@@ -102,6 +102,10 @@
       "title": "Erreur de démarrage OpenWhispr",
       "message": "Échec du démarrage de l'application :\n\n{{error}}\n\nVeuillez signaler ce problème."
     },
+    "localDataWipe": {
+      "title": "OpenWhispr n'a pas pu supprimer toutes ses données",
+      "message": "Votre organisation a demandé à OpenWhispr de supprimer ses données de cet appareil, et une partie n'a pas pu être effacée : OpenWhispr ne s'ouvrira donc pas. Redémarrez l'ordinateur, puis rouvrez OpenWhispr pour réessayer. Si cela se reproduit, contactez votre service informatique."
+    },
     "globeHotkey": {
       "title": "Raccourci Globe indisponible",
       "message": "OpenWhispr n'a pas pu activer la touche Globe.",

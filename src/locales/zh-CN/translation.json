@@ -102,6 +102,10 @@
       "title": "OpenWhispr 启动错误",
       "message": "应用启动失败：\n\n{{error}}\n\n请反馈此问题。"
     },
+    "localDataWipe": {
+      "title": "OpenWhispr 无法删除全部数据",
+      "message": "你的组织要求 OpenWhispr 删除此设备上的数据，但有部分数据无法删除，因此 OpenWhispr 不会打开。请重启电脑后再次打开 OpenWhispr 重试。如果问题持续出现，请联系你的 IT 团队。"
+    },
     "globeHotkey": {
       "title": "Globe 快捷键不可用",
       "message": "OpenWhispr 无法激活 Globe 键快捷键。",

@@ -102,6 +102,10 @@
       "title": "Erro de inicialização do OpenWhispr",
       "message": "Falha ao iniciar o aplicativo:\n\n{{error}}\n\nPor favor, reporte este problema."
     },
+    "localDataWipe": {
+      "title": "O OpenWhispr não conseguiu remover todos os dados",
+      "message": "Sua organização pediu ao OpenWhispr que removesse os dados dele deste dispositivo, e uma parte não pôde ser apagada, então o OpenWhispr não vai abrir. Reinicie o computador e abra o OpenWhispr de novo para tentar outra vez. Se isso continuar acontecendo, fale com a equipe de TI."
+    },
     "globeHotkey": {
       "title": "Atalho Globe indisponível",
       "message": "OpenWhispr não conseguiu ativar o atalho da tecla Globe.",

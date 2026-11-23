@@ -8,22 +8,29 @@
 #
 # Covers every home under /Users unless homes are named. Downloaded models stay
 # unless --include-models is passed. The audit log stays, as does the record of
-# the last WipeLocalDataOnLaunch token, so the app doesn't wipe a second time.
+# the last WipeLocalDataOnLaunch token, so the app doesn't wipe a second time,
+# and each home's wipe is recorded there while its account exists.
 # See docs/mdm-local-data-wipe.md.
 
 set -eo pipefail
 
 # The same lists as KEPT_USER_DATA_ENTRIES, MODEL_USER_DATA_ENTRIES,
 # MODEL_CACHE_ENTRIES and TEMP_PREFIXES in src/helpers/localDataWipe.js.
-kept_user_data=(audit meeting-audit-session.json meeting-audit-session.json.tmp local-data-wipe.json globe-preference-state.json)
+kept_user_data=(audit meeting-audit-session.json meeting-audit-session.json.tmp local-data-wipe.json local-data-wipe.pending globe-preference-state.json)
 model_user_data=(installed-models.json)
 model_cache=(whisper-models parakeet-models diarization-models models whisper-vad embedding-models)
 temp_prefixes=(ow- openwhispr- whisper-input- whisper-output- parakeet- enterprise-buffer- enterprise-chunks- kwin-active-class-)
+# MACOS_PREFERENCES_DOMAIN in src/helpers/managedDevicePolicy.js.
+preferences_domain=com.gizmolabs.openwhispr
 
+# A Jamf Pro policy passes the target volume, the computer name and the user
+# name first; its own parameters start at $4, and those left blank arrive empty.
+if [[ "${1-}" == / && $# -ge 3 ]]; then shift 3; fi
 include_models=false
 homes=()
 for arg in "$@"; do
   case "$arg" in
+    "") ;;
     --include-models) include_models=true ;;
     *)
       [[ -d "$arg" ]] || { echo "No such home: $arg" >&2; exit 1; }
@@ -70,14 +77,19 @@ contains() {
 # made must never lead the script out of it.
 inside_home() {
   local real
-  real="$(cd -P "$1" 2>/dev/null && pwd)" || return 1
+  real="$(cd -P "$1" 2>/dev/null && /bin/pwd -P)" || return 1
   [[ "$real" == "$home_real"/* ]]
 }
 
-# Removes everything in a folder of the home except the names given. One that
-# is a link, or leads out of the home, is skipped and reported.
+# The app's daily audit files, any OS user's (meetingAuditLog.js).
+is_audit_file() { [[ "$1" =~ ^meeting-audit-.+-[0-9]{4}-[0-9]{2}-[0-9]{2}\.jsonl$ ]]; }
+
+# Removes everything in a folder of the home except the names given. An
+# AuditLogPath inside it keeps its audit files and the folders on their way;
+# everything else there goes. One that is a link, or leads out of the home, is
+# skipped and reported.
 remove_all_except() {
-  local dir="$1" entry
+  local dir="$1" entry name real
   shift
   [[ -e "$dir" || -L "$dir" ]] || return 0
   if [[ ! -d "$dir" || -L "$dir" ]] || ! inside_home "$dir"; then
@@ -85,9 +97,18 @@ remove_all_except() {
     failed=1
     return 0
   fi
+  real="$(cd -P "$dir" && /bin/pwd -P)"
   for entry in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
     [[ -e "$entry" || -L "$entry" ]] || continue
-    contains "$(basename "$entry")" "$@" || remove "$entry"
+    name="$(basename "$entry")"
+    contains "$name" "$@" && continue
+    [[ "$real" == "$audit_real" ]] && is_audit_file "$name" && continue
+    if [[ -n "$audit_real" && -d "$entry" && ! -L "$entry" &&
+      ("$audit_real" == "$real/$name" || "$audit_real" == "$real/$name"/*) ]]; then
+      remove_all_except "$entry"
+      continue
+    fi
+    remove "$entry"
   done
 }
 
@@ -115,25 +136,41 @@ read_as_owner() { printf '%s\0' "$1" | as_owner cat; }
 # included, is the user's. The chosen folder itself stays, and nothing is
 # reached through a link out of it. While the home's account exists, the
 # database and the files are read as its owner, so root never opens one they
-# planted. Without one, root opens the database immutable, so a journal left
-# beside it is never replayed into a file it is a hard link to.
+# planted. Without one, root reads a copy of the database with its write-ahead
+# log, so the rows still in that log count and a journal left beside it is
+# replayed only into the copy, never into a file it is a hard link to. A
+# recorded file that didn't go keeps the database (keep_database), so a run
+# again still knows it is the mirror's; one that can't be read at all can't
+# tell it, so it goes.
 remove_mirrored_files() {
-  local database="$user_data/transcriptions.db" db rows base rel hash file folder real_base real_dir
-  local raw plain
+  local database="$user_data/transcriptions.db" db snapshot="" suffix read_failed="" before="$failed"
+  local rows base rel hash file folder real_base real_dir raw plain
   [[ -f "$database" && ! -L "$database" ]] || return 0
   db="$database"
-  [[ -n "$run_as" || $EUID -ne 0 ]] || db="file:$database?immutable=1"
+  if [[ -z "$run_as" && $EUID -eq 0 ]]; then
+    snapshot="$(mktemp -d)"
+    # Never left behind, even by a run that is stopped.
+    trap 'rm -rf "$snapshot"' EXIT
+    db="$snapshot/transcriptions.db"
+    for suffix in "" -wal -journal; do
+      [[ -f "$database$suffix" && ! -L "$database$suffix" ]] || continue
+      cp "$database$suffix" "$db$suffix" || read_failed=1
+    done
+  fi
   # A version from before the mirror kept its record names no file. Not
   # read-only: macOS's sqlite3 can't open a WAL database that way once its app
   # has closed it.
-  rows="$(as_owner_run sqlite3 "$db" \
+  [[ -z "$read_failed" ]] && rows="$(as_owner_run sqlite3 "$db" \
     "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'note_mirror_files'")" &&
     { [[ -z "$rows" ]] || rows="$(as_owner_run sqlite3 -ascii "$db" \
-      "SELECT base_path, rel_path, content_hash FROM note_mirror_files WHERE kind != 'dir'")"; } || {
+      "SELECT base_path, rel_path, content_hash FROM note_mirror_files WHERE kind != 'dir'")"; } ||
+    read_failed=1
+  [[ -z "$snapshot" ]] || { rm -rf "$snapshot" && trap - EXIT; }
+  if [[ -n "$read_failed" ]]; then
     echo "Could not read the notes mirror's record in $database" >&2
     failed=1
     return 0
-  }
+  fi
   while IFS=$'\x1f' read -r -d $'\x1e' base rel hash; do
     [[ "$base" == /* ]] || continue
     real_base="$(cd -P "$base" 2>/dev/null && pwd)" || continue
@@ -163,6 +200,7 @@ remove_mirrored_files() {
       folder="$(dirname "$folder")"
     done
   done <<<"$rows"
+  [[ "$failed" == "$before" ]] || keep_database=1
 }
 
 remove_temp_files() {
@@ -193,6 +231,48 @@ quit_app() {
   pkill -9 -U "$1" -f "$app_processes" || true
 }
 
+# AuditLogPath from the managed preferences, the user's own before the
+# device's, as the app reads it; nothing when it is unset or not absolute.
+configured_audit_dir() {
+  local plist value
+  for plist in "/Library/Managed Preferences/$1/$preferences_domain" \
+    "/Library/Managed Preferences/$preferences_domain"; do
+    value="$(defaults read "$plist" AuditLogPath 2>/dev/null)" || continue
+    [[ "$value" != /* ]] || echo "$value"
+    return 0
+  done
+}
+
+# Appends $3 to the daily file $2 in folder $1 as the app does
+# (meetingAuditLog.js): never through a link, and only to a regular file the
+# writer owns that has no other name. A FIFO planted there can't hold the open.
+append_audit_line='
+  zmodload zsh/system zsh/stat && mkdir -p -- "$1" || exit 1
+  sysopen -a -o creat,nofollow,nonblock -m 644 -u fd -- "$1/$2" || exit 1
+  zstat -H st -f $fd || exit 1
+  (( st[nlink] == 1 && st[uid] == EUID && (st[mode] & 8#170000) == 8#100000 )) || exit 1
+  print -r -u $fd -- "$3"'
+
+# Records the home's wipe in its user's audit log as the app records its own:
+# one line in their daily file, in AuditLogPath or else the audit folder the
+# wipe keeps, written as them. A home whose account is gone isn't recorded:
+# only root could write there, through any link left in it.
+record_wipe() {
+  local user="$1" configured="$2" ts reason=null line dir
+  [[ -n "$run_as" || $EUID -ne 0 ]] || return 0
+  [[ "$user" =~ ^[A-Za-z0-9._-]+$ ]] || user=unknown
+  ts="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+  [[ "$failed" == 0 ]] || reason='"incomplete"'
+  line="$(printf '{"ts":"%s","event":"local-data.wiped","sessionId":null,"noteId":null,"trigger":"script","reason":%s,"durationSec":null,"participantsNotified":null,"notificationMethod":null,"externalAttendees":null,"appVersion":null,"deviceUser":"%s"}' \
+    "$ts" "$reason" "$user")"
+  for dir in ${configured:+"$configured"} "$user_data/audit"; do
+    as_owner_run /bin/zsh -fc "$append_audit_line" zsh "$dir" \
+      "meeting-audit-$user-${ts:0:10}.jsonl" "$line" 2>/dev/null && return 0
+  done
+  echo "Could not record the wipe in the audit log for $home" >&2
+  failed=1
+}
+
 console_user=""
 [[ $EUID -eq 0 ]] && console_user="$(stat -f %Su /dev/console)"
 
@@ -204,7 +284,9 @@ if [[ "$include_models" == false ]]; then
 fi
 
 for home in "${homes[@]}"; do
-  home_real="$(cd -P "$home" 2>/dev/null && pwd)" || continue
+  # Spelled as the disk does, as the app's database records its paths, however
+  # the home was typed.
+  home_real="$(cd -P "$home" 2>/dev/null && /bin/pwd -P)" || continue
   owner_uid="$(stat -f %u "$home_real")" || continue
   run_as=""
   if [[ $EUID -eq 0 ]]; then
@@ -220,10 +302,18 @@ for home in "${homes[@]}"; do
   # Counted per home, so "Removed" names only homes where nothing failed.
   failed_before="$failed"
   failed=0
+  keep_database=0
+  user="$(id -un "$owner_uid" 2>/dev/null)" || user=""
   quit_app "$owner_uid"
   user_data="$home/Library/Application Support/OpenWhispr"
+  audit_dir="$(configured_audit_dir "$user")"
+  audit_real=""
+  [[ -z "$audit_dir" ]] || audit_real="$(cd -P "$audit_dir" 2>/dev/null && /bin/pwd -P)" || audit_real=""
   remove_mirrored_files
-  remove_all_except "$user_data" "${kept[@]}"
+  kept_here=("${kept[@]}")
+  [[ "$keep_database" == 0 ]] ||
+    kept_here+=(transcriptions.db transcriptions.db-wal transcriptions.db-shm transcriptions.db-journal)
+  remove_all_except "$user_data" "${kept_here[@]}"
   remove_all_except "$home/.cache/openwhispr" "${cache_kept[@]}"
   inside_home "$home/.openwhispr" && remove "$home/.openwhispr/cli-bridge.json"
 
@@ -234,6 +324,18 @@ for home in "${homes[@]}"; do
     launchctl asuser "$uid" sudo -u "$console_user" \
       security delete-generic-password -s OpenWhispr -a secrets-master-key >/dev/null 2>&1 || true
     remove_temp_files "$(launchctl asuser "$uid" sudo -u "$console_user" getconf DARWIN_USER_TEMP_DIR)"
+  fi
+  [[ ! -d "$user_data" ]] || record_wipe "$user" "$audit_dir"
+  # A home it couldn't finish is marked, so the app finishes the wipe there
+  # before it opens (SCRIPT_WIPE_MARKER in localDataWipe.js). A home whose
+  # account is gone has no one to open it.
+  if [[ (-n "$run_as" || $EUID -ne 0) && -d "$user_data" && ! -L "$user_data" ]] && inside_home "$user_data"; then
+    if [[ "$failed" == 1 ]]; then
+      printf '%s\0' "$user_data/local-data-wipe.pending" | as_owner touch ||
+        echo "Could not mark $home for OpenWhispr to finish the wipe" >&2
+    else
+      remove "$user_data/local-data-wipe.pending"
+    fi
   fi
   [[ "$failed" == 1 ]] || echo "Removed OpenWhispr local data from $home"
   [[ "$failed_before" == 0 ]] || failed=1

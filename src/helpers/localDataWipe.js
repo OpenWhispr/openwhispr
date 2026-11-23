@@ -10,7 +10,9 @@ const path = require("node:path");
 const sqliteFiles = (name) => [name, `${name}-wal`, `${name}-shm`, `${name}-journal`];
 const PRODUCT_EVENTS_FILE = "product-events.json";
 const WIPE_STATE_FILE = "local-data-wipe.json";
-// A stalled network AuditLogPath mustn't keep the fresh install from opening.
+// Left by an MDM script (scripts/mdm) that couldn't finish this folder.
+const SCRIPT_WIPE_MARKER = "local-data-wipe.pending";
+// A stalled network AuditLogPath mustn't keep the app from opening.
 const AUDIT_FLUSH_WAIT_MS = 5000;
 const auditWait = () =>
   new Promise((resolve) => setTimeout(resolve, AUDIT_FLUSH_WAIT_MS, null).unref());
@@ -56,8 +58,9 @@ const USER_DATA_ENTRIES = [
   ".linux-system-audio-restore-token.json",
 ];
 // The audit trail outlives the wipe it records, and the last token acted on
-// keeps the wipe to once per token. The Globe key's marker holds the system
-// setting a crash left changed, which startup puts back and then deletes.
+// keeps the wipe to once per token. A script's marker stays until the wipe it
+// asks for is done. The Globe key's marker holds the system setting a crash
+// left changed, which startup puts back and then deletes.
 // Chromium's own files in userData are emptied through its session instead,
 // never deleted under the running browser.
 const KEPT_USER_DATA_ENTRIES = [
@@ -65,6 +68,7 @@ const KEPT_USER_DATA_ENTRIES = [
   "meeting-audit-session.json",
   "meeting-audit-session.json.tmp",
   WIPE_STATE_FILE,
+  SCRIPT_WIPE_MARKER,
   "globe-preference-state.json",
 ];
 // Kept by the offboarding wipe unless WipeLocalDataIncludesModels asks;
@@ -125,13 +129,15 @@ function readJson(filePath) {
   }
 }
 
+// Named as database.js names it.
+const databaseName = () =>
+  process.env.NODE_ENV === "development" ? "transcriptions-dev.db" : "transcriptions.db";
+
 // What the note-file mirror wrote in each folder, the user's chosen ones
-// included, from its record in the database (named as database.js names it).
-// A database from before the mirror kept that record names no file.
+// included, from its record in the database. A database from before the
+// mirror kept that record names no file.
 function recordedMirrorFiles(userDataPath) {
-  const name =
-    process.env.NODE_ENV === "development" ? "transcriptions-dev.db" : "transcriptions.db";
-  const databasePath = path.join(userDataPath, name);
+  const databasePath = path.join(userDataPath, databaseName());
   if (!fs.statSync(databasePath, { throwIfNoEntry: false })?.isFile()) return new Map();
   const db = new (require("better-sqlite3"))(databasePath, { readonly: true, fileMustExist: true });
   try {
@@ -154,8 +160,11 @@ async function removeTempFiles(directory, remove) {
   for (const name of ours) {
     const target = path.join(directory, name);
     const stat = await fs.promises.lstat(target).catch(() => null);
-    // A shared temp folder (Linux /tmp) holds other users' files too.
-    if (stat && (!process.getuid || stat.uid === process.getuid())) await remove(name, target);
+    // A shared temp folder (Linux /tmp, or getSafeTempDir()'s on Windows) holds
+    // other users' files too. Windows can't say whose a file is, so there one
+    // this user may not delete is another's.
+    if (stat && (!process.getuid || stat.uid === process.getuid()))
+      await remove(name, target, { othersMayOwn: !process.getuid });
   }
 }
 
@@ -168,31 +177,35 @@ async function keptBelow(target, keep) {
 }
 
 // Returns each store that could not be removed, as "<name>: <reason>". An
-// absolute auditLogPath inside a folder it removes stays, with the folders on
-// its way.
+// absolute auditLogPath inside a folder it removes keeps its audit files, and
+// the folders on their way; everything else in it goes.
 async function removeLocalData({ includeModels, roots = defaultRoots(), auditLogPath = null }) {
+  const { isAuditFileName } = require("./meetingAuditLog");
   const errors = [];
   // One that stalls is a network folder, so none the wipe removes holds it.
   const keep = path.isAbsolute(auditLogPath ?? "")
     ? await Promise.race([fs.promises.realpath(auditLogPath).catch(() => null), auditWait()])
     : null;
-  const remove = async (name, target) => {
+  const remove = async (name, target, { othersMayOwn = false } = {}) => {
     try {
       const below = keep && (await keptBelow(target, keep));
-      if (below === "") return;
       if (typeof below === "string") {
         for (const child of await fs.promises.readdir(target))
-          await remove(name, path.join(target, child));
+          if (below !== "" || !isAuditFileName(child)) await remove(name, path.join(target, child));
         return;
       }
       await fs.promises.rm(target, { recursive: true, force: true, maxRetries: 3 });
     } catch (error) {
-      errors.push(`${name}: ${error.message}`);
+      if (!(othersMayOwn && ["EPERM", "EACCES"].includes(error.code)))
+        errors.push(`${name}: ${error.message}`);
     }
   };
 
-  // Before the database that records them is deleted below.
+  // Before the database that records them is deleted below. A recorded file
+  // that didn't go keeps the database, so the next launch's retry still knows
+  // it is the mirror's; one that can't be read at all can't tell it, so it goes.
   let mirrored = new Map();
+  let keepDatabase = false;
   try {
     mirrored = recordedMirrorFiles(roots.userData);
   } catch (error) {
@@ -202,7 +215,9 @@ async function removeLocalData({ includeModels, roots = defaultRoots(), auditLog
     try {
       require("./markdownMirror").removeMirroredFiles(basePath, entries);
     } catch (error) {
-      if (error.code !== "ENOENT") errors.push(`notes mirror: ${error.message}`);
+      if (error.code === "ENOENT") continue;
+      errors.push(`notes mirror: ${error.message}`);
+      keepDatabase = true;
     }
   }
   try {
@@ -211,7 +226,11 @@ async function removeLocalData({ includeModels, roots = defaultRoots(), auditLog
     errors.push(`enterprise audio bootstrap: ${error.message}`);
   }
 
-  const userDataEntries = [...USER_DATA_ENTRIES, ...(includeModels ? MODEL_USER_DATA_ENTRIES : [])];
+  const keptDatabase = keepDatabase ? sqliteFiles(databaseName()) : [];
+  const userDataEntries = [
+    ...USER_DATA_ENTRIES,
+    ...(includeModels ? MODEL_USER_DATA_ENTRIES : []),
+  ].filter((name) => !keptDatabase.includes(name));
   const homeCacheEntries = [...CACHE_ENTRIES, ...(includeModels ? MODEL_CACHE_ENTRIES : [])];
   const cacheRootEntries =
     includeModels && path.resolve(roots.cacheRoot) !== path.resolve(roots.homeCache)
@@ -273,10 +292,44 @@ function takeWipeNotice(userDataPath) {
   return notice;
 }
 
+const pendingWipes = (state) => (Array.isArray(state?.pendingAudit) ? state.pendingAudit : []);
+
+// Writes the record's wipe lines to the audit log, then drops them from the
+// record. A network AuditLogPath that stalls is waited on only so long; what it
+// hasn't taken stays for a later launch.
+async function writeWipeAudit(
+  { statePath, auditLogPath, userDataPath, appVersion, logger },
+  entries
+) {
+  if (entries.length === 0) return;
+  const { createMeetingAuditLog } = require("./meetingAuditLog");
+  const audit = createMeetingAuditLog({
+    isEnabled: () => true,
+    getConfiguredPath: () => auditLogPath ?? null,
+    userDataPath,
+    appVersion,
+    logger,
+  });
+  for (const entry of entries) audit.localDataWiped(entry);
+  const written = audit
+    .flush()
+    .then(() => {
+      // A record it can't read is left as it is, token and all.
+      const state = readJson(statePath);
+      if (state) fs.writeFileSync(statePath, JSON.stringify({ ...state, pendingAudit: undefined }));
+    })
+    .catch((error) =>
+      logger.error("Could not update the local data wipe record", { error: error.message })
+    );
+  await Promise.race([written, auditWait()]);
+}
+
 // Runs at launch, before the logger, database or any sidecar opens a file it
-// removes. Two things ask for it: a WipeLocalDataOnLaunch token this device
-// hasn't acted on, and a recorded workspace removal. Each wipes once.
-// Resolves true when the app should relaunch into its fresh state.
+// removes. Three things ask for it: a WipeLocalDataOnLaunch token this device
+// hasn't acted on, a recorded workspace removal, and the marker of a script
+// that couldn't finish. Each wipes until nothing is left behind. Resolves true
+// when the app should relaunch into its fresh state; rejects when something
+// stayed, and the app must not open it.
 async function wipeLocalDataOnLaunch({
   userDataPath,
   appVersion,
@@ -303,12 +356,27 @@ async function wipeLocalDataOnLaunch({
   } catch (error) {
     logger.warn("Device policy unreadable", { error: error.message });
   }
+  const auditRecord = {
+    statePath,
+    auditLogPath: device?.auditLogPath,
+    userDataPath,
+    appVersion,
+    logger,
+  };
+  // A token whose wipe left something behind wipes again, whatever the policy
+  // reads now.
   const token = device?.wipeLocalDataOnLaunch ?? null;
-  const newToken = token !== null && state.token !== token;
+  const wipeToken = token !== null && state.token !== token ? token : (state.pendingToken ?? null);
   const removal = state.pendingRemoval ?? null;
-  if (!newToken && !removal) return false;
+  const markerPath = path.join(userDataPath, SCRIPT_WIPE_MARKER);
+  const scriptWipe = fs.existsSync(markerPath);
+  if (!wipeToken && !removal && !scriptWipe) {
+    // The app opens meanwhile, however long the audit log takes.
+    void writeWipeAudit(auditRecord, pendingWipes(state));
+    return false;
+  }
 
-  const trigger = removal ? "workspace-removal" : "device-policy";
+  const trigger = removal ? "workspace-removal" : wipeToken ? "device-policy" : "script";
   logger.warn("Wiping local data", { trigger, includeModels });
   // main.js loaded .env into this process, and the relaunch inherits its
   // environment: what came from the file goes with the file. So do the saved
@@ -343,35 +411,37 @@ async function wipeLocalDataOnLaunch({
   // delete the key the next production user's saved keys now depend on.
   if ((env.OPENWHISPR_CHANNEL ?? "production") === "production") deleteMasterKey();
 
-  const { createMeetingAuditLog } = require("./meetingAuditLog");
-  const audit = createMeetingAuditLog({
-    isEnabled: () => true,
-    getConfiguredPath: () => device?.auditLogPath ?? null,
-    userDataPath,
-    appVersion,
-    logger,
-  });
-  audit.localDataWiped({ trigger, incomplete: errors.length > 0 });
-  if (errors.length > 0) logger.warn("Local data wipe incomplete", { errors });
+  const incomplete = errors.length > 0;
+  if (incomplete) logger.warn("Local data wipe incomplete", { errors });
 
-  // Without this on record a relaunch would wipe again; this launch carries on
-  // instead, and the next one retries. A removal leaves the fresh install its
-  // notice. The record goes first: the audit line may be bound for a network
-  // AuditLogPath, which is waited on only so long.
+  // A complete wipe goes on record, or a relaunch would wipe again (this launch
+  // carries on instead, and the next one retries), and a removal leaves the
+  // fresh install its notice. An incomplete one leaves what asked for it
+  // pending, so the next launch tries again. Either way its audit line waits in
+  // the record until the audit log has it.
+  const pendingAudit = [...pendingWipes(state), { trigger, incomplete, at: Date.now() }];
+  let recorded = true;
   try {
     fs.writeFileSync(
       statePath,
-      JSON.stringify({
-        token: newToken ? token : state.token,
-        notice: removal ? "workspace-removal" : state.notice,
-      })
+      JSON.stringify(
+        incomplete
+          ? { ...state, pendingToken: wipeToken ?? undefined, pendingAudit }
+          : {
+              token: wipeToken ?? state.token,
+              notice: removal ? "workspace-removal" : state.notice,
+              pendingAudit,
+            }
+      )
     );
+    if (!incomplete) fs.rmSync(markerPath, { force: true });
   } catch (error) {
     logger.error("Could not record the local data wipe", { error: error.message });
-    return false;
+    recorded = false;
   }
-  await Promise.race([audit.flush(), auditWait()]);
-  return true;
+  await writeWipeAudit(auditRecord, pendingAudit);
+  if (incomplete) throw Object.assign(new Error("Local data wipe incomplete"), { errors });
+  return recorded;
 }
 
 module.exports = {

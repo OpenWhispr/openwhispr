@@ -332,25 +332,22 @@ class MarkdownMirror {
       .filter((entry) => entry.ownerId === noteId && entry.kind === kind);
   }
 
-  // A file it can't read counts as edited, unless the caller asks for the error.
+  // A file it can't reach or read counts as edited, unless the caller asks for
+  // the error.
   _isPristine(entry, { throwIfUnreadable = false } = {}) {
-    let filePath;
     try {
-      filePath = this._absolutePath(entry.relPath);
+      const filePath = this._absolutePath(entry.relPath);
       this._assertWritableFilePath(filePath);
       const stats = fs.lstatSync(filePath);
       if (stats.isSymbolicLink() || !stats.isFile()) return false;
-    } catch {
-      return false;
-    }
-    let text;
-    try {
-      text = fs.readFileSync(filePath, "utf-8");
+      const text = fs.readFileSync(filePath, "utf-8");
+      return hashOf(text) === entry.hash || hashOf(normalizeLineEndings(text)) === entry.hash;
     } catch (error) {
-      if (throwIfUnreadable && error.code !== "ENOENT") throw error;
+      // A link on its way has no code, and a missing file or folder is gone.
+      if (throwIfUnreadable && error.code && !["ENOENT", "ENOTDIR"].includes(error.code))
+        throw error;
       return false;
     }
-    return hashOf(text) === entry.hash || hashOf(normalizeLineEndings(text)) === entry.hash;
   }
 
   // A name that differs only in case or Unicode form can be the same file, which

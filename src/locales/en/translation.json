@@ -102,6 +102,10 @@
       "title": "OpenWhispr Startup Error",
       "message": "Failed to start the application:\n\n{{error}}\n\nPlease report this issue."
     },
+    "localDataWipe": {
+      "title": "OpenWhispr couldn't remove all of its data",
+      "message": "Your organization asked OpenWhispr to remove its data from this device, and some of it couldn't be deleted, so OpenWhispr won't open. Restart your computer and open OpenWhispr again to try once more. If this keeps happening, contact your IT team."
+    },
     "globeHotkey": {
       "title": "Globe Hotkey Unavailable",
       "message": "OpenWhispr could not activate the Globe key hotkey.",

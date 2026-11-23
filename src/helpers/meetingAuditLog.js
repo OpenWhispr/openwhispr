@@ -11,6 +11,8 @@ const { LOCAL_POLICY_CODES } = require("./localModelPolicyGate");
 // when the device policy wiped the device's local data (#3030).
 
 const DAILY_FILE = /^\d{4}-\d{2}-\d{2}\.jsonl$/;
+// Any OS user's daily file, as the offboarding wipe keeps them.
+const isAuditFileName = (name) => /^meeting-audit-.+-\d{4}-\d{2}-\d{2}\.jsonl$/.test(name);
 // O_NOFOLLOW doesn't exist on Windows, so there the folder's ACLs must keep other
 // users from planting links. O_NONBLOCK keeps a FIFO planted there from holding
 // the open, and every write queued behind it, until someone reads it.
@@ -41,7 +43,7 @@ const STOP_REASONS = new Set([
   "app-quit",
 ]);
 // What asked for a local data wipe (#3030).
-const WIPE_TRIGGERS = new Set(["device-policy", "workspace-removal"]);
+const WIPE_TRIGGERS = new Set(["device-policy", "workspace-removal", "script"]);
 // Plus main's device or product policy block and the renderer's own "restricted" refusal.
 const REFUSAL_REASONS = new Set([
   ...AUDIO_POLICY_REFUSAL_CODES,
@@ -313,12 +315,13 @@ function createMeetingAuditLog({
   }
 
   // #3030: the offboarding wipe, kept with the recordings it outlives. The
-  // trigger is the device policy's token or a removal from the managing
-  // workspace; "incomplete" means some store could not be deleted.
-  function localDataWiped({ trigger, incomplete }) {
+  // trigger is the device policy's token, a removal from the managing
+  // workspace or the marker of an MDM script that couldn't finish; "incomplete"
+  // means some store could not be deleted. A line written after the wipe keeps
+  // the time the wipe happened (at).
+  function localDataWiped({ trigger, incomplete, at = now() }) {
     if (!isEnabled()) return;
     const dir = directory();
-    const at = now();
     enqueue(() =>
       append(dir, at, {
         event: "local-data.wiped",
@@ -347,4 +350,4 @@ function createMeetingAuditLog({
   };
 }
 
-module.exports = { createMeetingAuditLog };
+module.exports = { createMeetingAuditLog, isAuditFileName };

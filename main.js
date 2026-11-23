@@ -1305,13 +1305,28 @@ async function startApp() {
 
   // #3030: the device policy's offboarding wipe runs before the logger, the
   // database or any sidecar opens a file it removes, then restarts the app as a
-  // fresh install.
-  const wiped = await wipeLocalDataOnLaunch({
-    userDataPath: app.getPath("userData"),
-    appVersion: app.getVersion(),
-    clearBrowserData: () =>
-      Promise.all([session.defaultSession.clearStorageData(), session.defaultSession.clearCache()]),
-  });
+  // fresh install. One that leaves something behind keeps the app closed, so
+  // nothing opens what is left, and the next launch tries again.
+  let wiped;
+  try {
+    wiped = await wipeLocalDataOnLaunch({
+      userDataPath: app.getPath("userData"),
+      appVersion: app.getVersion(),
+      clearBrowserData: () =>
+        Promise.all([
+          session.defaultSession.clearStorageData(),
+          session.defaultSession.clearCache(),
+        ]),
+    });
+  } catch (error) {
+    // What stayed goes in the dialog: the logs folder went with the wipe.
+    dialog.showErrorBox(
+      i18nMain.t("startup.localDataWipe.title"),
+      [i18nMain.t("startup.localDataWipe.message"), (error.errors ?? []).join("\n")].join("\n\n")
+    );
+    app.exit(1);
+    return;
+  }
   if (wiped) {
     // Like Reset app data, a development build quits instead of relaunching.
     if (process.env.NODE_ENV !== "development") autoStart.scheduleRelaunch(OAUTH_PROTOCOL);

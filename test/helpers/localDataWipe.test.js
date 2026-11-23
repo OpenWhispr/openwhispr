@@ -68,6 +68,7 @@ const exists = (...parts) => fs.existsSync(path.join(...parts));
 test("removes every store and keeps the audit log, the wipe record and, by default, models", async () => {
   seedDevice();
   seed(path.join(roots.userData, "local-data-wipe.json"), "{}");
+  seed(path.join(roots.userData, "local-data-wipe.pending"), "");
   assert.deepEqual(await removeLocalData({ includeModels: false, roots }), []);
 
   for (const name of USER_DATA_ENTRIES) assert.equal(exists(roots.userData, name), false, name);
@@ -184,7 +185,16 @@ test("a database from before the mirror kept its record wipes without an error",
   assert.equal(exists(roots.userData, "transcriptions.db"), false);
 });
 
-// One note that can't go (a folder another tool locked) doesn't keep the rest.
+test("a database it can't read is reported and still goes", async () => {
+  seed(path.join(roots.userData, "transcriptions.db"), "not a database");
+  const errors = await removeLocalData({ includeModels: false, roots });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /^notes mirror: /);
+  assert.equal(exists(roots.userData, "transcriptions.db"), false);
+});
+
+// One note that can't go (a folder another tool locked) doesn't keep the rest,
+// and the database that records it stays for the next launch's retry.
 test(
   "a mirrored note that can't be removed is reported, and the others still go",
   { skip: process.platform === "win32" || process.getuid?.() === 0 },
@@ -199,6 +209,7 @@ test(
       assert.match(errors[0], /^notes mirror: /);
       assert.equal(exists(chosen, "Open"), false);
       assert.equal(exists(chosen, "Locked", "1-a.md"), true);
+      assert.equal(exists(roots.userData, "transcriptions.db"), true);
     } finally {
       fs.chmodSync(path.join(chosen, "Locked"), 0o755);
     }
@@ -362,34 +373,154 @@ test("an unreadable or rejected policy, or one without a token, never wipes", as
   }
 });
 
-test("a wipe that leaves a store behind still records its token, marked incomplete", async () => {
+const wipeState = () =>
+  JSON.parse(fs.readFileSync(path.join(roots.userData, "local-data-wipe.json"), "utf8"));
+const failingBrowserData = async () => {
+  throw new Error("session unavailable");
+};
+
+test("a wipe that leaves a store behind keeps the app closed and its token pending", async () => {
   seedDevice();
-  const harness = launchHarness({
+  const failing = launchHarness({
     snapshot: managed("offboard-1"),
-    clearBrowserData: async () => {
-      throw new Error("session unavailable");
-    },
+    clearBrowserData: failingBrowserData,
   });
-  assert.equal(await harness.wipe(), true);
-  assert.equal(auditLines()[0].reason, "incomplete");
-  assert.equal(exists(roots.userData, "local-data-wipe.json"), true);
+  await assert.rejects(failing.wipe(), {
+    message: "Local data wipe incomplete",
+    errors: ["browser data: session unavailable"],
+  });
+  assert.deepEqual(wipeState(), { pendingToken: "offboard-1" });
+  // The next launch tries again, and finishes, even when it can't read the policy.
+  seed(path.join(roots.userData, "transcriptions.db"));
+  const unreadable = launchHarness({ readError: new Error("Managed policy reader unavailable") });
+  assert.equal(await unreadable.wipe(), true);
+  assert.equal(exists(roots.userData, "transcriptions.db"), false);
+  assert.deepEqual(wipeState(), { token: "offboard-1" });
+  assert.deepEqual(
+    auditLines().map((line) => line.reason),
+    ["incomplete", null]
+  );
+});
+
+test("a removal's wipe leaves its notice only once nothing was left behind", async () => {
+  seedDevice();
+  requestWorkspaceRemovalWipe(roots.userData, {
+    accountId: "account-a",
+    workspaceId: "ws-1",
+    removedAt: "2026-11-12T10:00:00Z",
+  });
+  const harness = (clearBrowserData) =>
+    launchHarness({ readError: new Error("unreadable"), clearBrowserData });
+  await assert.rejects(harness(failingBrowserData).wipe());
+  assert.equal(takeWipeNotice(roots.userData), null);
+  assert.equal(wipeState().pendingRemoval.workspaceId, "ws-1");
+  assert.equal(await harness().wipe(), true);
+  assert.equal(takeWipeNotice(roots.userData), "workspace-removal");
+  assert.equal(await harness().wipe(), false);
+});
+
+// An MDM script that couldn't finish a home leaves its marker there, and the
+// app finishes the wipe before anything opens what is left.
+test("a script's marker makes the app finish the wipe, and goes once it is done", async () => {
+  seedDevice();
+  const marker = path.join(roots.userData, "local-data-wipe.pending");
+  seed(marker, "");
+  const harness = (clearBrowserData) =>
+    launchHarness({ readError: new Error("unreadable"), clearBrowserData });
+  await assert.rejects(harness(failingBrowserData).wipe());
+  assert.equal(fs.existsSync(marker), true);
+  assert.equal(await harness().wipe(), true);
+  assert.equal(fs.existsSync(marker), false);
+  assert.equal(exists(roots.userData, "transcriptions.db"), false);
+  assert.deepEqual(
+    auditLines().map((line) => [line.trigger, line.reason]),
+    [
+      ["script", "incomplete"],
+      ["script", null],
+    ]
+  );
+  assert.equal(await harness().wipe(), false);
+});
+
+// The audit line goes to the record first; one a stalled network share never
+// took is written at a later launch, with the time of the wipe, and the app
+// opens meanwhile.
+test("a wipe line an unresponsive AuditLogPath didn't take is written at a later launch", async () => {
+  seedDevice();
+  const auditLogPath = path.join(root, "share");
+  const open = fs.promises.open;
+  let stalled = 0;
+  fs.promises.open = (file, ...rest) =>
+    String(file).startsWith(auditLogPath)
+      ? (stalled++, new Promise(() => {}))
+      : open(file, ...rest);
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms, "waiting"));
+  try {
+    const snapshot = managed("offboard-1", { auditLogPath });
+    assert.equal(await launchHarness({ snapshot }).wipe(), true);
+    const [pending] = wipeState().pendingAudit;
+    assert.deepEqual({ ...pending, at: 0 }, { trigger: "device-policy", incomplete: false, at: 0 });
+    // Still stalled: the next launch opens without waiting on it.
+    assert.equal(await Promise.race([launchHarness({ snapshot }).wipe(), sleep(1000)]), false);
+    for (let tries = 0; stalled < 2 && tries < 100; tries++) await sleep(10);
+    assert.equal(stalled, 2);
+    fs.promises.open = open;
+    assert.equal(await launchHarness({ snapshot }).wipe(), false);
+    for (let tries = 0; wipeState().pendingAudit && tries < 100; tries++) await sleep(10);
+    assert.deepEqual(wipeState(), { token: "offboard-1" });
+    const [file] = fs.readdirSync(auditLogPath);
+    const line = JSON.parse(fs.readFileSync(path.join(auditLogPath, file), "utf8"));
+    assert.equal(line.event, "local-data.wiped");
+    assert.equal(line.ts, new Date(pending.at).toISOString());
+  } finally {
+    fs.promises.open = open;
+  }
 });
 
 test(
-  "a notes file that can't be read is a failure, not an edit, and stays",
+  "a notes file or folder that can't be read is a failure, not an edit, and keeps the database",
   { skip: process.platform === "win32" || process.getuid?.() === 0 },
   async () => {
+    // Two folders, so each fails on its own.
     const chosen = path.join(root, "Vault");
+    const other = path.join(root, "Other");
     mirrorWrote(roots.userData, chosen, "Personal/1-a.md", mirrored(1));
+    mirrorWrote(roots.userData, other, "Closed/2-b.md", mirrored(2));
     const file = path.join(chosen, "Personal", "1-a.md");
+    const folder = path.join(other, "Closed");
     fs.chmodSync(file, 0o000);
+    fs.chmodSync(folder, 0o000);
     try {
       const errors = await removeLocalData({ includeModels: false, roots });
-      assert.equal(errors.length, 1);
-      assert.match(errors[0], /^notes mirror: /);
+      assert.equal(errors.length, 2);
+      for (const error of errors) assert.match(error, /^notes mirror: /);
       assert.equal(fs.existsSync(file), true);
+      fs.chmodSync(folder, 0o755);
+      assert.equal(exists(folder, "2-b.md"), true);
+      assert.equal(exists(roots.userData, "transcriptions.db"), true);
     } finally {
       fs.chmodSync(file, 0o644);
+      fs.chmodSync(folder, 0o755);
+    }
+  }
+);
+
+// Windows has no owner to check, and the temp folder getSafeTempDir() falls back
+// to is every such account's.
+test(
+  "on Windows, a temp file this user may not delete is another account's, not a failure",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async () => {
+    seed(path.join(roots.temp[0], "whisper-input-other.wav"));
+    fs.chmodSync(roots.temp[0], 0o555);
+    const { getuid } = process;
+    process.getuid = undefined;
+    try {
+      assert.deepEqual(await removeLocalData({ includeModels: false, roots }), []);
+      assert.equal(exists(roots.temp[0], "whisper-input-other.wav"), true);
+    } finally {
+      process.getuid = getuid;
+      fs.chmodSync(roots.temp[0], 0o755);
     }
   }
 );
@@ -429,6 +560,23 @@ test("an AuditLogPath inside a folder the wipe removes keeps its history and get
   );
 });
 
+// Only the audit files are the audit log's: the store it shares a folder with
+// is still wiped.
+test("an AuditLogPath that is a store's own folder keeps only the audit files there", async () => {
+  for (const store of ["logs", "audio"]) {
+    seedDevice();
+    const auditLogPath = path.join(roots.userData, store);
+    seed(path.join(auditLogPath, "meeting-audit-it-2026-11-01.jsonl"), "{}\n");
+    assert.deepEqual(
+      await removeLocalData({ includeModels: false, roots, auditLogPath }),
+      [],
+      store
+    );
+    assert.deepEqual(fs.readdirSync(auditLogPath), ["meeting-audit-it-2026-11-01.jsonl"], store);
+    fs.rmSync(roots.userData, { recursive: true });
+  }
+});
+
 test("WipeLocalDataIncludesModels deployed on its own still takes models with a removal's wipe", async () => {
   const { normalizeDeviceValues } = require("../../src/helpers/managedDevicePolicy");
   seedDevice();
@@ -451,6 +599,7 @@ test("without its token on record the app carries on instead of relaunching into
   const harness = launchHarness({ snapshot: managed("offboard-1") });
   assert.equal(await harness.wipe(), false);
   assert.equal(exists(roots.userData, "transcriptions.db"), false);
+  assert.equal(auditLines()[0].event, "local-data.wiped");
 });
 
 // The inventory owns every path: a new store under userData, the model cache
@@ -565,11 +714,50 @@ test("the MDM scripts keep and treat as models exactly what the app does", () =>
   }
 });
 
+// The macOS script with stand-ins for what it reaches outside the home: never
+// the real app (process lookups see nothing running unless a tool says so), no
+// managed preferences, and macOS's stat from Linux's.
+function macosScript(tools = {}) {
+  const { execFileSync } = require("node:child_process");
+  const bin = path.join(root, "bin");
+  const stubs = { pgrep: "exit 1", pkill: "exit 1", defaults: "exit 1", ...tools };
+  if (process.platform !== "darwin") {
+    stubs.stat = '[ "$1" = -f ] && shift && set -- -c "$@"\nexec /usr/bin/stat "$@"';
+  }
+  for (const [tool, body] of Object.entries(stubs)) {
+    seed(path.join(bin, tool), `#!/bin/sh\n${body}\n`);
+    fs.chmodSync(path.join(bin, tool), 0o755);
+  }
+  return (...args) =>
+    execFileSync(
+      "/bin/bash",
+      [path.join(__dirname, "../../scripts/mdm/wipe-local-data-macos.sh"), ...args],
+      {
+        cwd: root,
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+        encoding: "utf8",
+      }
+    );
+}
+
+// The database records the notes folder as the disk spells it.
+test(
+  "the macOS script cleans a home's notes however the home is typed",
+  { skip: process.platform !== "darwin" },
+  async (t) => {
+    const home = path.join(root, "home");
+    const userData = path.join(home, "Library", "Application Support", "OpenWhispr");
+    mirrorWrote(userData, path.join(home, "Vault"), "Personal/1-a.md", mirrored(1));
+    if (!fs.existsSync(path.join(root, "HOME"))) return t.skip("case-sensitive volume");
+    macosScript()(path.join(root, "HOME"));
+    assert.equal(exists(home, "Vault", "Personal", "1-a.md"), false);
+  }
+);
+
 test(
   "the macOS script empties a home's OpenWhispr data and keeps what the app keeps",
   { skip: process.platform === "win32" },
   async () => {
-    const { execFileSync } = require("node:child_process");
     const home = path.join(root, "home");
     const userData = path.join(home, "Library", "Application Support", "OpenWhispr");
     const cache = path.join(home, ".cache", "openwhispr");
@@ -611,33 +799,18 @@ test(
     // Run as root, the script never follows a record out of the user's home.
     const outside = path.join(root, "Shared");
     wrote(outside, "Team/3-plan.md", mirrored(3));
-    // Never the real app: process lookups see nothing running.
-    const bin = path.join(root, "bin");
-    const tools = { pgrep: "exit 1", pkill: "exit 1" };
-    if (process.platform !== "darwin") {
-      // macOS's stat, from Linux's.
-      tools.stat = '[ "$1" = -f ] && shift && set -- -c "$@"\nexec /usr/bin/stat "$@"';
-    }
-    for (const [tool, body] of Object.entries(tools)) {
-      seed(path.join(bin, tool), `#!/bin/sh\n${body}\n`);
-      fs.chmodSync(path.join(bin, tool), 0o755);
-    }
-    const run = (...args) =>
-      execFileSync(
-        "/bin/bash",
-        [path.join(__dirname, "../../scripts/mdm/wipe-local-data-macos.sh"), ...args],
-        {
-          cwd: root,
-          env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
-          encoding: "utf8",
-        }
-      );
+    const run = macosScript();
 
     // A home named by mistake fails the run rather than reporting it wiped.
     assert.throws(
       () => run(path.join(root, "no-such-home")),
       (error) => error.status === 1 && error.stderr.includes("No such home")
     );
+    // A home named without OpenWhispr data in it gets nothing written there.
+    const bare = path.join(root, "bare-home");
+    fs.mkdirSync(bare);
+    run(bare);
+    assert.deepEqual(fs.readdirSync(bare), []);
     run(home);
     // From a version before the mirror kept its record: nothing to name, no failure.
     const older = path.join(root, "older-home");
@@ -647,10 +820,48 @@ test(
       .exec("CREATE TABLE notes (id INTEGER)")
       .close();
     run(older);
-    assert.deepEqual(fs.readdirSync(olderData), []);
+    // Each wipe is recorded in the home's audit log, as the app records its own.
+    const recorded = (data) =>
+      fs
+        .readdirSync(path.join(data, "audit"))
+        .filter((name) => name.endsWith(".jsonl"))
+        .flatMap((name) =>
+          fs
+            .readFileSync(path.join(data, "audit", name), "utf8")
+            .trim()
+            .split("\n")
+        )
+        .map((line) => JSON.parse(line));
+    assert.deepEqual(fs.readdirSync(olderData), ["audit"]);
+    const [olderLine] = recorded(olderData);
+    assert.equal(olderLine.event, "local-data.wiped");
+    assert.equal(olderLine.trigger, "script");
+    assert.equal(olderLine.reason, null);
+    assert.equal(olderLine.deviceUser, os.userInfo().username);
+    assert.match(
+      fs.readdirSync(path.join(olderData, "audit"))[0],
+      new RegExp(`^meeting-audit-${os.userInfo().username}-\\d{4}-\\d{2}-\\d{2}\\.jsonl$`)
+    );
+    // A database it can't read can't tell a run again what to remove, so it goes.
+    const corrupt = path.join(root, "corrupt-home");
+    const corruptData = path.join(corrupt, "Library", "Application Support", "OpenWhispr");
+    seed(path.join(corruptData, "transcriptions.db"), "not a database");
+    assert.throws(
+      () => run(corrupt),
+      (error) =>
+        error.status === 1 && error.stderr.includes("Could not read the notes mirror's record")
+    );
+    assert.deepEqual(fs.readdirSync(corruptData).sort(), ["audit", "local-data-wipe.pending"]);
+    assert.equal(recorded(corruptData)[0].reason, "incomplete");
+    assert.deepEqual(
+      recorded(userData).map((line) => line.trigger),
+      ["script"]
+    );
+    // A finished home loses any marker an earlier run left.
+    const finished = KEPT_USER_DATA_ENTRIES.filter((name) => name !== "local-data-wipe.pending");
     assert.deepEqual(
       fs.readdirSync(userData).sort(),
-      [...KEPT_USER_DATA_ENTRIES, ...MODEL_USER_DATA_ENTRIES].sort()
+      [...finished, ...MODEL_USER_DATA_ENTRIES].sort()
     );
     assert.deepEqual(fs.readdirSync(cache).sort(), [...MODEL_CACHE_ENTRIES].sort());
     assert.deepEqual(fs.readdirSync(path.join(home, ".openwhispr")), ["cli-config.json"]);
@@ -675,10 +886,9 @@ test(
         !error.stdout.includes("Removed OpenWhispr local data")
     );
     assert.equal(fs.existsSync(path.join(elsewhere, "openwhispr", "qdrant-data", "item")), true);
-    assert.deepEqual(
-      fs.readdirSync(path.join(linked, "Library", "Application Support", "OpenWhispr")),
-      []
-    );
+    const linkedData = path.join(linked, "Library", "Application Support", "OpenWhispr");
+    assert.deepEqual(fs.readdirSync(linkedData).sort(), ["audit", "local-data-wipe.pending"]);
+    assert.equal(recorded(linkedData)[0].reason, "incomplete");
 
     // A folder it can't empty is reported, the rest still goes, and the exit
     // code tells the MDM tool the device failed. (Root ignores the mode.)
@@ -693,63 +903,87 @@ test(
           () => run(stuck),
           (error) => error.status === 1
         );
-        assert.deepEqual(fs.readdirSync(stuckData), ["audio"]);
+        // Marked, so the app finishes the wipe before it opens there.
+        assert.deepEqual(fs.readdirSync(stuckData).sort(), [
+          "audio",
+          "audit",
+          "local-data-wipe.pending",
+        ]);
+        assert.equal(recorded(stuckData)[0].reason, "incomplete");
       } finally {
         fs.chmodSync(path.join(stuckData, "audio"), 0o755);
       }
     }
 
-    run("--include-models", home);
-    assert.deepEqual(fs.readdirSync(userData).sort(), [...KEPT_USER_DATA_ENTRIES].sort());
+    // As a Jamf Pro policy calls it: target volume, computer name and user
+    // first, then its parameters, the blank ones empty.
+    run("/", "Jo's MacBook", "jo", "--include-models", home, "", "");
+    assert.deepEqual(fs.readdirSync(userData).sort(), [...finished].sort());
     assert.deepEqual(fs.readdirSync(cache), []);
   }
 );
 
 test(
-  "the macOS script quits only its home's owner's app, and a note it can't read fails the run",
+  "the macOS script quits only its home's owner's app, keeps only the audit files in an AuditLogPath it empties, and keeps the database while a note can't be read",
   { skip: process.platform === "win32" || process.getuid?.() === 0 },
   async () => {
-    const { execFileSync } = require("node:child_process");
     const home = path.join(root, "home");
     const userData = path.join(home, "Library", "Application Support", "OpenWhispr");
+    // The logs folder itself: its debug logs still go.
+    const auditLogPath = path.join(userData, "logs");
+    seed(path.join(userData, "logs", "debug.log"));
+    seed(path.join(auditLogPath, "meeting-audit-it-2026-11-01.jsonl"), "{}\n");
     const vault = path.join(home, "Documents", "Vault");
     mirrorWrote(userData, vault, "Personal/1-a.md", mirrored(1));
     const note = path.join(vault, "Personal", "1-a.md");
-    const lookups = path.join(root, "process-lookups.log");
-    const bin = path.join(root, "bin");
-    const tools = { pgrep: `echo "$*" >> "${lookups}"\nexit 1`, pkill: "exit 1" };
-    if (process.platform !== "darwin") {
-      // macOS's stat, from Linux's.
-      tools.stat = '[ "$1" = -f ] && shift && set -- -c "$@"\nexec /usr/bin/stat "$@"';
-    }
-    for (const [tool, body] of Object.entries(tools)) {
-      seed(path.join(bin, tool), `#!/bin/sh\n${body}\n`);
-      fs.chmodSync(path.join(bin, tool), 0o755);
-    }
+    const calls = path.join(root, "process-lookups.log");
+    // A Mac's disk ignores case, so IT may type the folder in another one.
+    const typed = process.platform === "darwin" ? path.join(userData, "LOGS") : auditLogPath;
+    const run = macosScript({
+      pgrep: `echo "$*" >> "${calls}"\nexit 1`,
+      // AuditLogPath deployed device-wide.
+      defaults: `[ "$2" = "/Library/Managed Preferences/com.gizmolabs.openwhispr" ] && [ "$3" = AuditLogPath ] && echo "${typed}" && exit 0\nexit 1`,
+    });
+    const wipeLines = () =>
+      fs
+        .readdirSync(auditLogPath)
+        .filter((name) => name !== "meeting-audit-it-2026-11-01.jsonl")
+        .flatMap((name) =>
+          fs.readFileSync(path.join(auditLogPath, name), "utf8").trim().split("\n")
+        )
+        .map((line) => JSON.parse(line));
     fs.chmodSync(note, 0o000);
     try {
       assert.throws(
-        () =>
-          execFileSync(
-            "/bin/bash",
-            [path.join(__dirname, "../../scripts/mdm/wipe-local-data-macos.sh"), home],
-            {
-              cwd: root,
-              env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
-              encoding: "utf8",
-            }
-          ),
-        (error) =>
-          error.status === 1 &&
-          error.stderr.includes("Could not read") &&
-          !error.stdout.includes("Removed OpenWhispr local data")
+        () => run(home),
+        (error) => error.status === 1 && error.stderr.includes("Could not read")
       );
       assert.equal(fs.existsSync(note), true);
-      assert.deepEqual(fs.readFileSync(lookups, "utf8").trim().split("\n"), [
+      // Running it again needs the record of what the mirror wrote, and the
+      // marker has the app finish first if it opens before then.
+      assert.equal(exists(userData, "transcriptions.db"), true);
+      assert.equal(exists(userData, "local-data-wipe.pending"), true);
+      assert.equal(exists(userData, "logs", "debug.log"), false);
+      assert.ok(fs.readdirSync(auditLogPath).includes("meeting-audit-it-2026-11-01.jsonl"));
+      assert.deepEqual(
+        wipeLines().map((line) => [line.trigger, line.reason]),
+        [["script", "incomplete"]]
+      );
+      assert.deepEqual(fs.readFileSync(calls, "utf8").trim().split("\n"), [
         `-U ${process.getuid()} -f OpenWhispr.app/Contents/`,
       ]);
-    } finally {
+
       fs.chmodSync(note, 0o644);
+      run(home);
+      assert.equal(fs.existsSync(note), false);
+      assert.equal(exists(userData, "transcriptions.db"), false);
+      assert.equal(exists(userData, "local-data-wipe.pending"), false);
+      assert.deepEqual(
+        wipeLines().map((line) => line.reason),
+        ["incomplete", null]
+      );
+    } finally {
+      if (fs.existsSync(note)) fs.chmodSync(note, 0o644);
     }
   }
 );
