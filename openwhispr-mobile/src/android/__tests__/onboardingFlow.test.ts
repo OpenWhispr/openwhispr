@@ -4,6 +4,7 @@ import {
   previousStep,
   saveProgress,
   savedMode,
+  savedReturning,
   savedStep,
   stepsFor,
 } from '../onboarding/flow';
@@ -70,5 +71,28 @@ describe('Android onboarding flow', () => {
   it('ignores a step saved by an older build', () => {
     localStorage.setItem('android-onboarding-v3-step', 'pro');
     expect(savedStep()).toBe('splash');
+  });
+});
+
+describe('An account that finished onboarding on Android (F2)', () => {
+  beforeEach(() => store.clear());
+
+  it('skips the pitch, How it works and the practices and starts at Languages', () => {
+    const steps = stepsFor('cloud', true);
+    expect(steps.slice(0, 3)).toEqual(['splash', 'signin', 'languages']);
+    expect(steps).not.toContain('pitch');
+    expect(steps).not.toContain('practiceEdit');
+    expect(previousStep('languages', 'cloud', true)).toBe('signin');
+    expect(nextStep('languages', 'cloud', true)).toBe('apps');
+  });
+
+  it('remembers the route across a restart and forgets it when onboarding ends', () => {
+    saveProgress('apps', 'cloud', true);
+    expect(savedReturning()).toBe(true);
+    saveProgress('how', 'cloud', false);
+    expect(savedReturning()).toBe(false);
+    saveProgress('apps', 'cloud', true);
+    clearProgress();
+    expect(savedReturning()).toBe(false);
   });
 });

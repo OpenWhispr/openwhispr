@@ -6,11 +6,31 @@ import { AppFont } from '@/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useConfigStore } from '@/store/useConfigStore';
 import { LANGUAGES, byCode, initialLanguages } from './languages';
-import { AccentText, GlassButton, PillButton, Screen, SecondaryButton, colors, s } from './kit';
+import {
+  AccentText,
+  GlassButton,
+  LinkButton,
+  PillButton,
+  Screen,
+  SecondaryButton,
+  colors,
+  s,
+} from './kit';
 import { useOnboardingT } from './strings';
+import { useLaunchT } from '../launch/strings';
 
-export function LanguagesScreen({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+export function LanguagesScreen({
+  onBack,
+  onNext,
+  onSeeHowItWorks,
+}: {
+  onBack: () => void;
+  onNext: () => void;
+  /** An account that skipped the tour (F2) can still take it. */
+  onSeeHowItWorks?: () => void;
+}) {
   const t = useOnboardingT();
+  const launchT = useLaunchT();
   const config = useConfigStore((state) => state.config);
   const [codes, setCodes] = useState(() =>
     initialLanguages(config?.languages, config?.preferredLanguage),
@@ -36,6 +56,11 @@ export function LanguagesScreen({ onBack, onNext }: { onBack: () => void; onNext
       <Text textBreakStrategy="balanced" style={s.body}>
         {t(codes.length ? 'languagesBody' : 'autoDetect')}
       </Text>
+      {onSeeHowItWorks && (
+        <View style={{ alignItems: 'flex-start', marginTop: -8 }}>
+          <LinkButton label={launchT('seeHowItWorks')} onPress={onSeeHowItWorks} />
+        </View>
+      )}
       <View style={{ gap: 12 }}>
         {codes.map((code) => {
           const language = byCode.get(code);

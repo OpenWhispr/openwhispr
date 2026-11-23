@@ -15,6 +15,7 @@ import {
   previousStep,
   saveProgress,
   savedMode,
+  savedReturning,
   savedStep,
   type OnboardingMode,
   type OnboardingStep,
@@ -35,6 +36,7 @@ import { ModeScreen, ReadyScreen } from './onboarding/EndScreens';
 import { DeviceReadyScreen, DeviceSetupScreen } from './onboarding/DeviceSetupScreens';
 import { applyCloudConfig } from './onboarding/setup';
 import { useOnboardingT } from './onboarding/strings';
+import { finishedOnboardingOnAndroid } from './onboarding/accountOnboarding';
 
 export { PlanContent as ProContent } from './PlanContent';
 
@@ -44,6 +46,8 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
   const t = useOnboardingT();
   const [step, setStep] = useState<OnboardingStep>(savedStep);
   const [mode, setMode] = useState<OnboardingMode>(savedMode);
+  // An account that finished onboarding on Android before skips the tour (F2).
+  const [returning, setReturning] = useState(savedReturning);
   const [finishing, setFinishing] = useState(false);
   const user = useAuthStore((state) => state.user);
   const { register } = useSuperwallGate();
@@ -51,24 +55,38 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
   stepRef.current = step;
 
   const go = useCallback(
-    (next: OnboardingStep, nextMode: OnboardingMode = mode) => {
-      saveProgress(next, nextMode);
+    (next: OnboardingStep, nextMode: OnboardingMode = mode, nextReturning = returning) => {
+      saveProgress(next, nextMode, nextReturning);
       setMode(nextMode);
+      setReturning(nextReturning);
       setStep(next);
     },
-    [mode],
+    [mode, returning],
   );
   const advance = useCallback(() => {
-    const next = nextStep(stepRef.current, mode);
+    const next = nextStep(stepRef.current, mode, returning);
     if (next) go(next);
+  }, [go, mode, returning]);
+  // Signed in with a real account: the tour, or Languages for an account that already finished
+  // onboarding on Android. The server is asked once, for at most 3 s; no answer is the tour.
+  const asking = useRef(false);
+  const startAfterSignIn = useCallback(async () => {
+    if (asking.current) return;
+    asking.current = true;
+    try {
+      const finished = await finishedOnboardingOnAndroid();
+      go(finished ? 'languages' : 'pitch', mode, finished);
+    } finally {
+      asking.current = false;
+    }
   }, [go, mode]);
   const back = useCallback(() => {
-    const previous = previousStep(stepRef.current, mode);
+    const previous = previousStep(stepRef.current, mode, returning);
     // Someone already signed in has nothing to do on the sign-in screen.
     if (previous === 'signin' && user && !user.isAnonymous && !needsEmailVerification(user))
       go('splash');
     else if (previous) go(previous);
-  }, [go, mode, user]);
+  }, [go, mode, returning, user]);
 
   // The system back gesture walks back through the steps, as the on-screen back button does.
   useEffect(() => {
@@ -85,8 +103,8 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
   useEffect(() => {
     // An email account verifies first, on the sign-in screen (6.1, decision 12).
     if (step === 'signin' && user && !user.isAnonymous && !needsEmailVerification(user))
-      go('pitch');
-  }, [go, step, user]);
+      void startAfterSignIn();
+  }, [startAfterSignIn, step, user]);
 
   // Practice runs on Cloud for free before anyone signs up, as on iOS: someone who skipped
   // sign-in gets an anonymous session that a later sign-up links to.
@@ -151,9 +169,10 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
     case 'splash':
       return (
         <SplashScreen
-          onStart={() =>
-            go(user && !user.isAnonymous && !needsEmailVerification(user) ? 'pitch' : 'signin')
-          }
+          onStart={() => {
+            if (user && !user.isAnonymous && !needsEmailVerification(user)) void startAfterSignIn();
+            else go('signin');
+          }}
         />
       );
     case 'signin':
@@ -163,7 +182,7 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
           <AuthScreen
             variant="onboarding"
             onClose={() => go('splash')}
-            onGuestContinue={() => go('pitch')}
+            onGuestContinue={() => go('pitch', mode, false)}
           />
         </>
       );
@@ -178,7 +197,14 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
     case 'practiceEdit':
       return <PracticeMenuScreen key="edit" kind="edit" onBack={back} onNext={advance} />;
     case 'languages':
-      return <LanguagesScreen onBack={back} onNext={advance} />;
+      return (
+        <LanguagesScreen
+          onBack={back}
+          onNext={advance}
+          // The tour it skipped is one tap away; from there it carries on as for anyone new.
+          onSeeHowItWorks={returning ? () => go('how', mode, false) : undefined}
+        />
+      );
     case 'apps':
       return <AppsScreen onBack={back} onNext={advance} />;
     case 'overlay':

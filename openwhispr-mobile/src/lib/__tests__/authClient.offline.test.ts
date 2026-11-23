@@ -171,3 +171,37 @@ it('forgets cached identity when the session request throws an authoritative rej
   await expect(getSession({ allowOfflineCache: true })).rejects.toEqual({ status: 403 });
   expect(mockClearCache).toHaveBeenCalledWith('openwhispr_session_data', '{}');
 });
+
+describe('Android launch session (F3)', () => {
+  it('reads the saved account without the network and says whether it is still current', async () => {
+    await expect(androidAuth.readSavedSession()).resolves.toEqual({
+      user: expect.objectContaining({ id: user.id }),
+      current: true,
+    });
+    mockReadCache.mockResolvedValue(
+      JSON.stringify({
+        ...cachedSession(),
+        session: { ...cachedSession().session, expiresAt: new Date(0).toISOString() },
+      }),
+    );
+    await expect(androidAuth.readSavedSession()).resolves.toMatchObject({ current: false });
+    expect(mockGetSession).not.toHaveBeenCalled();
+  });
+
+  it('checks with a time limit and only ends the session on the server’s word', async () => {
+    mockGetSession.mockRejectedValue(Object.assign(new Error('timeout'), { name: 'TimeoutError' }));
+    await expect(androidAuth.checkSession(5000)).resolves.toEqual({ state: 'unknown' });
+    expect(mockGetSession).toHaveBeenCalledWith({ fetchOptions: { timeout: 5000 } });
+    expect(mockClearCache).not.toHaveBeenCalled();
+
+    mockGetSession.mockResolvedValue({ data: null, error: { status: 503 } });
+    await expect(androidAuth.checkSession(5000)).resolves.toEqual({ state: 'unknown' });
+
+    mockGetSession.mockResolvedValue({ data: { user }, error: null });
+    await expect(androidAuth.checkSession(5000)).resolves.toMatchObject({ state: 'valid' });
+
+    mockGetSession.mockResolvedValue({ data: null, error: { status: 401 } });
+    await expect(androidAuth.checkSession(5000)).resolves.toEqual({ state: 'ended' });
+    expect(mockClearCache).toHaveBeenCalled();
+  });
+});

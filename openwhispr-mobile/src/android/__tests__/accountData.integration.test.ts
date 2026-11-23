@@ -81,6 +81,14 @@ jest.mock('expo-secure-store', () => ({
   setItemAsync: async () => {},
   deleteItemAsync: async () => {},
 }));
+// Android's launch reads the saved session and asks the server through its own client.
+jest.mock('@/lib/authClient.android', () => ({
+  readSavedSession: async () => null,
+  checkSession: async () => {
+    if (mockSessionFailure) throw mockSessionFailure;
+    return mockSessionUser ? { state: 'valid', user: mockSessionUser } : { state: 'ended' };
+  },
+}));
 jest.mock('@/lib/authClient', () => ({
   getStoredSession: async () => (mockSessionUser ? `test-${mockSessionUser.id}` : null),
   getSession: async () => {
