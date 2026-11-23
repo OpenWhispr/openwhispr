@@ -1064,6 +1064,17 @@ describe('mobile dictation', () => {
     expect(r.queued()).toEqual([]);
   });
 
+  it('dates a dictation the keyboard finished earlier by when it finished', async () => {
+    const r = rig();
+    await r.signInAs(ACCOUNT);
+    await r.events.recordDictationCompleted({
+      ...dictation(1, 12, { source: 'keyboard' }),
+      occurredAt: Date.parse('2026-11-04T07:30:00.000Z'),
+    });
+    const sent = r.sentEvents().filter((event) => event.event_name === 'dictation_completed');
+    expect(sent.map((event) => event.occurred_at)).toEqual(['2026-11-04T07:30:00.000Z']);
+  });
+
   it('one recording is one event, however often and on whichever device run it is reported', async () => {
     const storage = memoryStorage();
     const first = rig(storage);

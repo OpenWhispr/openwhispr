@@ -17,6 +17,7 @@ import {
   type InviteFlowEvent,
   type InviteFlowState,
 } from "../lib/inviteFlow";
+import { workspacePlanSection } from "../lib/settingsNav";
 import { useInviteSeatLines } from "../hooks/useInviteSeatLines";
 import { workspaceCan } from "../lib/capabilities";
 import { invitePeople } from "../services/invitePeople";
@@ -275,7 +276,7 @@ export default function InviteTeammateDialog({
     // Closing mid-send would unmount the dialog, which aborts the run and loses its report.
     if (state.phase === "sending") return;
     close();
-    void window.electronAPI?.openSettingsSection?.("plansBilling");
+    void window.electronAPI?.openSettingsSection?.(workspacePlanSection(workspaceId));
   };
 
   // Invitations in flight can't be taken back, so the dialog stays until the run reports.

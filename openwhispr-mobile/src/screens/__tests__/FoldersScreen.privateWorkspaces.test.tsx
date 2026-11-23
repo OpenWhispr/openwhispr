@@ -50,7 +50,6 @@ jest.mock('@react-native-menu/menu', () =>
   require('../../components/notes/__tests__/menuViewMock'),
 );
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
-jest.mock('@/components/notes/NotesTopBar', () => ({ NotesTopBar: () => null }));
 jest.mock('@/components/notes/SyncStatusLabel', () => ({ SyncStatusLabel: () => null }));
 jest.mock('@/components/ui/Fab', () => {
   const { Pressable, Text } = require('react-native');
@@ -82,6 +81,7 @@ jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));
 
 import { act, fireEvent, render } from '@testing-library/react-native';
 import FoldersScreen from '@/screens/FoldersScreen';
+import { PrivateWorkspaceSwitcher } from '@/components/notes/PrivateWorkspaceSwitcher';
 import { useNotesStore } from '@/store/useNotesStore';
 
 const OWN = 'workspace-own';
@@ -128,7 +128,7 @@ beforeEach(() => {
 
 it('shows the active workspace’s Private and team spaces, and switches between workspaces', () => {
   const screen = render(<FoldersScreen />);
-  expect(screen.getByLabelText('Workspace: Mine')).toBeTruthy();
+  expect(screen.getByLabelText('Folders, Workspace: Mine')).toBeTruthy();
   expect(screen.getAllByText('Personal')).toHaveLength(1);
   expect(screen.queryByText('Groceries')).not.toBeNull();
   expect(screen.queryByText('Roadmap notes')).toBeNull();
@@ -138,7 +138,7 @@ it('shows the active workspace’s Private and team spaces, and switches between
   act(() => {
     fireEvent.press(screen.getByTestId(`menu-${ACME}`));
   });
-  expect(screen.getByLabelText('Workspace: Acme')).toBeTruthy();
+  expect(screen.getByLabelText('Folders, Workspace: Acme')).toBeTruthy();
   expect(screen.getAllByText('Personal')).toHaveLength(1);
   expect(screen.queryByText('Roadmap notes')).not.toBeNull();
   expect(screen.queryByText('Groceries')).toBeNull();
@@ -162,7 +162,8 @@ it('files a note composed from the Folders screen in the active workspace’s Pe
 it('keeps today’s single Private list when the API has no per-workspace Private', () => {
   mockRepo.setSyncState('private_workspace_placement', 'false');
   const screen = render(<FoldersScreen />);
-  expect(screen.queryByLabelText(/^Workspace:/)).toBeNull();
+  expect(screen.queryByLabelText(/Workspace:/)).toBeNull();
+  expect(screen.getByRole('header', { name: 'Folders' })).toBeTruthy();
   expect(screen.queryByText('Family')).not.toBeNull();
   expect(screen.queryByText('Engineering')).not.toBeNull();
 });
@@ -171,20 +172,20 @@ it('keeps legacy folders selectable beside a single workspace before a default e
   mockRepo.setSyncState('private_default_workspace_id', '');
   mockRepo.setSyncState('private_workspaces', JSON.stringify([{ id: ACME, name: 'Acme' }]));
   const screen = render(<FoldersScreen />);
-  expect(screen.getByLabelText('Workspace: Personal')).toBeTruthy();
+  expect(screen.getByLabelText('Folders, Workspace: Personal')).toBeTruthy();
   expect(screen.queryByText('Groceries')).not.toBeNull();
   expect(screen.queryByText('Roadmap notes')).toBeNull();
   expect(screen.queryByText('Family')).not.toBeNull();
   expect(screen.queryByText('Engineering')).not.toBeNull();
 
   fireEvent.press(screen.getByTestId(`menu-${ACME}`));
-  expect(screen.getByLabelText('Workspace: Acme')).toBeTruthy();
+  expect(screen.getByLabelText('Folders, Workspace: Acme')).toBeTruthy();
   expect(screen.queryByText('Roadmap notes')).not.toBeNull();
   expect(screen.queryByText('Groceries')).toBeNull();
   expect(screen.queryByText('Engineering')).not.toBeNull();
 
   fireEvent.press(screen.getByTestId('menu-unassigned-private'));
-  expect(screen.getByLabelText('Workspace: Personal')).toBeTruthy();
+  expect(screen.getByLabelText('Folders, Workspace: Personal')).toBeTruthy();
   expect(screen.queryByText('Groceries')).not.toBeNull();
   expect(screen.queryByText('Family')).not.toBeNull();
   expect(screen.queryByText('Engineering')).not.toBeNull();
@@ -193,4 +194,19 @@ it('keeps legacy folders selectable beside a single workspace before a default e
   expect(
     mockRepo.getFolders().find((folder) => folder.id === note.folderId)?.privateWorkspaceId,
   ).toBeNull();
+});
+
+it('carries the selection from the Account row to Folders and back', () => {
+  const account = render(<PrivateWorkspaceSwitcher />);
+  expect(account.getByRole('button', { name: 'Workspace: Mine' })).toBeTruthy();
+  fireEvent.press(account.getByTestId(`menu-${ACME}`));
+
+  const folders = render(<FoldersScreen />);
+  expect(folders.getByRole('button', { name: 'Folders, Workspace: Acme' })).toBeTruthy();
+  expect(folders.getByTestId(`menu-${ACME}`).props.accessibilityState.selected).toBe(true);
+  expect(folders.getByText('Roadmap notes')).toBeTruthy();
+  fireEvent.press(folders.getByTestId(`menu-${OWN}`));
+
+  expect(account.getByRole('button', { name: 'Workspace: Mine' })).toBeTruthy();
+  expect(account.getByTestId(`menu-${OWN}`).props.accessibilityState.selected).toBe(true);
 });

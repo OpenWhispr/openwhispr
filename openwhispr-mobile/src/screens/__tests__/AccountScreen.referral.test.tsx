@@ -23,6 +23,23 @@ const mockAuthState: {
   deleteAccount: jest.fn(),
 };
 const mockRouterPush = jest.fn();
+const mockNotesState = {
+  privateWorkspaces: [
+    { id: 'own', name: 'Mine' },
+    { id: 'team', name: 'Team' },
+  ],
+  activePrivateWorkspaceId: 'own',
+  defaultPrivateWorkspaceId: 'own',
+  setActivePrivateWorkspace: jest.fn(),
+  isInitialized: true,
+  initialize: jest.fn(),
+};
+jest.mock('@/store/useNotesStore', () => ({
+  useNotesStore: (select: (state: typeof mockNotesState) => unknown) => select(mockNotesState),
+}));
+jest.mock('@react-native-menu/menu', () =>
+  require('../../components/notes/__tests__/menuViewMock'),
+);
 const mockUsage: UsageInfo = {
   billingUserId: '00000000-0000-4000-8000-000000000001',
   wordsUsed: 100,
@@ -156,6 +173,13 @@ describe('AccountScreen referral section', () => {
     fireEvent.press(getByText('Referral Code'));
 
     expect(mockRouterPush).toHaveBeenCalledWith('/(account)/referral');
+  });
+
+  it('offers the shared workspace picker on Account', () => {
+    const screen = render(<AccountScreen />);
+    expect(screen.getByRole('button', { name: 'Workspace: Mine' })).toBeTruthy();
+    fireEvent.press(screen.getByTestId('menu-team'));
+    expect(mockNotesState.setActivePrivateWorkspace).toHaveBeenCalledWith('team');
   });
 
   it('shows Referral to guests', () => {

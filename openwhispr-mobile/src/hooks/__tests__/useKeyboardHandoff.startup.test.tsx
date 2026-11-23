@@ -133,6 +133,18 @@ jest.mock('@/lib/keyboardToneSync', () => ({
   snapshotKeyboardTone: jest.fn(),
   readKeyboardToneSnapshot: jest.fn(() => null),
 }));
+// The keyboard syncs the layout starts are not under test here. The direct-dictation one
+// reads the dictionary store, which opens the notes database; the others write through
+// App Group calls this file's storage mock doesn't have.
+jest.mock('@/lib/keyboardDirectSync', () => ({
+  startKeyboardDirectSync: () => () => undefined,
+}));
+jest.mock('@/lib/keyboardCredentialSync', () => ({
+  startKeyboardCredentialSync: () => () => undefined,
+}));
+jest.mock('@/lib/keyboardTypingSync', () => ({
+  startKeyboardTypingSync: () => () => undefined,
+}));
 jest.mock('@/lib/keyboardAgentSync', () => ({
   startKeyboardAgentSync: () => () => undefined,
   snapshotKeyboardAgentRequest: jest.fn(() => null),
