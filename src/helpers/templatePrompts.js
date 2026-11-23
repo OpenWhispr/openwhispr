@@ -15,6 +15,7 @@ import {
   NOTE_INPUT_PREAMBLE,
   PLAIN_TRANSCRIPT_INPUT_PREAMBLE,
   PLAIN_TRANSCRIPT_SYSTEM_PROMPT,
+  SCOPED_NOTES_FOOTER,
   SECTIONED_NOTES_FOOTER,
   SECTIONED_NOTES_FORMAT,
   SECTIONED_NOTES_INSTRUCTIONS,
@@ -81,7 +82,7 @@ export function compileTemplatePrompt(
         ...sections.map(({ heading, instruction }) =>
           instruction ? `## ${heading}\n${instruction}` : `## ${heading}`
         ),
-        SECTIONED_NOTES_FOOTER,
+        context ? SCOPED_NOTES_FOOTER : SECTIONED_NOTES_FOOTER,
       ]
         .filter(Boolean)
         .join("\n\n")

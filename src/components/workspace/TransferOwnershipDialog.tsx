@@ -11,7 +11,8 @@ import { serverRefusalMessage } from "../../services/cloudApi";
 import { transferOwnership } from "../../services/workspaceActions";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import type { Workspace, WorkspaceMember } from "../../types/electron";
-import { ChevronDown } from "../icons";
+import { ChevronsUpDown } from "../icons";
+import MemberAvatar from "../MemberAvatar";
 import { cn } from "../lib/utils";
 import {
   DropdownMenu,
@@ -21,6 +22,7 @@ import {
 } from "../ui/dropdown-menu";
 import { useToast } from "../ui/useToast";
 import { WorkspaceActionDialog } from "./WorkspaceActionDialog";
+import { PICKER_TRIGGER } from "./dialogButtons";
 
 interface TransferOwnershipDialogProps {
   workspace: Workspace;
@@ -129,8 +131,6 @@ export function TransferOwnershipDialog({
 
   const roleLabel = (member: WorkspaceMember): string =>
     t(`settingsPage.workspace.role.${member.role}`);
-  const candidateLabel = (member: WorkspaceMember): string =>
-    t("workspaces.transfer.candidate", { name: memberName(member), role: roleLabel(member) });
 
   const noCandidates = status === "ready" && candidates.length === 0;
   const pickerDisabled = status !== "ready" || noCandidates || busy;
@@ -165,15 +165,23 @@ export function TransferOwnershipDialog({
           <DropdownMenu>
             <DropdownMenuTrigger
               disabled={pickerDisabled}
-              className={cn(
-                "flex h-10 w-full items-center justify-between gap-2 rounded-full border border-border/70 bg-surface-1 px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
-                picked ? "text-foreground" : "text-muted-foreground"
-              )}
+              className={cn(PICKER_TRIGGER, !picked && "text-muted-foreground")}
             >
-              <span dir="auto" className="truncate">
-                {picked ? candidateLabel(picked) : t("workspaces.transfer.placeholder")}
+              {picked ? (
+                <MemberAvatar
+                  name={picked.name}
+                  email={picked.email}
+                  image={picked.image}
+                  size="row"
+                />
+              ) : null}
+              <span dir="auto" className="min-w-0 flex-1 truncate">
+                {picked ? memberName(picked) : t("workspaces.transfer.placeholder")}
               </span>
-              <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
+              <ChevronsUpDown
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
             </DropdownMenuTrigger>
             {/* Opens upward, over the title, and never flips: below the picker sit the dialog's
                 buttons, and picking enables Transfer ownership, so a double-click would land
@@ -187,10 +195,24 @@ export function TransferOwnershipDialog({
               {candidates.map((member) => (
                 <DropdownMenuItem
                   key={member.user_id}
+                  // Typeahead matches from the first character of the name, not of the label.
+                  textValue={memberName(member)}
                   onSelect={() => dispatch({ type: "pick", candidateId: member.user_id })}
+                  className="gap-2.5"
                 >
-                  <span dir="auto" className="truncate">
-                    {candidateLabel(member)}
+                  <MemberAvatar
+                    name={member.name}
+                    email={member.email}
+                    image={member.image}
+                    size="row"
+                  />
+                  <span className="flex min-w-0 flex-col">
+                    <span dir="auto" className="truncate text-sm text-foreground">
+                      {memberName(member)}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {roleLabel(member)}
+                    </span>
                   </span>
                 </DropdownMenuItem>
               ))}

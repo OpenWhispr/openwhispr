@@ -4,6 +4,8 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { CopyableCommand } from "../ui/CopyableCommand";
 import { SectionLabel, SettingsPanel, SettingsPanelRow } from "../ui/SettingsSection";
+import type { ApiAccessRestriction } from "../../stores/policyRules";
+import { ApiAccessNotice } from "./ApiAccessNotice";
 import { IntegrationsPane } from "./IntegrationsPane";
 
 const CLI_DOCS_URL = "https://docs.openwhispr.com/cli/install";
@@ -15,9 +17,11 @@ interface CliPaneProps {
   title: string;
   isPaid: boolean;
   onUpgrade: () => void;
+  /** Cloud mode signs in with a personal API key, which the organization may refuse. */
+  apiRestriction: ApiAccessRestriction | null;
 }
 
-export function CliPane({ title, isPaid, onUpgrade }: CliPaneProps): ReactElement {
+export function CliPane({ title, isPaid, onUpgrade, apiRestriction }: CliPaneProps): ReactElement {
   const { t } = useTranslation();
 
   return (
@@ -58,19 +62,23 @@ export function CliPane({ title, isPaid, onUpgrade }: CliPaneProps): ReactElemen
                 <h3 className="text-xs font-semibold text-foreground">
                   {t("integrations.cli.cloud.label")}
                 </h3>
-                {!isPaid && (
+                {!isPaid && !apiRestriction && (
                   <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
                     {t("integrations.plan.pro")}
                   </Badge>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
-                {isPaid
-                  ? t("integrations.cli.cloud.description")
-                  : t("integrations.cli.cloud.proRequired")}
-              </p>
+              {!apiRestriction && (
+                <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
+                  {isPaid
+                    ? t("integrations.cli.cloud.description")
+                    : t("integrations.cli.cloud.proRequired")}
+                </p>
+              )}
             </div>
-            {isPaid ? (
+            {apiRestriction ? (
+              <ApiAccessNotice restriction={apiRestriction} />
+            ) : isPaid ? (
               <CopyableCommand command={CLOUD_LOGIN_CMD} />
             ) : (
               <Button size="sm" onClick={onUpgrade}>

@@ -865,3 +865,27 @@ test("a cleanup model the org blocked says so instead of calling cleanup unconfi
   });
   assert.equal(unconfigured.notice.messageKey, "hooks.audioRecording.cleanupUnconfigured");
 });
+
+test("a provider's rewrite stands in for cleanup unless the app's own must run", async () => {
+  const { providerCleanupStandsIn } = await load();
+  const plain = { useCleanupModel: true, customPrompts: { cleanup: "" }, toneStyleEnabled: false };
+  const reachable = { cleanupReachable: true, providerLlmAllowed: true };
+  const unreachable = { cleanupReachable: false, providerLlmAllowed: true };
+
+  assert.equal(providerCleanupStandsIn(plain, reachable), true);
+  assert.equal(providerCleanupStandsIn(plain, unreachable), true);
+  assert.equal(providerCleanupStandsIn({ ...plain, useCleanupModel: false }, reachable), false);
+  assert.equal(
+    providerCleanupStandsIn(plain, { ...reachable, providerLlmAllowed: false }),
+    false,
+    "an org that refuses provider-run models gets no cloud rewrite"
+  );
+
+  // A custom prompt or a tone only reaches the app's cleanup, so it runs when it can.
+  const customPrompt = { ...plain, customPrompts: { cleanup: "As a list." } };
+  const tone = { ...plain, toneStyleEnabled: true };
+  for (const settings of [customPrompt, tone]) {
+    assert.equal(providerCleanupStandsIn(settings, reachable), false);
+    assert.equal(providerCleanupStandsIn(settings, unreachable), true);
+  }
+});

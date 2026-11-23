@@ -1,5 +1,5 @@
 import { useRegistryVersion } from "../../hooks/useRegistryVersion";
-import { useCallback } from "react";
+import { useCallback, type RefObject } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from "../icons";
@@ -42,6 +42,8 @@ const AUTO_REASONING_EFFORT_VALUE = "__auto__";
 
 interface InferenceConfigEditorProps {
   scope: InferenceScope;
+  selectedLabel?: string;
+  localPickerRef?: RefObject<HTMLDivElement | null>;
   onModeChange?: (mode: InferenceMode) => void;
   /** Restrict the selectable modes (e.g. vision override offers cloud/BYOK only). */
   allowedModes?: InferenceMode[];
@@ -51,15 +53,17 @@ export default function InferenceConfigEditor({
   scope,
   onModeChange,
   allowedModes,
+  selectedLabel,
+  localPickerRef,
 }: InferenceConfigEditorProps) {
   useRegistryVersion();
   const { t } = useTranslation();
   const policyState = usePolicySnapshot();
+  const definition: InferenceScopeDefinition = INFERENCE_SCOPES[scope];
   const config = useSettingsStore(
     useShallow((settings): ResolvedLLMConfig => {
       const effective = selectPolicyEffectiveSettings(settings, policyState);
       const resolved = selectResolvedLLMConfig(effective, scope);
-      const definition: InferenceScopeDefinition = INFERENCE_SCOPES[scope];
       // Inherited runtime defaults are not an explicit selection in an optional picker.
       return definition.optional
         ? { ...resolved, model: effective[definition.storeKeys.model] as string }
@@ -161,6 +165,7 @@ export default function InferenceConfigEditor({
       setCustomReasoningApiKey={setField("customApiKey")}
       setReasoningMode={setMode}
       mode={mode}
+      modelNeeds={definition.modelNeeds}
     />
   );
 
@@ -260,13 +265,26 @@ export default function InferenceConfigEditor({
       {modes.length > 1 && (
         <InferenceModeSelector
           modes={modes}
+          selectedLabel={selectedLabel}
           activeMode={effectiveMode}
           onSelect={handleModeSelect}
         />
       )}
 
       {effectiveMode === "providers" && renderModelSelector("cloud")}
-      {effectiveMode === "local" && renderModelSelector("local")}
+      {effectiveMode === "local" &&
+        (localPickerRef ? (
+          <div
+            ref={localPickerRef}
+            tabIndex={-1}
+            role="group"
+            aria-label={t("models.policy.chooseModel")}
+          >
+            {renderModelSelector("local")}
+          </div>
+        ) : (
+          renderModelSelector("local")
+        ))}
 
       {effectiveMode === "self-hosted" && (
         <OpenAICompatiblePanel

@@ -68,6 +68,8 @@ function isValidPolicyShape(policy) {
       typeof policy.features.screenContextEnabled === "boolean") &&
     (policy.features?.connectorsEnabled === undefined ||
       typeof policy.features.connectorsEnabled === "boolean") &&
+    (policy.features?.apiAccessEnabled === undefined ||
+      typeof policy.features.apiAccessEnabled === "boolean") &&
     (policy.meetings === undefined ||
       (policy.meetings !== null &&
         typeof policy.meetings === "object" &&
@@ -85,6 +87,11 @@ function isValidPolicyShape(policy) {
     (policy.requiredLocalModels === undefined ||
       (Array.isArray(policy.requiredLocalModels) &&
         policy.requiredLocalModels.every((item) => typeof item === "string"))) &&
+    (policy.updates === undefined ||
+      (policy.updates !== null &&
+        typeof policy.updates === "object" &&
+        !Array.isArray(policy.updates) &&
+        (policy.updates.mode === undefined || typeof policy.updates.mode === "string"))) &&
     (policy.minAppVersion === null || isCanonicalAppVersion(policy.minAppVersion))
   );
 }

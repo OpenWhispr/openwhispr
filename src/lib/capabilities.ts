@@ -1,6 +1,8 @@
 import type {
   SpaceCapabilities,
   SpaceItem,
+  Team,
+  TeamCapabilities,
   Workspace,
   WorkspaceCapabilities,
   WorkspaceRole,
@@ -65,4 +67,32 @@ export function spaceCan(
   if (!space) return false;
   const capabilities = space.capabilities ?? spaceCapabilitiesForRole(space);
   return capabilities[capability] === true;
+}
+
+export type TeamCreation = "allowed" | "paywall" | "unavailable";
+
+/**
+ * Whether the caller may create a team here, and if not, whether a plan or a permission is what
+ * stands in the way. A missing `create_teams` reads as allowed: a workspace cached before the API
+ * sent it must not show a paying customer a paywall, and the server still refuses when it should.
+ * The role table can't know the plan, so it has no say in it.
+ */
+export function teamCreationFor(
+  workspace: Pick<Workspace, "role" | "capabilities"> | null | undefined
+): TeamCreation {
+  if (!workspaceCan(workspace, "manage_teams")) return "unavailable";
+  return workspace?.capabilities?.create_teams === false ? "paywall" : "allowed";
+}
+
+/**
+ * Whether the caller may do something on a team. The server's capabilities win; an older API sent
+ * none, so managing follows the workspace and leaving, which needs a row it can't see, is false.
+ */
+export function teamCan(
+  team: Pick<Team, "capabilities">,
+  workspace: Pick<Workspace, "role" | "capabilities"> | null | undefined,
+  capability: keyof TeamCapabilities
+): boolean {
+  if (team.capabilities) return team.capabilities[capability] === true;
+  return capability === "leave" ? false : workspaceCan(workspace, "manage_teams");
 }

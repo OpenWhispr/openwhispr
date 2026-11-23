@@ -12,6 +12,7 @@ import {
   isSecureHttpEndpoint,
   isAzureOpenAIEndpoint,
   buildAzureTranscriptionUrl,
+  matchesHost,
 } from "../utils/urlUtils.ts";
 import {
   isOrukeetEndpoint,
@@ -19,6 +20,10 @@ import {
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription.js";
 import {
+  acceptsUnlistedTranscriptionModel,
+  ASSEMBLYAI_DICTATION_MODEL,
+  isAssemblyAiRewriteAllowedByPolicy,
+  isModeAllowedByPolicy,
   isTranscriptionSelectionAllowed,
   type PolicyDecisionSnapshot,
 } from "../stores/policyRules.ts";
@@ -29,6 +34,7 @@ import {
 } from "../services/transcriptionBaseUrl.ts";
 import type { ManagedEnterpriseRequestContext } from "../types/enterpriseIdentity.ts";
 import { getRegistryData } from "../models/registryData.js";
+import { isNoteRecordingOnlyTranscriptionModel } from "../models/appTranscriptionProviders.js";
 import { retiredReplacement } from "../models/modelLifecycle.js";
 
 const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
@@ -41,6 +47,14 @@ export function byokFileSizeLimit(provider: string): number {
   return provider === "gemini" ? GEMINI_FILE_SIZE_LIMIT : BYOK_FILE_SIZE_LIMIT;
 }
 
+// BYOK providers that speak OpenAI's own /audio/transcriptions shape and
+// differ only in base URL and key slot; OpenAI itself falls through as the
+// default. OpenRouter is a broker, so its ids stay vendor-prefixed.
+const OPENAI_COMPATIBLE_TRANSCRIPTION_BASES: Record<string, string> = {
+  groq: API_ENDPOINTS.GROQ_BASE,
+  openrouter: API_ENDPOINTS.OPENROUTER_BASE,
+};
+
 const CUSTOM_ENDPOINT_INVALID_MESSAGE_KEY =
   "hooks.audioRecording.errorDescriptions.customEndpointInvalid";
 const MANAGED_TRANSCRIPTION_UNAVAILABLE_MESSAGE_KEY =
@@ -52,15 +66,58 @@ const STREAMING_ONLY_PROVIDER_MESSAGE_KEY =
 const PROVIDER_KEY_MISSING_MESSAGE_KEY =
   "hooks.audioRecording.errorDescriptions.providerKeyMissing";
 
+const OPENROUTER_OUT_OF_CREDITS_MESSAGE_KEY =
+  "hooks.audioRecording.errorDescriptions.openRouterOutOfCredits";
+
+// OpenRouter is reached from its own tab or from a Custom endpoint typed by
+// hand. Both post to this host and share its limits, so every OpenRouter rule
+// (credits, dictionary, upload pieces) keys on the host, not the provider id.
+export function isOpenRouterEndpoint(endpoint: string | null | undefined): boolean {
+  return matchesHost(endpoint, "openrouter.ai");
+}
+
+// Audio Uploads to OpenRouter go out in 4-minute pieces (openRouterChunkedUpload.js):
+// its upstream providers stop after ~60 s of work per request. Self-hosted
+// servers set their own limits and never match.
+export function uploadsInChunks(route: TranscriptionRoute): boolean {
+  return (
+    route.transport === "http-batch" &&
+    route.provider !== "self-hosted" &&
+    isOpenRouterEndpoint(route.endpoint)
+  );
+}
+
+// OpenRouter answers 402 once the account's prepaid credit is spent, and its
+// JSON body would otherwise become the error text.
+export function batchTranscriptionHttpError(
+  status: number,
+  endpoint: string
+): { code: string; messageKey: string } | null {
+  if (status === 402 && isOpenRouterEndpoint(endpoint)) {
+    return { code: "OPENROUTER_OUT_OF_CREDITS", messageKey: OPENROUTER_OUT_OF_CREDITS_MESSAGE_KEY };
+  }
+  return null;
+}
+
 // Deepgram and AssemblyAI have no OpenAI-compatible /audio/transcriptions, so
 // they exist only as realtime providers. A batch/upload/retry request for them
 // has to fail closed: the fall-through at the end of resolveTranscriptionRoute
 // would otherwise POST the user's audio to api.openai.com with their OpenAI key.
 // Hand-maintained rather than derived from the registry: Corti's only model is
-// realtime too, yet it batches through the proxy. Every other "realtime-only"
-// decision (dictationStreamingRouting, audioManager.shouldUseStreaming, the
-// upload picker and selector) derives from this set.
+// realtime too, yet it batches through the proxy. The upload picker and selector
+// read this set; dictation and voice takes ask isStreamingOnlySelection, which
+// knows the one exception.
 export const STREAMING_ONLY_PROVIDERS = new Set(["deepgram", "assemblyai"]);
+
+// AssemblyAI's Dictation API is the one batch model on a realtime-only provider:
+// it transcribes and cleans up a finished recording in one request, through
+// main. The upload picker still leaves AssemblyAI out.
+export { ASSEMBLYAI_DICTATION_MODEL };
+
+export function isStreamingOnlySelection(provider: string, model?: string | null): boolean {
+  if (provider === "assemblyai" && model === ASSEMBLYAI_DICTATION_MODEL) return false;
+  return STREAMING_ONLY_PROVIDERS.has(provider);
+}
 
 export interface TranscriptionRouteSettings {
   transcriptionMode?: string;
@@ -118,7 +175,7 @@ export type TranscriptionRoute =
   | { transport: "local" }
   | {
       transport: "proxied";
-      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini";
+      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini" | "assemblyai" | "elevenlabs";
       model: string | null;
       language?: string;
       sizeCapBytes: number;
@@ -127,7 +184,7 @@ export type TranscriptionRoute =
     }
   | {
       transport: "http-batch";
-      provider: "self-hosted" | "custom" | "openai" | "groq";
+      provider: "self-hosted" | "custom" | "openai" | "groq" | "openrouter";
       endpoint: string;
       model: string | null;
       auth: { scheme: "bearer" | "azure-api-key" | "none"; keyRef: string | null };
@@ -174,6 +231,42 @@ export const XAI_STT_LANGUAGES = new Set([
   "vi",
 ]);
 
+// Languages the Dictation API accepts in language_codes; it rejects any other code.
+export const ASSEMBLYAI_DICTATION_LANGUAGES = new Set([
+  "af",
+  "ar",
+  "ca",
+  "da",
+  "de",
+  "en",
+  "es",
+  "et",
+  "fa",
+  "fi",
+  "fr",
+  "gl",
+  "he",
+  "hi",
+  "it",
+  "ja",
+  "ko",
+  "mr",
+  "nl",
+  "nn",
+  "no",
+  "pt",
+  "ro",
+  "ru",
+  "sv",
+  "tr",
+  "ur",
+  "vi",
+  "xh",
+  "yue",
+  "zh",
+  "zu",
+]);
+
 // The live catalog decides first: an offered model is sent as is, and a retired one
 // moves to its replacement. The prefix rules then keep a model the catalog does not know
 // yet (a remote addition before its catalog loads) instead of resetting it;
@@ -183,7 +276,12 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (provider === "custom") return trimmed || "whisper-1";
   if (trimmed) {
     const catalogProvider = getRegistryData().transcriptionProviders.find((p) => p.id === provider);
-    if (catalogProvider?.models.some((model) => model.id === trimmed)) return trimmed;
+    // A Note Recording-only model has no batch endpoint, so it falls to the rules below.
+    if (
+      !isNoteRecordingOnlyTranscriptionModel(provider, trimmed) &&
+      catalogProvider?.models.some((model) => model.id === trimmed)
+    )
+      return trimmed;
     const replacement = retiredReplacement("transcriptionProviders", provider, trimmed);
     if (replacement) return replacement;
     const matchesProvider =
@@ -192,12 +290,23 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
         (trimmed.startsWith("gpt-transcribe") ||
           trimmed.startsWith("gpt-4o") ||
           trimmed === "whisper-1")) ||
+      // Every OpenRouter id is vendor-prefixed, so the slash is what tells a
+      // real selection apart from one left behind by another provider. Models
+      // outside our curated list pass through deliberately.
+      acceptsUnlistedTranscriptionModel(provider, trimmed) ||
       (provider === "mistral" && trimmed.startsWith("voxtral-")) ||
       (provider === "corti" && trimmed.startsWith("corti-")) ||
       (provider === "gemini" && trimmed.startsWith("gemini-")) ||
+      // The realtime models have no batch endpoint; resolving one falls back to scribe_v3.
+      (provider === "elevenlabs" &&
+        trimmed.startsWith("scribe_") &&
+        !trimmed.endsWith("_realtime") &&
+        !trimmed.endsWith("_live")) ||
       (provider === "deepgram" && (trimmed.startsWith("nova-") || trimmed.startsWith("flux-"))) ||
       (provider === "assemblyai" &&
-        (trimmed.startsWith("universal-") || trimmed.startsWith("slam-")));
+        (trimmed.startsWith("universal-") ||
+          trimmed.startsWith("slam-") ||
+          trimmed === ASSEMBLYAI_DICTATION_MODEL));
     if (matchesProvider) return trimmed;
   }
   if (provider === "groq") return "whisper-large-v3-turbo";
@@ -205,8 +314,10 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (provider === "mistral") return "voxtral-mini-latest";
   if (provider === "corti") return "corti-transcribe";
   if (provider === "gemini") return "gemini-3.5-transcribe";
+  if (provider === "elevenlabs") return "scribe_v3";
   if (provider === "deepgram") return "nova-3";
   if (provider === "assemblyai") return "universal-3-6-pro";
+  if (provider === "openrouter") return "mistralai/voxtral-mini-transcribe-3-0";
   return "gpt-transcribe";
 }
 
@@ -286,12 +397,16 @@ export function resolveTranscriptionRoute({
 
   // Fail-closed floor only: callers pass policy-effective settings, so a
   // disallowed selection here means the policy layer was bypassed upstream.
+  // A local selection names no model here; the local managers check it.
+  const mode = s.transcriptionMode || (s.useLocalWhisper ? "local" : "providers");
   if (
     managed &&
-    !isTranscriptionSelectionAllowed(policy!, {
-      mode: (s.transcriptionMode || (s.useLocalWhisper ? "local" : "providers")) as never,
-      provider: s.cloudTranscriptionProvider || "",
-    })
+    !(mode === "local"
+      ? isModeAllowedByPolicy(policy!, "transcription", "local")
+      : isTranscriptionSelectionAllowed(policy!, {
+          mode: mode as never,
+          provider: s.cloudTranscriptionProvider || "",
+        }))
   ) {
     return error(
       "Transcription is restricted by your organization.",
@@ -358,6 +473,15 @@ export function resolveTranscriptionRoute({
       sizeCapBytes: GEMINI_FILE_SIZE_LIMIT,
     };
   }
+  if (provider === "elevenlabs") {
+    return {
+      transport: "proxied",
+      provider,
+      model,
+      language,
+      sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
+    };
+  }
   if (provider === "corti") {
     return {
       transport: "proxied",
@@ -410,6 +534,22 @@ export function resolveTranscriptionRoute({
         PROVIDER_KEY_MISSING_MESSAGE_KEY
       );
     }
+    if (!isStreamingOnlySelection(provider, model)) {
+      if (managed && !isAssemblyAiRewriteAllowedByPolicy(policy)) {
+        return error(
+          "Transcription is restricted by your organization.",
+          "POLICY_RESTRICTED",
+          "common.policyTranscriptionRestricted"
+        );
+      }
+      return {
+        transport: "proxied",
+        provider: "assemblyai",
+        model,
+        language: language && ASSEMBLYAI_DICTATION_LANGUAGES.has(language) ? language : undefined,
+        sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
+      };
+    }
     return error(
       "This provider only supports live transcription. Choose another provider for file uploads and retries.",
       "STREAMING_ONLY_PROVIDER",
@@ -417,16 +557,17 @@ export function resolveTranscriptionRoute({
     );
   }
 
-  const isGroq = provider === "groq";
+  const compatibleBase = OPENAI_COMPATIBLE_TRANSCRIPTION_BASES[provider];
+  const resolvedProvider = compatibleBase ? (provider as "groq" | "openrouter") : "openai";
   return {
     transport: "http-batch",
-    provider: isGroq ? "groq" : "openai",
+    provider: resolvedProvider,
     endpoint: buildApiUrl(
-      isGroq ? API_ENDPOINTS.GROQ_BASE : API_ENDPOINTS.TRANSCRIPTION_BASE,
+      compatibleBase ?? API_ENDPOINTS.TRANSCRIPTION_BASE,
       "/audio/transcriptions"
     ),
     model,
-    auth: { scheme: "bearer", keyRef: isGroq ? "groq" : "openai" },
+    auth: { scheme: "bearer", keyRef: resolvedProvider },
     sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
     language,
   };

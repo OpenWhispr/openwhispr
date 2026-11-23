@@ -4,13 +4,13 @@ import { filterMemberCandidates } from "./memberCandidates";
 
 export type PickedRecipient =
   | { kind: "member"; userId: string; label: string; email: string }
-  | { kind: "group"; teamId: string; label: string; memberCount: number }
+  | { kind: "team"; teamId: string; label: string; memberCount: number }
   | { kind: "email"; email: string; role: "admin" | "member"; valid: boolean };
 
 export interface PickerResults {
   /** `picked` rows stay listed, checked, so choosing one again takes it back out. */
   members: { member: WorkspaceMember; hasAccess: boolean; picked: boolean }[];
-  groups: { group: Team; hasAccess: boolean; picked: boolean }[];
+  teams: { team: Team; hasAccess: boolean; picked: boolean }[];
   /** The query reads as an address and nobody matches: offer to invite. */
   inviteEmail: string | null;
   /** The query is an address that already has an invitation waiting: shown, never offered again. */
@@ -25,8 +25,8 @@ export function recipientKey(recipient: PickedRecipient): string {
   switch (recipient.kind) {
     case "member":
       return `member:${recipient.userId}`;
-    case "group":
-      return `group:${recipient.teamId}`;
+    case "team":
+      return `team:${recipient.teamId}`;
     case "email":
       return `email:${recipient.email}`;
   }
@@ -41,12 +41,12 @@ export function memberRecipient(member: WorkspaceMember): PickedRecipient {
   };
 }
 
-export function groupRecipient(group: Team): PickedRecipient {
+export function teamRecipient(team: Team): PickedRecipient {
   return {
-    kind: "group",
-    teamId: group.id,
-    label: group.name,
-    memberCount: group.member_count ?? 0,
+    kind: "team",
+    teamId: team.id,
+    label: team.name,
+    memberCount: team.member_count ?? 0,
   };
 }
 
@@ -57,18 +57,18 @@ export function emailRecipient(email: string, role: "admin" | "member"): PickedR
 export function pickerResults(input: {
   query: string;
   roster: WorkspaceMember[];
-  groups: Team[];
+  teams: Team[];
   picked: PickedRecipient[];
   /** Rows that already have access show disabled, never pickable. */
   accessUserIds: ReadonlySet<string>;
-  accessGroupIds: ReadonlySet<string>;
+  accessTeamIds: ReadonlySet<string>;
   /** The creator, who gets a direct admin row anyway. */
   hiddenUserIds?: ReadonlySet<string>;
   /** Addresses with an invitation still waiting, lowercased. They aren't on the roster yet. */
   pendingEmails?: ReadonlySet<string>;
   canInvite: boolean;
 }): PickerResults {
-  const { query, roster, groups, picked, accessUserIds, accessGroupIds, hiddenUserIds } = input;
+  const { query, roster, teams, picked, accessUserIds, accessTeamIds, hiddenUserIds } = input;
   const pickedKeys = new Set(picked.map(recipientKey));
   const needle = query.trim().toLowerCase();
 
@@ -82,13 +82,13 @@ export function pickerResults(input: {
       picked: pickedKeys.has(`member:${member.user_id}`),
     }));
 
-  const matchingGroups = groups
-    .filter((group) => group.name.toLowerCase().includes(needle))
+  const matchingTeams = teams
+    .filter((team) => team.name.toLowerCase().includes(needle))
     .slice(0, PICKER_MAX_PER_KIND)
-    .map((group) => ({
-      group,
-      hasAccess: accessGroupIds.has(group.id),
-      picked: pickedKeys.has(`group:${group.id}`),
+    .map((team) => ({
+      team,
+      hasAccess: accessTeamIds.has(team.id),
+      picked: pickedKeys.has(`team:${team.id}`),
     }));
 
   const typed = query.trim();
@@ -100,12 +100,12 @@ export function pickerResults(input: {
 
   return {
     members,
-    groups: matchingGroups,
+    teams: matchingTeams,
     inviteEmail,
     pendingInvite,
     noResults:
       members.length === 0 &&
-      matchingGroups.length === 0 &&
+      matchingTeams.length === 0 &&
       inviteEmail === null &&
       pendingInvite === null,
   };
@@ -192,7 +192,7 @@ export function pickedSummary(picked: PickedRecipient[]): {
   };
   for (const recipient of picked) {
     if (recipient.kind === "member") summary.memberIds.push(recipient.userId);
-    else if (recipient.kind === "group") summary.teamIds.push(recipient.teamId);
+    else if (recipient.kind === "team") summary.teamIds.push(recipient.teamId);
     // An invalid address blocks the submit; it is never sent as one to invite.
     else if (recipient.valid) summary.emails.push({ email: recipient.email, role: recipient.role });
     else summary.hasInvalid = true;

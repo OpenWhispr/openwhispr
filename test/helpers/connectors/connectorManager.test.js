@@ -12,6 +12,65 @@ const ACCOUNT = "account-a";
 const ALLOWED = { policyState: "allowed", accountId: ACCOUNT };
 const SIGNED_OUT = { policyState: "signed_out", accountId: null };
 
+test("Salesforce field previews retain before/after metadata without exposing payload fields", async () => {
+  const metadata = [
+    { key: "value0", name: "Summary__c", label: "Summary", before: "Old", maxLength: 500 },
+  ];
+  const { manager } = await setup({
+    actions: { post: { kind: "approval", editable: { value0: "text", include0: "line" } } },
+    async prepare() {
+      return {
+        status: "ready",
+        payload: { secret: "main-only" },
+        preview: {
+          verbKey: "salesforceFields",
+          destinationLabel: "Acme",
+          accountLabel: "Chad",
+          body: "",
+          fields: { value0: "New", include0: "yes" },
+          salesforceFields: metadata,
+          secret: "never render",
+        },
+      };
+    },
+  });
+  const prepared = await manager.prepare("fake", "post", {}, ALLOWED);
+  assert.equal(prepared.status, "ready");
+  assert.deepEqual(prepared.preview.salesforceFields, metadata);
+  assert.equal(prepared.preview.secret, undefined);
+  assert.equal(prepared.payload, undefined);
+});
+
+test("Salesforce field previews fail closed without matching editable values and field metadata", async () => {
+  for (const metadata of [
+    undefined,
+    [],
+    [{ key: "value0", name: "Summary__c", label: "Summary", before: "Old", maxLength: -1 }],
+  ]) {
+    const { manager, log } = await setup({
+      actions: { post: { kind: "approval", editable: { value0: "text", include0: "line" } } },
+      async prepare() {
+        return {
+          status: "ready",
+          payload: {},
+          preview: {
+            verbKey: "salesforceFields",
+            destinationLabel: "Acme",
+            accountLabel: "Chad",
+            body: "",
+            fields: { value0: "New", include0: "yes" },
+            salesforceFields: metadata,
+          },
+        };
+      },
+    });
+    const result = await manager.prepare("fake", "post", {}, ALLOWED);
+    assert.equal(result.status, "failed");
+    assert.equal(result.errorCode, "invalid_result");
+    assert.equal(log.rows.size, 0);
+  }
+});
+
 function deferred() {
   let resolve;
   const promise = new Promise((r) => {
@@ -1197,6 +1256,41 @@ test("connect saves under the account that started it, cancels old approvals and
   });
   assert.equal(log.rows.get(prepared.actionId).state, "cancelled");
   assert.equal(announced.length, 1);
+});
+
+test("a sign-in domain that isn't Salesforce's keeps its own error", async () => {
+  const { manager } = await setup(
+    connectable({
+      async authorize() {
+        throw Object.assign(new Error("bad domain"), { code: "invalid_login_domain" });
+      },
+    }),
+    undefined,
+    { credentials: memoryCredentials(null, { connectorId: "fake" }) }
+  );
+  const result = await manager.connect("fake", "allowed");
+  assert.equal(result.status, "failed");
+  assert.equal(result.errorCode, "invalid_login_domain");
+});
+
+test("a sign-in domain reaches only a connector that takes one", async () => {
+  for (const takesLoginDomain of [false, true]) {
+    const seen = [];
+    const credentials = memoryCredentials(null, { connectorId: "fake" });
+    const { manager } = await setup(
+      connectable({
+        takesLoginDomain,
+        async authorize(options) {
+          seen.push(Object.keys(options).sort());
+          return { accessToken: "new" };
+        },
+      }),
+      undefined,
+      { credentials }
+    );
+    await manager.connect("fake", "allowed", { loginDomain: "test.salesforce.com" });
+    assert.deepEqual(seen, [takesLoginDomain ? ["loginDomain", "signal"] : ["signal"]]);
+  }
 });
 
 test("connecting another account revokes the login it replaced; the same account keeps it", async () => {

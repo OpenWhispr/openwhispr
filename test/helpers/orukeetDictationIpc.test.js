@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -40,6 +41,8 @@ const event = { sender: new EventEmitter() };
 event.sender.send = (channel, text) => messages.push([channel, text]);
 event.sender.id = 1;
 const backendFetch = async (url, options) => {
+  if (url.endsWith("/api/workspace-policy"))
+    return Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
   assert.ok(
     [
       "https://api.openwhispr.test/api/stt/orukeet/session",
@@ -118,8 +121,8 @@ Module._load = function loadWithMocks(request, parent, isMain) {
                     : cloudSession.websocketUrl
                 );
                 assert.equal(
-                  options.headers.Authorization,
-                  protocols ? undefined : "Bearer test-key"
+                  new Headers(options.headers).get("authorization"),
+                  protocols ? null : "Bearer test-key"
                 );
                 opened++;
                 return new WebSocket(`ws://127.0.0.1:${server.address().port}`, protocols, options);
@@ -222,7 +225,8 @@ test.before(async () => {
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
   target = buildFakeThis();
-  Ctor.prototype.setupHandlers.call(target);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(target));
+  await target.refreshEffectivePolicy(event);
 });
 
 test.after(async () => {
@@ -874,4 +878,75 @@ test("self-hosted Orukeet: a warmup still replaces a socket that carried audio",
 
   assert.equal(warmup.alreadyWarm, undefined);
   assert.notEqual(target._dictationStreaming, used);
+});
+
+test("custom Orukeet excludes self-hosted headers; self-hosted mode includes them with one Bearer auth", async (t) => {
+  const requests = [];
+  const capture = (_socket, request) => requests.push(request);
+  server.on("connection", capture);
+  target.environmentManager = {
+    getCustomTranscriptionKey: () => "test-key",
+    getSelfHostedSttHeaders: () =>
+      JSON.stringify({
+        dictation: [
+          { name: "X-API-Key", value: "self-hosted-only" },
+          { name: "authorization", value: "must-not-override" },
+        ],
+        upload: [{ name: "X-Upload-Key", value: "upload-only" }],
+      }),
+  };
+  t.after(async () => {
+    server.off("connection", capture);
+    delete target.environmentManager;
+    await handlers.get("dictation-realtime-stop")();
+  });
+  for (const transcriptionMode of ["providers", "self-hosted"]) {
+    await handlers.get("dictation-realtime-stop")();
+    const result = await handlers.get("dictation-realtime-start")(event, {
+      ...managedOptions,
+      mode: "byok",
+      baseUrl: cloudSession.baseUrl,
+      transcriptionMode,
+    });
+    assert.equal(result.success, true);
+    const request = requests.at(-1);
+    assert.equal(
+      request.headers["x-api-key"],
+      transcriptionMode === "self-hosted" ? "self-hosted-only" : undefined
+    );
+    assert.equal(request.headers["x-upload-key"], undefined);
+    assert.equal(request.headers.authorization, "Bearer test-key");
+    assert.equal(
+      request.rawHeaders.filter((value) => value.toLowerCase() === "authorization").length,
+      1
+    );
+  }
+});
+
+test("self-hosted Orukeet: a warm custom socket is not reused once headers apply", async (t) => {
+  const requests = [];
+  const capture = (_socket, request) => requests.push(request);
+  server.on("connection", capture);
+  target.environmentManager = {
+    getCustomTranscriptionKey: () => "test-key",
+    getSelfHostedSttHeaders: () =>
+      JSON.stringify({ dictation: [{ name: "X-API-Key", value: "self-hosted-only" }] }),
+  };
+  t.after(async () => {
+    server.off("connection", capture);
+    delete target.environmentManager;
+    await handlers.get("dictation-realtime-stop")();
+  });
+  await handlers.get("dictation-realtime-stop")();
+  const start = (transcriptionMode) =>
+    handlers.get("dictation-realtime-start")(event, {
+      ...managedOptions,
+      mode: "byok",
+      baseUrl: cloudSession.baseUrl,
+      transcriptionMode,
+    });
+  assert.equal((await start("providers")).success, true);
+  assert.equal((await start("self-hosted")).success, true);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].headers["x-api-key"], "self-hosted-only");
 });

@@ -1,0 +1,1070 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const React = require("react");
+const { createRendererServer } = require("../lib/rendererTestHarness");
+const {
+  ENGLISH_I18N_MOCK,
+  installHappyDom,
+  interactions,
+  readable,
+  text,
+} = require("../lib/happyDomDialog");
+
+// Mounts the real split button, menus and dialog with the real Radix primitives in happy-dom. The
+// services and the store are fakes the tests steer; strings come from the English file, so a
+// missing key shows up as a missing label.
+
+let CloudApiError;
+let PeopleAddMenu;
+let useAddToTeamspace;
+let MemberRoleMenu;
+let useAddPeopleToTeam;
+let teamCoverage;
+let createRoot;
+let happyWindow;
+let ui;
+let vite;
+
+test.before(async (t) => {
+  ({ happyWindow, createRoot } = await installHappyDom());
+  ui = interactions(happyWindow);
+  vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-people-add-menu-",
+    noExternal: ["react-i18next"],
+    mockModules: {
+      "react-i18next": ENGLISH_I18N_MOCK,
+      "/i18n": "export default { t: (key) => key, language: 'en' };",
+      "/ui/useToast":
+        "export const useToast = () => ({ toast: (toast) => globalThis.__toasts.push(toast) });",
+      "/stores/workspaceStore": `
+        export const useWorkspaceStore = Object.assign(
+          (selector) => selector(globalThis.__store),
+          { getState: () => globalThis.__store }
+        );
+      `,
+      "/services/TeamsService": `
+        export const TeamsService = { list: (id) => globalThis.__api.listTeams(id) };
+      `,
+      "/services/SpacesService": `
+        export const SpacesService = {
+          listInWorkspace: (id) => globalThis.__api.listInWorkspace(id),
+          coverage: (id, userIds) => globalThis.__api.coverage(id, userIds),
+        };
+      `,
+      "/services/spaceActions": `
+        export const addPeopleToTeam = (id, userIds) => globalThis.__api.addPeopleToTeam(id, userIds);
+        export const addPeopleToSpace = (id, userIds) => globalThis.__api.addPeopleToSpace(id, userIds);
+        export const localSpaceIdFor = (id) => globalThis.__api.localSpaceIdFor(id);
+      `,
+    },
+  });
+  ({ CloudApiError } = await vite.ssrLoadModule("/services/cloudApi.ts"));
+  ({ PeopleAddMenu, useAddPeopleToTeam, teamCoverage } = await vite.ssrLoadModule(
+    "/components/workspace/PeopleAddMenu.tsx"
+  ));
+  ({ useAddToTeamspace } = await vite.ssrLoadModule(
+    "/components/workspace/AddToTeamspaceMenu.tsx"
+  ));
+  ({ MemberRoleMenu } = await vite.ssrLoadModule("/components/settings/MemberRoleMenu.tsx"));
+});
+
+test.after(async () => {
+  await happyWindow.happyDOM.close();
+});
+
+const h = React.createElement;
+const doc = () => happyWindow.document;
+
+// ---- fixtures
+
+const team = (id, name, overrides = {}) => ({
+  id,
+  workspace_id: "w1",
+  name,
+  slug: name.toLowerCase(),
+  description: null,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+  capabilities: { manage_members: true, manage_settings: true, leave: false },
+  ...overrides,
+});
+
+// Deliberately out of name order.
+const TEAMS = [team("t-sales", "Sales"), team("t-design", "Design"), team("t-eng", "Engineering")];
+
+const WORKSPACE = { id: "w1", name: "Acme", role: "admin" };
+
+const person = (userId, name, teams = []) => ({
+  user_id: userId,
+  name,
+  email: `${userId}@openronnie.com`,
+  image: null,
+  role: "member",
+  joined_at: "2026-01-01T00:00:00Z",
+  teams,
+});
+const SALES = { id: "t-sales", name: "Sales" };
+const ENG = { id: "t-eng", name: "Engineering" };
+const LUCAS = person("lucas", "Lucas");
+const MASON = person("mason", "Mason");
+const NOAH = person("noah", "Noah", [SALES]);
+
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
+
+// What the People page wires: the controllers and their dialogs live in the page, and the bar goes
+// away when nobody is selected, as SelectionBar does.
+function Host({ state }) {
+  const [people, setPeople] = React.useState(state.people);
+  state.setPeople = (next) => {
+    state.people = next;
+    setPeople(next);
+  };
+  const teamAdd = useAddPeopleToTeam(state.workspace);
+  const openerRef = React.useRef(null);
+  const teamspace = useAddToTeamspace({
+    workspace: state.workspace,
+    people,
+    onAdded: state.onAdded,
+    returnFocusRef: openerRef,
+  });
+  return h(
+    React.Fragment,
+    null,
+    people.length > 0
+      ? h(PeopleAddMenu, {
+          workspace: state.workspace,
+          people,
+          onAdded: state.onAdded,
+          teamAdd,
+          teamspace,
+          openerRef,
+          onCreateTeam: state.onCreateTeam,
+        })
+      : null,
+    teamAdd.dialog,
+    teamspace.dialog
+  );
+}
+
+const networkError = () => new CloudApiError("Cloud API request failed", 0);
+
+// What a test steers: how the fakes answer. Each test gets its own calls log.
+async function mount(t, options = {}) {
+  const {
+    people = [LUCAS, MASON],
+    teams = TEAMS,
+    api = {},
+    workspace = WORKSPACE,
+    // A host that goes away mid-run, as the People page does when the selection empties.
+    unmountable = false,
+    // Runs when the roster is read; it may change who is selected, as a real refresh does.
+    onRefresh,
+  } = options;
+  const calls = [];
+  const added = [];
+  globalThis.__toasts = [];
+  globalThis.__store = {
+    refreshMembers: async (workspaceId) => {
+      calls.push(["roster", workspaceId]);
+      onRefresh?.(state);
+    },
+  };
+  globalThis.__api = {
+    listTeams: async (workspaceId) => {
+      calls.push(["teams", workspaceId]);
+      if (api.listTeams) return api.listTeams(workspaceId);
+      return teams;
+    },
+    listInWorkspace: async () => [],
+    coverage: async () => [],
+    addPeopleToTeam: async (teamId, userIds) => {
+      calls.push(["addBatch", teamId, userIds]);
+      if (api.addPeopleToTeam) return api.addPeopleToTeam(teamId, userIds);
+      return { added: userIds, already_members: [] };
+    },
+    addPeopleToSpace: async () => ({ added: [], already_members: [] }),
+    localSpaceIdFor: async () => null,
+  };
+
+  const container = doc().createElement("div");
+  doc().body.appendChild(container);
+  const root = createRoot(container);
+  let unmounted = false;
+  t.after(async () => {
+    if (!unmounted) await React.act(async () => root.unmount());
+    container.remove();
+    for (const name of ["__toasts", "__store", "__api"]) delete globalThis[name];
+  });
+  const state = {
+    people,
+    onAdded: () => {
+      calls.push(["cleared"]);
+      added.push(state.people.map((member) => member.user_id));
+    },
+    workspace,
+    onCreateTeam: () => calls.push(["createTeam"]),
+  };
+  await React.act(async () => {
+    root.render(h(Host, { state }));
+  });
+  await ui.settle();
+  return {
+    calls,
+    added,
+    state,
+    callsTo: (name) => calls.filter(([call]) => call === name),
+    rerender: async (nextPeople) => {
+      await React.act(async () => state.setPeople(nextPeople));
+      await ui.settle();
+    },
+    unmount: async () => {
+      assert.ok(unmountable, "this mount was not made unmountable");
+      unmounted = true;
+      await React.act(async () => root.unmount());
+    },
+  };
+}
+
+// ---- reading the screen
+
+const buttons = () => [...doc().querySelectorAll("button")];
+const labelButton = () => buttons().find((button) => text(button) === "Add to team");
+const chevron = () => doc().querySelector("button[aria-label='More ways to add']");
+const items = () => [...doc().querySelectorAll('[role="menuitem"]')];
+const itemNamed = (name) => items().find((item) => text(item) === name);
+const rows = () => [...doc().querySelectorAll('[role="menuitemcheckbox"]')];
+const rowFor = (name) => rows().find((row) => text(row).startsWith(name));
+const dialogs = () => [...doc().querySelectorAll('[role="dialog"]')];
+const dialogText = () => (dialogs().at(-1) ? text(dialogs().at(-1)) : null);
+const dialogButton = (label) =>
+  [...(dialogs().at(-1)?.querySelectorAll("button") ?? [])].find(
+    (button) => text(button) === label
+  );
+const toastTitles = () => globalThis.__toasts.map((toast) => readable(toast.title ?? ""));
+const menus = () => [...doc().querySelectorAll('[role="menu"]')];
+
+// Radix opens a dropdown on ArrowDown from its trigger, and a submenu on ArrowRight from its item.
+async function openLabelMenu() {
+  await ui.press(labelButton(), "ArrowDown");
+  await ui.settle();
+}
+async function openChevronMenu() {
+  await ui.press(chevron(), "ArrowDown");
+  await ui.settle();
+}
+async function openTeamSubmenu() {
+  await openChevronMenu();
+  await ui.press(itemNamed("Add to team"), "ArrowRight");
+  await ui.settle();
+}
+
+async function choose(name) {
+  await ui.click(rowFor(name));
+  await ui.settle();
+}
+
+// ---- teamCoverage
+
+test("teamCoverage counts only the selected people on that team", () => {
+  const people = [
+    person("a", "A", [SALES]),
+    person("b", "B", [SALES, ENG]),
+    person("c", "C", [ENG]),
+    person("d", "D"),
+  ];
+  assert.equal(teamCoverage(people, "t-sales"), 2);
+  assert.equal(teamCoverage(people, "t-eng"), 2);
+  assert.equal(teamCoverage(people, "t-none"), 0);
+  assert.equal(teamCoverage([], "t-sales"), 0);
+});
+
+test("teamCoverage: a roster with no teams field counts zero", () => {
+  const { teams: _omitted, ...bare } = LUCAS;
+  assert.equal(teamCoverage([bare, { ...bare, user_id: "x" }], "t-sales"), 0);
+});
+
+// ---- the split button and its menus
+
+test("the bar's menu has both submenus", async (t) => {
+  const { callsTo } = await mount(t);
+
+  assert.equal(callsTo("teams").length, 0, "teams are read when a menu first opens");
+  await openChevronMenu();
+
+  assert.deepEqual(items().map(text), [
+    "Add to team",
+    "Add to teamspace",
+    "Create team with selected",
+  ]);
+  assert.equal(itemNamed("Add to team").getAttribute("aria-haspopup"), "menu");
+  assert.equal(itemNamed("Add to teamspace").getAttribute("aria-haspopup"), "menu");
+});
+
+test("Create team with selected is hidden when the caller can't create teams", async (t) => {
+  await mount(t, { workspace: { ...WORKSPACE, role: "member" } });
+  await openChevronMenu();
+  assert.deepEqual(items().map(text), ["Add to team", "Add to teamspace"]);
+});
+
+test("below Business the item stays, since the page opens the paywall", async (t) => {
+  const { callsTo } = await mount(t, {
+    workspace: {
+      ...WORKSPACE,
+      capabilities: { manage_members: true, manage_teams: true, create_teams: false },
+    },
+  });
+  await openChevronMenu();
+  await ui.click(itemNamed("Create team with selected"));
+  await ui.settle();
+  assert.equal(callsTo("createTeam").length, 1);
+});
+
+test("Create team with selected calls the page's handler", async (t) => {
+  const { callsTo } = await mount(t);
+  await openChevronMenu();
+  await ui.click(itemNamed("Create team with selected"));
+  await ui.settle();
+  assert.equal(callsTo("createTeam").length, 1);
+});
+
+test("the label opens the team list itself, in name order", async (t) => {
+  const { callsTo } = await mount(t);
+
+  await openLabelMenu();
+
+  assert.equal(callsTo("teams").length, 1);
+  assert.deepEqual(rows().map(text), ["Design", "Engineering", "Sales"]);
+  // No second level: the list is the menu.
+  assert.deepEqual(items().map(text), []);
+});
+
+test("the team list is reachable from the chevron's submenu by keyboard", async (t) => {
+  await mount(t);
+
+  await openTeamSubmenu();
+
+  assert.deepEqual(rows().map(text), ["Design", "Engineering", "Sales"]);
+  // ArrowLeft closes only the submenu, leaving the parent menu to move through.
+  await ui.press(rowFor("Design"), "ArrowLeft");
+  await ui.settle();
+  assert.equal(rows().length, 0);
+  assert.ok(itemNamed("Add to team"), "the parent menu is still open");
+});
+
+test("a loading, failed or empty list says so", async (t) => {
+  const listing = deferred();
+  let attempts = 0;
+  await mount(t, {
+    api: {
+      listTeams: () => {
+        attempts += 1;
+        return attempts === 1 ? listing.promise : [];
+      },
+    },
+  });
+
+  await openLabelMenu();
+  assert.equal(readable(menus()[0].textContent), "Loading teams…");
+
+  await React.act(async () => listing.reject(networkError()));
+  await ui.settle();
+  assert.match(readable(menus()[0].textContent), /Couldn't load teams/);
+  await ui.click(
+    [...doc().querySelectorAll('[role="menuitem"]')].find((i) => text(i) === "Try again")
+  );
+  await ui.settle();
+
+  const none = items().find((item) => text(item) === "No teams yet");
+  assert.ok(none, "an empty workspace says so");
+  assert.equal(none.getAttribute("aria-disabled"), "true");
+});
+
+test("directory teams and teams the caller can't manage aren't offered", async (t) => {
+  await mount(t, {
+    teams: [
+      team("t-sales", "Sales"),
+      team("t-dir", "Directory", { directory_synced: true }),
+      team("t-ro", "Read only", {
+        capabilities: { manage_members: false, manage_settings: false, leave: true },
+      }),
+    ],
+  });
+
+  await openLabelMenu();
+  assert.deepEqual(rows().map(text), ["Sales"]);
+});
+
+test("teams that exist but can't be added to don't read as no teams yet", async (t) => {
+  await mount(t, {
+    teams: [team("t-dir", "Directory", { directory_synced: true })],
+  });
+
+  await openLabelMenu();
+
+  const none = items().find((item) => text(item) === "No teams you can add to");
+  assert.ok(none, "the list says nothing can be added to");
+  assert.equal(none.getAttribute("aria-disabled"), "true");
+  assert.equal(
+    items().find((item) => text(item) === "No teams yet"),
+    undefined
+  );
+});
+
+test("a partly covered team says how many are already on it", async (t) => {
+  await mount(t, { people: [NOAH, LUCAS] });
+
+  await openLabelMenu();
+
+  assert.equal(text(rowFor("Sales")), "Sales · 1 of 2 already added");
+  assert.equal(rowFor("Sales").getAttribute("aria-checked"), "mixed");
+  assert.equal(rowFor("Design").getAttribute("aria-checked"), "false");
+  assert.equal(text(rowFor("Design")), "Design");
+});
+
+test("a team everyone is already on is checked and can't be picked", async (t) => {
+  const { callsTo } = await mount(t, { people: [NOAH, person("ana", "Ana", [SALES])] });
+
+  await openLabelMenu();
+  const sales = rowFor("Sales");
+  assert.equal(sales.getAttribute("aria-checked"), "true");
+  assert.equal(sales.getAttribute("aria-disabled"), "true");
+  assert.equal(text(sales), "Sales");
+  await ui.click(sales);
+  await ui.settle();
+
+  assert.equal(callsTo("addBatch").length, 0);
+  assert.equal(dialogs().length, 0);
+});
+
+// ---- adding
+
+test("adding uses the batch", async (t) => {
+  const request = deferred();
+  const { callsTo } = await mount(t, { api: { addPeopleToTeam: () => request.promise } });
+
+  await openLabelMenu();
+  await choose("Sales");
+
+  assert.deepEqual(callsTo("addBatch"), [["addBatch", "t-sales", ["lucas", "mason"]]]);
+  // The menu closed and a dialog holds the screen while it runs.
+  assert.equal(menus().length, 0);
+  assert.match(dialogText(), /Adding 2 people…/);
+  assert.match(dialogText(), /Keep this window open while they're added to Sales\./);
+  assert.equal(dialogButton("Adding…").disabled, true);
+  assert.equal(dialogButton("Cancel"), undefined);
+
+  await React.act(async () => request.resolve({ added: ["lucas", "mason"], already_members: [] }));
+  await ui.settle();
+  assert.equal(dialogs().length, 0);
+});
+
+test("the roster is read again before the selection clears", async (t) => {
+  const { calls } = await mount(t);
+
+  await openLabelMenu();
+  await choose("Design");
+
+  // Once when the menu opened, and once more before the selection clears.
+  assert.deepEqual(
+    calls.map(([call]) => call).filter((call) => call === "roster" || call === "cleared"),
+    ["roster", "roster", "cleared"]
+  );
+  assert.deepEqual(toastTitles(), ["Added 2 members to Design"]);
+});
+
+test("a double click sends one request", async (t) => {
+  const request = deferred();
+  const { callsTo } = await mount(t, { api: { addPeopleToTeam: () => request.promise } });
+
+  await openLabelMenu();
+  const row = rowFor("Design");
+  await React.act(async () => {
+    row.click();
+    row.click();
+  });
+  await ui.settle();
+  await React.act(async () => request.resolve({ added: ["lucas", "mason"], already_members: [] }));
+  await ui.settle();
+
+  assert.equal(callsTo("addBatch").length, 1);
+});
+
+test("one person added, one already there reads as the frame does", async (t) => {
+  await mount(t, {
+    people: [NOAH, LUCAS],
+    api: { addPeopleToTeam: async () => ({ added: ["lucas"], already_members: ["noah"] }) },
+  });
+
+  await openLabelMenu();
+  await choose("Sales");
+
+  assert.deepEqual(toastTitles(), ["Added Lucas to Sales. Noah was already a member."]);
+});
+
+test("several already there reads in the plural, and a crowd falls back to a count", async (t) => {
+  const answers = [
+    { added: ["lucas"], already_members: ["noah", "ana"] },
+    { added: ["a", "b", "c"], already_members: ["lucas"] },
+  ];
+  await mount(t, {
+    people: [NOAH, person("ana", "Ana"), LUCAS],
+    api: { addPeopleToTeam: async () => answers.shift() },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+  assert.deepEqual(toastTitles(), ["Added Lucas to Design. Noah and Ana were already members."]);
+
+  await openLabelMenu();
+  await choose("Design");
+  assert.deepEqual(toastTitles().at(-1), "Added 3 members to Design");
+});
+
+test("nobody new says they were already on the team, never that they were added", async (t) => {
+  await mount(t, {
+    api: { addPeopleToTeam: async () => ({ added: [], already_members: ["lucas", "mason"] }) },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+
+  assert.deepEqual(toastTitles(), ["They're already on Design."]);
+});
+
+test("a failure keeps the selection and offers Try again", async (t) => {
+  let attempts = 0;
+  const { callsTo, added } = await mount(t, {
+    api: {
+      addPeopleToTeam: async (_id, userIds) => {
+        attempts += 1;
+        if (attempts === 1) throw networkError();
+        return { added: userIds, already_members: [] };
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+
+  assert.match(dialogText(), /Couldn't add 2 people/);
+  assert.match(dialogText(), /They haven't been added to Design\. Your selection is kept\./);
+  assert.deepEqual(added, []);
+  assert.deepEqual(toastTitles(), []);
+
+  await ui.click(dialogButton("Try again"));
+  await ui.settle();
+
+  assert.deepEqual(callsTo("addBatch"), [
+    ["addBatch", "t-design", ["lucas", "mason"]],
+    ["addBatch", "t-design", ["lucas", "mason"]],
+  ]);
+  assert.equal(dialogs().length, 0);
+  assert.deepEqual(added, [["lucas", "mason"]]);
+  assert.deepEqual(toastTitles(), ["Added 2 members to Design"]);
+});
+
+test("a failed Add's dialog is dismissed when the workspace changes under it", async (t) => {
+  const { callsTo, state } = await mount(t, {
+    api: {
+      addPeopleToTeam: async () => {
+        throw networkError();
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+  assert.match(dialogText(), /Couldn't add 2 people/);
+
+  // The page re-points at another workspace; the dialog's team belongs to the old one.
+  state.workspace = { ...WORKSPACE, id: "w2" };
+  await React.act(async () => state.setPeople([...state.people]));
+  await ui.settle();
+
+  assert.equal(dialogs().length, 0);
+  assert.equal(callsTo("addBatch").length, 1);
+});
+
+test("a lost answer on Try again counts the people this action added", async (t) => {
+  // The first request landed for Lucas and Mason but its answer was lost; the retry finds both in.
+  // Noah was on the team before this action started, so he alone was already a member.
+  const answers = [
+    () => {
+      throw networkError();
+    },
+    () => ({ added: [], already_members: ["lucas", "mason", "noah"] }),
+  ];
+  const { added } = await mount(t, {
+    people: [NOAH, LUCAS, MASON],
+    api: { addPeopleToTeam: async () => answers.shift()() },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+  await ui.click(dialogButton("Try again"));
+  await ui.settle();
+
+  // Design, not Sales: Noah is on Sales only. Everyone selected, with nobody "already there".
+  assert.deepEqual(toastTitles(), ["Added 3 members to Design"]);
+  assert.equal(added.length, 1);
+});
+
+test("on Try again, only people who were on the team before count as already there", async (t) => {
+  const answers = [
+    () => {
+      throw networkError();
+    },
+    () => ({ added: [], already_members: ["lucas", "noah"] }),
+  ];
+  await mount(t, {
+    people: [NOAH, LUCAS],
+    api: { addPeopleToTeam: async () => answers.shift()() },
+  });
+
+  await openLabelMenu();
+  await choose("Sales");
+  await ui.click(dialogButton("Try again"));
+  await ui.settle();
+
+  assert.deepEqual(toastTitles(), ["Added Lucas to Sales. Noah was already a member."]);
+});
+
+test("Cancel on a failure keeps the selection and hands focus back to the button", async (t) => {
+  const { added } = await mount(t, {
+    api: {
+      addPeopleToTeam: async () => {
+        throw networkError();
+      },
+    },
+  });
+
+  await openChevronMenu();
+  await ui.press(itemNamed("Add to team"), "ArrowRight");
+  await ui.settle();
+  await choose("Design");
+  await ui.click(dialogButton("Cancel"));
+  await ui.settle();
+  await React.act(async () => {
+    await new Promise((resolve) => happyWindow.requestAnimationFrame(resolve));
+  });
+
+  assert.equal(dialogs().length, 0);
+  assert.deepEqual(added, []);
+  assert.deepEqual(toastTitles(), []);
+  // Compared as a boolean: a failed assert.equal on DOM nodes spends minutes printing the document.
+  assert.ok(doc().activeElement === chevron(), "focus is on the button that opened the menu");
+});
+
+// The server's real text names nobody and is English in every locale.
+const NOT_MEMBERS = "One or more users are not members of this workspace";
+
+test("someone who left is named from the selection, and the roster refreshes", async (t) => {
+  const { callsTo, added } = await mount(t, {
+    api: {
+      addPeopleToTeam: async () => {
+        throw new CloudApiError(NOT_MEMBERS, 400, "not_workspace_members", {
+          user_ids: ["mason"],
+        });
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+
+  assert.match(dialogText(), /Couldn't add 2 people/);
+  assert.match(dialogText(), /Mason left the workspace, so nobody was added\./);
+  assert.doesNotMatch(dialogText(), /One or more users/);
+  // Once when the menu opened, once for the refusal.
+  assert.equal(callsTo("roster").length, 2);
+  assert.deepEqual(added, []);
+
+  // Try again adds whoever is left, and says it sends one.
+  await ui.click(dialogButton("Try again"));
+  await ui.settle();
+  assert.deepEqual(callsTo("addBatch").at(-1), ["addBatch", "t-design", ["lucas"]]);
+});
+
+test("someone nobody can name falls back to the server's text", async (t) => {
+  await mount(t, {
+    api: {
+      addPeopleToTeam: async () => {
+        throw new CloudApiError(NOT_MEMBERS, 400, "not_workspace_members", {
+          user_ids: ["stranger"],
+        });
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+
+  assert.match(dialogText(), /One or more users are not members of this workspace/);
+});
+
+test("the dialog outlives the bar when the roster refresh empties the selection", async (t) => {
+  let refreshes = 0;
+  await mount(t, {
+    onRefresh: (state) => {
+      // The refusal's refresh is the second read; by then the people have left.
+      refreshes += 1;
+      if (refreshes === 2) state.setPeople([]);
+    },
+    api: {
+      addPeopleToTeam: async () => {
+        throw new CloudApiError(NOT_MEMBERS, 400, "not_workspace_members", {
+          user_ids: ["lucas", "mason"],
+        });
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+  await ui.settle();
+
+  assert.equal(labelButton(), undefined, "the bar is gone");
+  assert.match(dialogText(), /Lucas and Mason left the workspace, so nobody was added\./);
+  // Nobody is left to retry for, so Try again just closes.
+  await ui.click(dialogButton("Try again"));
+  await ui.settle();
+  assert.equal(dialogs().length, 0);
+});
+
+test("a team everyone was removed from meanwhile can be picked once the menu reads the roster", async (t) => {
+  // The page loaded with both people on Design; another admin removed them since.
+  const onDesign = { id: "t-design", name: "Design" };
+  const stale = [person("lucas", "Lucas", [onDesign]), person("mason", "Mason", [onDesign])];
+  const { callsTo, state } = await mount(t, {
+    people: stale,
+    onRefresh: (host) => host.setPeople([LUCAS, MASON]),
+  });
+
+  await openLabelMenu();
+  await ui.settle();
+
+  assert.ok(callsTo("roster").length >= 1, "opening reads the roster");
+  assert.equal(rowFor("Design").getAttribute("aria-checked"), "false");
+  assert.equal(rowFor("Design").getAttribute("aria-disabled"), null);
+  assert.deepEqual(
+    state.people.map((member) => member.user_id),
+    ["lucas", "mason"]
+  );
+});
+
+test("opening the menu again reads the team list again", async (t) => {
+  const { callsTo } = await mount(t);
+
+  await openLabelMenu();
+  assert.equal(callsTo("teams").length, 1);
+  await ui.press(doc().querySelector('[role="menu"]'), "Escape");
+  await ui.settle();
+  await openLabelMenu();
+
+  assert.equal(callsTo("teams").length, 2);
+});
+
+test("passing over the submenus reads the lists once per opening of the menu", async (t) => {
+  const { callsTo } = await mount(t);
+  let coverageReads = 0;
+  globalThis.__api.coverage = async () => {
+    coverageReads += 1;
+    return [];
+  };
+
+  await openChevronMenu();
+  for (let pass = 0; pass < 3; pass += 1) {
+    for (const name of ["Add to team", "Add to teamspace"]) {
+      await ui.press(itemNamed(name), "ArrowRight");
+      await ui.settle();
+      await ui.press(menus().at(-1), "ArrowLeft");
+      await ui.settle();
+    }
+  }
+  assert.equal(callsTo("teams").length, 1);
+  assert.equal(callsTo("roster").length, 1);
+  assert.equal(coverageReads, 1);
+
+  await ui.press(menus()[0], "Escape");
+  await ui.settle();
+  await openTeamSubmenu();
+  assert.equal(callsTo("teams").length, 2, "a new opening reads the list again");
+  assert.equal(callsTo("roster").length, 2);
+});
+
+test("Try again recounts the dialog's title for who it sends", async (t) => {
+  let attempts = 0;
+  await mount(t, {
+    api: {
+      addPeopleToTeam: async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new CloudApiError(NOT_MEMBERS, 400, "not_workspace_members", {
+            user_ids: ["mason"],
+          });
+        }
+        return new Promise(() => {});
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+  await ui.click(dialogButton("Try again"));
+  await ui.settle();
+
+  assert.match(dialogText(), /Adding 1 person…/);
+});
+
+test("losing the team returns focus to the button that opened the menu", async (t) => {
+  await mount(t, {
+    api: {
+      addPeopleToTeam: async () => {
+        throw new CloudApiError("Team not found", 404);
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+  await React.act(async () => {
+    await new Promise((resolve) => happyWindow.requestAnimationFrame(resolve));
+  });
+
+  assert.ok(doc().activeElement === labelButton(), "focus is back on Add to team");
+});
+
+test("a session that needs SSO says so and offers no Try again", async (t) => {
+  await mount(t, {
+    api: {
+      addPeopleToTeam: async () => {
+        throw new CloudApiError("SSO required", 403, "SSO_REQUIRED");
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+
+  assert.match(dialogText(), /single sign-on to manage people in Acme\./);
+  assert.equal(dialogButton("Try again"), undefined);
+  await ui.click(dialogButton("Close"));
+  await ui.settle();
+  assert.equal(dialogs().length, 0);
+});
+
+test("Try again on a failed list keeps keyboard focus in the menu", async (t) => {
+  let attempts = 0;
+  await mount(t, {
+    api: {
+      listTeams: async () => {
+        attempts += 1;
+        if (attempts === 1) throw networkError();
+        return TEAMS;
+      },
+    },
+  });
+
+  await openChevronMenu();
+  await ui.press(itemNamed("Add to team"), "ArrowRight");
+  await ui.settle();
+  await ui.click(
+    [...doc().querySelectorAll('[role="menuitem"]')].find((i) => text(i) === "Try again")
+  );
+  await ui.settle();
+  await React.act(async () => {
+    await new Promise((resolve) => happyWindow.requestAnimationFrame(resolve));
+  });
+
+  assert.equal(rows().length, 3);
+  const menu = menus().at(-1);
+  assert.ok(menu.contains(doc().activeElement), "focus stayed inside the menu");
+});
+
+test("the split button is one pill whose chevron is named", async (t) => {
+  await mount(t);
+  assert.equal(labelButton().parentElement, chevron().parentElement);
+});
+
+test("a team deleted meanwhile says so and the list is read again", async (t) => {
+  const { callsTo, added } = await mount(t, {
+    api: {
+      addPeopleToTeam: async () => {
+        throw new CloudApiError("Team not found", 404);
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+
+  // Nothing a retry would change, so the dialog gives way to a toast.
+  assert.equal(dialogs().length, 0);
+  assert.deepEqual(toastTitles(), ["Design no longer exists."]);
+  assert.equal(globalThis.__toasts[0].variant, "destructive");
+  assert.deepEqual(added, []);
+  assert.equal(callsTo("teams").length, 2);
+});
+
+test("losing the right to manage says that, not that the team is gone", async (t) => {
+  await mount(t, {
+    api: {
+      addPeopleToTeam: async () => {
+        throw new CloudApiError("Insufficient role", 403);
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+
+  assert.equal(dialogs().length, 0);
+  assert.deepEqual(toastTitles(), ["You can no longer manage Design."]);
+});
+
+test("a directory-managed team shows the server's reason on the dialog", async (t) => {
+  await mount(t, {
+    api: {
+      addPeopleToTeam: async () => {
+        throw new CloudApiError("Team membership is managed by directory sync", 409);
+      },
+    },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+
+  assert.match(dialogText(), /Team membership is managed by directory sync/);
+});
+
+test("a failure after the page moved on still reaches the user as a toast", async (t) => {
+  const request = deferred();
+  const { added, unmount } = await mount(t, {
+    unmountable: true,
+    api: { addPeopleToTeam: () => request.promise },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+  await unmount();
+  await React.act(async () => request.reject(networkError()));
+  await ui.settle();
+
+  assert.deepEqual(toastTitles(), ["Couldn't add 2 people"]);
+  assert.equal(globalThis.__toasts[0].variant, "destructive");
+  assert.deepEqual(added, []);
+});
+
+test("a success after the page moved on still toasts, and never clears a selection that's gone", async (t) => {
+  const request = deferred();
+  const { added, unmount } = await mount(t, {
+    unmountable: true,
+    api: { addPeopleToTeam: () => request.promise },
+  });
+
+  await openLabelMenu();
+  await choose("Design");
+  await unmount();
+  await React.act(async () => request.resolve({ added: ["lucas", "mason"], already_members: [] }));
+  await ui.settle();
+
+  assert.deepEqual(toastTitles(), ["Added 2 members to Design"]);
+  assert.deepEqual(added, []);
+});
+
+// ---- Add to teamspace, now a submenu of the same button
+
+test("Add to teamspace still works from its submenu", async (t) => {
+  await mount(t);
+  globalThis.__api.listInWorkspace = async () => [
+    { id: "cloud-calls", workspace_id: "w1", name: "Customer Calls", emoji: "📞", teams: [] },
+  ];
+  globalThis.__api.addPeopleToSpace = async (id, userIds) => {
+    globalThis.__spaceCall = [id, userIds];
+    return { added: userIds, already_members: [] };
+  };
+
+  await openChevronMenu();
+  await ui.press(itemNamed("Add to teamspace"), "ArrowRight");
+  await ui.settle();
+  await choose("Customer Calls");
+
+  assert.deepEqual(globalThis.__spaceCall, ["cloud-calls", ["lucas", "mason"]]);
+  assert.deepEqual(toastTitles(), ["Added 2 people to Customer Calls"]);
+  delete globalThis.__spaceCall;
+});
+
+// ---- the row menu
+
+test("the row menu adds one person", async (t) => {
+  const calls = [];
+  globalThis.__toasts = [];
+  globalThis.__store = {
+    refreshMembers: async (workspaceId) => {
+      calls.push(["roster", workspaceId]);
+    },
+  };
+  globalThis.__api = {
+    listTeams: async () => TEAMS,
+    addPeopleToTeam: async (teamId, userIds) => {
+      calls.push(["addBatch", teamId, userIds]);
+      return { added: userIds, already_members: [] };
+    },
+  };
+  const container = doc().createElement("div");
+  doc().body.appendChild(container);
+  const root = createRoot(container);
+  t.after(async () => {
+    await React.act(async () => root.unmount());
+    container.remove();
+    for (const name of ["__toasts", "__store", "__api"]) delete globalThis[name];
+  });
+
+  // What the People page wires: one controller for the rows, its dialog beside the table.
+  function Rows() {
+    const teamAdd = useAddPeopleToTeam(WORKSPACE);
+    return h(
+      React.Fragment,
+      null,
+      h(MemberRoleMenu, {
+        member: NOAH,
+        isSelf: false,
+        canManage: true,
+        canTransfer: false,
+        pending: false,
+        onRoleChange: () => {},
+        onTransfer: () => {},
+        onRemove: () => {},
+        workspace: WORKSPACE,
+        teamAdd,
+      }),
+      teamAdd.dialog
+    );
+  }
+  await React.act(async () => root.render(h(Rows)));
+  await ui.settle();
+
+  await ui.press(doc().querySelector("button[aria-haspopup='menu']"), "ArrowDown");
+  await ui.settle();
+  await ui.press(itemNamed("Add to team"), "ArrowRight");
+  await ui.settle();
+
+  // Noah is on Sales already, so for one person it is a ticked, disabled row.
+  assert.equal(rowFor("Sales").getAttribute("aria-checked"), "true");
+  assert.equal(rowFor("Sales").getAttribute("aria-disabled"), "true");
+  await choose("Design");
+
+  assert.deepEqual(
+    calls.filter(([call]) => call === "addBatch"),
+    [["addBatch", "t-design", ["noah"]]]
+  );
+  assert.deepEqual(toastTitles(), ["Added 1 member to Design"]);
+});

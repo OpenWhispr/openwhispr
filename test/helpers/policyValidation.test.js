@@ -68,6 +68,14 @@ test("ignores stale additive analytics metadata", () => {
   assert.equal(isValidPolicyShape(policy), true);
 });
 
+test("personal API access accepts an optional boolean", () => {
+  for (const value of [undefined, true, false, null, 0, "false"]) {
+    const policy = validPolicy();
+    policy.features.apiAccessEnabled = value;
+    assert.equal(isValidPolicyShape(policy), value === undefined || typeof value === "boolean");
+  }
+});
+
 test("accepts screenContextEnabled as an optional boolean", () => {
   for (const value of [true, false]) {
     const policy = validPolicy();
@@ -306,5 +314,21 @@ test("meeting and upload controls are optional booleans for backward compatibili
       policy.features[key] = value;
       assert.equal(isValidPolicyShape(policy), false);
     }
+  }
+});
+
+test("update policy is additive and future string modes do not invalidate managed policy", () => {
+  for (const updates of [
+    undefined,
+    {},
+    { mode: "user_choice" },
+    { mode: "always_on" },
+    { mode: "it_managed" },
+    { mode: "future_mode" },
+  ]) {
+    assert.equal(isValidPolicyShape({ ...validPolicy(), updates }), true);
+  }
+  for (const updates of [null, [], "it_managed", { mode: 1 }, { mode: null }]) {
+    assert.equal(isValidPolicyShape({ ...validPolicy(), updates }), false);
   }
 });

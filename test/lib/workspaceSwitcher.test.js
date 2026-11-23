@@ -33,10 +33,10 @@ test("a failed load is not mistaken for having no workspace", async () => {
   });
 });
 
-test("offline, a user who had no workspace stays personal instead of seeing an error", async () => {
+test("a failed load with nothing listed is an error, saved workspace or not", async () => {
   const { resolveWorkspaceSwitcher } = await load();
 
-  assert.deepEqual(resolveWorkspaceSwitcher({ ...base, error: true }), { kind: "personal" });
+  assert.deepEqual(resolveWorkspaceSwitcher({ ...base, error: true }), { kind: "error" });
 });
 
 test("a cached list survives a failed refresh", async () => {
@@ -49,10 +49,11 @@ test("a cached list survives a failed refresh", async () => {
   );
 });
 
-test("users in no workspace stay personal", async () => {
+test("an empty list leaves Private reachable instead of waiting on the default workspace", async () => {
   const { resolveWorkspaceSwitcher } = await load();
 
-  assert.deepEqual(resolveWorkspaceSwitcher(base), { kind: "personal" });
+  // The default workspace's creation failed or is on its way: nothing to wait on with a spinner.
+  assert.deepEqual(resolveWorkspaceSwitcher(base), { kind: "unavailable" });
 });
 
 test("the active workspace is current", async () => {
@@ -119,4 +120,116 @@ test("with none chosen, an entitled Enterprise workspace becomes active, else th
   assert.equal(defaultActiveWorkspaceId([pro, enterprise("trialing")]), "acme");
   assert.equal(defaultActiveWorkspaceId([pro, enterprise("canceled")]), "beta");
   assert.equal(defaultActiveWorkspaceId([]), null);
+});
+
+test("with none chosen, the account's default comes before the first listed", async () => {
+  const { defaultActiveWorkspaceId } = await load();
+  const pro = { id: "beta", plan: "pro", status: "active", is_default: false };
+  const own = { id: "mine", plan: "free", status: "active", is_default: true };
+  const enterprise = { id: "acme", plan: "enterprise", status: "active", is_default: false };
+
+  assert.equal(defaultActiveWorkspaceId([pro, own]), "mine");
+  // Managed providers apply only while the Enterprise workspace is active, so it stays first.
+  assert.equal(defaultActiveWorkspaceId([pro, own, enterprise]), "acme");
+});
+
+test("the default workspace is the account's own, else its entitled Enterprise workspace", async () => {
+  const { resolveDefaultWorkspaceId } = await load();
+  const pro = { id: "beta", plan: "pro", status: "active", is_default: false };
+  const own = { id: "mine", plan: "free", status: "active", is_default: true };
+  const enterprise = (status) => ({ id: "acme", plan: "enterprise", status, is_default: false });
+  // Another member's default reads is_default false for this caller.
+  const someoneElses = { ...pro, id: "theirs", is_account_default: true };
+
+  assert.equal(resolveDefaultWorkspaceId([pro, enterprise("active"), own]), "mine");
+  assert.equal(resolveDefaultWorkspaceId([pro, enterprise("active")]), "acme");
+  assert.equal(resolveDefaultWorkspaceId([pro, enterprise("canceled")]), null);
+  assert.equal(resolveDefaultWorkspaceId([someoneElses]), null);
+  assert.equal(resolveDefaultWorkspaceId([]), null);
+});
+
+test("the switcher never offers Personal", async () => {
+  const switcher = await load();
+
+  assert.equal("canChoosePersonal" in switcher, false);
+  const state = switcher.resolveWorkspaceSwitcher({
+    ...base,
+    workspaces: [workspace("acme")],
+    activeWorkspaceId: null,
+  });
+  assert.equal(state.kind, "workspace");
+});
+
+test("Settings manages the active workspace, or the first when the active id is gone", async () => {
+  const { settingsWorkspace } = await load();
+  const acme = workspace("acme");
+  const beta = workspace("beta");
+
+  assert.equal(settingsWorkspace([acme, beta], "beta"), beta);
+  assert.equal(settingsWorkspace([acme, beta], "gone"), acme);
+  assert.equal(settingsWorkspace([acme, beta], null), acme);
+  assert.equal(settingsWorkspace([], null), null);
+});
+
+async function englishT() {
+  const i18next = require("i18next");
+  const i18n = i18next.createInstance();
+  await i18n.init({
+    lng: "en",
+    resources: { en: { translation: require("../../src/locales/en/translation.json") } },
+    interpolation: { escapeValue: false },
+  });
+  return i18n.t.bind(i18n);
+}
+
+test("the default workspace is named after the user, or generically without a name", async () => {
+  const { defaultWorkspaceName } = await load();
+  const t = await englishT();
+
+  assert.equal(defaultWorkspaceName("Ada", t), "Ada's workspace");
+  assert.equal(defaultWorkspaceName("  O'Brien  ", t), "O'Brien's workspace");
+  assert.equal(defaultWorkspaceName("", t), "My workspace");
+  assert.equal(defaultWorkspaceName(null, t), "My workspace");
+  // The API refuses names over 80 characters.
+  assert.equal(defaultWorkspaceName("x".repeat(80), t), "My workspace");
+});
+
+test("the default workspace is listed first, the rest in their order", async () => {
+  const { withDefaultFirst } = await load();
+  const acme = workspace("acme");
+  const beta = workspace("beta");
+  const mine = workspace("mine");
+
+  assert.deepEqual(withDefaultFirst([acme, beta, mine], "mine"), [mine, acme, beta]);
+  assert.deepEqual(withDefaultFirst([mine, acme, beta], "mine"), [mine, acme, beta]);
+  assert.deepEqual(withDefaultFirst([acme, beta], "gone"), [acme, beta]);
+  assert.deepEqual(withDefaultFirst([acme, beta], null), [acme, beta]);
+});
+
+test("private notes of a workspace being left go to the default workspace, by name", async () => {
+  const { privateNotesDestinationName } = await load();
+  const t = await englishT();
+  const acme = { ...workspace("acme"), name: "Acme", is_default: false };
+  const mine = { ...workspace("mine"), name: "Ada's lab", is_default: true };
+  const enterprise = {
+    ...workspace("corp"),
+    name: "Corp",
+    plan: "enterprise",
+    status: "active",
+    is_default: false,
+  };
+
+  assert.equal(privateNotesDestinationName([mine, acme], "acme", "Ada", t), "Ada's lab");
+  // A default with no name reads as the name it is made with.
+  assert.equal(
+    privateNotesDestinationName([{ ...mine, name: "  " }, acme], "acme", "Ada", t),
+    "Ada's workspace"
+  );
+  // Leaving the Enterprise workspace that stood in as the default: the account's own default,
+  // which the server makes next, takes them.
+  assert.equal(
+    privateNotesDestinationName([enterprise, acme], "corp", "Ada", t),
+    "Ada's workspace"
+  );
+  assert.equal(privateNotesDestinationName([acme], "acme", null, t), "My workspace");
 });

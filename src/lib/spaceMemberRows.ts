@@ -2,7 +2,7 @@ import type { SpaceMemberEntry } from "../services/SpacesService";
 import type { SpaceInvitation, SpaceTeamRef, TeamRole } from "../types/electron";
 
 export type SpaceMemberRow =
-  // Has a direct role, so it can be changed or removed here. `adminVia` names the groups whose
+  // Has a direct role, so it can be changed or removed here. `adminVia` names the teams whose
   // admins are admins of this teamspace through them: while there is one, a direct Member role
   // can't make this person less than an admin.
   | {
@@ -12,19 +12,20 @@ export type SpaceMemberRow =
       editable: boolean;
       adminVia: string[];
     }
-  // Reaches the teamspace only through a group, so the change belongs to that group. `promotable`
-  // is the one exception: see promoteInherited.
+  // Reaches the teamspace only through a team. `promotable`: a manager can make them an admin
+  // here, which gives them a direct role on top of the team's. An admin through a team has
+  // nothing to be promoted to, and a direct Member role wouldn't lower them.
   | {
       kind: "inherited";
       id: string;
       member: SpaceMemberEntry;
-      groupName: string;
+      teamName: string;
       asAdmin: boolean;
       promotable: boolean;
     }
   | { kind: "invitation"; id: string; invitation: SpaceInvitation }
   | {
-      kind: "group";
+      kind: "team";
       id: string;
       team: { id: string; name: string; access: TeamRole; memberCount: number | null };
     };
@@ -35,20 +36,15 @@ export interface SpaceMemberRowsInput {
   teams: SpaceTeamRef[];
   teamCounts: ReadonlyMap<string, number>;
   canManage: boolean;
-  /**
-   * The viewer is the only admin, can't leave until there is another, and everyone else comes
-   * through a group. Making one of them an admin is the only way out, so those rows take a role.
-   */
-  promoteInherited?: boolean;
-  /** Joins the names of the groups an inherited person comes through, in the reader's language. */
+  /** Joins the names of the teams an inherited person comes through, in the reader's language. */
   formatNames?: (names: string[]) => string;
 }
 
 const joinNames = (names: string[]): string => names.join(", ");
 
 /**
- * Admins as the API sorts them, then invitations, then groups, then everyone else as the API
- * sorts them. Someone with a direct role is a person even when a group also reaches them.
+ * Admins as the API sorts them, then invitations, then teams, then everyone else as the API
+ * sorts them. Someone with a direct role is a person even when a team also reaches them.
  */
 export function buildSpaceMemberRows({
   members,
@@ -56,7 +52,6 @@ export function buildSpaceMemberRows({
   teams,
   teamCounts,
   canManage,
-  promoteInherited = false,
   formatNames = joinNames,
 }: SpaceMemberRowsInput): SpaceMemberRow[] {
   const toRow = (member: SpaceMemberEntry): SpaceMemberRow => {
@@ -77,10 +72,10 @@ export function buildSpaceMemberRows({
       kind: "inherited",
       id: `person:${member.user_id}`,
       member,
-      groupName: formatNames(member.via_teams.map((team) => team.name)),
-      // With no direct role, an admin is one through a group.
+      teamName: formatNames(member.via_teams.map((team) => team.name)),
+      // With no direct role, an admin is one through a team.
       asAdmin: member.role === "admin",
-      promotable: canManage && promoteInherited,
+      promotable: canManage && member.role !== "admin",
     };
   };
 
@@ -92,8 +87,8 @@ export function buildSpaceMemberRows({
       invitation,
     })),
     ...teams.map((team): SpaceMemberRow => ({
-      kind: "group",
-      id: `group:${team.id}`,
+      kind: "team",
+      id: `team:${team.id}`,
       team: {
         id: team.id,
         name: team.name,

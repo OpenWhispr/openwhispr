@@ -7,6 +7,8 @@ export interface ToolResult {
   success: boolean;
   data: unknown;
   displayText: string;
+  /** Locally rendered evidence answer; never accepted from the model or saved as tool metadata. */
+  renderedAnswer?: { key: string; content: string };
 }
 
 export interface CompletedActionOutcome {

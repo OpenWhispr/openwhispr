@@ -35,6 +35,7 @@ const MOCKS = {
       setActive() {},
       refresh: async () => {},
     });
+    export const useRetryDefaultWorkspace = () => ({ retry() {}, retrying: false });
   `,
   "/stores/workspaceStore": `
     const read = () => ({

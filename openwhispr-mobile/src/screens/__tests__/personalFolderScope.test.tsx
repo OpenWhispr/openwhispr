@@ -23,6 +23,8 @@ jest.mock('@/data', () => ({
   notesRepository: {
     getFolders: jest.fn(() => []),
     getPrivateFolders: jest.fn(() => []),
+    // No Private placement recorded: only the default's Private exists.
+    getSyncState: jest.fn(() => null),
     getFolderCounts: jest.fn(() => ({})),
     getNotesByFolder: jest.fn(() => []),
     getNotesBySpace: jest.fn(() => []),
@@ -72,6 +74,9 @@ jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
 jest.mock('expo-router', () => ({
   router: { push: jest.fn() },
 }));
+jest.mock('@react-native-menu/menu', () =>
+  require('../../components/notes/__tests__/menuViewMock'),
+);
 jest.mock('@/components/notes/NotesTopBar', () => ({ NotesTopBar: () => null }));
 jest.mock('@/components/notes/SyncStatusLabel', () => ({ SyncStatusLabel: () => null }));
 jest.mock('@/components/ui/Fab', () => ({
