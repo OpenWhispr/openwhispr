@@ -40,3 +40,15 @@ test("glm-5.3 always reasons: suppress floors at low, high stands in for the ser
   assert.equal(getModelFamilyConstraints("GLM-5.3-Flash:cloud")?.family, "glm-5.3");
   assert.equal(getModelFamilyConstraints("glm-5-2")?.family, undefined);
 });
+
+test("kimi-k3.1 always reasons: suppress floors at low, high stands in for the server's max", async () => {
+  const { getModelFamilyConstraints } = await load();
+  assert.deepEqual(getModelFamilyConstraints("kimi-k3-1-pro")?.reasoningEffort, {
+    suppressValue: "low",
+    defaultValue: "high",
+    options: ["low", "high"],
+  });
+  assert.equal(getModelFamilyConstraints("moonshotai/Kimi-K3.1-Pro")?.family, "kimi-k3.1");
+  assert.equal(getModelFamilyConstraints("kimi-k3")?.family, undefined);
+  assert.equal(getModelFamilyConstraints("kimi-k2-6")?.family, undefined);
+});

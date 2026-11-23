@@ -8,8 +8,14 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useAffiliateStore } from '@/store/useAffiliateStore';
 import { loadAffiliateOffer, type AffiliateOffer } from '@/lib/affiliateOffer';
 import { getUsageOwnerKey, useUsageStore } from '@/store/useUsageStore';
+import {
+  isSuperwallIdentityReadyFor,
+  SUPERWALL_IDENTITY_WAIT_MS,
+  useSuperwallIdentityStore,
+} from '@/store/useSuperwallIdentityStore';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
+import { Sentry } from '@/lib/sentry';
 import { describeOnboardingError } from '@/lib/onboardingErrors';
 import { getAffiliateClientConfig } from '@/lib/affiliateLink';
 import { TrackingPermissionStep } from './TrackingPermissionStep';
@@ -25,7 +31,7 @@ const HIGHLIGHTS: { icon: string; mdIcon: LucideIconName; label: string }[] = [
 // non-transactional placement and would skip the paywall for good. Wait this
 // long for it, then present anyway so a broken SDK cannot hold the step. Only a
 // confirmed free account ever waits here.
-export const PAYWALL_READY_GRACE_MS = 3_000;
+export const PAYWALL_READY_GRACE_MS = SUPERWALL_IDENTITY_WAIT_MS;
 // How long Continue stays inert after registering: long enough for the SDK to
 // actually present (or report it can't), short enough that a paywall which
 // never resolves is still escapable.
@@ -49,7 +55,13 @@ export function PaywallStep() {
     usageOwnerKey !== null &&
     usageOwnerKey === getUsageOwnerKey() &&
     !usage.isSubscribed;
-  const { register, state, isConfigured } = useSuperwallGate();
+  const { register, state, isConfigured, requiresIdentity } = useSuperwallGate();
+  // A purchase before identify(billingUserId) reaches the server with no app
+  // user id and can never be attributed, so the paywall waits for the bridge.
+  const identityReady = useSuperwallIdentityStore((s) =>
+    isSuperwallIdentityReadyFor(s.identifiedBillingUserId, usage?.billingUserId),
+  );
+  const [identityGraceElapsed, setIdentityGraceElapsed] = useState(false);
   // Creator preparation awaits before registering; by then the SDK may have
   // finished configuring, so register through the latest gate, not this render's.
   const registerRef = useRef(register);
@@ -120,6 +132,13 @@ export function PaywallStep() {
   }, [isConfigured]);
 
   useEffect(() => {
+    // Identifying needs a configured SDK, so the wait only starts counting then.
+    if (!requiresIdentity || !isConfigured || identityReady) return;
+    const timer = setTimeout(() => setIdentityGraceElapsed(true), PAYWALL_READY_GRACE_MS);
+    return () => clearTimeout(timer);
+  }, [identityReady, isConfigured, requiresIdentity]);
+
+  useEffect(() => {
     if (!presenting) return;
     const timer = setTimeout(() => setEscapeElapsed(true), PAYWALL_ESCAPE_MS);
     return () => clearTimeout(timer);
@@ -146,6 +165,20 @@ export function PaywallStep() {
     if (!consentReady) return;
 
     if (!isConfigured && !readyGraceElapsed) return;
+    if (requiresIdentity && isConfigured && !identityReady) {
+      if (!identityGraceElapsed) return;
+      Sentry.addBreadcrumb({
+        category: 'superwall',
+        message: 'onboarding paywall skipped: identity not ready',
+        level: 'warning',
+      });
+      // No identity means a purchase could not be attributed: skip the offer
+      // rather than sell something the account may never receive.
+      hasPresentedRef.current = true;
+      setSkipping(true);
+      void advance();
+      return;
+    }
     hasPresentedRef.current = true;
     setPresenting(true);
 
@@ -197,8 +230,11 @@ export function PaywallStep() {
     advance,
     affiliateEnabled,
     consentReady,
+    identityGraceElapsed,
+    identityReady,
     isConfigured,
     isConfirmedFree,
+    requiresIdentity,
     readyGraceElapsed,
     user,
     sessionCookie,

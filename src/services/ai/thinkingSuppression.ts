@@ -51,6 +51,6 @@ export function applyThinkingSuppression(
 
   // A known endpoint host wins over the generic provider dialect.
   const providerKey = detectEndpointDialect(baseUrl)?.key ?? provider.toLowerCase();
-  suppressThinking(requestBody, providerKey, model);
+  suppressThinking(requestBody, providerKey, model, baseUrl);
   return true;
 }

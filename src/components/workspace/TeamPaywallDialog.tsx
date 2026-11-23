@@ -4,6 +4,7 @@ import { Users } from "../icons";
 import { cn } from "../lib/utils";
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "./dialogButtons";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
+import { workspacePlanSection } from "../../lib/settingsNav";
 import { hasValidatedAuthContext } from "../../lib/authRequestContext";
 import { teamCreationFor, workspaceCan } from "../../lib/capabilities";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -62,7 +63,7 @@ export default function TeamPaywallDialog({
   // A named section remounts Settings, so this also works from inside Settings.
   const handleUpgrade = (): void => {
     onOpenChange(false);
-    void window.electronAPI?.openSettingsSection?.("plansBilling");
+    void window.electronAPI?.openSettingsSection?.(workspacePlanSection(workspace.id));
   };
 
   const variant = lapsed ? "lapsedBody" : "body";

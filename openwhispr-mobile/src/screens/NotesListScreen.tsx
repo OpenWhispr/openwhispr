@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo, useState } from 'react';
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { View, ScrollView, Pressable, RefreshControl, Alert, ActionSheetIOS } from 'react-native';
 import { Text } from '@/components/ui/Text';
 
@@ -51,6 +51,7 @@ export default function NotesListScreen() {
   } = useNotesStore();
 
   const [newFolderVisible, setNewFolderVisible] = useState(false);
+  const routeWorkspaceId = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     if (!isInitialized) initialize();
@@ -62,12 +63,23 @@ export default function NotesListScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      const {
+        activePrivateWorkspaceId,
+        activeFolderId: storeFolderId,
+        activeSpaceId: storeSpaceId,
+      } = useNotesStore.getState();
+      // The Notes tab keeps its stack while Account switches the workspace.
+      if (routeWorkspaceId.current === undefined) {
+        routeWorkspaceId.current = activePrivateWorkspaceId;
+      } else if (routeWorkspaceId.current !== activePrivateWorkspaceId) {
+        router.dismissTo('/(tabs)/(notes)');
+        return;
+      }
+
       // Only re-assert when the store drifted to another scope — descending into
       // a folder rewrites it, so coming back would otherwise leave this screen
       // showing the child's notes. A no-op refocus (returning from a note) must
       // not run, or it would clear an open search.
-      const { activeFolderId: storeFolderId, activeSpaceId: storeSpaceId } =
-        useNotesStore.getState();
       if (spaceId != null) {
         if (storeSpaceId !== spaceId) setActiveSpaceId(spaceId);
       } else if (storeFolderId !== folderId) {

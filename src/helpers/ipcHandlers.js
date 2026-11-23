@@ -80,7 +80,7 @@ const {
   redactProviderBody,
 } = require("./providerHttpErrors");
 const { getLlmRequestTimeoutSeconds, llmRequestTimeoutError } = require("./llmRequestTimeout");
-const { isSettingsTarget } = require("./settingsTargets");
+const { isSettingsTarget, isPlansBillingTarget } = require("./settingsTargets");
 const {
   registerConnectorIpc,
   createConnectorPolicyResolver,
@@ -2604,7 +2604,7 @@ class IPCHandlers {
       if (
         !isSettingsTarget(section) &&
         !isProviderSettingsTarget(section) &&
-        section !== "plansBilling"
+        !isPlansBillingTarget(section)
       ) {
         return { success: false };
       }
@@ -13777,8 +13777,14 @@ class IPCHandlers {
       )
     );
 
-    ipcMain.handle("cloud-billing-portal", (event) =>
-      fetchStripeUrl(event, "/api/stripe/portal", "Cloud billing portal error")
+    ipcMain.handle("cloud-billing-portal", (event, expectedAuthGeneration) =>
+      fetchStripeUrl(
+        event,
+        "/api/stripe/portal",
+        "Cloud billing portal error",
+        undefined,
+        expectedAuthGeneration
+      )
     );
 
     ipcMain.handle("cloud-switch-plan", async (event, opts) => {

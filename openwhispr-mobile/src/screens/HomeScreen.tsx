@@ -414,7 +414,7 @@ export default function HomeScreen() {
     }
   };
 
-  const recentTranscripts = [...transcripts].sort((a, b) => b.createdAt - a.createdAt).slice(0, 10);
+  const recentTranscripts = [...transcripts].sort((a, b) => b.createdAt - a.createdAt).slice(0, 30);
 
   if (isCheckingInitialUrl) {
     return <View className="flex-1 bg-systemBackground" />;

@@ -1621,7 +1621,7 @@
         "label": "プロフィール"
       },
       "plansBilling": {
-        "description": "プラン、使用状況、請求",
+        "description": "プラン、使用状況、請求を管理します。",
         "label": "プランと請求"
       },
       "workspaceGeneral": {
@@ -1673,47 +1673,16 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "workspaceTitle": "ワークスペースの請求",
-      "workspaceDescription": "各ワークスペースには独自のプラン、シート、請求管理者があります。",
-      "billableSeat": "あなたのシートは課金対象です",
-      "nonBillableSeat": "管理者専用アクセス · 有料シートなし",
-      "managedBy": "請求は {{owner}} が管理しています。",
-      "addSeat": "シートを追加",
-      "seatUpdated_one": "ワークスペースの容量を {{count}} シートに更新しました",
-      "seatUpdated_other": "ワークスペースの容量を {{count}} シートに更新しました",
-      "seatUpdateFailed": "ワークスペースのシートを更新できませんでした",
-      "businessWorkspaceOnly": "ワークスペースで利用可能",
-      "personalPlanTitle": "個人プラン",
-      "providedBy": "個人プラン: Free · 有料アクセスは {{workspaces}} から提供",
-      "confirmSeats": {
-        "title": "ワークスペースのシートを追加しますか？",
-        "description_one": "{{workspace}} を {{count}} シートに拡張します。Stripe が日割りで請求します。",
-        "description_other": "{{workspace}} を {{count}} シートに拡張します。Stripe が日割りで請求します。",
-        "newCapacity": "新しい容量",
-        "chargeToday": "本日の請求額",
-        "confirm": "シートを追加"
-      }
+      "seatUpdateFailed": "ワークスペースのシートを更新できませんでした"
     },
     "account": {
-      "badges": {
-        "free": "無料",
-        "limitReached": "クラウド上限到達",
-        "pastDue": "支払い遅延",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "トライアル"
-      },
       "billing": {
         "couldNotOpenDescription": "請求ページを開く際に問題が発生しました。もう一度お試しください。",
         "couldNotOpenTitle": "請求を開けませんでした",
-        "manageBilling": "請求を管理",
-        "opening": "開いています...",
-        "updatePaymentMethod": "お支払い方法を更新",
         "contactOwnerTitle": "ワークスペースのオーナーにご連絡ください",
         "contactOwnerDescription": "このワークスペースの請求を更新できるのはオーナーのみです。",
         "manageInAppStore": "App Store で管理",
-        "manageInGooglePlay": "Google Play で管理",
-        "managedInMobileStore": "スマートフォンのアプリストアで請求されています。スマートフォンから管理してください。"
+        "manageInGooglePlay": "Google Play で管理"
       },
       "checkout": {
         "couldNotOpenDescription": "購入ページを開く際に問題が発生しました。もう一度お試しください。",
@@ -1732,20 +1701,6 @@
         "title": "前回サインイン時の情報を表示中",
         "description": "OpenWhispr がサーバーに接続できるようになるまで、同期とアカウントの変更は一時停止されます。"
       },
-      "pastDue": {
-        "description": "現在は無料プランをご利用中です。お支払い方法を更新して Pro に戻しましょう。",
-        "title": "お支払いを処理できませんでした"
-      },
-      "planDescriptions": {
-        "freeUsage": "今週の OpenWhispr Cloud 使用量：{{used}} / {{limit}} ワード",
-        "byokUnlimited": "独自の API キーとローカルモデルは引き続き無制限で利用できます。",
-        "nextBilling": "次の請求日: {{date}}",
-        "pastDue": "今週の OpenWhispr Cloud 使用量：{{used}} / {{limit}} ワード - お支払い方法を更新して Pro を復元",
-        "trial": "残り {{days}} 日 - 無制限の文字起こし",
-        "unlimited": "無制限",
-        "accessUntil": "{{date}} まで利用可能",
-        "storePaymentIssue": "アプリストアでこのサブスクリプションを更新できませんでした。プランを継続するには、ストアでお支払い方法を更新してください。"
-      },
       "planLabels": {
         "free": "無料",
         "pro": "Pro",
@@ -1755,81 +1710,24 @@
       "pricing": {
         "title": "プラン",
         "billedYearly": "年払い",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "永久",
-          "features": [
-            "## OpenWhispr Cloud",
-            "週2,000ワードの文字起こし",
-            "月5時間の会議録音",
-            "## 永久無料",
-            "無制限のローカルAIモデル",
-            "独自のAPIキーで無制限のクラウド文字起こし",
-            "100以上の言語に対応",
-            "カスタム辞書",
-            "データ保持なし",
-            "コミュニティサポート"
-          ]
-        },
         "pro": {
           "name": "Pro",
           "monthlyPrice": "$8",
-          "monthlyPeriod": "/月",
-          "annualPrice": "$80",
-          "annualPeriod": "/年",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "Free の全機能 +",
-          "features": [
-            "無制限のクラウド文字起こし",
-            "月20時間の会議録音",
-            "デバイス間の同期",
-            "公開リンクでノートを共有",
-            "個人APIアクセス",
-            "すべてのアプリでMCP統合",
-            "無制限のクラウド付きモバイルアプリ",
-            "メールサポート"
-          ],
-          "cta": "始める",
-          "switchToAnnual": "年払いに切り替え"
+          "annualEquivalent": "$6.67"
         },
         "business": {
           "name": "Business",
           "monthlyPrice": "$16",
-          "monthlyPeriod": "/月",
-          "annualPrice": "$160",
-          "annualPeriod": "/年",
           "annualEquivalent": "$13.33",
-          "includesPrefix": "Pro の全機能 +",
-          "badge": "一番人気",
-          "features": [
-            "無制限の会議録音",
-            "ワークスペースのロールとメンバー管理",
-            "アシスタントモード",
-            "データとチャット",
-            "優先サポート"
-          ],
-          "cta": "始める",
-          "switchToAnnual": "年払いに切り替え"
+          "cta": "始める"
         },
         "enterprise": {
           "name": "Enterprise",
           "price": "カスタム",
-          "subtitle": "高度なセキュリティとサポート向け",
-          "includesPrefix": "Business の全機能 +",
-          "features": [
-            "管理されたAPIクレジット",
-            "デバイス間のクラウド同期",
-            "チーム機能と管理",
-            "SSO とコンプライアンス",
-            "専任サポート"
-          ],
           "cta": "営業に問い合わせる",
           "upgradeCta": "Enterpriseにアップグレード",
           "askOwner": "{{name}}さんにワークスペースのアップグレードを依頼してください。"
         },
-        "currentPlan": "現在のプラン",
-        "yourPersonalPlan": "あなたの個人プラン",
         "yourWorkspacePlan": "ワークスペースのプラン",
         "manage": "管理",
         "coveredByWorkspace": "ワークスペースのプランに含まれています",
@@ -1851,7 +1749,6 @@
           "confirm": "確認"
         }
       },
-      "rollingWeeklyLimit": "週間利用上限（ローリング）",
       "signOut": {
         "endMeetingDescription": "サインアウトすると、録音中の会議が終了します。それまでに記録された内容はノートに残ります。",
         "endMeetingTitle": "会議の録音を終了しますか？",
@@ -1859,9 +1756,6 @@
         "failedTitle": "サインアウトできませんでした",
         "signOut": "サインアウト",
         "signingOut": "サインアウト中..."
-      },
-      "signedOutPlans": {
-        "button": "無料アカウントを作成"
       },
       "title": "アカウント",
       "toasts": {
@@ -1876,7 +1770,6 @@
         "title": "Pro を 7 日間無料でお試し"
       },
       "user": "ユーザー",
-      "wordsRemaining": "残り {{remaining}}",
       "deleteAccount": {
         "label": "アカウントを削除",
         "labelDescription": "アカウントと個人のクラウドデータを完全に削除します。他のローカルユーザーとワークスペース所有のコンテンツは保持されます。",
@@ -1927,10 +1820,6 @@
           "noPassword": "このアカウントにはパスワードが設定されていません。",
           "generic": "問題が発生しました。もう一度お試しください。"
         }
-      },
-      "planUnavailable": {
-        "title": "プランを取得できません",
-        "description": "現在プランを読み込めませんでした。ご利用の権限は変わりません。"
       }
     },
     "agentConfig": {
@@ -3085,26 +2974,12 @@
         "resentNoEmail": "招待を更新しましたが、メールを配信できませんでした。"
       },
       "billing": {
-        "plan": "プラン",
-        "seats": "シート",
-        "ownerOnly": "サブスクリプションを管理できるのはワークスペースのオーナーのみです。",
         "nextInvoice": "次回の請求",
-        "manageStripe": "Stripe で管理",
-        "startSubscription": "サブスクリプションを開始",
-        "provisionedPlan": "OpenWhispr が設定したプランです。プランやシート数の変更は営業担当にお問い合わせください。",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
           "free": "Free",
           "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "有効",
-          "trialing": "トライアル中",
-          "past_due": "支払い期限超過",
-          "canceled": "キャンセル済み",
-          "incomplete": "未完了",
-          "unpaid": "未払い"
         }
       },
       "developer": {
@@ -3242,6 +3117,326 @@
       "upgradeCta": "今すぐアップグレード",
       "upgradedTitle": "Enterpriseにアップグレードしました",
       "upgradedDescription": "{{workspace}}はEnterpriseになりました。"
+    },
+    "billing": {
+      "addSeats": {
+        "title": "シートを追加",
+        "invoiceDate": "次回の請求 · {{date}}",
+        "quantity": "追加するシート数",
+        "decrease": "シート数を減らす",
+        "increase": "シート数を増やす",
+        "now": "現在",
+        "after": "追加後",
+        "inUse": "使用中",
+        "pending": "保留中のシート",
+        "available": "利用可能",
+        "total": "合計シート数",
+        "price": "料金",
+        "perMonth": "{{price}} / シート / 月",
+        "proration": "次回の請求に加算",
+        "confirm_one": "{{count}} シートを追加",
+        "confirm_other": "{{count}} シートを追加",
+        "adding": "追加中…",
+        "failure": "シート数の変更を確認できませんでした。現在の合計を確認しています。",
+        "success": "{{workspace}} の合計は {{count}} シートです。",
+        "limitReached": "ワークスペースのシート数が上限に達しました。",
+        "occupancyMinimum": "使用中のシートを確保するには、合計 {{minimum}} シート以上が必要です。",
+        "previewFailed": "シート料金を読み込めませんでした。"
+      },
+      "free": {
+        "inviteTeammates": "チームメンバーを招待",
+        "upgradeToBusiness": "Business にアップグレード",
+        "proHint": "お一人ですか？Pro は月額 {{price}} です。",
+        "viewPersonal": "個人プランを見る",
+        "countFailed": "このワークスペースのメンバーを確認できませんでした。"
+      },
+      "errors": {
+        "noTeammates": "Business を始める前にチームメンバーを招待してください。"
+      },
+      "picker": {
+        "label": "表示中のプラン",
+        "personal": "個人",
+        "workspaces": "ワークスペース",
+        "loadFailed": "ワークスペースを読み込めませんでした"
+      },
+      "workspaceUnavailable": {
+        "title": "ワークスペースのプランを表示できません",
+        "description": "アクセス権は変わっていません。"
+      },
+      "tiles": {
+        "upgradeWorkspace": "ワークスペースをアップグレード",
+        "createWorkspace": "ワークスペースを作成"
+      },
+      "plans": {
+        "pricePerMonth": "{{price}} / 月",
+        "pricePerMonthYearly": "{{price}} / 月（年払い）",
+        "pricePerSeat": "{{price}} / シート / 月",
+        "pricePerSeatYearly": "{{price}} / シート / 月（年払い）",
+        "yourPlan": "あなたのプラン",
+        "pro": {
+          "includes": "Free の全機能に加えて",
+          "features": {
+            "unlimitedCloud": "無制限のクラウド文字起こし",
+            "syncDevices": "デバイス間の同期",
+            "publicLinks": "ノートの公開リンク",
+            "apiMcp": "個人 API と MCP アクセス",
+            "mobileApp": "モバイルアプリ"
+          }
+        },
+        "business": {
+          "includes": "Pro の全機能に加えて",
+          "features": {
+            "workspaceRoles": "ワークスペースのロールとメンバー",
+            "assistantMode": "アシスタントモード",
+            "chatOverData": "データと対話",
+            "prioritySupport": "優先サポート"
+          }
+        },
+        "enterprise": {
+          "includes": "Business の全機能に加えて",
+          "features": {
+            "managedCredits": "管理された API クレジット",
+            "ssoCompliance": "SSO とコンプライアンス",
+            "adminControls": "管理者コントロールとポリシー",
+            "dedicatedSupport": "専任サポート"
+          }
+        }
+      },
+      "personal": {
+        "blocks": {
+          "currentPlan": "現在のプラン",
+          "usage": "利用状況",
+          "billingDetails": "請求の詳細"
+        },
+        "signedOut": {
+          "title": "サインインしていません",
+          "body": "サインインするとプランを確認できます。"
+        },
+        "failed": {
+          "title": "プランを読み込めません",
+          "body": "アクセス権は変わりません。"
+        },
+        "actions": {
+          "cancelTrial": "トライアルを解約",
+          "cancelBusiness": "Business を解約",
+          "keepPlan": "{{plan}} を継続",
+          "subscribePro": "Pro に登録",
+          "manageBilling": "請求を管理",
+          "updatePayment": "支払い方法を更新",
+          "cancelPro": "Pro を解約"
+        },
+        "usage": {
+          "cloudTranscription": "クラウド文字起こし",
+          "unlimited": "無制限",
+          "wordsValue": "{{used}} / {{limit}} 語",
+          "wordsLeft": "過去 7 日間の残り {{remaining}} 語",
+          "rolling": "過去 7 日間で集計します。ローカルモデルとご自身の API キーは無制限です。",
+          "limitReached": "上限に達しました。ローカルモデルとご自身の API キーは引き続き使えます。"
+        },
+        "stores": {
+          "appStore": "App Store",
+          "playStore": "Google Play",
+          "unknown": "お使いのスマートフォンのアプリストア"
+        },
+        "badges": {
+          "stripeTrial": "トライアル",
+          "trial_one": "トライアル · 残り {{count}} 日",
+          "trial_other": "トライアル · 残り {{count}} 日",
+          "pastDue": "支払い期限切れ",
+          "cancelled": "解約済み",
+          "yearly": "年払い",
+          "monthly": "月払い"
+        },
+        "price": {
+          "trialStarts": "{{date}}から請求開始",
+          "trialYearlyStarts": "{{date}}から年払い",
+          "free": "$0",
+          "billedYearly": "年払い"
+        },
+        "banners": {
+          "endingDated": {
+            "title": "{{plan}} は{{date}}に終了します",
+            "body": "請求ポータルでプランを継続できます。"
+          },
+          "ending": {
+            "title": "{{plan}} は終了予定です",
+            "body": "請求ポータルでプランを継続できます。"
+          },
+          "paymentFailedRetry": {
+            "title": "支払いに失敗しました",
+            "body": "支払いが完了するまで無料プランの上限が適用されます。次回の再試行は{{date}}です。"
+          },
+          "coveredPastDue": {
+            "title": "{{workspace}} がすでに対象にしています",
+            "body": "請求ポータルで失敗した支払いを確認してください。"
+          },
+          "coveredPastDueUnnamed": {
+            "title": "ワークスペースがすでに対象にしています",
+            "body": "請求ポータルで失敗した支払いを確認してください。"
+          },
+          "coveredStripeTrial": {
+            "title": "{{workspace}} がすでに対象にしています",
+            "body": "Pro のトライアルは終了すると有料のサブスクリプションに切り替わります。"
+          },
+          "coveredStripeTrialUnnamed": {
+            "title": "ワークスペースがすでに対象にしています",
+            "body": "Pro のトライアルは終了すると有料のサブスクリプションに切り替わります。"
+          },
+          "coveredPaying": {
+            "title": "{{workspace}} がすでに対象にしています",
+            "body": "{{plan}} の料金は引き続き発生しています。"
+          },
+          "coveredPayingUnnamed": {
+            "title": "ワークスペースがすでに対象にしています",
+            "body": "{{plan}} の料金は引き続き発生しています。"
+          },
+          "coveredStore": {
+            "title": "{{workspace}} がすでに対象にしています",
+            "body": "スマートフォンのアプリストアで {{plan}} の購入内容を確認できます。"
+          },
+          "coveredStoreUnnamed": {
+            "title": "ワークスペースがすでに対象にしています",
+            "body": "スマートフォンのアプリストアで {{plan}} の購入内容を確認できます。"
+          },
+          "covered": {
+            "title": "{{workspace}} の対象です",
+            "body": "ワークスペースのシートで、ここでも無制限に使えます。"
+          },
+          "coveredUnnamed": {
+            "title": "ワークスペースの対象です",
+            "body": "ワークスペースのシートで、ここでも無制限に使えます。"
+          },
+          "paymentFailed": {
+            "title": "支払いに失敗しました",
+            "body": "支払いが完了するまで Free の上限が適用されます。"
+          },
+          "storeRenewalFailed": {
+            "title": "更新に失敗しました",
+            "body": "スマートフォンのアプリストアが再試行しています。そちらで支払い方法を更新してください。"
+          },
+          "weeklyLimit": {
+            "title": "週間上限に達しました",
+            "body": "7 日より前の語が集計から外れるにつれて、クラウド文字起こしが再び使えるようになります。ローカルモデルとご自身の API キーは引き続き使えます。"
+          }
+        },
+        "details": {
+          "nextInvoice": "次回の請求",
+          "finalInvoice": "最終請求",
+          "firstInvoice": "初回の請求",
+          "nextRetry": "次回の支払い再試行",
+          "amountDue": "未払い額",
+          "ends": "終了日",
+          "ended": "終了済み",
+          "billingContact": "請求先連絡先",
+          "periodEnds": "現在の期間の終了日",
+          "billedThrough": "請求元",
+          "accessUntil": "利用期限"
+        }
+      },
+      "workspace": {
+        "managedAccount": "管理対象アカウント",
+        "billingDetails": "請求の詳細",
+        "workspaceDetails": "ワークスペースの詳細",
+        "badges": {
+          "trial_one": "トライアル · 残り {{count}} 日",
+          "trial_other": "トライアル · 残り {{count}} 日",
+          "trialUndated": "トライアル",
+          "pastDue": "支払い期限切れ",
+          "unpaid": "未払い",
+          "incomplete": "未完了",
+          "cancelled": "解約済み",
+          "paused": "一時停止中"
+        },
+        "interval": {
+          "monthly": "月払い",
+          "annual": "年払い"
+        },
+        "planLine": {
+          "seatPrice": "1 席あたり月額 {{price}}",
+          "customPricing": "個別料金",
+          "free": "$0",
+          "invoicedByOpenWhispr": "OpenWhispr から請求",
+          "paidBy": "{{workspace}} が支払い",
+          "personalApplies": "個人プランが適用されます"
+        },
+        "actions": {
+          "manageBilling": "請求を管理",
+          "updatePayment": "支払い方法を更新",
+          "finishCheckout": "購入手続きを完了",
+          "keepPlan": "{{plan}} を継続",
+          "resubscribe": "再登録",
+          "openConsole": "コンソールを開く",
+          "upgradeEnterprise": "Enterprise にアップグレード",
+          "viewPersonal": "個人プランを見る",
+          "copyEmail": "メールをコピー"
+        },
+        "banners": {
+          "ends": {
+            "title": "{{plan}} は {{date}} に終了します",
+            "body": "それまでメンバーは {{plan}} を使えます。"
+          },
+          "endsUndated": {
+            "title": "{{plan}} は終了予定です",
+            "body": "現在の期間が終わるまで、メンバーは {{plan}} を使えます。"
+          },
+          "paymentFailed": {
+            "title": "支払いに失敗しました",
+            "body": "メンバーが再び {{plan}} を利用できるよう、支払い方法を更新してください。"
+          },
+          "paused": {
+            "title": "{{plan}} は一時停止中です",
+            "body": "支払いが完了するまで、メンバーには各自の個人プランが適用されます。"
+          },
+          "checkoutIncomplete": {
+            "title": "購入手続きが完了していません",
+            "body": "手続きを完了すると、メンバーの {{plan}} が始まります。"
+          },
+          "ended": {
+            "title": "{{plan}} は {{date}} に終了しました",
+            "body": "メンバーには各自の個人プランが適用されています。"
+          },
+          "endedUndated": {
+            "title": "{{plan}} は終了しました",
+            "body": "メンバーには各自の個人プランが適用されています。"
+          },
+          "memberPaymentProblem": {
+            "title": "{{workspace}} の支払いに問題があります",
+            "body": "ワークスペースの支払いが完了するまで、個人プランが適用されます。"
+          },
+          "memberPaused": {
+            "title": "{{workspace}} のプランは一時停止中です",
+            "body": "再開するまで、個人プランが適用されます。"
+          }
+        },
+        "usage": {
+          "seats": "シート",
+          "members": "メンバー",
+          "noSeatsLeft": "空きシートがありません",
+          "noSeatsLeftWithInvites_one": "空きシートがありません · 保留中の招待 {{count}} 件",
+          "noSeatsLeftWithInvites_other": "空きシートがありません · 保留中の招待 {{count}} 件",
+          "pendingInvites_one": "保留中の招待 {{count}} 件",
+          "pendingInvites_other": "保留中の招待 {{count}} 件"
+        },
+        "details": {
+          "nextInvoice": "次回の請求",
+          "nextRetry": "次回の支払い試行",
+          "amountDue": "未払い金額",
+          "billingContact": "請求先連絡先",
+          "finalInvoice": "最終請求",
+          "firstInvoice": "初回請求日",
+          "ends": "終了日",
+          "ended": "終了日",
+          "billing": "請求",
+          "periodEnds": "現在の期間の終了日",
+          "workspace": "ワークスペース",
+          "yourRole": "あなたのロール",
+          "yourSeat": "あなたのシート",
+          "managedBy": "管理者",
+          "invoicedByOpenWhispr": "OpenWhispr から請求",
+          "paidSeat": "有料シート",
+          "noPaidSeat": "有料シートなし"
+        }
+      }
     }
   },
   "models": {
@@ -3407,6 +3602,9 @@
         "liquidai_lfm2_2_6b_q4_k_m": "より高品質なクリーンアップ向けのバランス型LFM2",
         "liquidai_lfm2_5_350m_q8_0": "高速な口述クリーンアップ向けの超軽量モデル",
         "liquidai_lfm2_5_230m_q8_0": "小型モデル、控えめなハードウェアでも即座にクリーンアップ",
+        "liquidai_lfm3_1_7b_qad_q4_0": "Liquid AIの最新小型モデル",
+        "liquidai_lfm3_vl_2b_qad_q4_0": "Liquid AIのLFM3ビジョンモデル、ここではテキストに使用",
+        "liquidai_lfm3_omni_2b_q4_0": "Liquid AIのLFM3マルチモーダルモデル、ここではテキストに使用",
         "qwen_qwen3_5_0_8b_q4_k_m": "最速の整形向け超小型 Qwen3.5",
         "qwen_qwen3_8_27b_q4_k_m": "32 GB マシン向けで最も高性能な Qwen モデル",
         "qwen_qwen3_6_35b_a3b_q4_k_m": "高速な Mixture-of-Experts モデル、アクティブパラメータ 3B",

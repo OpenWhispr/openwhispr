@@ -1,15 +1,14 @@
+import { matchesHost } from "../../utils/urlUtils";
+
 /**
- * Request constraints that belong to a model family, independent of which
- * provider serves it. Storing a family fact inside a provider branch is what
- * broke Tinfoil gpt-oss (#1611: the "no reasoning off switch" rule lived under
- * `providerKey === "groq"`, so every other provider sent the rejected "none").
- * New family facts must land here, never in a provider conditional.
- *
- * Kept free of runtime imports so the table stays unit-testable on its own,
- * like thinkingSuppressionDialects.
+ * Model-family defaults shared across providers. A host can override a family
+ * constraint when its API supports different controls for the same model.
+ * Keeping defaults here, not in a provider branch, avoids #1611, where a gpt-oss
+ * rule scoped to `providerKey === "groq"` let every other provider send the
+ * rejected "none".
  */
 export interface ModelFamilyConstraints {
-  family: "gpt-oss" | "qwen" | "magistral" | "glm-5.3" | "gemini-no-minimal";
+  family: "gpt-oss" | "qwen" | "magistral" | "glm-5.3" | "kimi-k3.1" | "gemini-no-minimal";
   reasoningEffort?: {
     /** Value that best approximates "thinking off" for reasoning_effort. */
     suppressValue: string;
@@ -63,6 +62,14 @@ const FAMILIES: Array<ModelFamilyConstraints & { match: RegExp }> = [
     reasoningEffort: { suppressValue: "low", defaultValue: "high", options: ["low", "high"] },
   },
   {
+    family: "kimi-k3.1",
+    match: /kimi[-_]?k3[-.]1/,
+    // On Tinfoil, Kimi K3.1 Pro always reasons and takes low|high|max only; anything else,
+    // "none" included, is a 400 (docs.tinfoil.sh/guides/reasoning). Its server
+    // default is max, like GLM-5.3, so high stands in for it under the same caps.
+    reasoningEffort: { suppressValue: "low", defaultValue: "high", options: ["low", "high"] },
+  },
+  {
     family: "gemini-no-minimal",
     match: /gemini-(3\.8-flash|4-argon|3\.1-pro)/,
     // These Gemini models take low|medium|high only and reject "minimal", so low
@@ -82,9 +89,19 @@ const FAMILIES: Array<ModelFamilyConstraints & { match: RegExp }> = [
 ];
 
 export function getModelFamilyConstraints(
-  model: string | null | undefined
+  model: string | null | undefined,
+  endpoint?: string | null
 ): ModelFamilyConstraints | null {
   const id = (model || "").toLowerCase();
   if (!id) return null;
-  return FAMILIES.find((f) => f.match.test(id)) ?? null;
+  const family = FAMILIES.find((entry) => entry.match.test(id)) ?? null;
+  if (family?.family === "kimi-k3.1" && matchesHost(endpoint, "inference.verda.com")) {
+    // Verda supports a true off switch (docs.verda.com/inference/models/kimi-k3-1-pro).
+    // Auto leaves effort to the endpoint.
+    return {
+      ...family,
+      reasoningEffort: { suppressValue: "none", options: ["none", "low", "high"] },
+    };
+  }
+  return family;
 }
