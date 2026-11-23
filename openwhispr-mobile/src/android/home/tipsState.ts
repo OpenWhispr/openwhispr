@@ -2,19 +2,42 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 
 const KEY = 'android.home.tips';
-export const TIP_COUNT = 3;
 
-type Saved = { hidden: boolean; watched: number[] };
+/** Every tip on Home, in the order they're listed. Ids, not positions, are saved as watched. */
+export const TIP_IDS = ['dictate', 'assistant', 'translate', 'edit', 'size', 'hide'] as const;
+export type TipId = (typeof TIP_IDS)[number];
+export const TIP_COUNT = TIP_IDS.length;
+
+/**
+ * Builds before the six tips saved positions in a three-tip list: 0 start dictating, 1 bubble size,
+ * 2 hide. Those map onto the same tips here, so nobody is shown a tip again that they already watched.
+ */
+const LEGACY_POSITIONS: Record<number, TipId> = { 0: 'dictate', 1: 'size', 2: 'hide' };
+
+type Saved = { hidden: boolean; watched: TipId[] };
+
+/** Reads what was saved, whether as ids or as the old three-tip positions. */
+export function readWatched(value: unknown): TipId[] {
+  if (!Array.isArray(value)) return [];
+  const ids = value.map((entry) =>
+    typeof entry === 'number'
+      ? LEGACY_POSITIONS[entry]
+      : (TIP_IDS as readonly unknown[]).includes(entry)
+        ? (entry as TipId)
+        : undefined,
+  );
+  return [...new Set(ids.filter((id): id is TipId => id !== undefined))];
+}
 
 /**
  * Home's Tips: which videos the person has watched, and whether Tips is gone. Watching all
- * three, or "Hide", removes Tips from Home for good. Kept on this phone only.
+ * of them, or "Hide", removes Tips from Home for good. Kept on this phone only.
  */
 export const useTips = create<
   Saved & {
     loaded: boolean;
     load: () => Promise<void>;
-    watch: (index: number) => void;
+    watch: (id: TipId) => void;
     hide: () => void;
   }
 >((set, get) => {
@@ -30,21 +53,15 @@ export const useTips = create<
       if (get().loaded) return;
       try {
         const raw = await AsyncStorage.getItem(KEY);
-        const saved = raw ? (JSON.parse(raw) as Partial<Saved>) : {};
-        set({
-          hidden: saved.hidden === true,
-          watched: Array.isArray(saved.watched)
-            ? saved.watched.filter((index) => Number.isInteger(index))
-            : [],
-          loaded: true,
-        });
+        const saved = raw ? (JSON.parse(raw) as { hidden?: unknown; watched?: unknown }) : {};
+        set({ hidden: saved.hidden === true, watched: readWatched(saved.watched), loaded: true });
       } catch {
         set({ loaded: true });
       }
     },
-    watch: (index) => {
-      if (get().watched.includes(index)) return;
-      set({ watched: [...get().watched, index] });
+    watch: (id) => {
+      if (get().watched.includes(id)) return;
+      set({ watched: [...get().watched, id] });
       save();
     },
     hide: () => {
