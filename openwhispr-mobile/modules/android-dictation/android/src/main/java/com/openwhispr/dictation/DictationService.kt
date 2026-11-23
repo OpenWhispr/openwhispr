@@ -850,7 +850,7 @@ class DictationService : Service() {
         recording.start()
       }
       setState(BubbleState.LISTENING)
-      deliver("onStart", mapOf("selection" to selected, "mode" to next.wire))
+      deliver("onStart", mapOf("selection" to selected, "mode" to next.wire, "app" to targetApp()))
       handler.postDelayed(maximumRecording, 300000)
     } catch (error: Exception) {
       recorder?.close(); recorder = null; foreground(false)
@@ -896,9 +896,11 @@ class DictationService : Service() {
       retryKept = false
       val selected = InsertionService.instance?.captureTarget().orEmpty()
       setState(BubbleState.PROCESSING)
-      deliver("onRetry", mapOf("selection" to selected))
+      deliver("onRetry", mapOf("selection" to selected, "app" to targetApp()))
     } else { val again = mode; setState(BubbleState.READY); begin(again) }
   }
+  /** The package of the app whose field was captured last, for Tone & Style. */
+  private fun targetApp(): String = InsertionService.instance?.targetApp.orEmpty()
   private fun dismiss() {
     if (state != BubbleState.RETRY && state != BubbleState.RECOVER) return
     retryKept = false

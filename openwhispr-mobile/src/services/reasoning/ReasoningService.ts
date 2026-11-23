@@ -46,6 +46,7 @@ interface CallApiOptions {
   customDictionary?: string[];
   sharedDictionary?: string[];
   tone?: string;
+  appCategory?: string;
   agentName?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -125,6 +126,7 @@ export class ReasoningService {
       }
       if (options.tone && options.tone !== 'default') {
         body.tone = options.tone;
+        if (options.appCategory) body.appCategory = options.appCategory;
       }
       if (options.customPrompt) body.customPrompt = options.customPrompt;
     }
@@ -180,6 +182,7 @@ export class ReasoningService {
       signal,
       timeoutMs,
       tone,
+      appCategory,
       agentName,
       routing,
     } = request;
@@ -287,6 +290,7 @@ export class ReasoningService {
       signal,
       timeoutMs,
       tone,
+      appCategory,
       agentName,
     });
   }

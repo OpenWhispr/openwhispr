@@ -20,6 +20,7 @@ import { selectedSpeechModel } from './speechSelection';
 import { speechModelSupportsLanguages } from './speechCapabilities';
 import type { Recording } from '../../modules/android-dictation/src';
 import type { KeyboardTone } from '@/types';
+import { dictationToneStyle, type ToneKind } from './style/toneStyle';
 import { cleanupSavedOnDevice } from '@/lib/aiWorkflows.android';
 import i18n from './strings';
 import * as Crypto from 'expo-crypto';
@@ -53,6 +54,8 @@ export interface AndroidJob {
   selection: string;
   language?: string;
   tone?: KeyboardTone;
+  /** Tone & Style's kind of app for this dictation, set with `tone` while it is on. */
+  appCategory?: ToneKind;
 }
 
 /**
@@ -91,9 +94,11 @@ export function createAndroidJob(
   mode: DictationMode = 'dictate',
   target = 'Spanish',
   selection = '',
+  app?: string,
 ): AndroidJob {
   const config = useConfigStore.getState().config;
   const now = new Date();
+  const toneStyle = dictationToneStyle(config, app);
   return {
     eventId: Crypto.randomUUID(),
     startedAt: now.toISOString(),
@@ -105,8 +110,8 @@ export function createAndroidJob(
     target,
     selection,
     language: getPreferredTranscriptionLanguage(),
-    tone:
-      config?.androidStyleTones?.[config.androidStyleContext ?? 'personal'] ?? config?.keyboardTone,
+    tone: toneStyle?.tone,
+    appCategory: toneStyle?.appCategory,
   };
 }
 export async function ensureAndroidModels(job: AndroidJob): Promise<void> {
@@ -239,6 +244,7 @@ export async function processAndroidAudio(
         requestContext: 'keyboard',
         purpose: 'dictation',
         keyboardTone: job.tone,
+        keyboardAppCategory: job.appCategory,
       },
       {
         signal,
