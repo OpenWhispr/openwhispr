@@ -213,8 +213,6 @@ for (const maxTokens of [128, 8192]) {
   });
 }
 
-// Thinking counts toward max_tokens, so a model that thinks by default can spend
-// the whole cleanup budget before writing any text.
 for (const [model, disableThinking, expected] of [
   ["claude-sonnet-5-5", true, { type: "between_tools" }],
   ["claude-haiku-5-5", true, { type: "disabled" }],
@@ -246,7 +244,6 @@ for (const [model, disableThinking, expected] of [
   });
 }
 
-// Opus 5 with thinking disabled can leak <thinking> tags into its text.
 test("a <thinking> block leaked with thinking off is not returned", async () => {
   fetchBehavior = async () =>
     Response.json({

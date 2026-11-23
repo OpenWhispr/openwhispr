@@ -7752,7 +7752,7 @@ class IPCHandlers {
               messageKey: CLEANUP_EMPTY_REPLY_MESSAGE_KEY,
             });
           }
-          // With thinking turned off, Opus 5 can open its text with a <thinking> block.
+          // With thinking turned off, Claude can open its text with a <thinking> block.
           return {
             success: true,
             text: thinking
