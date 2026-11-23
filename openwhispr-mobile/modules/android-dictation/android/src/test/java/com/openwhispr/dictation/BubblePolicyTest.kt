@@ -1,5 +1,6 @@
 package com.openwhispr.dictation
 
+import kotlin.math.PI
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -47,6 +48,15 @@ class BubblePolicyTest {
     assertFalse(BubblePolicy.overTarget(540f, 1500f, 540f, 1950f, 120f))
   }
 
+  @Test fun cancelTargetIsWiderThanTheCrossAndYieldsToTheBubble() {
+    // ✕ centred at (400, 1000), 48 dp target at 3x density: 72 px each way.
+    assertTrue(BubblePolicy.overCancel(400f, 1000f, 400f, 1000f, 72f, onBubble = false))
+    assertTrue(BubblePolicy.overCancel(330f, 1070f, 400f, 1000f, 72f, onBubble = false))
+    assertFalse(BubblePolicy.overCancel(300f, 1000f, 400f, 1000f, 72f, onBubble = false))
+    assertFalse(BubblePolicy.overCancel(400f, 1100f, 400f, 1000f, 72f, onBubble = false))
+    assertFalse(BubblePolicy.overCancel(460f, 1000f, 400f, 1000f, 72f, onBubble = true))
+  }
+
   @Test fun bubbleSitsAboveTheKeyboardAndNeverOverIt() {
     // Default: just above the keyboard.
     assertEquals(1200 - 40 - 150, BubblePolicy.bubbleTop(null, 1200, 2400, 150, 40, 100))
@@ -74,11 +84,34 @@ class BubblePolicyTest {
     assertEquals(0f, roomNoise, 0f)
   }
 
-  @Test fun waveformHasSevenBarsTallestInTheMiddleAndNeverFlat() {
-    val bars = BubblePolicy.bars(1f, 0f)
-    assertEquals(7, bars.size)
-    assertTrue(BubblePolicy.bars(0f, 0f).all { it >= 0.15f })
-    assertTrue(bars.all { it in 0.15f..1f })
+  @Test fun listeningDrawsTheLogosThreeBarsAndTheyMoveLikeAWaveform() {
+    val half = (PI / 2).toFloat()
+    // At rest: the logo, 9 / 20 / 9 dp, whatever the wave.
+    assertArrayEquals(floatArrayOf(9f, 20f, 9f), BubblePolicy.bars(0f, 0f, 0f), 0.001f)
+    assertArrayEquals(floatArrayOf(9f, 20f, 9f), BubblePolicy.bars(0f, 0f, 0f, wave = 2f), 0.001f)
+    // At its crest a bar takes all its growth: the middle reaches 30 dp, a side 24.
+    assertEquals(30f, BubblePolicy.bars(1f, 1f, 1f, wave = half)[1], 0.001f)
+    assertEquals(24f, BubblePolicy.bars(1f, 1f, 1f, wave = half - 2.2f)[0], 0.001f)
+    // Full voice, the bars stand at different heights.
+    assertEquals(3, BubblePolicy.bars(1f, 1f, 1f, wave = -half).toSet().size)
+    // As a syllable fades the middle drops first, and a side still carrying it stands above the middle.
+    val fading = BubblePolicy.bars(0.3f, 1f, 1f, wave = half - 2.2f)
+    assertTrue(fading[0] > fading[1])
+    // As the wave turns, the heights change though the voice holds.
+    assertFalse(BubblePolicy.bars(1f, 1f, 1f, wave = 0f).contentEquals(BubblePolicy.bars(1f, 1f, 1f, wave = 1f)))
+    // Lagging sides: the middle can move before they do.
+    assertArrayEquals(floatArrayOf(9f, 9f), BubblePolicy.bars(1f, 0f, 0f, wave = 1f).let { floatArrayOf(it[0], it[2]) }, 0.001f)
+    // Silence breathes ±1 dp; a loud voice doesn't.
+    assertArrayEquals(floatArrayOf(10f, 21f, 10f), BubblePolicy.bars(0f, 0f, 0f, breath = 1f), 0.001f)
+    assertArrayEquals(BubblePolicy.bars(1f, 1f, 1f, wave = 1f), BubblePolicy.bars(1f, 1f, 1f, wave = 1f, breath = 1f), 0.001f)
+  }
+
+  @Test fun theWaveTurnsFasterTheLouderTheVoice() {
+    val soft = BubblePolicy.waveStep(0f, 0f, 100L)
+    val loud = BubblePolicy.waveStep(0f, 1f, 100L)
+    assertTrue(soft > 0f)
+    assertEquals((0.35f + 1.1f) / 0.35f, loud / soft, 0.01f)
+    assertTrue(BubblePolicy.waveStep(6f, 1f, 100L) < 2 * PI)
   }
 
   @Test fun theReadyBubbleShrinksWhenIdleOrOverASearchFieldOnlyWhenThoseAreOn() {

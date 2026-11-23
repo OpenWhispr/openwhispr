@@ -1,6 +1,9 @@
 package com.openwhispr.dictation
 
+import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.log10
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
@@ -107,6 +110,14 @@ object BubblePolicy {
   /** A released bubble settles on the edge its centre is nearest to. */
   fun dockRight(centerX: Float, screenWidth: Int) = centerX >= screenWidth / 2f
 
+  /**
+   * Whether a finger at ([x], [y]) is on the listening ✕: a square target [half] from the ✕'s centre each
+   * way (48 dp across, though the ✕ draws 32 dp). The bubble wins where the two overlap, so a small
+   * bubble's tap still stops rather than cancels.
+   */
+  fun overCancel(x: Float, y: Float, cancelX: Float, cancelY: Float, half: Float, onBubble: Boolean) =
+    !onBubble && abs(x - cancelX) <= half && abs(y - cancelY) <= half
+
   /** Whether the bubble's centre is close enough to the hide target to hide on release. */
   fun overTarget(bubbleX: Float, bubbleY: Float, targetX: Float, targetY: Float, radius: Float): Boolean {
     val dx = bubbleX - targetX
@@ -137,12 +148,46 @@ object BubblePolicy {
   private const val FLOOR_DB = -60.0
   private const val CEILING_DB = -20.0
 
-  private val barShape = floatArrayOf(0.45f, 0.7f, 0.9f, 1f, 0.9f, 0.7f, 0.45f)
-  const val BARS = 7
+  /**
+   * The listening bubble's three bars, in the logo's proportions (section 7, Josh 20 Nov), in dp for a
+   * 52 dp bubble: 5 wide, 10 apart, resting 9 / 20 / 9. They move like a waveform (Josh 22 Nov), not as
+   * one block: each bar rides its own phase of one wave ([wave]), and the sides hear the voice
+   * [SIDE_LAGS_MS] after the middle, so a loud syllable ripples outwards. The wave turns faster the louder
+   * the voice ([waveStep]), so soft speech sways and loud speech dances; in silence it all settles to the
+   * logo and breathes ±1 dp on a 1.6 s cycle ([breath], -1..1). A side can rise past the middle.
+   */
+  const val BAR_WIDTH = 5f
+  const val BAR_SPACING = 10f
+  const val MIDDLE_REST = 20f
+  const val SIDE_REST = 9f
+  const val MIDDLE_GROW = 10f
+  const val SIDE_GROW = 15f
+  const val BREATH_MS = 1600L
+  /** How long after the middle the left and right bars hear the voice. */
+  val SIDE_LAGS_MS = longArrayOf(110L, 60L)
+  /** Each bar's place on the wave (left, middle, right), in radians. */
+  private val WAVE_PHASES = floatArrayOf(2.2f, 0f, 4.3f)
+  /** How much of a bar's growth the wave takes away at its trough (middle, sides). */
+  private const val MIDDLE_SWAY = 0.3f
+  private const val SIDE_SWAY = 0.45f
+  /** How long a bar takes to ease toward its height (middle, sides): the sides glide (Josh 22 Nov: slower). */
+  const val MIDDLE_EASE_MS = 70f
+  const val SIDE_EASE_MS = 160f
+  private const val WAVE_REST_HZ = 0.35f
+  private const val WAVE_VOICE_HZ = 1.1f
 
-  /** Bar heights from 0 to 1 for the short listening waveform: tallest in the middle, never flat. */
-  fun bars(level: Float, phase: Float): FloatArray = FloatArray(BARS) { index ->
-    val wobble = 0.75f + 0.25f * kotlin.math.sin(phase + index * 1.3f)
-    (0.15f + 0.85f * level.coerceIn(0f, 1f) * barShape[index] * wobble).coerceIn(0.15f, 1f)
+  /** Heights for left, middle and right from each bar's level (0..1) and where the wave is. */
+  fun bars(middle: Float, left: Float, right: Float, wave: Float = 0f, breath: Float = 0f): FloatArray {
+    val levels = floatArrayOf(left.coerceIn(0f, 1f), middle.coerceIn(0f, 1f), right.coerceIn(0f, 1f))
+    val b = breath.coerceIn(-1f, 1f) * (1f - levels.max())
+    return FloatArray(3) { i ->
+      val sway = if (i == 1) MIDDLE_SWAY else SIDE_SWAY
+      val shape = 1f - sway * (1f - sin(wave + WAVE_PHASES[i])) / 2f
+      (if (i == 1) MIDDLE_REST + MIDDLE_GROW * levels[i] * shape else SIDE_REST + SIDE_GROW * levels[i] * shape) + b
+    }
   }
+
+  /** Moves the wave on by [dtMs], faster the louder [voice] (0..1). */
+  fun waveStep(wave: Float, voice: Float, dtMs: Long): Float =
+    ((wave + dtMs / 1000f * 2f * PI.toFloat() * (WAVE_REST_HZ + WAVE_VOICE_HZ * voice.coerceIn(0f, 1f))) % (2f * PI.toFloat()))
 }
