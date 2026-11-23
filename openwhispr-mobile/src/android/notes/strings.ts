@@ -108,6 +108,7 @@ export const notesEnglish = {
   noSummary: 'No summary yet',
   noSummaryBody: 'Turn the transcript into decisions, action items and the main points.',
   noSummaryBodyNote: 'Turn your notes into a clean summary with the main points.',
+  summaryPlaceholder: 'Write the summary…',
   writeSummary: 'Write summary',
   templateLabel: 'Template: {{name}}',
   noTextModel: 'Download a text model in Settings → Processing',

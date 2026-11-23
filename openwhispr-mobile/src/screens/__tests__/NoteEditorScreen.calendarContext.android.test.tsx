@@ -247,8 +247,9 @@ jest.mock('@/store/useUsageStore', () => {
   return { useUsageStore };
 });
 
+let mockKeyboardHeight = 0;
 jest.mock('@/hooks/useKeyboardHeight', () => ({
-  useKeyboardHeight: () => 0,
+  useKeyboardHeight: () => mockKeyboardHeight,
 }));
 
 jest.mock('@/services/reasoning/ReasoningService', () => ({
@@ -1099,7 +1100,7 @@ describe('NoteEditorScreen body tabs', () => {
     mockNote = note({ enhancedContent: '## Summary' });
     mockNotesState.notes = [mockNote];
     const { getByTestId, getByText, queryByTestId } = render(<NoteEditorScreen />);
-    expect(getByText('## Summary')).toBeTruthy();
+    expect(getByTestId('enhanced-read')).toBeTruthy();
     expect(getByTestId('note-tab-notes')).toBeTruthy();
     expect(getByTestId('note-tab-transcript')).toBeTruthy();
     expect(queryByTestId('write-summary')).toBeNull();
@@ -1119,8 +1120,8 @@ describe('NoteEditorScreen body tabs', () => {
     mockNote = plainNote({ enhancedContent: '## Summary' });
     mockNotesState.notes = [mockNote];
     mockSegments = [];
-    const { getByText, queryByTestId } = render(<NoteEditorScreen />);
-    expect(getByText('## Summary')).toBeTruthy();
+    const { getByTestId, queryByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId('enhanced-read')).toBeTruthy();
     expect(queryByTestId('note-content-input')).toBeNull();
   });
 
@@ -1131,8 +1132,8 @@ describe('NoteEditorScreen body tabs', () => {
     mockRouteTab = tab;
     mockNote = note({ enhancedContent: '## Summary' });
     mockNotesState.notes = [mockNote];
-    const { getByTestId, getByText, queryByText } = render(<NoteEditorScreen />);
-    expect(queryByText('## Summary')).toBeNull();
+    const { getByText, queryByTestId } = render(<NoteEditorScreen />);
+    expect(queryByTestId('enhanced-read')).toBeNull();
     if (tab === 'notes') expect(shownNotes()).toBe(shown);
     else expect(getByText(shown)).toBeTruthy();
   });
@@ -1142,8 +1143,8 @@ describe('NoteEditorScreen body tabs', () => {
     mockNote = note({ noteType: 'personal', diarizationEnabled: 0, enhancedContent: '## Summary' });
     mockNotesState.notes = [mockNote];
     mockSegments = [];
-    const { getByText } = render(<NoteEditorScreen />);
-    expect(getByText('## Summary')).toBeTruthy();
+    const { getByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId('enhanced-read')).toBeTruthy();
   });
 
   it('shows the processing status on the Transcript tab and keeps My notes reachable', () => {
@@ -1245,7 +1246,7 @@ describe('NoteEditorScreen body tabs', () => {
     });
     mockNotesState.notes = [mockNote];
     const { getByText, getByTestId, queryByTestId } = render(<NoteEditorScreen />);
-    expect(getByText('## Summary')).toBeTruthy();
+    expect(getByTestId('enhanced-read')).toBeTruthy();
     expect(getByTestId('note-tab-enhanced')).toBeTruthy();
     expect(getByTestId('note-tab-transcript')).toBeTruthy();
 
@@ -1370,7 +1371,7 @@ describe('NoteEditorScreen body tabs', () => {
     mockNotesState.notes = [mockNote];
     rerender(<NoteEditorScreen />);
 
-    expect(getByText('## Summary')).toBeTruthy();
+    expect(getByTestId('enhanced-read')).toBeTruthy();
     expect(queryByTestId('write-summary')).toBeNull();
   });
 
@@ -1385,18 +1386,42 @@ describe('NoteEditorScreen body tabs', () => {
     expect(notesInput()).toBeTruthy();
   });
 
-  it('saves edits to the generated notes when Done is pressed', () => {
+  it('saves edits to the generated notes when the edit ends (Done or tapping away)', () => {
     mockNote = note({ enhancedContent: '## Summary' });
     mockNotesState.notes = [mockNote];
     const { getByTestId } = render(<NoteEditorScreen />);
 
     fireEvent.press(getByTestId('enhanced-read'));
     fireEvent.changeText(getByTestId('enhanced-editor'), '## Summary\n- Launch Friday');
-    fireEvent.press(getByTestId('enhanced-done'));
+    fireEvent(getByTestId('enhanced-editor'), 'blur');
 
     expect(mockUpdateNote).toHaveBeenCalledWith(7, {
       enhancedContent: '## Summary\n- Launch Friday',
     });
+  });
+
+  it('edits the summary like the Notes tab: the format bar and Done above the keyboard', () => {
+    jest.useFakeTimers();
+    mockKeyboardHeight = 300;
+    mockNote = note({ enhancedContent: 'Launch Friday' });
+    mockNotesState.notes = [mockNote];
+    const { getByTestId, getByLabelText, queryByLabelText } = render(<NoteEditorScreen />);
+    // Reading: formatted text, no format bar.
+    expect(queryByLabelText('Bold')).toBeNull();
+    fireEvent.press(getByTestId('enhanced-read'));
+    const editor = getByTestId('enhanced-editor');
+    fireEvent(editor, 'focus');
+    fireEvent(editor, 'selectionChange', { nativeEvent: { selection: { start: 0, end: 6 } } });
+    fireEvent.press(getByLabelText('Bold'));
+    act(() => {
+      jest.advanceTimersByTime(800);
+    });
+    expect(mockUpdateNote).toHaveBeenLastCalledWith(7, { enhancedContent: '**Launch** Friday' });
+    // Done ends the edit and the bar goes.
+    fireEvent(editor, 'blur');
+    expect(queryByLabelText('Bold')).toBeNull();
+    mockKeyboardHeight = 0;
+    jest.useRealTimers();
   });
 
   it('saves an unfinished edit to the generated notes when the screen closes', () => {
@@ -1951,7 +1976,7 @@ describe('NoteEditorScreen clearing generated notes', () => {
     rerender(<NoteEditorScreen />);
 
     fireEvent.changeText(getByTestId('enhanced-editor'), '## Rewritten');
-    fireEvent.press(getByTestId('enhanced-done'));
+    fireEvent(getByTestId('enhanced-editor'), 'blur');
     expect(mockUpdateNote).toHaveBeenLastCalledWith(7, { enhancedContent: '## Rewritten' });
   });
 });
