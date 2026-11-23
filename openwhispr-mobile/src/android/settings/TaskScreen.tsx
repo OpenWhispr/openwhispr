@@ -167,8 +167,9 @@ function MeetingsTask() {
         )}
       </Group>
       {mode === 'local' ? (
-        // S8: a meeting on the phone needs a Meeting recording model; Meeting speakers is extra.
-        <Group title={t('onDeviceModels')} footer={t('onDeviceModelsFooter')}>
+        // S8: a meeting on the phone needs a Meeting recording model. Meeting speakers isn't
+        // shown: it downloads by itself at launch (liveSpeakers/speakerModel.ts).
+        <Group title={t('onDeviceModel')}>
           {meetingModelRows().map((row) => (
             <ListRow
               key={row.id}
@@ -182,31 +183,8 @@ function MeetingsTask() {
               }
             />
           ))}
-          <ListRow
-            icon="UsersRound"
-            title={t('meetingSpeakers')}
-            subtitle={`${t('optional')} · ${formatSize(ANDROID_MODELS['meeting-speakers'].bytes)}`}
-            value={ready['meeting-speakers'] ? t('ready') : t('download')}
-            valueAccent={!ready['meeting-speakers']}
-            onPress={() =>
-              router.push({ pathname: '/android-model', params: { kind: 'diarization' } })
-            }
-          />
         </Group>
-      ) : (
-        <Group title={t('speakerNames')}>
-          <ListRow
-            icon="UsersRound"
-            title={t('meetingSpeakers')}
-            subtitle={t('meetingSpeakersBody')}
-            value={ready['meeting-speakers'] ? t('ready') : t('download')}
-            valueAccent={!ready['meeting-speakers']}
-            onPress={() =>
-              router.push({ pathname: '/android-model', params: { kind: 'diarization' } })
-            }
-          />
-        </Group>
-      )}
+      ) : null}
       <KeySheet
         visible={sheet}
         onClose={() => setSheet(false)}

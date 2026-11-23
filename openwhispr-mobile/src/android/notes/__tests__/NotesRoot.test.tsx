@@ -29,7 +29,6 @@ const mockState = {
 jest.mock('../meetingModelSheet', () => ({
   MeetingModelList: () => null,
   MeetingModelRow: () => null,
-  useNeedsSpeakers: () => false,
 }));
 jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockPush(...args) },

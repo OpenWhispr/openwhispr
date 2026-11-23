@@ -11,7 +11,6 @@ import { DownloadRing, type RingPhase } from './DownloadRing';
 import { look } from './look';
 import { formatSize, modelName, type MODEL_ROWS } from './modelCatalog';
 import { settingsT, useSettingsT } from './strings';
-import { speakerModelRemovedByUser } from '../liveSpeakers/speakerModel';
 
 type Row = (typeof MODEL_ROWS)[number];
 
@@ -20,7 +19,6 @@ type Row = (typeof MODEL_ROWS)[number];
  * `onError` for a row that shows it in place.
  */
 export function startModelDownload(id: Row['id'], onError?: (message: string) => void) {
-  if (id === 'meeting-speakers') speakerModelRemovedByUser(false);
   downloadAndroidModel(id).catch((error: Error) => {
     if (error.message === i18n.t('downloadCancelled'))
       showToast(settingsT('downloadCancelled'), 'neutral');

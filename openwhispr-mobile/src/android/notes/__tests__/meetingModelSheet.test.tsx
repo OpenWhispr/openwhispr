@@ -6,10 +6,6 @@ const mockModels: { ready: Record<string, boolean>; progress: Record<string, num
   progress: {},
 };
 jest.mock('../../settings/modelCatalog', () => ({
-  MODEL_ROWS: [
-    { id: 'parakeet-v3', kind: 'speech', name: 'Parakeet v3' },
-    { id: 'meeting-speakers', kind: 'diarization', name: 'Meeting speakers' },
-  ],
   meetingModelRows: () => [{ id: 'parakeet-v3', kind: 'speech', name: 'Parakeet v3' }],
   useModelsReady: () => ({ ...mockModels, checked: true, refresh: jest.fn() }),
 }));
@@ -46,43 +42,31 @@ beforeEach(() => {
   mockModels.progress = {};
 });
 
-const row = (needsSpeech: boolean, needsSpeakers: boolean, onChoose = jest.fn()) =>
-  render(
-    <MeetingModelRow
-      needsSpeech={needsSpeech}
-      needsSpeakers={needsSpeakers}
-      onChoose={onChoose}
-      onLanded={jest.fn()}
-    />,
-  );
+const row = (needsModel: boolean, onChoose = jest.fn()) =>
+  render(<MeetingModelRow needsModel={needsModel} onChoose={onChoose} onLanded={jest.fn()} />);
 
-it('asks to choose a speech model first, and opens the list (S1)', () => {
+it('asks to choose a meeting model first, and opens the list (S1)', () => {
   const onChoose = jest.fn();
-  const view = row(true, true, onChoose);
+  const view = row(true, onChoose);
   expect(view.getByText('On device needs one. It downloads once.')).toBeTruthy();
-  expect(view.queryByText(/Meeting speakers/)).toBeNull();
-  fireEvent.press(view.getByText('Choose a speech model'));
+  fireEvent.press(view.getByText('Choose a meeting model'));
   expect(onChoose).toHaveBeenCalled();
 });
 
-it('shows the speech model downloading in place of the choice (S5)', () => {
+it('shows the meeting model downloading in place of the choice (S5)', () => {
   mockModels.progress = { 'parakeet-v3': 0.3 };
-  const view = row(true, true);
+  const view = row(true);
   expect(view.getByText('Parakeet v3')).toBeTruthy();
-  expect(view.queryByText('Choose a speech model')).toBeNull();
+  expect(view.queryByText('Choose a meeting model')).toBeNull();
 });
 
 it('keeps the model on the sheet while its files are checked, then folds it away (S6)', () => {
   jest.useFakeTimers();
   const onLanded = jest.fn();
   mockModels.progress = { 'parakeet-v3': 0.99 };
-  const view = render(
-    <MeetingModelRow needsSpeech needsSpeakers={false} onChoose={jest.fn()} onLanded={onLanded} />,
-  );
+  const view = render(<MeetingModelRow needsModel onChoose={jest.fn()} onLanded={onLanded} />);
   mockModels.progress = {};
-  view.rerender(
-    <MeetingModelRow needsSpeech needsSpeakers={false} onChoose={jest.fn()} onLanded={onLanded} />,
-  );
+  view.rerender(<MeetingModelRow needsModel onChoose={jest.fn()} onLanded={onLanded} />);
   expect(view.getByText('Parakeet v3')).toBeTruthy();
   act(() => mockSettle?.(true));
   expect(view.getByText('Parakeet v3')).toBeTruthy();
@@ -91,11 +75,6 @@ it('keeps the model on the sheet while its files are checked, then folds it away
   jest.useRealTimers();
 });
 
-it('offers Meeting speakers once a speech model is on the phone (S9)', () => {
-  const view = row(false, true);
-  expect(view.getByText('Meeting speakers / Optional · names who spoke')).toBeTruthy();
-});
-
-it('shows nothing once both are on the phone (S7)', () => {
-  expect(row(false, false).toJSON()).toBeNull();
+it('shows nothing once a meeting model is on the phone, Meeting speakers or not (S7)', () => {
+  expect(row(false).toJSON()).toBeNull();
 });

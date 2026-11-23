@@ -14,7 +14,7 @@ import { timeOf } from './rows';
 import { useNotesT } from './strings';
 import type { Workspace } from './library';
 import { parseCalendarParticipants } from '@/lib/calendar/meetingContext';
-import { MeetingModelList, MeetingModelRow, useNeedsSpeakers } from './meetingModelSheet';
+import { MeetingModelList, MeetingModelRow } from './meetingModelSheet';
 
 /** A row with a tile, a title and a line under it; used by every sheet here. */
 function SheetRow({
@@ -341,7 +341,6 @@ export function StartSheet({
   const t = useNotesT();
   const [picking, setPicking] = useState(false);
   const [choosingModel, setChoosingModel] = useState(false);
-  const needsSpeakers = useNeedsSpeakers(onDevice);
   useEffect(() => {
     if (!visible) {
       setPicking(false);
@@ -353,11 +352,11 @@ export function StartSheet({
       <BottomSheet
         visible={visible}
         onClose={onClose}
-        title={t('speechModelListTitle')}
+        title={t('meetingModelListTitle')}
         onBack={() => setChoosingModel(false)}
       >
         <MeetingModelList
-          onSpeechReady={() => {
+          onModelReady={() => {
             setChoosingModel(false);
             onModelsChanged?.();
           }}
@@ -431,13 +430,7 @@ export function StartSheet({
         <ListRow
           icon={onDevice ? 'Smartphone' : keyName ? 'KeyRound' : 'Cloud'}
           title={onDevice ? t('onPhone') : (keyName ?? t('liveOnCloud'))}
-          subtitle={t(
-            onDevice
-              ? needsSpeakers
-                ? 'onPhoneBodyNoSpeakers'
-                : 'onPhoneBody'
-              : 'liveOnCloudBody',
-          )}
+          subtitle={t(onDevice ? 'onPhoneBody' : 'liveOnCloudBody')}
           chevron={false}
           right={
             <Pressable
@@ -455,8 +448,7 @@ export function StartSheet({
         />
         {onDevice ? (
           <MeetingModelRow
-            needsSpeech={needsModel}
-            needsSpeakers={needsSpeakers}
+            needsModel={needsModel}
             onChoose={() => setChoosingModel(true)}
             onLanded={() => onModelsChanged?.()}
           />

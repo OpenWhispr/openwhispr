@@ -49,6 +49,8 @@ import { showToast } from '../settings/kit';
 import { settingsT, type SettingsT } from '../settings/strings';
 import type { LucideIconName } from '@/components/ui/SystemIcon';
 import { fableT } from './strings';
+import { canTranscribeMeetings } from '../speechSelection';
+import { meetingModelRows } from '../settings/modelCatalog';
 
 /**
  * Processing · Fable's take (test build, Josh approved 18 Nov). The screen is three places
@@ -442,15 +444,23 @@ export async function everythingOnCloud(): Promise<() => Promise<void>> {
 
 // --- On device, with downloads -------------------------------------------------------------
 
-export type PhoneKind = 'speech' | 'text' | 'diarization';
+/**
+ * `meeting`: the Meeting recording model, a speech model that can transcribe meetings, apart
+ * from dictation's. Meeting speakers downloads by itself (liveSpeakers/speakerModel.ts).
+ */
+export type PhoneKind = 'speech' | 'text' | 'meeting';
 export function kindOf(task: SheetTask): PhoneKind {
-  if (task === 'meeting') return 'diarization';
+  if (task === 'meeting') return 'meeting';
   return task === 'dictation' || task === 'upload' ? 'speech' : 'text';
 }
 export function phoneModelOf(config: UserConfig | null, kind: PhoneKind): AndroidModelId {
   if (kind === 'speech') return config?.androidSpeechModel ?? 'parakeet-v3';
   if (kind === 'text') return config?.androidTextModel ?? 'qwen-balanced';
-  return 'meeting-speakers';
+  // The dictation model when it can do meetings, else the catalog's first meeting model.
+  const dictation = config?.androidSpeechModel ?? 'parakeet-v3';
+  return canTranscribeMeetings(dictation)
+    ? dictation
+    : (meetingModelRows()[0]?.id ?? 'parakeet-v3');
 }
 
 type Job = { id: AndroidModelId; tasks: SheetTask[] };
@@ -589,9 +599,9 @@ export function cancelPhoneDownloads() {
 /** The models "Use for everything" on device still has to download (D1). */
 export async function missingForEverything(): Promise<AndroidModelId[]> {
   const config = useConfigStore.getState().config;
-  const ids = (['speech', 'text', 'diarization'] as const).map((kind) =>
-    phoneModelOf(config, kind),
-  );
+  const ids = [
+    ...new Set((['speech', 'text', 'meeting'] as const).map((kind) => phoneModelOf(config, kind))),
+  ];
   const ready = await Promise.all(ids.map((id) => modelReady(id).catch(() => false)));
   return ids.filter((_, index) => !ready[index]);
 }

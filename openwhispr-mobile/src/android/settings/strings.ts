@@ -250,7 +250,7 @@ export const settingsEnglish = {
   // Processing v2
   defaultForEveryTask: 'Default for every task',
   tasks: 'Tasks',
-  meetings: 'Meetings',
+  meetings: 'Meeting recording',
   changed: 'Changed',
   allOnDevice: 'Everything stays on this phone',
   offInSettings: 'Off in Settings',
@@ -272,10 +272,7 @@ export const settingsEnglish = {
   meetingPhoneBody: 'Private, with speaker names. Takes a few minutes.',
   speakerNames: 'Speaker names',
   meetingRecording: 'Meeting recording',
-  onDeviceModels: 'On device models',
-  optional: 'Optional',
-  onDeviceModelsFooter:
-    'On device meetings need a Meeting recording model to transcribe. It can differ from your dictation model. Meeting speakers is extra: without it the transcript has no speaker names.',
+  onDeviceModel: 'On device model',
   nothingMeetingRecording:
     'Nothing downloaded yet. On device meetings need one of these to transcribe.',
   useOwnKey: 'Use your own key',

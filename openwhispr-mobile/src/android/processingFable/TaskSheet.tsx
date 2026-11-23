@@ -16,7 +16,13 @@ import { BottomSheet, ListRow, settings, useReduceMotion } from '../settings/kit
 import { ModelListRow, type ModelState } from '../settings/ModelListRow';
 import { startModelDownload } from '../settings/ModelRow';
 import { removeWithUndo, setPending, useRemovals } from '../settings/ModelScreen';
-import { MODEL_ROWS, formatSize, modelName, useModelsReady } from '../settings/modelCatalog';
+import {
+  MODEL_ROWS,
+  formatSize,
+  meetingModelRows,
+  modelName,
+  useModelsReady,
+} from '../settings/modelCatalog';
 import { setTask } from '../settings/processingDefault';
 import type { SheetTask } from '../settings/ownKey';
 import { noOrphan } from '../settings/strings';
@@ -64,11 +70,15 @@ function PhoneModels({
   const pending = useRemovals((s) => s.pending);
   const { ready, progress, refresh } = useModelsReady();
   const kind = kindOf(task);
-  const rows = MODEL_ROWS.filter((row) => row.kind === kind);
+  // Meetings list the models that can transcribe them; choosing one never changes dictation's.
+  const rows =
+    kind === 'meeting' ? meetingModelRows() : MODEL_ROWS.filter((row) => row.kind === kind);
   const chosen = phoneModelOf(config, kind);
+  const dictation = config?.androidSpeechModel ?? 'parakeet-v3';
   const onPhone = (id: AndroidModelId) => Boolean(ready[id]) && !pending.includes(id);
   const downloadingId = Object.keys(progress)[0];
   const use = (id: AndroidModelId) =>
+    kind !== 'meeting' &&
     void useConfigStore
       .getState()
       .updateConfig(
@@ -77,10 +87,11 @@ function PhoneModels({
           : { androidTextModel: id as 'qwen-small' | 'qwen-balanced' },
       );
   const remove = (id: AndroidModelId) => {
-    if (id !== chosen) return removeWithUndo(id, refresh);
+    // A meeting model that dictation also uses warns as the speech list does.
+    if (id !== (kind === 'meeting' ? dictation : chosen)) return removeWithUndo(id, refresh);
     Alert.alert(
       t('removeTitle', { model: modelName(id) }),
-      t('removeInUseBody', { kind: t(kind === 'speech' ? 'speechKind' : 'textKind') }),
+      t('removeInUseBody', { kind: t(kind === 'text' ? 'textKind' : 'speechKind') }),
       [
         { text: t('cancel'), style: 'cancel' },
         { text: t('remove'), style: 'destructive', onPress: () => removeWithUndo(id, refresh) },
@@ -188,11 +199,8 @@ export function TaskSheet({
       await work();
     });
 
-  const deviceSubtitle = meeting
-    ? ready['meeting-speakers']
-      ? t('speakerNamesLine')
-      : t('speakerNamesDownload', { size: formatSize(ANDROID_MODELS['meeting-speakers'].bytes) })
-    : placement.place === 'device'
+  const deviceSubtitle =
+    placement.place === 'device' && !meeting
       ? t('deviceBody')
       : ready[phoneModel]
         ? modelName(phoneModel)
@@ -327,7 +335,7 @@ export function TaskSheet({
           </SheetCard>
         </View>
 
-        {!meeting && (placement.place === 'device' || waiting) && (
+        {(placement.place === 'device' || waiting) && (
           <PhoneModels t={t} task={task} config={config} shared={siblingOnDevice} />
         )}
 

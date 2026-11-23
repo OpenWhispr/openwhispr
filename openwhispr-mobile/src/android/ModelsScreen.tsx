@@ -22,7 +22,6 @@ import type { AndroidSpeechModelId } from './speechSelection';
 import type { UserConfig } from '@/types';
 import { speechModelSupportsLanguages } from './speechCapabilities';
 import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
-import { speakerModelRemovedByUser } from './liveSpeakers/speakerModel';
 export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { t } = useTranslation();
   const config = useConfigStore((s) => s.config);
@@ -72,7 +71,6 @@ export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) 
   const download = async (id: AndroidModelId) => {
     try {
       await downloadAndroidModel(id);
-      if (id === 'meeting-speakers') speakerModelRemovedByUser(false);
       await refresh();
     } catch (error) {
       Alert.alert(t('errorTitle'), (error as Error).message, [{ text: t('close') }]);
@@ -82,7 +80,6 @@ export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) 
     setRemoving(true);
     try {
       await removeAndroidModel(id);
-      if (id === 'meeting-speakers') speakerModelRemovedByUser(true);
       await refresh();
     } catch (error) {
       Alert.alert(t('errorTitle'), (error as Error).message, [{ text: t('close') }]);
