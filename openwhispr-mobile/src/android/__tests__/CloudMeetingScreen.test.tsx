@@ -3,6 +3,7 @@ import { Platform, Alert, PermissionsAndroid } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { CloudMeetingScreen as MeetingRecordScreen } from '../CloudMeetingScreen';
 import { CloudMeetingFinishError } from '@/android/useCloudMeeting';
+import { useCloudFinish } from '@/android/notes/cloudFinishStore';
 
 const mockCreateNote = jest.fn(() => ({ id: 7, content: '' }));
 const mockFinalize = jest.fn(async () => undefined);
@@ -242,6 +243,7 @@ jest.mock('@/android/useCloudMeeting', () => ({
 }));
 
 beforeEach(() => {
+  useCloudFinish.setState({ jobs: {} });
   jest.clearAllMocks();
   Platform.OS = 'android';
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -377,8 +379,30 @@ it('consumes a valid start once and persists partial text after finalization fai
   expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(notes)/7');
 });
 
+const finishJob = () => useCloudFinish.getState().jobs[7];
+
+it('opens the note at once on Stop while the last words save (Figma R2b)', async () => {
+  let stopped!: (parts: typeof mockParts) => void;
+  mockStopCloud.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        stopped = resolve;
+      }),
+  );
+  const view = render(<MeetingRecordScreen />);
+  await act(async () => fireEvent.press(view.getByTestId('begin')));
+  await act(async () => mockFeature?.());
+  await act(async () => fireEvent.press(view.getByTestId('stop')));
+  expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(notes)/7');
+  expect(finishJob()?.stage).toBe('saving');
+  expect(mockFinalize).not.toHaveBeenCalled();
+  await act(async () => stopped(mockParts));
+  expect(mockFinalize).toHaveBeenCalledWith(7, mockParts, 2, { incomplete: false });
+  expect(finishJob()).toBeUndefined();
+});
+
 it.each([true, false])(
-  'retains the recording result when saving fails and retries without recording again (incomplete=%s)',
+  'keeps the recording when saving fails and Try again on the note finishes it (incomplete=%s)',
   async (incomplete) => {
     if (incomplete)
       mockStopCloud.mockRejectedValue(
@@ -389,12 +413,13 @@ it.each([true, false])(
     await act(async () => fireEvent.press(view.getByTestId('begin')));
     await act(async () => mockFeature?.());
     await act(async () => fireEvent.press(view.getByTestId('stop')));
-    expect(mockReplace).not.toHaveBeenCalled();
-    expect(view.getByText('meetingSaveFailedBody')).toBeTruthy();
-    await act(async () => fireEvent.press(view.getByTestId('stop')));
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(notes)/7');
+    expect(finishJob()?.stage).toBe('failed');
+    await act(async () => finishJob()!.retry!());
+    expect(mockFinalize).toHaveBeenCalledTimes(2);
     expect(mockFinalize).toHaveBeenLastCalledWith(7, mockParts, 2, { incomplete });
     expect(mockCreateNote).toHaveBeenCalledTimes(1);
-    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(notes)/7');
+    expect(finishJob()).toBeUndefined();
   },
 );
 
@@ -410,13 +435,16 @@ it('retries repeated save failures with the real hook without reopening micropho
   const view = render(<MeetingRecordScreen />);
   await act(async () => fireEvent.press(view.getByTestId('begin')));
   await act(async () => mockFeature?.());
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await act(async () => fireEvent.press(view.getByTestId('stop')));
-    expect(mockRealtimeStart).toHaveBeenCalledTimes(1);
-    expect(finish).toHaveBeenCalledTimes(1);
-    expect(mockFinalize).toHaveBeenLastCalledWith(7, mockParts, 0, { incomplete: true });
+  await act(async () => fireEvent.press(view.getByTestId('stop')));
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    expect(finishJob()?.stage).toBe('failed');
+    await act(async () => finishJob()!.retry!());
   }
-  expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(notes)/7');
+  expect(mockRealtimeStart).toHaveBeenCalledTimes(1);
+  expect(finish).toHaveBeenCalledTimes(1);
+  expect(mockFinalize).toHaveBeenCalledTimes(3);
+  expect(mockFinalize).toHaveBeenLastCalledWith(7, mockParts, 0, { incomplete: true });
+  expect(finishJob()).toBeUndefined();
 });
 
 it('keeps a Cloud meeting recording in its account audio directory for recovery', async () => {
@@ -449,7 +477,7 @@ it('does not finalize a Cloud result after the account changes during Stop', asy
     stopped(mockParts);
   });
   expect(mockFinalize).not.toHaveBeenCalled();
-  expect(mockReplace).not.toHaveBeenCalled();
+  expect(finishJob()).toBeUndefined();
 });
 
 it('restores Cloud Retry for the original account only after native Stop settles', async () => {

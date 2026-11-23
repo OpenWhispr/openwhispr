@@ -8,6 +8,7 @@ import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents'
 
 let mockKeyboardHeight = 0;
 let mockBottomInset = 0;
+jest.mock('@/android/notes/noteChips', () => ({ RecordingNoteChips: () => null }));
 jest.mock('@/hooks/useKeyboardHeight', () => ({ useKeyboardHeight: () => mockKeyboardHeight }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 54, right: 0, bottom: mockBottomInset, left: 0 }),

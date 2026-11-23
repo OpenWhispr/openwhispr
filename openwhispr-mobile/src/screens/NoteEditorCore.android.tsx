@@ -40,9 +40,6 @@ import { ThatsMeSheet } from '@/components/notes/ThatsMeSheet';
 import { shouldOfferVoiceSetup, voiceSetupCandidates } from '@/lib/notes/voiceSetupPrompt';
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
 import { VOICE_ALREADY_TAUGHT_ALERT } from '@/lib/voiceEnrollmentMessages';
-import { AttendeesSheet } from '@/components/notes/AttendeesSheet';
-import { MoveToFolderSheet } from '@/components/notes/MoveToFolderSheet';
-import { useMoveNote } from '@/hooks/useMoveNote';
 import { formatNoteMetaDate, markViewer, noteTakenAt } from '@/lib/notes/noteMeta';
 import { SpeakerRenameSheet } from '@/components/notes/SpeakerRenameSheet';
 import { SpeakerMergeSheet } from '@/components/notes/SpeakerMergeSheet';
@@ -88,9 +85,7 @@ import {
 } from '@/lib/diarization/transcriptDisplay';
 
 import {
-  AttendeeCircles,
   FormatBar,
-  MetaChip,
   NoSummaryCard,
   NoteTabs,
   NoteTopBar,
@@ -116,6 +111,9 @@ import {
 } from '@/android/notes/templates';
 import { deleteNotesWithUndo } from '@/android/notes/pendingDeletes';
 import { notesT } from '@/android/notes/strings';
+import { NoteChips } from '@/android/notes/noteChips';
+import { initialsOf } from '@/android/notes/initials';
+import { CloudFinishCard, useCloudFinishJob } from '@/android/notes/cloudFinish';
 import { notesLook } from '@/android/notes/look';
 import { edgeCard } from '@/android/settings/look';
 import { showToast } from '@/android/settings/kit';
@@ -262,7 +260,8 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
     const [renameSheetVisible, setRenameSheetVisible] = useState(false);
     const [mergeSheetVisible, setMergeSheetVisible] = useState(false);
     const [suggestionSheetVisible, setSuggestionSheetVisible] = useState(false);
-    const [attendeesVisible, setAttendeesVisible] = useState(false);
+    const [moveVisible, setMoveVisible] = useState(false);
+    const [chipSheetOpen, setChipSheetOpen] = useState(false);
     const [enhancedEditing, setEnhancedEditing] = useState(false);
     // Bumped to remount the generated-notes editor when its draft must be thrown away.
     const [enhancedEditorRevision, setEnhancedEditorRevision] = useState(0);
@@ -333,7 +332,6 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
       setMergeSheetVisible(false);
       setSuggestionSheetVisible(false);
       setActiveSpeakerId(null);
-      setAttendeesVisible(false);
       setEnhancedEditing(false);
       setShareVisible(false);
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -364,6 +362,8 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
     }, [note?.title, note?.content]);
 
     const isAudioTranscript = isAudioTranscriptNote(note);
+    // Figma R2b: a Cloud meeting still saving its last words, naming speakers, writing the summary.
+    const cloudFinish = useCloudFinishJob(note?.id);
     const transcriptStatus = note?.transcriptionStatus ?? 'idle';
     // transcriptRevision is an intentional cache-bust dep: it bumps on local speaker/segment writes
     // (which don't change note identity) to force these reads to re-run.
@@ -437,16 +437,10 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
       [getSpaceFolders, isSpaceUnknown, privateFolders, scopeSpaceId, spaceFolders],
     );
     const folderName = targetFolders.find((folder) => folder.id === note?.folderId)?.name ?? null;
-    const move = useMoveNote({
-      scopeSpaceId,
-      targetFolders,
-      excludeFolderId: note?.folderId ?? null,
-    });
-    const closeMove = move.close;
     // A picker left open would move a note it no longer shows, or a team note as a personal one.
     useEffect(() => {
-      closeMove();
-    }, [closeMove, noteId, isSpaceUnknown]);
+      setMoveVisible(false);
+    }, [noteId, isSpaceUnknown]);
     // The participants' `self` comes from the calendar of whoever created the note. Only the team
     // sync records an owner, so a note without one is yours, even when its Space is unknown here.
     const attendees = useMemo(
@@ -653,7 +647,12 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
     // Android hands focus back to the first text field when a sheet's window closes, which
     // raised the keyboard over the title; nothing here asked for it, so it goes away again.
     const anySheetOpen =
-      menuVisible || exportVisible || templateVisible || cloudSheet != null || attendeesVisible;
+      menuVisible ||
+      exportVisible ||
+      templateVisible ||
+      cloudSheet != null ||
+      moveVisible ||
+      chipSheetOpen;
     const sheetWasOpen = useRef(false);
     useEffect(() => {
       if (anySheetOpen) {
@@ -1318,9 +1317,6 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
       ...(content.trim() && !contentIsTranscript ? (['notes'] as const) : []),
       ...(usesSegmentTranscript || contentIsTranscript ? (['transcript'] as const) : []),
     ];
-    const people = attendees
-      .filter((person) => !person.self && !person.resource)
-      .map((person) => ({ name: person.displayName, email: person.email }));
     const dateLabel = formatNoteMetaDate(
       noteTakenAt(note?.createdAt, note?.cloudUpdatedAt ?? note?.updatedAt),
       new Date(),
@@ -1419,29 +1415,24 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
                 padding: 0,
               }}
             />
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-              <MetaChip
-                icon="Calendar"
-                label={durationMinutes ? `${dateLabel} · ${durationMinutes} min` : dateLabel}
-              />
-              {folderName ? (
-                <MetaChip
-                  testID="note-folder-chip"
-                  icon="Folder"
-                  label={folderName}
-                  onPress={note && !isSpaceUnknown ? () => move.open(note.id) : undefined}
-                />
-              ) : null}
-              <AttendeeCircles people={people} onPress={() => setAttendeesVisible(true)} />
-              {note?.calendarEventId ? (
-                <MetaChip
-                  icon="CalendarDays"
-                  label={notesT('inCalendar', {
-                    title: (title || notesT('untitled')).split(/\s+/).slice(0, 2).join(' '),
-                  })}
-                />
-              ) : null}
-            </View>
+            <NoteChips
+              note={note}
+              dateLabel={durationMinutes ? `${dateLabel} · ${durationMinutes} min` : dateLabel}
+              folderName={folderName}
+              canMove={!isSpaceUnknown}
+              attendees={attendees}
+              viewerInitials={
+                !note?.ownerUserId ||
+                note.ownerUserId === user?.id ||
+                attendees.some((person) => person.self)
+                  ? initialsOf(user?.name || user?.email)
+                  : null
+              }
+              viewerEmail={user?.email ?? null}
+              moveVisible={moveVisible}
+              onMoveVisibleChange={setMoveVisible}
+              onSheetOpenChange={setChipSheetOpen}
+            />
 
             {conflict ? (
               <ConflictBanner
@@ -1468,7 +1459,13 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
             />
 
             {shownTab === 'enhanced' ? (
-              isEnhancing ? (
+              cloudFinish ? (
+                <CloudFinishCard
+                  stage={cloudFinish.stage}
+                  transcriptDone={transcriptStatus === 'done'}
+                  onRetry={cloudFinish.retry}
+                />
+              ) : isEnhancing ? (
                 <View style={[edgeCard, { padding: 16, gap: 12 }]}>
                   <View style={{ flexDirection: 'row' }}>
                     <SoftChip label={notesT('writing')} icon="Sparkles" />
@@ -1703,7 +1700,7 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
             note && !isSpaceUnknown
               ? () => {
                   setMenuVisible(false);
-                  move.open(note.id);
+                  setMoveVisible(true);
                 }
               : undefined
           }
@@ -1772,13 +1769,6 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
               : undefined
           }
         />
-        <AttendeesSheet
-          visible={attendeesVisible}
-          participants={attendees}
-          onClose={() => setAttendeesVisible(false)}
-        />
-        {/* Hidden in the render where the Space disappears, before the picker is closed. */}
-        {isSpaceUnknown ? null : <MoveToFolderSheet {...move.sheetProps} />}
         {speakerSheets}
         <ThatsMeSheet
           visible={voiceSetupVisible}

@@ -699,6 +699,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
         setRawNotes={setRawNotes}
         onStop={finish}
         title={selectedMeetingContext?.title}
+        noteId={noteId}
       />
     );
   }
@@ -715,6 +716,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
         partialText={cloudMeeting.partialText}
         title={selectedMeetingContext?.title}
         peopleCount={selectedMeetingContext?.participants?.length}
+        noteId={noteId ?? undefined}
         onStop={() => {
           finishCloud().catch(Sentry.captureException);
         }}

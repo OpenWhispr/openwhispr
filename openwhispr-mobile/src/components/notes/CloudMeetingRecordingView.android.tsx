@@ -2,6 +2,7 @@ import type React from 'react';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { RecordingView } from '@/android/notes/RecordingView';
 import { notesT } from '@/android/notes/strings';
+import { RecordingNoteChips } from '@/android/notes/noteChips';
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
 import type { CloudMeetingStatus } from '@/hooks/useCloudMeeting';
 
@@ -17,6 +18,8 @@ export interface CloudMeetingRecordingProps {
   /** The calendar meeting it records, when one was picked (Figma R0). */
   title?: string | null;
   peopleCount?: number;
+  /** The note being recorded: its chips show and can be edited while it records. */
+  noteId?: number;
 }
 
 interface CloudMeetingRecordingViewProps extends CloudMeetingRecordingProps {
@@ -42,6 +45,7 @@ export function CloudMeetingRecordingView({
   renderTranscript,
   title,
   peopleCount,
+  noteId,
 }: CloudMeetingRecordingViewProps): React.JSX.Element {
   const keyboardHeight = useKeyboardHeight();
   return (
@@ -50,10 +54,8 @@ export function CloudMeetingRecordingView({
       error={error}
       elapsedSeconds={elapsedSeconds}
       title={title?.trim() || notesT('recordMeeting')}
-      chips={[
-        notesT('liveOnCloud'),
-        ...(peopleCount && peopleCount > 1 ? [notesT('people', { count: peopleCount })] : []),
-      ]}
+      chips={peopleCount && peopleCount > 1 ? [notesT('people', { count: peopleCount })] : []}
+      meta={noteId != null ? <RecordingNoteChips noteId={noteId} /> : undefined}
       rawNotes={rawNotes}
       onChangeRawNotes={onChangeRawNotes}
       transcript={renderTranscript(utterances, partialText, status)}

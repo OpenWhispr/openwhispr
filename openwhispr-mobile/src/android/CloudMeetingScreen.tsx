@@ -21,9 +21,11 @@ import { meetingAudioDirectory } from '@/lib/meetingAudioStorage';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
 import { Sentry } from '@/lib/sentry';
+import { mapUtterancesToSegments } from '@/lib/notes/cloudMeetingSegments';
+import { setCloudFinish } from './notes/cloudFinishStore';
 import type { TranscriptionStatus } from '@/types';
 
-type Phase = 'prompt' | 'recording' | 'finalizing' | 'save-failed' | 'cancelling' | 'cancel-failed';
+type Phase = 'prompt' | 'recording' | 'cancelling' | 'cancel-failed';
 type Capture = {
   noteId: number;
   sourceFile: string;
@@ -43,7 +45,6 @@ export function CloudMeetingScreen(): React.JSX.Element {
   const [starting, setStarting] = useState(false);
   const [noteId, setNoteId] = useState<number>();
   const [rawNotes, setRawNotes] = useState('');
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [exitToNote, setExitToNote] = useState<number | null>(null);
   const focused = useRef(true);
   const mounted = useRef(true);
@@ -72,7 +73,7 @@ export function CloudMeetingScreen(): React.JSX.Element {
   const meetingContext = useRef(selectedMeetingContext);
   meetingContext.current = selectedMeetingContext;
   const cloud = useCloudMeeting({
-    enabled: phase === 'recording' || phase === 'finalizing' || phase === 'save-failed',
+    enabled: phase === 'recording',
     language: getPreferredTranscriptionLanguage(),
     noteId,
   });
@@ -233,7 +234,6 @@ export function CloudMeetingScreen(): React.JSX.Element {
             setRawNotes(note.content);
             setNoteId(note.id);
             finishing.current = false;
-            setSaveError(null);
             setPhase('recording');
           } catch (error) {
             if (created != null && current()) markFailed(created);
@@ -253,42 +253,97 @@ export function CloudMeetingScreen(): React.JSX.Element {
     }
   };
 
+  // Stop and save opens the note at once (Figma R2b). The last words, the transcript and the
+  // summary finish here in the background and report to the note's Summary card; leaving this
+  // screen no longer cancels them, and a different account or a lost note stops them writing.
   const finish = useCallback(async (): Promise<void> => {
     const run = capture.current;
-    const current = () => run != null && capture.current === run && run.context.ownsNote();
-    if (!run || !current() || finishing.current) return;
+    if (!run || !run.context.ownsNote() || finishing.current) return;
     finishing.current = true;
-    setPhase('finalizing');
-    setSaveError(null);
-    let utterances;
-    let interrupted: Error | null = null;
-    try {
-      utterances = await stopCloud();
-    } catch (error) {
-      interrupted = error instanceof Error ? error : new Error(String(error));
-      utterances = error instanceof CloudMeetingFinishError ? error.utterances : [];
-    }
-    if (!current()) return;
+    const identity = useAuthStore.getState();
+    const owned = () => {
+      const current = useAuthStore.getState();
+      return (
+        run.context.ownsNote() &&
+        current.user?.id === identity.user?.id &&
+        current.sessionCookie === identity.sessionCookie
+      );
+    };
+    let draftSaved = true;
     try {
       saveRaw(run);
-      await useNotesStore.getState().finalizeCloudMeeting(run.noteId, utterances, cloudElapsed, {
-        incomplete: interrupted !== null || cloudStatus === 'error',
-      });
     } catch (error) {
-      if (!current()) return;
+      draftSaved = false;
       Sentry.captureException(error);
-      setSaveError(t('meetingSaveFailedBody'));
-      setPhase('save-failed');
-      finishing.current = false;
-      return;
     }
-    if (!current()) return;
+    const draft = raw.current;
+    const elapsed = cloudElapsed;
+    const liveError = cloudStatus === 'error';
+    // What was heard so far shows on the Transcript tab while the last words save.
+    try {
+      const status = notesRepository.getNoteById(run.noteId)?.transcriptionStatus;
+      if (status != null && canTransition(status as TranscriptionStatus, 'transcribing'))
+        useNotesStore.getState().transitionStatus(run.noteId, 'transcribing');
+      if (cloud.utterances.length > 0)
+        notesRepository.replaceSegments(
+          run.noteId,
+          mapUtterancesToSegments(cloud.utterances, elapsed).map((segment) => ({
+            ...segment,
+            noteId: run.noteId,
+          })),
+        );
+    } catch (error) {
+      Sentry.captureException(error);
+    }
+    const stopping = stopCloud().then(
+      (utterances) => ({ utterances, interrupted: null as Error | null }),
+      (error: unknown) => ({
+        utterances: error instanceof CloudMeetingFinishError ? error.utterances : [],
+        interrupted: error instanceof Error ? error : new Error(String(error)),
+      }),
+    );
     capture.current = null;
-    run.context.dispose();
-    if (interrupted) Alert.alert(t('meetingInterrupted'), interrupted.message);
+    setCloudFinish(run.noteId, { stage: 'saving' });
     setPhase('prompt');
     setExitToNote(run.noteId);
-  }, [stopCloud, cloudElapsed, cloudStatus, saveRaw, t]);
+
+    const abandon = () => {
+      setCloudFinish(run.noteId, null);
+      run.context.recoverInterruptedNoteWhenOwnerReturns(run.sourceFile, () =>
+        markFailed(run.noteId),
+      );
+      run.context.dispose();
+    };
+    const settle = async (): Promise<void> => {
+      const { utterances, interrupted } = await stopping;
+      if (!owned()) return abandon();
+      setCloudFinish(run.noteId, { stage: 'finishing' });
+      try {
+        if (!draftSaved) {
+          useNotesStore.getState().updateNote(run.noteId, { content: draft });
+          draftSaved = true;
+        }
+        await useNotesStore.getState().finalizeCloudMeeting(run.noteId, utterances, elapsed, {
+          incomplete: interrupted !== null || liveError,
+        });
+      } catch (error) {
+        if (!owned()) return abandon();
+        Sentry.captureException(error);
+        setCloudFinish(run.noteId, {
+          stage: 'failed',
+          retry: () => {
+            settle().catch(Sentry.captureException);
+          },
+        });
+        return;
+      }
+      if (!owned()) return abandon();
+      setCloudFinish(run.noteId, null);
+      run.context.dispose();
+      if (interrupted) Alert.alert(t('meetingInterrupted'), interrupted.message);
+    };
+    await settle();
+  }, [stopCloud, cloudElapsed, cloudStatus, cloud.utterances, saveRaw, markFailed, t]);
   useEffect(() => {
     if (cloud.stopRequested && phase === 'recording') finish().catch(Sentry.captureException);
   }, [cloud.stopRequested, phase, finish]);
@@ -296,31 +351,27 @@ export function CloudMeetingScreen(): React.JSX.Element {
     if (exitToNote != null && phase === 'prompt') router.replace(`/(tabs)/(notes)/${exitToNote}`);
   }, [exitToNote, phase]);
   usePreventRemove(phase !== 'prompt', () => {
-    if (phase === 'finalizing' || phase === 'cancelling') return;
+    if (phase === 'cancelling') return;
     if (phase === 'cancel-failed') {
       cancel(capture.current, true).catch(Sentry.captureException);
       return;
     }
     const run = capture.current;
-    Alert.alert(
-      t(phase === 'save-failed' ? 'meetingSaveFailedTitle' : 'meetingLeaveTitle'),
-      t(phase === 'save-failed' ? 'meetingSaveFailedBody' : 'meetingLeaveBody'),
-      [
-        { text: t('meetingKeepRecording'), style: 'cancel' },
-        {
-          text: t(phase === 'save-failed' ? 'retry' : 'meetingStopSave'),
-          onPress: () => {
-            if (run && capture.current === run) finish().catch(Sentry.captureException);
-          },
+    Alert.alert(t('meetingLeaveTitle'), t('meetingLeaveBody'), [
+      { text: t('meetingKeepRecording'), style: 'cancel' },
+      {
+        text: t('meetingStopSave'),
+        onPress: () => {
+          if (run && capture.current === run) finish().catch(Sentry.captureException);
         },
-        {
-          text: t(phase === 'save-failed' ? 'meetingDiscardUnsaved' : 'cancel'),
-          onPress: () => {
-            cancel(run, true).catch(Sentry.captureException);
-          },
+      },
+      {
+        text: t('cancel'),
+        onPress: () => {
+          cancel(run, true).catch(Sentry.captureException);
         },
-      ],
-    );
+      },
+    ]);
   });
   if (phase === 'prompt')
     return (
@@ -333,12 +384,12 @@ export function CloudMeetingScreen(): React.JSX.Element {
         }}
       />
     );
-  if (phase === 'recording' || phase === 'save-failed' || phase === 'cancel-failed')
+  if (phase === 'recording' || phase === 'cancel-failed')
     return (
       <CloudMeetingRecording
-        status={saveError || phase === 'cancel-failed' ? 'error' : cloud.status}
-        error={phase === 'cancel-failed' ? t('meetingSaveFailedBody') : (saveError ?? cloud.error)}
-        stopLabel={phase === 'save-failed' || phase === 'cancel-failed' ? t('retry') : undefined}
+        status={phase === 'cancel-failed' ? 'error' : cloud.status}
+        error={phase === 'cancel-failed' ? t('meetingSaveFailedBody') : cloud.error}
+        stopLabel={phase === 'cancel-failed' ? t('retry') : undefined}
         elapsedSeconds={cloud.elapsedSeconds}
         rawNotes={rawNotes}
         onChangeRawNotes={setRawNotes}
@@ -346,6 +397,7 @@ export function CloudMeetingScreen(): React.JSX.Element {
         partialText={cloud.partialText}
         title={selectedMeetingContext?.title}
         peopleCount={selectedMeetingContext?.participants?.length}
+        noteId={noteId}
         onStop={() => {
           if (phase === 'cancel-failed')
             cancel(capture.current, true).catch(Sentry.captureException);
@@ -356,7 +408,7 @@ export function CloudMeetingScreen(): React.JSX.Element {
   return (
     <View className="flex-1 items-center justify-center gap-7 bg-systemBackground px-6">
       <ProcessingWaveform color={BRAND} size={48} />
-      <Text>{t(phase === 'cancelling' ? 'meetingSaveForLater' : 'meetingFinishing')}</Text>
+      <Text>{t('meetingSaveForLater')}</Text>
     </View>
   );
 }

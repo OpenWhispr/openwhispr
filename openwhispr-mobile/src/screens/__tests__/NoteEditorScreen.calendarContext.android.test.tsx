@@ -64,9 +64,6 @@ function notesInput() {
 }
 
 // Jest resolves the default file; load the Android entry Metro picks on Android.
-jest.mock('@/components/notes/AttendeesSheet', () =>
-  jest.requireActual('@/components/notes/AttendeesSheet.android'),
-);
 jest.mock('@/components/notes/EditableMarkdown', () =>
   jest.requireActual('@/components/notes/EditableMarkdown.android'),
 );
@@ -101,6 +98,7 @@ let mockActions: Action[];
 
 const mockNotesState = {
   notes: [] as Note[],
+  loadNotes: jest.fn(),
   updateNote: mockUpdateNote,
   deleteNote: mockDeleteNote,
   retryMeetingTranscription: mockRetryMeetingTranscription,
@@ -156,6 +154,7 @@ const mockDictionaryState = {
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 const mockPush = jest.fn();
@@ -424,12 +423,39 @@ jest.mock('@/components/notes/VoiceprintSuggestionSheet', () => ({
   VoiceprintSuggestionSheet: () => null,
 }));
 
-jest.mock('@/components/notes/MoveToFolderSheet', () => ({
+jest.mock('@/android/notes/moveSheet', () => ({
+  MOVE_UNDO_MS: 6000,
   MoveToFolderSheet: ({ visible }: { visible: boolean }) =>
     (() => {
       const { Text: MockText } = require('react-native');
       return visible ? <MockText testID="move-sheet">move-sheet</MockText> : null;
     })(),
+}));
+
+jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+
+// The chips read and write the calendar link and people through the repository.
+const mockNotesRepository = {
+  getAllNotes: jest.fn(() => [] as Note[]),
+  updateNoteCalendarContext: jest.fn(),
+};
+jest.mock('@/data', () => ({
+  get notesRepository() {
+    return mockNotesRepository;
+  },
+}));
+let mockCalendarEvents: unknown[] = [];
+jest.mock('@/data/calendarRepository', () => ({
+  calendarRepository: { getUpcomingEvents: () => mockCalendarEvents },
+}));
+let mockWorkspacePeople: { type: string; email: string; name: string }[] = [];
+jest.mock('@/data/remote/noteSharingApi', () => ({
+  searchNoteAccessPrincipals: jest.fn(async () => ({ suggestions: mockWorkspacePeople })),
+}));
+let mockCalendarAccounts: unknown[] = [];
+jest.mock('@/store/useGoogleCalendarStore', () => ({
+  useGoogleCalendarStore: (selector: (state: unknown) => unknown) =>
+    selector({ accounts: mockCalendarAccounts, load: async () => undefined }),
 }));
 
 /*
@@ -1555,8 +1581,9 @@ describe('NoteEditorScreen meta row', () => {
   it('lists the attendees from the attendees chip', () => {
     const { getByTestId, getByText } = render(<NoteEditorScreen />);
     fireEvent.press(getByTestId('note-attendees'));
-    expect(getByText('Attendees')).toBeTruthy();
+    expect(getByText('People · 2')).toBeTruthy();
     expect(getByText('Alice Adams')).toBeTruthy();
+    expect(getByText('You')).toBeTruthy();
   });
 
   it('hides the attendees chip on a note without attendees', () => {
@@ -1603,6 +1630,203 @@ describe('NoteEditorScreen meta row', () => {
     rerender(<NoteEditorScreen />);
 
     expect(queryByTestId('move-sheet')).toBeNull();
+  });
+
+  describe('chips (Figma N1, N1b, N5–N8)', () => {
+    const start = new Date();
+    start.setHours(start.getHours() + 1, 0, 0, 0);
+    const end = new Date(start.getTime() + 30 * 60 * 1000);
+    const weeklySync = {
+      id: 31,
+      accountId: 1,
+      calendarLocalId: 1,
+      googleCalendarId: 'primary',
+      googleEventId: 'evt-weekly',
+      iCalUID: null,
+      summary: 'Weekly sync with design',
+      description: 'Join: https://meet.google.com/abc-defg-hij',
+      location: null,
+      startAt: start.toISOString(),
+      endAt: end.toISOString(),
+      allDay: 0,
+      status: 'confirmed',
+      organizerEmail: 'sam@northwind.com',
+      creatorEmail: null,
+      attendeesJson: JSON.stringify([
+        { email: 'sam@northwind.com', displayName: 'Sam Kirby', organizer: true },
+        { email: 'priya@northwind.com', displayName: 'Priya Shah' },
+        { email: 'room@resource.calendar.google.com', displayName: 'Room 4', resource: true },
+      ]),
+      updated: null,
+      htmlLink: 'https://calendar.google.com/event?eid=weekly',
+      createdAt: null,
+      updatedAt: null,
+    };
+    const linkedId = JSON.stringify({
+      provider: 'google_calendar',
+      accountSubject: 'sub-1',
+      calendarId: 'primary',
+      eventId: 'evt-weekly',
+      iCalUID: null,
+    });
+    const lastContext = () =>
+      mockNotesRepository.updateNoteCalendarContext.mock.calls.at(-1) as [
+        number,
+        { participants?: string; calendarEventId?: string | null },
+      ];
+    const peopleIn = (json?: string | null) =>
+      (JSON.parse(json ?? '[]') as { email: string }[]).map((person) => person.email);
+    beforeEach(() => {
+      mockNotesRepository.updateNoteCalendarContext.mockClear();
+      jest.mocked(showToast).mockClear();
+      mockCalendarAccounts = [{ id: 1, status: 'connected', googleSubject: 'sub-1' }];
+      mockCalendarEvents = [weeklySync];
+    });
+    afterEach(() => {
+      mockCalendarAccounts = [];
+      mockCalendarEvents = [];
+    });
+
+    it('shows quiet Add chips on a note with no folder, people or event', () => {
+      mockCalendarAccounts = [];
+      mockNote = note({ folderId: null, calendarEventId: null, participants: null });
+      mockNotesState.notes = [mockNote];
+      const view = render(<NoteEditorScreen />);
+      expect(view.getByText('Add to folder')).toBeTruthy();
+      expect(view.getByText('Add people')).toBeTruthy();
+      // Link event shows only with a calendar connected.
+      expect(view.queryByText('Link event')).toBeNull();
+      fireEvent.press(view.getByTestId('note-add-folder'));
+      expect(view.getByTestId('move-sheet')).toBeTruthy();
+    });
+
+    it('offers Link event once a calendar is connected', () => {
+      mockNote = note({ calendarEventId: null });
+      mockNotesState.notes = [mockNote];
+      expect(render(<NoteEditorScreen />).getByText('Link event')).toBeTruthy();
+    });
+
+    it('names the linked meeting itself, not the note’s first words', () => {
+      mockNote = note({ calendarEventId: linkedId });
+      mockNotesState.notes = [mockNote];
+      const view = render(<NoteEditorScreen />);
+      expect(view.getByTestId('note-event-chip')).toBeTruthy();
+      expect(view.getByText('Weekly sync with design')).toBeTruthy();
+      expect(view.queryByText('Customer Planning · Google')).toBeNull();
+    });
+
+    it('opens the event with Join, Open in Google Calendar, Change and Unlink', () => {
+      mockNote = note({ calendarEventId: linkedId });
+      mockNotesState.notes = [mockNote];
+      const view = render(<NoteEditorScreen />);
+      fireEvent.press(view.getByTestId('note-event-chip'));
+      expect(view.getByText('Calendar event')).toBeTruthy();
+      expect(view.getByText('Join meeting')).toBeTruthy();
+      expect(view.getByText('meet.google.com')).toBeTruthy();
+      expect(view.getByText('Open in Google Calendar')).toBeTruthy();
+      expect(view.getByText('Change event')).toBeTruthy();
+      expect(view.getByText('Unlink event')).toBeTruthy();
+    });
+
+    it('says when this phone’s calendars don’t have the linked event, offering only Unlink', () => {
+      const view = render(<NoteEditorScreen />);
+      expect(view.getByText('Calendar event')).toBeTruthy();
+      fireEvent.press(view.getByTestId('note-event-chip'));
+      expect(view.getByText('This phone’s calendars don’t have this event.')).toBeTruthy();
+      expect(view.queryByText('Change event')).toBeNull();
+      expect(view.getByText('Unlink event')).toBeTruthy();
+    });
+
+    it('links a picked event: its people join the note, rooms don’t, and Undo puts it back', () => {
+      mockNote = note({ calendarEventId: null });
+      mockNotesState.notes = [mockNote];
+      const view = render(<NoteEditorScreen />);
+      fireEvent.press(view.getByTestId('note-link-event'));
+      expect(view.getByText('Link a calendar event')).toBeTruthy();
+      fireEvent.press(view.getByText('Weekly sync with design'));
+
+      const [id, update] = lastContext();
+      expect(id).toBe(7);
+      expect(JSON.parse(update.calendarEventId!)).toMatchObject({ eventId: 'evt-weekly' });
+      expect(peopleIn(update.participants)).toEqual([
+        'alice@example.com',
+        'sam@northwind.com',
+        'priya@northwind.com',
+      ]);
+      const [message, , action] = jest.mocked(showToast).mock.calls.at(-1)!;
+      expect(message).toBe('Linked to Weekly sync with design');
+      action!.onPress();
+      expect(lastContext()[1]).toEqual({
+        participants: mockNote.participants,
+        calendarEventId: null,
+      });
+    });
+
+    it('unlinks: drops the people the event added and keeps the ones you added', () => {
+      mockNote = note({
+        calendarEventId: linkedId,
+        participants: JSON.stringify([
+          { email: 'sam@northwind.com', displayName: 'Sam Kirby', organizer: true },
+          { email: 'priya@northwind.com', displayName: 'Priya Shah' },
+          { email: 'alice@example.com', displayName: 'Alice Adams' },
+        ]),
+      });
+      mockNotesState.notes = [mockNote];
+      const view = render(<NoteEditorScreen />);
+      fireEvent.press(view.getByTestId('note-event-chip'));
+      fireEvent.press(view.getByText('Unlink event'));
+      const [, update] = lastContext();
+      expect(update.calendarEventId).toBe('');
+      expect(peopleIn(update.participants)).toEqual(['alice@example.com']);
+      expect(jest.mocked(showToast).mock.calls.at(-1)![0]).toBe('Event unlinked');
+    });
+
+    it('takes someone off this note with Undo, never the calendar', () => {
+      const view = render(<NoteEditorScreen />);
+      fireEvent.press(view.getByTestId('note-attendees'));
+      fireEvent.press(view.getByLabelText('Remove Alice Adams'));
+      expect(peopleIn(lastContext()[1].participants)).toEqual([]);
+      const [message, , action, options] = jest.mocked(showToast).mock.calls.at(-1)!;
+      expect(message).toBe('Alice Adams removed');
+      expect(options).toEqual({ durationMs: 6000 });
+      action!.onPress();
+      expect(lastContext()[1].participants).toBe(mockNote.participants);
+    });
+
+    it('suggests your workspace’s people first on a backed-up note, never you', async () => {
+      jest.useFakeTimers();
+      mockWorkspacePeople = [{ type: 'user', email: 'gabe@openwhispr.com', name: 'Gabe' }];
+      mockNote = note({ calendarEventId: null, participants: null, remoteId: 'cloud-7' });
+      mockNotesState.notes = [mockNote];
+      const view = render(<NoteEditorScreen />);
+      fireEvent.press(view.getByTestId('note-add-people'));
+      await act(async () => {
+        jest.advanceTimersByTime(300);
+      });
+      const names = view
+        .getAllByText(/^(Gabe|Priya Shah|Sam Kirby)$/)
+        .map((node) => node.props.children);
+      expect(names[0]).toBe('Gabe');
+      expect(view.queryByText('user@example.com')).toBeNull();
+      jest.useRealTimers();
+      mockWorkspacePeople = [];
+    });
+
+    it('adds people from your calendar and a typed email, the new rows first', () => {
+      mockNote = note({ calendarEventId: null, participants: null });
+      mockNotesState.notes = [mockNote];
+      const view = render(<NoteEditorScreen />);
+      fireEvent.press(view.getByTestId('note-add-people'));
+      fireEvent.changeText(view.getByLabelText('Name or email'), 'pri');
+      fireEvent.press(view.getByText('Priya Shah'));
+      fireEvent.changeText(view.getByLabelText('Name or email'), 'new@person.com');
+      fireEvent.press(view.getByText('Add new@person.com'));
+      fireEvent.press(view.getByText('Done'));
+      expect(peopleIn(lastContext()[1].participants)).toEqual([
+        'priya@northwind.com',
+        'new@person.com',
+      ]);
+    });
   });
 
   describe('on a team note', () => {
