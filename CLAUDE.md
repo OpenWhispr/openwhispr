@@ -497,7 +497,7 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
     - Claude Opus 4.6 (`claude-opus-4-6`) - Previous Opus generation, 1M context
     - Claude Sonnet 4.5 (`claude-sonnet-4-5`) - Previous Sonnet generation (legacy)
     - Claude Opus 4.5 (`claude-opus-4-5`) - Earlier Opus model
-    - Models from Opus 4.7 onward (including the 5.5 generation) reject `temperature` (`supportsTemperature: false`); the Anthropic IPC bridge sends no thinking parameters, so no Anthropic entry carries `supportsThinking`
+    - Models from Opus 4.7 onward (including the 5.5 generation) reject `temperature` (`supportsTemperature: false`). The Anthropic IPC bridge sends `thinking` only to turn it off when `disableThinking` is true (`anthropicThinking.js`: `between_tools` for Sonnet 5.5, `disabled` for Haiku 5.5, Opus 5 and Sonnet 5, nothing for other models) and then strips a leading `<thinking>` block it leaks from the reply. No Anthropic entry carries `supportsThinking` yet, so Settings shows no thinking toggle for them and the saved setting applies
   - **Google Gemini** (Direct API integration):
     - Gemini 3.6 Flash (`gemini-3.6-flash`) - Fast, high-capability Gemini model
     - Gemini 3.8 Flash (`gemini-3.8-flash`) - Most capable Flash model

@@ -7752,7 +7752,13 @@ class IPCHandlers {
               messageKey: CLEANUP_EMPTY_REPLY_MESSAGE_KEY,
             });
           }
-          return { success: true, text: outputText };
+          // With thinking turned off, Opus 5 can open its text with a <thinking> block.
+          return {
+            success: true,
+            text: thinking
+              ? outputText.replace(/^<thinking>[\s\S]*?<\/thinking>\s*/i, "")
+              : outputText,
+          };
         } catch (error) {
           // proxyFetch also aborts on device-policy signals, so only our own
           // deadline counts as a timeout.

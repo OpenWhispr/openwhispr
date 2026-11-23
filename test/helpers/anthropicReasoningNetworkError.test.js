@@ -246,6 +246,21 @@ for (const [model, disableThinking, expected] of [
   });
 }
 
+// Opus 5 with thinking disabled can leak <thinking> tags into its text.
+test("a <thinking> block leaked with thinking off is not returned", async () => {
+  fetchBehavior = async () =>
+    Response.json({
+      content: [{ type: "text", text: "<thinking>tidy it up</thinking>Cleaned dictation." }],
+      stop_reason: "end_turn",
+    });
+
+  const result = await anthropicHandler({}, "short dictation", "claude-opus-5", null, {
+    disableThinking: true,
+  });
+
+  assert.deepEqual(result, { success: true, text: "Cleaned dictation." });
+});
+
 // The deadline comes from AbortSignal.timeout; swapping it for a controller's
 // signal lets a test expire it at once instead of waiting 30 seconds.
 function stubDeadline(t) {
