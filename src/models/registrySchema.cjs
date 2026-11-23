@@ -448,13 +448,19 @@ function assertCompatibleCatalog(input, previousInput, { floor } = {}) {
   const previous = readPrevious(previousInput);
   const bundled = floor ? readPrevious(floor) : previous;
   for (const section of PROVIDER_SECTIONS) {
+    // A provider can be added at the end, never removed or moved. Apps keep only the
+    // providers they bundle, so one an app lacks is skipped there. An added provider is
+    // in the floor too, so its downloads are checked whatever the floor holds.
     requireCondition(
       same(
-        next[section].map((p) => p.id),
+        next[section].slice(0, previous[section].length).map((p) => p.id),
         previous[section].map((p) => p.id)
       ),
       `Changed providers in ${section}`
     );
+    if (section === "localProviders")
+      for (const provider of next[section].slice(previous[section].length))
+        for (const model of provider.models) assertNewDownload(model);
     for (const oldProvider of previous[section]) {
       const provider = next[section].find((item) => item.id === oldProvider.id);
       for (const field of ["baseUrl", "allowCustomModelId", "batchModel"])
