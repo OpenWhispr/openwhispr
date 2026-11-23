@@ -5166,7 +5166,7 @@
       "title": "Screen Context",
       "description": "Attach a screenshot of your active screen to voice assistant commands.",
       "enable": "Share screen context",
-      "enableDescription": "Captures the display your cursor is on when a voice assistant recording starts. Never saved or logged.",
+      "enableDescription": "Captures the display your cursor is on when a voice assistant recording starts, or when the assistant needs to look at your screen. Never saved or logged.",
       "unsupported": "Screen capture isn't available on Linux Wayland.",
       "visionModel": "Separate vision model",
       "visionModelDescription": "Route commands that include a screenshot to a different, vision-capable model.",

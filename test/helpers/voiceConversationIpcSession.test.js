@@ -226,6 +226,15 @@ test("our own shutdown on quit ends the session without an error", async () => {
   assert.deepEqual(sentOfType(webContents, "error"), []);
 });
 
+test("a worker killed for a hung request tells the renderer, even when it exits with 0", async () => {
+  const webContents = await startSession();
+  voiceWorker.running = false;
+  voiceWorker.emit("exit", { code: 0, killedForTimeout: true });
+
+  assert.equal(hearsMic(webContents), false);
+  assert.equal(sentOfType(webContents, "error")[0].stage, "worker");
+});
+
 test("turns decode one at a time, and one that finishes after its session ended is dropped", async () => {
   const webContents = await startSession();
   speak();

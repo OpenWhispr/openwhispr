@@ -4879,7 +4879,7 @@
       "title": "Contexto de pantalla",
       "description": "Adjunta una captura de tu pantalla activa a los comandos del asistente de voz.",
       "enable": "Compartir contexto de pantalla",
-      "enableDescription": "Captura la pantalla donde está el cursor al iniciar una grabación del asistente de voz. Nunca se guarda ni se registra.",
+      "enableDescription": "Captura la pantalla donde está el cursor al iniciar una grabación del asistente de voz o cuando el asistente necesita ver tu pantalla. Nunca se guarda ni se registra.",
       "unsupported": "La captura de pantalla no está disponible en Linux Wayland.",
       "visionModel": "Modelo de visión aparte",
       "visionModelDescription": "Envía los comandos que incluyen una captura a otro modelo con capacidad de visión.",

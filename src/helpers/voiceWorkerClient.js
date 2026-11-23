@@ -20,6 +20,7 @@ class VoiceWorkerClient extends EventEmitter {
     this.pending = new Map();
     this.nextRequestId = 1;
     this.spawnPromise = null;
+    this.killedForTimeout = false;
   }
 
   get running() {
@@ -99,7 +100,9 @@ class VoiceWorkerClient extends EventEmitter {
       entry.reject(new Error("voice worker exited"));
     }
     this.pending.clear();
-    this.emit("exit", { code });
+    const { killedForTimeout } = this;
+    this.killedForTimeout = false;
+    this.emit("exit", { code, killedForTimeout });
   }
 
   async request(method, payload) {
@@ -107,7 +110,16 @@ class VoiceWorkerClient extends EventEmitter {
     const id = this.nextRequestId++;
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        if (this.pending.delete(id)) reject(new Error(`voice worker timeout: ${method}`));
+        if (!this.pending.delete(id)) return;
+        reject(new Error(`voice worker timeout: ${method}`));
+        // Speech requests run one at a time, so a hung one would block every later reply.
+        debugLogger.warn("voice worker request timeout; killing worker", { method });
+        this.killedForTimeout = true;
+        try {
+          this.child?.kill();
+        } catch {
+          // Already gone.
+        }
       }, REQUEST_TIMEOUT_MS);
       this.pending.set(id, { resolve, reject, timeout });
       this.port.postMessage({ id, method, payload });

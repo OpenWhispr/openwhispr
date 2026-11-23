@@ -5166,7 +5166,7 @@
       "title": "Bildschirmkontext",
       "description": "Hängt einen Screenshot Ihres aktiven Bildschirms an Sprachassistent-Befehle an.",
       "enable": "Bildschirmkontext teilen",
-      "enableDescription": "Erfasst beim Start einer Sprachassistent-Aufnahme den Bildschirm, auf dem sich der Cursor befindet. Wird nie gespeichert oder protokolliert.",
+      "enableDescription": "Erfasst den Bildschirm, auf dem sich der Cursor befindet, beim Start einer Sprachassistent-Aufnahme oder wenn der Assistent auf Ihren Bildschirm schauen muss. Wird nie gespeichert oder protokolliert.",
       "unsupported": "Bildschirmaufnahme ist unter Linux Wayland nicht verfügbar.",
       "visionModel": "Separates Vision-Modell",
       "visionModelDescription": "Leitet Befehle mit Screenshot an ein anderes Modell mit Bildverständnis weiter.",

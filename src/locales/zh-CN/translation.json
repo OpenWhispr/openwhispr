@@ -4806,7 +4806,7 @@
       "title": "屏幕上下文",
       "description": "在语音助手命令中附带当前屏幕的截图。",
       "enable": "共享屏幕上下文",
-      "enableDescription": "语音助手开始录音时，截取光标所在的显示器。绝不保存，也不写入日志。",
+      "enableDescription": "语音助手开始录音时，或助手需要查看屏幕时，截取光标所在的显示器。绝不保存，也不写入日志。",
       "unsupported": "Linux Wayland 不支持屏幕截图。",
       "visionModel": "单独的视觉模型",
       "visionModelDescription": "将带截图的命令转发给另一个支持图像的模型。",

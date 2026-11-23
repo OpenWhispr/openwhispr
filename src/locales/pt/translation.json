@@ -4833,7 +4833,7 @@
       "title": "Contexto de tela",
       "description": "Anexa uma captura da tela ativa aos comandos do assistente de voz.",
       "enable": "Compartilhar contexto de tela",
-      "enableDescription": "Captura a tela onde o cursor está ao iniciar uma gravação do assistente de voz. Nunca é salva nem registrada.",
+      "enableDescription": "Captura a tela onde o cursor está ao iniciar uma gravação do assistente de voz ou quando o assistente precisa ver sua tela. Nunca é salva nem registrada.",
       "unsupported": "A captura de tela não está disponível no Linux Wayland.",
       "visionModel": "Modelo de visão separado",
       "visionModelDescription": "Encaminha comandos que incluem captura de tela para outro modelo com visão.",

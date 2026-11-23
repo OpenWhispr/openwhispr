@@ -4827,7 +4827,7 @@
       "title": "Contesto dello schermo",
       "description": "Allega uno screenshot dello schermo attivo ai comandi dell'assistente vocale.",
       "enable": "Condividi contesto dello schermo",
-      "enableDescription": "Cattura lo schermo su cui si trova il cursore all'avvio di una registrazione dell'assistente vocale. Mai salvata né registrata.",
+      "enableDescription": "Cattura lo schermo su cui si trova il cursore all'avvio di una registrazione dell'assistente vocale o quando l'assistente ha bisogno di guardare lo schermo. Mai salvata né registrata.",
       "unsupported": "La cattura dello schermo non è disponibile su Linux Wayland.",
       "visionModel": "Modello di visione separato",
       "visionModelDescription": "Instrada i comandi che includono uno screenshot verso un altro modello con capacità di visione.",

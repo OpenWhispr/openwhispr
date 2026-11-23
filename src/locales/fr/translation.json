@@ -5193,7 +5193,7 @@
       "title": "Contexte d'écran",
       "description": "Joint une capture de votre écran actif aux commandes de l'assistant vocal.",
       "enable": "Partager le contexte d'écran",
-      "enableDescription": "Capture l'écran où se trouve le curseur au démarrage d'un enregistrement de l'assistant vocal. Jamais enregistrée ni journalisée.",
+      "enableDescription": "Capture l'écran où se trouve le curseur au démarrage d'un enregistrement de l'assistant vocal ou lorsque l'assistant a besoin de voir votre écran. Jamais enregistrée ni journalisée.",
       "unsupported": "La capture d'écran n'est pas disponible sous Linux Wayland.",
       "visionModel": "Modèle de vision distinct",
       "visionModelDescription": "Envoie les commandes incluant une capture vers un autre modèle capable de vision.",

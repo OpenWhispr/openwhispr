@@ -182,13 +182,14 @@ function registerVoiceConversationIpc({
     send({ type: "tts-audio", utteranceId, samples });
   });
 
-  voiceWorker.on("exit", ({ code }) => {
+  voiceWorker.on("exit", ({ code, killedForTimeout }) => {
     configuredKey = null;
     if (!session) return;
     // Mic frames would otherwise go nowhere while the renderer keeps listening.
     endSession();
-    // Exit code 0 is our own shutdown (app quit), not a crash worth a notice.
-    if (code !== 0) {
+    // Exit code 0 is our own shutdown (app quit), not a crash worth a notice, unless we
+    // killed a hung worker: a kill can report 0 too (it always does on Windows).
+    if (code !== 0 || killedForTimeout) {
       send({ type: "error", stage: "worker", message: `voice worker exited (${code})` });
     }
   });
