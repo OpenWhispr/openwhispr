@@ -156,13 +156,15 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
     TypingSettings.storeOtherLanguage(in: defaults)
     checks.check("other language: stored value turns typing help off", !TypingSettings(defaults: defaults).typingHelpEnabled)
     checks.check(
-      "unset on a French-first device: no typing help",
-      !TypingSettings(defaults: nil, preferredLanguages: ["fr-FR", "en-US"]).typingHelpEnabled
+      "unset on a device with neither English nor German: no typing help",
+      !TypingSettings(defaults: nil, preferredLanguages: ["fr-FR"]).typingHelpEnabled
+        && !TypingSettings(defaults: nil, preferredLanguages: ["fr-CH", "it-CH"]).typingHelpEnabled
     )
     checks.check(
-      "unset on an English- or German-first device: typing help",
+      "unset on a device that lists English or German anywhere: typing help",
       TypingSettings(defaults: nil, preferredLanguages: ["en-ZA", "af-ZA"]).typingHelpEnabled
-        && TypingSettings(defaults: nil, preferredLanguages: ["de-DE", "fr-FR"]).typingHelpEnabled
+        && TypingSettings(defaults: nil, preferredLanguages: ["af-ZA", "en-ZA"]).typingHelpEnabled
+        && TypingSettings(defaults: nil, preferredLanguages: ["fr-FR", "de-DE"]).typingHelpEnabled
     )
     let emptyDefaults = UserDefaults(suiteName: "keyboard-other-language-test-empty")!
     defer { emptyDefaults.removePersistentDomain(forName: "keyboard-other-language-test-empty") }

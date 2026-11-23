@@ -42,7 +42,7 @@ struct TypingSettings: Equatable {
   /// The style used when none is stored. Flip this to compare the two layouts.
   static let defaultBarStyle = SuggestionBarStyle.strip
 
-  /// Unset values fall back to the device: typing help when its first preferred language is
+  /// Unset values fall back to the device: typing help when one of its preferred languages is
   /// English or German, German rows when German comes before English, and the layout that
   /// language usually has.
   init(
@@ -53,10 +53,11 @@ struct TypingSettings: Equatable {
     if let storedLanguage {
       typingHelpEnabled = storedLanguage != TypingSettings.otherLanguageValue
     } else {
-      // Nobody chose: help only when the device's first language is one the keyboard has a
-      // word list for. A French speaker's text must not be corrected towards English.
-      let first = preferredLanguages.first.map { String($0.lowercased().prefix(2)) }
-      typingHelpEnabled = first.map { TypingLanguage(rawValue: $0) != nil } ?? true
+      // Nobody chose: help only when one of the device's languages is one the keyboard has a
+      // word list for. A French speaker's text must not be corrected towards English; someone
+      // who lists English second does type it.
+      typingHelpEnabled = preferredLanguages.isEmpty
+        || preferredLanguages.contains { TypingLanguage(rawValue: String($0.lowercased().prefix(2))) != nil }
     }
     // "Other" still needs letter rows and an emoji search language: the device's.
     let language = storedLanguage.flatMap(TypingLanguage.init(rawValue:))
