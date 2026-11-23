@@ -41,7 +41,7 @@ it('names the key chosen for meetings, as Settings does', () => {
   expect(shownSheet({ providerId: 'deepgram' }).keyName).toBe('Deepgram');
 });
 
-it('shows OpenWhispr Cloud with no key, and On this phone over a key', () => {
+it('shows OpenWhispr Cloud with no key, and On device over a key', () => {
   expect(shownSheet(null).keyName).toBeNull();
   expect(shownSheet({ providerId: 'openai' }, true)).toMatchObject({
     keyName: null,

@@ -225,7 +225,7 @@ export const notesEnglish = {
   noEventBody: 'Name it yourself afterwards',
   liveOnCloud: 'OpenWhispr Cloud',
   liveOnCloudBody: 'Words appear as people talk',
-  onPhone: 'On this phone',
+  onPhone: 'On device',
   onPhoneBody: 'Afterwards · speakers named',
   change: 'Change',
   startRecording: 'Start recording',
