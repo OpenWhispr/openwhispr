@@ -16,11 +16,21 @@ export function useMeetingStart(place: { folderId?: number; spaceId?: number }) 
   const [visible, setVisible] = useState(false);
   const [event, setEvent] = useState<GoogleCalendarEvent | null>(null);
   const [onDevice, setOnDevice] = useState(false);
+  const [keyName, setKeyName] = useState<string | null>(null);
   const [needsModel, setNeedsModel] = useState(false);
   return {
     open(preferred?: GoogleCalendarEvent | null) {
       const local = meetingOnDevice();
       setOnDevice(local);
+      // Named as Settings → Processing → Meetings names it, since that key is what records.
+      const { meetingKey } =
+        require('../providers/liveMeeting') as typeof import('../providers/liveMeeting');
+      const { KEY_PROVIDERS } =
+        require('../settings/ownKey') as typeof import('../settings/ownKey');
+      const key = local ? null : meetingKey();
+      setKeyName(
+        key ? (KEY_PROVIDERS.find(({ id }) => id === key.providerId)?.name ?? null) : null,
+      );
       setNeedsModel(false);
       if (local)
         useNotesStore
@@ -44,6 +54,7 @@ export function useMeetingStart(place: { folderId?: number; spaceId?: number }) 
         event={event}
         onPickEvent={setEvent}
         onDevice={onDevice}
+        keyName={keyName}
         needsModel={needsModel}
         now={now}
         onChange={() => {
