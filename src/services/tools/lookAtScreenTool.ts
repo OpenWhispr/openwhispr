@@ -12,6 +12,21 @@ export const LOOK_AT_SCREEN_PROMPT =
 // needs one, or two to check something the first missed.
 const MAX_LOOKS_PER_TURN = 2;
 
+// How long a screenshot waits on the capture before it counts as not taken.
+const SCREEN_CAPTURE_WAIT_MS = 3000;
+
+export async function captureScreenNow(): Promise<ChatImageAttachment | null> {
+  try {
+    const image = await Promise.race([
+      window.electronAPI?.captureScreenContext?.(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), SCREEN_CAPTURE_WAIT_MS)),
+    ]);
+    return image ? { image: image.data, mediaType: image.mediaType } : null;
+  } catch {
+    return null;
+  }
+}
+
 const success = () => i18n.t("agentMode.tools.look_at_screenSuccess");
 const failed = (): ToolResult => ({
   success: false,

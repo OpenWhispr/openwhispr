@@ -865,10 +865,14 @@ export function useVoiceCall({
         prepareLines(language === "auto" ? uiSpokenLanguage(settings.uiLanguage) : language);
 
         // Keep a local voice model loaded for the whole call: warm it now so the first
-        // turn skips the cold start, then beat llama-server's 5-minute idle stop.
+        // turn skips the cold start, then beat llama-server's 5-minute idle stop. Read
+        // each time, so a model switched mid-call isn't swapped back out between turns.
         const keepWarm = () => {
-          if (brainConfig.mode === "local" && brainConfig.model) {
-            void api.keepModelWarm(brainConfig.model).catch(() => {});
+          const { config } = resolveChatStreamingInference(getSettings(), {
+            inferenceScope: "dictationAgent",
+          });
+          if (config.mode === "local" && config.model) {
+            void api.keepModelWarm(config.model).catch(() => {});
           }
         };
         keepWarm();

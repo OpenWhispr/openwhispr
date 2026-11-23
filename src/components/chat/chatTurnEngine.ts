@@ -74,6 +74,7 @@ import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAtt
 import { FULL_TRANSCRIPT_MAX_TOKENS } from "../../utils/transcriptEvidence";
 import { createToolRegistry } from "../../services/tools";
 import {
+  captureScreenNow,
   createLookAtScreenTool,
   LOOK_AT_SCREEN_PROMPT,
   LOOK_AT_SCREEN_TOOL,
@@ -253,21 +254,6 @@ export interface OpenNoteContext {
   text: string;
   /** Only the start of the transcript is included; get_note reads the rest. */
   transcriptPreview: boolean;
-}
-
-// How long a look at the screen waits on the capture before it reports it couldn't read it.
-const SCREEN_CAPTURE_WAIT_MS = 3000;
-
-async function captureScreenNow(): Promise<ChatImageAttachment | null> {
-  try {
-    const image = await Promise.race([
-      window.electronAPI?.captureScreenContext?.(),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), SCREEN_CAPTURE_WAIT_MS)),
-    ]);
-    return image ? { image: image.data, mediaType: image.mediaType } : null;
-  } catch {
-    return null;
-  }
 }
 
 export interface ChatTurnOptions {

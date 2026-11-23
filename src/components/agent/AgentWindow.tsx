@@ -30,6 +30,7 @@ import { markdownToPlainText } from "../../helpers/markdownToPlainText";
 import type { ToneAppCategory } from "../../config/toneStyle";
 import { useSkillApprovalStore } from "../../stores/skillApprovalStore";
 import { INTERACTION_TOOL_NAMES } from "../../services/tools/interactionTools";
+import { captureScreenNow } from "../../services/tools/lookAtScreenTool";
 import type { ChatImageAttachment, Message } from "../chat/types";
 import { unsentForkContext, type AgentSelectionContext } from "../../utils/agentSelectionContext";
 import { getCachedPlatform } from "../../utils/platform";
@@ -142,15 +143,7 @@ function selectedApprovalField(): SelectionEditTarget | null {
 async function captureRequestScreen(): Promise<ChatImageAttachment | null> {
   if (!getSettings().voiceAgentScreenContext || !isScreenContextAllowed(usePolicyStore.getState()))
     return null;
-  try {
-    const image = await Promise.race([
-      window.electronAPI?.captureScreenContext?.(),
-      delay(PRESS_CAPTURE_WAIT_MS).then(() => null),
-    ]);
-    return image ? { image: image.data, mediaType: image.mediaType } : null;
-  } catch {
-    return null;
-  }
+  return captureScreenNow();
 }
 
 /**

@@ -49,6 +49,7 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
     reports: [],
     languages: [],
     languageSettings: [],
+    warmed: [],
     dropped: 0,
     ended: [],
     transcriptionFailures: 0,
@@ -89,7 +90,7 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
       return true;
     },
     holdReply: (sessionId, held) => calls.held.push([sessionId, held]),
-    keepModelWarm: async () => {},
+    keepModelWarm: async (modelId) => calls.warmed.push(modelId),
     setLanguage: async (_sessionId, { language }) => {
       calls.languages.push(language);
       return state.languageHeard(language);
@@ -192,8 +193,10 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
         export default { info() {}, warn() {}, error() {}, debug() {} };
       `,
       "/helpers/dictationAgentInference.js": `
-        export function resolveChatStreamingInference() {
-          return { config: { mode: "local", model: "voice-brain", provider: "qwen" } };
+        export function resolveChatStreamingInference(settings) {
+          return {
+            config: settings.brain ?? { mode: "local", model: "voice-brain", provider: "qwen" },
+          };
         }
       `,
       "/utils/dictationCues": `
@@ -734,6 +737,22 @@ test("using the call's window keeps a quiet call from idling out", async (t) => 
   await act(() => t.mock.timers.tick(10_000));
   assert.deepEqual(calls.ended, ["idle"]);
   assert.equal(listeners.size, 0, "the ended call stops listening to the window");
+});
+
+test("a call keeps warm the local model the assistant uses now, not the one it started with", async (t) => {
+  const { calls, act, startListening } = await mountVoiceCall(t);
+  t.mock.timers.enable({ apis: ["setInterval", "Date"], now: 0 });
+  await startListening();
+  assert.deepEqual(calls.warmed, ["voice-brain"]);
+
+  const settings = globalThis.__voiceCall.settings;
+  settings.brain = { mode: "local", model: "other-brain", provider: "qwen" };
+  await act(() => t.mock.timers.tick(60_000));
+  assert.deepEqual(calls.warmed, ["voice-brain", "other-brain"]);
+
+  settings.brain = { mode: "openwhispr", model: "cloud", provider: "openwhispr" };
+  await act(() => t.mock.timers.tick(60_000));
+  assert.deepEqual(calls.warmed, ["voice-brain", "other-brain"], "a cloud brain needs no warming");
 });
 
 test("a call prepares the lines it says while working, in its language and voice", async (t) => {
