@@ -477,7 +477,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       data-approval-card={entry.key}
       data-state={entry.state}
       data-call={callPlacement ?? undefined}
-      onKeyDown={keepEscape}
+      onKeyDown={inCall ? undefined : keepEscape}
       className={cn(
         "my-1.5 flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-surface-1 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-ring agent:border-border agent:text-[15px]",
         // Above a call's pill the frame around the card is its outline.

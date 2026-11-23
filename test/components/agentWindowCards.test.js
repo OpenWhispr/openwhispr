@@ -1471,6 +1471,24 @@ test("in a call, Esc while a card sends stops only speech: the send's turn goes 
   await view.waitForLayout("modal");
 });
 
+test("in a call, Esc in a waiting card's field stops its turn, as the card has no Cancel", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ messages: [user, finished] });
+  await React.act(async () => view.button("Start Voice Agent").click());
+  await view.chat({ busy: true, messages: [user, reply([slackCall], "Posting it.")] });
+  await view.askApproval("c5");
+
+  await React.act(async () =>
+    view.host
+      .querySelector("[data-approval-card] textarea")
+      .dispatchEvent(new view.happyWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+  );
+  assert.equal(globalThis.__chat.cancels, 1);
+  assert.ok(view.button("End call"), "the call goes on");
+});
+
 test("a call's transcript shrinks into its pill before the compact pill takes its place", async (t) => {
   const view = await mountWindow(t);
   await React.act(async () => view.main.handlers.open({ layout: "modal" }));
