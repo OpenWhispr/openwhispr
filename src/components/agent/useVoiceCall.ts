@@ -391,7 +391,7 @@ export function useVoiceCall({
       playerRef.current?.flush();
       setSpeaking(false);
       if (!utteranceId) return;
-      void api?.cancelSpeech(utteranceId);
+      void api?.cancelSpeech(utteranceId).catch(() => {});
       if (!responseDoneRef.current) callbacksRef.current.onReplyDropped();
       logTurn(outcome);
     },
@@ -609,7 +609,7 @@ export function useVoiceCall({
   const stopSpeech = useCallback(() => {
     holdForSpeech(false);
     playerRef.current?.flush();
-    if (utteranceRef.current) void api?.cancelSpeech(utteranceRef.current);
+    if (utteranceRef.current) void api?.cancelSpeech(utteranceRef.current).catch(() => {});
   }, [api, holdForSpeech]);
 
   /**

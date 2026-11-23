@@ -1,5 +1,5 @@
 // Pipecat Smart Turn v3 end-of-turn classifier on ONNX Runtime Web (WASM).
-// WASM, not onnxruntime-node: it also covers Intel Macs, which onnxruntime-node
+// WASM, not onnxruntime-node: it covers Intel Macs, which onnxruntime-node
 // >= 1.24 has no binding for.
 const {
   prepareSmartTurnAudio,

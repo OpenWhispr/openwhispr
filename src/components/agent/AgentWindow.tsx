@@ -75,8 +75,6 @@ const STEP_SETTLE_MS = 300;
 const NOTICE_MS = 5000;
 // How long a call's transcript takes to grow out of its pill or shrink back into it
 // (agent-window.css's call-panel rules).
-// On macOS a call's pill keeps the transcript's window (agentWindowManager), which never
-// resizes between them; elsewhere the window grows to the transcript and shrinks to the pill.
 const CALL_PANEL_MS = 150;
 // What the agent pill says once a call ends on its own.
 const CALL_END_NOTICES: Record<VoiceCallEndReason, string> = {
@@ -888,6 +886,8 @@ export default function AgentWindow() {
     onOpen: () => moveOnItsOwn({ type: "expand" }),
   });
 
+  // On macOS a call's pill keeps the transcript's window (agentWindowManager), which never
+  // resizes between them; elsewhere the window grows to the transcript and shrinks to the pill.
   const callKeepsTranscriptWindow = getCachedPlatform() === "darwin";
   const inTranscriptWindow =
     callKeepsTranscriptWindow && state.call !== null && state.layout === "pill";

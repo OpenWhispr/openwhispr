@@ -2667,7 +2667,7 @@ declare global {
             preferredWhisper?: string;
           }
         ) => Promise<boolean>;
-        keepModelWarm: (modelId: string) => Promise<{ warmed: boolean; reason?: string }>;
+        keepModelWarm: (modelId: string) => Promise<{ warmed: boolean }>;
         speak: (request: {
           utteranceId: string;
           text: string;

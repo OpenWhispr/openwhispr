@@ -198,13 +198,13 @@ function registerVoiceConversationIpc({
   // (voiceHarnessRunner.js) waits on these to score scripted conversations.
   const harnessEnabled = process.env.OPENWHISPR_VOICE_HARNESS === "1";
   ipcMain.handle("voice-conversation:harness-enabled", () => harnessEnabled);
-  ipcMain.on("voice-conversation:turn-report", (_event, report) =>
-    conversationEvents.emit("turn-report", report)
-  );
-  ipcMain.on("voice-conversation:turn-event", (_event, turnEvent) =>
-    conversationEvents.emit("turn-event", turnEvent)
-  );
   if (harnessEnabled) {
+    ipcMain.on("voice-conversation:turn-report", (_event, report) =>
+      conversationEvents.emit("turn-report", report)
+    );
+    ipcMain.on("voice-conversation:turn-event", (_event, turnEvent) =>
+      conversationEvents.emit("turn-event", turnEvent)
+    );
     require("./voiceHarnessRunner")
       .runVoiceHarness({
         voiceWorker,
