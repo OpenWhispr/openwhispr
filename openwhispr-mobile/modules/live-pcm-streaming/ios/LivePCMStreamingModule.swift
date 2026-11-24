@@ -16,6 +16,11 @@ private enum LivePCMError: LocalizedError {
   }
 }
 
+private struct StartOptions: Record {
+  /// file:// URI to record 16 kHz mono WAV into while streaming.
+  @Field var recordingUri: String?
+}
+
 // Streams microphone PCM16 to JS for realtime transcription. Captures with
 // AVAudioSession mode .default so iOS keeps its input conditioning (AGC, mic
 // array processing) ON. Meetings are far-field: with .measurement (the raw-audio
@@ -48,6 +53,14 @@ public class LivePCMStreamingModule: Module {
   // engine yet.
   private var generationReason: String?
 
+  // The meeting's crash-safe recording, fed the same accepted buffers as the
+  // stream so both share one capture clock. The writer lives for the whole
+  // recording; the converter belongs to the current engine, because a restart
+  // can change the input format.
+  private var recordingWriter: MeetingRecordingWriter?
+  private var recordingConverter: AVAudioConverter?
+  private var recordingFailureReported = false
+
   // Every engine and session change (start, restart, teardown) runs on this
   // serial queue, so a restart can never overlap another restart or a stop.
   // The watchdog timer and the observers below are confined to it too.
@@ -58,10 +71,14 @@ public class LivePCMStreamingModule: Module {
   public func definition() -> ModuleDefinition {
     Name("LivePCMStreaming")
 
-    Events("pcm-frame", "capture-state")
+    Events("pcm-frame", "capture-state", "recording-failed")
 
-    AsyncFunction("start") { (sampleRate: Int, promise: Promise) in
-      self.start(sampleRate: sampleRate, promise: promise)
+    AsyncFunction("start") { (sampleRate: Int, options: StartOptions?, promise: Promise) in
+      self.start(sampleRate: sampleRate, recordingUri: options?.recordingUri, promise: promise)
+    }
+
+    AsyncFunction("repairRecording") { (uri: String) -> Bool in
+      return self.repairRecording(uri: uri)
     }
 
     AsyncFunction("stop") { (promise: Promise) in
@@ -80,7 +97,7 @@ public class LivePCMStreamingModule: Module {
     }
   }
 
-  private func start(sampleRate: Int, promise: Promise) {
+  private func start(sampleRate: Int, recordingUri: String?, promise: Promise) {
     stateLock.lock()
     let alreadyStreaming = isStreaming
     stateLock.unlock()
@@ -104,7 +121,7 @@ public class LivePCMStreamingModule: Module {
           return
         }
         do {
-          try self.beginStreaming(sampleRate: Double(sampleRate))
+          try self.beginStreaming(sampleRate: Double(sampleRate), recordingUri: recordingUri)
           promise.resolve(nil)
         } catch {
           self.teardownOnQueue()
@@ -115,14 +132,33 @@ public class LivePCMStreamingModule: Module {
   }
 
   // Runs on captureQueue.
-  private func beginStreaming(sampleRate: Double) throws {
+  private func beginStreaming(sampleRate: Double, recordingUri: String?) throws {
+    // A recording that cannot be opened never fails the stream.
+    var writer: MeetingRecordingWriter?
+    if let recordingUri {
+      if let url = Self.fileUrl(from: recordingUri) {
+        writer = try? MeetingRecordingWriter(url: url)
+      }
+      writer?.onFailure = { [weak self, weak writer] in
+        self?.recordingFailed(writer)
+      }
+    }
+    let writerFailed = recordingUri != nil && writer == nil
+
     stateLock.lock()
     outputSampleRate = sampleRate
     frameNumber = 0
     emittedFrames = 0
     health = CaptureHealthPolicy(startedAtMs: Self.nowMs())
+    recordingWriter = writer
+    recordingConverter = nil
+    recordingFailureReported = writerFailed
     isStreaming = true
     stateLock.unlock()
+
+    if writerFailed {
+      sendEvent("recording-failed", [:])
+    }
 
     try startEngine(sampleRate: sampleRate, reason: nil)
     startObserving()
@@ -158,6 +194,12 @@ public class LivePCMStreamingModule: Module {
     guard let audioConverter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
       throw LivePCMError.converterCreationFailed
     }
+    let fileConverter = AVAudioFormat(
+      commonFormat: .pcmFormatFloat32,
+      sampleRate: Double(MeetingRecordingWriter.sampleRate),
+      channels: AVAudioChannelCount(MeetingRecordingWriter.channels),
+      interleaved: false
+    ).flatMap { AVAudioConverter(from: inputFormat, to: $0) }
 
     stateLock.lock()
     guard isStreaming else {
@@ -167,10 +209,22 @@ public class LivePCMStreamingModule: Module {
     audioEngine = engine
     converter = audioConverter
     outputFormat = targetFormat
+    // The writer stays: a new engine keeps appending to the same file.
+    let lostWriter = fileConverter == nil ? recordingWriter : nil
+    if lostWriter != nil {
+      recordingWriter = nil
+    }
+    recordingConverter = recordingWriter != nil ? fileConverter : nil
     engineGeneration += 1
     generationReason = reason
     let generation = engineGeneration
     stateLock.unlock()
+
+    if let lostWriter {
+      // This engine's audio cannot reach the file; keep what it already holds.
+      lostWriter.finish()
+      recordingFailed(nil)
+    }
 
     inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
       self?.handleTap(buffer, generation: generation)
@@ -185,6 +239,7 @@ public class LivePCMStreamingModule: Module {
       if audioEngine === engine {
         audioEngine = nil
         converter = nil
+        recordingConverter = nil
         generationReason = nil
       }
       stateLock.unlock()
@@ -208,6 +263,7 @@ public class LivePCMStreamingModule: Module {
     generationReason = nil
     audioEngine = nil
     converter = nil
+    recordingConverter = nil
     stateLock.unlock()
 
     oldEngine?.inputNode.removeTap(onBus: 0)
@@ -370,26 +426,75 @@ public class LivePCMStreamingModule: Module {
       && (health.state == .capturing || generationReason != nil)
   }
 
-  // Runs on the audio render thread: keep it cheap.
+  // Runs on the audio render thread: keep it cheap. The file write only
+  // enqueues; the disk work runs on the writer's queue.
   private func handleTap(_ inputBuffer: AVAudioPCMBuffer, generation: Int) {
     stateLock.lock()
     let accepted = acceptsBuffer(from: generation)
     let activeConverter = converter
     let activeFormat = outputFormat
+    let fileConverter = recordingWriter != nil ? recordingConverter : nil
     stateLock.unlock()
 
     guard accepted, let activeConverter, let activeFormat else { return }
 
-    let ratio = activeFormat.sampleRate / inputBuffer.format.sampleRate
+    // Converted before the stream so a buffer the stream can't use still
+    // reaches the file's converter, keeping its resampler continuous.
+    let recordingPcm = fileConverter.flatMap {
+      Self.convertToPCM16(inputBuffer, with: $0, to: $0.outputFormat)
+    }
+    let streamPcm = Self.convertToPCM16(inputBuffer, with: activeConverter, to: activeFormat)
+
+    stateLock.lock()
+    guard acceptsBuffer(from: generation) else {
+      stateLock.unlock()
+      return
+    }
+    let writer = recordingWriter
+    guard let streamPcm else {
+      stateLock.unlock()
+      if let recordingPcm { writer?.append(recordingPcm) }
+      return
+    }
+    let frames = streamPcm.count / 2
+    let number = frameNumber
+    let timestampMs = Int(Double(emittedFrames) / outputSampleRate * 1000)
+    frameNumber += 1
+    emittedFrames += frames
+    let resumed = health.frameArrived(atMs: Self.nowMs())
+    let resumeReason = generationReason
+    let capturedMs = currentCapturedMs()
+    stateLock.unlock()
+
+    if let recordingPcm { writer?.append(recordingPcm) }
+    sendEvent("pcm-frame", [
+      "audio": streamPcm.base64EncodedString(),
+      "frameNumber": number,
+      "timestampMs": timestampMs,
+    ])
+    if resumed, let resumeReason {
+      sendCaptureState(.capturing, reason: resumeReason, capturedMs: capturedMs)
+    }
+  }
+
+  // Runs on the audio render thread. Converts one tap buffer through the
+  // engine's long-lived converter and packs it as little-endian Int16; nil
+  // when the converter produced nothing.
+  private static func convertToPCM16(
+    _ inputBuffer: AVAudioPCMBuffer,
+    with audioConverter: AVAudioConverter,
+    to format: AVAudioFormat
+  ) -> Data? {
+    let ratio = format.sampleRate / inputBuffer.format.sampleRate
     let capacity = AVAudioFrameCount(Double(inputBuffer.frameLength) * ratio + 64)
     guard capacity > 0,
-          let outputBuffer = AVAudioPCMBuffer(pcmFormat: activeFormat, frameCapacity: capacity) else {
-      return
+          let outputBuffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else {
+      return nil
     }
 
     var providedInput = false
     var conversionError: NSError?
-    let status = activeConverter.convert(to: outputBuffer, error: &conversionError) { _, inputStatus in
+    let status = audioConverter.convert(to: outputBuffer, error: &conversionError) { _, inputStatus in
       if providedInput {
         inputStatus.pointee = .noDataNow
         return nil
@@ -402,7 +507,7 @@ public class LivePCMStreamingModule: Module {
     guard conversionError == nil, status != .error,
           outputBuffer.frameLength > 0,
           let samples = outputBuffer.floatChannelData?[0] else {
-      return
+      return nil
     }
 
     let frames = Int(outputBuffer.frameLength)
@@ -415,30 +520,51 @@ public class LivePCMStreamingModule: Module {
       var sample = Int16(scaled).littleEndian
       withUnsafeBytes(of: &sample) { pcm.append(contentsOf: $0) }
     }
-    let base64 = pcm.base64EncodedString()
+    return pcm
+  }
 
+  // Any thread; takes stateLock, so never call it holding the lock (nothing
+  // calls finish() under the lock either). Detaches a failed writer and
+  // reports the recording's failure once; the stream carries on.
+  private func recordingFailed(_ writer: MeetingRecordingWriter?) {
     stateLock.lock()
-    guard acceptsBuffer(from: generation) else {
-      stateLock.unlock()
-      return
+    if let writer, recordingWriter === writer {
+      recordingWriter = nil
+      recordingConverter = nil
     }
-    let number = frameNumber
-    let timestampMs = Int(Double(emittedFrames) / outputSampleRate * 1000)
-    frameNumber += 1
-    emittedFrames += frames
-    let resumed = health.frameArrived(atMs: Self.nowMs())
-    let resumeReason = generationReason
-    let capturedMs = currentCapturedMs()
+    let shouldReport = !recordingFailureReported
+    recordingFailureReported = true
     stateLock.unlock()
 
-    sendEvent("pcm-frame", [
-      "audio": base64,
-      "frameNumber": number,
-      "timestampMs": timestampMs,
-    ])
-    if resumed, let resumeReason {
-      sendCaptureState(.capturing, reason: resumeReason, capturedMs: capturedMs)
+    if shouldReport {
+      sendEvent("recording-failed", [:])
     }
+  }
+
+  // Runs on the Expo module queue; serialized with start and stop on
+  // captureQueue so it can never patch the file being recorded.
+  private func repairRecording(uri: String) -> Bool {
+    guard let url = Self.fileUrl(from: uri) else { return false }
+    return captureQueue.sync {
+      self.stateLock.lock()
+      let activePath = self.recordingWriter.map { Self.comparablePath($0.url) }
+      self.stateLock.unlock()
+      if activePath == Self.comparablePath(url) {
+        return false
+      }
+      return MeetingRecordingWriter.repairHeader(at: url)
+    }
+  }
+
+  private static func fileUrl(from uri: String) -> URL? {
+    if uri.hasPrefix("file://") {
+      return URL(string: uri)
+    }
+    return URL(fileURLWithPath: uri)
+  }
+
+  private static func comparablePath(_ url: URL) -> String {
+    return url.standardizedFileURL.resolvingSymlinksInPath().path
   }
 
   // Idempotent: safe to call from stop(), a failed start(), or OnDestroy.
@@ -456,9 +582,12 @@ public class LivePCMStreamingModule: Module {
     stateLock.lock()
     let engine = audioEngine
     let wasStreaming = isStreaming
+    let writer = recordingWriter
     audioEngine = nil
     converter = nil
     outputFormat = nil
+    recordingWriter = nil
+    recordingConverter = nil
     isStreaming = false
     stateLock.unlock()
 
@@ -466,6 +595,10 @@ public class LivePCMStreamingModule: Module {
 
     engine?.inputNode.removeTap(onBus: 0)
     engine?.stop()
+    // Blocks until the writer's queue has written everything queued and the
+    // final sizes, so stop() resolves on a complete file. The writer's queue
+    // never waits on captureQueue, so this sync cannot deadlock.
+    writer?.finish()
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
   }
 

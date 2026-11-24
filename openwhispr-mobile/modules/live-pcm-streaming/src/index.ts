@@ -25,15 +25,22 @@ export interface CaptureStateEvent {
   capturedMs: number;
 }
 
+export interface StartOptions {
+  /** file:// URI to record 16 kHz mono WAV into. */
+  recordingUri?: string;
+}
+
 type LivePCMStreamingEvents = {
   'pcm-frame': (frame: PcmFrame) => void;
   'capture-state': (event: CaptureStateEvent) => void;
+  'recording-failed': () => void;
 };
 
 interface NativeLivePCMStreaming {
-  start(sampleRate: number): Promise<void>;
+  start(sampleRate: number, options: StartOptions): Promise<void>;
   stop(): Promise<void>;
   isRecording(): boolean;
+  repairRecording(uri: string): Promise<boolean>;
 }
 
 /** Matches the desktop realtime transport (24 kHz mono PCM16). */
@@ -55,14 +62,19 @@ export const LivePCMStreaming = {
    * Starts capturing microphone audio (iOS input conditioning on, so far-field
    * speakers stay audible) and streams it as `pcm-frame` events. Rejects if
    * capture is already running or microphone permission is denied.
+   *
+   * With `recordingUri`, also records the audio to that WAV file. A file that
+   * can't be opened or written never fails capture: `recording-failed` fires
+   * once and streaming carries on.
    */
-  async start(sampleRate: number = DEFAULT_SAMPLE_RATE): Promise<void> {
+  async start(sampleRate: number = DEFAULT_SAMPLE_RATE, options?: StartOptions): Promise<void> {
     if (!NativeModule) {
       throw new Error('LivePCMStreaming is only available on iOS');
     }
-    return NativeModule.start(sampleRate);
+    return NativeModule.start(sampleRate, options ?? {});
   },
 
+  /** Resolves once capture has stopped and the recording file, if any, is complete. */
   async stop(): Promise<void> {
     if (!NativeModule) return;
     return NativeModule.stop();
@@ -70,6 +82,12 @@ export const LivePCMStreaming = {
 
   isRecording(): boolean {
     return NativeModule?.isRecording() ?? false;
+  },
+
+  /** Rewrites a recording's header from its real size. False when the file is missing or too short. */
+  async repairRecording(uri: string): Promise<boolean> {
+    if (!NativeModule) return false;
+    return NativeModule.repairRecording(uri);
   },
 };
 
@@ -83,4 +101,10 @@ export function addCaptureStateListener(
 ): EventSubscription | null {
   if (!NativeModuleEvents) return null;
   return NativeModuleEvents.addListener('capture-state', callback);
+}
+
+/** The recording file stopped (or never started); the stream is unaffected. Fires at most once per `start`. */
+export function addRecordingFailedListener(callback: () => void): EventSubscription | null {
+  if (!NativeModuleEvents) return null;
+  return NativeModuleEvents.addListener('recording-failed', callback);
 }
