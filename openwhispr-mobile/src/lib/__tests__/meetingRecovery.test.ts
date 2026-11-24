@@ -3,6 +3,7 @@ jest.mock('expo-file-system/legacy', () => ({ documentDirectory: 'file:///docs/'
 jest.mock('@/data', () => ({ notesRepository: { getAllNotes: jest.fn(() => []) } }));
 jest.mock('@/store/useNotesStore', () => ({ useNotesStore: { getState: jest.fn() } }));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+jest.mock('@/lib/captureLease', () => ({ isCaptureLeaseHeld: jest.fn(() => false) }));
 jest.mock('expo-network', () => ({ getNetworkStateAsync: jest.fn() }));
 jest.mock('../../../modules/live-pcm-streaming/src', () => ({
   LivePCMStreaming: { repairRecording: jest.fn() },

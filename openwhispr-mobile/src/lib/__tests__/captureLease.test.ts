@@ -1,4 +1,4 @@
-import { acquireCaptureLease, releaseCaptureLease } from '../captureLease';
+import { acquireCaptureLease, isCaptureLeaseHeld, releaseCaptureLease } from '../captureLease';
 import { AppGroupStorage } from '../../../modules/app-group-storage/src';
 import { Sentry } from '@/lib/sentry';
 
@@ -49,6 +49,47 @@ describe('captureLease', () => {
 
     expect(Sentry.captureException).toHaveBeenCalledWith(failure, {
       tags: { feature: 'meeting-capture-lease' },
+    });
+  });
+
+  describe('isCaptureLeaseHeld', () => {
+    afterEach(() => {
+      releaseCaptureLease('meeting-cloud');
+      releaseCaptureLease('meeting-local');
+    });
+
+    it('is held from a successful acquire until that owner releases', async () => {
+      (AppGroupStorage.acquireCaptureLease as jest.Mock).mockResolvedValue(undefined);
+      expect(isCaptureLeaseHeld()).toBe(false);
+
+      await acquireCaptureLease('meeting-cloud');
+      await acquireCaptureLease('meeting-local');
+      expect(isCaptureLeaseHeld()).toBe(true);
+
+      releaseCaptureLease('meeting-cloud');
+      expect(isCaptureLeaseHeld()).toBe(true);
+      releaseCaptureLease('meeting-local');
+      expect(isCaptureLeaseHeld()).toBe(false);
+    });
+
+    it('is not held after a failed acquire', async () => {
+      (AppGroupStorage.acquireCaptureLease as jest.Mock).mockRejectedValue(new Error('native'));
+
+      await acquireCaptureLease('meeting-local');
+
+      expect(isCaptureLeaseHeld()).toBe(false);
+    });
+
+    it('is released even when the native release throws', async () => {
+      (AppGroupStorage.acquireCaptureLease as jest.Mock).mockResolvedValue(undefined);
+      (AppGroupStorage.releaseCaptureLease as jest.Mock).mockImplementation(() => {
+        throw new Error('native release failure');
+      });
+
+      await acquireCaptureLease('meeting-cloud');
+      releaseCaptureLease('meeting-cloud');
+
+      expect(isCaptureLeaseHeld()).toBe(false);
     });
   });
 });

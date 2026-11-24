@@ -3,6 +3,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import type { Note } from '@/data';
 import { notesRepository } from '@/data';
+import { isCaptureLeaseHeld } from '@/lib/captureLease';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
 import { tryParseNoteTimestamp } from '@/lib/parseNoteTimestamp';
 import { Sentry } from '@/lib/sentry';
@@ -550,21 +551,9 @@ const reportRecoveryError = (error: unknown, noteId?: number): void => {
   });
 };
 
-// The capture lease can't be read from JS. A meeting this runtime started is the only one
-// recording now; a 'recording' note from an earlier process is an orphan, not a live meeting.
-const isMeetingCapturing = (): boolean =>
-  notesRepository
-    .getAllNotes()
-    .some(
-      (note) =>
-        note.noteType === 'meeting' &&
-        note.transcriptionStatus === 'recording' &&
-        !createdBeforeRuntime(note, RUNTIME_STARTED_AT_MS),
-    );
-
 // Stops between pieces too, since one note's owed audio can be many two-minute uploads.
 const resumeOwedBackfill = (noteId: number): Promise<void> =>
-  useNotesStore.getState().resumeMeetingBackfill(noteId, { shouldStop: isMeetingCapturing });
+  useNotesStore.getState().resumeMeetingBackfill(noteId, { shouldStop: isCaptureLeaseHeld });
 
 /** Runs the sweep once per JS runtime. Call after the notes store is initialized. */
 export function startMeetingRecoveryOnce(): void {
@@ -580,7 +569,7 @@ export function startMeetingRecoveryOnce(): void {
       isOnline: isDeviceOnline,
       resumeBackfill: resumeOwedBackfill,
       reportError: reportRecoveryError,
-      isMeetingCapturing,
+      isMeetingCapturing: isCaptureLeaseHeld,
     }),
   );
   // A recording found again can make its meeting resumable, so this runs first.
@@ -670,7 +659,7 @@ export function startMeetingRecoveryOnce(): void {
         getSegmentTimes: (noteId) =>
           notesRepository.getSegments(noteId).map(({ startMs, endMs }) => ({ startMs, endMs })),
         savePendingBackfill,
-        isMeetingCapturing,
+        isMeetingCapturing: isCaptureLeaseHeld,
       });
     })
     .catch((error: unknown) => {
