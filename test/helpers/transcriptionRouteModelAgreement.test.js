@@ -32,8 +32,8 @@ test("every shipping registry model resolves to itself or its provider's batch m
     const provider = registry.transcriptionProviders.find((p) => p.id === providerId);
     assert.ok(provider, `registry is missing provider ${providerId}`);
 
-    // A Note Recording-only model never reaches a batch request. A streaming model takes its
-    // provider's batch model: Gemini answers 400 for gemini-3.5-transcribe-live (#3369).
+    // A Note Recording-only model never reaches a batch request. Gemini answers 400 for
+    // gemini-3.5-transcribe-live in a batch request (#3369).
     for (const model of provider.models.filter(
       (m) => !isNoteRecordingOnlyTranscriptionModel(providerId, m.id)
     )) {
