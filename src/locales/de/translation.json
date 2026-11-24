@@ -5426,7 +5426,7 @@
       "status": {
         "starting": "Anruf wird gestartet…",
         "listening": "Hört zu",
-        "working": "Arbeitet…",
+        "working": "Arbeitet",
         "speaking": "Spricht",
         "micOff": "Mikrofon aus",
         "waiting": "Wartet auf Aktion",

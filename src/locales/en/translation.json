@@ -5426,7 +5426,7 @@
       "status": {
         "starting": "Starting voice…",
         "listening": "Listening",
-        "working": "Working…",
+        "working": "Working",
         "speaking": "Speaking",
         "micOff": "Microphone off",
         "waiting": "Waiting For Action",

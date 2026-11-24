@@ -5066,7 +5066,7 @@
       "status": {
         "starting": "正在启动语音…",
         "listening": "正在聆听",
-        "working": "处理中…",
+        "working": "处理中",
         "speaking": "正在说话",
         "micOff": "麦克风已关闭",
         "waiting": "等待操作",

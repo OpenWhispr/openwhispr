@@ -5453,7 +5453,7 @@
       "status": {
         "starting": "Démarrage de la voix…",
         "listening": "À l'écoute",
-        "working": "En cours…",
+        "working": "En cours",
         "speaking": "Parle",
         "micOff": "Micro coupé",
         "waiting": "En attente d'une action",

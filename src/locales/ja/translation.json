@@ -5066,7 +5066,7 @@
       "status": {
         "starting": "音声を開始中…",
         "listening": "聞き取り中",
-        "working": "処理中…",
+        "working": "処理中",
         "speaking": "話しています",
         "micOff": "マイクオフ",
         "waiting": "操作を待っています",

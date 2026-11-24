@@ -4,11 +4,14 @@ const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const fs = require("node:fs");
 const path = require("node:path");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const {
+  createRendererServer,
+  installBrowserGlobals,
+  installHappyDom,
+} = require("../lib/rendererTestHarness");
 
-// The call's pill rendered with the English strings.
-async function renderPill(t, props) {
-  installBrowserGlobals(t);
+// The call's pill module, with the English strings.
+async function loadPill(t) {
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-voice-pill-" });
   const [{ default: i18next }, { initReactI18next }] = await Promise.all([
     vite.ssrLoadModule("i18next"),
@@ -24,25 +27,48 @@ async function renderPill(t, props) {
       interpolation: { escapeValue: false },
     });
   }
-  const { VoicePill } = await vite.ssrLoadModule("/components/agent/VoicePill.tsx");
-  const noop = () => {};
-  return renderToStaticMarkup(
-    React.createElement(VoicePill, {
-      status: "listening",
-      readLevel: () => 0,
-      waveformActive: true,
-      micMuted: false,
-      sessionControl: "end",
-      settingsOpen: false,
-      onSettings: noop,
-      onTranscript: noop,
-      onMic: noop,
-      onEnd: noop,
-      onStopReply: noop,
-      onLeave: noop,
-      ...props,
-    })
-  );
+  return vite.ssrLoadModule("/components/agent/VoicePill.tsx");
+}
+
+const noop = () => {};
+const PILL_PROPS = {
+  status: "listening",
+  readLevel: () => 0,
+  waveformActive: true,
+  micMuted: false,
+  sessionControl: "end",
+  settingsOpen: false,
+  onSettings: noop,
+  onTranscript: noop,
+  onMic: noop,
+  onEnd: noop,
+  onStopReply: noop,
+  onLeave: noop,
+};
+
+async function renderPill(t, props) {
+  installBrowserGlobals(t);
+  const { VoicePill } = await loadPill(t);
+  return renderToStaticMarkup(React.createElement(VoicePill, { ...PILL_PROPS, ...props }));
+}
+
+// The pill mounted in a real DOM, with node's mock timers for the cap's words.
+async function mountPill(t, props) {
+  let root = null;
+  t.after(() => root && React.act(async () => root.unmount()));
+  const happyWindow = await installHappyDom(t);
+  const { VoicePill, WORKING_DOT_MS } = await loadPill(t);
+  const { createRoot } = require("react-dom/client");
+  const host = happyWindow.document.createElement("div");
+  root = createRoot(host);
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const render = (next) =>
+    React.act(async () =>
+      root.render(React.createElement(VoicePill, { ...PILL_PROPS, waveformActive: false, ...next }))
+    );
+  await render(props);
+  const tick = () => React.act(async () => t.mock.timers.tick(WORKING_DOT_MS));
+  return { host, render, tick };
 }
 
 test("the compact pill expands to the transcript, and the transcript's pill minimizes it", async (t) => {
@@ -60,4 +86,48 @@ test("a stopped call shows Back to typing in place of its controls", async (t) =
   for (const label of ["Settings", "Minimize", "Turn microphone off", "End call"]) {
     assert.doesNotMatch(stopped, new RegExp(`aria-label="${label}"`));
   }
+});
+
+test("while a turn works, the cap reads Working with one, two, then three dots, from none each turn", async (t) => {
+  const view = await mountPill(t, { status: "working" });
+  const cap = () => view.host.querySelector("[role=status]");
+  const dotsShown = () =>
+    [...cap().querySelectorAll('[aria-hidden="true"] > span')].filter(
+      (dot) => !dot.classList.contains("opacity-0")
+    ).length;
+  assert.equal(
+    cap().textContent,
+    "Working...",
+    "every dot keeps its place, so the word never shifts"
+  );
+  const counts = [dotsShown()];
+  for (let step = 0; step < 4; step += 1) {
+    await view.tick();
+    counts.push(dotsShown());
+  }
+  assert.deepEqual(counts, [0, 1, 2, 3, 0]);
+
+  await view.tick();
+  await view.render({ status: "working", notice: "Copied" });
+  assert.equal(cap().textContent, "Copied");
+  await view.render({ status: "speaking" });
+  assert.equal(cap().textContent, "Speaking");
+  await view.render({ status: "working" });
+  assert.equal(dotsShown(), 0);
+});
+
+test("while a turn works, the bars swell slowly with no sound, and lie still once it ends", async (t) => {
+  const view = await mountPill(t, { status: "working" });
+  const pill = view.host.querySelector("[data-voice-pill]");
+  const lifts = () =>
+    Array.from({ length: 4 }, (_, index) =>
+      Number(pill.style.getPropertyValue(`--voice-bar-${index}`))
+    );
+  await React.act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+  assert.ok(
+    lifts().some((lift) => lift > 0.05),
+    `the bars swell: ${lifts()}`
+  );
+  await view.render({ status: "listening" });
+  assert.deepEqual(lifts(), [0, 0, 0, 0]);
 });

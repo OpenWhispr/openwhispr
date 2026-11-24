@@ -5087,7 +5087,7 @@
       "status": {
         "starting": "Avvio della voce…",
         "listening": "In ascolto",
-        "working": "Al lavoro…",
+        "working": "Al lavoro",
         "speaking": "Sta parlando",
         "micOff": "Microfono spento",
         "waiting": "In attesa di un'azione",

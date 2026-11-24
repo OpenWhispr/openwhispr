@@ -5139,7 +5139,7 @@
       "status": {
         "starting": "Iniciando voz…",
         "listening": "Escuchando",
-        "working": "Trabajando…",
+        "working": "Trabajando",
         "speaking": "Hablando",
         "micOff": "Micrófono apagado",
         "waiting": "Esperando una acción",

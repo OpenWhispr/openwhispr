@@ -5093,7 +5093,7 @@
       "status": {
         "starting": "Iniciando voz…",
         "listening": "Ouvindo",
-        "working": "Trabalhando…",
+        "working": "Trabalhando",
         "speaking": "Falando",
         "micOff": "Microfone desligado",
         "waiting": "Aguardando ação",

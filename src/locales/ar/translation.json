@@ -3069,7 +3069,7 @@
       "status": {
         "starting": "جارٍ تشغيل الصوت…",
         "listening": "يستمع",
-        "working": "يعمل…",
+        "working": "يعمل",
         "speaking": "يتحدث",
         "micOff": "الميكروفون متوقف",
         "waiting": "بانتظار إجراء",

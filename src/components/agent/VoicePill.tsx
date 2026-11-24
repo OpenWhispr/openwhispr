@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Keyboard, Maximize, Mic, MicOff, Minimize, Settings, X } from "../icons";
 import { cn } from "../lib/utils";
@@ -11,6 +11,7 @@ import {
   soundBarHeight,
   soundBarLevels,
   soundLevel,
+  thinkingBarLevels,
 } from "./voiceBars";
 
 /** What the call's status cap says, from what is actually happening. */
@@ -39,6 +40,27 @@ const STATUS_LABELS: Record<VoiceCallStatus, string> = {
   sendingMessage: "agentWindow.call.status.sendingMessage",
   stopped: "agentWindow.call.status.stopped",
 };
+
+// While a turn works, the cap reads Working, then one, two and three dots and
+// over again, so a long turn never reads as stuck. Each turn starts with none.
+const WORKING_DOTS = 3;
+export const WORKING_DOT_MS = 900;
+
+function useWorkingDots(active: boolean): number {
+  const [dots, setDots] = useState(0);
+  useEffect(() => {
+    if (!active) return undefined;
+    const timer = setInterval(
+      () => setDots((current) => (current + 1) % (WORKING_DOTS + 1)),
+      WORKING_DOT_MS
+    );
+    return () => {
+      clearInterval(timer);
+      setDots(0);
+    };
+  }, [active]);
+  return dots;
+}
 
 // The cap's outline: a tab whose shoulders run down into the pill below it.
 const CAP_WIDTH = 196;
@@ -93,15 +115,18 @@ export function VoicePill({
   const { t } = useTranslation();
   const dragHandlers = useAgentWindowDrag();
   const label = notice ?? t(STATUS_LABELS[status]);
+  const working = status === "working" && !notice;
+  const dots = useWorkingDots(working);
   const starting = status === "starting";
   const stopped = status === "stopped";
   const glow = !inModal && status === "speaking" && !notice;
-  const levelActive = glow || (waveformActive && !stopped);
+  const levelActive = glow || working || (waveformActive && !stopped);
   const pillRef = useRef<HTMLDivElement>(null);
 
   // The Sound bars and the glow follow the reply or the microphone as it is
-  // heard (--voice-level); they hold still under reduced motion, and an
-  // animation ending never changes the call.
+  // heard (--voice-level), and while a turn works a slow swell runs through the
+  // bars under that; they hold still under reduced motion, and an animation
+  // ending never changes the call.
   useEffect(() => {
     const element = pillRef.current;
     if (!element) return undefined;
@@ -118,19 +143,22 @@ export function VoicePill({
     let level = 0;
     let barLevel = 0;
     const history: number[] = new Array(SOUND_HISTORY_FRAMES).fill(0);
-    const paint = () => {
+    const startedAt = performance.now();
+    const paint = (now: number) => {
       const rms = readLevel();
       level = level * 0.8 + Math.min(1, rms * 6) * 0.2;
       element.style.setProperty("--voice-level", level.toFixed(3));
       barLevel = followLevel(barLevel, soundLevel(rms));
       history.pop();
       history.unshift(barLevel);
-      paintBars(soundBarLevels(history));
+      const lifts = soundBarLevels(history);
+      const swell = working ? thinkingBarLevels(now - startedAt) : null;
+      paintBars(swell ? lifts.map((lift, index) => Math.max(lift, swell[index])) : lifts);
       frame = requestAnimationFrame(paint);
     };
     frame = requestAnimationFrame(paint);
     return () => cancelAnimationFrame(frame);
-  }, [levelActive, readLevel]);
+  }, [levelActive, readLevel, working]);
 
   const surface = inModal ? "bg-surface-1 dark:bg-surface-2" : "agent-panel bg-surface-0";
   const capFill = inModal ? "fill-surface-1 dark:fill-surface-2" : "fill-[var(--color-surface-0)]";
@@ -174,6 +202,22 @@ export function VoicePill({
             className={cn("voice-pill-swap", status === "speaking" && "voice-pill-swap-slow")}
           >
             {label}
+            {/* Every dot keeps its place, so Working never shifts as they come and go. */}
+            {working && (
+              <span aria-hidden="true">
+                {Array.from({ length: WORKING_DOTS }, (_, index) => (
+                  <span
+                    key={index}
+                    className={cn(
+                      "transition-opacity duration-500 motion-reduce:transition-none",
+                      index >= dots && "opacity-0"
+                    )}
+                  >
+                    .
+                  </span>
+                ))}
+              </span>
+            )}
           </span>
         </span>
         {onShowCard && (
