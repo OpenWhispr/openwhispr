@@ -22,6 +22,7 @@ struct MeetingRecordingWriterTests {
     try initThatCannotWriteRemovesTheFile(dir)
     try writeFailureStopsWritingAndReportsOnce(dir)
     try failureBeforeAnyAudioRemovesTheFile(dir)
+    failureKeepsAFileThatHoldsAudio()
     print("MeetingRecordingWriterTests: all passed")
   }
 
@@ -168,5 +169,20 @@ struct MeetingRecordingWriterTests {
     }
     expect(failures == 1, "reported once")
     expect(!fileManager.fileExists(atPath: url.path), "a failed recording with no audio is removed")
+  }
+
+  static func failureKeepsAFileThatHoldsAudio() {
+    expect(
+      MeetingRecordingWriter.keepsFileAfterFailure(audioBytesOnDisk: 0, dataBytesWritten: 3_200),
+      "a size read that failed never deletes audio the writer wrote"
+    )
+    expect(
+      MeetingRecordingWriter.keepsFileAfterFailure(audioBytesOnDisk: 3_200, dataBytesWritten: 0),
+      "audio found on disk is kept"
+    )
+    expect(
+      !MeetingRecordingWriter.keepsFileAfterFailure(audioBytesOnDisk: 0, dataBytesWritten: 0),
+      "a file with no audio is removed"
+    )
   }
 }

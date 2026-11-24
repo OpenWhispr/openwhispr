@@ -121,10 +121,16 @@ final class MeetingRecordingWriter {
     }
     try? handle.close()
     self.handle = nil
-    if audioBytes == 0 {
+    if !Self.keepsFileAfterFailure(audioBytesOnDisk: audioBytes, dataBytesWritten: dataBytes) {
       try? FileManager.default.removeItem(at: url)
     }
     onFailure?()
+  }
+
+  // A failed seekToEnd reads as no audio on disk, so the bytes this writer itself wrote are
+  // the floor: a file that holds audio is never deleted for a size it could not read.
+  static func keepsFileAfterFailure(audioBytesOnDisk: UInt32, dataBytesWritten: UInt64) -> Bool {
+    return audioBytesOnDisk > 0 || dataBytesWritten > 0
   }
 
   private static func clampedDataBytes(_ bytes: UInt64) -> UInt32 {
