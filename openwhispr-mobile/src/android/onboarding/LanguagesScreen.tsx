@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
@@ -18,6 +18,9 @@ import {
 } from './kit';
 import { useOnboardingT } from './strings';
 import { useLaunchT } from '../launch/strings';
+import { useSettingsT } from '../settings/strings';
+import { SearchField } from '../controls';
+import { flat, theme } from '../theme';
 
 export function LanguagesScreen({
   onBack,
@@ -107,6 +110,7 @@ function AddLanguageSheet({
   onAdd: (code: string) => void;
 }) {
   const t = useOnboardingT();
+  const st = useSettingsT();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const results = useMemo(() => {
@@ -127,24 +131,20 @@ function AddLanguageSheet({
               accessibilityRole="button"
               accessibilityLabel={t('cancel')}
               onPress={onClose}
-              style={l.cancel}
+              hitSlop={8}
+              style={({ pressed }) => [l.cancel, pressed && { opacity: 0.6 }]}
             >
               <Text style={{ color: colors.accent, fontSize: 16, fontFamily: AppFont.medium }}>
                 {t('cancel')}
               </Text>
             </Pressable>
           </View>
-          <View style={l.search}>
-            <SystemIcon name="magnifyingglass" mdName="Search" size={16} color={colors.tertiary} />
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder={t('searchLanguages', { count: LANGUAGES.length })}
-              placeholderTextColor={colors.tertiary}
-              accessibilityLabel={t('searchLanguages', { count: LANGUAGES.length })}
-              style={l.searchInput}
-            />
-          </View>
+          <SearchField
+            value={search}
+            onChangeText={setSearch}
+            placeholder={t('searchLanguages', { count: LANGUAGES.length })}
+            clearLabel={st('clearSearch')}
+          />
           <View style={l.list}>
             <FlatList
               data={results}
@@ -162,7 +162,7 @@ function AddLanguageSheet({
                   }}
                   style={({ pressed }) => [
                     l.option,
-                    pressed && { backgroundColor: colors.surface2 },
+                    pressed && { backgroundColor: theme.tile },
                   ]}
                 >
                   <Text style={{ fontSize: 18 }}>{item.flag}</Text>
@@ -183,22 +183,17 @@ const l = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    backgroundColor: colors.surface,
+    ...flat,
     borderRadius: 16,
     paddingHorizontal: 16,
     minHeight: 56,
-    shadowColor: '#000000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
   },
   label: { flex: 1, fontSize: 17, color: colors.ink },
-  scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
+  scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.40)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.canvas,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 16,
     paddingTop: 8,
     height: '92%',
@@ -208,28 +203,12 @@ const l = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#C9C6C0',
+    backgroundColor: theme.track,
     alignSelf: 'center',
   },
   sheetTitle: { fontSize: 22, fontFamily: AppFont.bold, color: colors.ink },
-  cancel: {
-    backgroundColor: colors.surface,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    minHeight: 36,
-    justifyContent: 'center',
-  },
-  search: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.fill,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    minHeight: 48,
-  },
-  searchInput: { flex: 1, fontSize: 17, color: colors.ink },
-  list: { flex: 1, backgroundColor: colors.surface, borderRadius: 18, overflow: 'hidden' },
+  cancel: { minHeight: 36, paddingHorizontal: 4, justifyContent: 'center' },
+  list: { ...flat, flex: 1, borderRadius: 16, overflow: 'hidden' },
   option: {
     flexDirection: 'row',
     alignItems: 'center',

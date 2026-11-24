@@ -57,6 +57,18 @@ export const theme = {
   successFill: 'rgba(31,157,85,0.12)',
   errorFill: 'rgba(215,0,21,0.10)',
   connected: '#16A34A',
+  /** A soft accent wash behind a small accent glyph (a send arrow, a mock row). */
+  accentSoft: '#E6EDFC',
+  /** The brand-blue screens (onboarding intro, sign in): the gradient's light top and deep foot. */
+  brandLight: '#7DA2F2',
+  brandTop: '#5B81E4',
+  brandDeep: '#163992',
+  /** The highlighted words of a title on the brand blue. */
+  brandHighlight: '#B9CEFF',
+  /** An amber call-out: its fill, outline and text. */
+  amberBg: '#FFF4E3',
+  amberLine: '#F2B661',
+  amberInk: '#8A5300',
   /** The brand glass gradient's two stops. */
   glassTop: '#5588F0',
   glassBottom: '#3466E2',

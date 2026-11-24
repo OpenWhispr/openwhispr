@@ -24,7 +24,7 @@ import {
 } from './kit';
 import { useOnboardingT } from './strings';
 import { appIcon } from './AppsScreen';
-import { glassEdge } from '../home/kit';
+import { flat as glassEdge, glass, inset, knob, theme } from '../theme';
 
 const EMPTY: BubbleStatus = {
   overlay: false,
@@ -417,11 +417,11 @@ export function NotificationsScreen({
 const p = StyleSheet.create({
   // Toggle/Switch from the design system (4173:8).
   toggle: { width: 52.5, height: 23, borderRadius: 12, padding: 1.6, justifyContent: 'center' },
-  toggleOn: { backgroundColor: '#1555D4' },
-  toggleOff: { backgroundColor: '#D9D7D2' },
-  knob: { width: 32, height: 19.7, borderRadius: 10, backgroundColor: '#FFFFFF' },
+  toggleOn: glass,
+  toggleOff: inset,
+  knob: { ...knob, width: 32, height: 19.7, borderRadius: 10 },
   settingCard: { ...glassEdge, borderRadius: 20, overflow: 'hidden' },
-  settingHeader: { backgroundColor: '#F8F7F5', paddingHorizontal: 18, paddingVertical: 14 },
+  settingHeader: { backgroundColor: theme.surface2, paddingHorizontal: 18, paddingVertical: 14 },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -445,17 +445,17 @@ const p = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
+  scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.40)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.canvas,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 20,
     gap: 16,
   },
-  disclosure: { backgroundColor: '#D9E0EE', borderRadius: 18, padding: 18, gap: 6 },
+  disclosure: { ...glassEdge, borderRadius: 16, padding: 18, gap: 6 },
   keyboardArt: {
-    backgroundColor: colors.surface,
+    ...glassEdge,
     borderRadius: 24,
     padding: 14,
     gap: 12,
@@ -476,12 +476,12 @@ const p = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#F28C1B',
+    backgroundColor: theme.warning,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: theme.surface,
   },
   keys: { backgroundColor: colors.fill, borderRadius: 14, padding: 8, gap: 6 },
-  key: { width: 24, height: 30, borderRadius: 5, backgroundColor: '#FFFFFF' },
+  key: { width: 24, height: 30, borderRadius: 5, backgroundColor: theme.surface },
   warning: {
     backgroundColor: colors.amberBg,
     borderColor: colors.amberLine,

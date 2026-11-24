@@ -10,7 +10,7 @@ import { ANDROID_MODELS, useModelDownloads, type AndroidModelId } from '../model
 import { DownloadRing } from '../settings/DownloadRing';
 import { edgeCard, sectionLabel } from '../settings/look';
 import { useReduceMotion } from '../settings/kit';
-import { TILE_FILL } from '../home/kit';
+import { theme } from '../theme';
 import {
   modelFor,
   retryDeviceDownloads,
@@ -128,7 +128,7 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
 
 function Tile({ item, glass, muted }: { item: Item; glass?: boolean; muted?: boolean }) {
   const icon = ROWS[item].icon;
-  const color = glass ? '#FFFFFF' : muted ? colors.tertiary : colors.ink;
+  const color = glass ? theme.onGlass : muted ? colors.tertiary : colors.ink;
   const glyph =
     icon === 'sparkle' ? (
       <Glyph name="sparkle" size={14} color={color} />
@@ -140,7 +140,7 @@ function Tile({ item, glass, muted }: { item: Item; glass?: boolean; muted?: boo
       {glyph}
     </LinearGradient>
   ) : (
-    <View style={[d.tile, { backgroundColor: TILE_FILL }]}>{glyph}</View>
+    <View style={[d.tile, { backgroundColor: theme.tile }]}>{glyph}</View>
   );
 }
 
@@ -257,7 +257,7 @@ function QueuedRing() {
         cx={14}
         cy={14}
         r={11}
-        stroke="#C9C8C4"
+        stroke={theme.dotIdle}
         strokeWidth={2}
         strokeDasharray="3 3"
         fill="none"
@@ -381,7 +381,7 @@ const d = StyleSheet.create({
     paddingVertical: 14,
     minHeight: 72,
   },
-  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.divider },
+  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.divider },
   tile: {
     width: 36,
     height: 36,
@@ -405,7 +405,7 @@ const d = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 22,
-    backgroundColor: '#22211F',
+    backgroundColor: theme.toast,
   },
-  toastLabel: { fontSize: 14, fontFamily: AppFont.medium, color: '#FFFFFF' },
+  toastLabel: { fontSize: 14, fontFamily: AppFont.medium, color: theme.onToast },
 });

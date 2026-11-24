@@ -60,14 +60,6 @@ const LOGOS = new Set([
  * so the list only shrinks.
  */
 const PENDING = new Set([
-  // 6 · Onboarding + native bubble
-  'src/android/onboarding/kit.tsx',
-  'src/android/onboarding/practiceParts.tsx',
-  'src/android/onboarding/PracticeBubble.tsx',
-  'src/android/onboarding/LanguagesScreen.tsx',
-  'src/android/onboarding/EndScreens.tsx',
-  'src/android/onboarding/PermissionScreens.tsx',
-  'src/android/onboarding/DeviceSetupScreens.tsx',
   // 7 · Account flows
   'src/android/launch/LaunchScreens.tsx',
 ]);
