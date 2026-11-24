@@ -125,11 +125,9 @@ def main():
         print("NO_ELEMENT", flush=True)
         sys.exit(1)
 
-    # Route every call through the bus, never libatspi's direct connection to
-    # each application: GTK3's bridge before at-spi2-core 2.62 keeps every one
-    # it accepts, with its pidfds, until the app exits (#3242). Only libatspi
-    # 2.61+ reads this; older releases still open them from this fallback,
-    # which, unlike linux-text-monitor.c, can't refuse them.
+    # Keeps libatspi off direct app connections (linux-fast-paste.c explains
+    # why). Only libatspi 2.61+ reads this; unlike linux-text-monitor.c, this
+    # fallback can't refuse the ones older releases still open.
     os.environ["ATSPI_DISABLE_P2P"] = "1"
     Atspi.init()
     if probe_editable:

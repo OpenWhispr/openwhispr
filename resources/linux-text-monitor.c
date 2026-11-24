@@ -197,11 +197,8 @@ static char *read_text_value(AtspiText *text_iface) {
     return value;
 }
 
-/* Route every call through the bus, never libatspi's direct connection to each
- * application: GTK3's bridge before at-spi2-core 2.62 keeps every one it
- * accepts, with its pidfds, until the app exits (#3242). libatspi 2.61+ skips
- * them under ATSPI_DISABLE_P2P; for older releases this definition refuses
- * every connection opened after atspi_init(). linux-fast-paste does the same. */
+/* Refuses libatspi's direct connections opened after atspi_init(), for releases
+ * before 2.61 that ignore ATSPI_DISABLE_P2P. linux-fast-paste.c explains why. */
 static int atspi_started;
 
 DBusConnection *dbus_connection_open_private(const char *address, DBusError *error) {

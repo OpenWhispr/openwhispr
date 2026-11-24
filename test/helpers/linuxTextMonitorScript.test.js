@@ -50,7 +50,7 @@ for (const [mode, args] of [
   ["editable probe", ["--probe-editable", "1234"]],
 ]) {
   test(
-    `Python text monitor ${mode} starts AT-SPI with direct application connections disabled`,
+    `Python text monitor ${mode} sets ATSPI_DISABLE_P2P=1 before Atspi.init() runs`,
     { skip: process.platform === "win32" },
     (t) => {
       const directory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-text-monitor-py-"));
