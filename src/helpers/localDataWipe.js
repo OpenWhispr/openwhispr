@@ -367,13 +367,7 @@ async function wipeLocalDataOnLaunch({
   } catch (error) {
     logger.warn("Device policy unreadable", { error: error.message });
   }
-  const auditRecord = {
-    statePath,
-    auditLogPath: device?.auditLogPath,
-    userDataPath,
-    appVersion,
-    logger,
-  };
+  const auditRecord = { statePath, userDataPath, appVersion, logger };
   // A token whose wipe left something behind wipes again, whatever the policy
   // reads now.
   const token = device?.wipeLocalDataOnLaunch ?? null;
@@ -384,12 +378,15 @@ async function wipeLocalDataOnLaunch({
   const started = state.pendingSettings ?? null;
   if (!wipeToken && !removal && !scriptWipe && !started) {
     // The app opens meanwhile, however long the audit log takes.
-    void writeWipeAudit(auditRecord, pendingWipes(state));
+    void writeWipeAudit(
+      { ...auditRecord, auditLogPath: device?.auditLogPath },
+      pendingWipes(state)
+    );
     return false;
   }
 
   // A started wipe with nothing else pending was a marker's, which a script that
-  // finished has taken since.
+  // finished, or this wipe before its end record failed, has taken since.
   const trigger = removal ? "workspace-removal" : wipeToken ? "device-policy" : "script";
   // On record before anything goes, so a wipe cut short by a crash or a failure
   // is tried again at every launch, taking what it was asked to and keeping its
@@ -404,10 +401,9 @@ async function wipeLocalDataOnLaunch({
   try {
     writeState(statePath, intent);
   } catch (error) {
+    // A full disk mustn't keep the data: what asked for the wipe is still there
+    // for a retry, and the end record below decides whether the app opens.
     logger.error("Could not record the local data wipe", { error: error.message });
-    throw Object.assign(new Error("Local data wipe not started"), {
-      errors: [`wipe record: ${error.message}`],
-    });
   }
   logger.warn("Wiping local data", { trigger, includeModels: settings.includeModels });
   // main.js loaded .env into this process, and the relaunch inherits its
@@ -442,6 +438,15 @@ async function wipeLocalDataOnLaunch({
   // IT manages: a staging or dev build acting on the same token later must not
   // delete the key the next production user's saved keys now depend on.
   if ((env.OPENWHISPR_CHANNEL ?? "production") === "production") deleteMasterKey();
+  // The marker goes before the end record, so a crash between the two leaves
+  // the saved settings for the retry.
+  if (errors.length === 0) {
+    try {
+      fs.rmSync(markerPath, { force: true });
+    } catch (error) {
+      errors.push(`script marker: ${error.message}`);
+    }
+  }
 
   const incomplete = errors.length > 0;
   if (incomplete) logger.warn("Local data wipe incomplete", { errors });
@@ -463,7 +468,6 @@ async function wipeLocalDataOnLaunch({
             pendingAudit,
           }
     );
-    if (!incomplete) fs.rmSync(markerPath, { force: true });
   } catch (error) {
     logger.error("Could not record the local data wipe", { error: error.message });
     errors.push(`wipe record: ${error.message}`);

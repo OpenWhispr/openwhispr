@@ -68,6 +68,9 @@ function createWorkspacePolicyManager({
   now = Date.now,
 }) {
   const snapshots = new Map();
+  // Credentials with a lookup this run acted on, and whether their binding
+  // vouched for the account then, which removal matching trusts over the cache.
+  const lookedUp = new Map();
   const inFlight = new Map();
   const successfulRefreshes = new Map();
   const lastAttempts = new Map();
@@ -191,21 +194,21 @@ function createWorkspacePolicyManager({
   // #3030: the server says this account was removed from a managed workspace.
   // Only a device whose last managed verdict for this credential (or account)
   // named that workspace acts on it: a removal from some other workspace, or a
-  // sign-in on another device, wipes nothing. That verdict is the one this run
-  // enforces, which a failed cache write may have left off disk; only without
-  // one do the cached verdicts count, the credential's own still counting once
-  // a rejected session has cleared the account label. A removal the app
+  // sign-in on another device, wipes nothing. Once a lookup has run, that is the
+  // verdict this run enforces, which a failed cache write may have left off
+  // disk, and while that lookup came before the credential's binding, its
+  // account's last verdict too, which nothing has been matched against yet.
+  // Without one, the cached verdicts count, the credential's own still counting
+  // once a rejected session has cleared the account label. A removal the app
   // couldn't record throws, so the verdict that names its workspace isn't
   // replaced and the next lookup reports it again.
   function reportRemoval(identity, removal) {
     if (typeof removal?.workspaceId !== "string" || !validTimestamp(removal.removedAt)) return;
-    const live = snapshots.get(identityKey(identity))?.data;
-    const verdicts = live
-      ? [live]
-      : [
-          readWorkspacePolicyCache(cachePath, cacheIdentity(identity)),
-          isValidatedAccount(identity) && readAccountPolicyCache(cachePath, identity),
-        ];
+    const key = identityKey(identity);
+    const account = isValidatedAccount(identity) && readAccountPolicyCache(cachePath, identity);
+    const verdicts = lookedUp.has(key)
+      ? [snapshots.get(key)?.data, !lookedUp.get(key) && account]
+      : [readWorkspacePolicyCache(cachePath, cacheIdentity(identity)), account];
     const managedBy = verdicts.flatMap((verdict) =>
       verdict?.managed && Array.isArray(verdict.managedBy) ? verdict.managedBy : []
     );
@@ -216,6 +219,20 @@ function createWorkspacePolicyManager({
       removedAt: removal.removedAt,
     });
     if (recorded === false) throw new Error("Could not record the workspace removal");
+  }
+
+  // A bound credential's verdict becomes its account's, so the removals it lists
+  // are checked against the verdict it replaces first, whichever read binds it
+  // (one heard before the binding, maybe in an earlier run, wasn't). A removal
+  // the app couldn't record skips the write, so the next read checks it again.
+  function saveVerdict(identity, data) {
+    try {
+      if (isValidatedAccount(identity))
+        for (const removal of data.workspaceRemovals ?? []) reportRemoval(identity, removal);
+      writeWorkspacePolicyCache(cachePath, cacheIdentity(identity), data);
+    } catch (error) {
+      logger?.error?.("Policy verdict not saved", error);
+    }
   }
 
   function errorSnapshot(identity, code, error, httpStatus) {
@@ -275,11 +292,7 @@ function createWorkspacePolicyManager({
       isValidatedAccount(identity) &&
       accountWasManaged(identity.accountId)
     ) {
-      try {
-        writeWorkspacePolicyCache(cachePath, cacheIdentity(identity), data);
-      } catch (error) {
-        logger?.error?.("Policy cache write failed", error);
-      }
+      saveVerdict(identity, data);
     }
     return {
       success: true,
@@ -317,11 +330,7 @@ function createWorkspacePolicyManager({
     revision += 1;
     const next = { data, revision };
     snapshots.set(key, next);
-    try {
-      writeWorkspacePolicyCache(cachePath, cacheIdentity(identity), data);
-    } catch (error) {
-      logger?.error?.("Policy cache write failed", error);
-    }
+    saveVerdict(identity, data);
     const result = publicSnapshot(identity, data, status, revision);
     broadcast?.(result);
     return result;
@@ -332,6 +341,13 @@ function createWorkspacePolicyManager({
     // A stale (anti-downgraded) response is still a successful server round
     // trip; recording it keeps the refresh TTL engaged behind lagging replicas.
     successfulRefreshes.set(identityKey(identity), now());
+    // What publicSnapshot acts on.
+    if (
+      data.managed ||
+      !accountWasManaged(identity.accountId) ||
+      (data.endpointSupported !== false && isValidatedAccount(identity))
+    )
+      lookedUp.set(identityKey(identity), isValidatedAccount(identity));
     return accept(identity, data, status);
   }
 

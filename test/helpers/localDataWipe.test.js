@@ -60,7 +60,8 @@ function seedDevice() {
       seed(path.join(cache, name, "item"));
   seed(roots.bridgeFile);
   seed(roots.portalTokenFile);
-  for (const prefix of TEMP_PREFIXES) seed(path.join(roots.temp[0], `${prefix}1.wav`));
+  for (const temp of [roots.temp[0], roots.sharedTemp[0]])
+    for (const prefix of TEMP_PREFIXES) seed(path.join(temp, `${prefix}1.wav`));
   seed(path.join(roots.temp[0], "another-app.tmp"));
 }
 
@@ -83,6 +84,7 @@ test("removes every store and keeps the audit log, the wipe record and, by defau
   assert.equal(fs.existsSync(roots.bridgeFile), false);
   assert.equal(fs.existsSync(roots.portalTokenFile), false);
   assert.deepEqual(fs.readdirSync(roots.temp[0]), ["another-app.tmp"]);
+  assert.deepEqual(fs.readdirSync(roots.sharedTemp[0]), []);
 
   assert.deepEqual(await removeLocalData({ includeModels: true, roots }), []);
   for (const name of MODEL_USER_DATA_ENTRIES) assert.equal(exists(roots.userData, name), false);
@@ -606,14 +608,26 @@ test("WipeLocalDataIncludesModels deployed on its own still takes models with a 
 
 const recordFailed = ({ errors }) => errors.length === 1 && /^wipe record: /.test(errors[0]);
 
-test("a wipe it can't put on record removes nothing and keeps the app closed", async () => {
+// A full disk mustn't keep the data the wipe is for.
+test("a wipe it can't put on record still removes the data, and keeps the app closed", async () => {
   seedDevice();
-  // A folder where the record goes: the write fails, as on a read-only disk.
+  // A folder where the record goes: every write fails, as on a full or read-only disk.
   fs.mkdirSync(path.join(roots.userData, "local-data-wipe.json"));
-  const harness = launchHarness({ snapshot: managed("offboard-1") });
-  await assert.rejects(harness.wipe(), recordFailed);
-  assert.deepEqual(harness.calls, []);
-  assert.equal(exists(roots.userData, "transcriptions.db"), true);
+  await assert.rejects(launchHarness({ snapshot: managed("offboard-1") }).wipe(), recordFailed);
+  assert.equal(exists(roots.userData, "transcriptions.db"), false);
+});
+
+test("a wipe whose start can't be recorded opens the app once its end is", async () => {
+  seedDevice();
+  const pending = path.join(roots.userData, "local-data-wipe.json.tmp");
+  fs.mkdirSync(pending);
+  const harness = launchHarness({
+    snapshot: managed("offboard-1"),
+    clearBrowserData: async () => fs.rmdirSync(pending),
+  });
+  assert.equal(await harness.wipe(), true);
+  assert.equal(exists(roots.userData, "transcriptions.db"), false);
+  assert.deepEqual(wipeState(), { token: "offboard-1" });
 });
 
 // Otherwise the app would open, and the retry would take what the user did since.
@@ -652,6 +666,40 @@ test("a retry takes what its wipe was asked to and keeps its audit files, whatev
   assert.equal(exists(roots.userData, "logs", "debug.log"), false);
   assert.ok(fs.readdirSync(auditLogPath).includes("meeting-audit-it-2026-11-01.jsonl"));
   assert.deepEqual(wipeState(), { token: "offboard-1" });
+});
+
+// The marker goes before the end record, so a crash between the two leaves the
+// saved settings for the retry rather than a marker whose settings the policy
+// then decides.
+test("a marker the wipe can't remove leaves its saved settings for the retry", async () => {
+  seedDevice();
+  seed(path.join(roots.userData, "local-data-wipe.pending", "stuck"), "");
+  const snapshot = { ...managed(null), wipeLocalDataIncludesModels: true };
+  await assert.rejects(
+    launchHarness({ snapshot }).wipe(),
+    ({ errors }) => errors.length === 1 && /^script marker: /.test(errors[0])
+  );
+  assert.deepEqual(
+    auditLines().map((line) => line.reason),
+    ["incomplete"]
+  );
+  seed(path.join(roots.homeCache, "whisper-models", "item"));
+  await assert.rejects(launchHarness({ readError: new Error("unreadable") }).wipe());
+  assert.equal(exists(roots.homeCache, "whisper-models"), false);
+});
+
+// A script that finished took its marker after the app's own try at it failed.
+test("a wipe started for a marker a script has since taken still finishes", async () => {
+  seedDevice();
+  const marker = path.join(roots.userData, "local-data-wipe.pending");
+  seed(marker, "");
+  const harness = (clearBrowserData) =>
+    launchHarness({ readError: new Error("unreadable"), clearBrowserData });
+  await assert.rejects(harness(failingBrowserData).wipe());
+  fs.rmSync(marker);
+  assert.equal(await harness().wipe(), true);
+  assert.deepEqual(wipeState(), {});
+  assert.equal(await harness().wipe(), false);
 });
 
 test("a new token after a wipe that stopped short brings its own settings", async () => {
@@ -846,6 +894,25 @@ test(
     })(path.join(root, "home"));
     assert.equal(fs.readFileSync(seen, "utf8").trim(), "yes");
     assert.equal(fs.existsSync(marker), false);
+  }
+);
+
+test(
+  "the macOS script leaves a home it can't mark as it is",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async () => {
+    const home = path.join(root, "home");
+    const real = path.join(root, "elsewhere-data");
+    seed(path.join(real, "audio", "1.webm"));
+    seed(path.join(home, ".cache", "openwhispr", "qdrant-data", "item"));
+    fs.mkdirSync(path.join(home, "Library", "Application Support"), { recursive: true });
+    fs.symlinkSync(real, path.join(home, "Library", "Application Support", "OpenWhispr"));
+    assert.throws(
+      () => macosScript()(home),
+      (error) => error.status === 1 && error.stderr.includes("can't be marked")
+    );
+    assert.equal(exists(real, "audio", "1.webm"), true);
+    assert.equal(exists(home, ".cache", "openwhispr", "qdrant-data", "item"), true);
   }
 );
 

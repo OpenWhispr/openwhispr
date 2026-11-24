@@ -411,9 +411,8 @@ function Write-WipeRecord([string]$User, [string]$Audit, [string]$UserData, [str
 
 # The ASCII-only fallbacks the app uses when a profile path has spaces or
 # non-ASCII characters; they are shared by every user of the device, so any
-# signed-in user could swap a folder there for a junction. Cleaned first: any
-# profile's data may be in them, so a profile's wipe is finished only once
-# they are.
+# signed-in user could swap a folder there for a junction. Cleaned first, so
+# the wipe of a profile whose data may be in them finishes only once they are.
 $sharedRoots = @($env:ProgramData, "$env:SystemDrive\")
 $sharedExists = @($sharedRoots | Where-Object { Test-Path -LiteralPath (Join-Path $_ "OpenWhispr") }).Count -gt 0
 if ($sharedExists -and $someoneSignedIn) {
@@ -422,8 +421,13 @@ if ($sharedExists -and $someoneSignedIn) {
 } else {
   foreach ($root in $sharedRoots) {
     $app = Join-Path $root "OpenWhispr"
-    Remove-TempFiles (Join-Path $app "temp") $root
-    Remove-AllExcept (Join-Path $app "cache") $root $cacheKept (Get-AuditLogPath)
+    try {
+      Remove-TempFiles (Join-Path $app "temp") $root
+      Remove-AllExcept (Join-Path $app "cache") $root $cacheKept (Get-AuditLogPath)
+    } catch {
+      Write-Warning "Could not clean $($app): $($_.Exception.Message)"
+      $failed = $true
+    }
   }
 }
 $sharedFailed = $failed
@@ -437,7 +441,9 @@ foreach ($profilePath in $profilePaths) {
   }
   # Counted per profile, so "Removed" names only profiles where nothing failed.
   $failedBefore = $failed
-  $failed = $sharedFailed
+  # By default only a profile whose path has spaces or non-ASCII characters
+  # keeps data in the shared folders (getSafeTempDir, modelDirUtils).
+  $failed = $sharedFailed -and $profilePath -notmatch '^[\x21-\x7E]*$'
   $userData = Join-Path $profilePath "AppData\Roaming\OpenWhispr"
   # Marked before anything goes, so a run cut short leaves the app to finish the
   # wipe before it opens (SCRIPT_WIPE_MARKER in localDataWipe.js); a run that
@@ -447,34 +453,44 @@ foreach ($profilePath in $profilePaths) {
   if ($hadData) {
     try {
       if (-not (Test-RealFolder $userData $profilePath)) { throw "it is a link or leads out of the profile" }
+      # One an earlier run left stays; anything else at its name goes.
       $existing = Get-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
-      if ($existing) { Remove-Entry $existing }
-      [IO.File]::Open($marker, "CreateNew").Dispose()
+      if ($existing -and ($existing -isnot [IO.FileInfo] -or ($existing.Attributes -band [IO.FileAttributes]::ReparsePoint))) {
+        Remove-Entry $existing
+        $existing = $null
+      }
+      if (-not $existing) { [IO.File]::Open($marker, "CreateNew").Dispose() }
     } catch {
       Write-Warning "Skipped $($profilePath): it can't be marked for OpenWhispr to finish the wipe ($_)"
       $failed = $true
       continue
     }
   }
-  $user = Get-ProfileUser $sid
-  $audit = Get-AuditLogPath $profilePath $user
-  $keptHere = $kept
-  # A run again needs the record of what the notes mirror wrote, in the database.
-  if (Remove-MirroredFiles $userData $profilePath) {
-    $keptHere += "transcriptions.db", "transcriptions.db-wal", "transcriptions.db-shm", "transcriptions.db-journal"
-  }
-  Remove-AllExcept $userData $profilePath $keptHere $audit
-  Remove-AllExcept (Join-Path $profilePath ".cache\openwhispr") $profilePath $cacheKept $audit
-  $bridge = Join-Path $profilePath ".openwhispr"
-  $bridgeFile = Join-Path $bridge "cli-bridge.json"
-  if ((Test-RealFolder $bridge $profilePath) -and (Test-Path -LiteralPath $bridgeFile -PathType Leaf)) {
-    Remove-Entry (Get-Item -LiteralPath $bridgeFile -Force)
-  }
-  Remove-TempFiles (Join-Path $profilePath "AppData\Local\Temp") $profilePath
-  if ($hadData) {
-    Write-WipeRecord $user $audit $userData $profilePath $failed
-    $existing = Get-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
-    if (-not $failed -and $existing) { Remove-Entry $existing }
+  # One profile that stops partway leaves its mark for the app and doesn't stop the rest.
+  try {
+    $user = Get-ProfileUser $sid
+    $audit = Get-AuditLogPath $profilePath $user
+    $keptHere = $kept
+    # A run again needs the record of what the notes mirror wrote, in the database.
+    if (Remove-MirroredFiles $userData $profilePath) {
+      $keptHere += "transcriptions.db", "transcriptions.db-wal", "transcriptions.db-shm", "transcriptions.db-journal"
+    }
+    Remove-AllExcept $userData $profilePath $keptHere $audit
+    Remove-AllExcept (Join-Path $profilePath ".cache\openwhispr") $profilePath $cacheKept $audit
+    $bridge = Join-Path $profilePath ".openwhispr"
+    $bridgeFile = Join-Path $bridge "cli-bridge.json"
+    if ((Test-RealFolder $bridge $profilePath) -and (Test-Path -LiteralPath $bridgeFile -PathType Leaf)) {
+      Remove-Entry (Get-Item -LiteralPath $bridgeFile -Force)
+    }
+    Remove-TempFiles (Join-Path $profilePath "AppData\Local\Temp") $profilePath
+    if ($hadData) {
+      Write-WipeRecord $user $audit $userData $profilePath $failed
+      $existing = Get-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+      if (-not $failed -and $existing) { Remove-Entry $existing }
+    }
+  } catch {
+    Write-Warning "Could not finish the wipe of $($profilePath): $($_.Exception.Message)"
+    $failed = $true
   }
   if (-not $failed -and $hadData) { Write-Output "Removed OpenWhispr local data from $profilePath" }
   $failed = $failed -or $failedBefore
