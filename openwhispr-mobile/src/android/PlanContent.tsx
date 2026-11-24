@@ -104,7 +104,12 @@ export function PlanContent({ openPaywall }: { openPaywall?: 'limit' } = {}) {
   // "Unlocking Pro" becomes "Pro is on its way" once the wait passes 30 s.
   useEffect(() => {
     if (view.kind !== 'confirming' || waitingSince === undefined) return;
-    const timer = setTimeout(() => setNow(Date.now()), waitingSince + CONFIRMING_MS - now + 50);
+    // Measured from the real clock: `now` dates from when the screen last rendered, often long
+    // before the purchase started waiting.
+    const timer = setTimeout(
+      () => setNow(Date.now()),
+      Math.max(0, waitingSince + CONFIRMING_MS - Date.now()) + 50,
+    );
     return () => clearTimeout(timer);
   }, [view.kind, waitingSince, now]);
   // A purchase that unlocks while the screen is open says so at the bottom (B5's toast).
@@ -505,7 +510,10 @@ export function PlanContent({ openPaywall }: { openPaywall?: 'limit' } = {}) {
     }
   }
   return (
+    // SettingsPage already pads 16; the scroll view spans that gutter and pads itself, so cards
+    // line up with the back button and their shadows aren't cut at the sides.
     <ScrollView
+      style={{ marginHorizontal: -16, marginTop: -16 }}
       contentContainerStyle={{
         flexGrow: 1,
         paddingHorizontal: 16,

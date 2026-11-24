@@ -253,6 +253,22 @@ describe('confirming a purchase', () => {
     expect(refreshAndroidBillingAccess).toHaveBeenCalled();
   });
 
+  it('times the 30 s from the purchase, not from when the screen opened', () => {
+    show();
+    expect(kind()).toBe('free');
+    // The paywall stays open a minute before the purchase goes through.
+    act(() => jest.advanceTimersByTime(60_000));
+    act(() =>
+      useAndroidBillingStatus.setState({
+        accounts: { 'billing-a': 'checking' },
+        since: { 'billing-a': Date.now() },
+      }),
+    );
+    expect(kind()).toBe('confirming');
+    act(() => jest.advanceTimersByTime(30_100));
+    expect(kind()).toBe('on-its-way');
+  });
+
   it('a wait restored from an earlier run reads as the longer one at once', () => {
     useAndroidBillingStatus.setState({ accounts: { 'billing-a': 'access-pending' }, since: {} });
     show();
