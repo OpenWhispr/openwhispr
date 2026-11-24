@@ -572,11 +572,22 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   };
 
   // Meeting-specific: stops recording and returns the raw URI without running the dictation finalize path.
+  // A call or Siri may have paused the recorder, so "open" comes from openRef, not from the recorder:
+  // the audio captured up to the pause must still reach the caller.
   const stopRecordingRaw = async (): Promise<string | null> => {
-    if (!audioRecorder.isRecording) return null;
+    if (!openRef.current) {
+      // Nothing to stop, but never leave the keyboard's mic parked.
+      releaseLease();
+      return null;
+    }
     stoppingRef.current = true;
+    const paused = !audioRecorder.isRecording;
     try {
+      // A paused recorder may refuse to stop even though its file is complete; keep the file.
       await audioRecorder.stop();
+      openRef.current = false;
+    } catch (stopError) {
+      if (!paused) throw stopError;
       openRef.current = false;
     } finally {
       stoppingRef.current = false;
