@@ -21,6 +21,8 @@ const NOTE_FILE_NAME = /^(?:edited-(?:\d+-)?)?\d+-.*\.(?:md|txt)$/i;
 const MAX_SLUG_BYTES = 150;
 
 const CASE_RENAME_RETRY_MS = 1000;
+// "<name> (moving)", then "(moving 2)" and on: a folder stepping aside needs one free.
+const MAX_PARKING_NAMES = 20;
 const BUSY_DIRECTORY_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
 
 const SYSTEM_LEFTOVERS = new Set([".DS_Store", "Thumbs.db", "desktop.ini"]);
@@ -681,6 +683,29 @@ class MarkdownMirror {
     } catch (err) {
       debugLogger.error("Failed to ensure folder", { error: err.message }, "note-files");
     }
+  }
+
+  isSameDirectory(leftPath, rightPath) {
+    return !!leftPath && !!rightPath && this._isSameFile(leftPath, rightPath);
+  }
+
+  // Moves a folder's directory aside to a free sibling, "<name> (moving)", for a
+  // move that has to free the spelling first; the folder then moves on from there.
+  // Answers where it went, or null where it stayed.
+  parkFolderDir(oldRelPath, location, folderId) {
+    const { segments } = this._toLocation(location);
+    for (let attempt = 1; attempt <= MAX_PARKING_NAMES; attempt++) {
+      const suffix = attempt === 1 ? " (moving)" : ` (moving ${attempt})`;
+      const parked = {
+        ...location,
+        segments: [...segments.slice(0, -1), segments.at(-1) + suffix],
+      };
+      if (this.getFolderPath(parked)) continue;
+      if (!this.relocateFolderDir(oldRelPath, parked, folderId)) return null;
+      const parkedPath = this._resolveFolderPath(parked);
+      return parkedPath ? this._relPath(parkedPath) : null;
+    }
+    return null;
   }
 
   // The coordinator proves exclusive ownership before moving a whole folder.

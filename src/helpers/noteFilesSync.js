@@ -167,9 +167,36 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
   // destination sits in a directory about to leave, and until the directory its
   // destination sits in has arrived. A sibling may take a vacated name after
   // disambiguation changes, so moves free their destinations first, independently
-  // of database order; cycles are left alone.
+  // of database order; cycles are left alone, except the one below.
   const runFolderMoves = (moves, done) => {
     const pending = [...moves];
+    // On a disk that ignores case, nesting a folder under one whose name differs
+    // only in case ("projects" under "Projects") is a cycle: the parent's new
+    // directory is the subfolder's own, spelled differently, and the subfolder
+    // waits for its new parent. Left alone, the next write would hand the
+    // subfolder's directory, attachments and all, to the parent. The subfolder
+    // steps aside to a free name first, so the parent moves in whole and the
+    // subfolder follows from there.
+    const parkCaseFoldedOccupant = () => {
+      for (const move of pending) {
+        const destination = mirror.getFolderPath(move.after);
+        if (!destination) continue;
+        const occupant = pending.find(
+          (other) =>
+            other !== move &&
+            !other.parkedAt &&
+            isInsidePath(other.newPath, move.newPath) &&
+            mirror.isSameDirectory(destination, mirror.getFolderPath(other.before))
+        );
+        if (!occupant) continue;
+        const parkedAt = mirror.parkFolderDir(occupant.source, occupant.before, occupant.folderId);
+        if (!parkedAt) continue;
+        occupant.parkedAt = parkedAt;
+        occupant.source = parkedAt;
+        return true;
+      }
+      return false;
+    };
     const mustWait = (move) =>
       pending.some(
         (other) =>
@@ -192,13 +219,14 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
           pending.splice(index, 1);
           // Even a move that can't happen frees the moves waiting on it.
           madeProgress = true;
-          const source = existingPath(move.before);
+          const source = move.parkedAt ?? existingPath(move.before);
           if (source && mirror.relocateFolderDir(source, move.after, move.folderId)) {
             done.add(move.folderId);
             movedAny = true;
           }
         }
       }
+      if (pending.length > 0 && parkCaseFoldedOccupant()) continue;
       // A destination still taken now stays taken (the user's directory, or a
       // cycle), so those moves never happen and the moves waiting on them go alone.
       const stuck = pending.filter((move) => mirror.getFolderPath(move.after));

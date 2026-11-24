@@ -409,6 +409,49 @@ test("an empty directory of the user's named like a subfolder stays", async (t) 
   assert.equal(fs.existsSync(path.join(fx.basePath, "Client A")), false);
 });
 
+function ignoresCase(directory) {
+  const probe = path.join(directory, `case-probe-${process.pid}`);
+  fs.writeFileSync(probe, "");
+  try {
+    return fs.existsSync(probe.toUpperCase().replace(directory.toUpperCase(), directory));
+  } finally {
+    fs.rmSync(probe, { force: true });
+  }
+}
+
+test("nesting a folder under one named the same but for case keeps each one's attachments", async (t) => {
+  if (!ignoresCase(os.tmpdir())) {
+    t.skip("this disk tells case apart, so the two directories never meet");
+    return;
+  }
+  const fx = await createFixture(t, {
+    folders: [
+      { id: 10, name: "projects", space_id: PRIVATE },
+      { id: 11, name: "Projects", space_id: PRIVATE },
+    ],
+    notes: [
+      { id: 100, title: "Low", space_id: PRIVATE, folder_id: 10 },
+      { id: 101, title: "High", space_id: PRIVATE, folder_id: 11 },
+    ],
+  });
+  const upperDir = path.dirname(fx.notePathOf(101));
+  fx.writeUserFile("Private notes/projects/low.png", "low");
+  fx.writeUserFile(`${upperDir}/high.png`, "high");
+
+  await fx.change(() => (fx.folder(10).parent_folder_id = 11));
+
+  assert.deepEqual(fx.tree(), [
+    "Private notes/Projects/101-high.md",
+    "Private notes/Projects/high.png",
+    "Private notes/Projects/projects/100-low.md",
+    "Private notes/Projects/projects/low.png",
+  ]);
+  assert.equal(fx.read("Private notes/Projects/projects/low.png"), "low");
+  assert.equal(fx.read("Private notes/Projects/high.png"), "high");
+  assert.equal(fx.noteRows(100).length, 1);
+  assert.equal(fx.noteRows(101).length, 1);
+});
+
 // The parent's own files stay where they were, its subfolder goes alone, and
 // what was already in the way is left as it is.
 test("a parent whose new directory is taken loses nothing", async (t) => {
