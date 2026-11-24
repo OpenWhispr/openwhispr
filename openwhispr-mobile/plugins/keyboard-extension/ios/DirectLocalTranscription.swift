@@ -9,8 +9,8 @@ enum DirectLocalModel: String, Equatable {
   /// The model's folder under the App Group's `SpeechModels/`, as the app stores it.
   var folderName: String {
     switch self {
-    case .parakeetV2: return "parakeet-tdt-0.6b-v2-coreml"
-    case .parakeetV3: return "parakeet-tdt-0.6b-v3-coreml"
+    case .parakeetV2: return "parakeet-tdt-0.6b-v2"
+    case .parakeetV3: return "parakeet-tdt-0.6b-v3"
     }
   }
 }

@@ -54,8 +54,8 @@ extension DirectDictationTests {
     let v2 = localConfig.replacingOccurrences(of: "parakeet-v3", with: "parakeet-v2")
       .replacingOccurrences(of: #""languageHint":"de""#, with: #""languageHint":null"#)
     expect(DirectDictationConfig.decode(v2)?.engine, .local(model: .parakeetV2, languageHint: nil), "local: v2, no hint")
-    expect(DirectLocalModel.parakeetV2.folderName, "parakeet-tdt-0.6b-v2-coreml", "v2 folder")
-    expect(DirectLocalModel.parakeetV3.folderName, "parakeet-tdt-0.6b-v3-coreml", "v3 folder")
+    expect(DirectLocalModel.parakeetV2.folderName, "parakeet-tdt-0.6b-v2", "v2 folder")
+    expect(DirectLocalModel.parakeetV3.folderName, "parakeet-tdt-0.6b-v3", "v3 folder")
   }
 
   static func testLocalNeedsNoApiBase() {

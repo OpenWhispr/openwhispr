@@ -39,7 +39,7 @@ Everything here runs on the device. Keystrokes and typing history never leave th
 
 ## Apple capabilities required
 
-- **App Group** (`group.<ios bundle id>`) — must match between the main app, the extension, and the `app-group-storage` module. The app keeps its Parakeet models there too, at `Library/Application Support/SpeechModels/<folder>` (`parakeet-tdt-0.6b-v2-coreml`, `parakeet-tdt-0.6b-v3-coreml`; see [`modules/parakeet-asr/ios/SharedSpeechModels.swift`](../../modules/parakeet-asr/ios/SharedSpeechModels.swift)), excluded from backup and moved there from the app's own container by builds that predate it.
+- **App Group** (`group.<ios bundle id>`) — must match between the main app, the extension, and the `app-group-storage` module. The app keeps its Parakeet models there too, at `Library/Application Support/SpeechModels/<folder>` (`parakeet-tdt-0.6b-v2`, `parakeet-tdt-0.6b-v3`, the folder names FluidAudio loads from; see [`modules/parakeet-asr/ios/SharedSpeechModels.swift`](../../modules/parakeet-asr/ios/SharedSpeechModels.swift)), excluded from backup and moved there from the app's own container by builds that predate it.
 - **Open Access** (`RequestsOpenAccess` in `Info.plist`) — required for the extension to read/write the shared suite.
 
 ## Environments

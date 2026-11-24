@@ -265,17 +265,11 @@ final class KeyboardParakeetTranscriber: @preconcurrency DirectLocalTranscriber 
     }
   }
 
-  /// FluidAudio's `AsrModels.modelsExist` reads `<parent>/<its own repo folder name>`, which
-  /// isn't the folder the app installs to (see the report on Task 5), so the same file list is
-  /// checked here in the folder itself. The app swaps a model in by deleting the folder and
-  /// renaming a complete staging folder into place, so present files are never half-written.
+  /// FluidAudio's own check (read-only: `fileExists` only), with the int8 encoder the app
+  /// downloads. The app swaps a model in by deleting the folder and renaming a complete staging
+  /// folder into place, so files that are present are never half-written.
   private static func modelFilesPresent(in directory: URL, model: DirectLocalModel) -> Bool {
-    let names = fileNames(for: model)
-    let required = [
-      ModelNames.ASR.preprocessorFile, names.encoder, ModelNames.ASR.decoderFile, names.joint,
-      ModelNames.ASR.vocabularyFile,
-    ]
-    return required.allSatisfy { FileManager.default.fileExists(atPath: directory.appendingPathComponent($0).path) }
+    AsrModels.modelsExist(at: directory, version: fileNames(for: model).version, encoderPrecision: .int8)
   }
 
   nonisolated private static func loadModels(from directory: URL, model: DirectLocalModel) throws -> AsrModels {

@@ -8,12 +8,14 @@ import Foundation
 /// importing this module, so the two must never drift):
 ///
 ///     <App Group container>/Library/Application Support/SpeechModels/<folder name>
-///     v2: parakeet-tdt-0.6b-v2-coreml
-///     v3: parakeet-tdt-0.6b-v3-coreml
+///     v2: parakeet-tdt-0.6b-v2
+///     v3: parakeet-tdt-0.6b-v3
 ///
-/// The folder name is FluidAudio's repo folder name, which its loader requires: `AsrModels.load`
-/// and `modelsExist` read the files from `directory.deletingLastPathComponent()/<repo folder>`,
-/// so any other last component would load nothing.
+/// The folder name is FluidAudio's `Repo.folderName`, which its loader requires: `AsrModels.load`
+/// and `modelsExist` read the files from `directory.deletingLastPathComponent()/<folderName>`,
+/// so any other last component would load nothing. In 0.15.4 that is the Hugging Face repo name
+/// without its `-coreml` suffix, and the last component of `AsrModels.defaultCacheDirectory`, so
+/// the legacy move below keeps the same name.
 ///
 /// Staging for a download in progress is the same path with ".downloading" appended: a sibling in
 /// the same folder, so the downloader's final move is a same-volume rename and a keyboard loading
@@ -22,8 +24,8 @@ import Foundation
 /// `SpeechModels` is excluded from backup (it holds ~0.5 GB per version that can be downloaded
 /// again), which covers everything inside it.
 enum SharedSpeechModels {
-  static let v2FolderName = "parakeet-tdt-0.6b-v2-coreml"
-  static let v3FolderName = "parakeet-tdt-0.6b-v3-coreml"
+  static let v2FolderName = "parakeet-tdt-0.6b-v2"
+  static let v3FolderName = "parakeet-tdt-0.6b-v3"
 
   private static let stagingSuffix = ".downloading"
 
