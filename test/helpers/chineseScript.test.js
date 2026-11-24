@@ -21,6 +21,12 @@ test("resolveChineseScriptTarget: zh-CN / zh-TW override auto preference", async
   assert.equal(resolveChineseScriptTarget("en", "simplified"), null);
 });
 
+test("resolveChineseScriptTarget: Cantonese writes Traditional, whatever the script preference", async () => {
+  const { resolveChineseScriptTarget } = await load();
+  assert.equal(resolveChineseScriptTarget("yue", "simplified"), "traditional");
+  assert.equal(resolveChineseScriptTarget("yue", undefined, "佢哋講廣東話"), "traditional");
+});
+
 test("isChineseText distinguishes Chinese from Japanese and Korean", async () => {
   const { isChineseText } = await load();
   assert.equal(isChineseText("这是简体中文"), true);

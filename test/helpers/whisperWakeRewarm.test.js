@@ -375,3 +375,18 @@ test("a remembered failure (the backend never worked) is not retried on wake", a
   assert.equal(await manager.onWakeFromSleep(), false);
   assert.equal(started, false);
 });
+
+test("Cantonese maps to zh on pre-large-v3 vocabularies and stays yue on large/turbo", () => {
+  const { resolveWhisperCppLanguage } = require("../../src/helpers/whisper");
+  // tiny/base/small/medium carry 99 languages: id 99 collides with <|translate|>.
+  for (const model of ["tiny", "base", "small", "medium"]) {
+    assert.equal(resolveWhisperCppLanguage(model, "yue"), "zh", model);
+  }
+  // large-v3 vocabularies have a real <|yue|> token.
+  for (const model of ["large", "turbo"]) {
+    assert.equal(resolveWhisperCppLanguage(model, "yue"), "yue", model);
+  }
+  assert.equal(resolveWhisperCppLanguage("base", "ja"), "ja");
+  assert.equal(resolveWhisperCppLanguage("base", null), null);
+  assert.equal(resolveWhisperCppLanguage("base", "auto"), "auto");
+});

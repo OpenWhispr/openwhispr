@@ -86,9 +86,17 @@ function resolveModel(options) {
     return selected;
   }
   // Keep the existing Nova-3 language fallback and managed routing contract.
-  const lang = options.language && options.language !== "auto" ? options.language : null;
+  const lang = resolvedDeepgramLanguage(options);
   const baseLang = lang ? lang.split("-")[0].toLowerCase() : null;
   return !lang || NOVA3_LANGUAGES.has(lang) || NOVA3_LANGUAGES.has(baseLang) ? "nova-3" : "nova-2";
+}
+
+// Deepgram's Cantonese code is zh-HK (nova-2 and nova-3); a bare "yue" is an
+// unknown language and the handshake is refused. Fold it here once so model
+// selection, warm-connection identity and the socket params all agree.
+function resolvedDeepgramLanguage(options) {
+  if (!options.language || options.language === "auto") return null;
+  return options.language === "yue" ? "zh-HK" : options.language;
 }
 
 // Everything buildWebSocketUrl pins on the socket, folded the way it folds it, so
@@ -98,7 +106,7 @@ function resolveModel(options) {
 const urlIdentity = (options) =>
   JSON.stringify([
     options.sampleRate || SAMPLE_RATE,
-    options.language && options.language !== "auto" ? options.language : null,
+    resolvedDeepgramLanguage(options),
     (options.keyterms || []).filter(Boolean),
     resolveModel(options),
   ]);
@@ -156,7 +164,7 @@ class DeepgramStreaming {
 
   buildWebSocketUrl(options) {
     const sampleRate = options.sampleRate || SAMPLE_RATE;
-    const lang = options.language && options.language !== "auto" ? options.language : null;
+    const lang = resolvedDeepgramLanguage(options);
     const model = resolveModel(options);
     this.currentModel = model;
 

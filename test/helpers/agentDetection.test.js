@@ -195,6 +195,20 @@ test("leaves CJK punctuation untouched outside ja and zh dictation", async () =>
   );
 });
 
+test("treats Cantonese dictation like zh: cues, glued runs, and stripping", async () => {
+  const { detectAgentName, stripAgentAddress } = await load();
+
+  // Unspaced Han runs need the CJK splitting yue now joins.
+  assert.equal(detectAgentName("喂Jarvis，幫我寫封email", "Jarvis", "yue"), true);
+  assert.equal(detectAgentName("Jarvis，幫我寫封email", "Jarvis", "yue"), true);
+  assert.equal(detectAgentName("哈囉Jarvis幫我寫封email", "Jarvis", "yue"), true);
+  // An unsegmented mention that isn't an address stays one.
+  assert.equal(detectAgentName("呢段係講Jarvis嘅說話", "Jarvis", "yue"), false);
+
+  // CJK-Latin boundaries gain the same space zh dictation gets.
+  assert.equal(stripAgentAddress("喂Jarvis，幫我寫封email", "Jarvis", "yue"), "幫我寫封 email");
+});
+
 test("leaves non-CJK Unicode normalization behavior unchanged", async () => {
   const { detectAgentName } = await load();
   const decomposedName = "E\u0301lodie";

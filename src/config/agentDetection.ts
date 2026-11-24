@@ -46,6 +46,7 @@ const LOCALIZED_VOCATIVE_CUES: Record<string, readonly string[]> = {
   pt: ["ei", "olá"],
   ru: ["привет", "эй", "слушай"],
   zh: ["嘿", "你好", "喂"],
+  yue: ["喂", "哈囉"],
 };
 
 const LOCALIZED_CUE_SETS: ReadonlyMap<string, ReadonlySet<string>> = new Map(
@@ -200,7 +201,7 @@ function locateAgentAddress(
 
   const base = baseLanguageOf(language);
   const localizedCues = (base && LOCALIZED_CUE_SETS.get(base)) || EMPTY_CUES;
-  const normalizeCjk = base === "ja" || base === "zh";
+  const normalizeCjk = base === "ja" || base === "zh" || base === "yue";
   const detectionName = normalizeCjk ? name.normalize("NFC") : name;
   // Snippet ranges and the normalized text share this frame, so a candidate
   // span in `source` can be mapped back onto a range.

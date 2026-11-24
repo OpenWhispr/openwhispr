@@ -9,7 +9,9 @@
  * OpenAI-compatible multipart (Gemini, batch and Live; ElevenLabs) send a real
  * transcription through the shipped module for the same reason, and OpenAI's
  * batch default is posted the way the app builds it so a retired model or
- * field surfaces here too.
+ * field surfaces here too. Language-pinned probes (-yue) send Cantonese the
+ * way the app sends it — through the shipped builders where there is one — so
+ * a provider dropping or rejecting the code is provider news, not a regression.
  *
  * Run: node scripts/stt-canary.mjs
  * Keys come from STT_CANARY_<PROVIDER>_KEY env vars; providers without a key
@@ -220,12 +222,15 @@ async function probeGeminiLive(key) {
 // gpt-transcribe is the BYOK batch default and takes the custom dictionary on
 // its `keywords[]` channel, so one rides along: the request fails here first if
 // OpenAI retires either. Silence transcribes to empty text, so only acceptance
-// is asserted.
-async function probeOpenAiBatch(key, audio) {
+// is asserted. `language` pins a code the app sends verbatim when the user
+// picks it (Cantonese "yue" is ISO 639-3, not every model family takes it);
+// `whisper-1` rides the large-v2 vocabulary, where "yue" is not a known code.
+async function probeOpenAiBatch(key, audio, { model = "gpt-transcribe", language = null } = {}) {
   const body = new FormData();
   body.append("file", new Blob([audio], { type: "audio/wav" }), "audio.wav");
-  body.append("model", "gpt-transcribe");
-  body.append("keywords[]", "OpenWhispr");
+  body.append("model", model);
+  if (model === "gpt-transcribe") body.append("keywords[]", "OpenWhispr");
+  if (language) body.append("language", language);
   const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}` },
@@ -244,6 +249,66 @@ const tokenDeps = (key) => ({
   },
   proxyFetch: fetch,
 });
+
+// The exact frame BYOK dictation sends (openaiRealtimeStreaming.js builds the
+// same transcription_session.update with the picked language): OpenAI rejects
+// an unknown code on the socket with an error event rather than at the
+// handshake, so the session acknowledgment — not the open — is what proves the
+// model family accepts the code (gpt-4o-mini-transcribe has rejected `eu`).
+async function probeOpenAiRealtimeLanguage(key, language) {
+  const token = await fetchRealtimeTokenForProvider("openai-realtime", tokenDeps(key), {
+    mode: "byok",
+  });
+  if (!token) return { ok: false, detail: "empty token" };
+  return new Promise((resolve) => {
+    const ws = new WebSocket("wss://api.openai.com/v1/realtime?intent=transcription", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const timer = setTimeout(() => {
+      ws.terminate();
+      resolve({ ok: false, detail: `no session acknowledgment within ${HANDSHAKE_TIMEOUT_MS}ms` });
+    }, HANDSHAKE_TIMEOUT_MS);
+    const finish = (result) => {
+      clearTimeout(timer);
+      ws.terminate();
+      resolve(result);
+    };
+    ws.on("open", () => {
+      ws.send(
+        JSON.stringify({
+          type: "transcription_session.update",
+          session: {
+            input_audio_transcription: { model: "gpt-4o-mini-transcribe", language },
+          },
+        })
+      );
+    });
+    ws.on("message", (data) => {
+      let event;
+      try {
+        event = JSON.parse(data);
+      } catch {
+        event = {};
+      }
+      if (event.type === "error") {
+        finish({
+          ok: false,
+          detail: `language rejected: ${event.error?.code ?? "unknown"}`,
+        });
+        return;
+      }
+      if (event.type === "transcription_session.updated") finish({ ok: true });
+    });
+    ws.on("close", (code) => finish({ ok: false, detail: `closed before acknowledgment (code ${code})` }));
+    ws.on("unexpected-response", (_req, res) =>
+      finish({ ok: false, detail: `handshake rejected: HTTP ${res.statusCode}` })
+    );
+    ws.on("error", (err) => {
+      clearTimeout(timer);
+      resolve({ ok: false, detail: err.message });
+    });
+  });
+}
 
 const PROBES = [
   {
@@ -264,6 +329,26 @@ const PROBES = [
     run: (key) => probeOpenAiBatch(key, SILENT_WAV()),
   },
   {
+    // Cantonese rides the app's picker on every OpenAI-shaped path; the API
+    // validates `language` per model family, so acceptance is provider news.
+    id: "openai-batch-yue",
+    keyEnv: "STT_CANARY_OPENAI_KEY",
+    run: (key) => probeOpenAiBatch(key, SILENT_WAV(), { language: "yue" }),
+  },
+  {
+    // whisper-1 carries the large-v2 vocabulary, which has no `yue`; if OpenAI
+    // starts refusing it the openai batch route needs the same boundary
+    // mapping the local pre-large-v3 models got.
+    id: "openai-batch-whisper1-yue",
+    keyEnv: "STT_CANARY_OPENAI_KEY",
+    run: (key) => probeOpenAiBatch(key, SILENT_WAV(), { model: "whisper-1", language: "yue" }),
+  },
+  {
+    id: "openai-realtime-yue",
+    keyEnv: "STT_CANARY_OPENAI_KEY",
+    run: (key) => probeOpenAiRealtimeLanguage(key, "yue"),
+  },
+  {
     id: "deepgram-realtime",
     keyEnv: "STT_CANARY_DEEPGRAM_KEY",
     run: async (key) => {
@@ -273,6 +358,24 @@ const PROBES = [
       const url = new DeepgramStreaming().buildWebSocketUrl({
         sampleRate: 16000,
         keyterms: ["OpenWhispr"],
+      });
+      return probeWebSocket(url, null, {
+        authorization: DeepgramStreaming.authorizationHeader("byok", token),
+      });
+    },
+  },
+  {
+    // Cantonese through the app's own URL builder, which maps yue → zh-HK:
+    // proves the mapped model+language pair still clears the handshake.
+    id: "deepgram-realtime-yue",
+    keyEnv: "STT_CANARY_DEEPGRAM_KEY",
+    run: async (key) => {
+      const token = await fetchRealtimeTokenForProvider("deepgram-realtime", tokenDeps(key), {
+        mode: "byok",
+      });
+      const url = new DeepgramStreaming().buildWebSocketUrl({
+        sampleRate: 16000,
+        language: "yue",
       });
       return probeWebSocket(url, null, {
         authorization: DeepgramStreaming.authorizationHeader("byok", token),

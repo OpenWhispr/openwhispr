@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Cantonese (yue) dictation language.** Cantonese joins the language picker, transcribed natively on Whisper large/turbo (local and Groq), and mapped for engines without a Cantonese code: `zh` on pre-large-v3 local Whisper and Cohere Transcribe, `zh-HK` on Deepgram, auto-detect on Mistral and xAI. The wake word now hears Cantonese, and output is written in Traditional characters. (#2944, thanks @alex-tw-lam)
+
 ## [1.12.0] - 2026-11-17
 
 A new assistant window you can use from any app, and workspaces that grow into a full team space: Private sections for your own notes, Teams, Teamspaces, Guests and a People page. Setup on a new computer is one screen with model picks for that machine, the model list updates from a signed catalog between releases, and chats keep answering while you work elsewhere. Organizations get managed device and update policy, accounts no longer share history, dictionary or chats on a shared computer, and this release fixes team notes that stalled after a sync race.

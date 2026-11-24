@@ -120,6 +120,15 @@ test("proxied providers carry their quirks as route data", async () => {
   });
   assert.equal(xaiUnsupported.language, undefined, "outside the xAI ITN allowlist");
 
+  const mistralYue = await resolve({
+    cloudTranscriptionProvider: "mistral",
+    preferredLanguage: "yue",
+  });
+  assert.equal(mistralYue.language, undefined, "Voxtral 422s on non-ISO-639-1 codes");
+
+  const groqYue = await resolve({ cloudTranscriptionProvider: "groq", preferredLanguage: "yue" });
+  assert.equal(groqYue.language, "yue", "Groq's large-v3 vocabulary carries yue natively");
+
   const corti = await resolve({ cloudTranscriptionProvider: "corti", cortiTenant: " acme " });
   assert.equal(corti.model, "corti-transcribe");
   assert.equal(corti.language, "en", "Corti needs a concrete language even on auto");

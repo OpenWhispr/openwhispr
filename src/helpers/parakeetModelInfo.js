@@ -58,8 +58,11 @@ function resolveModelLanguage(modelName, language) {
     typeof language === "string"
       ? language.trim().replace(/_/g, "-").split("-")[0].toLowerCase()
       : "";
+  // Cohere lists no Cantonese; "zh" keeps the decoder Chinese instead of the
+  // English fallback, and the cleanup prompt restores written Cantonese.
+  const requested = base === "yue" ? "zh" : base;
   const supported = getModelInfo(modelName)?.supportedLanguages || [];
-  if (supported.includes(base)) return base;
+  if (supported.includes(requested)) return requested;
   // English when the model offers it, otherwise a language the model can actually run.
   return supported.length === 0 || supported.includes("en") ? "en" : supported[0];
 }

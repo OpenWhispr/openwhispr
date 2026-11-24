@@ -15,6 +15,7 @@ const NATIVE_LABELS: Record<string, string> = {
   ru: "Русский",
   "zh-CN": "简体中文",
   "zh-TW": "繁體中文",
+  yue: "粵語",
 };
 
 const LANGUAGE_LABELS: Record<string, string> = {
@@ -26,6 +27,7 @@ const LANGUAGE_LABELS: Record<string, string> = {
 
 const SEARCH_ALIASES: Record<string, string> = {
   hi: "hind hindustani",
+  yue: "cantonese 粵語 广东话 廣東話 粤语 chinese hong kong",
 };
 
 const PRIMARY_LANGUAGE_CODES = ["en-US", "zh-CN", "es", "ar", "af"];
