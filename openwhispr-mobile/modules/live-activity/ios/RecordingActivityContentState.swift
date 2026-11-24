@@ -6,11 +6,14 @@ public enum RecordingActivityMode: String, Codable, Hashable {
   case meeting
 }
 
-/// `idle` is dictation-only (session up, not recording); `processing` is meeting-only.
+/// `idle` is dictation-only (session up, not recording); `paused` (the mic stopped
+/// capturing mid-meeting) and `processing` are meeting-only. Raw values are the wire
+/// format, so a state written by an older build still decodes.
 public enum RecordingActivityPhase: String, Codable, Hashable {
   case recording
   case idle
   case processing
+  case paused
 }
 
 /// Foundation-only so the resolver tests can compile it with plain `swiftc` on macOS;
@@ -53,6 +56,7 @@ public struct RecordingActivityContentState: Codable, Hashable {
   /// Meeting card headline.
   public var displayTitle: String {
     if phase == .processing { return "Processing notes…" }
+    if phase == .paused { return "Recording paused" }
     return title ?? "Taking notes…"
   }
 

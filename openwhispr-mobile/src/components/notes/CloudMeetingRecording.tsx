@@ -23,10 +23,21 @@ const STATUS_LABEL: Record<CloudMeetingStatus, string> = {
   error: 'DISCONNECTED',
 };
 
+// Red while the mic is feeding the recording; a reconnect still holds its audio to send.
+const isRecordingStatus = (status: CloudMeetingStatus): boolean =>
+  status === 'live' || status === 'reconnecting';
+
+const stoppedMessage = (error: string | null): string => {
+  const reason = error?.trim();
+  if (!reason) return 'Recording has stopped.';
+  return `${reason}${/[.!?…]$/.test(reason) ? '' : '.'} Recording has stopped.`;
+};
+
 interface CloudMeetingRecordingProps {
   status: CloudMeetingStatus;
   error: string | null;
-  elapsedSeconds: number;
+  /** Audio the mic actually captured, so the clock stops while nothing is recorded. */
+  capturedSeconds: number;
   rawNotes: string;
   onChangeRawNotes: (text: string) => void;
   utterances: RealtimeUtterance[];
@@ -35,16 +46,15 @@ interface CloudMeetingRecordingProps {
 }
 
 /**
- * Presentational cloud-meeting recording UI (Variant C, interim in-app timer —
- * the Dynamic Island Live Activity is a deferred follow-up). A persistent status
- * bar (red dot + status + timer) sits above a Notes / Live Transcript segmented
- * control, with a full-width Stop pinned to the bottom so it never moves between
- * tabs. All state is owned by the caller; this component only renders + reports.
+ * Presentational cloud-meeting recording UI. A persistent status bar (status dot +
+ * status + captured-audio clock) sits above a Notes / Live Transcript segmented control,
+ * with a full-width Stop pinned to the bottom so it never moves between tabs. All state
+ * is owned by the caller; this component only renders + reports.
  */
 export function CloudMeetingRecording({
   status,
   error,
-  elapsedSeconds,
+  capturedSeconds,
   rawNotes,
   onChangeRawNotes,
   utterances,
@@ -67,7 +77,9 @@ export function CloudMeetingRecording({
         className="mx-4 mt-1 flex-row items-center gap-3 rounded-[22px] border border-separator bg-secondarySystemGroupedBackground p-4 shadow-sm"
         style={{ borderCurve: 'continuous' }}
       >
-        <View className="h-2.5 w-2.5 rounded-full bg-systemRed" />
+        <View
+          className={`h-2.5 w-2.5 rounded-full ${isRecordingStatus(status) ? 'bg-systemRed' : 'bg-tertiaryLabel'}`}
+        />
         <View>
           <Text className="text-[12px] font-semibold tracking-wide text-secondaryLabel">
             {STATUS_LABEL[status]}
@@ -76,16 +88,21 @@ export function CloudMeetingRecording({
             className="text-[26px] font-semibold leading-none text-label"
             style={{ fontVariant: ['tabular-nums'] }}
           >
-            {formatClock(elapsedSeconds)}
+            {formatClock(capturedSeconds)}
           </Text>
         </View>
       </View>
-      {status === 'error' && error ? (
-        <Text className="mx-4 mt-2 text-[13px] text-systemRed">{error}</Text>
+      {status === 'error' ? (
+        <Text className="mx-4 mt-2 text-[13px] text-systemRed">{stoppedMessage(error)}</Text>
+      ) : null}
+      {status === 'interrupted' ? (
+        <Text className="mx-4 mt-2 text-[13px] text-systemRed">
+          The microphone was interrupted. Trying to resume…
+        </Text>
       ) : null}
       {status === 'reconnecting' ? (
         <Text className="mx-4 mt-2 text-[13px] text-systemOrange">
-          Reconnecting — recording continues
+          {"Connection lost. Reconnecting… speech isn't being transcribed right now."}
         </Text>
       ) : null}
 

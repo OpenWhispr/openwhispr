@@ -18,7 +18,6 @@ export interface CloudMeeting {
   error: string | null;
   partialText: string;
   utterances: RealtimeUtterance[];
-  elapsedSeconds: number;
   /** Audio the mic actually delivered, in seconds. */
   capturedSeconds: number;
   /** Audio lost because no socket could take it during an outage, in seconds. */
@@ -34,9 +33,10 @@ export interface CloudMeeting {
 /**
  * Owns a cloud realtime transcription session for a meeting. Starts the WebSocket
  * + native-PCM session when `enabled` becomes true, streams partial/finalized
- * utterances into state, and tracks elapsed and captured time. Lives in
+ * utterances into state, and tracks captured and dropped time. Lives in
  * `MeetingRecordScreen` (not the presentational recording component) so the screen's
- * finish handler can call `stop()` and read the final utterances/elapsed to persist them.
+ * finish handler can call `stop()` and read the final utterances and captured time to
+ * persist them.
  */
 export function useCloudMeeting({
   enabled,
@@ -56,7 +56,6 @@ export function useCloudMeeting({
   const [error, setError] = useState<string | null>(initial.error);
   const [partialText, setPartialText] = useState(initial.partialText);
   const [utterances, setUtterances] = useState<RealtimeUtterance[]>(initial.utterances);
-  const [elapsedSeconds, setElapsedSeconds] = useState(initial.elapsedSeconds);
   const [capturedSeconds, setCapturedSeconds] = useState(initial.capturedSeconds);
   const [droppedSeconds, setDroppedSeconds] = useState(initial.droppedSeconds);
   const [interruptions, setInterruptions] = useState(initial.interruptions);
@@ -96,7 +95,6 @@ export function useCloudMeeting({
     setError(fresh.error);
     setPartialText(fresh.partialText);
     setUtterances(fresh.utterances);
-    setElapsedSeconds(fresh.elapsedSeconds);
     setCapturedSeconds(fresh.capturedSeconds);
     setDroppedSeconds(fresh.droppedSeconds);
     setInterruptions(fresh.interruptions);
@@ -173,8 +171,8 @@ export function useCloudMeeting({
   }, [enabled]);
 
   useEffect(() => {
-    // Keep ticking through reconnects and interruptions: the wall clock feeds the
-    // segment-timing fallback, and the captured clock is how a silent stall is noticed.
+    // Keep ticking through reconnects and interruptions: the captured clock is how a
+    // silent stall is noticed.
     if (!started || failed) return;
     const update = (): void => {
       const session = sessionRef.current;
@@ -185,7 +183,6 @@ export function useCloudMeeting({
       const growth = trackCaptureGrowth(clockRef.current, capturedMs, now);
       clockRef.current = growth.clock;
       setStalled(growth.stalled);
-      setElapsedSeconds(Math.floor((now - startedAt) / 1000));
       setCapturedSeconds(Math.floor(capturedMs / 1000));
       setDroppedSeconds(Math.floor(session.droppedMs() / 1000));
     };
@@ -224,7 +221,6 @@ export function useCloudMeeting({
     error,
     partialText,
     utterances,
-    elapsedSeconds,
     capturedSeconds,
     droppedSeconds,
     interruptions,

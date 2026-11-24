@@ -32,7 +32,7 @@ final class LiveActivityController {
   private var terminateObserverToken: NSObjectProtocol?
   private var backgroundObserverTokens: [NSObjectProtocol] = []
 
-  /// Non-nil while MeetingRecordScreen has a meeting recording or processing.
+  /// Non-nil while MeetingRecordScreen has a meeting recording, paused or processing.
   private var meeting: MeetingSnapshot?
   /// Held from a lock-screen End until the meeting clears, since background audio
   /// stops keeping the app alive once the mic stops.
@@ -169,6 +169,33 @@ final class LiveActivityController {
     }
   }
 
+  /// Mirrors whether the mic is really capturing. Resuming backdates `startedAt` by the
+  /// captured time, so the system-drawn timer continues from captured audio rather than
+  /// the wall clock. Ignored unless a meeting is recording or paused.
+  func setMeetingCapture(capturing: Bool, recordedSeconds: Int) {
+    onMain {
+      guard let current = self.meeting else { return }
+      switch current.phase {
+      case .recording, .paused:
+        break
+      case .processing:
+        return
+      }
+      let recorded = max(0, recordedSeconds)
+      let phase: MeetingSnapshot.Phase
+      let startedAt: Date
+      if capturing {
+        phase = .recording
+        startedAt = Date().addingTimeInterval(-TimeInterval(recorded))
+      } else {
+        phase = .paused(recordedSeconds: recorded)
+        startedAt = current.startedAt
+      }
+      self.meeting = MeetingSnapshot(title: current.title, startedAt: startedAt, phase: phase)
+      self.reconcile()
+    }
+  }
+
   func setMeetingProcessing(recordedSeconds: Int) {
     onMain {
       guard let current = self.meeting else { return }
@@ -197,9 +224,17 @@ final class LiveActivityController {
       reconcile()
       return
     }
-    guard case .recording = current.phase else { return }
+    let recordedSeconds: Int
+    switch current.phase {
+    case .recording:
+      // `startedAt` is backdated by captured time on every resume, so this is captured time.
+      recordedSeconds = max(0, Int(Date().timeIntervalSince(current.startedAt)))
+    case .paused(let pausedSeconds):
+      recordedSeconds = pausedSeconds
+    case .processing:
+      return
+    }
     beginBackgroundWork()
-    let recordedSeconds = max(0, Int(Date().timeIntervalSince(current.startedAt)))
     meeting = MeetingSnapshot(
       title: current.title, startedAt: current.startedAt,
       phase: .processing(recordedSeconds: recordedSeconds))

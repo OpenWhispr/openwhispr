@@ -1,7 +1,10 @@
 import {
+  captureCoverage,
   deriveCloudMeetingStatus,
   initialCloudMeetingSession,
   isCaptureStalled,
+  isCloudMeetingCapturing,
+  partialCaptureMessage,
   trackCaptureGrowth,
 } from '../meetingCapture';
 
@@ -50,6 +53,16 @@ describe('deriveCloudMeetingStatus', () => {
   });
 });
 
+describe('isCloudMeetingCapturing', () => {
+  it('is false only once the mic stopped or the session ended', () => {
+    expect(isCloudMeetingCapturing('connecting')).toBe(true);
+    expect(isCloudMeetingCapturing('live')).toBe(true);
+    expect(isCloudMeetingCapturing('reconnecting')).toBe(true);
+    expect(isCloudMeetingCapturing('interrupted')).toBe(false);
+    expect(isCloudMeetingCapturing('error')).toBe(false);
+  });
+});
+
 describe('isCaptureStalled', () => {
   it('is true once the captured clock has not grown for CAPTURE_STALL_MS', () => {
     expect(isCaptureStalled(1_000, 5_999)).toBe(false);
@@ -68,7 +81,6 @@ describe('initialCloudMeetingSession', () => {
       error: null,
       partialText: '',
       utterances: [],
-      elapsedSeconds: 0,
       capturedSeconds: 0,
       droppedSeconds: 0,
       interruptions: 0,
@@ -94,5 +106,39 @@ describe('trackCaptureGrowth', () => {
   it("misses a new session's growth when the last session's baseline is kept", () => {
     const carried = { lastCapturedMs: 600_000, lastGrowthAtMs: 10_000 };
     expect(trackCaptureGrowth(carried, 200, 16_000).stalled).toBe(true);
+  });
+});
+
+describe('captureCoverage', () => {
+  it('measures what was recorded against how long the meeting ran', () => {
+    expect(captureCoverage(540_000, 3_660_000)).toEqual({
+      recordedSeconds: 540,
+      elapsedSeconds: 3660,
+      missingSeconds: 3120,
+      isPartial: true,
+    });
+  });
+
+  it('is partial once 30 s or more is missing', () => {
+    expect(captureCoverage(3_650_000, 3_660_000).isPartial).toBe(false);
+    expect(captureCoverage(3_630_000, 3_660_000).isPartial).toBe(true);
+  });
+
+  it('never reports negative missing time', () => {
+    expect(captureCoverage(3_700_000, 3_660_000).missingSeconds).toBe(0);
+  });
+});
+
+describe('partialCaptureMessage', () => {
+  it('says how much of the meeting was recorded', () => {
+    expect(partialCaptureMessage(captureCoverage(540_000, 3_660_000))).toBe(
+      'OpenWhispr recorded 9 min of this 61 min meeting. The rest was missed while the microphone or the connection was interrupted.',
+    );
+  });
+
+  it('says under 1 min when less than a minute was recorded', () => {
+    expect(partialCaptureMessage(captureCoverage(20_000, 90_000))).toContain(
+      'recorded under 1 min of this 2 min meeting',
+    );
   });
 });

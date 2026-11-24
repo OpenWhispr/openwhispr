@@ -4,6 +4,8 @@ import Foundation
 public struct MeetingSnapshot: Equatable {
   public enum Phase: Equatable {
     case recording
+    /// The mic stopped capturing; `recordedSeconds` is the audio captured so far.
+    case paused(recordedSeconds: Int)
     case processing(recordedSeconds: Int)
   }
 
@@ -37,6 +39,10 @@ public enum LiveActivityResolver {
       case .recording:
         return RecordingActivityContentState(
           mode: .meeting, phase: .recording, startedAt: meeting.startedAt, title: meeting.title)
+      case .paused(let recordedSeconds):
+        return RecordingActivityContentState(
+          mode: .meeting, phase: .paused, startedAt: meeting.startedAt, title: meeting.title,
+          recordedSeconds: recordedSeconds)
       case .processing(let recordedSeconds):
         return RecordingActivityContentState(
           mode: .meeting, phase: .processing, startedAt: meeting.startedAt, title: meeting.title,

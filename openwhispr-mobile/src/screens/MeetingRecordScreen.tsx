@@ -27,6 +27,9 @@ import { canRunCloudMeeting } from '@/lib/accountAccess';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useCloudMeeting } from '@/hooks/useCloudMeeting';
 import { useMeetingLiveActivity, type MeetingActivityPhase } from '@/hooks/useMeetingLiveActivity';
+import { useMeetingRecorderHealth } from '@/hooks/useMeetingRecorderHealth';
+import { captureCoverage, isCloudMeetingCapturing } from '@/lib/notes/meetingCapture';
+import { alertIfPartialCapture, useCapturePausedNotification } from '@/lib/meetingCaptureAlerts';
 import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
 import { Sentry } from '@/lib/sentry';
@@ -49,15 +52,15 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   const [phase, setPhase] = useState<Phase>('prompt');
   const [noteId, setNoteId] = useState<number | null>(null);
   const [count, setCount] = useState<number | undefined>(undefined);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  // Wall-clock start of the current meeting (local or cloud), for the Live Activity timer.
-  // recordingStartedAtRef is local-only and is cleared as soon as processing starts.
+  // Wall-clock start of the current meeting (local or cloud): starts the Live Activity and
+  // measures, at Stop, how much of the meeting the recording covers.
   const [meetingStartedAt, setMeetingStartedAt] = useState<number | null>(null);
+  // Which recorder the current meeting uses, so processing still reads that one's clock.
+  const [meetingPath, setMeetingPath] = useState<'local' | 'cloud'>('local');
   const [rawNotes, setRawNotes] = useState('');
   const [calendarEvents, setCalendarEvents] = useState<GoogleCalendarEvent[]>([]);
   const [selectedCalendarEventId, setSelectedCalendarEventId] = useState<number | null>(null);
   const lastSavedRawNotesRef = useRef('');
-  const recordingStartedAtRef = useRef<number | null>(null);
   // The utterance callback outlives renders; the note is created just before the phase flips.
   const noteIdRef = useRef<number | null>(null);
   noteIdRef.current = noteId;
@@ -99,6 +102,22 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
       }
     },
   });
+
+  const recorderHealth = useMeetingRecorderHealth(
+    recording.audioRecorder,
+    phase === 'recording',
+    recording.canResumeRecording,
+  );
+  // One capture state and clock for both recorders, read by the screen, the lock screen and
+  // the paused notification.
+  const capturing =
+    meetingPath === 'cloud'
+      ? isCloudMeetingCapturing(cloudMeeting.status)
+      : recorderHealth.capturing;
+  const capturedSeconds =
+    meetingPath === 'cloud'
+      ? cloudMeeting.capturedSeconds
+      : Math.floor(recorderHealth.capturedMs / 1000);
 
   const accountsById = useMemo(
     () => new Map(googleCalendarAccounts.map((account) => [account.id, account])),
@@ -144,22 +163,6 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
       Sentry.captureException(error, { tags: { feature: 'meeting-calendar-suggestions' } });
     }
   }, [googleCalendarAccounts, phase]);
-
-  useEffect(() => {
-    if (phase !== 'recording') {
-      setElapsedSeconds(0);
-      recordingStartedAtRef.current = null;
-      return;
-    }
-    const updateElapsed = () => {
-      const startedAt = recordingStartedAtRef.current;
-      if (startedAt == null) return;
-      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
-    };
-    updateElapsed();
-    const interval = setInterval(updateElapsed, 1000);
-    return () => clearInterval(interval);
-  }, [phase]);
 
   useEffect(() => {
     if (
@@ -232,9 +235,8 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     setRawNotes(note.content);
     lastSavedRawNotesRef.current = note.content;
     setNoteId(note.id);
-    const startedAt = Date.now();
-    recordingStartedAtRef.current = startedAt;
-    setMeetingStartedAt(startedAt);
+    setMeetingStartedAt(Date.now());
+    setMeetingPath('local');
     setPhase('recording');
   };
 
@@ -287,6 +289,11 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   };
 
   const finish = async (): Promise<void> => {
+    // Measured at Stop: transcription below can take minutes and must not count as missed time.
+    const coverage = captureCoverage(
+      recorderHealth.capturedMs,
+      meetingStartedAt == null ? 0 : Date.now() - meetingStartedAt,
+    );
     setPhase('processing');
     try {
       const uri = await recording.stopRecordingRaw();
@@ -301,6 +308,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
       await FileSystem.copyAsync({ from: uri, to: stableUri });
       await runMeetingPipeline(noteId, stableUri, count);
       router.replace(`/(tabs)/(notes)/${noteId}`);
+      alertIfPartialCapture(coverage);
     } catch (error) {
       if (noteId != null) markNoteFailed(noteId);
       Sentry.captureException(error);
@@ -340,12 +348,17 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     lastSavedRawNotesRef.current = note.content;
     setNoteId(note.id);
     setMeetingStartedAt(Date.now());
+    setMeetingPath('cloud');
     setPhase('cloud-recording');
   };
 
   const finishCloud = async (): Promise<void> => {
     // Read these before awaiting: the stop waits for the last turn and state moves on meanwhile.
-    const elapsed = cloudMeeting.elapsedSeconds;
+    const captured = cloudMeeting.capturedSeconds;
+    const coverage = captureCoverage(
+      (cloudMeeting.capturedSeconds - cloudMeeting.droppedSeconds) * 1000,
+      meetingStartedAt == null ? 0 : Date.now() - meetingStartedAt,
+    );
     const hadError = cloudMeeting.status === 'error';
     setPhase('processing');
     const utterances = await cloudMeeting.stop();
@@ -361,8 +374,9 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
       return;
     }
     try {
-      await finalizeCloudMeeting(noteId, utterances, elapsed);
+      await finalizeCloudMeeting(noteId, utterances, captured);
       router.replace(`/(tabs)/(notes)/${noteId}`);
+      alertIfPartialCapture(coverage);
     } catch (error) {
       markNoteFailed(noteId);
       Sentry.captureException(error);
@@ -380,11 +394,15 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     phase: meetingActivityPhase,
     title: selectedMeetingContext?.title ?? null,
     startedAt: meetingStartedAt,
+    capturing,
+    capturedSeconds,
     onEndRequested: () => {
       const stop = phase === 'cloud-recording' ? finishCloud : finish;
       stop().catch(Sentry.captureException);
     },
   });
+
+  useCapturePausedNotification(meetingActivityPhase === 'recording', capturing);
 
   if (phase === 'prompt') {
     return (
@@ -457,15 +475,24 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
       <View className="flex-1 bg-systemBackground px-6" style={{ paddingTop: headerHeight }}>
         <View className="items-center pb-2 pt-4">
           <View className="mb-3 flex-row items-center gap-2">
-            <View className="h-2 w-2 rounded-full bg-systemRed" />
-            <Text className="text-[14px] font-medium text-secondaryLabel">Recording</Text>
+            <View
+              className={`h-2 w-2 rounded-full ${capturing ? 'bg-systemRed' : 'bg-tertiaryLabel'}`}
+            />
+            <Text className="text-[14px] font-medium text-secondaryLabel">
+              {capturing ? 'Recording' : 'Not recording'}
+            </Text>
           </View>
           <Text
             className="text-[60px] font-semibold leading-none tracking-tight text-label"
             style={{ fontVariant: ['tabular-nums'] }}
           >
-            {formatClock(elapsedSeconds)}
+            {formatClock(capturedSeconds)}
           </Text>
+          {capturing ? null : (
+            <Text className="mt-3 text-center text-[13px] text-systemRed">
+              The microphone was interrupted. Trying to resume…
+            </Text>
+          )}
           <View className="mt-5 flex-row gap-2">
             <View
               className="rounded-full border border-separator bg-secondarySystemGroupedBackground px-3 py-1.5"
@@ -521,7 +548,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
       <CloudMeetingRecording
         status={cloudMeeting.status}
         error={cloudMeeting.error}
-        elapsedSeconds={cloudMeeting.elapsedSeconds}
+        capturedSeconds={cloudMeeting.capturedSeconds}
         rawNotes={rawNotes}
         onChangeRawNotes={setRawNotes}
         utterances={cloudMeeting.utterances}

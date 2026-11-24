@@ -23,6 +23,15 @@ export function deriveCloudMeetingStatus(input: {
   return 'live';
 }
 
+/**
+ * Whether the screen and lock screen should read as recording. A reconnect still captures
+ * audio and sends it once the socket returns, and a session still connecting hasn't lost
+ * anything yet; only a stopped mic or an ended session has.
+ */
+export function isCloudMeetingCapturing(status: CloudMeetingStatus): boolean {
+  return status !== 'interrupted' && status !== 'error';
+}
+
 // Frames arrive every ~100 ms, so five seconds without growth means the mic has
 // stopped even if the native module never said so.
 export const CAPTURE_STALL_MS = 5000;
@@ -48,7 +57,6 @@ export interface CloudMeetingSessionState {
   error: string | null;
   partialText: string;
   utterances: RealtimeUtterance[];
-  elapsedSeconds: number;
   capturedSeconds: number;
   droppedSeconds: number;
   interruptions: number;
@@ -72,7 +80,6 @@ export function initialCloudMeetingSession(nowMs: number): CloudMeetingSessionSt
     error: null,
     partialText: '',
     utterances: [],
-    elapsedSeconds: 0,
     capturedSeconds: 0,
     droppedSeconds: 0,
     interruptions: 0,
@@ -93,4 +100,37 @@ export function trackCaptureGrowth(
       ? { lastCapturedMs: capturedMs, lastGrowthAtMs: nowMs }
       : clock;
   return { clock: next, stalled: isCaptureStalled(next.lastGrowthAtMs, nowMs) };
+}
+
+// Short gaps (a reconnect, a brief Siri prompt) aren't worth an alert; half a minute is.
+export const PARTIAL_CAPTURE_THRESHOLD_SECONDS = 30;
+
+/** How much of a meeting's wall-clock time actually reached the recording. */
+export interface CaptureCoverage {
+  recordedSeconds: number;
+  elapsedSeconds: number;
+  missingSeconds: number;
+  isPartial: boolean;
+}
+
+/** `recordedMs` is captured minus dropped audio; partial when 30 s or more is missing. */
+export function captureCoverage(recordedMs: number, elapsedMs: number): CaptureCoverage {
+  const recordedSeconds = Math.max(0, Math.floor(recordedMs / 1000));
+  const elapsedSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
+  const missingSeconds = Math.max(0, elapsedSeconds - recordedSeconds);
+  return {
+    recordedSeconds,
+    elapsedSeconds,
+    missingSeconds,
+    isPartial: missingSeconds >= PARTIAL_CAPTURE_THRESHOLD_SECONDS,
+  };
+}
+
+export const PARTIAL_CAPTURE_TITLE = "Part of this meeting wasn't recorded";
+
+const formatMinutes = (seconds: number): string =>
+  seconds < 60 ? 'under 1 min' : `${Math.round(seconds / 60)} min`;
+
+export function partialCaptureMessage(coverage: CaptureCoverage): string {
+  return `OpenWhispr recorded ${formatMinutes(coverage.recordedSeconds)} of this ${formatMinutes(coverage.elapsedSeconds)} meeting. The rest was missed while the microphone or the connection was interrupted.`;
 }
