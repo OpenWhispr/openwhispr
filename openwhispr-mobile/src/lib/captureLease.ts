@@ -15,5 +15,10 @@ export async function acquireCaptureLease(owner: CaptureLeaseOwner): Promise<voi
 
 /** Idempotent. Call only after the capture has fully stopped. */
 export function releaseCaptureLease(owner: CaptureLeaseOwner): void {
-  AppGroupStorage.releaseCaptureLease(owner);
+  try {
+    AppGroupStorage.releaseCaptureLease(owner);
+  } catch (error) {
+    // Release runs in teardown paths that must finish; a native failure is reported, not thrown.
+    Sentry.captureException(error, { tags: { feature: 'meeting-capture-lease' } });
+  }
 }

@@ -8,6 +8,11 @@ import { useAudioRecording, type UseAudioRecordingOptions } from '../useAudioRec
 import { TranscriptionService } from '@/services/transcription/TranscriptionService';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 
+jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('expo-file-system/legacy', () => ({
+  getInfoAsync: jest.fn(async () => ({ exists: true, size: 1024 })),
+  deleteAsync: jest.fn(async () => undefined),
+}));
 // Meetings' capture lease reaches Sentry and the native module, neither of which loads under
 // Jest; dictation never touches it.
 jest.mock('@/lib/captureLease', () => ({
@@ -15,11 +20,6 @@ jest.mock('@/lib/captureLease', () => ({
   releaseCaptureLease: jest.fn(),
 }));
 
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
-jest.mock('expo-file-system/legacy', () => ({
-  getInfoAsync: jest.fn(async () => ({ exists: true, size: 1024 })),
-  deleteAsync: jest.fn(async () => undefined),
-}));
 jest.mock('@/components/ui/PermissionAlert', () => ({ showPermissionAlert: jest.fn() }));
 jest.mock('@/store/useTranscriptStore', () => ({
   createTranscriptId: jest.fn(() => 'test-id'),

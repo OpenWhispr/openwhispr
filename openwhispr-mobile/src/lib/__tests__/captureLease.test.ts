@@ -8,7 +8,10 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
 
 describe('captureLease', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (AppGroupStorage.releaseCaptureLease as jest.Mock).mockReset();
+  });
 
   it('acquires the native lease for the given owner', async () => {
     (AppGroupStorage.acquireCaptureLease as jest.Mock).mockResolvedValue(undefined);
@@ -34,5 +37,18 @@ describe('captureLease', () => {
     releaseCaptureLease('meeting-local');
 
     expect(AppGroupStorage.releaseCaptureLease).toHaveBeenCalledWith('meeting-local');
+  });
+
+  it('never throws when the native release throws, and reports it to Sentry', () => {
+    const failure = new Error('native release failure');
+    (AppGroupStorage.releaseCaptureLease as jest.Mock).mockImplementation(() => {
+      throw failure;
+    });
+
+    expect(() => releaseCaptureLease('meeting-cloud')).not.toThrow();
+
+    expect(Sentry.captureException).toHaveBeenCalledWith(failure, {
+      tags: { feature: 'meeting-capture-lease' },
+    });
   });
 });

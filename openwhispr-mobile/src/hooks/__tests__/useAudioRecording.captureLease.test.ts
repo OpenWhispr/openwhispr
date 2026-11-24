@@ -2,9 +2,8 @@ import { act, renderHook } from '@testing-library/react-native';
 import { useAudioRecording } from '../useAudioRecording';
 import { acquireCaptureLease, releaseCaptureLease } from '@/lib/captureLease';
 
-// The recording path pulls in expo-sqlite-backed stores and the whole
-// transcription pipeline. None of it runs before the permission check, so mock
-// it away and keep these tests on the one branch Apple rejected us over.
+// The recording path pulls in expo-sqlite-backed stores and the whole transcription pipeline;
+// mock it away so these tests stay on the capture lease.
 jest.mock('expo-file-system/legacy', () => ({
   getInfoAsync: jest.fn(),
   deleteAsync: jest.fn(async () => undefined),
@@ -197,6 +196,51 @@ describe('useAudioRecording capture lease', () => {
 
     unmount();
 
+    expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases when unmounted while the acquire is pending', async () => {
+    let grant: () => void = () => undefined;
+    (acquireCaptureLease as jest.Mock).mockReturnValue(
+      new Promise<void>((resolve) => {
+        grant = resolve;
+      }),
+    );
+    const { result, unmount } = renderRecording(true);
+
+    let started: Promise<void> = Promise.resolve();
+    await act(async () => {
+      started = result.current.startRecording().catch(() => undefined);
+      await Promise.resolve();
+    });
+    unmount();
+    await act(async () => {
+      grant();
+      await started;
+    });
+
+    expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
+    expect(mockAudioModule.setAudioModeAsync).not.toHaveBeenCalled();
+    expect(mockRecorder.prepareToRecordAsync).not.toHaveBeenCalled();
+  });
+
+  it("a failed second start does not release the first recording's lease", async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { result } = renderRecording(true);
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    mockRecorder.prepareToRecordAsync.mockRejectedValue(new Error('prepare refused'));
+
+    await act(async () => {
+      await result.current.startRecording().catch(() => undefined);
+    });
+    expect(acquireCaptureLease).toHaveBeenCalledTimes(1);
+    expect(releaseCaptureLease).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.stopRecordingRaw();
+    });
     expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
   });
 

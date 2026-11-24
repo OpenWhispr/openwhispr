@@ -2,15 +2,15 @@ import { act, renderHook } from '@testing-library/react-native';
 import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
 import { useAudioRecording } from '../useAudioRecording';
 
+jest.mock('expo-file-system/legacy', () => ({
+  getInfoAsync: jest.fn(async () => ({ exists: true, size: 1024 })),
+}));
+
 // Meetings' capture lease reaches Sentry and the native module, neither of which loads under
 // Jest; dictation never touches it.
 jest.mock('@/lib/captureLease', () => ({
   acquireCaptureLease: jest.fn(),
   releaseCaptureLease: jest.fn(),
-}));
-
-jest.mock('expo-file-system/legacy', () => ({
-  getInfoAsync: jest.fn(async () => ({ exists: true, size: 1024 })),
 }));
 
 // permissions.ts re-exports the alert helper, which reaches nativewind through

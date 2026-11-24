@@ -108,6 +108,8 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   const openRef = useRef(false);
   // Meetings (background recording) park the keyboard's warm mic for as long as they capture.
   const leaseHeldRef = useRef(false);
+  // An acquire can still be pending when the hook unmounts; it must not leave the lease held.
+  const mountedRef = useRef(true);
 
   const recorderOptions = getDefaultRecorderOptions();
   const audioRecorder = useAudioRecorder(recorderOptions);
@@ -126,7 +128,13 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   };
 
   // The recorder belongs to this hook and goes down with it, so the lease must too.
-  useEffect(() => releaseLease, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      releaseLease();
+    };
+  }, []);
 
   const ensureAudioSupport = () => {
     if (!isSupported || !expoAudio || !audioRecorder) {
@@ -142,6 +150,9 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   };
 
   const startRecording = async () => {
+    // A second start while a capture is open reuses its lease, so only the call that acquired
+    // may release it when it fails.
+    let acquiredHere = false;
     try {
       const { expoAudio: audioModule, audioRecorder: recorder } = ensureAudioSupport();
 
@@ -174,6 +185,11 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       if (allowsBackgroundRecording && !leaseHeldRef.current) {
         await acquireCaptureLease('meeting-local');
         leaseHeldRef.current = true;
+        acquiredHere = true;
+        if (!mountedRef.current) {
+          releaseLease();
+          return;
+        }
       }
 
       try {
@@ -207,7 +223,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       setIsRecording(true);
       setCurrentText('');
     } catch (error) {
-      releaseLease();
+      if (acquiredHere) releaseLease();
       // Permission denial is a normal user state — surfaced by onError as a
       // friendly alert. Skip console.error so dev LogBox doesn't show a red toast.
       if (!isMicPermissionError(error)) {
@@ -237,6 +253,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         openRef.current = false;
       } finally {
         stoppingRef.current = false;
+        // Also on a rejected stop: a failed stop must not leave the keyboard's mic parked.
         releaseLease();
       }
 
@@ -538,6 +555,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       } catch (stopError) {
         if (!paused) throw stopError;
       } finally {
+        // Also on a rejected stop: a failed stop must not leave the keyboard's mic parked.
         releaseLease();
       }
       openRef.current = false;
