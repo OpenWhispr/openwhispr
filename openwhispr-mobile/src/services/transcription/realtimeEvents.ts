@@ -29,6 +29,12 @@ export interface RealtimeCallbacks {
   onReconnected?: () => void;
   /** The microphone stopped or resumed delivering audio. */
   onCaptureState?: (event: { capturing: boolean; reason: string }) => void;
+  /** The server gave up transcribing a turn; its timing, when known, is where its audio sits. */
+  onTranscriptionFailed?: (failure: {
+    itemId: string;
+    startMs: number | null;
+    endMs: number | null;
+  }) => void;
 }
 
 export interface RealtimeSession {
@@ -65,6 +71,8 @@ export interface RealtimeEventReducer {
   utterances: () => RealtimeUtterance[];
   /** Items the server committed and has not yet transcribed. */
   pendingItemCount: () => number;
+  /** Of those, the items whose id starts with `prefix` (one leg's turns). */
+  pendingItemCountWithPrefix: (prefix: string) => number;
   /** Forget pending items whose id starts with `prefix` (a leg that closed won't finish them). */
   dropPendingItems: (prefix: string) => void;
 }
@@ -109,7 +117,10 @@ export function createRealtimeEventReducer(callbacks: RealtimeCallbacks): Realti
         break;
       }
       case 'conversation.item.input_audio_transcription.failed': {
-        if (itemId) pending.delete(itemId);
+        if (!itemId) break;
+        pending.delete(itemId);
+        const t = timing.get(itemId) ?? { startMs: null, endMs: null };
+        callbacks.onTranscriptionFailed?.({ itemId, startMs: t.startMs, endMs: t.endMs });
         break;
       }
       case 'conversation.item.input_audio_transcription.completed': {
@@ -143,6 +154,13 @@ export function createRealtimeEventReducer(callbacks: RealtimeCallbacks): Realti
     handleEvent,
     utterances: () => [...finalized],
     pendingItemCount: () => pending.size,
+    pendingItemCountWithPrefix: (prefix: string): number => {
+      let count = 0;
+      for (const itemId of pending) {
+        if (itemId.startsWith(prefix)) count += 1;
+      }
+      return count;
+    },
     dropPendingItems: (prefix: string): void => {
       for (const itemId of pending) {
         if (itemId.startsWith(prefix)) pending.delete(itemId);

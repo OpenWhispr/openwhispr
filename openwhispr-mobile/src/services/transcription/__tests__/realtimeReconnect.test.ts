@@ -186,6 +186,51 @@ describe('createRealtimeEventReducer pending items', () => {
   });
 });
 
+describe('createRealtimeEventReducer failed turns and per-leg pending', () => {
+  it('reports a failed turn with the timing it knows, and counts pending items per prefix', () => {
+    const onTranscriptionFailed = jest.fn();
+    const reducer = createRealtimeEventReducer({ onTranscriptionFailed });
+    reducer.handleEvent({
+      type: 'input_audio_buffer.speech_started',
+      item_id: 'L1:f',
+      audio_start_ms: 500,
+    });
+    reducer.handleEvent({
+      type: 'input_audio_buffer.speech_stopped',
+      item_id: 'L1:f',
+      audio_end_ms: 1500,
+    });
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: 'L1:f' });
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: 'L2:g' });
+    expect(reducer.pendingItemCountWithPrefix('L1:')).toBe(1);
+    expect(reducer.pendingItemCountWithPrefix('L2:')).toBe(1);
+
+    reducer.handleEvent({
+      type: 'conversation.item.input_audio_transcription.failed',
+      item_id: 'L1:f',
+    });
+
+    expect(onTranscriptionFailed).toHaveBeenCalledWith({
+      itemId: 'L1:f',
+      startMs: 500,
+      endMs: 1500,
+    });
+    expect(reducer.pendingItemCountWithPrefix('L1:')).toBe(0);
+    expect(reducer.pendingItemCount()).toBe(1);
+    expect(reducer.utterances()).toEqual([]);
+  });
+
+  it('reports a failed turn it has no timing for with null times', () => {
+    const onTranscriptionFailed = jest.fn();
+    const reducer = createRealtimeEventReducer({ onTranscriptionFailed });
+    reducer.handleEvent({
+      type: 'conversation.item.input_audio_transcription.failed',
+      item_id: 'x',
+    });
+    expect(onTranscriptionFailed).toHaveBeenCalledWith({ itemId: 'x', startMs: null, endMs: null });
+  });
+});
+
 describe('dropPendingItems', () => {
   it('forgets only the pending items under the given leg prefix', () => {
     const reducer = createRealtimeEventReducer({});

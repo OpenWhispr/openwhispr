@@ -123,11 +123,24 @@ export async function startRealtimeMeetingWs(
     ...callbacks,
     onUtterance: (utterance) => {
       const meta = eventLeg ? legMeta.get(eventLeg) : undefined;
-      // endMs is already on the capture clock: the leg offset was applied before the reducer.
-      if (meta && utterance.endMs !== null) {
-        meta.transcribedUpToMs = Math.max(meta.transcribedUpToMs, utterance.endMs);
+      if (meta) {
+        // endMs is already on the capture clock: the leg offset was applied before the reducer.
+        // Our own commit's turn has no VAD end; its text covers all the leg was sent before it.
+        const endMs = utterance.endMs ?? meta.commitSentUpToMs;
+        if (endMs !== null) meta.transcribedUpToMs = Math.max(meta.transcribedUpToMs, endMs);
       }
       callbacks.onUtterance?.(utterance);
+    },
+    onTranscriptionFailed: (failure) => {
+      const meta = eventLeg ? legMeta.get(eventLeg) : undefined;
+      // A failed turn's audio never comes back as text. Without its timing, the best bound is
+      // everything the leg was sent past its last completed turn.
+      if (failure.startMs !== null && failure.endMs !== null) {
+        addLostWindow({ startMs: failure.startMs, endMs: failure.endMs });
+      } else if (meta) {
+        addLostWindow({ startMs: meta.transcribedUpToMs, endMs: meta.sentUpToMs });
+      }
+      callbacks.onTranscriptionFailed?.(failure);
     },
   });
   const pcmRing = new PcmRingBuffer(pcmTailCapBytes(sampleRate), sampleRate);
@@ -155,12 +168,14 @@ export async function startRealtimeMeetingWs(
   // Per-leg index + offset, keyed by socket so a replaced leg's late messages keep
   // their own leg's namespace/offset during a swap. `sentUpToMs` is the end of the last audio
   // handed to the socket, `transcribedUpToMs` the end of its latest completed turn (both on
-  // the capture clock); `ended` makes a leg's loss count once.
+  // the capture clock); `commitSentUpToMs` is `sentUpToMs` when our commit went out (null
+  // before); `ended` makes a leg's loss count once.
   interface LegMeta {
     legIndex: number;
     offsetMs: number;
     sentUpToMs: number;
     transcribedUpToMs: number;
+    commitSentUpToMs: number | null;
     ended: boolean;
   }
   const legMeta = new WeakMap<WebSocketLike, LegMeta>();
@@ -287,9 +302,18 @@ export async function startRealtimeMeetingWs(
     if (meta) reducer.dropPendingItems(legItemPrefix(meta.legIndex));
   };
 
+  // Settling still waits on every leg's turns (unchanged timing), but whether a retired leg
+  // lost audio depends only on its own: another leg's turn in flight says nothing about it.
+  const drainIsClean = (drain: { ws: WebSocketLike; sawReply: boolean }): boolean => {
+    const meta = legMeta.get(drain.ws);
+    if (!meta || !drain.sawReply) return false;
+    return reducer.pendingItemCountWithPrefix(legItemPrefix(meta.legIndex)) === 0;
+  };
+
+  // Judged before the leg's turns are forgotten, or every closed leg would look clean.
   const finishDrainsFor = (ws: WebSocketLike): void => {
     for (const drain of drains) {
-      if (drain.ws === ws) drain.finish(false);
+      if (drain.ws === ws) drain.finish(drainIsClean(drain));
     }
   };
 
@@ -303,6 +327,8 @@ export async function startRealtimeMeetingWs(
     }
     try {
       ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+      const meta = legMeta.get(ws);
+      if (meta) meta.commitSentUpToMs = meta.sentUpToMs;
     } catch {
       recordLegLoss(ws);
       closeWs(ws);
@@ -313,7 +339,7 @@ export async function startRealtimeMeetingWs(
       const drain = {
         ws,
         sawReply: false,
-        // `clean`: the reply came with nothing pending. A timeout or a closed socket isn't.
+        // `clean`: the reply came and none of this leg's own turns are still pending.
         finish: (clean: boolean): void => {
           if (!drains.delete(drain)) return;
           if (timer) clearTimeout(timer);
@@ -326,7 +352,7 @@ export async function startRealtimeMeetingWs(
         },
       };
       drains.add(drain);
-      timer = setTimeout(() => drain.finish(false), STOP_FLUSH_TIMEOUT_MS);
+      timer = setTimeout(() => drain.finish(drainIsClean(drain)), STOP_FLUSH_TIMEOUT_MS);
     });
     drainPromises.add(promise);
     void promise.then(() => drainPromises.delete(promise));
@@ -465,11 +491,12 @@ export async function startRealtimeMeetingWs(
           reject(new Error(`Realtime WebSocket closed before open (code ${code ?? 'unknown'})`));
           return;
         }
-        // The current leg dying, or a leg closing mid-drain, ends it without a clean drain.
-        if (ws === currentWs || [...drains].some((drain) => drain.ws === ws)) recordLegLoss(ws);
+        // The current leg dying ends it without a clean drain; a leg closing mid-drain is
+        // judged by its own turns before they are forgotten.
+        if (ws === currentWs) recordLegLoss(ws);
+        finishDrainsFor(ws);
         // A leg the server closed has nothing more to deliver.
         forgetLegTurns(ws);
-        finishDrainsFor(ws);
         settleDrains();
         void handleLegClosed(ws, code);
       };
@@ -483,6 +510,7 @@ export async function startRealtimeMeetingWs(
       offsetMs: 0,
       sentUpToMs: 0,
       transcribedUpToMs: 0,
+      commitSentUpToMs: null,
       ended: false,
     });
   };
