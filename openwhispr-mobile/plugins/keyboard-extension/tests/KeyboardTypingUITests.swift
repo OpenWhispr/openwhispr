@@ -651,6 +651,31 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
     let (text, _, _) = makeTypingKeyboard()
     checks.check("text fields keep the letter keys", !text.uiTestNumberPadShown)
   }
+
+  // Moving to another field. iOS can tear down the old field's document interface after
+  // textWillChange; reading its traits later crashed the keyboard (SIGSEGV in
+  // _UITextDocumentInterface, 2026-11-24). Traits are read only during textDidChange.
+  do {
+    let (keyboard, proxy, _) = makeTypingKeyboard()
+    // The keyboard's own setup (the typing engine loads on its first suggestion refresh)
+    // reads the field once; let it finish before counting.
+    RunLoop.main.run(until: Date().addingTimeInterval(0.6))
+    proxy.resetTraitReads()
+    RunLoop.main.run(until: Date().addingTimeInterval(0.6))
+    let idleReads = proxy.traitReads
+    proxy.resetTraitReads()
+    keyboard.touchTestTextWillChange()
+    RunLoop.main.run(until: Date().addingTimeInterval(0.6))
+    checks.check(
+      "textWillChange reads no field traits, now or later (\(proxy.traitReads), idle \(idleReads))",
+      idleReads == 0 && proxy.traitReads == 0
+    )
+    proxy.keyboardType = .numberPad
+    keyboard.touchTestTextWillChange()
+    keyboard.touchTestTextDidChange()
+    keyboard.uiTestPump()
+    checks.check("moving to a number field shows the pad through textDidChange", keyboard.uiTestNumberPadShown)
+  }
 }
 
 private extension KeyboardViewController {

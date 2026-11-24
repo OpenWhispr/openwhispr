@@ -1467,12 +1467,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     preferredContentSize = CGSize(width: view.bounds.width, height: keyboardHeight)
   }
 
-  override func textWillChange(_ textInput: UITextInput?) {
-    super.textWillChange(textInput)
-    // Moving to another field: its keyboard type may differ (a number pad, a URL row).
-    DispatchQueue.main.async { [weak self] in self?.refreshFieldAwareKeys() }
-  }
-
+  // A field's keys (number pad, return key, URL row) follow it here and in viewDidAppear,
+  // never later from textWillChange: iOS can tear down the old field's document interface
+  // in between, and reading its traits then crashes the keyboard.
   override func textDidChange(_ textInput: UITextInput?) {
     super.textDidChange(textInput)
     noteFieldReport()
