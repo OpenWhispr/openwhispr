@@ -3,6 +3,7 @@ import { Animated, Linking, Pressable, ScrollView, TextInput, View } from 'react
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { home, type } from '../home/kit';
+import { flat, glass, theme } from '../theme';
 import {
   BottomSheet,
   PillAction,
@@ -60,18 +61,20 @@ function Chip({
       accessibilityRole="radio"
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: 36,
-        paddingHorizontal: 14,
-        borderRadius: 999,
-        justifyContent: 'center',
-        backgroundColor: selected ? home.accent : home.surface,
-        borderWidth: selected ? 0 : 1,
-        borderColor: home.borderSubtle,
-        opacity: pressed ? 0.8 : 1,
-      })}
+      style={({ pressed }) => [
+        selected ? glass : flat,
+        {
+          minHeight: 36,
+          paddingHorizontal: 14,
+          borderRadius: 999,
+          justifyContent: 'center',
+          opacity: pressed ? 0.8 : 1,
+        },
+      ]}
     >
-      <Text style={[type.subhead, { color: selected ? '#FFFFFF' : home.text, fontWeight: '500' }]}>
+      <Text
+        style={[type.subhead, { color: selected ? theme.onGlass : home.text, fontWeight: '500' }]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -214,9 +217,9 @@ export function KeySheet({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          // The row scrolls to the sheet's edges.
-          style={{ marginHorizontal: -16 }}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+          // The row scrolls to the sheet's edges, with room above and below for the chips' lift.
+          style={{ marginHorizontal: -16, marginVertical: -12 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 8 }}
           accessibilityRole="radiogroup"
           accessibilityLabel={t('provider')}
         >

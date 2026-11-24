@@ -7,7 +7,7 @@ import type { SheetTask } from '../settings/ownKey';
 import type { Place, Source } from './places';
 import { PROVIDER_LOGOS } from './providerLogos';
 import { look as settingsLook } from '../settings/look';
-import { raised, raisedPressed } from '../theme';
+import { raised, raisedPressed, theme } from '../theme';
 
 /**
  * Processing in OpenWhispr's design language (Figma sections 8 and 9): the desktop's glass edge
@@ -48,7 +48,7 @@ export function Tile({
   size?: number;
 }) {
   const logo = source && source !== 'custom' ? PROVIDER_LOGOS[source] : null;
-  const color = kind === 'glass' ? '#FFFFFF' : kind === 'sel' ? home.accent : home.secondary;
+  const color = kind === 'glass' ? theme.onGlass : kind === 'sel' ? home.accent : home.text;
   return (
     <View
       style={[
@@ -65,7 +65,7 @@ export function Tile({
         kind === 'logo' && {
           backgroundColor: home.surface,
           borderWidth: 1,
-          borderColor: 'rgba(0,0,0,0.08)',
+          borderColor: theme.divider,
         },
       ]}
     >
@@ -98,7 +98,7 @@ export function Tag({ label, neutral }: { label: string; neutral?: boolean }) {
         paddingHorizontal: 6,
         paddingVertical: 1,
         borderRadius: 6,
-        backgroundColor: neutral ? 'rgba(0,0,0,0.06)' : look.selFill,
+        backgroundColor: neutral ? look.track : look.selFill,
       }}
     >
       <Text
@@ -122,7 +122,7 @@ export function CountBadge({ label }: { label: string }) {
         paddingHorizontal: 7,
         paddingVertical: 2,
         borderRadius: 6,
-        backgroundColor: 'rgba(21,85,212,0.10)',
+        backgroundColor: look.selFill,
       }}
     >
       <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '500', color: home.accent }}>
@@ -208,7 +208,7 @@ export function GlassButton({
         pressed && !disabled && glossPressed,
       ]}
     >
-      <Text style={[type.subhead, { color: '#FFFFFF', fontWeight: '500' }]}>{label}</Text>
+      <Text style={[type.subhead, { color: theme.onGlass, fontWeight: '500' }]}>{label}</Text>
     </Pressable>
   );
 }

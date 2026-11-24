@@ -8,12 +8,12 @@ import { SpeakerAvatar } from '@/components/notes/SpeakerAvatar';
 import { useNotesStore } from '@/store/useNotesStore';
 import { confirmDestructive } from '@/lib/alerts';
 import { safeHaptics } from '@/lib/utils';
-import { iosColor } from '@/config/colors';
 import { AppFont } from '@/lib/fonts';
 import {
   supportsVoiceEnrollment,
   VOICE_ENROLLMENT_UNAVAILABLE,
 } from '@/lib/voiceEnrollmentCapability';
+import { theme } from '@/android/theme';
 
 const formatDate = (value: string | null): string => {
   if (!value) return 'On this device';
@@ -43,21 +43,23 @@ function FieldRow({
 }) {
   return (
     <View className="min-h-[50px] flex-row items-center px-4">
-      <Text className="w-[84px] text-[16px] text-secondaryLabel">{label}</Text>
+      <Text className="w-[84px] text-[16px]" style={{ color: theme.secondary }}>
+        {label}
+      </Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
         onBlur={onBlur}
         onSubmitEditing={onBlur}
         placeholder={placeholder}
-        placeholderTextColor={iosColor('tertiaryLabel')}
+        placeholderTextColor={theme.tertiary}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
         autoCorrect={false}
         returnKeyType="done"
         testID={testID}
-        className="flex-1 py-3 text-[17px] text-label"
-        style={{ fontFamily: AppFont.regular }}
+        className="flex-1 py-3 text-[17px]"
+        style={{ fontFamily: AppFont.regular, color: theme.ink }}
       />
     </View>
   );
@@ -142,13 +144,13 @@ export default function VoiceProfileDetailScreen() {
   }, [profile, deleteVoiceProfile]);
 
   if (!profile) {
-    return <View className="flex-1 bg-systemBackground" />;
+    return <View className="flex-1" style={{ backgroundColor: theme.canvas }} />;
   }
 
   const isOwner = profile.isOwner === 1;
 
   return (
-    <View className="flex-1 bg-systemBackground">
+    <View className="flex-1" style={{ backgroundColor: theme.canvas }}>
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
@@ -157,12 +159,18 @@ export default function VoiceProfileDetailScreen() {
         <View className="items-center gap-2.5 pb-1 pt-2">
           <SpeakerAvatar name={profile.displayName} isOwner={isOwner} size={76} />
           <View className="flex-row items-center gap-2">
-            <Text accessibilityRole="header" className="text-[22px] font-bold text-label">
+            <Text
+              accessibilityRole="header"
+              className="text-[22px] font-bold"
+              style={{ color: theme.ink }}
+            >
               {profile.displayName}
             </Text>
             {isOwner ? (
-              <View className="rounded-md bg-tertiarySystemFill px-2 py-0.5">
-                <Text className="text-[12px] font-semibold text-secondaryLabel">You</Text>
+              <View className="rounded-md px-2 py-0.5" style={{ backgroundColor: theme.track }}>
+                <Text className="text-[12px] font-semibold" style={{ color: theme.secondary }}>
+                  You
+                </Text>
               </View>
             ) : null}
           </View>
@@ -189,19 +197,25 @@ export default function VoiceProfileDetailScreen() {
             testID="voice-profile-email-input"
           />
         </GroupedList>
-        <Text className="mt-2 px-4 text-[13px] leading-5 text-secondaryLabel">
+        <Text className="mt-2 px-4 text-[13px] leading-5" style={{ color: theme.secondary }}>
           Adding an email lets meeting notes link this speaker to calendar invites later.
         </Text>
 
         <SectionHeader label="Voice sample" />
         <GroupedList dividerInset={16}>
           <View className="min-h-[46px] flex-row items-center justify-between px-4 py-3">
-            <Text className="text-[16px] text-secondaryLabel">Samples</Text>
-            <Text className="text-[16px] font-medium text-label">{profile.sampleCount}</Text>
+            <Text className="text-[16px]" style={{ color: theme.secondary }}>
+              Samples
+            </Text>
+            <Text className="text-[16px] font-medium" style={{ color: theme.ink }}>
+              {profile.sampleCount}
+            </Text>
           </View>
           <View className="min-h-[46px] flex-row items-center justify-between px-4 py-3">
-            <Text className="text-[16px] text-secondaryLabel">Added</Text>
-            <Text className="text-[16px] font-medium text-label">
+            <Text className="text-[16px]" style={{ color: theme.secondary }}>
+              Added
+            </Text>
+            <Text className="text-[16px] font-medium" style={{ color: theme.ink }}>
               {formatDate(profile.createdAt)}
             </Text>
           </View>
@@ -213,11 +227,13 @@ export default function VoiceProfileDetailScreen() {
               testID="voice-profile-reenroll"
               contentInsetLeft={16}
             >
-              <Text className="text-[17px] font-medium text-brand">Retrain Voice</Text>
+              <Text className="text-[17px] font-medium" style={{ color: theme.accent }}>
+                Retrain Voice
+              </Text>
             </GroupedList.Row>
           ) : null}
         </GroupedList>
-        <Text className="mt-2 px-4 text-[13px] leading-5 text-secondaryLabel">
+        <Text className="mt-2 px-4 text-[13px] leading-5" style={{ color: theme.secondary }}>
           {supportsVoiceEnrollment()
             ? 'Retraining replaces this voice sample. Past transcripts keep their existing labels.'
             : VOICE_ENROLLMENT_UNAVAILABLE}
@@ -232,7 +248,7 @@ export default function VoiceProfileDetailScreen() {
               testID="voice-profile-delete"
               contentInsetLeft={16}
             >
-              <Text className="text-center text-[17px] font-medium text-systemRed">
+              <Text className="text-center text-[17px] font-medium" style={{ color: theme.error }}>
                 Delete Profile
               </Text>
             </GroupedList.Row>

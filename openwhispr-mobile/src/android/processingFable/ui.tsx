@@ -347,7 +347,7 @@ export function Field({
         borderRadius: 12,
         // An error's 1.5 px ring takes the extra half pixel from the padding, so nothing shifts.
         borderWidth: failed ? 1.5 : 1,
-        borderColor: failed ? look.error : focused ? home.accent : 'rgba(0,0,0,0.10)',
+        borderColor: failed ? look.error : focused ? home.accent : look.fieldHairline,
         backgroundColor: home.surface,
         boxShadow: look.edgeShadow,
         flexDirection: 'row',

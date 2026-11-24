@@ -1,13 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { View } from 'react-native';
 import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
-import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useConfigStore } from '@/store/useConfigStore';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
-import { home } from '../home/kit';
 import { Group, ListRow, SettingsPage, settings } from './kit';
-import { edgeField } from './look';
+import { SearchField } from '../controls';
 import { useSettingsT } from './strings';
 import {
   TRANSLATE_LANGUAGES,
@@ -66,44 +64,13 @@ export default function TranslateIntoScreen() {
 
   return (
     <SettingsPage title={t('translateInto')}>
-      <View
-        style={[
-          edgeField,
-          {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-            paddingLeft: 14,
-            paddingRight: 8,
-            minHeight: 48,
-          },
-        ]}
-      >
-        <SystemIcon name="magnifyingglass" mdName="Search" size={18} color={home.tertiary} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder={t('searchLanguages')}
-          placeholderTextColor={home.tertiary}
-          accessibilityLabel={t('searchLanguages')}
-          autoCorrect={false}
-          autoCapitalize="none"
-          returnKeyType="search"
-          style={{ flex: 1, fontSize: 16, color: home.text, paddingVertical: 10 }}
-        />
-        {query ? (
-          <Pressable
-            cssInterop={false}
-            accessibilityRole="button"
-            accessibilityLabel={t('clearSearch')}
-            hitSlop={8}
-            onPress={() => setQuery('')}
-            style={{ padding: 6 }}
-          >
-            <SystemIcon name="xmark" mdName="X" size={16} color={home.tertiary} />
-          </Pressable>
-        ) : null}
-      </View>
+      <SearchField
+        value={query}
+        onChangeText={setQuery}
+        placeholder={t('searchLanguages')}
+        clearLabel={t('clearSearch')}
+        autoCapitalize="none"
+      />
 
       {results ? (
         results.length ? (

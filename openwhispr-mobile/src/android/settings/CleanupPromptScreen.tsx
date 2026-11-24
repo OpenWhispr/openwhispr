@@ -20,6 +20,7 @@ import {
 import { home, type } from '../home/kit';
 import { PillAction, SettingsPage, TextAction, settings, showToast } from './kit';
 import { bodyText, edgeField } from './look';
+import { theme } from '../theme';
 import { useSettingsT } from './strings';
 
 // The prompt is sent with every cleanup; past about 5x the default, latency shows. A caution,
@@ -132,7 +133,7 @@ export default function CleanupPromptScreen() {
           </View>
           <View style={{ gap: 4 }}>
             {draft.length > LONG_PROMPT_CHARS && (
-              <Text style={[settings.subtitle, { color: '#D97706' }]}>{t('promptLong')}</Text>
+              <Text style={[settings.subtitle, { color: theme.warning }]}>{t('promptLong')}</Text>
             )}
             <Text style={settings.subtitle}>{t('promptFooter')}</Text>
           </View>

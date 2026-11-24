@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/useToast';
 import { confirmDestructive } from '@/lib/alerts';
 // The Android design's blue switch, not the iOS system-green one.
 import { Toggle } from '@/android/settings/kit';
+import { glass, glassPressed, theme } from '@/android/theme';
 import { OnDeviceModelSection } from '@/components/settings/OnDeviceModelSection';
 import { useConfigToggle } from '@/hooks/useConfigToggle';
 import { useCustomPromptsStore } from '@/store/useCustomPromptsStore';
@@ -90,7 +91,9 @@ const PROVIDER_SETUP_URLS: Record<string, string> = {
 function SectionFooter({ children }: { children: string }): React.JSX.Element {
   return (
     <View className="mx-4 -mt-5 mb-7 px-4">
-      <Text className="text-[13px] text-secondaryLabel">{children}</Text>
+      <Text className="text-[13px]" style={{ color: theme.secondary }}>
+        {children}
+      </Text>
     </View>
   );
 }
@@ -283,7 +286,7 @@ export function WorkflowSettingsScreen(): React.JSX.Element {
   if (!scope) {
     return (
       <SettingsScreen>
-        <Text className="px-8 text-[15px] text-secondaryLabel">
+        <Text className="px-8 text-[15px]" style={{ color: theme.secondary }}>
           {copy('workflowSettings.unavailable', 'This workflow is not available.')}
         </Text>
       </SettingsScreen>
@@ -933,7 +936,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   }
 
   return (
-    <Container className="flex-1 bg-systemBackground" {...containerProps}>
+    <Container className="flex-1" style={{ backgroundColor: theme.canvas }} {...containerProps}>
       <SettingsScreen
         {...screenProps}
         automaticallyAdjustKeyboardInsets
@@ -1161,19 +1164,22 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
                     accessibilityState={{ disabled: !canSave, busy }}
                     onPress={save}
                     disabled={!canSave}
-                    className={
-                      'items-center rounded-[10px] py-3 ' + (canSave ? 'bg-brand' : 'bg-brand/30')
-                    }
-                    style={({ pressed }) => ({
-                      borderCurve: 'continuous',
-                      opacity: pressed ? 0.85 : 1,
-                      transform: [{ scale: pressed ? 0.98 : 1 }],
-                    })}
+                    style={({ pressed }) => [
+                      glass,
+                      {
+                        alignItems: 'center',
+                        borderRadius: 999,
+                        minHeight: 50,
+                        justifyContent: 'center',
+                        opacity: canSave ? 1 : 0.5,
+                      },
+                      pressed && canSave && glassPressed,
+                    ]}
                   >
                     {busy && !checking ? (
-                      <ActivityIndicator color="white" />
+                      <ActivityIndicator color={theme.onGlass} />
                     ) : (
-                      <Text className="text-[15px] font-semibold text-white">
+                      <Text className="text-[15px] font-semibold" style={{ color: theme.onGlass }}>
                         {copy('save', 'Save')}
                       </Text>
                     )}

@@ -22,9 +22,9 @@ const mockState = {
 };
 
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
-jest.mock('@/components/ui/Button', () => ({
-  Button: ({ onPress, children }: any) =>
-    require('react').createElement(require('react-native').Text, { onPress }, children),
+jest.mock('@/android/settings/kit', () => ({
+  PillAction: ({ onPress, label }: any) =>
+    require('react').createElement(require('react-native').Text, { onPress }, label),
 }));
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockParams,

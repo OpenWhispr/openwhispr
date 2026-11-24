@@ -5,10 +5,11 @@ import type { GoogleCalendar, GoogleCalendarAccount } from '@/data/calendarTypes
 import { needsReconnect } from '../calendar/connect';
 import { type } from '../home/kit';
 import { edgeCard } from './look';
+import { theme } from '../theme';
 import { relativeTime } from './kit';
 import type { useSettingsT } from './strings';
 
-export const AMBER = '#B45309';
+export const AMBER = theme.amber;
 
 type T = ReturnType<typeof useSettingsT>;
 
@@ -67,7 +68,7 @@ export function AmberTag({ label }: { label: string }) {
         paddingHorizontal: 8,
         paddingVertical: 2,
         borderRadius: 6,
-        backgroundColor: 'rgba(245,158,11,0.16)',
+        backgroundColor: theme.amberFill,
       }}
     >
       <Text

@@ -28,11 +28,17 @@ export const theme = {
   accent: '#1555D4',
   hairline: 'rgba(0,0,0,0.06)',
   divider: 'rgba(0,0,0,0.08)',
+  /** A text field's hairline, a step darker than a card's. */
+  fieldHairline: 'rgba(0,0,0,0.10)',
   /** A selected row or tile: the accent at 12%. */
   selFill: 'rgba(21,85,212,0.12)',
   /** The dark toast pill; `toastSolid` is the snackbar with an action. */
   toast: 'rgba(29,29,36,0.92)',
   toastSolid: '#1D1D24',
+  /** Text and icons on the toast, its top rim, and its action word (Undo). */
+  onToast: '#FFFFFF',
+  toastRim: 'rgba(255,255,255,0.14)',
+  toastAction: '#8FB2FF',
   /** Labels and icons on the brand glass. */
   onGlass: '#FFFFFF',
   /** Your own message bubble in an example (Style's previews). */
@@ -41,6 +47,16 @@ export const theme = {
   struck: 'rgba(102,99,110,0.45)',
   /** The ring round a picked card (the tone setup's decks). */
   pickedRing: 'rgba(52,102,226,0.9)',
+  /** Status colours: an error, a success, a warning (a signed-out calendar, a long prompt). */
+  error: '#D70015',
+  success: '#1F9D55',
+  amber: '#B45309',
+  warning: '#D97706',
+  /** The amber tag's fill, and a key check's tick. */
+  amberFill: 'rgba(245,158,11,0.16)',
+  successFill: 'rgba(31,157,85,0.12)',
+  errorFill: 'rgba(215,0,21,0.10)',
+  connected: '#16A34A',
   /** The brand glass gradient's two stops. */
   glassTop: '#5588F0',
   glassBottom: '#3466E2',

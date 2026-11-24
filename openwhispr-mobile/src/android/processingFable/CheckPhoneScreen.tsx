@@ -21,6 +21,7 @@ import { Group, ListRow, PillAction, SettingsPage, cardStyle, settings } from '.
 import { ResultTimes } from '../settings/ResultTimes';
 import { modelName } from '../settings/modelCatalog';
 import { useFableT } from './strings';
+import { ProgressBar } from '../controls';
 
 const STAGES: BenchmarkStage[] = ['preparingSample', 'processing', 'cleanup'];
 
@@ -155,16 +156,7 @@ export default function CheckPhoneScreen() {
             {shared(stage)}
           </Text>
           {fileName ? <Text style={settings.subtitle}>{fileName}</Text> : null}
-          <View style={{ height: 4, borderRadius: 2, backgroundColor: home.fill }}>
-            <View
-              style={{
-                width: `${(step / STAGES.length) * 100}%`,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: home.accent,
-              }}
-            />
-          </View>
+          <ProgressBar value={step / STAGES.length} />
           <Text style={[settings.subtitle, settings.tabular]}>
             {t('stepOf', { step, count: STAGES.length })}
           </Text>

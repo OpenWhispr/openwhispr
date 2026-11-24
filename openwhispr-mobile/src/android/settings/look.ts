@@ -11,9 +11,9 @@ export const look = {
   selFill: theme.selFill,
   idleFill: theme.tile,
   track: theme.track,
-  error: '#D70015',
+  error: theme.error,
   hairline: glassEdge.borderColor,
-  fieldHairline: 'rgba(0,0,0,0.10)',
+  fieldHairline: theme.fieldHairline,
   edgeShadow: glassEdge.boxShadow,
 };
 

@@ -33,6 +33,7 @@ import {
 } from '@/android/settings/kit';
 import { bodyText, edgeField, look } from '@/android/settings/look';
 import { settingsT } from '@/android/settings/strings';
+import { theme } from '@/android/theme';
 
 const TITLE = 'Referral';
 
@@ -45,9 +46,9 @@ const STEPS = [
 /** The invite's state as a square tag, coloured by what it means. */
 function InviteStatusBadge({ status }: { status: ReferralInvite['status'] }) {
   const config: Record<ReferralInvite['status'], { bg: string; text: string; label: string }> = {
-    converted: { bg: 'rgba(31,157,85,0.12)', text: settings.success, label: 'Joined' },
+    converted: { bg: theme.successFill, text: settings.success, label: 'Joined' },
     opened: { bg: look.selFill, text: home.accent, label: 'Opened' },
-    failed: { bg: 'rgba(215,0,21,0.10)', text: look.error, label: 'Bounced' },
+    failed: { bg: theme.errorFill, text: look.error, label: 'Bounced' },
     sent: { bg: look.track, text: home.secondary, label: 'Sent' },
   };
   const c = config[status] ?? config.sent;
@@ -350,7 +351,7 @@ export default function ReferralScreen() {
           value={emailInput}
           onChangeText={setEmailInput}
           placeholder="friend@example.com"
-          placeholderTextColor="rgba(24,23,20,0.4)"
+          placeholderTextColor={theme.tertiary}
           keyboardType="email-address"
           autoCapitalize="none"
           returnKeyType="send"
@@ -358,7 +359,7 @@ export default function ReferralScreen() {
           editable={!sendingInvite}
           style={[
             edgeField,
-            { ...bodyText, minHeight: 49, paddingHorizontal: 16, paddingVertical: 13 },
+            { ...bodyText, minHeight: 48, paddingHorizontal: 16, paddingVertical: 13 },
           ]}
         />
         <PillAction

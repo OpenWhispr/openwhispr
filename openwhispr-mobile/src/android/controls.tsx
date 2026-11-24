@@ -141,7 +141,7 @@ export const SearchField = forwardRef<
         flat,
         {
           borderRadius: 12,
-          borderColor: 'rgba(0,0,0,0.10)',
+          borderColor: theme.fieldHairline,
           minHeight: 48,
           flexDirection: 'row',
           alignItems: 'center',

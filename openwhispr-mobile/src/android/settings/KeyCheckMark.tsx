@@ -3,6 +3,7 @@ import { Animated, Easing, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { home } from '../home/kit';
+import { theme } from '../theme';
 import { useReduceMotion } from './kit';
 import type { KeyCheckState } from './keyCheck';
 
@@ -20,9 +21,9 @@ const TICK_EASE = Easing.bezier(0.65, 0, 0.35, 1);
 
 export const KEY_CHECK_COLORS = {
   checking: home.secondary,
-  connected: '#16A34A',
+  connected: theme.connected,
   failed: home.error,
-  unverified: '#D97706',
+  unverified: theme.warning,
 } as const;
 
 const timing = (

@@ -60,10 +60,6 @@ const LOGOS = new Set([
  * so the list only shrinks.
  */
 const PENDING = new Set([
-  // 5 · Settings
-  'src/android/settings/SizeLookScreen.tsx',
-  'src/android/settings/ModelListRow.tsx',
-  'src/android/settings/BubbleAssistantScreen.tsx',
   // 6 · Onboarding + native bubble
   'src/android/onboarding/kit.tsx',
   'src/android/onboarding/practiceParts.tsx',

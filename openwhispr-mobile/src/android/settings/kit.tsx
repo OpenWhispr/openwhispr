@@ -28,7 +28,7 @@ import { TAB_BAR_HEIGHT } from '../tabBar';
 /** Figma "Android · Settings" tokens on top of the shared Home tokens. */
 export const settings = {
   ...home,
-  success: '#1F9D55',
+  success: theme.success,
   rowValue: { fontSize: 15, lineHeight: 24, color: home.tertiary },
   title: { fontSize: 17, lineHeight: 22, fontWeight: '500' as const, color: home.text },
   rowTitle: { fontSize: 16, lineHeight: 22, fontWeight: '500' as const, color: home.text },
@@ -485,7 +485,7 @@ export function PillAction({
   /** A spinner in place of the label while the action runs. */
   busy?: boolean;
 }) {
-  const color = primary ? '#FFFFFF' : destructive ? look.error : home.text;
+  const color = primary ? theme.onGlass : destructive ? look.error : home.text;
   const off = disabled || busy;
   return (
     <Pressable
@@ -757,7 +757,7 @@ export function SettingsToastHost() {
             borderRadius: action ? 14 : 999,
             backgroundColor: action ? theme.toastSolid : theme.toast,
             borderTopWidth: 1,
-            borderTopColor: 'rgba(255,255,255,0.14)',
+            borderTopColor: theme.toastRim,
             // 12 blur, 4 down: the 16 dp margin holds the whole shadow.
             boxShadow: '0px 4px 12px rgba(0,0,0,0.18)',
           },
@@ -782,11 +782,13 @@ export function SettingsToastHost() {
             }}
           >
             {tone === 'success' ? (
-              <SystemIcon name="checkmark" mdName="Check" size={12} color="#FFFFFF" />
+              <SystemIcon name="checkmark" mdName="Check" size={12} color={theme.onToast} />
             ) : tone === 'learned' ? (
-              <SystemIcon name="sparkles" mdName="Sparkles" size={11} color="#FFFFFF" />
+              <SystemIcon name="sparkles" mdName="Sparkles" size={11} color={theme.onToast} />
             ) : (
-              <Text style={{ color: '#FFFFFF', fontSize: 12, lineHeight: 14, fontWeight: '700' }}>
+              <Text
+                style={{ color: theme.onToast, fontSize: 12, lineHeight: 14, fontWeight: '700' }}
+              >
                 !
               </Text>
             )}
@@ -795,7 +797,7 @@ export function SettingsToastHost() {
         <Text
           textBreakStrategy="balanced"
           style={{
-            color: '#FFFFFF',
+            color: theme.onToast,
             fontSize: 15,
             lineHeight: 20,
             fontWeight: '500',
@@ -824,7 +826,9 @@ export function SettingsToastHost() {
               opacity: pressed ? 0.6 : 1,
             })}
           >
-            <Text style={{ color: '#8FB2FF', fontSize: 15, lineHeight: 20, fontWeight: '600' }}>
+            <Text
+              style={{ color: theme.toastAction, fontSize: 15, lineHeight: 20, fontWeight: '600' }}
+            >
               {action.label}
             </Text>
           </Pressable>

@@ -8,6 +8,7 @@ import { Glyph, type GlyphName } from '../onboarding/PracticeBubble';
 import { GLASS_GRADIENT } from '../onboarding/kit';
 import { Group, ListRow, SettingsPage, Toggle, cardStyle, settings } from './kit';
 import { look } from './look';
+import { flat, theme } from '../theme';
 import { useSettingsT, type SettingsKey } from './strings';
 import { setBubbleAssistant, useBubbleAssistant } from './bubbleAppearance';
 import { currentTranslateTarget } from './translateLanguages';
@@ -49,7 +50,7 @@ function MenuPreview({ language }: { language: string }) {
           </View>
         </LinearGradient>
         <View style={styles.badge}>
-          <Glyph name="sparkle" size={9} color="#154BD4" />
+          <Glyph name="sparkle" size={9} color={theme.accent} />
         </View>
       </View>
       <View style={styles.menu}>
@@ -145,7 +146,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   bars: { flexDirection: 'row', alignItems: 'center', gap: 2.5 },
-  bar: { width: 2.6, borderRadius: 2, backgroundColor: '#FFFFFF' },
+  bar: { width: 2.6, borderRadius: 2, backgroundColor: theme.onGlass },
   badge: {
     position: 'absolute',
     top: 0,
@@ -153,7 +154,7 @@ const styles = StyleSheet.create({
     width: 15,
     height: 15,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.surface,
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: '0px 1px 2px rgba(0,0,0,0.12)',
@@ -163,10 +164,7 @@ const styles = StyleSheet.create({
     padding: 5,
     gap: 2,
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
-    boxShadow: '0px 2px 5px rgba(15,23,42,0.06)',
+    ...flat,
   },
   menuRow: {
     height: 36,
@@ -180,7 +178,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 7,
-    backgroundColor: look.canvas,
+    backgroundColor: theme.tile,
     alignItems: 'center',
     justifyContent: 'center',
   },

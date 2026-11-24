@@ -33,6 +33,7 @@ import { TaskSheet } from './TaskSheet';
 import { OutlineButton, Tile, edgeCard, sectionLabel } from './look';
 import { AddRow, ChipRow, Divider, PlaceHeader, TaskChip, confirmWithUndo, taskChip } from './ui';
 import type { AndroidModelId } from '../models';
+import { ProgressBar } from '../controls';
 
 /** The On device card's one progress line while models download for waiting tasks (D2). */
 function DownloadLine({ t }: { t: FableT }) {
@@ -45,16 +46,7 @@ function DownloadLine({ t }: { t: FableT }) {
   const share = Math.min(1, done / totalBytes);
   return (
     <View style={{ gap: 6 }} accessibilityLiveRegion="polite">
-      <View style={{ height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.07)' }}>
-        <View
-          style={{
-            width: `${Math.round(share * 100)}%`,
-            height: 4,
-            borderRadius: 2,
-            experimental_backgroundImage: 'linear-gradient(90deg, #5588f0 0%, #3466e2 100%)',
-          }}
-        />
-      </View>
+      <ProgressBar value={share} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <Text style={[settings.subtitle, settings.tabular, { flex: 1 }]}>
           {t('downloadingLine', {

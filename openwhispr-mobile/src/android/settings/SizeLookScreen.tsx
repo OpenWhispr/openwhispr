@@ -3,6 +3,7 @@ import { Animated, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { home } from '../home/kit';
+import { theme } from '../theme';
 import {
   Group,
   ListRow,
@@ -101,7 +102,7 @@ function Preview({
               width: full,
               height: full,
               borderRadius: full / 2,
-              backgroundColor: '#2457C5',
+              backgroundColor: theme.accent,
               opacity: shrink,
             }}
           />
