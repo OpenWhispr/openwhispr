@@ -1,3 +1,4 @@
+jest.unmock('@/android/liveSpeakers/speakerModel');
 const mockDownload = jest.fn(async () => undefined);
 const mockReady = jest.fn(async () => false);
 jest.mock('@/android/models', () => ({
