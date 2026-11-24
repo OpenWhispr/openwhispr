@@ -138,6 +138,7 @@ beforeEach(() => {
     stopRecording: jest.fn(),
     stopRecordingRaw,
     cancelRecording,
+    canResumeRecording: () => false,
     audioRecorder: { isRecording: true } as ReturnType<typeof useAudioRecording>['audioRecorder'],
   });
 });

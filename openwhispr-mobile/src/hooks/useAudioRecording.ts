@@ -598,6 +598,10 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
     return audioRecorder.uri ?? null;
   };
 
+  // Reads the refs at call time so a caller can hold one identity: asking a recorder to resume
+  // while a stop is awaiting it would restart the recording the user is ending.
+  const canResumeRecording = (): boolean => openRef.current && !stoppingRef.current;
+
   return {
     isRecording,
     isProcessing,
@@ -607,6 +611,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
     stopRecording,
     stopRecordingRaw,
     cancelRecording,
+    canResumeRecording,
     audioRecorder,
   };
 }

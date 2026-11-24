@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export interface RecorderHealth {
   capturing: boolean;
@@ -15,12 +15,19 @@ const RESUME_RETRY_MS = 2000;
 
 const IDLE_HEALTH: RecorderHealth = { capturing: false, capturedMs: 0 };
 
-/** Polls once a second while `active`; asks a paused recorder to resume at most every 2 s. */
+/**
+ * Polls once a second while `active`; asks a paused recorder to resume at most every 2 s, and only
+ * while `shouldResume()` allows it (not during a stop).
+ */
 export function useMeetingRecorderHealth(
   recorder: HealthRecorder | null,
   active: boolean,
+  shouldResume: () => boolean,
 ): RecorderHealth {
   const [health, setHealth] = useState<RecorderHealth>(IDLE_HEALTH);
+  // A ref, so a new function identity doesn't restart the polling.
+  const shouldResumeRef = useRef(shouldResume);
+  shouldResumeRef.current = shouldResume;
 
   useEffect(() => {
     if (!recorder || !active) return;
@@ -34,7 +41,7 @@ export function useMeetingRecorderHealth(
         // A recorder that is mid-teardown can throw; report it as not capturing.
         status = { isRecording: false, durationMillis: 0 };
       }
-      if (!status.isRecording) {
+      if (!status.isRecording && shouldResumeRef.current()) {
         const now = Date.now();
         if (now - lastResumeAt >= RESUME_RETRY_MS) {
           lastResumeAt = now;

@@ -218,4 +218,35 @@ describe('useAudioRecording stopRecordingRaw', () => {
     expect(mockRecorder.stop).toHaveBeenCalledTimes(1);
     expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
   });
+
+  it('cannot resume while a stop is in progress', async () => {
+    const { result } = renderRecording(true);
+    expect(result.current.canResumeRecording()).toBe(false);
+
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    expect(result.current.canResumeRecording()).toBe(true);
+    // Paused, as after a call: the stop is the path a resume could race with.
+    mockRecorder.isRecording = false;
+    let finishStop: () => void = () => undefined;
+    mockRecorder.stop.mockReturnValue(
+      new Promise<undefined>((resolve) => {
+        finishStop = () => resolve(undefined);
+      }),
+    );
+
+    let stopped: Promise<string | null> = Promise.resolve(null);
+    await act(async () => {
+      stopped = result.current.stopRecordingRaw();
+      await Promise.resolve();
+    });
+    expect(result.current.canResumeRecording()).toBe(false);
+
+    await act(async () => {
+      finishStop();
+      await stopped;
+    });
+    expect(result.current.canResumeRecording()).toBe(false);
+  });
 });
