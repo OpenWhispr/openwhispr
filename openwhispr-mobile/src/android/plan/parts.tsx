@@ -10,33 +10,19 @@ import { useTheme } from '../ThemeProvider';
 import { formatResetParts, resetDate } from './planState';
 import { usePlanT } from './strings';
 
-export type ChipTone = 'neutral' | 'accent' | 'pro' | 'amber';
+export type ChipTone = 'neutral' | 'accent' | 'amber';
 
-/** The small uppercase tag above a plan's name: YOUR PLAN, PRO, CONFIRMING, ACTION NEEDED. */
+/** The small uppercase tag above a plan's name: YOUR PLAN (grey on every plan), CONFIRMING, ACTION NEEDED. */
 export function StatusChip({ label, tone }: { label: string; tone: ChipTone }) {
   const th = useTheme();
   const k = th.tokens;
-  const fill =
-    tone === 'neutral'
-      ? k.track
-      : tone === 'amber'
-        ? k.amberFill
-        : tone === 'accent'
-          ? k.selFill
-          : undefined;
-  const ink =
-    tone === 'neutral'
-      ? k.secondary
-      : tone === 'amber'
-        ? k.amber
-        : tone === 'pro'
-          ? k.onGlass
-          : k.accent;
+  const fill = tone === 'neutral' ? k.track : tone === 'amber' ? k.amberFill : k.selFill;
+  const ink = tone === 'neutral' ? k.secondary : tone === 'amber' ? k.amber : k.accent;
   return (
     <View
       style={[
         { alignSelf: 'flex-start', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
-        tone === 'pro' ? th.glass : { backgroundColor: fill },
+        { backgroundColor: fill },
       ]}
     >
       <Text

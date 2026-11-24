@@ -7,7 +7,6 @@ import { planTranslations } from './translations';
 export const planEnglish = {
   // Status chips above a plan's name
   chipYourPlan: 'Your plan',
-  chipPro: 'Pro',
   chipBusiness: 'Business',
   chipConfirming: 'Confirming',
   chipPaymentPending: 'Payment pending',

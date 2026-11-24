@@ -356,7 +356,7 @@ export function PlanContent({ openPaywall }: { openPaywall?: 'limit' } = {}) {
       top = (
         <>
           <PlanCard
-            chip={{ label: t('chipPro'), tone: 'pro' }}
+            chip={{ label: t('chipYourPlan'), tone: 'neutral' }}
             title={t('pro')}
             body={
               renews
@@ -419,7 +419,7 @@ export function PlanContent({ openPaywall }: { openPaywall?: 'limit' } = {}) {
       top = (
         <>
           <PlanCard
-            chip={{ label: t('chipPro'), tone: 'pro' }}
+            chip={{ label: t('chipYourPlan'), tone: 'neutral' }}
             title={t('pro')}
             body={renews ? t('webRenews', { date: renews }) : t('webBody')}
             usage={usage}
@@ -468,7 +468,7 @@ export function PlanContent({ openPaywall }: { openPaywall?: 'limit' } = {}) {
       top = (
         <>
           <PlanCard
-            chip={{ label: t('chipPro'), tone: 'pro' }}
+            chip={{ label: t('chipYourPlan'), tone: 'neutral' }}
             title={t('pro')}
             body={t('appStoreBody')}
             usage={usage}
@@ -490,7 +490,7 @@ export function PlanContent({ openPaywall }: { openPaywall?: 'limit' } = {}) {
       top = (
         <>
           <PlanCard
-            chip={{ label: t('chipPro'), tone: 'pro' }}
+            chip={{ label: t('chipYourPlan'), tone: 'neutral' }}
             title={view.plan === 'business' ? t('business') : t('pro')}
             body={ends ? t('trialEnds', { date: ends }) : undefined}
             usage={usage}

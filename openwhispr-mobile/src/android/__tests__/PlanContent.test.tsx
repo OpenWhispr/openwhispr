@@ -296,6 +296,9 @@ it('C · Pro on Google Play: renewal date, Play price and management', () => {
   useUsageStore.setState({ usage: playPro() });
   show();
   expect(kind()).toBe('pro-play');
+  // Pro cards say YOUR PLAN, never Pro twice.
+  expect(screen.getByText('chipYourPlan')).toBeTruthy();
+  expect(screen.queryByText('chipPro')).toBeNull();
   expect(screen.getByText(/^renewsPrice:.*"price":"priceYear:/)).toBeTruthy();
   expect(screen.getByText('unlimited')).toBeTruthy();
   fireEvent.press(screen.getByRole('button', { name: 'manageSubscription' }));

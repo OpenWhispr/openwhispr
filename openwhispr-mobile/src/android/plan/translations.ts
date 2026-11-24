@@ -4,7 +4,6 @@ import type { PlanKey } from './strings';
 export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> = {
   es: {
     chipYourPlan: 'Tu plan',
-    chipPro: 'Pro',
     chipBusiness: 'Business',
     chipConfirming: 'Confirmando',
     chipPaymentPending: 'Pago pendiente',
@@ -98,7 +97,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
   },
   fr: {
     chipYourPlan: 'Votre offre',
-    chipPro: 'Pro',
     chipBusiness: 'Business',
     chipConfirming: 'Confirmation',
     chipPaymentPending: 'Paiement en attente',
@@ -191,7 +189,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
   },
   de: {
     chipYourPlan: 'Dein Tarif',
-    chipPro: 'Pro',
     chipBusiness: 'Business',
     chipConfirming: 'Wird bestätigt',
     chipPaymentPending: 'Zahlung ausstehend',
@@ -286,7 +283,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
   },
   pt: {
     chipYourPlan: 'Seu plano',
-    chipPro: 'Pro',
     chipBusiness: 'Business',
     chipConfirming: 'Confirmando',
     chipPaymentPending: 'Pagamento pendente',
@@ -379,7 +375,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
   },
   it: {
     chipYourPlan: 'Il tuo piano',
-    chipPro: 'Pro',
     chipBusiness: 'Business',
     chipConfirming: 'In conferma',
     chipPaymentPending: 'Pagamento in sospeso',
@@ -471,7 +466,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
   },
   ru: {
     chipYourPlan: 'Ваш тариф',
-    chipPro: 'Pro',
     chipBusiness: 'Business',
     chipConfirming: 'Подтверждение',
     chipPaymentPending: 'Платёж в обработке',
@@ -563,7 +557,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
   },
   'zh-CN': {
     chipYourPlan: '你的方案',
-    chipPro: 'Pro',
     chipBusiness: 'Business',
     chipConfirming: '确认中',
     chipPaymentPending: '付款待处理',
@@ -647,7 +640,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
   },
   'zh-TW': {
     chipYourPlan: '你的方案',
-    chipPro: 'Pro',
     chipBusiness: 'Business',
     chipConfirming: '確認中',
     chipPaymentPending: '付款待處理',
@@ -731,7 +723,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
   },
   ja: {
     chipYourPlan: 'ご利用中のプラン',
-    chipPro: 'Pro',
     chipBusiness: 'Business',
     chipConfirming: '確認中',
     chipPaymentPending: '支払い保留中',
@@ -823,7 +814,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
   },
   ar: {
     chipYourPlan: 'خطتك',
-    chipPro: 'Pro',
     chipBusiness: 'Business',
     chipConfirming: 'قيد التأكيد',
     chipPaymentPending: 'الدفع معلّق',
