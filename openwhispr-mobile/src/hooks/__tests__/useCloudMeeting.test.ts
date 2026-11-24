@@ -163,7 +163,11 @@ describe('useCloudMeeting', () => {
     });
     expect(result.current.utterances).toHaveLength(2);
 
-    let stopped: Promise<unknown> = Promise.resolve([]);
+    let stopped: Promise<CloudMeetingResult> = Promise.resolve({
+      utterances: [],
+      droppedWindows: [],
+      recordingUri: null,
+    });
     act(() => {
       stopped = result.current.stop();
     });
@@ -225,7 +229,11 @@ describe('useCloudMeeting', () => {
     });
 
     let settled = false;
-    let stopped: Promise<unknown> = Promise.resolve([]);
+    let stopped: Promise<CloudMeetingResult> = Promise.resolve({
+      utterances: [],
+      droppedWindows: [],
+      recordingUri: null,
+    });
     act(() => {
       stopped = result.current.stop();
       void stopped.then(() => {
