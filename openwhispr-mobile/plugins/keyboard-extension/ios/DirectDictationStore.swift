@@ -16,11 +16,19 @@ struct DirectDictationRecord: Codable, Equatable {
   var text: String?
   var originalText: String?
   var cleanupApplied: Bool?
+  /// "cloud", or the Local model's raw value ("parakeet-v2", "parakeet-v3"). Records written
+  /// before Local existed have none and are Cloud takes.
+  var engine: String?
+
+  static let cloudEngine = "cloud"
+
+  var isCloud: Bool { engine == nil || engine == Self.cloudEngine }
 }
 
 /// Per-dictation files in the App Group container: `<jobId>.json` (the record), `<jobId>.pcm`
 /// (the take while it is recorded), `<jobId>.m4a` (what is uploaded, and kept for a retry in
-/// the app) and `<jobId>.body` (the multipart upload). One file per dictation, so the keyboard
+/// the app), `<jobId>.body` (the multipart upload) and `<jobId>.wav` (what a Local take hands
+/// the transcriber). One file per dictation, so the keyboard
 /// and the app never rewrite each other's data.
 final class DirectDictationStore {
   static let folderName = "direct-dictations"
@@ -40,16 +48,18 @@ final class DirectDictationStore {
   func pcmURL(jobId: String) -> URL { directory.appendingPathComponent("\(jobId).pcm") }
   func audioURL(jobId: String) -> URL { directory.appendingPathComponent("\(jobId).m4a") }
   func bodyURL(jobId: String) -> URL { directory.appendingPathComponent("\(jobId).body") }
+  func wavURL(jobId: String) -> URL { directory.appendingPathComponent("\(jobId).wav") }
   private func recordURL(jobId: String) -> URL { directory.appendingPathComponent("\(jobId).json") }
   // DirectAudioEncoder writes here first, then moves the finished file to audioURL.
   private func partialURL(jobId: String) -> URL { DirectAudioEncoder.partialURL(for: audioURL(jobId: jobId)) }
 
   /// Written before recording starts, so audio on disk always has an owner.
-  func begin(jobId: String, userId: String, documentID: UUID, tone: String) throws {
+  func begin(jobId: String, userId: String, documentID: UUID, tone: String, engine: String) throws {
     try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
     try write(DirectDictationRecord(
       jobId: jobId, status: .pending, userId: userId, documentID: documentID, startedAtMs: now(), completedAtMs: nil,
-      durationMs: 0, tone: tone, text: nil, originalText: nil, cleanupApplied: nil
+      durationMs: 0, tone: tone, text: nil, originalText: nil, cleanupApplied: nil,
+      engine: engine
     ))
   }
 
@@ -68,17 +78,21 @@ final class DirectDictationStore {
     record.originalText = originalText
     record.cleanupApplied = cleanupApplied
     try write(record)
-    remove([pcmURL(jobId: jobId), audioURL(jobId: jobId), bodyURL(jobId: jobId), partialURL(jobId: jobId)])
+    remove([
+      pcmURL(jobId: jobId), audioURL(jobId: jobId), bodyURL(jobId: jobId), partialURL(jobId: jobId),
+      wavURL(jobId: jobId),
+    ])
   }
 
-  /// History can retry from the encoded take, or from PCM if encoding failed.
+  /// History can retry from the encoded take, or from PCM if encoding failed (and always from
+  /// PCM for a Local take, which is never encoded).
   func fail(jobId: String, durationMs: Int) throws {
     guard var record = record(jobId: jobId) else { return }
     record.status = .failed
     record.completedAtMs = now()
     record.durationMs = durationMs
     try write(record)
-    remove([bodyURL(jobId: jobId), partialURL(jobId: jobId)])
+    remove([bodyURL(jobId: jobId), partialURL(jobId: jobId), wavURL(jobId: jobId)])
     if fileManager.fileExists(atPath: audioURL(jobId: jobId).path) { remove([pcmURL(jobId: jobId)]) }
     prune()
   }
@@ -86,7 +100,7 @@ final class DirectDictationStore {
   func cancel(jobId: String) {
     remove([
       recordURL(jobId: jobId), pcmURL(jobId: jobId), audioURL(jobId: jobId), bodyURL(jobId: jobId),
-      partialURL(jobId: jobId),
+      partialURL(jobId: jobId), wavURL(jobId: jobId),
     ])
   }
 
@@ -97,11 +111,12 @@ final class DirectDictationStore {
 
   /// The newest pending record of `userId` that started less than 10 minutes ago and still has
   /// its audio: the `.m4a`, or the `.pcm` of a take the keyboard was killed before encoding.
+  /// Only Cloud takes: resuming means uploading, and a Local take never leaves the device.
   func resumable(userId: String, documentID: UUID) -> DirectDictationRecord? {
     let cutoff = now() - Self.resumeWindowMs
     return allRecords()
       .filter { record in
-        record.status == .pending && record.userId == userId && record.documentID == documentID
+        record.status == .pending && record.isCloud && record.userId == userId && record.documentID == documentID
           && record.startedAtMs > cutoff
           && (fileManager.fileExists(atPath: audioURL(jobId: record.jobId).path)
             || fileManager.fileExists(atPath: pcmURL(jobId: record.jobId).path))
@@ -115,7 +130,7 @@ final class DirectDictationStore {
     for record in records.dropFirst(Self.maxRecords) { cancel(jobId: record.jobId) }
     let failed = records.prefix(Self.maxRecords).filter { $0.status == .failed }
     for record in failed.dropFirst(Self.maxFailedAudio) {
-      remove([audioURL(jobId: record.jobId), pcmURL(jobId: record.jobId)])
+      remove([audioURL(jobId: record.jobId), pcmURL(jobId: record.jobId), wavURL(jobId: record.jobId)])
     }
   }
 

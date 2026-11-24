@@ -62,11 +62,14 @@ struct DirectDependencies {
   var encode: (_ pcmURL: URL, _ m4aURL: URL, _ gain: Float) throws -> Void
   var makeJobId: () -> String
   var makeBoundary: () -> String
+  /// Parakeet in the keyboard; nil where it can't run, which leaves Local snapshots ineligible.
+  var localTranscriber: DirectLocalTranscriber?
 }
 
-/// A dictation the keyboard records and transcribes itself, for OpenWhispr Cloud users when the
-/// app isn't running. One per keyboard process: the view controller can be recreated mid-take,
-/// so it attaches to this object rather than owning it. Every call happens on the main thread.
+/// A dictation the keyboard records and transcribes itself when the app isn't running: uploaded
+/// for OpenWhispr Cloud users, or transcribed on the device with Parakeet for Local Mode users.
+/// One per keyboard process: the view controller can be recreated mid-take, so it attaches to
+/// this object rather than owning it. Every call happens on the main thread.
 final class DirectDictation {
   static let startTimeout: TimeInterval = 3
   static let takeCap: TimeInterval = 300
@@ -82,10 +85,23 @@ final class DirectDictation {
   /// The final text, already snippet-expanded.
   var onText: ((String) -> Void)?
 
+  /// How a take is transcribed. A Local job has no request context at all, so no code path can
+  /// build a request for it.
+  private enum JobEngine {
+    case cloud(DirectRequestContext)
+    case local(model: DirectLocalModel, languageHint: String?)
+  }
+
+  private enum EligibleEngine {
+    case cloud(cookie: String)
+    case local(model: DirectLocalModel, languageHint: String?)
+  }
+
   private struct Job {
     let token: Int
     let jobId: String
-    let context: DirectRequestContext
+    let config: DirectDictationConfig
+    let engine: JobEngine
     let documentID: UUID
     var writer: PcmFileWriter?
     var meter = SpeechActivityMeter()
@@ -117,8 +133,9 @@ final class DirectDictation {
     deps.capture.onEnded = { [weak self] reason in self?.captureEnded(reason) }
   }
 
-  /// The snapshot decodes, a cookie exists, and the path hasn't been turned off since the
-  /// snapshot last changed.
+  /// The snapshot decodes, the path hasn't been turned off since the snapshot last changed, and
+  /// either a cookie exists (Cloud) or the snapshot's Parakeet model is loaded (Local). Reading
+  /// it with a Local snapshot whose model isn't ready asks the transcriber to load it.
   var isEligible: Bool { eligibleContext() != nil }
 
   func start() {
@@ -126,15 +143,27 @@ final class DirectDictation {
     case .idle, .failed: break
     default: return
     }
-    guard job == nil, let documentID = readDocumentID?(), let (config, cookie) = eligibleContext() else { return }
+    guard job == nil, let documentID = readDocumentID?(), let (config, eligible) = eligibleContext() else { return }
     let jobId = deps.makeJobId()
-    let context = DirectRequestContext(config: config, jobId: jobId, tone: deps.readTone(), cookie: cookie)
+    let tone = deps.readTone()
+    let engine: JobEngine
+    let recordEngine: String
+    switch eligible {
+    case let .cloud(cookie):
+      engine = .cloud(DirectRequestContext(config: config, jobId: jobId, tone: tone, cookie: cookie))
+      recordEngine = DirectDictationRecord.cloudEngine
+    case let .local(model, languageHint):
+      engine = .local(model: model, languageHint: languageHint)
+      recordEngine = model.rawValue
+    }
     do {
-      // The record first, so audio on disk always has an owner.
-      try deps.store.begin(jobId: jobId, userId: config.userId, documentID: documentID, tone: context.tone)
+      // The record first, so audio on disk always has an owner, and says which engine it is
+      // for, so a Local take left behind is never resumed as an upload.
+      try deps.store.begin(jobId: jobId, userId: config.userId, documentID: documentID, tone: tone, engine: recordEngine)
       let writer = try PcmFileWriter(url: deps.store.pcmURL(jobId: jobId))
       nextToken += 1
-      job = Job(token: nextToken, jobId: jobId, context: context, documentID: documentID, writer: writer)
+      job = Job(token: nextToken, jobId: jobId, config: config, engine: engine, documentID: documentID, writer: writer)
+      undeliveredText = nil
     } catch {
       deps.store.cancel(jobId: jobId)
       state = .failed(.tryAgain)
@@ -169,7 +198,8 @@ final class DirectDictation {
   }
 
   /// Capture never outlives the keyboard. Audio already captured is kept, to send when the
-  /// keyboard comes back; a request in flight is left to finish.
+  /// keyboard comes back (a Local take is transcribed at once); a request or a transcription in
+  /// flight is left to finish.
   func keyboardWillDisappear() {
     keyboardVisible = false
     switch state {
@@ -181,22 +211,26 @@ final class DirectDictation {
 
   func keyboardDidAppear() {
     keyboardVisible = true
-    if let result = undeliveredText {
+    // Kept until it reaches the field and account it was spoken for, or a newer take starts.
+    if let result = undeliveredText, insertIfDestinationMatches(result) {
       undeliveredText = nil
-      insertIfDestinationMatches(result)
     }
     switch state {
     case .idle, .failed: break
     default: return
     }
-    guard job == nil, let documentID = readDocumentID?(), let (config, cookie) = eligibleContext(),
-      let record = deps.store.resumable(userId: config.userId, documentID: documentID)
+    // Resuming uploads, so only a Cloud snapshot resumes, and only a Cloud record (the store
+    // never returns a Local one; the app's outbox makes those retryable rows).
+    guard job == nil, let documentID = readDocumentID?(), let (config, eligible) = eligibleContext(),
+      case let .cloud(cookie) = eligible,
+      let record = deps.store.resumable(userId: config.userId, documentID: documentID), record.isCloud
     else { return }
     nextToken += 1
     job = Job(
       token: nextToken,
       jobId: record.jobId,
-      context: DirectRequestContext(config: config, jobId: record.jobId, tone: record.tone, cookie: cookie),
+      config: config,
+      engine: .cloud(DirectRequestContext(config: config, jobId: record.jobId, tone: record.tone, cookie: cookie)),
       documentID: documentID,
       writer: nil,
       durationMs: record.durationMs
@@ -270,7 +304,8 @@ final class DirectDictation {
     state = .failed(.captureUnavailable)
   }
 
-  /// Closes and encodes the take before upload or suspension.
+  /// Closes and encodes the take before upload or suspension; a Local take goes to the
+  /// transcriber instead.
   private func finishRecording(upload shouldUpload: Bool) {
     guard state == .recording, var current = job else { return }
     cancelTimers()
@@ -286,6 +321,16 @@ final class DirectDictation {
       store.cancel(jobId: jobId)
       job = nil
       state = shouldUpload ? .failed(.noSpeech) : .idle
+      return
+    }
+
+    // Parakeet takes the take as captured: the gain is for the AAC upload. It is transcribed
+    // even when the keyboard is going away, since nothing leaves the device and the keyboard
+    // never resumes a Local take; the text waits for the same field (`undeliveredText`).
+    if case let .local(model, languageHint) = current.engine {
+      current.writer = nil
+      job = current
+      transcribeLocally(model: model, languageHint: languageHint)
       return
     }
 
@@ -317,15 +362,55 @@ final class DirectDictation {
     try? FileManager.default.removeItem(at: pcm)
   }
 
+  // MARK: - On the device
+
+  /// The PCM stays until the take completes, so a failure leaves History a take to retry.
+  private func transcribeLocally(model: DirectLocalModel, languageHint: String?) {
+    guard let current = job else { return }
+    let store = deps.store
+    let wav = store.wavURL(jobId: current.jobId)
+    // The model loaded now must be the one the take started with: the language may have moved
+    // the route from v2 to v3 since, and v2 must never transcribe German.
+    guard let transcriber = deps.localTranscriber, transcriber.readyModel == model else {
+      failJob(.tryAgain, turnOff: false)
+      return
+    }
+    do {
+      try store.setDuration(jobId: current.jobId, durationMs: current.durationMs)
+      try PcmWav.wrap(pcmURL: store.pcmURL(jobId: current.jobId), into: wav)
+    } catch {
+      failJob(.tryAgain, turnOff: false)
+      return
+    }
+    state = .transcribing
+    let token = current.token
+    inFlight = transcriber.transcribe(wavURL: wav, languageHint: languageHint) { [weak self] result in
+      guard let self, self.job?.token == token else { return }
+      self.inFlight = nil
+      switch result {
+      case let .success(text):
+        self.finish(text: text, original: text, cleanupApplied: nil)
+      case .failure:
+        self.failJob(.tryAgain, turnOff: false)
+      }
+    }
+  }
+
   // MARK: - Requests
 
   private func upload() {
+    // Only a Cloud job has a request context; anything else is a take that must not leave
+    // the device.
     guard let current = job else { return }
+    guard case let .cloud(context) = current.engine else {
+      failJob(.tryAgain, turnOff: false)
+      return
+    }
     state = .transcribing
     let store = deps.store
     do {
       let request = try DirectDictationRequests.makeTranscribeRequest(
-        current.context,
+        context,
         audioURL: store.audioURL(jobId: current.jobId),
         bodyURL: store.bodyURL(jobId: current.jobId),
         boundary: deps.makeBoundary()
@@ -346,7 +431,7 @@ final class DirectDictation {
     switch outcome {
     case let .success(text, original, applied):
       // As the app: a fused request that came back without cleanup gets one cleanup pass.
-      if current.context.config.cleanup.enabled && applied != true {
+      if current.config.cleanup.enabled && applied != true {
         cleanUp(raw: text, original: original ?? text, token: token)
       } else {
         finish(text: text, original: original ?? text, cleanupApplied: applied)
@@ -370,8 +455,8 @@ final class DirectDictation {
   }
 
   private func cleanUp(raw: String, original: String, token: Int) {
-    guard let current = job,
-      let request = try? DirectDictationRequests.makeReasonRequest(current.context, rawText: raw)
+    guard let current = job, case let .cloud(context) = current.engine,
+      let request = try? DirectDictationRequests.makeReasonRequest(context, rawText: raw)
     else {
       finish(text: raw, original: original, cleanupApplied: false)
       return
@@ -386,27 +471,29 @@ final class DirectDictation {
 
   private func finish(text: String, original: String, cleanupApplied: Bool?) {
     guard let current = job else { return }
-    let expanded = SnippetExpander.expand(text, snippets: current.context.config.snippets)
+    let expanded = SnippetExpander.expand(text, snippets: current.config.snippets)
     try? deps.store.complete(
       jobId: current.jobId, text: expanded, originalText: original, cleanupApplied: cleanupApplied,
       durationMs: current.durationMs
     )
     job = nil
     state = .idle
-    let result = ResultForInsertion(text: expanded, userId: current.context.config.userId, documentID: current.documentID)
+    let result = ResultForInsertion(text: expanded, userId: current.config.userId, documentID: current.documentID)
     if keyboardVisible {
-      insertIfDestinationMatches(result)
+      _ = insertIfDestinationMatches(result)
     } else {
       undeliveredText = result
     }
   }
 
-  private func insertIfDestinationMatches(_ result: ResultForInsertion) {
-    guard readDocumentID?() == result.documentID, eligibleContext()?.0.userId == result.userId else { return }
+  private func insertIfDestinationMatches(_ result: ResultForInsertion) -> Bool {
+    guard readDocumentID?() == result.documentID, deliverableUserId() == result.userId else { return false }
     onText?(result.text)
+    return true
   }
 
-  /// Keeps the `.m4a`, so the app can offer a retry from History.
+  /// Keeps the `.m4a` (or the `.pcm` of a take never encoded, as every Local take), so the app
+  /// can offer a retry from History.
   private func failJob(_ failure: DirectFailure, turnOff: Bool) {
     guard let current = job else { return }
     try? deps.store.fail(jobId: current.jobId, durationMs: current.durationMs)
@@ -417,17 +504,45 @@ final class DirectDictation {
 
   // MARK: - Eligibility
 
-  private func eligibleContext() -> (DirectDictationConfig, String)? {
+  private func currentConfig() -> DirectDictationConfig? {
     let json = deps.readConfigJSON()
     if turnedOff {
       // Off until the app writes a different snapshot (a new sign-in, a setting change).
       guard json != configWhenTurnedOff else { return nil }
       turnedOff = false
     }
-    guard let config = DirectDictationConfig.decode(json),
-      let cookie = deps.readCookie(config.userId), !cookie.isEmpty
-    else { return nil }
-    return (config, cookie)
+    return DirectDictationConfig.decode(json)
+  }
+
+  private func eligibleContext() -> (DirectDictationConfig, EligibleEngine)? {
+    guard let config = currentConfig() else { return nil }
+    switch config.engine {
+    case .cloud:
+      guard let cookie = deps.readCookie(config.userId), !cookie.isEmpty else { return nil }
+      return (config, .cloud(cookie: cookie))
+    case let .local(model, languageHint):
+      guard let transcriber = deps.localTranscriber else { return nil }
+      guard transcriber.readyModel == model else {
+        // Not ready (or another model loaded): load this one for the next take, and hand off
+        // this time.
+        transcriber.prepare(model)
+        return nil
+      }
+      return (config, .local(model: model, languageHint: languageHint))
+    }
+  }
+
+  /// The account a finished take may still be typed for. Unlike eligibility, a Local result
+  /// doesn't need the model loaded any more: only the account has to be the same.
+  private func deliverableUserId() -> String? {
+    guard let config = currentConfig() else { return nil }
+    switch config.engine {
+    case .cloud:
+      guard let cookie = deps.readCookie(config.userId), !cookie.isEmpty else { return nil }
+      return config.userId
+    case .local:
+      return config.userId
+    }
   }
 
   private func turnPathOff() {

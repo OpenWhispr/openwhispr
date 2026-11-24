@@ -350,6 +350,7 @@ const KEYBOARD_SOURCES = [
   'DirectDictationRequests.swift',
   'DirectDictationRuntime.swift',
   'DirectDictationStore.swift',
+  'DirectLocalTranscription.swift',
   'EmojiCatalog.swift',
   'EmojiPanelView.swift',
   'HitTargetModel.swift',

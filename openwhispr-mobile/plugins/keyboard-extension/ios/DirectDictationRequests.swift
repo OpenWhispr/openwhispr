@@ -11,6 +11,11 @@ struct DirectRequestContext: Equatable {
   let cookie: String
 }
 
+/// A request was asked for with a snapshot that has no server: a Local take.
+enum DirectRequestError: Error, Equatable {
+  case notCloud
+}
+
 enum TranscribeOutcome: Equatable {
   case success(text: String, originalText: String?, cleanupApplied: Bool?)
   /// 422 NO_SPEECH_DETECTED, or a 200 with empty text.
@@ -71,6 +76,8 @@ enum DirectDictationRequests {
   static func makeTranscribeRequest(
     _ context: DirectRequestContext, audioURL: URL, bodyURL: URL, boundary: String
   ) throws -> URLRequest {
+    // Before the body is written: nothing of a Local take is ever prepared for sending.
+    let base = try cloudBaseURL(context)
     let audio = try FileHandle(forReadingFrom: audioURL)
     defer { try? audio.close() }
     FileManager.default.createFile(atPath: bodyURL.path, contents: nil)
@@ -92,13 +99,14 @@ enum DirectDictationRequests {
     try body.write(contentsOf: Data("\r\n--\(boundary)--\r\n".utf8))
 
     // The server's parser takes everything after `boundary=`, so it goes last and unquoted.
-    var request = baseRequest(context, path: "api/transcribe", timeout: transcribeTimeout)
+    var request = baseRequest(context, base: base, path: "api/transcribe", timeout: transcribeTimeout)
     request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
     return request
   }
 
   /// The cleanup pass the app runs when the fused request comes back without one.
   static func makeReasonRequest(_ context: DirectRequestContext, rawText: String) throws -> URLRequest {
+    let base = try cloudBaseURL(context)
     let config = context.config
     var payload: [String: Any] = [
       "text": rawText,
@@ -114,7 +122,7 @@ enum DirectDictationRequests {
     }
     if let tone = appliedTone(context) { payload["tone"] = tone }
 
-    var request = baseRequest(context, path: "api/reason", timeout: reasonTimeout)
+    var request = baseRequest(context, base: base, path: "api/reason", timeout: reasonTimeout)
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.setValue(cleanupTimeoutMs, forHTTPHeaderField: "x-openwhispr-cleanup-timeout-ms")
     request.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [.withoutEscapingSlashes])
@@ -157,8 +165,13 @@ enum DirectDictationRequests {
     return firstText(object, ["text"])
   }
 
-  private static func baseRequest(_ context: DirectRequestContext, path: String, timeout: TimeInterval) -> URLRequest {
-    var request = URLRequest(url: context.config.apiBaseURL.appendingPathComponent(path), timeoutInterval: timeout)
+  private static func cloudBaseURL(_ context: DirectRequestContext) throws -> URL {
+    guard case let .cloud(apiBaseURL) = context.config.engine else { throw DirectRequestError.notCloud }
+    return apiBaseURL
+  }
+
+  private static func baseRequest(_ context: DirectRequestContext, base: URL, path: String, timeout: TimeInterval) -> URLRequest {
+    var request = URLRequest(url: base.appendingPathComponent(path), timeoutInterval: timeout)
     request.httpMethod = "POST"
     request.httpShouldHandleCookies = false
     request.setValue(context.cookie, forHTTPHeaderField: "Cookie")

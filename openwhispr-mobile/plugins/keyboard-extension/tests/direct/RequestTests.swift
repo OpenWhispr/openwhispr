@@ -7,7 +7,7 @@ extension DirectDictationTests {
   ) -> DirectDictationConfig {
     DirectDictationConfig(
       userId: "u1",
-      apiBaseURL: URL(string: "https://api.openwhispr.com")!,
+      engine: .cloud(apiBaseURL: URL(string: "https://api.openwhispr.com")!),
       appVersion: appVersion,
       language: language,
       cleanup: .init(enabled: cleanup, language: language, toneApplies: toneApplies),
@@ -134,5 +134,28 @@ extension DirectDictationTests {
     expect(R.parseReason(status: 200, body: json(#"{"text":"Cleaned."}"#)), "Cleaned.", "reason 200")
     expect(R.parseReason(status: 200, body: json(#"{"text":""}"#)) == nil, true, "reason empty text")
     expect(R.parseReason(status: 403, body: json(#"{"text":"x"}"#)) == nil, true, "reason refused")
+
+    testRequestsRefuseLocal()
+  }
+
+  /// No request, and no upload body, is ever built from a Local snapshot.
+  static func testRequestsRefuseLocal() {
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent("direct-req-local-\(UUID().uuidString)")
+    try! FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let audio = folder.appendingPathComponent("j1.m4a")
+    let body = folder.appendingPathComponent("j1.body")
+    try! Data([1, 2, 3, 4]).write(to: audio)
+    let local = DirectDictationConfig.decode(localConfig)!
+    let context = DirectRequestContext(config: local, jobId: "j1", tone: "default", cookie: "session=1")
+    var transcribeError: Error?
+    do { _ = try DirectDictationRequests.makeTranscribeRequest(context, audioURL: audio, bodyURL: body, boundary: "B") } catch {
+      transcribeError = error
+    }
+    expect(transcribeError as? DirectRequestError, .notCloud, "local: no transcribe request")
+    expect(FileManager.default.fileExists(atPath: body.path), false, "local: no upload body written")
+    var reasonError: Error?
+    do { _ = try DirectDictationRequests.makeReasonRequest(context, rawText: "x") } catch { reasonError = error }
+    expect(reasonError as? DirectRequestError, .notCloud, "local: no reason request")
   }
 }

@@ -66,6 +66,42 @@ final class FakeTransport: DirectTransport {
   }
 }
 
+final class FakeTranscription: DirectCancellable {
+  var cancelled = false
+  func cancel() { cancelled = true }
+}
+
+/// Parakeet as the state machine sees it: a model that is ready or not, and transcriptions the
+/// test completes when it wants.
+final class FakeLocalTranscriber: DirectLocalTranscriber {
+  struct Call {
+    let wavURL: URL
+    let languageHint: String?
+    /// The WAV's size when the transcriber got it.
+    let wavBytes: Int
+    let handle: FakeTranscription
+    let completion: (Result<String, Error>) -> Void
+  }
+
+  var readyModel: DirectLocalModel?
+  var prepared: [DirectLocalModel] = []
+  var calls: [Call] = []
+
+  func prepare(_ model: DirectLocalModel) { prepared.append(model) }
+
+  func transcribe(
+    wavURL: URL, languageHint: String?, completion: @escaping (Result<String, Error>) -> Void
+  ) -> DirectCancellable {
+    let size = (try? FileManager.default.attributesOfItem(atPath: wavURL.path)[.size] as? Int) ?? -1
+    let handle = FakeTranscription()
+    calls.append(Call(wavURL: wavURL, languageHint: languageHint, wavBytes: size, handle: handle, completion: completion))
+    return handle
+  }
+
+  func succeed(_ text: String) { calls.last?.completion(.success(text)) }
+  func fail() { calls.last?.completion(.failure(NSError(domain: "parakeet", code: 1))) }
+}
+
 final class FakeScheduler: DirectScheduler {
   final class Item: DirectCancellable {
     let due: Int64
@@ -113,6 +149,9 @@ final class Harness {
   /// The account the shared session belongs to.
   var cookieUser = "u1"
   var documentID: UUID? = UUID()
+  let transcriber = FakeLocalTranscriber()
+  /// False for a keyboard where Parakeet can't run (takes effect on the next process).
+  var transcriberAvailable = true
   var encodeError: Error?
   var encodeGains: [Float] = []
   var texts: [String] = []
@@ -146,7 +185,8 @@ final class Harness {
         self.jobCounter += 1
         return "job-\(self.jobCounter)"
       },
-      makeBoundary: { "B" }
+      makeBoundary: { "B" },
+      localTranscriber: transcriberAvailable ? transcriber : nil
     ))
     machine.readDocumentID = { [unowned self] in self.documentID }
     machine.onText = { [unowned self] in self.texts.append($0) }
@@ -192,6 +232,15 @@ final class Harness {
       .sorted()
   }
 
+  /// Every network call the machine made, of either kind.
+  var networkCalls: Int { transport.uploads.count + transport.sends.count }
+
+  /// A Local Mode snapshot for `model`, with the model already loaded.
+  func useLocal(_ model: DirectLocalModel = .parakeetV2, ready: Bool = true) {
+    configJSON = DirectDictationTests.localConfig(model: model)
+    transcriber.readyModel = ready ? model : nil
+  }
+
   func cleanup() { try? FileManager.default.removeItem(at: folder) }
 }
 
@@ -231,6 +280,263 @@ extension DirectDictationTests {
     machineResumeRequiresOriginalDocument()
     machineRecoverQuietSpeech()
     machineCleanupMissingFlag()
+    testLocalEligibleOnlyWhenModelReady()
+    testLocalNotEligibleWhenLoadedModelDiffers()
+    testLocalTakeTranscribesWithoutNetwork()
+    testLocalTranscriptionFailureKeepsPcm()
+    testLocalRecordIsNeverResumedAsUpload()
+    testLocalResultWaitsForSameDocument()
+    testLocalNoSpeechNeverTranscribes()
+    testLocalAsksTranscriberToPrepare()
+    machineLocalDisappearWhileRecording()
+    machineLocalCancelWhileTranscribing()
+    machineCloudResultWaitsForSameDocument()
+  }
+
+  /// The contract's Local snapshot for `model`, with an English hint and cleanup switched on
+  /// (which a Local snapshot never has), so a stray cleanup call would show up as a send.
+  static func localConfig(model: DirectLocalModel) -> String {
+    localConfig
+      .replacingOccurrences(of: "parakeet-v3", with: model.rawValue)
+      .replacingOccurrences(of: #""languageHint":"de""#, with: #""languageHint":"en""#)
+      .replacingOccurrences(of: #""cleanup":{"enabled":false"#, with: #""cleanup":{"enabled":true"#)
+  }
+
+  static func testLocalEligibleOnlyWhenModelReady() {
+    let h = Harness()
+    defer { h.cleanup() }
+    h.cookie = nil  // Local needs no session
+    h.useLocal(.parakeetV2, ready: false)
+    expect(h.dictation.isEligible, false, "local: not eligible before the model is ready")
+    h.dictation.start()
+    expect(h.capture.startCount, 0, "local: nothing starts before the model is ready")
+    h.transcriber.readyModel = .parakeetV2
+    expect(h.dictation.isEligible, true, "local: eligible once the model is ready, without a cookie")
+    h.transcriberAvailable = false
+    h.restartProcess()
+    expect(h.dictation.isEligible, false, "local: never eligible where Parakeet can't run")
+    expect(h.networkCalls, 0, "local eligibility: no network")
+  }
+
+  static func testLocalNotEligibleWhenLoadedModelDiffers() {
+    let h = Harness()
+    defer { h.cleanup() }
+    h.useLocal(.parakeetV3, ready: false)
+    h.transcriber.readyModel = .parakeetV2
+    expect(h.dictation.isEligible, false, "local: v2 loaded, v3 asked: not eligible")
+    expect(h.transcriber.prepared.last, .parakeetV3, "local: the snapshot's model is asked for")
+    h.dictation.start()
+    expect(h.capture.startCount, 0, "local: v2 loaded, v3 asked: nothing starts")
+
+    // A take started with v2, and the language moved the route to v3 before stop.
+    let switched = Harness()
+    defer { switched.cleanup() }
+    switched.useLocal(.parakeetV2)
+    switched.record()
+    switched.configJSON = localConfig(model: .parakeetV3)
+    switched.transcriber.readyModel = .parakeetV3
+    switched.dictation.confirm()
+    expect(switched.transcriber.calls.count, 0, "local: a v2 take is never transcribed with another model")
+    expect(switched.state, .failed(.tryAgain), "local: model changed mid-take: try again")
+    expect(switched.files(), ["job-1.json", "job-1.pcm"], "local: model changed mid-take: take kept")
+    expect(switched.networkCalls, 0, "local: model changed mid-take: no network")
+  }
+
+  static func testLocalTakeTranscribesWithoutNetwork() {
+    let h = Harness()
+    defer { h.cleanup() }
+    h.useLocal(.parakeetV2)
+    h.record(seconds: 1)
+    expect(h.store.record(jobId: "job-1")?.engine, "parakeet-v2", "local: the record names its model from the start")
+    h.dictation.confirm()
+    expect(h.state, .transcribing, "local: transcribing")
+    expect(h.transcriber.calls.count, 1, "local: transcribed once")
+    expect(h.transcriber.calls.first?.wavURL, h.store.wavURL(jobId: "job-1"), "local: gets <jobId>.wav")
+    expect(h.transcriber.calls.first?.languageHint, "en", "local: gets the hint")
+    expect(h.transcriber.calls.first?.wavBytes, 44 + 32_000, "local: the WAV holds the whole take, as captured")
+    expect(h.encodeGains.count, 0, "local: never encoded for upload")
+    expect(h.transport.uploads.count, 0, "local: no upload")
+    expect(h.transport.sends.count, 0, "local: no send")
+    h.transcriber.succeed("send it to my email")
+    expect(h.state, .idle, "local: idle")
+    expect(h.texts, ["send it to a@b.co"], "local: snippet-expanded text inserted")
+    let record = h.store.record(jobId: "job-1")
+    expect(record?.status, .completed, "local: record completed")
+    expect(record?.engine, "parakeet-v2", "local: record engine")
+    expect(record?.cleanupApplied == nil, true, "local: cleanupApplied nil")
+    expect(record?.originalText, "send it to my email", "local: original is the raw text")
+    expect(record?.durationMs, 1_000, "local: duration")
+    expect(h.files(), ["job-1.json"], "local: .pcm and .wav gone")
+    expect(h.networkCalls, 0, "local: no network at all, cleanup on in the snapshot or not")
+  }
+
+  static func testLocalTranscriptionFailureKeepsPcm() {
+    let h = Harness()
+    defer { h.cleanup() }
+    h.useLocal(.parakeetV2)
+    h.record(seconds: 1)
+    h.dictation.confirm()
+    h.transcriber.fail()
+    expect(h.state, .failed(.tryAgain), "local fail: try again")
+    expect(h.store.record(jobId: "job-1")?.status, .failed, "local fail: record failed")
+    expect(h.files(), ["job-1.json", "job-1.pcm"], "local fail: PCM kept for History, WAV removed")
+    expect(h.dictation.isEligible, true, "local fail: path stays on")
+    expect(h.networkCalls, 0, "local fail: no retry over the network")
+    h.dictation.start()
+    expect(h.state, .starting, "local fail: the next take starts")
+  }
+
+  // Killed mid-take with Local, then Cloud with a working session: the take must stay on the
+  // device (the app's outbox makes it a retryable row).
+  static func testLocalRecordIsNeverResumedAsUpload() {
+    let h = Harness()
+    defer { h.cleanup() }
+    h.useLocal(.parakeetV2)
+    h.record(seconds: 2)
+    h.restartProcess()
+    h.configJSON = validConfig
+    h.cookie = "session=1"
+    expect(h.dictation.isEligible, true, "local resume: Cloud is eligible now")
+    h.dictation.keyboardDidAppear()
+    expect(h.networkCalls, 0, "local resume: nothing uploaded or sent")
+    expect(h.encodeGains.count, 0, "local resume: not encoded for upload")
+    expect(h.state, .idle, "local resume: idle")
+    expect(h.store.record(jobId: "job-1")?.status, .pending, "local resume: record left for the app")
+    expect(h.files(), ["job-1.json", "job-1.pcm"], "local resume: PCM kept")
+
+    // Still Local: the keyboard doesn't resume it either.
+    h.useLocal(.parakeetV2)
+    h.restartProcess()
+    h.dictation.keyboardDidAppear()
+    expect(h.transcriber.calls.count, 0, "local resume: not transcribed on return")
+    expect(h.networkCalls, 0, "local resume: still no network")
+  }
+
+  static func testLocalResultWaitsForSameDocument() {
+    let h = Harness()
+    defer { h.cleanup() }
+    let original = h.documentID
+    h.useLocal(.parakeetV2)
+    h.record(seconds: 1)
+    h.dictation.confirm()
+    h.dictation.keyboardWillDisappear()
+    expect(h.transcriber.calls.first?.handle.cancelled, false, "local hidden: transcription left running")
+    h.transcriber.succeed("hello there")
+    expect(h.texts, [], "local hidden: nothing typed while hidden")
+    expect(h.store.record(jobId: "job-1")?.status, .completed, "local hidden: saved for History")
+    h.documentID = UUID()
+    h.dictation.keyboardDidAppear()
+    expect(h.texts, [], "local hidden: another field never receives it")
+    h.dictation.keyboardWillDisappear()
+    h.documentID = original
+    h.transcriber.readyModel = nil  // released meanwhile: the text needs no model
+    h.dictation.keyboardDidAppear()
+    expect(h.texts, ["hello there"], "local hidden: typed once back in the original field")
+    h.dictation.keyboardWillDisappear()
+    h.dictation.keyboardDidAppear()
+    expect(h.texts.count, 1, "local hidden: typed only once")
+
+    // Same field, another account: never.
+    let other = Harness()
+    defer { other.cleanup() }
+    other.useLocal(.parakeetV2)
+    other.record(seconds: 1)
+    other.dictation.confirm()
+    other.dictation.keyboardWillDisappear()
+    other.transcriber.succeed("hello there")
+    other.configJSON = localConfig(model: .parakeetV2).replacingOccurrences(of: #""u1""#, with: #""u2""#)
+    other.dictation.keyboardDidAppear()
+    expect(other.texts, [], "local hidden: another account never receives it")
+  }
+
+  static func testLocalNoSpeechNeverTranscribes() {
+    let h = Harness()
+    defer { h.cleanup() }
+    h.useLocal(.parakeetV2)
+    h.dictation.start()
+    h.capture.started()
+    h.feed(h.silence(seconds: 1))
+    h.dictation.confirm()
+    expect(h.state, .failed(.noSpeech), "local silence: no speech")
+    expect(h.transcriber.calls.count, 0, "local silence: transcriber not called")
+    expect(h.files(), [], "local silence: files deleted")
+    expect(h.networkCalls, 0, "local silence: no network")
+  }
+
+  static func testLocalAsksTranscriberToPrepare() {
+    let h = Harness()
+    defer { h.cleanup() }
+    h.useLocal(.parakeetV2, ready: false)
+    _ = h.dictation.isEligible
+    expect(h.transcriber.prepared, [.parakeetV2], "local: reading eligibility asks for the model once")
+    expect(h.networkCalls, 0, "local warm-up: no network")
+    h.transcriber.readyModel = .parakeetV2
+    _ = h.dictation.isEligible
+    expect(h.transcriber.prepared.count, 1, "local: a ready model isn't asked for again")
+  }
+
+  static func machineLocalDisappearWhileRecording() {
+    let h = Harness()
+    defer { h.cleanup() }
+    h.useLocal(.parakeetV2)
+    h.record(seconds: 2)
+    h.dictation.keyboardWillDisappear()
+    expect(h.capture.stopCount >= 1, true, "local disappear recording: capture stopped")
+    expect(h.transcriber.calls.count, 1, "local disappear recording: transcribed on the device")
+    expect(h.encodeGains.count, 0, "local disappear recording: never encoded")
+    h.transcriber.succeed("hello")
+    expect(h.texts, [], "local disappear recording: nothing typed while hidden")
+    h.dictation.keyboardDidAppear()
+    expect(h.texts, ["hello"], "local disappear recording: typed on return")
+    expect(h.networkCalls, 0, "local disappear recording: no network")
+  }
+
+  static func machineLocalCancelWhileTranscribing() {
+    let h = Harness()
+    defer { h.cleanup() }
+    h.useLocal(.parakeetV2)
+    h.record(seconds: 1)
+    h.dictation.confirm()
+    h.dictation.cancel()
+    expect(h.transcriber.calls.first?.handle.cancelled, true, "local cancel: transcription cancelled")
+    expect(h.state, .idle, "local cancel: idle")
+    expect(h.files(), [], "local cancel: no files")
+    h.transcriber.succeed("late")
+    expect(h.texts, [], "local cancel: a late result inserts nothing")
+  }
+
+  // The same keep-until-delivered rule for a Cloud take answered while hidden.
+  static func machineCloudResultWaitsForSameDocument() {
+    let h = Harness()
+    defer { h.cleanup() }
+    let original = h.documentID
+    h.record(seconds: 1)
+    h.dictation.confirm()
+    h.dictation.keyboardWillDisappear()
+    h.transport.uploads.first?.complete(200, sentText)
+    h.documentID = UUID()
+    h.dictation.keyboardDidAppear()
+    expect(h.texts, [], "cloud hidden: another field never receives it")
+    h.dictation.keyboardWillDisappear()
+    h.documentID = original
+    h.dictation.keyboardDidAppear()
+    expect(h.texts, ["send it to a@b.co"], "cloud hidden: typed once back in the original field")
+    // A new take drops a result still waiting.
+    let dropped = Harness()
+    defer { dropped.cleanup() }
+    let first = dropped.documentID
+    dropped.record(seconds: 1)
+    dropped.dictation.confirm()
+    dropped.dictation.keyboardWillDisappear()
+    dropped.transport.uploads.first?.complete(200, sentText)
+    dropped.documentID = UUID()
+    dropped.dictation.keyboardDidAppear()
+    dropped.dictation.start()
+    dropped.dictation.cancel()
+    dropped.dictation.keyboardWillDisappear()
+    dropped.documentID = first
+    dropped.dictation.keyboardDidAppear()
+    expect(dropped.texts, [], "cloud hidden: a newer take replaces the waiting result")
   }
 
   static func machineDeliveryRequiresOriginalDestination() {

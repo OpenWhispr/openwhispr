@@ -4,7 +4,14 @@ import Foundation
 /// `keyboard_direct_config` (written by `src/lib/keyboardDirectSync.ts`). A snapshot this
 /// build can't trust decodes to nil, and the keyboard keeps today's handoff.
 struct DirectDictationConfig: Equatable {
-  static let supportedVersion = 1
+  static let supportedVersion = 2
+
+  /// Where the take is transcribed. Only `.cloud` carries a server: a Local snapshot has no
+  /// URL to send anything to.
+  enum Engine: Equatable {
+    case cloud(apiBaseURL: URL)
+    case local(model: DirectLocalModel, languageHint: String?)
+  }
 
   struct Cleanup: Equatable {
     let enabled: Bool
@@ -24,28 +31,28 @@ struct DirectDictationConfig: Equatable {
   }
 
   let userId: String
-  let apiBaseURL: URL
+  let engine: Engine
   let appVersion: String?
   let language: String?
   let cleanup: Cleanup
   let dictionary: Dictionary
   let snippets: [Snippet]
 
-  /// nil unless the JSON parses, `version == 1`, `enabled == true`, `userId` is non-empty
-  /// and `apiBaseUrl` is https (or http on localhost / 127.0.0.1).
+  /// nil unless the JSON parses, `version == 2`, `enabled == true` and `userId` is non-empty.
+  /// A Cloud snapshot also needs `apiBaseUrl` to be https (or http on localhost / 127.0.0.1);
+  /// a Local one needs a known `local.model` and no URL.
   static func decode(_ json: String?) -> DirectDictationConfig? {
     guard let data = json?.data(using: .utf8),
       let raw = try? JSONDecoder().decode(Raw.self, from: data),
       raw.version == supportedVersion,
       raw.enabled == true,
       let userId = raw.userId, !userId.isEmpty,
-      let base = raw.apiBaseUrl.flatMap(URL.init(string:)),
-      isTrustedHost(base)
+      let engine = decodeEngine(raw)
     else { return nil }
 
     return DirectDictationConfig(
       userId: userId,
-      apiBaseURL: base,
+      engine: engine,
       appVersion: raw.appVersion,
       language: nonEmpty(raw.language),
       cleanup: Cleanup(
@@ -60,6 +67,21 @@ struct DirectDictationConfig: Equatable {
       ),
       snippets: (raw.snippets ?? []).map { Snippet(trigger: $0.trigger, replacement: $0.replacement) }
     )
+  }
+
+  // A missing `engine` is not read as Cloud: version 2 always writes it, so its absence means
+  // a snapshot this build doesn't understand.
+  private static func decodeEngine(_ raw: Raw) -> Engine? {
+    switch raw.engine {
+    case "cloud":
+      guard let base = raw.apiBaseUrl.flatMap(URL.init(string:)), isTrustedHost(base) else { return nil }
+      return .cloud(apiBaseURL: base)
+    case "local":
+      guard let model = raw.local?.model.flatMap(DirectLocalModel.init(rawValue:)) else { return nil }
+      return .local(model: model, languageHint: nonEmpty(raw.local?.languageHint))
+    default:
+      return nil
+    }
   }
 
   // The session cookie goes to this host, so only TLS, or plain http on this device for
@@ -90,6 +112,11 @@ struct DirectDictationConfig: Equatable {
       let prompt: String?
     }
 
+    struct RawLocal: Decodable {
+      let model: String?
+      let languageHint: String?
+    }
+
     struct RawSnippet: Decodable {
       let trigger: String
       let replacement: String
@@ -97,6 +124,8 @@ struct DirectDictationConfig: Equatable {
 
     let version: Int?
     let enabled: Bool?
+    let engine: String?
+    let local: RawLocal?
     let userId: String?
     let apiBaseUrl: String?
     let appVersion: String?

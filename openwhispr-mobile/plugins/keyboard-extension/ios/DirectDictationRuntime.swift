@@ -51,7 +51,9 @@ final class DirectDictationRuntime {
       encode: { pcm, m4a, gain in try DirectAudioEncoder.encodeAAC(pcmURL: pcm, m4aURL: m4a, gain: gain) },
       // The job id format the keyboard already uses: <ms>-<UUID>.
       makeJobId: { "\(Int64(Date().timeIntervalSince1970 * 1000))-\(UUID().uuidString)" },
-      makeBoundary: { "OpenWhispr-\(UUID().uuidString)" }
+      makeBoundary: { "OpenWhispr-\(UUID().uuidString)" },
+      // Parakeet in the keyboard comes next; until then Local snapshots hand off to the app.
+      localTranscriber: nil
     ))
   }
 
