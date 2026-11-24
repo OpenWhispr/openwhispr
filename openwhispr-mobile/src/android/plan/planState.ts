@@ -77,25 +77,6 @@ export function isLowOnWords(usage: UsageInfo | null | undefined): boolean {
   return usage.wordsRemaining < usage.limit * 0.1;
 }
 
-/** A real reset time from the API, or null: today `/api/usage` sends `resetAt: "rolling"`. */
-export function resetDate(resetAt: string | undefined): Date | null {
-  if (!resetAt) return null;
-  const time = Date.parse(resetAt);
-  return Number.isFinite(time) ? new Date(time) : null;
-}
-
-/** "Mon 30 Nov" and "00:00" in the app's language. */
-export function formatResetParts(date: Date, locale: string): { date: string; time: string } {
-  return {
-    date: new Intl.DateTimeFormat(locale, {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-    }).format(date),
-    time: new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(date),
-  };
-}
-
 /** "24 Nov 2027" (or "24 Dec" when `short`) in the app's language. */
 export function formatPlanDate(iso: string, locale: string, short = false): string | null {
   const time = Date.parse(iso);

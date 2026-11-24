@@ -4,7 +4,6 @@ import {
   formatPlanDate,
   isLowOnWords,
   planView,
-  resetDate,
   type PlanInput,
 } from '../plan/planState';
 import { pricesFromProducts } from '../plan/prices';
@@ -95,9 +94,7 @@ it('puts the Home meter up under 10% left, for free accounts only', () => {
   expect(isLowOnWords(null)).toBe(false);
 });
 
-it('shows a reset time only when the API sends one', () => {
-  expect(resetDate('rolling')).toBeNull();
-  expect(resetDate('2026-11-30T00:00:00Z')?.toISOString()).toBe('2026-11-30T00:00:00.000Z');
+it('formats no date from a bad value', () => {
   expect(formatPlanDate('not a date', 'en')).toBeNull();
 });
 

@@ -158,16 +158,10 @@ it('A · free: the plan, the meter, what Pro adds and the price from Play', () =
   expect(screen.getByText('73 / 2,000')).toBeTruthy();
   expect(screen.getByText('addDevices')).toBeTruthy();
   expect(screen.getByText('fromPrice:{"price":"$6.58"}')).toBeTruthy();
-  // The API's window is rolling: no made-up reset day, and never "N left".
-  expect(screen.queryByText(/^resets/)).toBeNull();
+  // The allowance is a rolling 7 days: no reset day, and never "N left".
+  expect(screen.getByText('rollingAllowance')).toBeTruthy();
   fireEvent.press(screen.getByRole('button', { name: 'seeProPlans' }));
   expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ placement: 'billing' }));
-});
-
-it('A · shows the reset day once the API sends a real time', () => {
-  useUsageStore.setState({ usage: usage({ resetAt: '2026-11-30T00:00:00Z' }) });
-  show();
-  expect(screen.getByText(/^resets:/)).toBeTruthy();
 });
 
 it('B · out of words opens the out-of-words paywall', () => {

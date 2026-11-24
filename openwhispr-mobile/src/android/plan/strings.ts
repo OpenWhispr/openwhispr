@@ -21,7 +21,7 @@ export const planEnglish = {
   // The words meter
   cloudWordsThisWeek: 'Cloud words this week',
   unlimited: 'Unlimited',
-  resets: 'Resets {{date}} at {{time}}',
+  rollingAllowance: 'Rolling 7-day allowance',
   goUnlimited: 'Go unlimited',
   // A · Free, B · out of words
   freeBody:

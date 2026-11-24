@@ -16,7 +16,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     business: 'Business',
     cloudWordsThisWeek: 'Palabras en la nube esta semana',
     unlimited: 'Ilimitadas',
-    resets: 'Se restablece el {{date}} a las {{time}}',
+    rollingAllowance: 'Asignación móvil de 7 días',
     goUnlimited: 'Pasar a ilimitado',
     freeBody:
       'Dictado en el dispositivo sin límites, más {{limit}} palabras en la nube por semana para la limpieza con IA y el asistente.',
@@ -109,7 +109,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     business: 'Business',
     cloudWordsThisWeek: 'Mots cloud cette semaine',
     unlimited: 'Illimités',
-    resets: 'Réinitialisation le {{date}} à {{time}}',
+    rollingAllowance: 'Quota glissant sur 7 jours',
     goUnlimited: 'Passer en illimité',
     freeBody:
       'Dictée sur l’appareil illimitée, plus {{limit}} mots cloud par semaine pour le nettoyage par IA et l’assistant.',
@@ -201,7 +201,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     business: 'Business',
     cloudWordsThisWeek: 'Cloud-Wörter diese Woche',
     unlimited: 'Unbegrenzt',
-    resets: 'Wird am {{date}} um {{time}} zurückgesetzt',
+    rollingAllowance: 'Rollierendes 7-Tage-Kontingent',
     goUnlimited: 'Unbegrenzt nutzen',
     freeBody:
       'Unbegrenztes Diktieren auf dem Gerät, dazu {{limit}} Cloud-Wörter pro Woche für die KI-Bereinigung und den Assistenten.',
@@ -295,7 +295,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     business: 'Business',
     cloudWordsThisWeek: 'Palavras na nuvem esta semana',
     unlimited: 'Ilimitadas',
-    resets: 'Reinicia em {{date}} às {{time}}',
+    rollingAllowance: 'Cota móvel de 7 dias',
     goUnlimited: 'Ficar ilimitado',
     freeBody:
       'Ditado no dispositivo ilimitado, mais {{limit}} palavras na nuvem por semana para a limpeza com IA e o assistente.',
@@ -387,7 +387,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     business: 'Business',
     cloudWordsThisWeek: 'Parole cloud questa settimana',
     unlimited: 'Illimitate',
-    resets: 'Si azzera il {{date}} alle {{time}}',
+    rollingAllowance: 'Quota mobile di 7 giorni',
     goUnlimited: 'Passa all’illimitato',
     freeBody:
       'Dettatura sul dispositivo illimitata, più {{limit}} parole cloud a settimana per la pulizia con IA e l’assistente.',
@@ -478,7 +478,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     business: 'Business',
     cloudWordsThisWeek: 'Облачные слова за неделю',
     unlimited: 'Без ограничений',
-    resets: 'Сброс {{date}} в {{time}}',
+    rollingAllowance: 'Скользящий лимит за 7 дней',
     goUnlimited: 'Снять ограничения',
     freeBody:
       'Диктовка на устройстве без ограничений, плюс {{limit}} облачных слов в неделю для ИИ-обработки текста и ассистента.',
@@ -569,7 +569,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     business: 'Business',
     cloudWordsThisWeek: '本周云端字数',
     unlimited: '不限',
-    resets: '{{date}} {{time}} 重置',
+    rollingAllowance: '滚动 7 天额度',
     goUnlimited: '升级为不限量',
     freeBody: '设备端听写不限量，另有每周 {{limit}} 个云端字数，用于 AI 文本整理和助手。',
     freeOutBody: '你已用完本周的云端字数。设备端听写仍可使用。',
@@ -652,7 +652,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     business: 'Business',
     cloudWordsThisWeek: '本週雲端字數',
     unlimited: '不限',
-    resets: '{{date}} {{time}} 重置',
+    rollingAllowance: '滾動 7 天額度',
     goUnlimited: '升級為不限量',
     freeBody: '裝置端聽寫不限量，另有每週 {{limit}} 個雲端字數，用於 AI 文字整理和助理。',
     freeOutBody: '你已用完本週的雲端字數。裝置端聽寫仍可使用。',
@@ -735,7 +735,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     business: 'Business',
     cloudWordsThisWeek: '今週のクラウド単語数',
     unlimited: '無制限',
-    resets: '{{date}} {{time}}にリセット',
+    rollingAllowance: '直近7日間の利用枠',
     goUnlimited: '無制限にする',
     freeBody:
       'デバイス上の音声入力は無制限。AIによる文章整理とアシスタント用に、クラウド単語数が週 {{limit}} 語付いています。',
@@ -826,7 +826,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     business: 'Business',
     cloudWordsThisWeek: 'كلمات السحابة هذا الأسبوع',
     unlimited: 'غير محدودة',
-    resets: 'تُعاد التعبئة في {{date}} الساعة {{time}}',
+    rollingAllowance: 'حصة متجددة لآخر 7 أيام',
     goUnlimited: 'انتقل إلى غير المحدود',
     freeBody:
       'إملاء غير محدود على الجهاز، مع {{limit}} كلمة سحابية أسبوعيًا للتنظيف بالذكاء الاصطناعي والمساعد.',

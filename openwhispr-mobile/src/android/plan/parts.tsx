@@ -1,13 +1,11 @@
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
-import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import type { UsageInfo } from '@/data/remote/usageApi';
 import { ProgressBar } from '../controls';
 import { useHome } from '../home/kit';
 import { useSettingsLook } from '../settings/look';
 import { useTheme } from '../ThemeProvider';
-import { formatResetParts, resetDate } from './planState';
 import { usePlanT } from './strings';
 
 export type ChipTone = 'neutral' | 'accent' | 'amber';
@@ -41,23 +39,13 @@ export function StatusChip({ label, tone }: { label: string; tone: ChipTone }) {
   );
 }
 
-/** One line of the meter's foot: the reset time, or nothing while the API's window is rolling. */
-export function useResetLine(usage: UsageInfo): string | null {
-  const t = usePlanT();
-  const { i18n } = useTranslation();
-  const date = resetDate(usage.resetAt);
-  if (!date) return null;
-  return t('resets', formatResetParts(date, i18n.language));
-}
-
 /**
- * "Cloud words this week  73 / 2 000", a bar, and "Resets Mon 30 Nov at 00:00" (never "N left").
- * Unlimited plans show the word Unlimited and no bar. `action` sits at the end of the reset line.
+ * "Cloud words this week  73 / 2 000", a bar, and "Rolling 7-day allowance" (never "N left" or a reset date).
+ * Unlimited plans show the word Unlimited and no bar. `action` sits at the end of the allowance line.
  */
 export function WordsMeter({ usage, action }: { usage: UsageInfo; action?: ReactNode }) {
   const t = usePlanT();
   const { c, type } = useHome();
-  const reset = useResetLine(usage);
   const unlimited = usage.isSubscribed || usage.limit <= 0;
   const used = Math.max(usage.wordsUsed, 0);
   return (
@@ -82,10 +70,10 @@ export function WordsMeter({ usage, action }: { usage: UsageInfo; action?: React
           value={Math.max(0.02, used / Math.max(1, usage.limit))}
         />
       )}
-      {!unlimited && (reset || action) && (
+      {!unlimited && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 20 }}>
           <Text style={[type.footnote, { flex: 1, fontSize: 12, color: c.tertiary }]}>
-            {reset ?? ''}
+            {t('rollingAllowance')}
           </Text>
           {action}
         </View>
