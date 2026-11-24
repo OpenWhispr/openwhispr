@@ -58,6 +58,12 @@ public class AppGroupStorageModule: Module {
   // audioStateLock; the input tap only ever takes audioStateLock, so the
   // audio thread never waits on pipeline work.
   private let audioPipelineLock = NSRecursiveLock()
+  // A meeting recording shares this process's AVAudioSession. While it holds
+  // the lease the warm mic stays parked and never deactivates the session.
+  // Its own lock, never held while calling into the pipeline, so it stays
+  // out of the audioPipelineLock/audioStateLock order.
+  private let captureLeaseLock = NSLock()
+  private var captureLease = CaptureLeasePolicy()
   private var audioEngine: AVAudioEngine?
   private var recordingFile: AVAudioFile?
   private var recordingFileUrl: URL?
@@ -278,6 +284,21 @@ public class AppGroupStorageModule: Module {
     Function("armWarmMic") { () -> Void in
       DispatchQueue.main.async {
         self.armWarmMic(reason: "js.permissionGranted")
+      }
+    }
+
+    // Resolves only once the warm mic is parked, so meeting capture never
+    // starts while the keyboard pipeline still owns the session.
+    AsyncFunction("acquireCaptureLease") { (owner: String, promise: Promise) in
+      DispatchQueue.main.async {
+        self.acquireCaptureLease(owner: owner)
+        promise.resolve(nil)
+      }
+    }
+
+    Function("releaseCaptureLease") { (owner: String) -> Void in
+      DispatchQueue.main.async {
+        self.releaseCaptureLease(owner: owner)
       }
     }
 
@@ -865,6 +886,14 @@ public class AppGroupStorageModule: Module {
       }
     }
 
+    // A keyboard clip would reconfigure the session a meeting is recording on.
+    // Checked after the defer is in place so it republishes ready=0.
+    if isCaptureLeaseHeld() {
+      setKeyboardStatus("error", detail: "capture_lease_held")
+      logMarker("startRecording.rejectedCaptureLease", extra: "trigger=\(trigger)")
+      return false
+    }
+
     removeDarwinStartObserver()
 
     // isInputFlowing guards against a zombie engine (suspended-and-resumed
@@ -1180,10 +1209,17 @@ public class AppGroupStorageModule: Module {
     setWarmMicState(isWarm: false)
     stopKeepAliveHeartbeat()
 
-    do {
-      try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-    } catch {
-      logMarker("audioEngine.deactivateSessionFailed", extra: "reason=\(reason) error=\(error.localizedDescription)")
+    // Every teardown path (idle timeout, interruption, media-services reset,
+    // Dictation mode switch, OnDestroy) ends here, so this one check keeps them
+    // all from deactivating the session under a meeting recording.
+    if isCaptureLeaseHeld() {
+      logMarker("audioEngine.keptSessionForCaptureLease", extra: "reason=\(reason)")
+    } else {
+      do {
+        try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+      } catch {
+        logMarker("audioEngine.deactivateSessionFailed", extra: "reason=\(reason) error=\(error.localizedDescription)")
+      }
     }
     // A backgrounded app can suspend now, so LiveActivityController drops the idle
     // session card before iOS can kill the app without warning.
@@ -1945,6 +1981,10 @@ public class AppGroupStorageModule: Module {
       logMarker("armWarmMic.skippedDisabled", extra: "reason=\(reason)")
       return
     }
+    guard !isCaptureLeaseHeld() else {
+      logMarker("armWarmMic.skippedCaptureLease", extra: "reason=\(reason)")
+      return
+    }
     // Without permission there is nothing to warm, and attempting it would
     // raise the system prompt from wherever we happen to be (launch, resume).
     // The keyboard stays un-ready, which is the truthful state: it cannot
@@ -2005,6 +2045,49 @@ public class AppGroupStorageModule: Module {
     }
     shutdownAudioPipeline(reason: "releaseWarmMic.\(reason)")
     logMarker("releaseWarmMic.released", extra: "reason=\(reason)")
+  }
+
+  // MARK: - Capture Lease
+
+  private func isCaptureLeaseHeld() -> Bool {
+    captureLeaseLock.lock()
+    defer { captureLeaseLock.unlock() }
+    return captureLease.isHeld
+  }
+
+  /// Parks the warm mic for a meeting recording. Runs on main; only the first
+  /// holder parks, later holders find it already parked.
+  private func acquireCaptureLease(owner: String) {
+    captureLeaseLock.lock()
+    let isFirstHolder = captureLease.acquire(owner)
+    captureLeaseLock.unlock()
+    logMarker("captureLease.acquired", extra: "owner=\(owner) parks=\(isFirstHolder)")
+    guard isFirstHolder else { return }
+
+    audioPipelineLock.lock()
+    defer { audioPipelineLock.unlock() }
+    stopWarmMicIdleTimer()
+    audioStateLock.lock()
+    let recording = isClipRecording
+    audioStateLock.unlock()
+    if recording {
+      stopRecording(reason: "captureLease")
+    }
+    // The lease is already held, so this stops the engine but leaves the
+    // session active for the meeting.
+    shutdownAudioPipeline(reason: "captureLease")
+    setSharedRecordingState(active: false, ready: false, clearStopRequested: false, clearAudioLevel: true)
+  }
+
+  private func releaseCaptureLease(owner: String) {
+    captureLeaseLock.lock()
+    let wasLastHolder = captureLease.release(owner)
+    captureLeaseLock.unlock()
+    logMarker("captureLease.released", extra: "owner=\(owner) rearms=\(wasLastHolder)")
+    // Warming activates the session, which only succeeds in the foreground;
+    // otherwise the next foreground re-arms.
+    guard wasLastHolder, UIApplication.shared.applicationState == .active else { return }
+    armWarmMic(reason: "captureLeaseReleased")
   }
 
   private func resetWarmMicIdleTimer() {

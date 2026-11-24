@@ -23,6 +23,8 @@ interface AppGroupStorageModule {
   stopNativeRecording(): void;
   endProcessingTask(): void;
   armWarmMic(): void;
+  acquireCaptureLease(owner: string): Promise<void>;
+  releaseCaptureLease(owner: string): void;
   isHardwareKeyboardConnected(): boolean;
   markHotkeyJsReady(): void;
   setKeyboardSessionCredential?(cookie: string | null): boolean;
@@ -211,6 +213,23 @@ export const AppGroupStorage = {
   armWarmMic(): void {
     if (!NativeModule) return;
     NativeModule.armWarmMic();
+  },
+
+  /**
+   * Parks the keyboard's warm mic while `owner` captures audio. The warm mic
+   * shares the app's audio session, and its idle teardown would otherwise
+   * deactivate the session under a meeting recording. Resolves once parked,
+   * so start capture only after it settles.
+   */
+  async acquireCaptureLease(owner: string): Promise<void> {
+    if (!NativeModule) return;
+    await NativeModule.acquireCaptureLease(owner);
+  },
+
+  /** Ends `owner`'s hold; the last release re-arms the warm mic in the foreground. */
+  releaseCaptureLease(owner: string): void {
+    if (!NativeModule) return;
+    NativeModule.releaseCaptureLease(owner);
   },
 
   /** True while a hardware keyboard (e.g. a Magic Keyboard) is attached. */
