@@ -7701,12 +7701,20 @@ class IPCHandlers {
           // Claude models from Opus 4.7 onward reject `temperature` with a 400;
           // the renderer derives support from the model registry.
           const useTemperature = config?.supportsTemperature === true;
+          // Thinking counts toward max_tokens; the catalog names the value that turns it off.
+          const thinking =
+            config?.disableThinking === true
+              ? modelRegistryData.cloudProviders
+                  .find((provider) => provider.id === "anthropic")
+                  ?.models.find((model) => model.id === modelId)?.thinkingOff
+              : undefined;
           const requestBody = {
             model: modelId,
             messages: [{ role: "user", content: userContent }],
             system: systemPrompt,
             max_tokens: config?.maxTokens || 4096,
             ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
+            ...(thinking ? { thinking } : {}),
           };
 
           const response = await proxyFetch("https://api.anthropic.com/v1/messages", {
@@ -7747,7 +7755,12 @@ class IPCHandlers {
               messageKey: CLEANUP_TRUNCATED_MESSAGE_KEY,
             });
           }
-          const outputText = extractAnthropicText(data);
+          let outputText = extractAnthropicText(data);
+          // With thinking turned off, Claude can open its text with a <thinking> block.
+          // A reply that is only that block has no answer, like one with no text at all.
+          if (thinking && outputText) {
+            outputText = outputText.replace(/^<thinking>[\s\S]*?<\/thinking>\s*/i, "") || null;
+          }
           if (outputText === null) {
             throw Object.assign(new Error(describeMissingAnthropicText(data)), {
               messageKey: CLEANUP_EMPTY_REPLY_MESSAGE_KEY,
