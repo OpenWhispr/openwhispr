@@ -5,6 +5,29 @@ extension DirectDictationTests {
     testWavHeader()
     testBudget()
     testResidency()
+    testLocalModelLog()
+  }
+
+  static func testLocalModelLog() {
+    let folder = tempFolder("model-log")
+    defer { try? FileManager.default.removeItem(at: folder) }
+    // The store's folder may not exist yet when the first load is logged.
+    let log = DirectLocalModelLog(url: folder.appendingPathComponent("direct-dictations/local-model.log"))
+    let start = Date(timeIntervalSince1970: 1_800_000_000)
+    log.append("load parakeet-v2 ready in 0.5 s", at: start)
+    func lines() -> [String] {
+      ((try? String(contentsOf: log.url, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init)
+    }
+    expect(lines(), ["2027-01-15T08:00:00Z load parakeet-v2 ready in 0.5 s"], "model log: one stamped line")
+    log.append("two\nlines", at: start)
+    expect(lines().last, "2027-01-15T08:00:00Z two lines", "model log: a line stays one line")
+    for index in 0..<(DirectLocalModelLog.maxLines + 5) {
+      log.append("line \(index)", at: start)
+    }
+    let kept = lines()
+    expect(kept.count, DirectLocalModelLog.maxLines, "model log: capped")
+    expect(kept.last, "2027-01-15T08:00:00Z line \(DirectLocalModelLog.maxLines + 4)", "model log: newest kept")
+    expect(kept.first, "2027-01-15T08:00:00Z line 5", "model log: oldest dropped first")
   }
 
   static func testWavHeader() {

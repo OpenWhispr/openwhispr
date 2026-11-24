@@ -136,3 +136,25 @@ struct ParakeetResidency {
     return now - lastWarning >= Self.cooldownAfterWarning
   }
 }
+
+/// The on-device model's load and transcription lines, kept in the App Group because a Release
+/// keyboard logs nowhere else: they can be copied off the phone (`devicectl device copy from
+/// --domain-type appGroupDataContainer`). Lines carry timings, MB, model ids and error type
+/// names, never text or audio. Only the newest `maxLines` stay. Not a `.json`, so neither the
+/// store nor the app's outbox ever reads or deletes it as a dictation.
+struct DirectLocalModelLog {
+  static let fileName = "local-model.log"
+  static let maxLines = 200
+
+  let url: URL
+
+  func append(_ line: String, at date: Date) {
+    let existing = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+    var lines = existing.split(separator: "\n").map(String.init)
+    let stamp = ISO8601DateFormatter().string(from: date)
+    lines.append("\(stamp) \(line.replacingOccurrences(of: "\n", with: " "))")
+    let kept = lines.suffix(Self.maxLines)
+    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try? (kept.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+  }
+}

@@ -485,6 +485,21 @@ describe('drainKeyboardDirectOutbox', () => {
     expect(h.failed).toEqual([expect.objectContaining({ provider: 'local', localOnly: true })]);
   });
 
+  it("leaves the keyboard's model log alone", async () => {
+    const h = harness({
+      'local-model.log': '2027-01-15T08:00:00Z load parakeet-v2 ready in 0.5 s\n',
+      'job-1.json': JSON.stringify(record()),
+    });
+    expect(await drainKeyboardDirectOutbox(h.deps)).toEqual({
+      completed: 1,
+      failed: 0,
+      dropped: 0,
+    });
+    expect(h.disk).toEqual({
+      'local-model.log': '2027-01-15T08:00:00Z load parakeet-v2 ready in 0.5 s\n',
+    });
+  });
+
   it('does nothing without the App Group folder', async () => {
     const h = harness({});
     expect(await drainKeyboardDirectOutbox({ ...h.deps, files: null })).toEqual({

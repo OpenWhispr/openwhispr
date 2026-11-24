@@ -11,7 +11,8 @@ protocol DirectDictationControlling: AnyObject {
   var onStateChange: ((DirectDictationState) -> Void)? { get set }
   var onLevel: ((Float) -> Void)? { get set }
   var onText: ((String) -> Void)? { get set }
-  /// One line per on-device model load or transcription (timings and MB, never text).
+  /// One line per on-device model load or transcription (timings and MB, never text). The runtime
+  /// also keeps them in `direct-dictations/local-model.log` in the App Group.
   var onLocalModelLog: ((String) -> Void)? { get set }
   /// The on-device model became ready or stopped being ready (loaded, released, swapped), so
   /// whether the keyboard can dictate this way may have changed. Called on the main thread,
@@ -41,6 +42,9 @@ final class DirectDictationRuntime {
   private let hasContainer: Bool
   #if canImport(FluidAudio)
   private let parakeet: KeyboardParakeetTranscriber
+  /// Every model line also goes to the App Group file, which a Release build can be read from.
+  private let localModelLog: DirectLocalModelLog?
+  private var localModelLogListener: ((String) -> Void)?
   #endif
 
   private init() {
@@ -55,6 +59,7 @@ final class DirectDictationRuntime {
     #if canImport(FluidAudio)
     let parakeet = KeyboardParakeetTranscriber(appGroupContainer: container)
     self.parakeet = parakeet
+    localModelLog = container.map { _ in DirectLocalModelLog(url: folder.appendingPathComponent(DirectLocalModelLog.fileName)) }
     let localTranscriber: DirectLocalTranscriber? = parakeet
     #else
     let localTranscriber: DirectLocalTranscriber? = nil
@@ -74,6 +79,12 @@ final class DirectDictationRuntime {
       makeBoundary: { "OpenWhispr-\(UUID().uuidString)" },
       localTranscriber: localTranscriber
     ))
+    #if canImport(FluidAudio)
+    parakeet.log = { [weak self] line in
+      self?.localModelLog?.append(line, at: Date())
+      self?.localModelLogListener?(line)
+    }
+    #endif
   }
 
   /// The path is usable right now: the snapshot and the session allow it, OpenWhispr has the
@@ -136,14 +147,14 @@ extension DirectDictationRuntime: DirectDictationControlling {
   var onLocalModelLog: ((String) -> Void)? {
     get {
       #if canImport(FluidAudio)
-      return parakeet.log
+      return localModelLogListener
       #else
       return nil
       #endif
     }
     set {
       #if canImport(FluidAudio)
-      parakeet.log = newValue
+      localModelLogListener = newValue
       #endif
     }
   }
