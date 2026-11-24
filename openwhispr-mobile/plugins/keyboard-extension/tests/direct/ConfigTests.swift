@@ -85,7 +85,12 @@ extension DirectDictationTests {
 
   static func testRejectsUnknownEngine() {
     expect(DirectDictationConfig.decode(validConfig.replacingOccurrences(of: #""engine":"cloud""#, with: #""engine":"whisper""#)) == nil, true, "unknown engine")
-    expect(DirectDictationConfig.decode(validConfig.replacingOccurrences(of: #""engine":"cloud","#, with: "")) == nil, true, "missing engine")
+    // Version 2 with no "engine" key, otherwise the valid Cloud snapshot: refused, never read as
+    // Cloud (the v1 case fails earlier, on its version).
+    let noEngine = validConfig.replacingOccurrences(of: #""engine":"cloud","#, with: "")
+    expect(noEngine.contains("\"engine\""), false, "fixture: no engine key")
+    expect(noEngine.contains("\"version\":2"), true, "fixture: version 2")
+    expect(DirectDictationConfig.decode(noEngine) == nil, true, "v2 snapshot without engine refused")
     expect(DirectDictationConfig.decode(localConfig.replacingOccurrences(of: "parakeet-v3", with: "parakeet-v9")) == nil, true, "unknown local model")
     expect(DirectDictationConfig.decode(localConfig.replacingOccurrences(of: #""local":{"model":"parakeet-v3","languageHint":"de"}"#, with: #""local":null"#)) == nil, true, "local without its model")
     let disabled = localConfig.replacingOccurrences(of: "\"enabled\":true", with: "\"enabled\":false")

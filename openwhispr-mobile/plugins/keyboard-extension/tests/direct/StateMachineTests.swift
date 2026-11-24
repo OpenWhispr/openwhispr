@@ -782,7 +782,8 @@ extension DirectDictationTests {
     expect(h.capture.startCount, 0, "stale local + target: nothing starts")
     expect(h.networkCalls, 0, "stale local + target: no network")
 
-    // A take started with no target, and one picked mid-take: still raw, still no request.
+    // A target picked mid-take doesn't change a running Local take (the target is pinned at
+    // start, for either engine): it is typed raw and no request is made.
     h.translation = nil
     h.record()
     h.translation = (code: "es", label: "Spanish")
