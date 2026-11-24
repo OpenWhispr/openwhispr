@@ -6,6 +6,7 @@ import logger from "../utils/logger";
 import { playStartCue, playStopCue } from "../utils/dictationCues";
 import { getSettings } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
+import { isParagraphOnlyResult } from "../utils/spokenParagraphs";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { providerErrorActions } from "../utils/describeProviderError";
 import {
@@ -791,7 +792,11 @@ export const useAudioRecording = (toast, options = {}) => {
           dismissDictationError?.();
           const transcribedText = result.text?.trim();
 
-          if (!transcribedText) {
+          const paragraphOnly =
+            !result.selectionEdit?.sessionId &&
+            !result.assistantConversation &&
+            isParagraphOnlyResult(result.text, result.rawText, getSettings().preferredLanguage);
+          if (!transcribedText && !paragraphOnly) {
             window.electronAPI?.hideDictationPreview?.();
             showDictationError({
               title: t("hooks.audioRecording.noAudio.title"),
