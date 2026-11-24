@@ -4751,6 +4751,11 @@
         "title": "Meeting audio has gone quiet",
         "description": "No one has been heard for a few minutes. If the call is still going, check your sound output device."
       },
+      "externalAttendeesBlocked": "This meeting includes people outside your organization. Your organization doesn't allow transcribing it.",
+      "externalAttendeesUnverifiable": "OpenWhispr couldn’t verify everyone on this invite. Your organization only allows transcription of internal meetings.",
+      "externalAttendeesStopped": "Recording stopped because the invite includes someone outside your organization. You can keep taking notes.",
+      "internalAttendeesQuestion": "Is everyone in this meeting from your organization?",
+      "internalAttendeesConfirm": "Yes, start",
       "recordingDisabledByOrg": "Meeting recording is disabled by your organization.",
       "stoppedAccountChanged": "Recording stopped because you signed out or switched accounts.",
       "stoppedPolicyUnresolved": "Recording stopped because your organization's settings couldn't be checked.",

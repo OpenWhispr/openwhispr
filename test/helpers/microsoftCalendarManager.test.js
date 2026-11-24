@@ -254,6 +254,7 @@ test("_syncCalendar inserts a never-seen stripped occurrence bare when the serie
   assert.equal(upserted.length, 1);
   assert.equal(upserted[0].id, "occ-1");
   assert.equal(upserted[0].summary, null);
+  assert.equal(upserted[0].attendees_omitted, true);
   assert.equal(upserted[0].start_time, "2026-07-20T09:25:00Z");
 });
 
@@ -316,8 +317,10 @@ test("_syncCalendar keeps the stored row when a stripped occurrence's master fet
 
   assert.deepEqual(
     upserted.map((event) => event.id),
-    ["evt-1"]
+    ["occ-1", "evt-1"]
   );
+  assert.equal(upserted[0].attendees_omitted, true);
+  assert.equal(upserted[0].summary, "Standup");
   assert.deepEqual(staleKeepLists, [["occ-1", "evt-1"]]);
 });
 
@@ -487,7 +490,9 @@ test("a stripped occurrence keeps details but applies explicit RSVP after master
     };
   };
   await manager._syncCalendar({ id: "cal-1", account_email: "me@example.com" });
-  assert.deepEqual(upserted, [{ ...original, self_response_status: "declined" }]);
+  assert.deepEqual(upserted, [
+    { ...original, attendees_omitted: true, self_response_status: "declined" },
+  ]);
 });
 
 test("_deltaUrl starts CALENDAR_LOOKBACK_DAYS back", () => {
@@ -502,4 +507,18 @@ test("_deltaUrl starts CALENDAR_LOOKBACK_DAYS back", () => {
     Math.abs(Date.parse(params.get("startDateTime")) - (now - CALENDAR_LOOKBACK_MS)) < 5_000
   );
   assert.ok(Math.abs(Date.parse(params.get("endDateTime")) - (now + 38 * 86_400_000)) < 5_000);
+});
+
+test("Outlook hidden lists are incomplete for guests and complete for the organizer", () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const manager = new MicrosoftCalendarManager({}, {});
+  const invite = {
+    start: { dateTime: "2026-07-20T10:00:00" },
+    end: { dateTime: "2026-07-20T11:00:00" },
+    attendees: [],
+    hideAttendees: true,
+  };
+  for (const isOrganizer of [false, true]) {
+    assert.equal(manager._mapEvent({ ...invite, isOrganizer }, {}).attendees_omitted, !isOrganizer);
+  }
 });

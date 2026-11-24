@@ -211,7 +211,10 @@ export interface MeetingNotificationData {
   /** Set while the org refuses meeting recording: the card can only join. */
   recordingRefusal?: Extract<
     MeetingError,
-    "POLICY_MEETING_RECORDING_DISABLED" | "POLICY_UNRESOLVABLE"
+    | "POLICY_MEETING_RECORDING_DISABLED"
+    | "POLICY_UNRESOLVABLE"
+    | "POLICY_EXTERNAL_ATTENDEES"
+    | "POLICY_ATTENDEES_UNVERIFIABLE"
   >;
 }
 
@@ -260,6 +263,8 @@ export type MeetingError =
   | "NOTE_UNAVAILABLE"
   | "START_FAILED"
   | "POLICY_MEETING_RECORDING_DISABLED"
+  | "POLICY_EXTERNAL_ATTENDEES"
+  | "POLICY_ATTENDEES_UNVERIFIABLE"
   | "POLICY_UNRESOLVABLE";
 
 export type MeetingResult<T> =
@@ -3993,6 +3998,20 @@ declare global {
           speakerIndexBase?: number;
         } & PolicyFailureMetadata
       >;
+      checkMeetingRecordingStart?: (options: {
+        noteId: number | null;
+        sessionId: string;
+      }) => Promise<{ success: true } | { success: false; code: string }>;
+      releaseMeetingRecordingStart?: (sessionId: string) => void;
+      onMeetingRecordingAdmissionRevoked?: (
+        callback: (data: {
+          sessionId: string;
+          code:
+            | "POLICY_EXTERNAL_ATTENDEES"
+            | "POLICY_ATTENDEES_UNVERIFIABLE"
+            | "AUDIO_OPERATION_CANCELLED";
+        }) => void
+      ) => () => void;
       isMeetingRecordingDisabled?: () => Promise<boolean>;
       meetingRecordingRefused?: (details: {
         noteId: number | null;
@@ -4299,7 +4318,8 @@ declare global {
         status?: "ready" | "cancel"
       ) => Promise<MeetingResult<NoteItem>>;
       joinCalendarMeeting?: (
-        eventId: string
+        eventId: string,
+        notesOnly?: boolean
       ) => Promise<{ success: boolean; code?: string; error?: string }>;
       // Resolves with nothing once started, or with why it could not start.
       startManualMeeting?: () => Promise<{ success: false; code?: string; error: string } | void>;

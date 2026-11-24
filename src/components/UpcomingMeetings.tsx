@@ -11,6 +11,11 @@ import calendarEmptyDark from "../assets/empty-states/home-calendar-dark.svg";
 import { cn } from "./lib/utils";
 import { CARD_SURFACE_CLASS } from "./ui/surfaces";
 import type { CalendarAttendee, CalendarEvent } from "../types/calendar";
+import {
+  meetingAttendeeVerdict,
+  meetingAttendeeRefusalCode,
+  meetingAttendeeRefusalKey,
+} from "../helpers/meetingAttendeePolicy.js";
 import { parseAttendees } from "../utils/calendarAttendees";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
@@ -175,6 +180,9 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
   const { toast } = useToast();
   const recordingAllowed = usePolicyStore((state) => isAudioFeatureAllowed(state, "meeting"));
   const recordingRefusal = usePolicyStore(meetingRecordingRefusal);
+  const meetingPolicy = usePolicyStore((state) => state.policy?.meetings);
+  const attendeeRefusal = meetingAttendeeRefusalCode(meetingAttendeeVerdict(event, meetingPolicy));
+  const canTranscribe = recordingAllowed && !attendeeRefusal;
   const refusalId = useId();
   const joinUrl = getMeetingJoinUrl(event);
   const attendees = useMemo(() => parseAttendees(event), [event]);
@@ -182,7 +190,10 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
 
   const startNotes = async () => {
     if (joinUrl) openJoinUrl(joinUrl);
-    const result = await window.electronAPI?.joinCalendarMeeting?.(event.id);
+    const result = await window.electronAPI?.joinCalendarMeeting?.(
+      event.id,
+      Boolean(attendeeRefusal)
+    );
     // Only an org-policy refusal carries a code; the meeting link still opened.
     if (result?.success === false && result.code) {
       toast({ title: t(meetingStartRefusalKey(result.code)), variant: "default" });
@@ -193,27 +204,34 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
   // keeps its button, disabled, to say why.
   const refusal =
     recordingAllowed || joinUrl ? null : t(MEETING_RECORDING_REFUSAL_KEYS[recordingRefusal]);
-  const joinLabel = recordingAllowed
+  const attendeeReason =
+    recordingAllowed && attendeeRefusal ? t(meetingAttendeeRefusalKey(attendeeRefusal)) : null;
+  const reason = refusal ?? attendeeReason;
+  const joinLabel = canTranscribe
     ? t("upcoming.joinAndTranscribe")
     : t("meetingNotification.joinOnly");
   const button = (
     <Button
       size="sm"
       variant="ghost"
-      onClick={recordingAllowed ? startNotes : () => joinUrl && openJoinUrl(joinUrl)}
+      onClick={
+        canTranscribe || (!joinUrl && recordingAllowed)
+          ? startNotes
+          : () => joinUrl && openJoinUrl(joinUrl)
+      }
       disabled={refusal !== null}
-      aria-describedby={refusal ? refusalId : undefined}
+      aria-describedby={reason ? refusalId : undefined}
       className={cn("pointer-events-auto", DAY_CARD_BUTTON_CLASS)}
     >
       {joinUrl ? <Video size={12} /> : <Mic size={12} />}
       {joinUrl ? joinLabel : t("upcoming.takeNotes")}
     </Button>
   );
-  const joinButton = refusal ? (
-    <span title={refusal} className="pointer-events-auto">
+  const joinButton = reason ? (
+    <span title={reason} className="pointer-events-auto">
       {button}
       <span id={refusalId} hidden>
-        {refusal}
+        {reason}
       </span>
     </span>
   ) : (

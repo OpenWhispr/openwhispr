@@ -4245,6 +4245,11 @@
         "title": "El audio de la reunión se ha quedado en silencio",
         "description": "No se ha oído a nadie desde hace unos minutos. Si la llamada sigue en curso, revisa tu dispositivo de salida de sonido."
       },
+      "externalAttendeesBlocked": "En esta reunión participan personas ajenas a tu organización. Tu organización no permite transcribirla.",
+      "externalAttendeesUnverifiable": "OpenWhispr no pudo verificar a todas las personas invitadas. Tu organización solo permite transcribir reuniones internas.",
+      "externalAttendeesStopped": "La grabación se detuvo porque se ha invitado a una persona ajena a tu organización. Puedes seguir tomando notas.",
+      "internalAttendeesQuestion": "¿Todas las personas de esta reunión pertenecen a tu organización?",
+      "internalAttendeesConfirm": "Sí, empezar",
       "recordingDisabledByOrg": "Tu organización ha desactivado la grabación de reuniones.",
       "stoppedAccountChanged": "La grabación se detuvo porque cerraste sesión o cambiaste de cuenta.",
       "stoppedPolicyUnresolved": "La grabación se detuvo porque no se pudieron comprobar los ajustes de tu organización.",
