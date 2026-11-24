@@ -8,11 +8,10 @@ import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
 import { providerDisplayName } from '@/lib/mobileProviders';
 import { switchWorkflowMode } from '@/lib/workflowModeSwitch.android';
-import { home } from '../home/kit';
 import type { AndroidSpeechModelId } from '../speechSelection';
 import { ANDROID_MODELS, type AndroidModelId } from '../models';
-import { Badge, Group, ListRow, SettingsPage, settings, useReduceMotion } from './kit';
-import { KEY_CHECK_COLORS } from './KeyCheckMark';
+import { Badge, Group, ListRow, SettingsPage, useReduceMotion, useSettings } from './kit';
+import { useKeyCheckColors } from './KeyCheckMark';
 import type { KeyProviderId } from './keyCheck';
 import { KeySheet } from './KeySheet';
 import { SpeechModelSheet } from './ModelSheet';
@@ -38,6 +37,7 @@ import { useSettingsT, type SettingsKey } from './strings';
 
 /** The selected row's check, landing (200 ms) when the choice changes. */
 export function LandingCheck({ shown, reduceMotion }: { shown: boolean; reduceMotion: boolean }) {
+  const { accent } = useSettings();
   const value = useRef(new Animated.Value(shown ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(value, {
@@ -56,7 +56,7 @@ export function LandingCheck({ shown, reduceMotion }: { shown: boolean; reduceMo
         transform: [{ scale: value.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
       }}
     >
-      <SystemIcon name="checkmark" mdName="Check" size={22} color={home.accent} />
+      <SystemIcon name="checkmark" mdName="Check" size={22} color={accent} />
     </Animated.View>
   );
 }
@@ -71,6 +71,7 @@ function LiftValue({
   accent: boolean;
   reduceMotion: boolean;
 }) {
+  const settings = useSettings();
   const value = useRef(new Animated.Value(1)).current;
   const first = useRef(true);
   useEffect(() => {
@@ -91,7 +92,7 @@ function LiftValue({
       style={[
         settings.rowValue,
         settings.tabular,
-        accent && { color: home.accent },
+        accent && { color: settings.accent },
         {
           opacity: value,
           transform: [
@@ -133,6 +134,8 @@ const TASK_TITLE: Record<KeyTask, SettingsKey> = {
  */
 export default function ProcessingScreen() {
   const t = useSettingsT();
+  const settings = useSettings();
+  const keyCheckColors = useKeyCheckColors();
   const reduceMotion = useReduceMotion();
   const config = useConfigStore((s) => s.config);
   const activeMode = useProcessingModeStore((s) => s.activeMode);
@@ -229,7 +232,7 @@ export default function ProcessingScreen() {
             subtitle={body}
             subtitleStyle={
               mode === 'providers' && defaults.mode === 'providers'
-                ? { color: KEY_CHECK_COLORS.connected }
+                ? { color: keyCheckColors.connected }
                 : undefined
             }
             selected={defaults.mode === mode}
@@ -300,7 +303,7 @@ export default function ProcessingScreen() {
                       name="chevron.right"
                       mdName="ChevronRight"
                       size={20}
-                      color={home.tertiary}
+                      color={settings.tertiary}
                     />
                   </View>
                 }

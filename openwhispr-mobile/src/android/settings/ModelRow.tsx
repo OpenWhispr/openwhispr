@@ -5,10 +5,9 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { ANDROID_MODELS, cancelAndroidDownload, downloadAndroidModel, modelReady } from '../models';
 import i18n from '../strings';
-import { home } from '../home/kit';
-import { Badge, ListRow, settings, showToast } from './kit';
+import { Badge, ListRow, showToast, useSettings } from './kit';
 import { DownloadRing, type RingPhase } from './DownloadRing';
-import { look } from './look';
+import { useSettingsLook } from './look';
 import { formatSize, modelName, type MODEL_ROWS } from './modelCatalog';
 import { settingsT, useSettingsT } from './strings';
 
@@ -70,6 +69,8 @@ export function ModelRow({
   line?: string;
 }) {
   const t = useSettingsT();
+  const settings = useSettings();
+  const { look } = useSettingsLook();
   const [failure, setFailure] = useState<string | null>(null);
   // Between the last byte and the readiness check the ring keeps spinning; never "Download".
   const [ending, setEnding] = useState<'checking' | 'done' | null>(null);
@@ -154,7 +155,7 @@ export function ModelRow({
           style={[
             settings.rowValue,
             {
-              color: dimmed ? home.tertiary : home.accent,
+              color: dimmed ? settings.tertiary : settings.accent,
               opacity: ringShown.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
             },
           ]}
@@ -179,7 +180,7 @@ export function ModelRow({
         </Animated.View>
       )}
       {!phase && inUse && (
-        <SystemIcon name="checkmark" mdName="Check" size={22} color={home.accent} />
+        <SystemIcon name="checkmark" mdName="Check" size={22} color={settings.accent} />
       )}
     </View>
   );

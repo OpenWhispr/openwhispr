@@ -2,22 +2,41 @@ import { Pressable, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
-import { gloss, glossPressed, home, type, useHome } from '../home/kit';
+import { useHome } from '../home/kit';
 import type { SheetTask } from '../settings/ownKey';
 import type { Place, Source } from './places';
 import { PROVIDER_LOGOS } from './providerLogos';
-import { look as settingsLook } from '../settings/look';
-import { raised, raisedPressed, theme } from '../theme';
-import { useTheme } from '../ThemeProvider';
+import { settingsLookFor } from '../settings/look';
+import { themeFor, useTheme, type AndroidTheme } from '../ThemeProvider';
+import type { Scheme } from '../theme';
 
 /**
  * Processing in OpenWhispr's design language (Figma sections 8 and 9): the desktop's glass edge
  * on cards and fields, the Home's glossy tile for the place in use, desktop provider logos.
  * The shared values live in `settings/look.ts`, so Settings and Processing stay one look.
  */
-export const look = { ...settingsLook, pickedRow: 'rgba(21,85,212,0.08)' };
-
-export { edgeCard, sectionLabel } from '../settings/look';
+function buildProcessingLook(theme: AndroidTheme) {
+  return {
+    ...settingsLookFor(theme).look,
+    pickedRow: theme.scheme === 'dark' ? 'rgba(110,155,255,0.14)' : 'rgba(21,85,212,0.08)',
+    /**
+     * The plate behind a provider's logo: the surface in light, a light plate in dark so black
+     * marks (OpenAI, Mistral) stay visible (design §3.6).
+     */
+    logoPlate: theme.scheme === 'dark' ? '#F2F2F5' : theme.tokens.surface,
+  };
+}
+export type ProcessingLook = ReturnType<typeof buildProcessingLook>;
+const looks: Partial<Record<Scheme, ProcessingLook>> = {};
+export function processingLookFor(theme: AndroidTheme): ProcessingLook {
+  return (looks[theme.scheme] ??= buildProcessingLook(theme));
+}
+/** Processing's look for the scheme in use. Read it at render; a switch re-renders in place. */
+export function useProcessingLook(): ProcessingLook {
+  return processingLookFor(useTheme());
+}
+/** @deprecated Light only: read `useProcessingLook()`. */
+export const look = processingLookFor(themeFor('light'));
 
 export const PLACE_ICON: Record<Place, LucideIconName> = {
   cloud: 'Cloud',
@@ -48,8 +67,11 @@ export function Tile({
   source?: Source;
   size?: number;
 }) {
+  const th = useTheme();
+  const look = useProcessingLook();
+  const home = useHome().c;
   const logo = source && source !== 'custom' ? PROVIDER_LOGOS[source] : null;
-  const color = kind === 'glass' ? theme.onGlass : kind === 'sel' ? home.accent : home.text;
+  const color = kind === 'glass' ? th.tokens.onGlass : kind === 'sel' ? home.accent : home.text;
   return (
     <View
       style={[
@@ -60,13 +82,13 @@ export function Tile({
           alignItems: 'center',
           justifyContent: 'center',
         },
-        kind === 'glass' && gloss,
+        kind === 'glass' && th.glass,
         kind === 'idle' && { backgroundColor: look.idleFill },
         kind === 'sel' && { backgroundColor: look.selFill },
         kind === 'logo' && {
-          backgroundColor: home.surface,
+          backgroundColor: look.logoPlate,
           borderWidth: 1,
-          borderColor: theme.divider,
+          borderColor: th.tokens.divider,
         },
       ]}
     >
@@ -86,13 +108,33 @@ export function Tile({
 
 /** A provider's mark on its own, for the Provider field (18) and the model list label (14). */
 export function ProviderMark({ source, size }: { source: Source; size: number }) {
+  const th = useTheme();
+  const look = useProcessingLook();
   if (source === 'custom')
-    return <SystemIcon name="link" mdName="Link" size={size} color={home.secondary} />;
-  return <SvgXml xml={PROVIDER_LOGOS[source]} width={size} height={size} />;
+    return <SystemIcon name="link" mdName="Link" size={size} color={th.tokens.secondary} />;
+  const mark = <SvgXml xml={PROVIDER_LOGOS[source]} width={size} height={size} />;
+  if (th.scheme !== 'dark') return mark;
+  // In dark the mark sits on a small light plate, so black logos don't vanish.
+  return (
+    <View
+      style={{
+        width: size + 6,
+        height: size + 6,
+        borderRadius: (size + 6) / 4,
+        backgroundColor: look.logoPlate,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {mark}
+    </View>
+  );
 }
 
 /** The small square tag: Live (blue) or After (grey), and "N tasks" beside a place's name. */
 export function Tag({ label, neutral }: { label: string; neutral?: boolean }) {
+  const look = useProcessingLook();
+  const home = useHome().c;
   return (
     <View
       style={{
@@ -117,6 +159,8 @@ export function Tag({ label, neutral }: { label: string; neutral?: boolean }) {
 }
 
 export function CountBadge({ label }: { label: string }) {
+  const look = useProcessingLook();
+  const home = useHome().c;
   return (
     <View
       style={{

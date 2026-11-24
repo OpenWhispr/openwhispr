@@ -13,8 +13,8 @@ import {
   PillAction,
   SettingsPage,
   Toggle,
-  settings,
   showToast,
+  useSettings,
 } from './kit';
 import { GlassButton, OutlineButton } from '../processingFable/look';
 import { needsReconnect } from '../calendar/connect';
@@ -31,6 +31,7 @@ const goBack = () => (router.canGoBack() ? router.back() : router.replace('/andr
  */
 export default function CalendarAccountScreen() {
   const t = useSettingsT();
+  const settings = useSettings();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const accountId = Number(id);
   const accounts = useGoogleCalendarStore((state) => state.accounts);

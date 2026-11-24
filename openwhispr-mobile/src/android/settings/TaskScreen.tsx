@@ -9,9 +9,8 @@ import { resolveCustomPrompt } from '@/config/prompts/registry';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
 import { providerDisplayName, type InferenceMode } from '@/lib/mobileProviders';
 import { switchWorkflowMode } from '@/lib/workflowModeSwitch.android';
-import { home } from '../home/kit';
-import { BottomSheet, Group, ListRow, SettingsPage, useReduceMotion } from './kit';
-import { KEY_CHECK_COLORS } from './KeyCheckMark';
+import { BottomSheet, Group, ListRow, SettingsPage, useReduceMotion, useSettings } from './kit';
+import { useKeyCheckColors } from './KeyCheckMark';
 import type { KeyProviderId } from './keyCheck';
 import { KeySheet } from './KeySheet';
 import { SpeechModelSheet } from './ModelSheet';
@@ -58,6 +57,7 @@ function ModelPicker({
   onChoose: (model: string) => void;
 }) {
   const t = useSettingsT();
+  const { surface } = useSettings();
   const models = providerModels(provider, task);
   // A model chosen before that has since left the list stays on it, as the old screen did.
   const options = models.includes(current) || !current ? models : [current, ...models];
@@ -65,7 +65,7 @@ function ModelPicker({
     <BottomSheet visible={visible} onClose={onClose} title={t('chooseModel')}>
       {/* OpenRouter lists twelve; the list scrolls rather than run off the screen. */}
       <ScrollView
-        style={{ maxHeight: 420, borderRadius: 16, backgroundColor: home.surface }}
+        style={{ maxHeight: 420, borderRadius: 16, backgroundColor: surface }}
         contentContainerStyle={{ paddingBottom: 4 }}
       >
         {options.map((model) => (
@@ -87,6 +87,7 @@ function ModelPicker({
  */
 function MeetingsTask() {
   const t = useSettingsT();
+  const keyCheckColors = useKeyCheckColors();
   const reduceMotion = useReduceMotion();
   // Read so the page follows what's saved for meetings.
   const meeting = useConfigStore((s) => s.config?.inference?.meeting);
@@ -154,7 +155,7 @@ function MeetingsTask() {
             subtitle={row.body}
             subtitleStyle={
               row.selected && row.icon === 'KeyRound'
-                ? { color: KEY_CHECK_COLORS.connected }
+                ? { color: keyCheckColors.connected }
                 : undefined
             }
             selected={row.selected}
@@ -203,6 +204,7 @@ function MeetingsTask() {
  */
 function Task({ task }: { task: KeyTask }) {
   const t = useSettingsT();
+  const keyCheckColors = useKeyCheckColors();
   const reduceMotion = useReduceMotion();
   const config = useConfigStore((s) => s.config);
   const activeMode = useProcessingModeStore((s) => s.activeMode);
@@ -284,7 +286,7 @@ function Task({ task }: { task: KeyTask }) {
             subtitle={row.body}
             subtitleStyle={
               row.selected && row.icon === 'KeyRound'
-                ? { color: KEY_CHECK_COLORS.connected }
+                ? { color: keyCheckColors.connected }
                 : undefined
             }
             selected={row.selected}

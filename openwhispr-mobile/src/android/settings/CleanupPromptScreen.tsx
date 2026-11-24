@@ -17,10 +17,9 @@ import {
   normalizeCustomPromptForSave,
   resolveCustomPrompt,
 } from '@/config/prompts/registry';
-import { home, type } from '../home/kit';
-import { PillAction, SettingsPage, TextAction, settings, showToast } from './kit';
-import { bodyText, edgeField } from './look';
-import { theme } from '../theme';
+import { useHome } from '../home/kit';
+import { PillAction, SettingsPage, TextAction, showToast, useSettings } from './kit';
+import { useSettingsLook } from './look';
 import { useSettingsT } from './strings';
 
 // The prompt is sent with every cleanup; past about 5x the default, latency shows. A caution,
@@ -39,6 +38,9 @@ const ANDROID_DEFAULT_PROMPT = DEFAULT_CLEANUP_PROMPT.replace(
  */
 export default function CleanupPromptScreen() {
   const t = useSettingsT();
+  const { c: home, type, theme: th } = useHome();
+  const settings = useSettings();
+  const { bodyText, edgeField } = useSettingsLook();
   const stored = useCustomPromptsStore((state) => state.customPrompts.cleanup);
   const setCustomPrompt = useCustomPromptsStore((state) => state.setCustomPrompt);
   const resetCustomPrompt = useCustomPromptsStore((state) => state.resetCustomPrompt);
@@ -127,13 +129,17 @@ export default function CleanupPromptScreen() {
                 autoCorrect={false}
                 spellCheck={false}
                 accessibilityLabel={t('cleanupPrompt')}
+                selectionColor={th.tokens.selFill}
+                cursorColor={th.tokens.accent}
                 style={{ fontSize: 12, lineHeight: 17, color: home.text, paddingTop: 4 }}
               />
             </ScrollView>
           </View>
           <View style={{ gap: 4 }}>
             {draft.length > LONG_PROMPT_CHARS && (
-              <Text style={[settings.subtitle, { color: theme.warning }]}>{t('promptLong')}</Text>
+              <Text style={[settings.subtitle, { color: th.tokens.warning }]}>
+                {t('promptLong')}
+              </Text>
             )}
             <Text style={settings.subtitle}>{t('promptFooter')}</Text>
           </View>

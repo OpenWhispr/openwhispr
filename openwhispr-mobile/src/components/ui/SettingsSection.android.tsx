@@ -3,14 +3,13 @@ import {
   View,
   Platform,
   Pressable,
-  StyleSheet,
   TextInput,
   type TextInputProps,
   type AccessibilityState,
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from './SystemIcon';
-import { flat, theme } from '@/android/theme';
+import { makeStyles, useTheme } from '@/android/ThemeProvider';
 import { AppFont } from '@/lib/fonts';
 
 type SettingsRowProps = {
@@ -50,6 +49,8 @@ export function SettingsRow({
   descriptionAccessory,
   disabled = false,
 }: SettingsRowProps) {
+  const theme = useTheme().tokens;
+  const styles = useStyles();
   const android = Platform.OS === 'android';
   const isLine = iconStyle === 'line';
   const dimmed = disabled ? 'opacity-40' : '';
@@ -150,6 +151,8 @@ export function SettingsTextFieldRow({
   style,
   ...inputProps
 }: SettingsTextFieldRowProps) {
+  const theme = useTheme().tokens;
+  const styles = useStyles();
   if (Platform.OS === 'android') {
     return (
       <View className="min-h-[50px] flex-row items-center gap-4 px-4 py-3">
@@ -205,6 +208,7 @@ type SettingsSectionProps = {
 };
 
 export function SettingsSection({ title, borderless = false, children }: SettingsSectionProps) {
+  const styles = useStyles();
   const childArray = React.Children.toArray(children);
   return (
     <View className="mb-7">
@@ -228,18 +232,18 @@ export function SettingsSection({ title, borderless = false, children }: Setting
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   // Glossy white: a flat card, corners 16, inset hairline dividers.
-  card: { ...flat, borderRadius: 16 },
+  card: { ...t.flat, borderRadius: 16 },
   cardInner: { borderRadius: 16, overflow: 'hidden' },
-  divider: { height: 1, marginLeft: 64, backgroundColor: theme.hairline },
+  divider: { height: 1, marginLeft: 64, backgroundColor: t.tokens.hairline },
   tile: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: theme.tile,
+    backgroundColor: t.tokens.tile,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  secondary: { color: theme.secondary },
-});
+  secondary: { color: t.tokens.secondary },
+}));

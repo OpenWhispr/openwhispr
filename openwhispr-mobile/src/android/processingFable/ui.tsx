@@ -12,14 +12,15 @@ import {
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
-import { home, type } from '../home/kit';
-import { settings, showToast, useReduceMotion } from '../settings/kit';
+import { useHome } from '../home/kit';
+import { showToast, useReduceMotion, useSettings } from '../settings/kit';
+import { useSettingsLook } from '../settings/look';
 import { KeyCheckMark } from '../settings/KeyCheckMark';
 import type { KeyCheckState } from '../settings/keyCheck';
 import { Radio } from '../settings/ModelListRow';
 import { noOrphan } from '../settings/strings';
 import type { SheetTask } from '../settings/ownKey';
-import { raised, raisedPressed } from '../theme';
+import { useTheme } from '../ThemeProvider';
 import {
   CountBadge,
   PLACE_ICON,
@@ -27,9 +28,7 @@ import {
   TASK_ICON,
   Tag,
   Tile,
-  edgeCard,
-  look,
-  sectionLabel,
+  useProcessingLook,
 } from './look';
 import { TASK_TITLE, type Place, type Source } from './places';
 import type { FableT } from './strings';
@@ -48,6 +47,8 @@ export function TaskChip({
   accessibilityLabel?: string;
   onPress?: () => void;
 }) {
+  const th = useTheme();
+  const { c: home, type } = useHome();
   const body = (
     <>
       <SystemIcon name="circle" mdName={icon} size={16} color={home.secondary} />
@@ -59,7 +60,7 @@ export function TaskChip({
   );
   // Raised (D9): tapping a task chip moves the task.
   const chip = (pressed: boolean): StyleProp<ViewStyle> => [
-    raised,
+    th.raised,
     {
       minHeight: 32,
       paddingVertical: 6,
@@ -70,7 +71,7 @@ export function TaskChip({
       alignItems: 'center',
       gap: 6,
     },
-    pressed && raisedPressed,
+    pressed && th.raisedPressed,
   ];
   if (!onPress)
     return (
@@ -123,6 +124,7 @@ export function PlaceHeader({
   /** "3 tasks", shown only while the place runs something. */
   count?: string;
 }) {
+  const settings = useSettings();
   return (
     <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
       <Tile kind={count ? 'glass' : 'idle'} icon={PLACE_ICON[place]} />
@@ -139,9 +141,10 @@ export function PlaceHeader({
   );
 }
 
-export const Divider = () => (
-  <View style={{ height: 1, marginHorizontal: 14, backgroundColor: look.hairline }} />
-);
+export const Divider = () => {
+  const look = useProcessingLook();
+  return <View style={{ height: 1, marginHorizontal: 14, backgroundColor: look.hairline }} />;
+};
 
 /** One choice in a sheet's radio list: icon, title with a tag, a line, the radio on the right. */
 export function RadioRow({
@@ -164,6 +167,8 @@ export function RadioRow({
   /** A place's icon in a tile (blue once picked), or a provider's logo. */
   leading?: React.ReactNode;
 }) {
+  const settings = useSettings();
+  const look = useProcessingLook();
   const reduceMotion = useReduceMotion();
   return (
     <Pressable
@@ -179,7 +184,7 @@ export function RadioRow({
         paddingHorizontal: 16,
         paddingVertical: 12,
         minHeight: 60,
-        backgroundColor: selected ? look.pickedRow : pressed ? home.canvas : undefined,
+        backgroundColor: selected ? look.pickedRow : pressed ? settings.canvas : undefined,
         opacity: disabled ? 0.45 : 1,
       })}
     >
@@ -198,6 +203,7 @@ export function RadioRow({
 
 /** "+ Add a key" as the last row of a list. */
 export function AddRow({ label, onPress }: { label: string; onPress: () => void }) {
+  const settings = useSettings();
   return (
     <Pressable
       cssInterop={false}
@@ -210,17 +216,18 @@ export function AddRow({ label, onPress }: { label: string; onPress: () => void 
         paddingHorizontal: 16,
         minHeight: 60,
         paddingVertical: 12,
-        backgroundColor: pressed ? home.canvas : undefined,
+        backgroundColor: pressed ? settings.canvas : undefined,
       })}
     >
       <Tile kind="sel" icon="Plus" />
-      <Text style={[settings.title, { color: home.accent }]}>{label}</Text>
+      <Text style={[settings.title, { color: settings.accent }]}>{label}</Text>
     </Pressable>
   );
 }
 
 /** A card of rows in a sheet, split by inset dividers. */
 export function SheetCard({ children }: { children: React.ReactNode }) {
+  const { edgeCard } = useSettingsLook();
   const rows = React.Children.toArray(children).filter(Boolean);
   return (
     <View style={edgeCard}>
@@ -236,6 +243,7 @@ export function SheetCard({ children }: { children: React.ReactNode }) {
 
 /** An uppercase label over a sheet's section, with the provider's mark when it names one. */
 export function SectionLabel({ children, source }: { children: string; source?: Source }) {
+  const { sectionLabel } = useSettingsLook();
   const label = (
     <Text accessibilityRole="header" style={sectionLabel}>
       {children}
@@ -339,6 +347,9 @@ export function Field({
   /** The provider's mark before the value (the Provider field). */
   leading?: React.ReactNode;
 }) {
+  const settings = useSettings();
+  const look = useProcessingLook();
+  const { c: home, type } = useHome();
   const [focused, setFocused] = useState(false);
   const box = (
     <View
@@ -425,6 +436,8 @@ export function Field({
 
 /** The reason under a refused key or an unreachable server, in red or grey. */
 export function Reason({ text, failed }: { text: string; failed: boolean }) {
+  const look = useProcessingLook();
+  const { c: home, type } = useHome();
   return (
     <Text
       accessibilityLiveRegion="polite"

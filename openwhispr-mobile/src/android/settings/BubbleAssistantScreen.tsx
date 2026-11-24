@@ -1,14 +1,13 @@
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
-import { home } from '../home/kit';
 import { Glyph, type GlyphName } from '../onboarding/PracticeBubble';
 import { GLASS_GRADIENT } from '../onboarding/kit';
-import { Group, ListRow, SettingsPage, Toggle, cardStyle, settings } from './kit';
-import { look } from './look';
-import { flat, theme } from '../theme';
+import { Group, ListRow, SettingsPage, Toggle, useSettings } from './kit';
+import { settingsLookFor, useSettingsLook } from './look';
+import { makeStyles } from '../ThemeProvider';
 import { useSettingsT, type SettingsKey } from './strings';
 import { setBubbleAssistant, useBubbleAssistant } from './bubbleAppearance';
 import { currentTranslateTarget } from './translateLanguages';
@@ -18,9 +17,11 @@ const BARS = [8, 14, 20, 14, 8];
 
 /** A grey 36 tile holding one of the menu's own glyphs, for list rows. */
 export function GlyphTile({ name }: { name: GlyphName }) {
+  const styles = useStyles();
+  const settings = useSettings();
   return (
     <View style={styles.listTile}>
-      <Glyph name={name} size={16} color={home.text} />
+      <Glyph name={name} size={16} color={settings.text} />
     </View>
   );
 }
@@ -34,6 +35,8 @@ const MENU: { glyph: GlyphName; title: SettingsKey; body: SettingsKey }[] = [
 /** The hold menu beside the assistant bubble (glass, voice bars, star badge), as the bubble draws them. */
 function MenuPreview({ language }: { language: string }) {
   const t = useSettingsT();
+  const styles = useStyles();
+  const settings = useSettings();
   return (
     <View accessible accessibilityLabel={t('assistantPreview')} style={styles.preview}>
       <View style={styles.bubble}>
@@ -50,14 +53,15 @@ function MenuPreview({ language }: { language: string }) {
           </View>
         </LinearGradient>
         <View style={styles.badge}>
-          <Glyph name="sparkle" size={9} color={theme.accent} />
+          {/* The bubble's own badge colour (`BubbleColors.dot`), the same in both schemes. */}
+          <Glyph name="sparkle" size={9} color="#1555D4" />
         </View>
       </View>
       <View style={styles.menu}>
         {MENU.map((row) => (
           <View key={row.title} style={styles.menuRow}>
             <View style={styles.menuTile}>
-              <Glyph name={row.glyph} size={12} color={home.text} />
+              <Glyph name={row.glyph} size={12} color={settings.text} />
             </View>
             <View style={{ flex: 1 }}>
               <Text numberOfLines={1} style={styles.menuTitle}>
@@ -81,6 +85,9 @@ function MenuPreview({ language }: { language: string }) {
  */
 export default function BubbleAssistantScreen() {
   const t = useSettingsT();
+  const styles = useStyles();
+  const settings = useSettings();
+  const { edgeCard: cardStyle } = useSettingsLook();
   const on = useBubbleAssistant((s) => s.on);
   const target = currentTranslateTarget(useConfigStore((s) => s.config?.androidTranslationTarget));
   return (
@@ -119,78 +126,83 @@ export default function BubbleAssistantScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  listTile: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: look.idleFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  preview: {
-    height: 160,
-    borderRadius: 20,
-    backgroundColor: look.selFill,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 20,
-  },
-  bubble: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
-  glass: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bars: { flexDirection: 'row', alignItems: 'center', gap: 2.5 },
-  bar: { width: 2.6, borderRadius: 2, backgroundColor: theme.onGlass },
-  badge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 15,
-    height: 15,
-    borderRadius: 8,
-    backgroundColor: theme.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0px 1px 2px rgba(0,0,0,0.12)',
-  },
-  menu: {
-    width: 184,
-    padding: 5,
-    gap: 2,
-    borderRadius: 16,
-    ...flat,
-  },
-  menuRow: {
-    height: 36,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingLeft: 6,
-    paddingRight: 8,
-  },
-  menuTile: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
-    backgroundColor: theme.tile,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  menuTitle: { fontSize: 12, lineHeight: 15, fontWeight: '500', color: home.text },
-  menuBody: { fontSize: 10, lineHeight: 13, color: home.secondary },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-    paddingLeft: 16,
-    paddingRight: 12,
-    minHeight: 64,
-  },
+const useStyles = makeStyles((theme) => {
+  const k = theme.tokens;
+  const { look } = settingsLookFor(theme);
+  return {
+    listTile: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: look.idleFill,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    preview: {
+      height: 160,
+      borderRadius: 20,
+      backgroundColor: look.selFill,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 20,
+    },
+    bubble: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+    glass: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bars: { flexDirection: 'row', alignItems: 'center', gap: 2.5 },
+    bar: { width: 2.6, borderRadius: 2, backgroundColor: k.onGlass },
+    badge: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      width: 15,
+      height: 15,
+      borderRadius: 8,
+      // The bubble's own white badge, the same in both schemes.
+      backgroundColor: '#FFFFFF',
+      alignItems: 'center',
+      justifyContent: 'center',
+      boxShadow: '0px 1px 2px rgba(0,0,0,0.12)',
+    },
+    menu: {
+      width: 184,
+      padding: 5,
+      gap: 2,
+      borderRadius: 16,
+      ...theme.flat,
+    },
+    menuRow: {
+      height: 36,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingLeft: 6,
+      paddingRight: 8,
+    },
+    menuTile: {
+      width: 22,
+      height: 22,
+      borderRadius: 7,
+      backgroundColor: k.tile,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    menuTitle: { fontSize: 12, lineHeight: 15, fontWeight: '500', color: k.ink },
+    menuBody: { fontSize: 10, lineHeight: 13, color: k.secondary },
+    switchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 12,
+      paddingLeft: 16,
+      paddingRight: 12,
+      minHeight: 64,
+    },
+  };
 });

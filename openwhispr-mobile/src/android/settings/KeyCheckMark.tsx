@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
-import { home } from '../home/kit';
-import { theme } from '../theme';
+import { homeLook } from '../home/kit';
+import { useTheme, type AndroidTheme } from '../ThemeProvider';
 import { useReduceMotion } from './kit';
 import type { KeyCheckState } from './keyCheck';
 
@@ -19,12 +19,21 @@ const BANG = 5.2;
 const STANDARD = Easing.bezier(0.4, 0, 0.2, 1);
 const TICK_EASE = Easing.bezier(0.65, 0, 0.35, 1);
 
-export const KEY_CHECK_COLORS = {
-  checking: home.secondary,
-  connected: theme.connected,
-  failed: home.error,
-  unverified: theme.warning,
-} as const;
+/** A key check's colour per state, for a theme. */
+export function keyCheckColors(theme: AndroidTheme) {
+  const c = homeLook(theme).c;
+  return {
+    checking: c.secondary,
+    connected: theme.tokens.connected,
+    failed: c.error,
+    unverified: theme.tokens.warning,
+  } as const;
+}
+
+/** A key check's colours for the scheme in use; read them at render. */
+export function useKeyCheckColors() {
+  return keyCheckColors(useTheme());
+}
 
 const timing = (
   value: Animated.Value,
@@ -59,6 +68,7 @@ export function KeyCheckMark({
   /** False for a key that was already saved: it shows settled, with no haptic. */
   animate?: boolean;
 }) {
+  const colors = useKeyCheckColors();
   const reduceMotion = useReduceMotion();
   const instant = reduceMotion || !animate;
   // Native-driven: the spin, and the ring's shrink and fade. JS-driven: the stroke drawing.
@@ -131,7 +141,7 @@ export function KeyCheckMark({
     return () => sequence.stop();
   }, [state, instant, animate, ringScale, ringOpacity, arc, tick, crossA, crossB, bang, dot]);
 
-  const color = KEY_CHECK_COLORS[state];
+  const color = colors[state];
   const line = { stroke: color, strokeWidth: 2.4, strokeLinecap: 'round', fill: 'none' } as const;
   return (
     <View style={{ width: SIZE, height: SIZE }} accessible={false} importantForAccessibility="no">

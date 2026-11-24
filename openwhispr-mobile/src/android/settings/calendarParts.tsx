@@ -3,13 +3,10 @@ import { View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import type { GoogleCalendar, GoogleCalendarAccount } from '@/data/calendarTypes';
 import { needsReconnect } from '../calendar/connect';
-import { type } from '../home/kit';
-import { edgeCard } from './look';
-import { theme } from '../theme';
+import { useHome } from '../home/kit';
+import { useSettingsLook } from './look';
 import { relativeTime } from './kit';
 import type { useSettingsT } from './strings';
-
-export const AMBER = theme.amber;
 
 type T = ReturnType<typeof useSettingsT>;
 
@@ -49,6 +46,7 @@ export function sortAccounts(accounts: GoogleCalendarAccount[]): GoogleCalendarA
 
 /** The Google "G" on a white glass-edged tile. */
 export function GoogleTile() {
+  const { edgeCard } = useSettingsLook();
   return (
     <View
       style={[
@@ -62,17 +60,19 @@ export function GoogleTile() {
 }
 
 export function AmberTag({ label }: { label: string }) {
+  const { type, theme } = useHome();
+  const k = theme.tokens;
   return (
     <View
       style={{
         paddingHorizontal: 8,
         paddingVertical: 2,
         borderRadius: 6,
-        backgroundColor: theme.amberFill,
+        backgroundColor: k.amberFill,
       }}
     >
       <Text
-        style={[type.footnote, { fontSize: 12, lineHeight: 16, color: AMBER, fontWeight: '500' }]}
+        style={[type.footnote, { fontSize: 12, lineHeight: 16, color: k.amber, fontWeight: '500' }]}
       >
         {label}
       </Text>

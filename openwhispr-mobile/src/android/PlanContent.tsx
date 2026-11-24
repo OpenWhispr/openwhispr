@@ -13,15 +13,9 @@ import {
   refreshAndroidBillingAccess,
   useAndroidBillingStatus,
 } from './billing';
-import { Group, ListRow, PillAction, cardStyle, settings } from './settings/kit';
-import { bodyText } from './settings/look';
-
-const titleText = {
-  fontSize: 32,
-  lineHeight: 38,
-  fontWeight: '700' as const,
-  color: settings.text,
-};
+import { Group, ListRow, PillAction, useSettings } from './settings/kit';
+import { useSettingsLook } from './settings/look';
+import { useTheme } from './ThemeProvider';
 
 /** A one-row card that opens something (Manage on Google Play, Support, Web billing). */
 function LinkCard({ title, onPress }: { title: string; onPress: () => void }) {
@@ -34,6 +28,16 @@ function LinkCard({ title, onPress }: { title: string; onPress: () => void }) {
 
 export function PlanContent() {
   const { t } = useTranslation('android');
+  const th = useTheme();
+  const settings = useSettings();
+  const { bodyText } = useSettingsLook();
+  const titleText = {
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: '700' as const,
+    color: settings.text,
+  };
+  const cardStyle = { ...th.flat, borderRadius: 16, overflow: 'hidden' as const };
   const user = useAuthStore((state) => state.user);
   const sessionCookie = useAuthStore((state) => state.sessionCookie);
   const usage = useUsageStore((state) => state.usage);

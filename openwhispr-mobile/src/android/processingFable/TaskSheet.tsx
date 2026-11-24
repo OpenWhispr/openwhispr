@@ -9,10 +9,9 @@ import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { resolveCustomPrompt } from '@/config/prompts/registry';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
 import type { UserConfig } from '@/types';
-import { home } from '../home/kit';
 import { ANDROID_MODELS, type AndroidModelId } from '../models';
 import type { AndroidSpeechModelId } from '../speechSelection';
-import { BottomSheet, ListRow, settings, useReduceMotion } from '../settings/kit';
+import { BottomSheet, ListRow, useReduceMotion, useSettings } from '../settings/kit';
 import { ModelListRow, type ModelState } from '../settings/ModelListRow';
 import { startModelDownload } from '../settings/ModelRow';
 import { removeWithUndo, setPending, useRemovals } from '../settings/ModelScreen';
@@ -66,6 +65,7 @@ function PhoneModels({
   config: UserConfig | null;
   shared: boolean;
 }) {
+  const settings = useSettings();
   const reduceMotion = useReduceMotion();
   const pending = useRemovals((s) => s.pending);
   const { ready, progress, refresh } = useModelsReady();
@@ -155,6 +155,7 @@ export function TaskSheet({
   onAddKey: () => void;
 }) {
   const t = useFableT();
+  const settings = useSettings();
   const config = useConfigStore((s) => s.config);
   const activeMode = useProcessingModeStore((s) => s.activeMode);
   const cloudAccess = cloudAccessFor(useAuthStore((s) => s.user));

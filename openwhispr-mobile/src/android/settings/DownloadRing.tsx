@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
-import { home } from '../home/kit';
+import { useHome } from '../home/kit';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -28,6 +28,7 @@ export function DownloadRing({
   progress: number;
   reduceMotion: boolean;
 }) {
+  const { c } = useHome();
   const fill = useRef(new Animated.Value(progress)).current;
   const spin = useRef(new Animated.Value(0)).current;
   const ring = useRef(new Animated.Value(1)).current;
@@ -105,7 +106,7 @@ export function DownloadRing({
             cx={SIZE / 2}
             cy={SIZE / 2}
             r={RADIUS}
-            stroke={home.fill}
+            stroke={c.fill}
             strokeWidth={2.5}
             fill="none"
           />
@@ -113,7 +114,7 @@ export function DownloadRing({
             cx={SIZE / 2}
             cy={SIZE / 2}
             r={RADIUS}
-            stroke={home.accent}
+            stroke={c.accent}
             strokeWidth={2.5}
             strokeLinecap="round"
             fill="none"
@@ -125,7 +126,7 @@ export function DownloadRing({
             transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
           />
           {phase === 'downloading' && (
-            <Rect x={10} y={10} width={8} height={8} rx={1.5} fill={home.accent} />
+            <Rect x={10} y={10} width={8} height={8} rx={1.5} fill={c.accent} />
           )}
         </Svg>
       </Animated.View>
@@ -138,7 +139,7 @@ export function DownloadRing({
         >
           <AnimatedPath
             d={CHECK}
-            stroke={home.accent}
+            stroke={c.accent}
             strokeWidth={2}
             strokeLinecap="round"
             strokeLinejoin="round"

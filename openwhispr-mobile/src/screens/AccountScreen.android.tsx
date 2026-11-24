@@ -17,9 +17,8 @@ import { requiresRealAccount } from '@/lib/accountAccess';
 import { getAccountDisplay } from '@/lib/accountDisplay';
 import { safeHaptics } from '@/lib/utils';
 import { AndroidDictation } from '../../modules/android-dictation/src';
-import { gloss, home, type } from '@/android/home/kit';
-import { look } from '@/android/settings/look';
-import { theme } from '@/android/theme';
+import { useHome } from '@/android/home/kit';
+import { useSettingsLook } from '@/android/settings/look';
 import { ProgressBar } from '@/android/controls';
 import {
   Badge,
@@ -27,10 +26,9 @@ import {
   ListRow,
   PillAction,
   SettingsPage,
-  cardStyle,
   relativeTime,
-  settings,
   showToast,
+  useSettings,
 } from '@/android/settings/kit';
 import { useSettingsT, type SettingsKey } from '@/android/settings/strings';
 import { requestRuntime, usePermissions } from '@/android/settings/permissions';
@@ -52,6 +50,10 @@ const HISTORY_LABEL: Record<number, SettingsKey> = {
 
 export default function SettingsScreen() {
   const t = useSettingsT();
+  const { type, theme: th } = useHome();
+  const theme = th.tokens;
+  const settings = useSettings();
+  const { look, edgeCard: cardStyle } = useSettingsLook();
   const user = useAuthStore((s) => s.user);
   const isGuest = useAuthStore((s) => s.isGuest);
   const signOut = useAuthStore((s) => s.signOut);
@@ -181,7 +183,7 @@ export default function SettingsScreen() {
                   alignItems: 'center',
                   justifyContent: 'center',
                 },
-                gloss,
+                th.glass,
               ]}
             >
               {signedIn ? (

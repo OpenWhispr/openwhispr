@@ -2,8 +2,8 @@ import { Linking, View } from 'react-native';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
-import { Group, ListRow, SettingsPage, settings } from '@/android/settings/kit';
-import { bodyText } from '@/android/settings/look';
+import { Group, ListRow, SettingsPage, useSettings } from '@/android/settings/kit';
+import { useSettingsLook } from '@/android/settings/look';
 import notices from '@/android/licenses.json';
 
 const entries = [
@@ -52,6 +52,8 @@ const entries = [
 ];
 export default function LicensesScreen() {
   const { t } = useTranslation();
+  const settings = useSettings();
+  const { bodyText } = useSettingsLook();
   const [expanded, setExpanded] = useState<string | null>(null);
   return (
     <SettingsPage title={t('licenses')}>

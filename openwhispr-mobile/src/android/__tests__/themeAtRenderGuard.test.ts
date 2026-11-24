@@ -53,6 +53,8 @@ const LEGACY_TOKENS = new Set([
   'bodyText',
   'sectionLabel',
   'cardStyle',
+  // settings/kit's light-only tokens (read `useSettings()` instead).
+  'settings',
 ]);
 const COLOUR = /#[0-9a-f]{3,8}\b|\brgba?\(/i;
 

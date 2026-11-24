@@ -8,20 +8,24 @@ import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { safeHaptics } from '@/lib/utils';
 import { speechModelSupportsLanguages } from '@/android/speechCapabilities';
 import type { AndroidSpeechModelId } from '@/android/speechSelection';
-import { Badge, ListRow, SettingsPage, cardStyle, settings } from '@/android/settings/kit';
+import { Badge, ListRow, SettingsPage, useSettings } from '@/android/settings/kit';
 import { MODEL_ROWS, modelName } from '@/android/settings/modelCatalog';
 import { useSettingsT } from '@/android/settings/strings';
 import { useNavigationBar } from '@/android/navigationBar';
-import { look } from '@/android/settings/look';
+import { useSettingsLook } from '@/android/settings/look';
 import { SearchField } from '@/android/controls';
 
-const Divider = () => (
-  <View style={{ height: 1, marginLeft: 14, backgroundColor: look.hairline }} />
-);
+function Divider() {
+  const { look } = useSettingsLook();
+  return <View style={{ height: 1, marginLeft: 14, backgroundColor: look.hairline }} />;
+}
 
 /** Settings → Language: one searchable list; a tap saves and goes straight back. */
 export default function LanguageScreen() {
   const t = useSettingsT();
+  const settings = useSettings();
+  // Settings' card: the glass edge, corners 16.
+  const { edgeCard: cardStyle } = useSettingsLook();
   const config = useConfigStore((s) => s.config);
   const local = useProcessingModeStore((s) => s.activeMode === 'private');
   const [query, setQuery] = useState('');

@@ -7,10 +7,10 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
-import { home, type } from '../home/kit';
+import { useHome } from '../home/kit';
 import { ANDROID_MODELS, useModelDownloads } from '../models';
-import { settings, SettingsPage, showToast } from '../settings/kit';
-import { KEY_CHECK_COLORS } from '../settings/KeyCheckMark';
+import { SettingsPage, showToast, useSettings } from '../settings/kit';
+import { useSettingsLook } from '../settings/look';
 import { formatSize, modelName } from '../settings/modelCatalog';
 import { SHEET_TASKS, type SheetTask } from '../settings/ownKey';
 import { AddKeySheet } from './AddKeySheet';
@@ -30,13 +30,16 @@ import {
 } from './places';
 import { useFableT, type FableT } from './strings';
 import { TaskSheet } from './TaskSheet';
-import { OutlineButton, Tile, edgeCard, sectionLabel } from './look';
+import { OutlineButton, Tile } from './look';
+import { useTheme } from '../ThemeProvider';
 import { AddRow, ChipRow, Divider, PlaceHeader, TaskChip, confirmWithUndo, taskChip } from './ui';
 import type { AndroidModelId } from '../models';
 import { ProgressBar } from '../controls';
 
 /** The On device card's one progress line while models download for waiting tasks (D2). */
 function DownloadLine({ t }: { t: FableT }) {
+  const settings = useSettings();
+  const { type } = useHome();
   const { jobs, doneBytes, totalBytes } = usePhoneQueue();
   const progress = useModelDownloads((state) => state.progress);
   const current = jobs[0];
@@ -70,7 +73,7 @@ function DownloadLine({ t }: { t: FableT }) {
             opacity: pressed ? 0.6 : 1,
           })}
         >
-          <Text style={[type.subhead, { color: home.accent, fontWeight: '500' }]}>
+          <Text style={[type.subhead, { color: settings.accent, fontWeight: '500' }]}>
             {t('cancel')}
           </Text>
         </Pressable>
@@ -81,6 +84,7 @@ function DownloadLine({ t }: { t: FableT }) {
 
 /** A card per place; its tasks sit inside it. */
 function PlaceCard({ children }: { children: React.ReactNode }) {
+  const { edgeCard } = useSettingsLook();
   return (
     <View style={[edgeCard, { paddingHorizontal: 16, paddingVertical: 16, gap: 14 }]}>
       {children}
@@ -95,6 +99,9 @@ function PlaceCard({ children }: { children: React.ReactNode }) {
  */
 export default function ProcessingScreen() {
   const t = useFableT();
+  const th = useTheme();
+  const settings = useSettings();
+  const { edgeCard, sectionLabel } = useSettingsLook();
   const config = useConfigStore((s) => s.config);
   const activeMode = useProcessingModeStore((s) => s.activeMode);
   const user = useAuthStore((s) => s.user);
@@ -228,7 +235,7 @@ export default function ProcessingScreen() {
               paddingHorizontal: 16,
               paddingVertical: 14,
               gap: 12,
-              backgroundColor: pressed ? home.canvas : undefined,
+              backgroundColor: pressed ? settings.canvas : undefined,
             })}
           >
             <View style={{ flex: 1, gap: 2 }}>
@@ -239,7 +246,7 @@ export default function ProcessingScreen() {
               name="chevron.right"
               mdName="ChevronRight"
               size={20}
-              color={home.tertiary}
+              color={settings.tertiary}
             />
           </Pressable>
         </View>
@@ -279,7 +286,7 @@ export default function ProcessingScreen() {
                         paddingHorizontal: 16,
                         paddingVertical: 14,
                         gap: 12,
-                        backgroundColor: pressed ? home.canvas : undefined,
+                        backgroundColor: pressed ? settings.canvas : undefined,
                       })}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -296,14 +303,14 @@ export default function ProcessingScreen() {
                             name="checkmark"
                             mdName="Check"
                             size={20}
-                            color={KEY_CHECK_COLORS.connected}
+                            color={th.tokens.connected}
                           />
                         )}
                         <SystemIcon
                           name="chevron.right"
                           mdName="ChevronRight"
                           size={20}
-                          color={home.tertiary}
+                          color={settings.tertiary}
                         />
                       </View>
                       {items.length > 0 && <View style={{ paddingLeft: 48 }}>{chips(items)}</View>}
@@ -317,7 +324,7 @@ export default function ProcessingScreen() {
           )}
         </View>
 
-        <Text style={[settings.subtitle, { textAlign: 'center', color: home.tertiary }]}>
+        <Text style={[settings.subtitle, { textAlign: 'center', color: settings.tertiary }]}>
           {t('tapTaskHint')}
         </Text>
       </View>

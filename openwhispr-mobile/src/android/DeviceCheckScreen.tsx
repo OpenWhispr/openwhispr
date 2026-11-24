@@ -9,8 +9,8 @@ import { ResultTimes } from './settings/ResultTimes';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { ANDROID_MODELS } from './models';
-import { Group, ListRow, PillAction, SettingsPage, cardStyle, settings } from './settings/kit';
-import { bodyText } from './settings/look';
+import { Group, ListRow, PillAction, SettingsPage, useSettings } from './settings/kit';
+import { useSettingsLook } from './settings/look';
 import {
   deviceGuidance,
   readDeviceProfile,
@@ -42,6 +42,8 @@ export function waitForForeground(signal: AbortSignal): Promise<void> {
 
 export default function DeviceCheckScreen() {
   const { t } = useTranslation();
+  const settings = useSettings();
+  const { bodyText, edgeCard: cardStyle } = useSettingsLook();
   const config = useConfigStore((state) => state.config);
   const speechModel = config?.androidSpeechModel ?? 'parakeet-v3';
   const textModel = config?.androidTextModel ?? 'qwen-balanced';

@@ -2,18 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Linking, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { home, type } from '../home/kit';
-import { flat, glass, theme } from '../theme';
+import { useHome } from '../home/kit';
 import {
   BottomSheet,
   PillAction,
   TextAction,
-  cardStyle,
-  settings,
   showToast,
   useReduceMotion,
+  useSettings,
 } from './kit';
-import { KEY_CHECK_COLORS, KeyCheckMark } from './KeyCheckMark';
+import { KeyCheckMark, useKeyCheckColors } from './KeyCheckMark';
 import { useKeyCheck, type KeyCheckResult, type KeyProviderId } from './keyCheck';
 import {
   KEY_PROVIDERS,
@@ -55,6 +53,7 @@ function Chip({
   selected: boolean;
   onPress: () => void;
 }) {
+  const { c: home, type, theme: th } = useHome();
   return (
     <Pressable
       cssInterop={false}
@@ -62,7 +61,7 @@ function Chip({
       accessibilityState={{ selected }}
       onPress={onPress}
       style={({ pressed }) => [
-        selected ? glass : flat,
+        selected ? th.glass : th.flat,
         {
           minHeight: 36,
           paddingHorizontal: 14,
@@ -73,7 +72,7 @@ function Chip({
       ]}
     >
       <Text
-        style={[type.subhead, { color: selected ? theme.onGlass : home.text, fontWeight: '500' }]}
+        style={[type.subhead, { color: selected ? home.onGlass : home.text, fontWeight: '500' }]}
       >
         {label}
       </Text>
@@ -113,6 +112,9 @@ export function KeySheet({
   asDefault?: boolean;
 }) {
   const t = useSettingsT();
+  const { c: home, type, card: cardStyle } = useHome();
+  const settings = useSettings();
+  const keyColors = useKeyCheckColors();
   const [provider, setProvider] = useState<KeyProviderId>(initialProvider);
   // Each provider keeps its half-typed key and its ticks while the sheet is open, so moving
   // between chips loses nothing.
@@ -205,9 +207,9 @@ export function KeySheet({
     }));
 
   const borderColor = failed
-    ? KEY_CHECK_COLORS.failed
+    ? keyColors.failed
     : check.state === 'connected' && !lockedSaved && locked !== draft.trim()
-      ? KEY_CHECK_COLORS.connected
+      ? keyColors.connected
       : home.borderSubtle;
 
   return (
@@ -316,7 +318,7 @@ export function KeySheet({
               style={[
                 type.subhead,
                 {
-                  color: check.state === 'failed' ? KEY_CHECK_COLORS.failed : home.secondary,
+                  color: check.state === 'failed' ? keyColors.failed : home.secondary,
                 },
               ]}
             >
