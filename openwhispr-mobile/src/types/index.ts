@@ -100,8 +100,8 @@ export interface Transcript extends CleanupInferenceSnapshot {
   duration?: number;
   provider: TranscriptionProvider;
   /**
-   * Transcribed by the keyboard's own Local engine, which promises the take never leaves this
-   * iPhone: Retry stays On-Device whatever mode is on now, and fails rather than uploading.
+   * Recorded for the keyboard's Local engine, which promises the take never leaves this iPhone:
+   * Retry stays On-Device whatever mode is on now, and fails rather than uploading.
    */
   localOnly?: boolean;
   status?: 'completed' | 'failed';

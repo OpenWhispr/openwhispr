@@ -474,6 +474,17 @@ describe('drainKeyboardDirectOutbox', () => {
     expect(h.failed[0]).not.toHaveProperty('localOnly');
   });
 
+  it('treats an engine it does not know as local, never as cloud', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({ engine: 'whisper-tiny', status: 'failed', text: null, originalText: null }),
+      ),
+      'job-1.pcm': 'raw',
+    });
+    await drainKeyboardDirectOutbox(h.deps);
+    expect(h.failed).toEqual([expect.objectContaining({ provider: 'local', localOnly: true })]);
+  });
+
   it('does nothing without the App Group folder', async () => {
     const h = harness({});
     expect(await drainKeyboardDirectOutbox({ ...h.deps, files: null })).toEqual({

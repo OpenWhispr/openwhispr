@@ -87,10 +87,11 @@ function parseRecord(json: string | null): DirectDictationRecord | null {
   }
 }
 
-// A take the keyboard transcribed with its own Parakeet model. It must never reach the network, so
-// its failed row is marked localOnly: Retry then stays On-Device whatever mode is on.
+// A take recorded for the keyboard's own Local engine. It must never reach the network, so its
+// failed row is marked localOnly: Retry then stays On-Device whatever mode is on. Only "cloud" (or
+// no engine, from before Local existed) is Cloud: an engine this build doesn't know stays local.
 function isLocalTake(record: DirectDictationRecord): boolean {
-  return record.engine?.startsWith('parakeet-') === true;
+  return record.engine != null && record.engine !== 'cloud';
 }
 
 function durationSeconds(record: DirectDictationRecord): number | undefined {
