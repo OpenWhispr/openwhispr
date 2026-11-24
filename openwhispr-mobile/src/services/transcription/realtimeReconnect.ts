@@ -43,30 +43,63 @@ export function pcmTailCapBytes(sampleRate: number): number {
   return sampleRate * 2 * PCM_TAIL_SECONDS;
 }
 
+/** A stretch of captured audio, `[startMs, endMs)` on the capture clock. */
+export interface AudioWindow {
+  startMs: number;
+  endMs: number;
+}
+
+// Windows this close are re-transcribed as one stretch; a sliver of audio that did reach
+// the socket between two drops is cheaper to transcribe twice than to cut around.
+const AUDIO_WINDOW_JOIN_MS = 1000;
+
+/** Sorted, merged; windows closer than 1 s are joined. */
+export function mergeAudioWindows(windows: AudioWindow[]): AudioWindow[] {
+  const sorted = [...windows].sort((a, b) => a.startMs - b.startMs);
+  const merged: AudioWindow[] = [];
+  for (const window of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && window.startMs - last.endMs < AUDIO_WINDOW_JOIN_MS) {
+      last.endMs = Math.max(last.endMs, window.endMs);
+    } else {
+      merged.push({ startMs: window.startMs, endMs: window.endMs });
+    }
+  }
+  return merged;
+}
+
 /**
  * Byte-bounded FIFO of raw PCM chunks: `push` drops the oldest chunks once the total
- * exceeds `maxBytes` (a long outage becomes a bounded gap); `drain` empties it.
+ * exceeds `maxBytes` (a long outage becomes a bounded gap) and records where each dropped
+ * chunk sat on the capture clock; `drain` empties it.
  */
 export class PcmRingBuffer {
-  private chunks: Buffer[] = [];
+  private chunks: { chunk: Buffer; startMs: number }[] = [];
   private bytes = 0;
   private dropped = 0;
+  private windows: AudioWindow[] = [];
 
-  constructor(private readonly maxBytes: number) {}
+  /** `sampleRate` (PCM16 mono) gives a dropped chunk its length in ms; it defaults to the rate whose 20 s tail is `maxBytes`. */
+  constructor(
+    private readonly maxBytes: number,
+    private readonly sampleRate: number = maxBytes / (2 * PCM_TAIL_SECONDS),
+  ) {}
 
-  push(chunk: Buffer): void {
-    this.chunks.push(chunk);
+  /** `startMs` is where the chunk begins on the capture clock. */
+  push(chunk: Buffer, startMs: number): void {
+    this.chunks.push({ chunk, startMs });
     this.bytes += chunk.length;
     // Keep the most recent chunk so a single oversized frame can't empty the buffer.
     while (this.bytes > this.maxBytes && this.chunks.length > 1) {
-      const dropped = this.chunks.shift() as Buffer;
-      this.bytes -= dropped.length;
-      this.dropped += dropped.length;
+      const evicted = this.chunks.shift() as { chunk: Buffer; startMs: number };
+      this.bytes -= evicted.chunk.length;
+      this.dropped += evicted.chunk.length;
+      this.recordDrop(evicted.startMs, evicted.chunk.length);
     }
   }
 
   drain(): Buffer[] {
-    const out = this.chunks;
+    const out = this.chunks.map((entry) => entry.chunk);
     this.chunks = [];
     this.bytes = 0;
     return out;
@@ -79,6 +112,23 @@ export class PcmRingBuffer {
   /** Bytes pushed out past the cap over the buffer's life; drains don't count. */
   get droppedBytes(): number {
     return this.dropped;
+  }
+
+  /** Where the evicted chunks sat on the capture clock, oldest first. */
+  get droppedWindows(): AudioWindow[] {
+    return this.windows.map((window) => ({ ...window }));
+  }
+
+  private recordDrop(startMs: number, length: number): void {
+    // Rounded up so a window never stops short of the audio it lost.
+    const endMs = startMs + Math.ceil((length * 1000) / (this.sampleRate * 2));
+    const last = this.windows[this.windows.length - 1];
+    // Evictions run oldest first and back to back, so a long outage stays one window.
+    if (last && startMs <= last.endMs) {
+      last.endMs = Math.max(last.endMs, endMs);
+      return;
+    }
+    this.windows.push({ startMs, endMs });
   }
 }
 

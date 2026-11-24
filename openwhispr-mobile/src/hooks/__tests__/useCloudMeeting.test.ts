@@ -67,6 +67,7 @@ beforeEach(() => {
       utterances: () => [...delivered],
       capturedMs: () => capturedMs,
       droppedMs: () => 0,
+      droppedWindows: () => [],
     };
     sessions.push({
       session,

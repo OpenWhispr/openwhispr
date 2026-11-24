@@ -1,6 +1,7 @@
 import { Buffer } from 'buffer';
 import {
   PcmRingBuffer,
+  mergeAudioWindows,
   classifyClose,
   namespaceItemId,
   legItemPrefix,
@@ -22,8 +23,8 @@ import { createRealtimeEventReducer } from '../realtimeEvents';
 describe('PcmRingBuffer', () => {
   it('accumulates chunks while under the cap and drains them in order', () => {
     const ring = new PcmRingBuffer(100);
-    ring.push(Buffer.from([1, 2, 3, 4]));
-    ring.push(Buffer.from([5, 6]));
+    ring.push(Buffer.from([1, 2, 3, 4]), 0);
+    ring.push(Buffer.from([5, 6]), 0);
     expect(ring.byteLength).toBe(6);
     const drained = Buffer.concat(ring.drain());
     expect([...drained]).toEqual([1, 2, 3, 4, 5, 6]);
@@ -31,9 +32,9 @@ describe('PcmRingBuffer', () => {
 
   it('drops the oldest chunks when the cap is exceeded, keeping the recent tail', () => {
     const ring = new PcmRingBuffer(10);
-    ring.push(Buffer.from([1, 1, 1, 1])); // 4 bytes
-    ring.push(Buffer.from([2, 2, 2, 2])); // 8 bytes
-    ring.push(Buffer.from([3, 3, 3, 3])); // 12 > 10 → drop oldest ([1,1,1,1])
+    ring.push(Buffer.from([1, 1, 1, 1]), 0); // 4 bytes
+    ring.push(Buffer.from([2, 2, 2, 2]), 0); // 8 bytes
+    ring.push(Buffer.from([3, 3, 3, 3]), 0); // 12 > 10 → drop oldest ([1,1,1,1])
     expect(ring.byteLength).toBe(8);
     const drained = Buffer.concat(ring.drain());
     expect([...drained]).toEqual([2, 2, 2, 2, 3, 3, 3, 3]);
@@ -41,22 +42,67 @@ describe('PcmRingBuffer', () => {
 
   it('counts the bytes it drops, and a drain does not count as a drop', () => {
     const ring = new PcmRingBuffer(100);
-    ring.push(Buffer.alloc(60));
+    ring.push(Buffer.alloc(60), 0);
     expect(ring.droppedBytes).toBe(0);
-    ring.push(Buffer.alloc(60)); // 120 > 100: the oldest chunk goes
-    ring.push(Buffer.alloc(60));
+    ring.push(Buffer.alloc(60), 0); // 120 > 100: the oldest chunk goes
+    ring.push(Buffer.alloc(60), 0);
     expect(ring.droppedBytes).toBe(120);
     expect(ring.byteLength).toBe(60);
     ring.drain();
     expect(ring.droppedBytes).toBe(120); // a drain sends audio, it does not drop it
   });
 
+  it('records where each evicted chunk sat on the capture clock', () => {
+    // sampleRate 100 → 200 bytes a second, so a 200-byte chunk is 1000 ms; cap 400 bytes.
+    const ring = new PcmRingBuffer(400, 100);
+    ring.push(Buffer.alloc(200), 0);
+    ring.push(Buffer.alloc(200), 1000);
+    expect(ring.droppedWindows).toEqual([]);
+    ring.push(Buffer.alloc(200), 2000); // 600 > 400: the chunk at 0 ms goes
+    ring.push(Buffer.alloc(200), 3000); // the chunk at 1000 ms goes, joining the first window
+    expect(ring.droppedWindows).toEqual([{ startMs: 0, endMs: 2000 }]);
+    ring.drain();
+    expect(ring.droppedWindows).toEqual([{ startMs: 0, endMs: 2000 }]); // a drain drops nothing
+  });
+
   it('empties on drain so a subsequent drain returns nothing', () => {
     const ring = new PcmRingBuffer(100);
-    ring.push(Buffer.from([9, 9]));
+    ring.push(Buffer.from([9, 9]), 0);
     expect(Buffer.concat(ring.drain()).length).toBe(2);
     expect(ring.byteLength).toBe(0);
     expect(ring.drain()).toEqual([]);
+  });
+});
+
+describe('mergeAudioWindows', () => {
+  it('sorts windows and joins those closer than a second', () => {
+    expect(
+      mergeAudioWindows([
+        { startMs: 5000, endMs: 6000 },
+        { startMs: 0, endMs: 1000 },
+        { startMs: 1500, endMs: 3000 },
+      ]),
+    ).toEqual([
+      { startMs: 0, endMs: 3000 },
+      { startMs: 5000, endMs: 6000 },
+    ]);
+  });
+
+  it('keeps windows a full second apart separate and folds one inside another', () => {
+    expect(
+      mergeAudioWindows([
+        { startMs: 0, endMs: 1000 },
+        { startMs: 2000, endMs: 3000 },
+        { startMs: 2200, endMs: 2500 },
+      ]),
+    ).toEqual([
+      { startMs: 0, endMs: 1000 },
+      { startMs: 2000, endMs: 3000 },
+    ]);
+  });
+
+  it('returns nothing for nothing', () => {
+    expect(mergeAudioWindows([])).toEqual([]);
   });
 });
 

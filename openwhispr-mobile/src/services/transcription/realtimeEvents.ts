@@ -5,6 +5,7 @@
  * which accumulates partials and emits finalized utterances. The exported types
  * are the contract for the whole cloud-meeting path (hook, store, and UI).
  */
+import type { AudioWindow } from './realtimeReconnect';
 
 export interface RealtimeUtterance {
   itemId: string;
@@ -39,6 +40,12 @@ export interface RealtimeSession {
   capturedMs: () => number;
   /** Audio dropped while no socket could take it, in ms. */
   droppedMs: () => number;
+  /**
+   * Stretches of captured audio that never reached a socket, on the capture clock: evicted
+   * from the outage buffer, lost to a failed send, or still buffered when the session ended
+   * with no socket open. Sorted and merged.
+   */
+  droppedWindows: () => AudioWindow[];
 }
 
 // Loose shape of the events this reducer reads; each type carries only its subset.

@@ -29,9 +29,11 @@ import {
 import { transcriptionPolicyErrorFromApiError } from './policyErrors';
 import { createRealtimeEventReducer } from './realtimeEvents';
 import type { RealtimeCallbacks, RealtimeSession } from './realtimeEvents';
+import type { AudioWindow } from './realtimeReconnect';
 import {
   PcmRingBuffer,
   applyLegOffset,
+  mergeAudioWindows,
   classifyClose,
   legItemPrefix,
   namespaceItemId,
@@ -87,7 +89,7 @@ const defaultWsFactory = (url: string, protocols: string[]): WebSocketLike =>
   new WebSocket(url, protocols) as unknown as WebSocketLike;
 
 export async function startRealtimeMeetingWs(
-  opts: { language?: string; model?: string; sampleRate?: number } = {},
+  opts: { language?: string; model?: string; sampleRate?: number; recordingUri?: string } = {},
   callbacks: RealtimeCallbacks = {},
   deps: RealtimeMeetingDeps = {},
 ): Promise<RealtimeSession> {
@@ -116,11 +118,16 @@ export async function startRealtimeMeetingWs(
 
   // One reducer per session — this is why utterances survive every leg swap.
   const reducer = createRealtimeEventReducer(callbacks);
-  const pcmRing = new PcmRingBuffer(pcmTailCapBytes(sampleRate));
+  const pcmRing = new PcmRingBuffer(pcmTailCapBytes(sampleRate), sampleRate);
   const bytesToMs = (bytes: number): number => Math.floor((bytes * 1000) / (sampleRate * 2));
   let capturedBytes = 0;
   // Merged chunks a failed send threw away; the ring counts its own evictions.
   let sendDroppedBytes = 0;
+  // Capture-clock stretches lost outside the ring: failed sends, and audio still buffered
+  // when the session ended with no socket to take it. The ring records its own evictions.
+  const lostWindows: AudioWindow[] = [];
+  // The ring always holds the newest audio captured, back to back, so this is where it starts.
+  const ringStartMs = (): number => bytesToMs(capturedBytes - pcmRing.byteLength);
   // Per-leg index + offset, keyed by socket so a replaced leg's late messages keep
   // their own leg's namespace/offset during a swap.
   const legMeta = new WeakMap<WebSocketLike, { legIndex: number; offsetMs: number }>();
@@ -164,13 +171,22 @@ export async function startRealtimeMeetingWs(
   };
 
   const enqueuePcm = (buf: Buffer): void => {
+    const startMs = bytesToMs(capturedBytes);
     capturedBytes += buf.length;
-    pcmRing.push(buf);
+    pcmRing.push(buf, startMs);
+  };
+
+  // Audio left in the ring when the session ends never reaches a socket.
+  const abandonRing = (): void => {
+    if (pcmRing.byteLength === 0) return;
+    lostWindows.push({ startMs: ringStartMs(), endMs: bytesToMs(capturedBytes) });
+    pcmRing.drain();
   };
 
   const flush = (): void => {
     const ws = currentWs;
     if (!ws || ws.readyState !== WS_OPEN) return; // during an outage this no-ops; PCM keeps buffering
+    const startMs = ringStartMs();
     const chunks = pcmRing.drain();
     if (chunks.length === 0) return;
     // Merge by bytes; base64 concatenation is only valid on 3-byte-aligned chunks.
@@ -182,6 +198,7 @@ export async function startRealtimeMeetingWs(
     } catch {
       // Socket may have closed between the readyState check and send; drop the chunk.
       sendDroppedBytes += merged.length;
+      lostWindows.push({ startMs, endMs: bytesToMs(capturedBytes) });
     }
   };
 
@@ -436,6 +453,7 @@ export async function startRealtimeMeetingWs(
     terminated = true;
     teardownCapture();
     currentWs = null;
+    abandonRing();
     const message = error instanceof Error ? error.message : 'Realtime session ended';
     callbacks.onError?.({ error: { message } });
     notifyClose();
@@ -560,6 +578,8 @@ export async function startRealtimeMeetingWs(
     stopMic();
     clearTimers();
     flush();
+    // Stopped while no socket was open (mid-reconnect): what the ring holds is lost to the stream.
+    abandonRing();
     const ws = currentWs;
     currentWs = null;
     if (ws) void finishLeg(ws);
@@ -588,7 +608,12 @@ export async function startRealtimeMeetingWs(
   await acquireCaptureLease('meeting-cloud');
   leaseHeld = true;
   try {
-    await LivePCMStreaming.start(sampleRate);
+    // Only pass options when recording, so the plain start stays exactly as it was.
+    if (opts.recordingUri) {
+      await LivePCMStreaming.start(sampleRate, { recordingUri: opts.recordingUri });
+    } else {
+      await LivePCMStreaming.start(sampleRate);
+    }
   } catch (error) {
     frameSub?.remove();
     frameSub = null;
@@ -617,5 +642,6 @@ export async function startRealtimeMeetingWs(
     utterances: reducer.utterances,
     capturedMs: () => bytesToMs(capturedBytes),
     droppedMs: () => bytesToMs(pcmRing.droppedBytes + sendDroppedBytes),
+    droppedWindows: () => mergeAudioWindows([...pcmRing.droppedWindows, ...lostWindows]),
   };
 }

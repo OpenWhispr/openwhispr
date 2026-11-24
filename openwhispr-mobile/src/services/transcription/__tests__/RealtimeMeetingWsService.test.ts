@@ -897,6 +897,88 @@ describe('startRealtimeMeetingWs — stop finishes the last turn', () => {
   });
 });
 
+describe('startRealtimeMeetingWs — dropped audio windows', () => {
+  // sampleRate 100 → 200 bytes a second, so a 200-byte frame is 1000 ms of capture;
+  // the outage buffer holds 4000 bytes (20 s).
+  const SECOND = new Array(200).fill(4);
+
+  it('reports the stretch a long outage dropped, on the capture clock', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    emitFrame(SECOND); // 0–1000 ms reaches leg 1
+    await jest.advanceTimersByTimeAsync(FLUSH_MS + 10);
+
+    ageLeg();
+    leg1.serverClose(1006);
+    await flushMicro(); // the replacement leg is connecting, not open
+    for (let i = 0; i < 60; i++) emitFrame(SECOND); // 60 s offline: 1000–61000 ms
+
+    const leg2 = lastLeg();
+    leg2.open();
+    await flushMicro(); // the 20 s still in the buffer (41000–61000 ms) reaches leg 2
+
+    // 40 one-second frames fell off the front: 1000–41000 ms, i.e. 60 s minus the 20 s buffer.
+    expect(session.droppedWindows()).toEqual([{ startMs: 1000, endMs: 41_000 }]);
+    expect(leg2.appendedBytes()).toBe(4000);
+  });
+
+  it('reports nothing for a meeting without drops', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    for (let i = 0; i < 5; i++) {
+      emitFrame(SECOND);
+      await jest.advanceTimersByTimeAsync(FLUSH_MS + 10);
+    }
+    const stopped = session.stop();
+    leg1.emit(commitEmpty);
+    await stopped;
+
+    expect(session.droppedWindows()).toEqual([]);
+  });
+
+  it('reports audio abandoned in the ring when stop comes during a reconnect', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    emitFrame(SECOND); // 0–1000 ms reaches leg 1
+    await jest.advanceTimersByTimeAsync(FLUSH_MS + 10);
+
+    ageLeg();
+    leg1.serverClose(1006);
+    await flushMicro(); // the replacement leg is connecting, not open
+    for (let i = 0; i < 8; i++) emitFrame(SECOND); // 8 s held in the buffer: 1000–9000 ms
+
+    await session.stop();
+
+    expect(session.droppedWindows()).toEqual([{ startMs: 1000, endMs: 9000 }]);
+    expect(session.droppedMs()).toBe(0); // droppedMs still counts only evictions and failed sends
+  });
+
+  it('records the span a failed send lost', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    emitFrame(SECOND); // 0–1000 ms reaches leg 1
+    await jest.advanceTimersByTimeAsync(FLUSH_MS + 10);
+    leg1.send = (): void => {
+      throw new Error('socket gone');
+    };
+
+    emitFrame(SECOND); // 1000–2000 ms
+    emitFrame(SECOND); // 2000–3000 ms; both go out in one merged send that throws
+    await jest.advanceTimersByTimeAsync(FLUSH_MS + 10);
+
+    expect(session.droppedWindows()).toEqual([{ startMs: 1000, endMs: 3000 }]);
+  });
+
+  it('passes the recording file to the mic', async () => {
+    const recordingUri = 'file:///documents/meeting-note-1.wav';
+    await boot({}, { recordingUri });
+
+    expect(LivePCMStreaming.start).toHaveBeenCalledWith(24000, { recordingUri });
+  });
+
+  it('starts the mic with only the sample rate when there is no recording file', async () => {
+    await boot();
+
+    expect(LivePCMStreaming.start).toHaveBeenCalledWith(24000);
+  });
+});
+
 const speechStarted = (itemId: string, audioStartMs: number): WsMessage => ({
   type: 'input_audio_buffer.speech_started',
   item_id: itemId,
