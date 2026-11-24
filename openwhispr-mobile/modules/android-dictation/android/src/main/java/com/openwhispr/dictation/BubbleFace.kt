@@ -75,10 +75,10 @@ class BubbleFace(context: Context) : View(context) {
     color = Color.WHITE; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
   }
   private val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.glassTop }
-  private val ringTrack = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = BubbleColors.accent; alpha = 46 }
-  private val ringArc = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; color = BubbleColors.accent }
+  private val ringTrack = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = BubbleColors.dot; alpha = 46 }
+  private val ringArc = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; color = BubbleColors.dot }
   private val badgeFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
-  private val badgeGlyph = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.accent }
+  private val badgeGlyph = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.dot }
   private val unseenPaint = Paint(Paint.ANTI_ALIAS_FLAG)
   private val checkPath = Path()
   private val checkMeasure = PathMeasure()

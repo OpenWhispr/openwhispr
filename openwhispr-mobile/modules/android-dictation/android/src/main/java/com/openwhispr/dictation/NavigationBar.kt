@@ -59,10 +59,11 @@ internal class NavigationBar(private val emit: (Map<String, Any>) -> Unit) {
   }
 
   /**
-   * Main thread. A colour paints the bar as part of the page (no contrast scrim, dark icons); null
-   * puts back what the window had before.
+   * Main thread. A colour paints the bar as part of the page (no contrast scrim), with dark icons
+   * on a light page and light icons on a dark one ([darkIcons]); null puts back what the window
+   * had before.
    */
-  fun style(color: Int?) {
+  fun style(color: Int?, darkIcons: Boolean = true) {
     val window = activity?.window ?: return
     val controller = WindowCompat.getInsetsController(window, window.decorView)
     if (color == null) {
@@ -86,6 +87,6 @@ internal class NavigationBar(private val emit: (Map<String, Any>) -> Unit) {
     @Suppress("DEPRECATION")
     window.navigationBarColor = color
     if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
-    controller.isAppearanceLightNavigationBars = true
+    controller.isAppearanceLightNavigationBars = darkIcons
   }
 }

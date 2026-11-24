@@ -40,16 +40,27 @@ export function useNavigationBar(): { buttons: boolean; inset: number } {
 
 // Screens that want the bar painted as part of the page; the bar is restored when none is focused.
 let owners = 0;
-let painted: number | null = null;
-function paint(color: number | null) {
-  if (color === painted) return;
-  painted = color;
-  setNavigationBarColor(color);
+let painted: string | null = null;
+function paint(color: number | null, darkIcons: boolean) {
+  const key = color === null ? null : `${color}:${darkIcons}`;
+  if (key === painted) return;
+  painted = key;
+  setNavigationBarColor(color, darkIcons);
+}
+
+/** Whether a page colour wants dark bar icons: anything lighter than mid grey. */
+export function wantsDarkIcons(color: number): boolean {
+  const red = (color >> 16) & 0xff;
+  const green = (color >> 8) & 0xff;
+  const blue = color & 0xff;
+  return 0.299 * red + 0.587 * green + 0.114 * blue > 128;
 }
 
 /**
- * Paints the button bar in `canvas` with dark icons and no contrast scrim while the calling
- * screen is focused; gesture navigation keeps the system's own handle.
+ * Paints the button bar in `canvas` with no contrast scrim while the calling screen is focused,
+ * its icons dark on a light canvas and light on a dark one; gesture navigation keeps the system's
+ * own handle. A screen on `useTheme()` passes its theme's canvas, so the bar switches in the same
+ * render as the page.
  */
 export function useNavigationBarCanvas(canvas: string) {
   const { buttons } = useNavigationBar();
@@ -57,11 +68,12 @@ export function useNavigationBarCanvas(canvas: string) {
     useCallback(() => {
       owners += 1;
       // A signed 32-bit ARGB int, as Android's Color is.
-      paint(buttons ? (processColor(canvas) as number) | 0 : null);
+      const color = buttons ? (processColor(canvas) as number) | 0 : null;
+      paint(color, color === null || wantsDarkIcons(color));
       return () => {
         owners -= 1;
         // Counted, so moving between Settings screens never hands the bar back in between.
-        if (!owners) paint(null);
+        if (!owners) paint(null, true);
       };
     }, [buttons, canvas]),
   );

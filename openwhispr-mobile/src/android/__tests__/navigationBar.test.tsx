@@ -16,7 +16,8 @@ jest.mock('expo-router', () => ({
 }));
 jest.mock('../../../modules/android-dictation/src/navigationBar', () => ({
   getNavigationBar: () => mockGet(),
-  setNavigationBarColor: (color: number | null) => mockSetColor(color),
+  setNavigationBarColor: (color: number | null, darkIcons?: boolean) =>
+    mockSetColor(color, darkIcons),
   navigationBarEvents: {
     addListener: (_name: string, listener: (state: object) => void) => {
       mockNative = listener;
@@ -52,7 +53,21 @@ it('paints the button bar while a Settings screen is focused, and hands it back 
   act(() => {
     cleanup = mockFocus!();
   });
-  expect(mockSetColor).toHaveBeenLastCalledWith(0xfff8f6f5 | 0);
+  expect(mockSetColor).toHaveBeenLastCalledWith(0xfff8f6f5 | 0, true);
   act(() => cleanup!());
-  expect(mockSetColor).toHaveBeenLastCalledWith(null);
+  expect(mockSetColor).toHaveBeenLastCalledWith(null, true);
+});
+
+it('gives a dark canvas light bar icons', () => {
+  function Screen() {
+    useNavigationBarCanvas('#0E0F13');
+    return null;
+  }
+  render(<Screen />);
+  let cleanup: (() => void) | void;
+  act(() => {
+    cleanup = mockFocus!();
+  });
+  expect(mockSetColor).toHaveBeenLastCalledWith(0xff0e0f13 | 0, false);
+  act(() => cleanup!());
 });

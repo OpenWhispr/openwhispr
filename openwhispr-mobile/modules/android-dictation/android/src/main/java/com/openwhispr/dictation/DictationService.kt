@@ -4,6 +4,7 @@ import android.animation.ValueAnimator
 import android.app.*
 import android.content.Intent
 import android.net.Uri
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
@@ -120,6 +121,8 @@ class DictationService : Service() {
   override fun onBind(intent: Intent?) = null
   override fun onCreate() {
     super.onCreate(); instance = this
+    BubbleColors.read(resources.configuration)
+    shownConfig = Configuration(resources.configuration)
     application.registerActivityLifecycleCallbacks(screens)
     windows = getSystemService(WINDOW_SERVICE) as WindowManager
     dockRight = preferences.getBoolean("dockRight", true)
@@ -170,7 +173,20 @@ class DictationService : Service() {
     emit?.invoke("onStatusChange", emptyMap())
     return START_NOT_STICKY
   }
-  override fun onConfigurationChanged(newConfig: Configuration) { super.onConfigurationChanged(newConfig); closeMenu(); place() }
+  /** The configuration the overlays were last laid out for. */
+  private var shownConfig: Configuration? = null
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    val changes = shownConfig?.diff(newConfig) ?: -1
+    shownConfig = Configuration(newConfig)
+    // Light ↔ dark (K7, §3b): repaint in place. The windows, the open menu, the tabs, the bubble's
+    // place and state and the recording all stay as they are.
+    BubbleColors.follow(newConfig)
+    val layout = ActivityInfo.CONFIG_ORIENTATION or ActivityInfo.CONFIG_SCREEN_SIZE or ActivityInfo.CONFIG_SCREEN_LAYOUT or
+      ActivityInfo.CONFIG_SMALLEST_SCREEN_SIZE or ActivityInfo.CONFIG_DENSITY or ActivityInfo.CONFIG_FONT_SCALE
+    if (changes and layout == 0) return
+    closeMenu(); place()
+  }
 
   // Visibility -------------------------------------------------------------------------------
 
@@ -344,7 +360,7 @@ class DictationService : Service() {
       elevation = dp(8f)
       setOnClickListener { if (state == BubbleState.LISTENING) finish(false) }
     }.also { face = it }
-    val cancel = cancelButton ?: GlyphButton(this, GlyphButton.Glyph.CLOSE, Color.WHITE, BubbleColors.ink).apply {
+    val cancel = cancelButton ?: GlyphButton(this, GlyphButton.Glyph.CLOSE, { BubbleColors.surface }, { BubbleColors.ink }).apply {
       contentDescription = getString(R.string.ow_bubble_cancel); elevation = dp(4f)
       setOnClickListener { finish(true) }
     }.also { cancelButton = it }
@@ -785,10 +801,13 @@ class DictationService : Service() {
   private fun createTarget() {
     val circle = HideTargetView(this)
     val caption = TextView(this).apply {
-      setText(R.string.ow_bubble_hide_target); typeface = font; setTextColor(BubbleColors.ink)
+      setText(R.string.ow_bubble_hide_target); typeface = font
       setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f); gravity = Gravity.CENTER
       val pad = dp(10f).toInt(); setPadding(pad, dp(4f).toInt(), pad, dp(4f).toInt())
-      background = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(12f); setStroke(dp(1f).toInt().coerceAtLeast(1), BubbleColors.hairline) }
+      BubbleColors.themed(this) {
+        setTextColor(BubbleColors.ink)
+        background = GradientDrawable().apply { setColor(BubbleColors.surface); cornerRadius = dp(12f); setStroke(dp(1f).toInt().coerceAtLeast(1), BubbleColors.hairline) }
+      }
       elevation = dp(2f)
     }
     val holder = FrameLayout(this).apply {

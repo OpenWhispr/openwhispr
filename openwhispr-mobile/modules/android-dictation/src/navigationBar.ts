@@ -13,16 +13,19 @@ export interface NativeNavigationBar {
 
 type Native = {
   getNavigationBar?: () => Promise<NativeNavigationBar>;
-  setNavigationBarColor?: (color: number | null) => Promise<void>;
+  setNavigationBarColor?: (color: number | null, darkIcons?: boolean) => Promise<void>;
 };
 const native = AndroidDictation as Native | null;
 
 /** Undefined on native builds before navigation-bar support. */
 export const getNavigationBar = native?.getNavigationBar?.bind(native);
 
-/** A colour paints the bar as part of the page; null puts back the window's own look. */
-export function setNavigationBarColor(color: number | null): void {
-  native?.setNavigationBarColor?.(color)?.catch(() => undefined);
+/**
+ * A colour paints the bar as part of the page, with dark icons on a light page and light icons on
+ * a dark one; null puts back the window's own look.
+ */
+export function setNavigationBarColor(color: number | null, darkIcons = true): void {
+  native?.setNavigationBarColor?.(color, darkIcons)?.catch(() => undefined);
 }
 
 export const navigationBarEvents = native?.getNavigationBar

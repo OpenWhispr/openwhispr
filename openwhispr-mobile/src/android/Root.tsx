@@ -37,12 +37,19 @@ import { observeEndedSessions } from './authLifecycle';
 import { CouldNotOpen, LaunchSplash, SignedOutSheet } from './launch/LaunchScreens';
 import { reportAndroidOnboardingDone } from './onboarding/accountOnboarding';
 import { prefetchSpeakerModel } from './liveSpeakers/speakerModel';
+import { ThemeProvider, useTheme } from './ThemeProvider';
 
 /** The speaker model waits this long after launch, so it never competes with the first screen. */
 export const SPEAKER_MODEL_DELAY_MS = 15_000;
 
 /** Past this, the splash says what it's waiting for (D3). Most launches never see it. */
 export const SLOW_OPEN_MS = 1500;
+
+/** Dark icons on the light page, light icons on the dark one, switched with the page (§3b). */
+function SchemeStatusBar() {
+  const { scheme } = useTheme();
+  return <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />;
+}
 
 export default function AndroidRoot() {
   const [ready, setReady] = useState(false);
@@ -128,33 +135,35 @@ export default function AndroidRoot() {
     }
   }, [ready, accountRevision, accountError, accountBlocked]);
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <StatusBar style="dark" />
-        <OpenWhisprSuperwallProvider>
-          {failed ? (
-            <CouldNotOpen
-              details={failed}
-              onRetry={() => {
-                forgetAppData();
-                setBootError('');
-                setSlow(false);
-                setAttempt((value) => value + 1);
-              }}
-            />
-          ) : showApp ? (
-            <>
-              <Stack key={accountRevision} screenOptions={{ headerShown: false }} />
-              <SettingsToastHost />
-              <SignedOutSheet />
-            </>
-          ) : (
-            // Under the native splash this is never seen; it takes over at the same pixels.
-            <LaunchSplash slow={slow} />
-          )}
-          <PermissionAlertMount />
-        </OpenWhisprSuperwallProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <ThemeProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <SchemeStatusBar />
+          <OpenWhisprSuperwallProvider>
+            {failed ? (
+              <CouldNotOpen
+                details={failed}
+                onRetry={() => {
+                  forgetAppData();
+                  setBootError('');
+                  setSlow(false);
+                  setAttempt((value) => value + 1);
+                }}
+              />
+            ) : showApp ? (
+              <>
+                <Stack key={accountRevision} screenOptions={{ headerShown: false }} />
+                <SettingsToastHost />
+                <SignedOutSheet />
+              </>
+            ) : (
+              // Under the native splash this is never seen; it takes over at the same pixels.
+              <LaunchSplash slow={slow} />
+            )}
+            <PermissionAlertMount />
+          </OpenWhisprSuperwallProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </ThemeProvider>
   );
 }
