@@ -48,10 +48,17 @@ export async function extractWavRange(
   startMs: number,
   endMs: number,
 ): Promise<string> {
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
+    throw new Error('Recording range is not valid');
+  }
+  const cacheDirectory = FileSystem.cacheDirectory;
+  if (!cacheDirectory) {
+    throw new Error('No cache directory to write the recording range to');
+  }
   const info = await FileSystem.getInfoAsync(sourceUri);
   const fileBytes = info.exists && 'size' in info ? info.size : 0;
   const { offset, length } = wavByteRange(startMs, endMs, fileBytes);
-  if (length <= 0) {
+  if (!(length > 0)) {
     throw new Error('Recording has no audio in that range');
   }
   const base64 = await FileSystem.readAsStringAsync(sourceUri, {
@@ -59,21 +66,35 @@ export async function extractWavRange(
     position: offset,
     length,
   });
-  const data = Buffer.from(base64, 'base64');
+  const read = Buffer.from(base64, 'base64');
+  // A short read (the file shrank) must not leave a half sample or a header-only file.
+  const data = read.subarray(0, read.length - (read.length % BYTES_PER_SAMPLE));
+  if (data.length === 0) {
+    throw new Error('Recording has no audio in that range');
+  }
   const wav = Buffer.concat([buildWavHeader(data.length), data]);
-  const destination = `${FileSystem.cacheDirectory}meeting-range-${Date.now()}-${Math.random()
+  const destination = `${cacheDirectory}meeting-range-${Date.now()}-${Math.random()
     .toString(36)
     .slice(2, 10)}.wav`;
-  await FileSystem.writeAsStringAsync(destination, wav.toString('base64'), {
-    encoding: FileSystem.EncodingType.Base64,
-  });
+  try {
+    await FileSystem.writeAsStringAsync(destination, wav.toString('base64'), {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+  } catch (error) {
+    // A partial file must never be mistaken for a finished stretch.
+    await FileSystem.deleteAsync(destination, { idempotent: true }).catch(() => undefined);
+    throw error;
+  }
   return destination;
 }
 
 /** Splits windows into pieces of at most maxMs and drops pieces shorter than minMs. */
 export function splitWindows(windows: AudioWindow[], maxMs: number, minMs: number): AudioWindow[] {
   const pieces: AudioWindow[] = [];
+  // A non-positive step would never advance the loop.
+  if (!(maxMs > 0)) return pieces;
   for (const window of windows) {
+    if (!Number.isFinite(window.startMs) || !Number.isFinite(window.endMs)) continue;
     for (let startMs = window.startMs; startMs < window.endMs; startMs += maxMs) {
       const endMs = Math.min(startMs + maxMs, window.endMs);
       if (endMs - startMs >= minMs) pieces.push({ startMs, endMs });

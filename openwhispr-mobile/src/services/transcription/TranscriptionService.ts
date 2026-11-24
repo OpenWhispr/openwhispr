@@ -827,7 +827,10 @@ export class TranscriptionService {
       if (firstError !== null) throw firstError;
       const text = stitchChunkTexts(texts);
       if (chunkSeconds === null) return { text, duration: 0, provider: 'cloud' };
-      // Per-chunk times let a meeting place this text on its recording's clock.
+      // Per-chunk times let a meeting place this text on its recording's clock. They are
+      // nominal: the native splitter starts a new chunk only at a decoded-buffer boundary,
+      // so each chunk overshoots by up to about a second. Fine for coarse placement, not
+      // for alignment.
       const segments: WhisperSegment[] = [];
       texts.forEach((chunkText, index) => {
         if (!chunkText.trim()) return;

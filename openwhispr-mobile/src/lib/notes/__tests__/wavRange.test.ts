@@ -4,11 +4,14 @@ import { extractWavRange, splitWindows, WAV_HEADER_BYTES, wavByteRange } from '.
 
 jest.mock('expo-file-system/legacy', () => ({
   cacheDirectory: 'file:///cache/',
+  deleteAsync: jest.fn(),
   EncodingType: { Base64: 'base64' },
   getInfoAsync: jest.fn(),
   readAsStringAsync: jest.fn(),
   writeAsStringAsync: jest.fn(),
 }));
+
+const fsMock = FileSystem as { cacheDirectory: string | null };
 
 const FILE_BYTES = WAV_HEADER_BYTES + 320_000;
 
@@ -43,6 +46,11 @@ describe('splitWindows', (): void => {
       { startMs: 120_000, endMs: 240_000 },
       { startMs: 240_000, endMs: 250_000 },
     ]);
+  });
+
+  it('returns nothing for a non-positive maxMs or non-finite bounds', (): void => {
+    expect(splitWindows([{ startMs: 0, endMs: 10_000 }], 0, 2000)).toEqual([]);
+    expect(splitWindows([{ startMs: 0, endMs: NaN }], 120_000, 2000)).toEqual([]);
   });
 
   it('drops pieces shorter than the minimum, remainders included', (): void => {
@@ -94,6 +102,55 @@ describe('extractWavRange', (): void => {
     expect(written.toString('ascii', 36, 40)).toBe('data');
     expect(written.readUInt32LE(40)).toBe(64_000);
     expect(written.subarray(44).equals(data)).toBe(true);
+  });
+
+  it('rejects an empty read without writing a header-only file', async (): Promise<void> => {
+    jest.mocked(FileSystem.readAsStringAsync).mockResolvedValue('');
+    await expect(extractWavRange('file:///source.wav', 1000, 3000)).rejects.toThrow();
+    expect(FileSystem.writeAsStringAsync).not.toHaveBeenCalled();
+  });
+
+  it('trims a short read to whole samples', async (): Promise<void> => {
+    jest
+      .mocked(FileSystem.readAsStringAsync)
+      .mockResolvedValue(Buffer.alloc(101, 1).toString('base64'));
+    await extractWavRange('file:///source.wav', 1000, 3000);
+    const written = Buffer.from(
+      jest.mocked(FileSystem.writeAsStringAsync).mock.calls[0][1],
+      'base64',
+    );
+    expect(written.length).toBe(44 + 100);
+    expect(written.readUInt32LE(40)).toBe(100);
+    expect(written.readUInt32LE(4)).toBe(36 + 100);
+  });
+
+  it('deletes the destination and rethrows when the write fails', async (): Promise<void> => {
+    jest
+      .mocked(FileSystem.readAsStringAsync)
+      .mockResolvedValue(Buffer.alloc(64, 1).toString('base64'));
+    const failure = new Error('disk full');
+    jest.mocked(FileSystem.writeAsStringAsync).mockRejectedValue(failure);
+    jest.mocked(FileSystem.deleteAsync).mockRejectedValue(new Error('gone'));
+    await expect(extractWavRange('file:///source.wav', 1000, 3000)).rejects.toBe(failure);
+    expect(FileSystem.deleteAsync).toHaveBeenCalledWith(
+      expect.stringMatching(/^file:\/\/\/cache\/.+\.wav$/),
+      { idempotent: true },
+    );
+  });
+
+  it('rejects when there is no cache directory', async (): Promise<void> => {
+    fsMock.cacheDirectory = null;
+    try {
+      await expect(extractWavRange('file:///source.wav', 1000, 3000)).rejects.toThrow();
+    } finally {
+      fsMock.cacheDirectory = 'file:///cache/';
+    }
+    expect(FileSystem.writeAsStringAsync).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-finite range', async (): Promise<void> => {
+    await expect(extractWavRange('file:///source.wav', NaN, 3000)).rejects.toThrow();
+    expect(FileSystem.readAsStringAsync).not.toHaveBeenCalled();
   });
 
   it('rejects an empty range without writing a file', async (): Promise<void> => {
