@@ -83,7 +83,7 @@ public class ParakeetASRModule: Module {
       Task {
         do {
           let v = try Self.parseVersion(version)
-          // Repo-scoped dir (…/SpeechModels/parakeet-tdt-0.6b-v{2,3}-coreml) — removing it frees
+          // Repo-scoped dir (…/SpeechModels/parakeet-tdt-0.6b-v{2,3}) — removing it frees
           // only this version's weights and never touches the diarization models (they stay in
           // FluidAudio's own cache directory).
           let dir = Self.modelDirectory(for: v)
