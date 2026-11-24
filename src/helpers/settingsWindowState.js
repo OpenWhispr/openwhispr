@@ -4,6 +4,7 @@ const { resolveBundledBinary } = require("./binaryResolver");
 // The guide polls this while the overlay is open, so a hung helper must never
 // hold it up: the query is cheap enough that a short timeout is plenty.
 const TIMEOUT_MS = 400;
+const PERMISSION_REQUEST_TIMEOUT_MS = 5000;
 
 // Resolved once: the resolver logs every lookup, and the guide polls twice a
 // second for as long as the overlay is open.
@@ -20,6 +21,20 @@ function helperBinary() {
 
 function isSettingsWindowStateAvailable() {
   return helperBinary() !== null;
+}
+
+function queryPostEventAccess(request) {
+  const binary = helperBinary();
+  if (!binary) return Promise.resolve(false);
+
+  const flag = request ? "--request-post-event-access" : "--check-post-event-access";
+  const timeout = request ? PERMISSION_REQUEST_TIMEOUT_MS : TIMEOUT_MS;
+  return new Promise((resolve) => {
+    execFile(binary, [flag], { timeout }, (error, stdout) => {
+      // Older copies of the helper respond with window state, even for unknown flags.
+      resolve(!error && stdout.trim() === "POST_EVENT_ALLOWED");
+    });
+  });
 }
 
 // { settings: bounds | null, authPrompt, frontmost, settingsRunning }, or null
@@ -44,4 +59,4 @@ function readSettingsWindowState() {
   });
 }
 
-module.exports = { readSettingsWindowState, isSettingsWindowStateAvailable };
+module.exports = { readSettingsWindowState, isSettingsWindowStateAvailable, queryPostEventAccess };

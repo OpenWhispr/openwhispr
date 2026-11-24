@@ -4,6 +4,7 @@ const DevServerManager = require("./devServerManager");
 const debugLogger = require("./debugLogger");
 const { isFromWindow } = require("./ipcSender");
 const { computeGuideBounds } = require("./permissionGuidePlacement");
+const { usesAppControlPicker } = require("./macAppControl");
 const {
   isSettingsWindowStateAvailable,
   readSettingsWindowState,
@@ -104,15 +105,25 @@ class PermissionGuideManager {
 
   snapshot() {
     if (!this.state) return null;
+    const selectApp = this.usesAppPicker();
     return {
       ...this.state,
+      selectApp,
       canDrag:
         !!this.bundlePath &&
+        !selectApp &&
         !this.state.busy &&
         !this.state.granted &&
         ["accessibility", "screen-context"].includes(this.state.permission),
       appIcon: this.icon?.toDataURL(),
     };
+  }
+
+  usesAppPicker() {
+    return (
+      this.state?.permission === "accessibility" &&
+      usesAppControlPicker(process.getSystemVersion?.())
+    );
   }
 
   setState(state) {
@@ -132,8 +143,8 @@ class PermissionGuideManager {
     return screen.getDisplayMatching(rect).workArea;
   }
 
-  // Anchored inside the System Settings window, falling back to the bottom of
-  // the display while that window has not appeared.
+  // The app picker needs the whole Settings window, so its guide only shows
+  // when there is room outside it.
   applyBounds(window, settings) {
     // Keyed off the dialog, not the onboarding window: System Settings can open
     // on a different display, and clamping to the onboarding window's screen
@@ -142,9 +153,12 @@ class PermissionGuideManager {
       settingsBounds: settings,
       workArea: this.workAreaFor(settings ?? this.owner.getBounds()),
       size: GUIDE_SIZE,
+      keepSettingsClear: this.usesAppPicker(),
     });
+    if (!bounds) return false;
     const current = window.getBounds();
     if (current.x !== bounds.x || current.y !== bounds.y) window.setBounds(bounds);
+    return true;
   }
 
   async waitForSettings(window) {
@@ -168,15 +182,16 @@ class PermissionGuideManager {
     // overlay over a transient hiccup.
     if (!state || this.window !== window || window.isDestroyed()) return;
 
+    let fits = !this.usesAppPicker();
     if (state.settings) {
       this.sawSettings = true;
-      this.applyBounds(window, state.settings);
+      fits = this.applyBounds(window, state.settings);
     } else if (this.sawSettings && !state.settingsRunning) {
       this.close(true, true);
       return;
     }
 
-    const aside = this.shouldStepAside(state);
+    const aside = !fits || this.shouldStepAside(state);
     if (aside === this.steppedAside) return;
     this.steppedAside = aside;
     if (aside) window.hide();
@@ -289,7 +304,7 @@ class PermissionGuideManager {
       const settingsState = await this.waitForSettings(window);
       if (this.window !== window || window.isDestroyed()) return false;
       if (settingsState?.settings) this.sawSettings = true;
-      this.applyBounds(window, settingsState?.settings ?? null);
+      const fits = this.applyBounds(window, settingsState?.settings ?? null);
 
       if (app.isPackaged) {
         this.bundlePath = path.resolve(app.getPath("exe"), "../../..");
@@ -307,7 +322,7 @@ class PermissionGuideManager {
       }
       if (this.window !== window || window.isDestroyed()) return false;
       window.webContents.send("permission-guide-state-changed", this.snapshot());
-      this.steppedAside = Boolean(settingsState && this.shouldStepAside(settingsState));
+      this.steppedAside = !fits || Boolean(settingsState && this.shouldStepAside(settingsState));
       if (!this.steppedAside) window.showInactive();
       this.startPolling();
       return true;

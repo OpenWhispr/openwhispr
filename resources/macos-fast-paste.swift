@@ -2,7 +2,9 @@ import Cocoa
 import Carbon.HIToolbox
 
 if !AXIsProcessTrusted() {
-    exit(2)
+    guard #available(macOS 27.3, *), CGPreflightPostEventAccess() else {
+        exit(2)
+    }
 }
 
 // Selection capture sends ⌘C and reports which app received it, so the caller

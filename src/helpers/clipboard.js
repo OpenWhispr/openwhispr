@@ -8,6 +8,8 @@ const os = require("os");
 const debugLogger = require("./debugLogger");
 const { getLinuxSessionInfo } = require("./linuxSession");
 const { getCosmicActiveAppId } = require("./cosmicToplevel");
+const { PRIVACY_SETTINGS_URL, usesAppControlPicker } = require("./macAppControl");
+const { queryPostEventAccess } = require("./settingsWindowState");
 
 const CACHE_TTL_MS = 30000;
 
@@ -2630,6 +2632,10 @@ class ClipboardManager {
     throw err;
   }
 
+  requestPostEventAccess() {
+    return queryPostEventAccess(true);
+  }
+
   async checkAccessibilityPermissions(silent = false) {
     if (process.platform !== "darwin") return true;
 
@@ -2640,7 +2646,9 @@ class ClipboardManager {
       }
     }
 
-    const allowed = systemPreferences.isTrustedAccessibilityClient(false);
+    const allowed =
+      systemPreferences.isTrustedAccessibilityClient(false) ||
+      (usesAppControlPicker() && (await queryPostEventAccess(false)));
 
     if (!silent) {
       this.accessibilityCache = {
@@ -2663,7 +2671,11 @@ class ClipboardManager {
       testError.includes("(-25006)");
 
     let dialogMessage;
-    if (isStuckPermission) {
+    if (usesAppControlPicker()) {
+      dialogMessage = `To enable automatic pasting, select OpenWhispr in Privacy & Security → System & App Protection Override. Without permission, you can paste the copied text with Command-V.
+
+Would you like to open System Settings now?`;
+    } else if (isStuckPermission) {
       dialogMessage = `🔒 OpenWhispr needs Accessibility permissions, but it looks like you may have OLD PERMISSIONS from a previous version.
 
 ❗ COMMON ISSUE: If you've rebuilt/reinstalled OpenWhispr, the old permissions may be "stuck" and preventing new ones.
@@ -2715,8 +2727,16 @@ Would you like to open System Settings now?`;
   }
 
   openSystemSettings() {
+    const useAppPicker = usesAppControlPicker();
     const settingsCommands = [
-      ["open", ["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"]],
+      [
+        "open",
+        [
+          useAppPicker
+            ? PRIVACY_SETTINGS_URL
+            : "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+        ],
+      ],
       ["open", ["-b", "com.apple.systempreferences"]],
       ["open", ["/System/Library/PreferencePanes/Security.prefPane"]],
     ];
@@ -2736,6 +2756,8 @@ Would you like to open System Settings now?`;
           if (settingsCode !== 0) {
             commandIndex++;
             tryNextCommand();
+          } else if (useAppPicker) {
+            void this.requestPostEventAccess();
           }
         });
       } else {

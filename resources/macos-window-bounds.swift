@@ -26,6 +26,19 @@ import AppKit
 import CoreGraphics
 import Foundation
 
+// macOS 27.3 lists input posting separately from assistive access. Keep the
+// request user-initiated and use a quiet preflight for permission polling.
+switch CommandLine.arguments.dropFirst().first {
+case "--request-post-event-access":
+    if CGRequestPostEventAccess() { print("POST_EVENT_ALLOWED") }
+    exit(0)
+case "--check-post-event-access":
+    if CGPreflightPostEventAccess() { print("POST_EVENT_ALLOWED") }
+    exit(0)
+default:
+    break
+}
+
 // Ventura renamed System Preferences to System Settings; the bundle identifier
 // is the one thing that stayed the same across the releases the app supports.
 let settingsBundleId = "com.apple.systempreferences"

@@ -30,6 +30,7 @@ const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { isFromWindow } = require("./ipcSender");
 const { openExternalUrl } = require("./externalUrlOpener");
+const { PRIVACY_SETTINGS_URL, usesAppControlPicker } = require("./macAppControl");
 const { resolveFailedGpuBackends } = require("./whisper");
 const { WHISPER_GPU_FAILURE_REASON_KEYS } = require("./whisperGpuFailureReason");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
@@ -8005,7 +8006,9 @@ class IPCHandlers {
     const openSystemSettings = async (settingType) => {
       const platform = process.platform;
       const urls = SYSTEM_SETTINGS_URLS[platform];
-      const url = urls?.[settingType];
+      const useAppPicker =
+        platform === "darwin" && settingType === "accessibility" && usesAppControlPicker();
+      const url = useAppPicker ? PRIVACY_SETTINGS_URL : urls?.[settingType];
 
       if (!url) {
         // Platform doesn't support this settings URL
@@ -8026,6 +8029,7 @@ class IPCHandlers {
 
       try {
         await shell.openExternal(url);
+        if (useAppPicker) void this.clipboardManager.requestPostEventAccess();
         return { success: true };
       } catch (error) {
         debugLogger.error(`Failed to open ${settingType} settings:`, error);

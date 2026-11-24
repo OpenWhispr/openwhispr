@@ -13,7 +13,11 @@ export function PermissionGuideCard({ state, onAction, onDrag }: CardProps): Rea
   const { t } = useTranslation();
   const instructions = {
     microphone: t("onboarding.permissionGuide.microphone"),
-    accessibility: t("onboarding.permissionGuide.accessibility"),
+    accessibility: t(
+      state.selectApp
+        ? "onboarding.permissionGuide.selectApp"
+        : "onboarding.permissionGuide.accessibility"
+    ),
     "system-audio": t("onboarding.permissionGuide.systemAudio"),
     "screen-context": t("onboarding.permissionGuide.screenContext"),
   };
@@ -22,6 +26,7 @@ export function PermissionGuideCard({ state, onAction, onDrag }: CardProps): Rea
   const dragStep =
     !state.granted &&
     !state.error &&
+    !state.selectApp &&
     (state.permission === "accessibility" || state.permission === "screen-context");
   const interactive = { WebkitAppRegion: "no-drag" } as CSSProperties;
   const button =
