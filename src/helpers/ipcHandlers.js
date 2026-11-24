@@ -227,6 +227,7 @@ const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const { transcribeWithGemini } = require("./geminiTranscription");
 const { transcribeAssemblyAiRecording } = require("./assemblyAiDictation");
 const { transcribeWithElevenLabs } = require("./elevenLabsTranscription");
+const { transcribeWithVercelGateway } = require("./vercelGatewayTranscription");
 const AudioStorageManager = require("./audioStorage");
 const { SkillLibrary } = require("./skills/skillLibrary");
 const { registerSkillsIpc } = require("./skills/skillsIpc");
@@ -542,6 +543,15 @@ async function postMultipart(
 
 async function transcribeElevenLabsSpeech(options) {
   const result = await transcribeWithElevenLabs(options);
+  if (!result.text) {
+    throw Object.assign(new Error("No speech detected in audio"), { code: "NO_SPEECH_DETECTED" });
+  }
+  return result;
+}
+
+// The gateway answers silence with an empty text, which ends as it does elsewhere.
+async function transcribeVercelGatewaySpeech(options) {
+  const result = await transcribeWithVercelGateway(options);
   if (!result.text) {
     throw Object.assign(new Error("No speech detected in audio"), { code: "NO_SPEECH_DETECTED" });
   }
@@ -6924,6 +6934,21 @@ class IPCHandlers {
       })
     );
 
+    // Vercel AI Gateway's transcription route takes JSON with base64 audio and the
+    // model id in a header; it has no OpenAI-compatible multipart path.
+    handleProviderTranscription(
+      "proxy-vercel-transcription",
+      serializeIpcError(async (_event, { audioBuffer, model, mimeType }, signal) => {
+        return await transcribeVercelGatewaySpeech({
+          signal,
+          audioBuffer: Buffer.from(audioBuffer),
+          model,
+          contentType: mimeType || "audio/webm",
+          apiKey: this.environmentManager.getVercelKey(),
+        });
+      })
+    );
+
     // ElevenLabs Scribe authenticates with xi-api-key and takes model_id /
     // language_code, so it has no OpenAI-compatible path either.
     const elevenLabsDictations = new AgentStreamRequestRegistry();
@@ -9771,6 +9796,16 @@ class IPCHandlers {
             apiKey: this.environmentManager.getElevenlabsKey(),
           });
           result = { text, source: "elevenlabs", model: route.model };
+        } else if (route.transport === "proxied" && route.provider === "vercel") {
+          // No size check, as for ElevenLabs: dictation already sent this recording once.
+          const { text } = await transcribeVercelGatewaySpeech({
+            signal,
+            audioBuffer: buffer,
+            model: route.model,
+            contentType: isWavFormat(buffer) ? "audio/wav" : "audio/webm",
+            apiKey: this.environmentManager.getVercelKey(),
+          });
+          result = { text, source: "vercel", model: route.model };
         } else {
           // mistral/xai have no OpenAI-compatible endpoint — main talks to them
           // directly; everything else consumes the route endpoint as-is.
@@ -14306,6 +14341,17 @@ class IPCHandlers {
                 fileName: path.basename(realByok),
                 contentType: providerContentType(realByok),
                 apiKey: apiKey || this.environmentManager.getElevenlabsKey(),
+              });
+              return { success: true, text };
+            }
+
+            if (route.transport === "proxied" && route.provider === "vercel") {
+              const { text } = await transcribeVercelGatewaySpeech({
+                audioBuffer: fs.readFileSync(realByok),
+                signal,
+                model: route.model,
+                contentType: providerContentType(realByok),
+                apiKey: apiKey || this.environmentManager.getVercelKey(),
               });
               return { success: true, text };
             }

@@ -303,6 +303,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "assemblyai", name: "AssemblyAI" },
   { id: "elevenlabs", name: "ElevenLabs" },
   { id: "openrouter", name: "OpenRouter" },
+  { id: "vercel", name: "Vercel AI Gateway" },
   { id: "custom", name: "Custom" },
 ];
 
@@ -338,7 +339,8 @@ interface ProviderCredentialField {
     | "deepgramApiKey"
     | "assemblyaiApiKey"
     | "elevenlabsApiKey"
-    | "openrouterApiKey";
+    | "openrouterApiKey"
+    | "vercelApiKey";
   input: "secret" | "text" | "select";
   labelKey?: string;
   placeholder?: string;
@@ -410,6 +412,10 @@ const PROVIDER_CREDENTIALS: Record<
   openrouter: {
     consoleUrl: "https://openrouter.ai/keys",
     fields: [{ key: "openrouterApiKey", input: "secret" }],
+  },
+  vercel: {
+    consoleUrl: "https://vercel.com/dashboard/ai-gateway/api-keys",
+    fields: [{ key: "vercelApiKey", input: "secret" }],
   },
 };
 
@@ -551,6 +557,8 @@ export default function TranscriptionModelPicker({
   const setElevenlabsApiKey = useSettingsStore((s) => s.setElevenlabsApiKey);
   const openrouterApiKey = useSettingsStore((s) => s.openrouterApiKey);
   const setOpenrouterApiKey = useSettingsStore((s) => s.setOpenrouterApiKey);
+  const vercelApiKey = useSettingsStore((s) => s.vercelApiKey);
+  const setVercelApiKey = useSettingsStore((s) => s.setVercelApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
@@ -1326,6 +1334,7 @@ export default function TranscriptionModelPicker({
     assemblyaiApiKey: keyDraft.value("assemblyaiApiKey", assemblyaiApiKey),
     elevenlabsApiKey: keyDraft.value("elevenlabsApiKey", elevenlabsApiKey),
     openrouterApiKey: keyDraft.value("openrouterApiKey", openrouterApiKey),
+    vercelApiKey: keyDraft.value("vercelApiKey", vercelApiKey),
   };
   const customKey = keyDraft.value("customTranscriptionApiKey", customTranscriptionApiKey);
   const credentialSetters: Record<ProviderCredentialField["key"], (value: string) => void> = {
@@ -1343,6 +1352,7 @@ export default function TranscriptionModelPicker({
     assemblyaiApiKey: setAssemblyaiApiKey,
     elevenlabsApiKey: setElevenlabsApiKey,
     openrouterApiKey: setOpenrouterApiKey,
+    vercelApiKey: setVercelApiKey,
   };
 
   const endpointHold = useFocusHold();
@@ -1454,10 +1464,13 @@ export default function TranscriptionModelPicker({
     return currentCloudProvider.models
       .filter((model) => modelAllowed(displayedCloudProvider, model.id))
       .map((m) => {
-        // OpenRouter brokers other vendors' models, so the id's prefix
-        // ("openai/…", "google/…") names the model better than OpenRouter's own
-        // mark. Vendors we have no icon for keep it, rather than showing none.
-        const slash = displayedCloudProvider === "openrouter" ? m.id.indexOf("/") : -1;
+        // OpenRouter and Vercel AI Gateway broker other vendors' models, so the
+        // id's prefix ("openai/…", "google/…") names the model better than the
+        // broker's own mark. Vendors we have no icon for keep it, rather than
+        // showing none.
+        const brokered =
+          displayedCloudProvider === "openrouter" || displayedCloudProvider === "vercel";
+        const slash = brokered ? m.id.indexOf("/") : -1;
         const vendorIcon = slash > 0 ? getRemoteProviderIcon(m.id.slice(0, slash)) : null;
         const { icon, invertInDark } = vendorIcon?.icon ? vendorIcon : providerIcon;
         return {

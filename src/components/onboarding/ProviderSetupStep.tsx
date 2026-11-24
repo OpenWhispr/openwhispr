@@ -192,6 +192,8 @@ function providerCredential(provider: string, store: ReturnType<typeof useSettin
       return { value: store.assemblyaiApiKey, set: store.setAssemblyaiApiKey };
     case "elevenlabs":
       return { value: store.elevenlabsApiKey, set: store.setElevenlabsApiKey };
+    case "vercel":
+      return { value: store.vercelApiKey, set: store.setVercelApiKey };
     default:
       return { value: "", set: (_value: string) => undefined };
   }

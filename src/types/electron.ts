@@ -2965,6 +2965,11 @@ declare global {
         language?: string;
         keyterms?: string[];
       }) => Promise<ProxyTranscriptionResult<{ acceptedKeyterms: string[] }>>;
+      proxyVercelTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        model?: string;
+        mimeType?: string;
+      }) => Promise<ProxyTranscriptionResult>;
 
       // Groq API key management
       getGroqKey: () => Promise<string | null>;
@@ -3025,6 +3030,8 @@ declare global {
       }) => Promise<ProxyTranscriptionResult & { cleanedText?: string }>;
       getElevenlabsKey?: () => Promise<string | null>;
       saveElevenlabsKey?: (key: string) => Promise<void>;
+      getVercelKey?: () => Promise<string | null>;
+      saveVercelKey?: (key: string) => Promise<void>;
 
       // Custom endpoint API keys
       getSelfHostedSttHeaders?: () => Promise<string | null>;

@@ -35,11 +35,20 @@ test("the realtime STT providers use their own auth schemes, not Bearer", () => 
   assert.equal(assemblyai.headers.Authorization, "aai-secret");
 });
 
+// AI Gateway's model list answers without a key, so the key is checked on a route that needs one.
+test("the Vercel AI Gateway key is checked against its credits route", () => {
+  const vercel = resolveProviderRequest({ provider: "vercel", apiKey: "vck-secret" });
+  assert.equal(vercel.endpoint, "https://ai-gateway.vercel.sh/v1/credits");
+  assert.equal(vercel.endpoint.includes("vck-secret"), false);
+  assert.equal(vercel.headers.Authorization, "Bearer vck-secret");
+});
+
 // AssemblyAI's payload is not OpenAI-shaped, so responseOffersModel would report
 // modelNotFound for a perfectly valid key.
 test("a 200 is the whole signal for providers with no OpenAI-shaped model list", async () => {
   for (const [provider, model, payload] of [
     ["assemblyai", "universal-streaming-english", { transcripts: [], page_details: {} }],
+    ["vercel", "openai/gpt-transcribe", { balance: "4.20", total_used: "0.80" }],
   ]) {
     assert.deepEqual(
       await testProviderConnection({ provider, apiKey: "k", model }, async () => ({
@@ -775,6 +784,7 @@ test("hosted providers refuse redirects; custom servers keep following them", as
     "deepgram",
     "assemblyai",
     "elevenlabs",
+    "vercel",
   ];
   for (const provider of hosted) {
     assert.equal(resolveProviderRequest({ provider, apiKey: "k" }).redirect, "error", provider);

@@ -23,6 +23,9 @@ const ENDPOINTS = {
   // The transcription route checks the key before the body, so a request without audio is
   // refused as unauthorised or as invalid, and transcribes nothing.
   elevenlabs: "https://api.elevenlabs.io/v1/speech-to-text",
+  // AI Gateway's model list is public, so it cannot vouch for a key. The credits
+  // route answers only the key that calls it.
+  vercel: "https://ai-gateway.vercel.sh/v1/credits",
 };
 // Listing the key's projects proves the key too: used only if Deepgram retires the route above.
 const DEEPGRAM_PROJECTS_ENDPOINT = "https://api.deepgram.com/v1/projects";
@@ -476,8 +479,13 @@ async function testProviderConnection(
     const next = await probe(endpoint, request, fetchImpl, async (response) => {
       if (!response.ok) return describeResponseFailure(response, provider);
       if (provider === "openrouter") return describeOpenRouterKey(response);
-      // AssemblyAI's probe lists transcripts, not models, so a 200 is the whole signal.
-      if (provider === "assemblyai" || (await responseOffersModel(response, model, provider))) {
+      // AssemblyAI's probe lists transcripts and Vercel's reads credits, not models,
+      // so a 200 is the whole signal.
+      if (
+        provider === "assemblyai" ||
+        provider === "vercel" ||
+        (await responseOffersModel(response, model, provider))
+      ) {
         return null;
       }
       return MODEL_NOT_FOUND;

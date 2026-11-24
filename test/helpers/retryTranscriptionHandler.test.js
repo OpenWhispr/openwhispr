@@ -286,6 +286,7 @@ function buildFakeThis() {
       getTinfoilKey: () => "tk-tinfoil",
       getAssemblyAIKey: () => "aai-assemblyai",
       getElevenlabsKey: () => "xi-elevenlabs",
+      getVercelKey: () => "vck-vercel",
       getOpenrouterKey: () => "ork-openrouter",
       getCustomTranscriptionKey: () => "ck-custom",
       getSelfHostedSttHeaders: () => selfHostedHeaders,
@@ -831,6 +832,26 @@ test("retry: ElevenLabs gets the recording at its own endpoint, with the job's a
   assert.ok(fetches[0].init.signal instanceof AbortSignal);
 });
 
+test("retry: Vercel AI Gateway gets base64 JSON at its transcription route, never multipart", async () => {
+  fetches.length = 0;
+  const result = await invoke({
+    cloudTranscriptionProvider: "vercel",
+    cloudTranscriptionModel: "mistral/voxtral-mini-transcribe-3",
+    cloudTranscriptionMode: "byok",
+    transcriptionMode: "providers",
+    preferredLanguage: "de",
+  });
+  assert.equal(result.success, true);
+  assert.equal(fetches.length, 1);
+  assert.equal(fetches[0].url, "https://ai-gateway.vercel.sh/v4/ai/transcription-model");
+  assert.equal(fetches[0].init.headers.Authorization, "Bearer vck-vercel");
+  assert.equal(fetches[0].init.headers["ai-model-id"], "mistral/voxtral-mini-transcribe-3");
+  const body = JSON.parse(fetches[0].init.body);
+  assert.deepEqual(Object.keys(body).sort(), ["audio", "mediaType"]);
+  assert.equal(typeof body.audio, "string");
+  assert.ok(fetches[0].init.signal instanceof AbortSignal);
+});
+
 test("ElevenLabs dictation cancellation stops only the sender's request before a keyterm retry", async (t) => {
   const { deferred } = require("./harness/deferred");
   const response = deferred();
@@ -1126,6 +1147,7 @@ test("proxy transcription handlers resolve to structured errors instead of rejec
       "proxy-assemblyai-transcription",
       "proxy-corti-transcription",
       "proxy-elevenlabs-transcription",
+      "proxy-vercel-transcription",
     ]) {
       const fn = handlers.get(channel);
       assert.ok(fn, `${channel} must be registered`);

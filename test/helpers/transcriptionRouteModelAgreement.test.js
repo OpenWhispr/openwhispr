@@ -23,6 +23,7 @@ const PREFIX_VALIDATED_PROVIDERS = [
   "assemblyai",
   "elevenlabs",
   "openrouter",
+  "vercel",
 ];
 
 test("every shipping registry model survives resolveByokModel", async () => {

@@ -84,3 +84,18 @@ test("the Note Recording-only rule holds when a publication lists the model", ()
   assert.equal(isNoteRecordingOnlyTranscriptionModel("elevenlabs", "scribe_v3"), false);
   assert.equal(isNoteRecordingOnlyTranscriptionModel("gemini", "scribe_v3_live"), false);
 });
+
+test("Vercel AI Gateway survives a live catalog that does not list it", () => {
+  const vercel = (catalog) => catalog.transcriptionProviders.find((p) => p.id === "vercel");
+  assert.equal(vercel(vendored), undefined, "sync the catalog, then drop the app's entry");
+  const applied = acceptCatalog(vendored, bundled, "1.12.1");
+
+  assert.equal(vercel(applied).defaultModel, "openai/gpt-transcribe");
+  assert.ok(vercel(applied).models.some((model) => model.id === vercel(applied).defaultModel));
+  // The gateway brokers other vendors' models, so every id keeps its vendor prefix.
+  for (const model of vercel(applied).models) {
+    assert.match(model.id, /^[a-z-]+\/.+/, model.id);
+    // Its realtime models are WebSocket-only; none is offered for batch or Note Recording.
+    assert.equal(model.streaming, undefined, model.id);
+  }
+});

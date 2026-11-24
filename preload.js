@@ -17,6 +17,7 @@ const BYOK_KEY_BRIDGES = [
   { base: "deepgram", get: "getDeepgramKey", save: "saveDeepgramKey" },
   { base: "assemblyai", get: "getAssemblyAIKey", save: "saveAssemblyAIKey" },
   { base: "elevenlabs", get: "getElevenlabsKey", save: "saveElevenlabsKey" },
+  { base: "vercel", get: "getVercelKey", save: "saveVercelKey" },
   {
     base: "note-formatting-custom",
     get: "getNoteFormattingCustomKey",
@@ -752,6 +753,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   proxyGeminiTranscription: (data) => ipcRenderer.invoke("proxy-gemini-transcription", data),
   proxyElevenlabsTranscription: (data) =>
     ipcRenderer.invoke("proxy-elevenlabs-transcription", data),
+  proxyVercelTranscription: (data) => ipcRenderer.invoke("proxy-vercel-transcription", data),
 
   // Corti API
   getCortiClientId: () => ipcRenderer.invoke("get-corti-client-id"),

@@ -52,6 +52,7 @@ test("self-hosted mode without a URL fails closed unless the provider is custom"
     "tinfoil",
     "elevenlabs",
     "openrouter",
+    "vercel",
   ]) {
     const route = await resolve({
       transcriptionMode: "self-hosted",
@@ -141,6 +142,30 @@ test("proxied providers carry their quirks as route data", async () => {
   assert.equal(elevenlabs.model, "scribe_v3");
   assert.equal(elevenlabs.sizeCapBytes, 25 * 1024 * 1024);
   assert.equal("endpoint" in elevenlabs, false, "the key never reaches an OpenAI-shaped endpoint");
+});
+
+test("vercel is proxied, sends no language and keeps vendor-prefixed model ids", async () => {
+  const route = await resolve({ cloudTranscriptionProvider: "vercel", preferredLanguage: "es" });
+  assert.equal(route.transport, "proxied");
+  assert.equal(route.provider, "vercel");
+  assert.equal(route.model, "openai/gpt-transcribe");
+  assert.equal(route.sizeCapBytes, 25 * 1024 * 1024);
+  assert.equal(route.language, undefined, "the gateway's route takes no language of its own");
+  assert.equal("endpoint" in route, false, "the gateway has no OpenAI-shaped audio endpoint");
+
+  // The gateway's catalog moves faster than the shortlist, so an unlisted id survives.
+  const unlisted = await resolve({
+    cloudTranscriptionProvider: "vercel",
+    cloudTranscriptionModel: "microsoft/mai-transcribe-2",
+  });
+  assert.equal(unlisted.model, "microsoft/mai-transcribe-2");
+
+  // A bare id is another provider's leftover and degrades to the default.
+  const leftover = await resolve({
+    cloudTranscriptionProvider: "vercel",
+    cloudTranscriptionModel: "whisper-large-v3-turbo",
+  });
+  assert.equal(leftover.model, "openai/gpt-transcribe");
 });
 
 test("byokFileSizeLimit matches the per-provider route caps", async () => {
