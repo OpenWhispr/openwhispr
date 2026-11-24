@@ -131,7 +131,8 @@ export function createCloudPostPassDeps(language: string | undefined): PostPassD
   };
 }
 
-const recordingDurationMs = async (uri: string): Promise<number> => {
+/** A meeting recording's length from its size; 0 when it can't be read. */
+export const recordingDurationMs = async (uri: string): Promise<number> => {
   const info = await FileSystem.getInfoAsync(uri).catch(() => null);
   const bytes = info?.exists && 'size' in info ? info.size : 0;
   return Math.max(0, Math.floor((bytes - WAV_HEADER_BYTES) / RECORDING_BYTES_PER_MS));

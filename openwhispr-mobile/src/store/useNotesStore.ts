@@ -33,6 +33,8 @@ import type { CloudMeetingResult } from '@/hooks/useCloudMeeting';
 import type { AudioWindow } from '@/services/transcription/realtimeReconnect';
 import { assertTransition, canTransition } from '@/lib/diarization/transcriptionStatus';
 import { formatTranscriptForExport } from '@/lib/diarization/transcriptDisplay';
+import { assignSpeakersToSegments } from '@/lib/diarization/assignSpeakers';
+import { diarizationToTurns, speakerLabelFor } from '@/lib/diarization/diarizationBridge';
 import { buildMergeTargetPatch, buildRenameSpeakerPatch } from '@/lib/diarization/speakerEdits';
 import {
   buildConfirmedSpeakerPatch,
@@ -55,6 +57,7 @@ import {
   backfillDroppedAudio,
   createCloudPostPassDeps,
   mergeTranscript,
+  recordingDurationMs,
   transcribeRecordingToSegments,
 } from '@/lib/notes/meetingPostPass';
 import { DEFAULT_MEETING_TITLE } from '@/lib/notes/meetingConstants';
@@ -125,6 +128,11 @@ const loadVoiceEnrollmentProcessingDeps = () => {
     AudioTools: audioToolsModule.AudioTools,
   };
 };
+
+const loadInsertNewSpeakers = () =>
+  (
+    require('@/services/diarization/DiarizationService') as typeof import('@/services/diarization/DiarizationService')
+  ).insertNewSpeakers;
 
 const loadDiarizer = () => {
   const diarizerModule =
@@ -485,6 +493,16 @@ const isLiveNote = (noteId: number): boolean => {
 const withNoteId = (noteId: number, segments: CloudMeetingSegment[]): NewSegment[] =>
   segments.map((segment) => ({ ...segment, noteId }));
 
+const savedAsNew = (noteId: number, rows: Segment[]): NewSegment[] =>
+  rows.map((row) => ({
+    noteId,
+    text: row.text,
+    startMs: row.startMs,
+    endMs: row.endMs,
+    speakerLabel: row.speakerLabel,
+    sortOrder: row.sortOrder,
+  }));
+
 const errorCode = (error: unknown): string => {
   const code = (error as { code?: unknown } | null)?.code;
   return typeof code === 'string' ? code : 'unknown';
@@ -646,6 +664,8 @@ interface NotesStore {
   ) => Promise<void>;
   /** A meeting with a recording and no transcript: transcribes the whole file through cloud chunks. */
   transcribeMeetingRecording: (noteId: number) => Promise<void>;
+  /** Runs the diarizer on the note's recording and labels its segments. Never throws; false when it did nothing. */
+  labelMeetingSpeakers: (noteId: number, options: { utteranceTimed: boolean }) => Promise<boolean>;
   /** Deletes a meeting's recording and clears its `sourceFile`. Never throws. */
   discardMeetingRecording: (noteId: number) => Promise<void>;
   /** Saves one live utterance. Never throws: a failed write is reported and the meeting goes on. */
@@ -1095,8 +1115,10 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
           .catch(() => undefined);
         return;
       }
-      // Task 7: the speaker pass runs here, while the recording is still on disk.
-      get().transitionStatus(noteId, 'done'); // transcribing -> done (cloud skips diarizing)
+      // While the recording is still on disk: the diarizer reads it. Leaves the status at
+      // transcribing or diarizing, both of which may move to done.
+      await get().labelMeetingSpeakers(noteId, { utteranceTimed: true });
+      get().transitionStatus(noteId, 'done');
       if (transcript.some((segment) => segment.text?.trim())) {
         logTranscriptionCompleted({ source: 'meeting', provider: 'cloud' });
       }
@@ -1153,7 +1175,9 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
               }),
             );
       notesRepository.replaceSegments(noteId, transcript);
-      // Task 7: the speaker pass runs here, while the recording is still on disk.
+      // Two-minute chunks each hold several speakers, so this labels nothing; it stays so the
+      // rule for which transcripts get labelled lives in one place.
+      await get().labelMeetingSpeakers(noteId, { utteranceTimed: false });
       get().transitionStatus(noteId, 'done');
       if (transcript.some((segment) => segment.text?.trim())) {
         logTranscriptionCompleted({ source: 'meeting', provider: 'cloud' });
@@ -1162,6 +1186,94 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       await finalizeMeetingNoteContent(noteId);
     } finally {
       get().loadNotes();
+    }
+  },
+
+  labelMeetingSpeakers: async (noteId, { utteranceTimed }) => {
+    if (!utteranceTimed) return false;
+    const startedAt = Date.now();
+    // Set while labelled segments are written but their speakers aren't yet, the one stretch a
+    // failure must undo.
+    let restore: NewSegment[] | null = null;
+    let labelled = false;
+    try {
+      const note = notesRepository.getNoteById(noteId);
+      const recordingUri = note?.sourceFile;
+      if (
+        !note ||
+        note.deletedAt ||
+        !recordingUri ||
+        !isManagedMeetingAudioUri(noteId, recordingUri)
+      ) {
+        return false;
+      }
+      if (!(await get().isDiarizerAvailable()) || !(await get().isDiarizerModelReady())) {
+        return false;
+      }
+      if (notesRepository.getSegments(noteId).length === 0) return false;
+      if (canTransition(notesRepository.getTranscriptionStatus(noteId), 'diarizing')) {
+        get().transitionStatus(noteId, 'diarizing');
+      }
+      // The native engine streams the file from disk; the recording never enters JS memory.
+      const diarization = await loadDiarizer().diarize(
+        recordingUri,
+        note.expectedSpeakerCount ?? 0,
+      );
+      // Deleting the note removed its segments; writing would bring them back.
+      if (!isLiveNote(noteId)) return false;
+      // Read again: the segments are the user's text and may have changed while it ran.
+      const current = savedAsNew(noteId, notesRepository.getSegments(noteId));
+      const segments = assignSpeakersToSegments(current, diarizationToTurns(diarization));
+      const labels = segments.flatMap((segment) =>
+        segment.speakerLabel ? [segment.speakerLabel] : [],
+      );
+      if (labels.length === 0) return false;
+      restore = current;
+      notesRepository.replaceSegments(noteId, segments);
+      loadInsertNewSpeakers()(noteId, labels, notesRepository);
+      notesRepository.updateNoteMeta(noteId, { diarizationEnabled: 1 });
+      restore = null;
+      labelled = true;
+      const speakerEmbeddingsByLabel = Object.fromEntries(
+        Object.entries(diarization.embeddings).map(([id, embedding]) => [
+          speakerLabelFor(Number(id)),
+          embedding,
+        ]),
+      );
+      set((state) => ({
+        meetingSpeakerEmbeddingsByNoteId: {
+          ...state.meetingSpeakerEmbeddingsByNoteId,
+          [noteId]: speakerEmbeddingsByLabel,
+        },
+      }));
+      if (identifyMeetingSpeakers(noteId, speakerEmbeddingsByLabel)) {
+        set((state) => ({ transcriptRevision: state.transcriptRevision + 1 }));
+      }
+      Sentry.captureMessage('meeting-speaker-pass', {
+        level: 'info',
+        tags: { feature: 'meeting-post-pass', outcome: 'labelled' },
+        extra: {
+          durationMs: Date.now() - startedAt,
+          audioMs: await recordingDurationMs(recordingUri),
+          speakers: new Set(labels).size,
+        },
+      });
+      return true;
+    } catch (error) {
+      if (restore && isLiveNote(noteId)) {
+        try {
+          notesRepository.replaceSegments(noteId, restore);
+        } catch {
+          // The labelled rows stay; their text and timing are the user's, unchanged.
+        }
+      }
+      Sentry.captureMessage('meeting-speaker-pass', {
+        level: 'warning',
+        tags: { feature: 'meeting-post-pass', outcome: 'failed', error_code: errorCode(error) },
+        extra: { durationMs: Date.now() - startedAt },
+      });
+      // Labels already written stand even if identifying them failed.
+      return labelled;
     }
   },
 

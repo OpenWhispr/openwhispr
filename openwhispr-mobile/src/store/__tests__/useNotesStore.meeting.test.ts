@@ -85,6 +85,7 @@ jest.mock('@/data', () => ({
     replaceSegments: jest.fn(),
     appendSegments: jest.fn(),
     getSpeakers: jest.fn(() => []),
+    upsertSpeakers: jest.fn(),
     getActions: jest.fn(() => []),
     updateSpeaker: jest.fn(),
     mergeSpeakers: jest.fn(),
@@ -132,6 +133,7 @@ jest.mock('@/lib/notes/localMeetingNotes', () => ({
   generateLocalMeetingNotes: jest.fn(),
 }));
 jest.mock('@/services/diarization/DiarizationService', () => ({
+  ...jest.requireActual('@/services/diarization/DiarizationService'),
   processMeeting: mockProcessMeeting,
 }));
 jest.mock('@/lib/diarization/getDiarizer', () => ({
@@ -845,6 +847,226 @@ describe('meeting post-pass', () => {
 
     expect(notesRepository.replaceSegments).toHaveBeenCalledTimes(1);
     expect(savedTexts(0)).toEqual([]);
+  });
+
+  describe('speaker pass', () => {
+    let statuses: string[];
+    let saved: { text: string; startMs: number; endMs: number; speakerLabel: string | null }[];
+    let diarize: jest.Mock;
+    let modelDownloaded: boolean;
+    let available: boolean;
+
+    const diarization = {
+      speakerCount: 2,
+      segments: [
+        { start: 0, end: 4, speakerId: 0 },
+        { start: 5, end: 9, speakerId: 1 },
+      ],
+      embeddings: { 0: [1, 0], 1: [0, 1] },
+    };
+
+    const lastLabels = (): (string | null)[] => {
+      const calls = (notesRepository.replaceSegments as jest.Mock).mock.calls;
+      return calls[calls.length - 1][1].map(
+        (row: { speakerLabel: string | null }) => row.speakerLabel,
+      );
+    };
+
+    beforeEach(() => {
+      statuses = [];
+      saved = [];
+      modelDownloaded = true;
+      available = true;
+      (notesRepository.setTranscriptionStatus as jest.Mock).mockImplementation((_id, to) => {
+        status = to;
+        statuses.push(to);
+      });
+      (notesRepository.replaceSegments as jest.Mock).mockImplementation((_id, rows) => {
+        saved = rows;
+      });
+      (notesRepository.getSegments as jest.Mock).mockImplementation(() =>
+        saved.map((row, index) => ({ ...segment(row.text), ...row, id: 100 + index })),
+      );
+      diarize = jest.fn(async (uri: string) => {
+        // The diarizer reads the file, so it must still be there.
+        if (!filesOnDisk.has(uri)) throw new Error('missing file');
+        return diarization;
+      });
+      mockGetDiarizer.mockReturnValue({
+        isAvailable: () => available,
+        isModelDownloaded: jest.fn(async () => modelDownloaded),
+        downloadModel: jest.fn(async () => undefined),
+        deleteModel: jest.fn(async () => undefined),
+        diarize,
+      });
+    });
+
+    afterEach(() => {
+      (notesRepository.replaceSegments as jest.Mock).mockReset();
+      (notesRepository.upsertSpeakers as jest.Mock).mockReset();
+    });
+
+    it('labels a cloud meeting when the model is downloaded', async () => {
+      note = { ...note, expectedSpeakerCount: 2 };
+
+      await finalize({ utterances: [utterance('Hi.', 0, 2000), utterance('Hello.', 6000, 8000)] });
+
+      expect(diarize).toHaveBeenCalledWith(RECORDING, 2);
+      expect(lastLabels()).toEqual(['speaker_0', 'speaker_1']);
+      expect(saved.map((row) => row.text)).toEqual(['Hi.', 'Hello.']);
+      expect(notesRepository.upsertSpeakers).toHaveBeenCalledWith(7, [
+        expect.objectContaining({ speakerLabel: 'speaker_0', speakerStatus: 'provisional' }),
+        expect.objectContaining({ speakerLabel: 'speaker_1', speakerStatus: 'provisional' }),
+      ]);
+      expect(note?.diarizationEnabled).toBe(1);
+      expect(statuses).toEqual(['transcribing', 'diarizing', 'done']);
+      expect(useNotesStore.getState().meetingSpeakerEmbeddingsByNoteId[7]).toEqual({
+        speaker_0: [1, 0],
+        speaker_1: [0, 1],
+      });
+      expect(filesOnDisk.has(RECORDING)).toBe(false);
+      expect(Sentry.captureMessage).toHaveBeenCalledWith('meeting-speaker-pass', {
+        level: 'info',
+        tags: { feature: 'meeting-post-pass', outcome: 'labelled' },
+        extra: { durationMs: expect.any(Number), audioMs: 60_000, speakers: 2 },
+      });
+    });
+
+    it('identifies speakers from saved voice profiles', async () => {
+      (notesRepository.getSpeakerProfiles as jest.Mock).mockReturnValue([
+        {
+          id: 99,
+          displayName: 'Me',
+          email: null,
+          isOwner: 1,
+          embedding: [1, 0],
+          sampleCount: 1,
+          consentAt: '2026-06-19T12:00:00.000Z',
+          createdAt: null,
+          updatedAt: null,
+        },
+      ]);
+      (notesRepository.getSpeakers as jest.Mock).mockReturnValue([
+        speaker({ id: 10, speakerLabel: 'speaker_0' }),
+      ]);
+
+      await finalize({ utterances: [utterance('Hi.', 0, 2000)] });
+
+      expect(notesRepository.updateSpeaker).toHaveBeenCalledWith(
+        10,
+        expect.objectContaining({ displayName: 'Me', profileId: 99 }),
+      );
+      expect(useNotesStore.getState().transcriptRevision).toBe(1);
+    });
+
+    it('leaves a backfilled stretch unlabelled when no one speaker holds most of it', async () => {
+      mockCloudTranscribe.mockResolvedValue({ text: 'Several people.', duration: 0 });
+      diarize.mockResolvedValue({
+        speakerCount: 3,
+        segments: [
+          { start: 0, end: 2, speakerId: 0 },
+          { start: 10, end: 60, speakerId: 0 },
+          { start: 60, end: 90, speakerId: 1 },
+          { start: 90, end: 130, speakerId: 2 },
+        ],
+        embeddings: { 0: [1, 0], 1: [0, 1], 2: [1, 1] },
+      });
+
+      await finalize({
+        utterances: [utterance('Live.', 0, 2000)],
+        droppedWindows: [{ startMs: 10_000, endMs: 130_000 }],
+      });
+
+      expect(saved.map((row) => row.text)).toEqual(['Live.', 'Several people.']);
+      expect(lastLabels()).toEqual(['speaker_0', null]);
+      expect(notesRepository.upsertSpeakers).toHaveBeenCalledWith(7, [
+        expect.objectContaining({ speakerLabel: 'speaker_0' }),
+      ]);
+    });
+
+    it('leaves the transcript alone when the model is missing', async () => {
+      modelDownloaded = false;
+
+      await finalize({ utterances: [utterance('Hi.', 0, 2000)] });
+
+      expect(diarize).not.toHaveBeenCalled();
+      expect(notesRepository.replaceSegments).toHaveBeenCalledTimes(1);
+      expect(notesRepository.upsertSpeakers).not.toHaveBeenCalled();
+      expect(statuses).toEqual(['transcribing', 'done']);
+    });
+
+    it('does nothing where the diarizer is unavailable', async () => {
+      available = false;
+
+      await expect(
+        useNotesStore.getState().labelMeetingSpeakers(7, { utteranceTimed: true }),
+      ).resolves.toBe(false);
+      expect(diarize).not.toHaveBeenCalled();
+    });
+
+    it('leaves the transcript alone and ends done when the diarizer throws', async () => {
+      diarize.mockRejectedValue(new Error('/private/var/meeting-7.wav: engine failed'));
+
+      await finalize({ utterances: [utterance('Hi.', 0, 2000)] });
+
+      expect(notesRepository.replaceSegments).toHaveBeenCalledTimes(1);
+      expect(saved).toEqual([expect.objectContaining({ text: 'Hi.', speakerLabel: null })]);
+      expect(notesRepository.upsertSpeakers).not.toHaveBeenCalled();
+      expect(note?.diarizationEnabled).toBe(0);
+      expect(statuses).toEqual(['transcribing', 'diarizing', 'done']);
+      expect(filesOnDisk.has(RECORDING)).toBe(false);
+      expect(note?.sourceFile).toBeNull();
+      expect(Sentry.captureMessage).toHaveBeenCalledWith(
+        'meeting-speaker-pass',
+        expect.objectContaining({
+          tags: expect.objectContaining({ outcome: 'failed' }),
+        }),
+      );
+      expect(JSON.stringify((Sentry.captureMessage as jest.Mock).mock.calls)).not.toContain(
+        'private',
+      );
+    });
+
+    it('puts the segments back when writing the speakers fails', async () => {
+      (notesRepository.upsertSpeakers as jest.Mock).mockImplementation(() => {
+        throw new Error('database unavailable');
+      });
+
+      await finalize({ utterances: [utterance('Hi.', 0, 2000)] });
+
+      expect(saved).toEqual([expect.objectContaining({ text: 'Hi.', speakerLabel: null })]);
+      expect(status).toBe('done');
+    });
+
+    it('writes nothing for a note deleted while the diarizer ran', async () => {
+      diarize.mockImplementation(async () => {
+        note = { ...note, deletedAt: '2026-11-24 10:00:00' };
+        return diarization;
+      });
+
+      await expect(
+        useNotesStore.getState().labelMeetingSpeakers(7, { utteranceTimed: true }),
+      ).resolves.toBe(false);
+      expect(notesRepository.replaceSegments).not.toHaveBeenCalled();
+      expect(notesRepository.upsertSpeakers).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the segments are not utterance-timed', async () => {
+      status = 'transcribing';
+
+      await expect(
+        useNotesStore.getState().labelMeetingSpeakers(7, { utteranceTimed: false }),
+      ).resolves.toBe(false);
+      expect(diarize).not.toHaveBeenCalled();
+      expect(status).toBe('transcribing');
+    });
+
+    it('does not label a whole-file transcription', async () => {
+      await finalize({ utterances: [] });
+
+      expect(diarize).not.toHaveBeenCalled();
+      expect(status).toBe('done');
+    });
   });
 
   describe('retry', () => {
