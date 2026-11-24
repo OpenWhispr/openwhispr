@@ -54,6 +54,10 @@ private final class FakeDirectDictation: DirectDictationControlling {
   var onLevel: ((Float) -> Void)?
   var onText: ((String) -> Void)?
   var onLocalModelLog: ((String) -> Void)?
+  var onLocalModelReadyChange: (() -> Void)?
+  var attaches = 0
+  /// What `attaches` was when the last `start()` ran.
+  var attachesAtStart: Int?
   var starts = 0
   var confirms = 0
   var cancels = 0
@@ -62,10 +66,13 @@ private final class FakeDirectDictation: DirectDictationControlling {
   var warmUps = 0
   var releases = 0
 
-  func attach(to view: UIView) {}
+  func attach(to view: UIView) { attaches += 1 }
   func warmUp() { warmUps += 1 }
   func releaseLocalModelWhenIdle() { releases += 1 }
-  func start() { starts += 1 }
+  func start() {
+    starts += 1
+    attachesAtStart = attaches
+  }
   func confirm() { confirms += 1 }
   func cancel() { cancels += 1 }
   func keyboardWillDisappear() { disappears += 1 }
@@ -311,6 +318,7 @@ private enum KeyboardTouchTests {
     checkLayoutChanges(&checks)
     checkTyping(&checks)
     checkDirectDictation(&checks)
+    checkDirectLocalModelReadiness(&checks)
     checkTypingHelp(&checks)
 
     print("Keyboard touch routing: \(checks.count - checks.failures.count)/\(checks.count) passed")
@@ -801,6 +809,45 @@ private enum KeyboardTouchTests {
       quote { $0.keyboardType = .emailAddress; $0.smartQuotesType = .yes } == "\u{2018}"
     )
   }
+}
+
+/// A Local snapshot's model loads seconds after the keyboard appears (and can be released while
+/// it shows): the keyboard attaches the microphone page then and redraws the pill.
+@MainActor
+private func checkDirectLocalModelReadiness(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let direct = FakeDirectDictation()
+  direct.canRecordHere = false
+  keyboard.touchTestUseDirect(direct)
+  keyboard.touchTestRefreshPill()
+  checks.check("local ready: loading reads Activate", keyboard.touchTestPillTitle == "Activate")
+
+  let attachesBefore = direct.attaches
+  direct.canRecordHere = true
+  direct.onLocalModelReadyChange?()
+  checks.check("local ready: the microphone page is attached once the model is ready", direct.attaches == attachesBefore + 1)
+  checks.check("local ready: the pill reads Tap to speak", keyboard.touchTestPillTitle == "Tap to speak")
+  checks.check("local ready: the pill starts a direct take", keyboard.touchTestPillActions == ["handleDirectRecordTapped"])
+
+  direct.canRecordHere = false
+  direct.onLocalModelReadyChange?()
+  checks.check("local ready: a released model puts the pill back to Activate", keyboard.touchTestPillTitle == "Activate")
+
+  // A take in progress owns the pill: readiness changing mid-take doesn't redraw it.
+  direct.canRecordHere = true
+  direct.push(.transcribing)
+  direct.onLocalModelReadyChange?()
+  checks.check("local ready: a take in progress keeps its pill", keyboard.touchTestPillTitle == "Transcribing")
+  direct.push(.idle)
+
+  // Belt and braces: a tap attaches the page before starting, whatever happened before.
+  keyboard.touchTestRefreshPill()
+  let attachesBeforeTap = direct.attaches
+  keyboard.touchTestTapDirectPill()
+  checks.check("local ready: a tap attaches before it starts", direct.attachesAtStart == attachesBeforeTap + 1)
 }
 
 /// The pill and the recording canvas when the keyboard records and transcribes itself.

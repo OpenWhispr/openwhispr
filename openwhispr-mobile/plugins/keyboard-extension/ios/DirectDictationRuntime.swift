@@ -13,6 +13,10 @@ protocol DirectDictationControlling: AnyObject {
   var onText: ((String) -> Void)? { get set }
   /// One line per on-device model load or transcription (timings and MB, never text).
   var onLocalModelLog: ((String) -> Void)? { get set }
+  /// The on-device model became ready or stopped being ready (loaded, released, swapped), so
+  /// whether the keyboard can dictate this way may have changed. Called on the main thread,
+  /// never from inside an eligibility read.
+  var onLocalModelReadyChange: (() -> Void)? { get set }
   func attach(to view: UIView)
   /// Starts loading the on-device model a Local snapshot names, so the next tap can use it.
   func warmUp()
@@ -140,6 +144,21 @@ extension DirectDictationRuntime: DirectDictationControlling {
     set {
       #if canImport(FluidAudio)
       parakeet.log = newValue
+      #endif
+    }
+  }
+
+  var onLocalModelReadyChange: (() -> Void)? {
+    get {
+      #if canImport(FluidAudio)
+      return parakeet.onReadyChange
+      #else
+      return nil
+      #endif
+    }
+    set {
+      #if canImport(FluidAudio)
+      parakeet.onReadyChange = newValue
       #endif
     }
   }

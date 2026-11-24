@@ -5508,6 +5508,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     direct.readDocumentID = { [weak self] in self?.currentDocumentID }
     direct.attach(to: view)
     direct.onLocalModelLog = { [weak self] line in self?.logRecordMarker("direct.local", extra: line) }
+    direct.onLocalModelReadyChange = { [weak self] in self?.directLocalModelReadyChanged() }
     direct.onStateChange = { [weak self] state in self?.renderDirectState(state) }
     direct.onLevel = { [weak self] level in
       guard let self, self.directDictation?.state == .recording else { return }
@@ -5526,6 +5527,19 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       self.insertSmartText(self.formatTranscription(text))
     }
     if isDirectTakeActive { renderDirectState(direct.state) }
+  }
+
+  /// A Local snapshot's model loads seconds after the keyboard appears, when the web view
+  /// wasn't made (it is only made for an eligible keyboard), and it can be released or swapped
+  /// while the keyboard shows. Attach now, and redraw a resting pill so it says what a tap does.
+  private func directLocalModelReadyChanged() {
+    guard Self.directOwner === self, hasFullAccess, let direct = directDictation else { return }
+    direct.attach(to: view)
+    // A take, a handoff or the review card owns the pill; a timed state redraws it when it ends.
+    guard !isDirectTakeActive, !isRemoteRecordingActive, !isDarwinStartPending, !isAgentReviewShown,
+      issueResetTimer == nil, waitForTranscriptTimer == nil, waitForAgentResultTimer == nil
+    else { return }
+    refreshRecordButton()
   }
 
   private func renderDirectState(_ state: DirectDictationState) {
@@ -5571,6 +5585,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       refreshRecordButton()
       return
     }
+    // Idempotent; covers a web view never made because the model wasn't ready at appearance.
+    // Capture waits for the page to load.
+    direct.attach(to: view)
     let before = direct.state
     direct.start()
     // A start that changed nothing (the snapshot changed since the pill was drawn, or it failed

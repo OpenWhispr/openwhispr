@@ -30,9 +30,18 @@ final class KeyboardParakeetTranscriber: @preconcurrency DirectLocalTranscriber 
   /// on the very next eligibility read: each attempt costs seconds and tens of MB.
   private static let retryAfterFailure: TimeInterval = 60
 
-  private(set) var readyModel: DirectLocalModel?
+  private(set) var readyModel: DirectLocalModel? {
+    didSet {
+      guard readyModel != oldValue else { return }
+      // Deferred: a release happens inside prepare(), which an eligibility read (a pill
+      // refresh) calls, and the listener refreshes the pill.
+      DispatchQueue.main.async { [weak self] in self?.onReadyChange?() }
+    }
+  }
   /// One line per load and per transcription: timings and MB only.
   var log: ((String) -> Void)?
+  /// `readyModel` changed: the keyboard attaches its microphone page and redraws the pill.
+  var onReadyChange: (() -> Void)?
 
   private let speechModels: URL?
   private var manager: AsrManager?
