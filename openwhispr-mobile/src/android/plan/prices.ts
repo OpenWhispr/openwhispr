@@ -15,7 +15,8 @@ export interface PlayPrices {
 }
 
 type PriceState =
-  | { status: 'idle' | 'loading' }
+  // `retrying`: a Try again after a failure, which keeps the unavailable card up meanwhile.
+  | { status: 'idle' | 'loading'; retrying?: boolean }
   | { status: 'loaded'; prices: PlayPrices }
   | { status: 'unavailable' };
 
@@ -40,7 +41,10 @@ export function pricesFromProducts(products: PurchasesStoreProduct[]): PlayPrice
 async function loadPrices(): Promise<void> {
   const state = usePriceStore.getState();
   if (state.status === 'loading' || state.status === 'loaded') return;
-  usePriceStore.setState({ status: 'loading' });
+  usePriceStore.setState({
+    status: 'loading',
+    retrying: state.status === 'idle' && state.retrying,
+  });
   try {
     // Loaded here, not at import: screens that only show a meter never touch the store.
     const { default: Purchases, PRODUCT_CATEGORY } =
@@ -48,10 +52,10 @@ async function loadPrices(): Promise<void> {
     if (!(await Purchases.isConfigured())) throw new Error('RevenueCat is not configured');
     const products = await Purchases.getProducts([PRO_PRODUCT_ID], PRODUCT_CATEGORY.SUBSCRIPTION);
     if (!products.length) throw new Error('No Pro products from Google Play');
-    usePriceStore.setState({ status: 'loaded', prices: pricesFromProducts(products) });
+    usePriceStore.setState({ status: 'loaded', prices: pricesFromProducts(products) }, true);
   } catch {
     // Play Billing can't connect (no Play services, region, offline): Plan & billing's K state.
-    usePriceStore.setState({ status: 'unavailable' });
+    usePriceStore.setState({ status: 'unavailable' }, true);
   }
 }
 
@@ -62,12 +66,13 @@ export function usePlayPrices(enabled: boolean) {
     if (enabled) void loadPrices();
   }, [enabled]);
   const retry = useCallback(() => {
-    usePriceStore.setState({ status: 'idle' });
+    usePriceStore.setState({ status: 'idle', retrying: true });
     void loadPrices();
   }, []);
   return {
     prices: state.status === 'loaded' ? state.prices : null,
-    unavailable: state.status === 'unavailable',
+    // A retry keeps showing the failure until Play answers, so the page doesn't flash the plans.
+    unavailable: state.status === 'unavailable' || ('retrying' in state && !!state.retrying),
     loading: state.status === 'loading',
     retry,
   };

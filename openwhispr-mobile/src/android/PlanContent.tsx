@@ -246,7 +246,12 @@ export function PlanContent({ openPaywall }: { openPaywall?: 'limit' } = {}) {
                 />
                 <Text style={[type.footnote, { flex: 1 }]}>{t('storeUnavailable')}</Text>
               </View>
-              <PillAction icon="RotateCw" label={t('tryAgain')} onPress={prices.retry} />
+              <PillAction
+                icon="RotateCw"
+                label={t('tryAgain')}
+                busy={prices.loading}
+                onPress={prices.retry}
+              />
             </>
           ) : (
             !out && (
