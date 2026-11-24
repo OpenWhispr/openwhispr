@@ -48,6 +48,8 @@ export interface UserConfig {
   // the first time a hardware keyboard is attached.
   hardwareKeyboardNudgeDismissedAt?: string;
   keyboardTone?: KeyboardTone;
+  // Language code the keyboard translates dictation into; null or unset is Off.
+  keyboardTranslationTarget?: string | null;
   // Records and transcribes in the keyboard for OpenWhispr Cloud, without opening the app.
   // Off by default for the first TestFlight build.
   keyboardDirectDictation?: boolean;
@@ -103,6 +105,9 @@ export interface Transcript extends CleanupInferenceSnapshot {
   errorMessage?: string;
   requestContext?: 'keyboard' | 'recording' | 'file';
   keyboardTone?: KeyboardTone;
+  // The language the text was translated into. On a failed keyboard row it is the target the
+  // dictation was recorded with, so a retry from History translates it the same way.
+  translatedTo?: string;
   jobId?: string;
   retryCount?: number;
 }
@@ -138,6 +143,8 @@ export interface ReasoningRequest {
   // as dictated words.
   agentName?: string;
   routing?: ReasoningRoutingOptions;
+  // Tells the Cloud route what the systemPrompt is for. Omitted for every other caller.
+  purpose?: 'translation';
 }
 
 export interface ReasoningResponse {
@@ -221,6 +228,9 @@ export interface TranscriptionRequest extends CleanupInferenceSnapshot {
   // Per-job snapshot of the keyboard tone taken at record-start. Threaded to
   // cleanup; never re-read live. Only set for keyboard dictation.
   keyboardTone?: KeyboardTone;
+  // Per-job snapshot of the keyboard translation target taken at record-start; absent is Off.
+  // Only set for keyboard dictation.
+  translationTarget?: string;
   timeoutSeconds?: number;
 }
 
@@ -243,6 +253,8 @@ export interface TranscriptionResponse extends CleanupInferenceSnapshot {
   serverTiming?: Record<string, string | number | boolean | null>;
   /** Present only when word timestamps were requested (meeting path). t0/t1 in centiseconds. */
   segments?: WhisperSegment[];
+  /** Set only when `text` is a translation into this language. */
+  translatedTo?: string;
 }
 
 /** Raw whisper.rn segment. t0/t1 are CENTISECONDS (hundredths of a second). */

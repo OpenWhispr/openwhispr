@@ -12,6 +12,7 @@ import { useConfigStore } from '@/store/useConfigStore';
 import { useConfigToggle } from '@/hooks/useConfigToggle';
 import { DEFAULT_LANGUAGE, getLanguage } from '@/lib/languages';
 import { toneLabel, DEFAULT_KEYBOARD_TONE } from '@/lib/keyboardTone';
+import { translationLabel } from '@/lib/keyboardTranslation';
 import { getDictationAgentName } from '@/lib/dictationAgent';
 import {
   KEYBOARD_TYPING_LANGUAGES,
@@ -101,6 +102,7 @@ export default function PreferencesScreen() {
   const autoLearn = config?.autoLearnCorrections ?? true;
   const language = getLanguage(config?.preferredLanguage ?? DEFAULT_LANGUAGE);
   const keyboardTone = config?.keyboardTone ?? DEFAULT_KEYBOARD_TONE;
+  const translationTarget = config?.keyboardTranslationTarget ?? null;
   const agentName = config ? getDictationAgentName(config) : 'OpenWhispr';
   const handleToggleAutoLearn = useConfigToggle('autoLearnCorrections');
   const supportsDirectDictation =
@@ -179,6 +181,15 @@ export default function PreferencesScreen() {
           description="Applies to keyboard dictation only"
           subtitle={toneLabel(keyboardTone)}
           onPress={() => router.push('/(account)/keyboard-tone')}
+        />
+        <SettingsRow
+          iconStyle="line"
+          icon="character.bubble"
+          mdIcon="Languages"
+          title="Translate dictation"
+          description="Type keyboard dictation in another language"
+          subtitle={translationTarget ? translationLabel(translationTarget) : 'Off'}
+          onPress={() => router.push('/(account)/keyboard-translation')}
         />
         <SettingsRow
           iconStyle="line"

@@ -234,6 +234,13 @@ private extension KeyboardViewController {
   func touchTestTapConfirm() { handleStopRecordingTapped() }
   func touchTestTapCancel() { handleCancelRecordingTapped() }
   func touchTestDirectWillDisappear() { directKeyboardWillDisappear() }
+  var touchTestOptionsButton: KeyButton { optionsButton }
+  func touchTestRefreshOptions() { refreshOptionsButton() }
+  /// What the Translate menu's Off and language actions run.
+  func touchTestSelectTranslation(_ code: String?) {
+    KeyboardHandoffProvider.shared.setTranslationTarget(code)
+    translationTargetDidChange()
+  }
 }
 
 private struct TouchChecks {
@@ -306,6 +313,8 @@ private enum KeyboardTouchTests {
     checkLayoutChanges(&checks)
     checkTyping(&checks)
     checkDirectDictation(&checks)
+    checkOptionsButton(&checks)
+    checkTranslationSelectionRefreshesPill(&checks)
     checkTypingHelp(&checks)
 
     print("Keyboard touch routing: \(checks.count - checks.failures.count)/\(checks.count) passed")
@@ -796,6 +805,101 @@ private enum KeyboardTouchTests {
       quote { $0.keyboardType = .emailAddress; $0.smartQuotesType = .yes } == "\u{2018}"
     )
   }
+}
+
+/// The options button shows the translation target as a badge in place of its icon. The
+/// values are written to the App Group suite itself, as the app would, and put back after.
+@MainActor
+private func checkOptionsButton(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+  guard let defaults = KeyboardHandoffProvider.shared.sharedDefaults() else {
+    checks.check("options button: the App Group suite opens", false)
+    return
+  }
+  let keys = ["keyboard_translation_target", "keyboard_translation_languages", "keyboard_translation_applicable"]
+  let saved = keys.map { defaults.object(forKey: $0) }
+  defer {
+    for (key, value) in zip(keys, saved) {
+      if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) }
+    }
+  }
+  defaults.set(#"[{"code":"es","label":"Spanish"},{"code":"fr","label":"French"}]"#, forKey: keys[1])
+  defaults.set("1", forKey: keys[2])
+  defaults.set("es", forKey: keys[0])
+
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let button = keyboard.touchTestOptionsButton
+  checks.check(
+    "options button with a target: titled ES (got \(button.title(for: .normal) ?? "nil"))",
+    button.title(for: .normal) == "ES"
+  )
+  checks.check("options button with a target: no icon", button.image(for: .normal) == nil)
+  checks.check("options button with a target: says so", button.accessibilityValue == "Translating to Spanish")
+
+  defaults.removeObject(forKey: keys[0])
+  keyboard.touchTestRefreshOptions()
+  checks.check("options button with translation off: an icon", button.image(for: .normal) != nil)
+  checks.check(
+    "options button with translation off: no title (got \(button.title(for: .normal) ?? "nil"))",
+    (button.title(for: .normal) ?? "").isEmpty
+  )
+  checks.check("options button with translation off: no value", button.accessibilityValue == nil)
+}
+
+/// Picking a language or Off can change whether the direct path takes the dictation, so the
+/// pill's route follows at once, but never over a state that owns the pill.
+@MainActor
+private func checkTranslationSelectionRefreshesPill(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+  guard let defaults = KeyboardHandoffProvider.shared.sharedDefaults() else {
+    checks.check("translate pick: the App Group suite opens", false)
+    return
+  }
+  let keys = [
+    "keyboard_translation_target", "keyboard_translation_languages",
+    "keyboard_translation_applicable", "keyboard_translation_recents",
+  ]
+  let saved = keys.map { defaults.object(forKey: $0) }
+  defer {
+    for (key, value) in zip(keys, saved) {
+      if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) }
+    }
+  }
+  defaults.set(#"[{"code":"es","label":"Spanish"}]"#, forKey: keys[1])
+  defaults.set("1", forKey: keys[2])
+  defaults.removeObject(forKey: keys[0])
+
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let direct = FakeDirectDictation()
+  keyboard.touchTestUseDirect(direct)
+  // Stood down (a snapshot that can't run on its own), then a pick it can run.
+  direct.canRecordHere = false
+  keyboard.touchTestRefreshPill()
+  checks.check("translate pick: stood down reads Activate", keyboard.touchTestPillTitle == "Activate")
+  direct.canRecordHere = true
+  keyboard.touchTestSelectTranslation("es")
+  checks.check(
+    "translate pick: a language the path can run reads Tap to speak (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    keyboard.touchTestPillTitle == "Tap to speak"
+  )
+  checks.check("translate pick: and the pill starts a direct take", keyboard.touchTestPillActions == ["handleDirectRecordTapped"])
+
+  direct.canRecordHere = false
+  keyboard.touchTestSelectTranslation(nil)
+  checks.check("translate pick: Off that stands it down reads Activate", keyboard.touchTestPillTitle == "Activate")
+
+  // A timed issue state owns the pill until its timer puts it back.
+  direct.canRecordHere = true
+  direct.push(.failed(.noSpeech))
+  direct.state = .idle
+  keyboard.touchTestSelectTranslation("es")
+  checks.check(
+    "translate pick: an issue state stays (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    keyboard.touchTestPillTitle == "No speech"
+  )
+  keyboard.touchTestRefreshPill()
 }
 
 /// The pill and the recording canvas when the keyboard records and transcribes itself.

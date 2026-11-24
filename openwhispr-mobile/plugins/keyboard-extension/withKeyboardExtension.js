@@ -22,6 +22,7 @@ const RESOURCE_FILES = ['lexicon-en.bin', 'lexicon-de.bin', 'emoji.bin'];
 const EXTENSION_FILES = [
   { name: 'KeyboardViewController.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
   { name: 'KeyboardCapitalization.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'KeyboardOptionsMenu.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
   { name: 'DirectAudioRoute.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
   { name: 'WebAudioCapture.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
   { name: 'DirectDictationRuntime.swift', fileType: 'sourcecode.swift', phase: 'Sources' },

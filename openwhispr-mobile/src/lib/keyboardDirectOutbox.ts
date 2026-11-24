@@ -32,6 +32,10 @@ interface DirectDictationRecord {
   text?: string | null;
   originalText?: string | null;
   cleanupApplied?: boolean | null;
+  /** The keyboard's target when the dictation started. */
+  translationTarget?: string | null;
+  /** Set only when `text` is the translation. */
+  translatedTo?: string | null;
 }
 
 export interface OutboxFiles {
@@ -138,6 +142,7 @@ export async function drainKeyboardDirectOutbox(
           provider: 'cloud',
           requestContext: 'keyboard',
           keyboardTone: (record.tone ?? 'default') as KeyboardTone,
+          translatedTo: record.translatedTo ?? undefined,
           duration: durationSeconds(record),
           createdAt: occurredAt,
         },
@@ -175,6 +180,8 @@ export async function drainKeyboardDirectOutbox(
         provider: 'cloud',
         requestContext: 'keyboard',
         keyboardTone: (record.tone ?? 'default') as KeyboardTone,
+        // Nothing was translated yet: the target it was recorded with, so a retry translates it.
+        translatedTo: record.translationTarget ?? undefined,
         errorMessage: FAILED_MESSAGE,
         createdAt: record.startedAtMs,
       },

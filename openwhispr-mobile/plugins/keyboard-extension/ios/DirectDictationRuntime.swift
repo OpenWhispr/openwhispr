@@ -48,6 +48,7 @@ final class DirectDictationRuntime {
       readConfigJSON: { defaults?.string(forKey: "keyboard_direct_config") },
       readCookie: { userId in KeyboardCredentialStore.readCookie(accessGroup: appGroupId, userId: userId) },
       readTone: { defaults?.string(forKey: "keyboard_dictation_tone") ?? "default" },
+      readTranslation: { directDictationTranslation() },
       encode: { pcm, m4a, gain in try DirectAudioEncoder.encodeAAC(pcmURL: pcm, m4aURL: m4a, gain: gain) },
       // The job id format the keyboard already uses: <ms>-<UUID>.
       makeJobId: { "\(Int64(Date().timeIntervalSince1970 * 1000))-\(UUID().uuidString)" },
@@ -71,7 +72,7 @@ final class DirectDictationRuntime {
   /// Moves the hidden web view into this controller's view. The web view is only made for a
   /// keyboard that can dictate this way.
   func attach(to view: UIView) {
-    guard dictation.isEligible else { return }
+    guard dictation.isEligibleIgnoringTranslation else { return }
     capture.attach(to: view)
   }
 

@@ -42,6 +42,8 @@ export type FailedTranscriptInput = {
   cleanupUnavailable?: string;
   requestContext?: Transcript['requestContext'];
   keyboardTone?: KeyboardTone;
+  // The translation target the dictation was recorded with, so a retry translates it too.
+  translatedTo?: string;
   jobId?: string;
   errorMessage: string;
   createdAt?: number;
@@ -311,6 +313,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           errorMessage: transcript.errorMessage,
           requestContext: transcript.requestContext,
           keyboardTone: transcript.keyboardTone,
+          translatedTo: transcript.translatedTo,
           jobId: transcript.jobId,
           retryCount: 0,
         };
@@ -410,6 +413,8 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           // History holds dictations and uploads only; meetings are notes.
           purpose: scope,
           keyboardTone: current.requestContext === 'keyboard' ? current.keyboardTone : undefined,
+          translationTarget:
+            current.requestContext === 'keyboard' ? current.translatedTo : undefined,
         });
 
         const updated: Transcript = {
@@ -422,6 +427,8 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           cleanupRoute: processed.transcription.cleanupRoute,
           cleanupUnavailable: processed.transcription.cleanupUnavailable,
           cleanupWarning: processed.transcription.cleanupWarning,
+          // Only what this attempt actually translated, never the target it was asked for.
+          translatedTo: processed.translatedTo,
           // Retry succeeded: the row is completed and no longer retryable.
           audioUrl: undefined,
           status: 'completed',

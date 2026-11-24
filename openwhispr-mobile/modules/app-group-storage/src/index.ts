@@ -313,6 +313,14 @@ export const APP_GROUP_KEYS = {
   KEYBOARD_RECORDING_TONE: 'keyboard_recording_tone',
   KEYBOARD_RECORDING_TONE_JOB_ID: 'keyboard_recording_tone_job_id',
   KEYBOARD_TONE_APPLICABLE: 'keyboard_tone_applicable',
+  // Dictation translation: the chosen target (absent = Off), the languages the current route can
+  // translate into (JSON), whether translation applies at all, and the per-job frozen target.
+  KEYBOARD_TRANSLATION_TARGET: 'keyboard_translation_target',
+  KEYBOARD_TRANSLATION_LANGUAGES: 'keyboard_translation_languages',
+  KEYBOARD_TRANSLATION_APPLICABLE: 'keyboard_translation_applicable',
+  KEYBOARD_TRANSLATION_RECENTS: 'keyboard_translation_recents',
+  KEYBOARD_RECORDING_TRANSLATION: 'keyboard_recording_translation',
+  KEYBOARD_RECORDING_TRANSLATION_JOB_ID: 'keyboard_recording_translation_job_id',
   // The direct-dictation snapshot the keyboard reads (src/lib/keyboardDirectSync.ts).
   KEYBOARD_DIRECT_CONFIG: 'keyboard_direct_config',
   BACKGROUND_SESSION_READY: 'background_session_ready',

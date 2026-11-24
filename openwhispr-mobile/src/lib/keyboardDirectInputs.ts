@@ -5,6 +5,7 @@ import { getClientVersionHeader } from '@/lib/apiClient';
 import { buildDictationHintTiers, buildLlmDictionary } from '@/lib/dictationHints';
 import { snapshotTranscriptionJob } from '@/lib/inferenceRouting';
 import { isToneApplicable } from '@/lib/keyboardTone';
+import { isTranslationApplicable } from '@/lib/keyboardTranslation';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
 import { cloudDictationPrompt } from '@/lib/transcriptionPromptCap';
 import type { KeyboardDirectInputs } from '@/lib/keyboardDirectSync';
@@ -20,7 +21,7 @@ import { getUsageOwnerKey, useUsageStore } from '@/store/useUsageStore';
 // Keyboard dictations are dictation contexts: snippet triggers ride with personal words.
 const INCLUDE_SNIPPET_TRIGGERS = true;
 
-function dictationRoute(): KeyboardDirectInputs['route'] {
+export function dictationRoute(): KeyboardDirectInputs['route'] {
   try {
     const job = snapshotTranscriptionJob('dictation', ['cleanup']);
     return {
@@ -48,11 +49,13 @@ export function gatherKeyboardDirectInputs(): KeyboardDirectInputs {
   const cleanupEnabled = config?.cleanupEnabled ?? true;
   const snippetState = useSnippetsStore.getState();
   const llm = buildLlmDictionary(INCLUDE_SNIPPET_TRIGGERS);
+  const route = dictationRoute();
+  const guest = requiresRealAccount(user);
   return {
     settingEnabled: config?.keyboardDirectDictation === true,
-    userId: requiresRealAccount(user) ? null : (user?.id ?? null),
+    userId: guest ? null : (user?.id ?? null),
     hasSessionCookie: Boolean(sessionCookie?.trim()),
-    route: dictationRoute(),
+    route,
     cleanupEnabled,
     customCleanupPrompt: getActiveCustomCleanupPrompt() !== undefined,
     // The app reads no workspace policy before it uploads a keyboard dictation; the server
@@ -71,6 +74,11 @@ export function gatherKeyboardDirectInputs(): KeyboardDirectInputs {
     snippets: snippetState.isLoaded
       ? snippetState.entries.map(({ trigger, replacement }) => ({ trigger, replacement }))
       : [],
+    translationApplies: isTranslationApplicable({
+      mode: route?.cleanupMode ?? null,
+      cleanupUnavailable: route?.cleanupUnavailable ?? false,
+      guest,
+    }),
   };
 }
 

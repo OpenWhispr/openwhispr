@@ -221,6 +221,64 @@ describe('useTranscriptStore retry support', () => {
     });
   });
 
+  it('keeps the translation target on a failed keyboard row', async () => {
+    await useTranscriptStore.getState().addFailedTranscript({
+      id: 't1',
+      audioUrl: 'file://tmp/source.m4a',
+      provider: 'cloud',
+      requestContext: 'keyboard',
+      translatedTo: 'es',
+      errorMessage: 'network down',
+    });
+
+    expect(useTranscriptStore.getState().transcripts[0].translatedTo).toBe('es');
+  });
+
+  it('retries a keyboard row into its translation target and records what was translated', async () => {
+    useTranscriptStore.setState({ transcripts: [failedTranscript({ translatedTo: 'es' })] });
+    mockTranscribeAndCleanup.mockResolvedValueOnce({
+      text: 'Hola.',
+      originalText: 'raw transcript',
+      transcription: { text: 'Hola.', duration: 3, provider: 'cloud', translatedTo: 'es' },
+      cleanupApplied: true,
+      fusedCleanup: false,
+      translatedTo: 'es',
+    });
+
+    const updated = await useTranscriptStore.getState().retryTranscript('t1');
+
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ translationTarget: 'es' }),
+    );
+    expect(updated).toEqual(
+      expect.objectContaining({
+        text: 'Hola.',
+        originalText: 'raw transcript',
+        translatedTo: 'es',
+      }),
+    );
+  });
+
+  it('drops translatedTo when the retry types the text untranslated', async () => {
+    useTranscriptStore.setState({ transcripts: [failedTranscript({ translatedTo: 'es' })] });
+
+    const updated = await useTranscriptStore.getState().retryTranscript('t1');
+
+    expect(updated.translatedTo).toBeUndefined();
+  });
+
+  it('sends no translation target when retrying an in-app recording', async () => {
+    useTranscriptStore.setState({
+      transcripts: [failedTranscript({ requestContext: 'recording', translatedTo: 'es' })],
+    });
+
+    await useTranscriptStore.getState().retryTranscript('t1');
+
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ translationTarget: undefined }),
+    );
+  });
+
   it('releases the retained audio when a retry succeeds', async () => {
     useTranscriptStore.setState({ transcripts: [failedTranscript()] });
 

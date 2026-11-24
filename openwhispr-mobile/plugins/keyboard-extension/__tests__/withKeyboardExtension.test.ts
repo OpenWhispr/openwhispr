@@ -357,6 +357,7 @@ const KEYBOARD_SOURCES = [
   'KeyboardCapitalization.swift',
   'KeyboardCredentialStore.swift',
   'KeyboardInteractions.swift',
+  'KeyboardOptionsMenu.swift',
   'KeyboardViewController.swift',
   'SnippetExpander.swift',
   'SuggestionBarView.swift',

@@ -133,6 +133,16 @@ jest.mock('@/lib/keyboardToneSync', () => ({
   snapshotKeyboardTone: jest.fn(),
   readKeyboardToneSnapshot: jest.fn(() => null),
 }));
+// The translation sync reads the dictionary store through the direct-dictation inputs, which
+// opens the notes database; translateTranscript pulls in the router through accountAccess.
+jest.mock('@/lib/keyboardTranslationSync', () => ({
+  startKeyboardTranslationSync: () => () => undefined,
+  snapshotKeyboardTranslation: jest.fn(() => null),
+  readKeyboardTranslationSnapshot: jest.fn(() => null),
+}));
+jest.mock('@/lib/translateTranscript', () => ({
+  translateTranscript: jest.fn(async (text: string) => ({ text, translated: false })),
+}));
 // The keyboard syncs the layout starts are not under test here. The direct-dictation one
 // reads the dictionary store, which opens the notes database; the others write through
 // App Group calls this file's storage mock doesn't have.

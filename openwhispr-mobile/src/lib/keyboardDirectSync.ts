@@ -1,4 +1,5 @@
 import { AppGroupStorage, APP_GROUP_KEYS } from '../../modules/app-group-storage/src';
+import { DEFAULT_TRANSLATE_PROMPT } from '@/config/prompts/registry';
 import {
   gatherKeyboardDirectInputs,
   subscribeKeyboardDirectInputs,
@@ -28,6 +29,8 @@ export interface KeyboardDirectConfig {
   cleanup: { enabled: boolean; language: string | null; toneApplies: boolean };
   dictionary: { personal: string[]; shared: string[]; prompt: string };
   snippets: { trigger: string; replacement: string }[];
+  /** `prompt` carries `{{targetLanguage}}`; the keyboard fills in the label of its target. */
+  translation: { enabled: boolean; prompt: string };
 }
 
 export interface KeyboardDirectInputs {
@@ -51,6 +54,8 @@ export interface KeyboardDirectInputs {
   toneApplies: boolean;
   dictionary: { personal: string[]; shared: string[]; prompt: string };
   snippets: { trigger: string; replacement: string }[];
+  /** `isTranslationApplicable` for the dictation route, as the keyboard's Translate menu sees it. */
+  translationApplies: boolean;
 }
 
 // The keyboard sends one fused /api/transcribe request, so it may only take dictations the app
@@ -76,6 +81,10 @@ function disabledReason(inputs: KeyboardDirectInputs): KeyboardDirectDisabledRea
 export function buildKeyboardDirectConfig(inputs: KeyboardDirectInputs): KeyboardDirectConfig {
   const reason = disabledReason(inputs);
   const enabled = reason === null;
+  // The keyboard translates through /api/reason only, so a route whose AI runs on the device or
+  // with the user's own provider (eligible here with cleanup off) never sends its text there.
+  const translates =
+    enabled && inputs.translationApplies && inputs.route?.cleanupMode === 'openwhispr';
   return {
     version: 1,
     enabled,
@@ -92,6 +101,7 @@ export function buildKeyboardDirectConfig(inputs: KeyboardDirectInputs): Keyboar
     },
     dictionary: enabled ? inputs.dictionary : { personal: [], shared: [], prompt: '' },
     snippets: enabled ? inputs.snippets : [],
+    translation: { enabled: translates, prompt: translates ? DEFAULT_TRANSLATE_PROMPT : '' },
   };
 }
 

@@ -58,6 +58,8 @@ struct DirectDependencies {
   /// The shared session's cookie, only when it belongs to this account.
   var readCookie: (_ userId: String) -> String?
   var readTone: () -> String
+  /// The keyboard's effective translation target and its English label; nil when Off.
+  var readTranslation: () -> (code: String, label: String)?
   /// `DirectAudioEncoder.encodeAAC` in production; a file copy in tests.
   var encode: (_ pcmURL: URL, _ m4aURL: URL, _ gain: Float) throws -> Void
   var makeJobId: () -> String
@@ -117,21 +119,34 @@ final class DirectDictation {
     deps.capture.onEnded = { [weak self] reason in self?.captureEnded(reason) }
   }
 
-  /// The snapshot decodes, a cookie exists, and the path hasn't been turned off since the
-  /// snapshot last changed.
-  var isEligible: Bool { eligibleContext() != nil }
+  /// A new take may start: the snapshot decodes, a cookie exists, the path hasn't been turned
+  /// off since the snapshot last changed, and a language picked in the keyboard is one the
+  /// snapshot can translate into.
+  var isEligible: Bool { newTakeContext() != nil }
+
+  /// As `isEligible` without the translation check, for preparing capture: picking Off later in
+  /// the same keyboard session must find the microphone ready.
+  var isEligibleIgnoringTranslation: Bool { eligibleContext() != nil }
 
   func start() {
     switch state {
     case .idle, .failed: break
     default: return
     }
-    guard job == nil, let documentID = readDocumentID?(), let (config, cookie) = eligibleContext() else { return }
+    guard job == nil, let documentID = readDocumentID?(), let (config, cookie) = newTakeContext() else { return }
     let jobId = deps.makeJobId()
-    let context = DirectRequestContext(config: config, jobId: jobId, tone: deps.readTone(), cookie: cookie)
+    // Read once: a target picked mid-take applies to the next dictation.
+    let translation = deps.readTranslation()
+    let context = DirectRequestContext(
+      config: config, jobId: jobId, tone: deps.readTone(), cookie: cookie,
+      translationTarget: translation?.code, translationLabel: translation?.label
+    )
     do {
       // The record first, so audio on disk always has an owner.
-      try deps.store.begin(jobId: jobId, userId: config.userId, documentID: documentID, tone: context.tone)
+      try deps.store.begin(
+        jobId: jobId, userId: config.userId, documentID: documentID, tone: context.tone,
+        translationTarget: context.translationTarget, translationLabel: context.translationLabel
+      )
       let writer = try PcmFileWriter(url: deps.store.pcmURL(jobId: jobId))
       nextToken += 1
       job = Job(token: nextToken, jobId: jobId, context: context, documentID: documentID, writer: writer)
@@ -196,7 +211,11 @@ final class DirectDictation {
     job = Job(
       token: nextToken,
       jobId: record.jobId,
-      context: DirectRequestContext(config: config, jobId: record.jobId, tone: record.tone, cookie: cookie),
+      // The target the take started with, not today's.
+      context: DirectRequestContext(
+        config: config, jobId: record.jobId, tone: record.tone, cookie: cookie,
+        translationTarget: record.translationTarget, translationLabel: record.translationLabel
+      ),
       documentID: documentID,
       writer: nil,
       durationMs: record.durationMs
@@ -349,7 +368,7 @@ final class DirectDictation {
       if current.context.config.cleanup.enabled && applied != true {
         cleanUp(raw: text, original: original ?? text, token: token)
       } else {
-        finish(text: text, original: original ?? text, cleanupApplied: applied)
+        translateThenFinish(text: text, original: original ?? text, cleanupApplied: applied, token: token)
       }
     case .noSpeech:
       deps.store.cancel(jobId: current.jobId)
@@ -373,27 +392,49 @@ final class DirectDictation {
     guard let current = job,
       let request = try? DirectDictationRequests.makeReasonRequest(current.context, rawText: raw)
     else {
-      finish(text: raw, original: original, cleanupApplied: false)
+      translateThenFinish(text: raw, original: original, cleanupApplied: false, token: token)
       return
     }
     inFlight = deps.transport.send(request) { [weak self] status, body in
       guard let self, self.job?.token == token else { return }
       self.inFlight = nil
       let cleaned = DirectDictationRequests.parseReason(status: status, body: body)
-      self.finish(text: cleaned ?? raw, original: original, cleanupApplied: cleaned != nil)
+      self.translateThenFinish(text: cleaned ?? raw, original: original, cleanupApplied: cleaned != nil, token: token)
     }
   }
 
-  private func finish(text: String, original: String, cleanupApplied: Bool?) {
-    guard let current = job else { return }
+  /// Snippets expand first, since their triggers are in the spoken language (as the app's
+  /// pipeline). A failed, empty or unchanged translation types the expanded text untranslated.
+  private func translateThenFinish(text: String, original: String, cleanupApplied: Bool?, token: Int) {
+    guard let current = job, current.token == token else { return }
     let expanded = SnippetExpander.expand(text, snippets: current.context.config.snippets)
+    guard let request = try? DirectDictationRequests.makeTranslateRequest(current.context, text: expanded),
+      let target = current.context.translationTarget
+    else {
+      finish(text: expanded, original: original, cleanupApplied: cleanupApplied, translatedTo: nil)
+      return
+    }
+    inFlight = deps.transport.send(request) { [weak self] status, body in
+      guard let self, self.job?.token == token else { return }
+      self.inFlight = nil
+      if let translated = DirectDictationRequests.parseTranslation(status: status, body: body, input: expanded) {
+        self.finish(text: translated, original: original, cleanupApplied: cleanupApplied, translatedTo: target)
+      } else {
+        self.finish(text: expanded, original: original, cleanupApplied: cleanupApplied, translatedTo: nil)
+      }
+    }
+  }
+
+  /// `text` is final: snippet-expanded, and translated when `translatedTo` is set.
+  private func finish(text: String, original: String, cleanupApplied: Bool?, translatedTo: String?) {
+    guard let current = job else { return }
     try? deps.store.complete(
-      jobId: current.jobId, text: expanded, originalText: original, cleanupApplied: cleanupApplied,
-      durationMs: current.durationMs
+      jobId: current.jobId, text: text, originalText: original, cleanupApplied: cleanupApplied,
+      translatedTo: translatedTo, durationMs: current.durationMs
     )
     job = nil
     state = .idle
-    let result = ResultForInsertion(text: expanded, userId: current.context.config.userId, documentID: current.documentID)
+    let result = ResultForInsertion(text: text, userId: current.context.config.userId, documentID: current.documentID)
     if keyboardVisible {
       insertIfDestinationMatches(result)
     } else {
@@ -428,6 +469,15 @@ final class DirectDictation {
       let cookie = deps.readCookie(config.userId), !cookie.isEmpty
     else { return nil }
     return (config, cookie)
+  }
+
+  /// Stands down while a language is picked that this snapshot can't translate into (its AI
+  /// route isn't OpenWhispr Cloud), so the keyboard's other route records and the app translates.
+  /// Recovery and delivery use `eligibleContext()`: a take already started keeps its own target.
+  private func newTakeContext() -> (DirectDictationConfig, String)? {
+    guard let eligible = eligibleContext() else { return nil }
+    if deps.readTranslation() != nil && !eligible.0.translation.enabled { return nil }
+    return eligible
   }
 
   private func turnPathOff() {

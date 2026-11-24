@@ -113,6 +113,8 @@ final class Harness {
   /// The account the shared session belongs to.
   var cookieUser = "u1"
   var documentID: UUID? = UUID()
+  /// The keyboard's effective translation target, as `readTranslation` reports it.
+  var translation: (code: String, label: String)?
   var encodeError: Error?
   var encodeGains: [Float] = []
   var texts: [String] = []
@@ -136,6 +138,7 @@ final class Harness {
       readConfigJSON: { [unowned self] in self.configJSON },
       readCookie: { [unowned self] userId in userId == self.cookieUser ? self.cookie : nil },
       readTone: { "default" },
+      readTranslation: { [unowned self] in self.translation },
       encode: { [unowned self] pcm, m4a, gain in
         self.encodeGains.append(gain)
         if let error = self.encodeError { throw error }
@@ -231,6 +234,226 @@ extension DirectDictationTests {
     machineResumeRequiresOriginalDocument()
     machineRecoverQuietSpeech()
     machineCleanupMissingFlag()
+    machineTranslates()
+    machineTranslationFails()
+    machineCancelWhileTranslating()
+    machineTranslationTargetPinnedAtStart()
+    machineTranslationOffInKeyboard()
+    machineTranslationSameLanguage()
+    machineTranslatesAfterCleanupRetry()
+    machineResumeKeepsTranslationTarget()
+    machineTranslationWhileHidden()
+    machineStandsDownWhenSnapshotCannotTranslate()
+  }
+
+  static func machineStandsDownWhenSnapshotCannotTranslate() {
+    // A language picked in the keyboard that this snapshot can't translate into: the keyboard's
+    // other route records instead, so the app translates on the user's own route.
+    let blocked = Harness()
+    defer { blocked.cleanup() }
+    blocked.translation = (code: "es", label: "Spanish")
+    expect(blocked.dictation.isEligible, false, "target without snapshot translation: not eligible")
+    expect(blocked.dictation.isEligibleIgnoringTranslation, true,
+           "target without snapshot translation: capture is still prepared, for picking Off later")
+    blocked.dictation.start()
+    expect(blocked.capture.startCount, 0, "target without snapshot translation: nothing starts")
+    expect(blocked.state, .idle, "target without snapshot translation: idle")
+    expect(blocked.files(), [], "target without snapshot translation: no record")
+    expect(blocked.transport.uploads.count, 0, "target without snapshot translation: no upload")
+    blocked.translation = nil
+    expect(blocked.dictation.isEligible, true, "Off picked later: eligible again")
+
+    let sameLanguage = Harness()
+    defer { sameLanguage.cleanup() }
+    sameLanguage.translation = (code: "en-US", label: "English (US)")
+    expect(sameLanguage.dictation.isEligible, false, "no same-language exception")
+
+    let translating = translatedHarness()
+    defer { translating.cleanup() }
+    expect(translating.dictation.isEligible, true, "target with snapshot translation: eligible")
+    translating.dictation.start()
+    expect(translating.capture.startCount, 1, "target with snapshot translation: starts")
+
+    let off = Harness()
+    defer { off.cleanup() }
+    expect(off.dictation.isEligible, true, "translation Off: eligible as before")
+    off.dictation.start()
+    expect(off.capture.startCount, 1, "translation Off: starts")
+
+    // A take already on disk resumes with its stored target, whatever the keyboard shows now.
+    let resumed = Harness()
+    defer { resumed.cleanup() }
+    resumed.record(seconds: 2)
+    resumed.dictation.keyboardWillDisappear()
+    resumed.translation = (code: "es", label: "Spanish")
+    resumed.dictation.keyboardDidAppear()
+    expect(resumed.transport.uploads.count, 1, "recovery is not gated")
+    resumed.transport.uploads.first?.complete(200, sentText)
+    expect(resumed.texts, ["send it to a@b.co"], "recovery: delivered untranslated, as it started")
+  }
+
+  static func translatedHarness() -> Harness {
+    let h = Harness()
+    h.configJSON = translatedConfig
+    h.translation = (code: "es", label: "Spanish")
+    return h
+  }
+
+  static func sentBody(_ call: FakeCall?) -> [String: Any] {
+    (try? JSONSerialization.jsonObject(with: call?.request.httpBody ?? Data())) as? [String: Any] ?? [:]
+  }
+
+  static func machineTranslates() {
+    let h = translatedHarness()
+    defer { h.cleanup() }
+    h.record()
+    h.dictation.confirm()
+    h.transport.uploads.first?.complete(200, sentText)
+    expect(h.transport.sends.count, 1, "translate: one reason call")
+    expect(h.transport.sends.first?.request.url?.path, "/api/reason", "translate: to /api/reason")
+    expect(sentBody(h.transport.sends.first)["text"] as? String, "send it to a@b.co",
+           "translate: snippets are expanded before translation")
+    expect(sentBody(h.transport.sends.first)["systemPrompt"] as? String, "Translate the text into Spanish.",
+           "translate: the prompt names the target")
+    expect(h.state, .transcribing, "translate: still transcribing while translating")
+    expect(h.texts, [], "translate: nothing typed before the translation")
+    // The reply is typed as is: a snippet trigger in it is not expanded a second time.
+    h.transport.sends.first?.complete(200, #"{"text":"envíalo a my email"}"#)
+    expect(h.texts, ["envíalo a my email"], "translate: the translation is typed once, not expanded again")
+    expect(h.state, .idle, "translate: idle")
+    let record = h.store.record(jobId: "job-1")
+    expect(record?.text, "envíalo a my email", "translate: record has the translation")
+    expect(record?.translatedTo, "es", "translate: record says translated to es")
+    expect(record?.originalText, "send it to my email", "translate: originalText stays the raw transcript")
+    expect(record?.translationTarget, "es", "translate: target recorded at start")
+  }
+
+  static func machineTranslationFails() {
+    for (status, body, name) in [(500, "", "500"), (0, "", "transport error"),
+                                 (200, #"{"text":"send it to a@b.co"}"#, "unchanged reply"),
+                                 (200, #"{"text":""}"#, "empty reply")] {
+      let h = translatedHarness()
+      h.record()
+      h.dictation.confirm()
+      h.transport.uploads.first?.complete(200, sentText)
+      h.transport.sends.first?.complete(status, body)
+      expect(h.transport.sends.count, 1, "translate \(name): not retried")
+      expect(h.texts, ["send it to a@b.co"], "translate \(name): the untranslated, expanded text is typed")
+      expect(h.store.record(jobId: "job-1")?.translatedTo == nil, true, "translate \(name): record not translated")
+      expect(h.store.record(jobId: "job-1")?.status, .completed, "translate \(name): record completed")
+      h.cleanup()
+    }
+  }
+
+  static func machineCancelWhileTranslating() {
+    let h = translatedHarness()
+    defer { h.cleanup() }
+    h.record()
+    h.dictation.confirm()
+    h.transport.uploads.first?.complete(200, sentText)
+    h.dictation.cancel()
+    expect(h.transport.sends.first?.cancelled, true, "cancel translating: request cancelled")
+    expect(h.state, .idle, "cancel translating: idle")
+    expect(h.files(), [], "cancel translating: no files")
+    h.transport.sends.first?.complete(200, #"{"text":"Hola"}"#)
+    expect(h.texts, [], "cancel translating: a late translation inserts nothing")
+    expect(h.files(), [], "cancel translating: a late translation writes nothing")
+
+    // A newer dictation: the first one's late translation still belongs to nobody.
+    h.record()
+    expect(h.state, .recording, "cancel translating: a new take starts")
+    h.transport.sends.first?.complete(200, #"{"text":"Hola"}"#)
+    expect(h.texts, [], "superseded: the old translation inserts nothing")
+    expect(h.store.record(jobId: "job-2")?.status, .pending, "superseded: the new take is untouched")
+  }
+
+  static func machineTranslationTargetPinnedAtStart() {
+    let h = translatedHarness()
+    defer { h.cleanup() }
+    h.dictation.start()
+    h.translation = (code: "fr", label: "French")
+    h.capture.started()
+    h.feed(h.loud(seconds: 1))
+    h.dictation.confirm()
+    h.transport.uploads.first?.complete(200, sentText)
+    expect(sentBody(h.transport.sends.first)["systemPrompt"] as? String, "Translate the text into Spanish.",
+           "pinned: the language start() saw")
+    h.transport.sends.first?.complete(200, #"{"text":"Hola"}"#)
+    expect(h.store.record(jobId: "job-1")?.translatedTo, "es", "pinned: translatedTo is the start's target")
+  }
+
+  static func machineTranslationOffInKeyboard() {
+    // (A target the snapshot can't translate: machineStandsDownWhenSnapshotCannotTranslate.)
+    let none = translatedHarness()
+    defer { none.cleanup() }
+    none.translation = nil
+    none.record()
+    none.dictation.confirm()
+    none.transport.uploads.first?.complete(200, sentText)
+    expect(none.transport.sends.count, 0, "translation off in the keyboard: no translate request")
+    expect(none.texts, ["send it to a@b.co"], "translation off in the keyboard: text typed")
+  }
+
+  static func machineTranslationSameLanguage() {
+    let h = translatedHarness()
+    defer { h.cleanup() }
+    h.translation = (code: "en-US", label: "English (US)")
+    h.record()
+    h.dictation.confirm()
+    h.transport.uploads.first?.complete(200, sentText)
+    expect(h.transport.sends.count, 0, "same language: no translate request")
+    expect(h.texts, ["send it to a@b.co"], "same language: text typed")
+  }
+
+  static func machineTranslatesAfterCleanupRetry() {
+    let h = translatedHarness()
+    defer { h.cleanup() }
+    h.record()
+    h.dictation.confirm()
+    h.transport.uploads.first?.complete(200, #"{"text":"raw words","cleanupApplied":false}"#)
+    expect(h.transport.sends.count, 1, "cleanup then translate: cleanup first")
+    expect(sentBody(h.transport.sends.first)["purpose"] as? String, "cleanup", "cleanup then translate: cleanup call")
+    h.transport.sends.first?.complete(200, #"{"text":"Clean words."}"#)
+    expect(h.transport.sends.count, 2, "cleanup then translate: then translation")
+    expect(sentBody(h.transport.sends.last)["text"] as? String, "Clean words.", "cleanup then translate: translates the cleaned text")
+    h.transport.sends.last?.complete(200, #"{"text":"Palabras limpias."}"#)
+    expect(h.texts, ["Palabras limpias."], "cleanup then translate: translation typed")
+    let record = h.store.record(jobId: "job-1")
+    expect(record?.cleanupApplied, true, "cleanup then translate: cleaned")
+    expect(record?.originalText, "raw words", "cleanup then translate: raw transcript kept")
+    expect(record?.translatedTo, "es", "cleanup then translate: translated")
+  }
+
+  static func machineResumeKeepsTranslationTarget() {
+    for restart in [false, true] {
+      let h = translatedHarness()
+      h.record(seconds: 2)
+      h.dictation.keyboardWillDisappear()
+      if restart { h.restartProcess() }
+      h.translation = (code: "fr", label: "French")
+      h.dictation.keyboardDidAppear()
+      h.transport.uploads.first?.complete(200, sentText)
+      expect(sentBody(h.transport.sends.first)["systemPrompt"] as? String, "Translate the text into Spanish.",
+             "resume (restart \(restart)): the recorded target, not the live one")
+      h.transport.sends.first?.complete(200, #"{"text":"Hola"}"#)
+      expect(h.store.record(jobId: "job-1")?.translatedTo, "es", "resume (restart \(restart)): translatedTo es")
+      expect(h.texts, ["Hola"], "resume (restart \(restart)): translation typed")
+      h.cleanup()
+    }
+  }
+
+  static func machineTranslationWhileHidden() {
+    let h = translatedHarness()
+    defer { h.cleanup() }
+    h.record()
+    h.dictation.confirm()
+    h.transport.uploads.first?.complete(200, sentText)
+    h.dictation.keyboardWillDisappear()
+    expect(h.transport.sends.first?.cancelled, false, "hidden translating: request left running")
+    h.transport.sends.first?.complete(200, #"{"text":"Hola"}"#)
+    expect(h.texts, [], "hidden translating: nothing typed while hidden")
+    h.dictation.keyboardDidAppear()
+    expect(h.texts, ["Hola"], "hidden translating: typed on return")
   }
 
   static func machineDeliveryRequiresOriginalDestination() {

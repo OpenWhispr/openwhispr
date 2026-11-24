@@ -23,6 +23,12 @@ import { cleanupTranscript } from '@/lib/cleanupTranscript';
 import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
 import { snapshotKeyboardTone, readKeyboardToneSnapshot } from '@/lib/keyboardToneSync';
 import {
+  snapshotKeyboardTranslation,
+  readKeyboardTranslationSnapshot,
+} from '@/lib/keyboardTranslationSync';
+import { shouldTranslate } from '@/lib/keyboardTranslation';
+import { translateTranscript } from '@/lib/translateTranscript';
+import {
   snapshotKeyboardAgentRequest,
   readKeyboardAgentJob,
   clearKeyboardAgentJob,
@@ -415,6 +421,7 @@ export function useKeyboardHandoff(
                 requestContext: 'keyboard',
                 jobId: providerJobId,
                 keyboardTone: readKeyboardToneSnapshot(providerJobId),
+                translatedTo: readKeyboardTranslationSnapshot(providerJobId) ?? undefined,
                 errorMessage:
                   'The provider upload was interrupted. Retry uses the original provider.',
               });
@@ -482,8 +489,35 @@ export function useKeyboardHandoff(
                 includeSnippetTriggers: true,
                 context: 'keyboard',
               });
-        const finalText = expandSnippets(cleaned, useSnippetsStore.getState().entries);
+        const expanded = expandSnippets(cleaned, useSnippetsStore.getState().entries);
         markTiming('cleanup_done');
+
+        // Same translation step transcribeAndCleanup applies, on the same route as cleanup above.
+        let finalText = expanded;
+        let translatedTo: string | undefined;
+        const translationTarget = readKeyboardTranslationSnapshot(rawJobId);
+        if (
+          recoveredRoute &&
+          recoveredRoute.provider !== 'local' &&
+          translationTarget &&
+          shouldTranslate(getPreferredTranscriptionLanguage(), translationTarget) &&
+          !isCancelRequested() &&
+          expanded.trim()
+        ) {
+          markTiming('translate_start');
+          const translation = await translateTranscript(expanded, {
+            target: translationTarget,
+            inferenceRoute: recoveredRoute.cleanupRoute,
+            cleanupUnavailable: recoveredRoute.cleanupUnavailable,
+            onSkipped: (reason): void => {
+              cleanupWarning ??= reason;
+            },
+          });
+          if (translation.translated) {
+            finalText = translation.text;
+            translatedTo = translationTarget;
+          }
+        }
 
         if (isCancelRequested()) {
           recoverySaved = true;
@@ -529,6 +563,7 @@ export function useKeyboardHandoff(
           cleanupUnavailable: recoveredRoute?.cleanupUnavailable,
           cleanupWarning,
           requestContext: 'keyboard',
+          translatedTo,
         });
         recoverySaved = true;
         if (
@@ -641,6 +676,7 @@ export function useKeyboardHandoff(
       setCurrentJobId(jobId);
       begin(jobId);
       snapshotKeyboardTone(jobId);
+      snapshotKeyboardTranslation(jobId);
       // Snapshot any pending keyboard_agent_request into a per-job record.
       // Returns null (no-op) for normal dictation; idempotent per jobId.
       snapshotKeyboardAgentRequest(jobId);
@@ -812,6 +848,7 @@ export function useKeyboardHandoff(
         const provider = jobRoute.provider;
         const transcriptId = jobId;
         const keyboardTone = readKeyboardToneSnapshot(jobId);
+        const translationTarget = readKeyboardTranslationSnapshot(jobId) ?? undefined;
         let retainedAudioUrl: string | null = null;
 
         const flagNoSpeech = () => {
@@ -937,6 +974,7 @@ export function useKeyboardHandoff(
               cleanupUnavailable: jobRoute.cleanupUnavailable,
               requestContext: 'keyboard',
               keyboardTone,
+              translatedTo: translationTarget,
               jobId,
               errorMessage: toFriendlyTranscriptionErrorMessage(error),
             });
@@ -1006,6 +1044,7 @@ export function useKeyboardHandoff(
               requestContext: 'keyboard',
               purpose: 'dictation',
               keyboardTone,
+              translationTarget,
             },
             {
               shouldCancel: isCancelRequested,
@@ -1018,6 +1057,13 @@ export function useKeyboardHandoff(
                     markTiming('cleanup_start');
                     markTiming('transcribe_cleanup_start');
                   }
+                  return;
+                }
+                // Translation follows cleanup; the keyboard keeps showing its cleaning state,
+                // and cleanup's own timing is left as it was measured.
+                if (stage === 'translating') {
+                  setKeyboardStatus('cleaning');
+                  markTiming('translate_start');
                   return;
                 }
 
@@ -1129,6 +1175,7 @@ export function useKeyboardHandoff(
             cleanupWarning: processed.transcription.cleanupWarning,
             requestContext: 'keyboard',
             keyboardTone,
+            translatedTo: processed.translatedTo,
             jobId,
           }).catch((error: unknown) => {
             if (!delivered) throw error;
@@ -1189,6 +1236,7 @@ export function useKeyboardHandoff(
       if (bgJobId) {
         captureDictationForJob(bgJobId);
         snapshotKeyboardTone(bgJobId);
+        snapshotKeyboardTranslation(bgJobId);
         // Mirror the tone snapshot: capture a pending agent request for this
         // job. No-op (null) when none is pending; idempotent per jobId.
         snapshotKeyboardAgentRequest(bgJobId);

@@ -45,7 +45,10 @@ export const CLEANUP_TIMEOUT_MS = 12_000;
 export const CLEANUP_MAX_RETRIES = 1;
 export const CLEANUP_INITIAL_RETRY_DELAY_MS = 750;
 
-function createTimeoutSignal(timeoutMs: number): { signal: AbortSignal; cancel: () => void } {
+export function createTimeoutSignal(timeoutMs: number): {
+  signal: AbortSignal;
+  cancel: () => void;
+} {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   return {

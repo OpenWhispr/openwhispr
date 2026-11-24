@@ -3,7 +3,8 @@ import Foundation
 extension DirectDictationTests {
   static func makeConfig(
     cleanup: Bool = true, language: String? = "en", toneApplies: Bool = true, personal: [String] = ["Kubernetes"],
-    shared: [String] = ["Gizmo"], prompt: String = "Kubernetes, Gizmo", appVersion: String? = "1.2.6"
+    shared: [String] = ["Gizmo"], prompt: String = "Kubernetes, Gizmo", appVersion: String? = "1.2.6",
+    translation: DirectDictationConfig.Translation = .init(enabled: false, prompt: "")
   ) -> DirectDictationConfig {
     DirectDictationConfig(
       userId: "u1",
@@ -12,12 +13,23 @@ extension DirectDictationTests {
       language: language,
       cleanup: .init(enabled: cleanup, language: language, toneApplies: toneApplies),
       dictionary: .init(personal: personal, shared: shared, prompt: prompt),
-      snippets: []
+      snippets: [],
+      translation: translation
+    )
+  }
+
+  static func translationContext(
+    language: String? = "en", target: String?, label: String?, enabled: Bool = true,
+    prompt: String = "Translate the text into {{targetLanguage}}."
+  ) -> DirectRequestContext {
+    DirectRequestContext(
+      config: makeConfig(language: language, translation: .init(enabled: enabled, prompt: prompt)),
+      jobId: "j1", tone: "formal", cookie: "session=1", translationTarget: target, translationLabel: label
     )
   }
 
   static func fieldList(_ config: DirectDictationConfig, tone: String) -> [String] {
-    let context = DirectRequestContext(config: config, jobId: "123-abc", tone: tone, cookie: "session=1")
+    let context = DirectRequestContext(config: config, jobId: "123-abc", tone: tone, cookie: "session=1", translationTarget: nil, translationLabel: nil)
     return DirectDictationRequests.transcribeFields(context).map { "\($0.name)=\($0.value)" }
   }
 
@@ -56,7 +68,8 @@ extension DirectDictationTests {
     let body = folder.appendingPathComponent("j1.body")
     try! Data([1, 2, 3, 4]).write(to: audio)
     let minimal = DirectRequestContext(
-      config: makeConfig(cleanup: false, language: nil, prompt: ""), jobId: "j1", tone: "default", cookie: "session=1"
+      config: makeConfig(cleanup: false, language: nil, prompt: ""), jobId: "j1", tone: "default", cookie: "session=1",
+      translationTarget: nil, translationLabel: nil
     )
     let request = try! DirectDictationRequests.makeTranscribeRequest(minimal, audioURL: audio, bodyURL: body, boundary: "B")
     var expected = Data()
@@ -78,12 +91,12 @@ extension DirectDictationTests {
     expect(request.value(forHTTPHeaderField: "x-openwhispr-platform"), "mobile", "platform header")
     expect(request.value(forHTTPHeaderField: "x-openwhispr-policy-version"), "1", "policy header")
     expect(request.value(forHTTPHeaderField: "x-openwhispr-version"), "1.2.6", "version header")
-    let noVersion = DirectRequestContext(config: makeConfig(appVersion: nil), jobId: "j1", tone: "default", cookie: "c")
+    let noVersion = DirectRequestContext(config: makeConfig(appVersion: nil), jobId: "j1", tone: "default", cookie: "c", translationTarget: nil, translationLabel: nil)
     let unversioned = try! DirectDictationRequests.makeTranscribeRequest(noVersion, audioURL: audio, bodyURL: body, boundary: "B")
     expect(unversioned.value(forHTTPHeaderField: "x-openwhispr-version") == nil, true, "no version header without a version")
 
     // The cleanup retry.
-    let formal = DirectRequestContext(config: makeConfig(), jobId: "j1", tone: "formal", cookie: "session=1")
+    let formal = DirectRequestContext(config: makeConfig(), jobId: "j1", tone: "formal", cookie: "session=1", translationTarget: nil, translationLabel: nil)
     let reason = try! DirectDictationRequests.makeReasonRequest(formal, rawText: "hello there")
     expect(reason.url?.absoluteString, "https://api.openwhispr.com/api/reason", "reason url")
     expect(reason.httpMethod, "POST", "reason method")
@@ -101,7 +114,7 @@ extension DirectDictationTests {
     expect(sent["language"] as? String, "en", "reason language")
     expect(sent["locale"] as? String, "en", "reason locale")
     expect(sent["tone"] as? String, "formal", "reason tone")
-    let plain = DirectRequestContext(config: makeConfig(language: nil, toneApplies: false, shared: []), jobId: "j1", tone: "formal", cookie: "c")
+    let plain = DirectRequestContext(config: makeConfig(language: nil, toneApplies: false, shared: []), jobId: "j1", tone: "formal", cookie: "c", translationTarget: nil, translationLabel: nil)
     let plainBody = (try? JSONSerialization.jsonObject(with: (try! DirectDictationRequests.makeReasonRequest(plain, rawText: "x")).httpBody ?? Data())) as? [String: Any] ?? [:]
     expect(Set(plainBody.keys), ["text", "promptMode", "purpose", "clientType", "customDictionary"], "reason keys without optional values")
 
@@ -134,5 +147,57 @@ extension DirectDictationTests {
     expect(R.parseReason(status: 200, body: json(#"{"text":"Cleaned."}"#)), "Cleaned.", "reason 200")
     expect(R.parseReason(status: 200, body: json(#"{"text":""}"#)) == nil, true, "reason empty text")
     expect(R.parseReason(status: 403, body: json(#"{"text":"x"}"#)) == nil, true, "reason refused")
+
+    testTranslateRequests()
+  }
+
+  static func testTranslateRequests() {
+    typealias R = DirectDictationRequests
+    let request = try! R.makeTranslateRequest(translationContext(target: "es", label: "Spanish"), text: "Hello")
+    expect(request != nil, true, "translate: a request when on with a target")
+    expect(request?.url?.absoluteString, "https://api.openwhispr.com/api/reason", "translate url")
+    expect(request?.httpMethod, "POST", "translate method")
+    expect(request?.timeoutInterval, 12, "translate timeout")
+    expect(request?.value(forHTTPHeaderField: "Content-Type"), "application/json", "translate content type")
+    expect(request?.value(forHTTPHeaderField: "Cookie"), "session=1", "translate cookie")
+    let body = (try? JSONSerialization.jsonObject(with: request?.httpBody ?? Data())) as? [String: Any] ?? [:]
+    expect(body["text"] as? String, "Hello", "translate text")
+    expect(body["purpose"] as? String, "translation", "translate purpose")
+    expect(body["clientType"] as? String, "mobile", "translate clientType")
+    expect(body["systemPrompt"] as? String, "Translate the text into Spanish.", "translate prompt names the label")
+    expect(Set(body.keys), ["text", "systemPrompt", "purpose", "clientType"],
+           "translate: no promptMode, tone, dictionary or language")
+
+    expect(try! R.makeTranslateRequest(translationContext(target: nil, label: nil), text: "Hello") == nil, true,
+           "translate: none without a target")
+    expect(try! R.makeTranslateRequest(translationContext(target: "es", label: nil), text: "Hello") == nil, true,
+           "translate: none without a label")
+    expect(try! R.makeTranslateRequest(translationContext(target: "es", label: "Spanish", enabled: false), text: "Hello") == nil,
+           true, "translate: none when the snapshot has it off")
+    expect(try! R.makeTranslateRequest(translationContext(target: "es", label: "Spanish", prompt: ""), text: "Hello") == nil,
+           true, "translate: none without a prompt")
+    expect(try! R.makeTranslateRequest(translationContext(language: "es", target: "es", label: "Spanish"), text: "Hola") == nil,
+           true, "translate: none when dictating in the target language")
+    expect(try! R.makeTranslateRequest(translationContext(language: "en", target: "en-US", label: "English (US)"), text: "Hi") == nil,
+           true, "translate: same base language skips")
+    expect(try! R.makeTranslateRequest(translationContext(language: "ZH", target: "zh-TW", label: "Chinese"), text: "Hi") == nil,
+           true, "translate: base language compares case-insensitively")
+    expect(try! R.makeTranslateRequest(translationContext(language: "en-GB", target: "en-US", label: "English (US)"), text: "Hi") == nil,
+           true, "translate: regional variants of one language skip")
+    expect(try! R.makeTranslateRequest(translationContext(language: nil, target: "es", label: "Spanish"), text: "Hi") != nil,
+           true, "translate: no dictation language still translates")
+    expect(try! R.makeTranslateRequest(translationContext(language: "auto", target: "es", label: "Spanish"), text: "Hi") != nil,
+           true, "translate: auto still translates")
+    expect(try! R.makeTranslateRequest(translationContext(language: "zh-CN", target: "en", label: "English"), text: "Hi") != nil,
+           true, "translate: different base languages translate")
+
+    expect(R.parseTranslation(status: 200, body: json(#"{"text":"Hola"}"#), input: "Hello"), "Hola", "translation 200")
+    expect(R.parseTranslation(status: 200, body: json(#"{"text":" Hello "}"#), input: "Hello") == nil, true,
+           "translation unchanged after trimming")
+    expect(R.parseTranslation(status: 200, body: json(#"{"text":"Hello\n  there"}"#), input: "Hello there") == nil, true,
+           "translation unchanged after collapsing whitespace")
+    expect(R.parseTranslation(status: 200, body: json(#"{"text":"  "}"#), input: "Hello") == nil, true, "translation blank")
+    expect(R.parseTranslation(status: 500, body: Data(), input: "Hello") == nil, true, "translation 500")
+    expect(R.parseTranslation(status: 403, body: json(#"{"text":"Hola"}"#), input: "Hello") == nil, true, "translation refused")
   }
 }

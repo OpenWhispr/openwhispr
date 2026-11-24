@@ -780,12 +780,16 @@ private final class KeyPopupView: UIView {
 
 private struct DictationLinkView: View {
   let url: URL
+  /// Receives the URL opener this Link calls, for a control that can't be a Link (a menu row).
+  var onOpenURLAvailable: ((OpenURLAction) -> Void)? = nil
+  @Environment(\.openURL) private var openURL
 
   var body: some View {
     Link(destination: url) {
       Color.clear
         .contentShape(Rectangle())
     }
+    .onAppear { onOpenURLAvailable?(openURL) }
   }
 }
 
@@ -879,7 +883,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private enum Metrics {
-    // The toolbar: tone, the centred dictation pill, agent.
+    // The toolbar: options, the centred dictation pill, agent.
     static let dictationButtonSize: CGFloat = 40
     /// The pill as a mic button beside the suggestions: a 44pt target.
     static let compactPillWidth: CGFloat = 44
@@ -1127,7 +1131,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   )
 
   private let rootStack = UIStackView()
-  // The toolbar: tone, the centred dictation pill, agent. The strip guide is the
+  // The toolbar: options, the centred dictation pill, agent. The strip guide is the
   // pill-high strip at the top of the band, where the buttons centre.
   private let topBar = ToolbarView()
   private let stripGuide = UILayoutGuide()
@@ -1138,7 +1142,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // Sits beside the processing pill ("Transcribing"/"Cleaning up") to abandon
   // the in-flight transcription. Hidden in every other state.
   private let processingCancelButton = UIButton(type: .system)
-  private let toneButton = KeyButton(type: .system)
+  private let optionsButton = KeyButton(type: .system)
+  // SwiftUI's opener, handed over by the dictation Link: the only way an extension opens its app.
+  private var openURLAction: OpenURLAction?
   private let keyboardRowsStack = KeyboardRowsStack()
   private let lettersRowsStack = UIStackView()
   private let numbersRowsStack = UIStackView()
@@ -1513,7 +1519,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // On every way out of here (the review card returns early), and last, so a resumed or
     // finished direct take isn't repainted by the handoff paths below.
     defer { directDictation?.keyboardDidAppear() }
-    refreshToneButton()
+    refreshOptionsButton()
     refreshAgentButton()
     // The review card owns the screen until the user acts on it; don't let a
     // stale recording flag or resume path tear it down on reappear. Re-gate its
@@ -2428,7 +2434,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
   }
 
-  /// The toolbar: the tone menu on the left, the dictation pill centred, the agent wand on
+  /// The toolbar: the options menu on the left, the dictation pill centred, the agent wand on
   /// the right.
   private func setupTopBar() {
     topBar.translatesAutoresizingMaskIntoConstraints = false
@@ -2483,17 +2489,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     processingCancelButton.isHidden = true
     topBar.addSubview(processingCancelButton)
 
-    // gauge.with.dots.needle.bottom.50percent is iOS 16+; fall back to the classic
-    // gauge on the extension's 15.1 deployment target.
     configureToolbarButton(
-      toneButton,
-      image: UIImage(systemName: "gauge.with.dots.needle.bottom.50percent") ?? UIImage(systemName: "gauge"),
-      accessibilityLabel: "Dictation tone"
+      optionsButton,
+      image: Self.optionsIcon,
+      accessibilityLabel: "Dictation options"
     )
-    toneButton.showsMenuAsPrimaryAction = true
-    refreshToneButton()
+    optionsButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+    optionsButton.setTitleColor(.label, for: .normal)
+    optionsButton.setTitleColor(.label, for: .highlighted)
+    optionsButton.showsMenuAsPrimaryAction = true
+    refreshOptionsButton()
 
-    // Agent entry button, mirroring the tone button on the trailing edge. A press
+    // Agent entry button, mirroring the options button on the trailing edge. A press
     // gesture (not a tap target) so it can write the request before the Link
     // overlay fires the handoff — the same coordination the record button uses.
     configureToolbarButton(
@@ -2524,10 +2531,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     NSLayoutConstraint.activate(stripConstraints + [
       topBarHeight,
 
-      toneButton.leadingAnchor.constraint(equalTo: stripGuide.leadingAnchor, constant: Metrics.toolbarButtonInset),
-      toneButton.centerYAnchor.constraint(equalTo: stripGuide.centerYAnchor),
-      toneButton.widthAnchor.constraint(equalToConstant: Metrics.toolbarButtonSize),
-      toneButton.heightAnchor.constraint(equalToConstant: Metrics.toolbarButtonSize),
+      optionsButton.leadingAnchor.constraint(equalTo: stripGuide.leadingAnchor, constant: Metrics.toolbarButtonInset),
+      optionsButton.centerYAnchor.constraint(equalTo: stripGuide.centerYAnchor),
+      optionsButton.widthAnchor.constraint(equalToConstant: Metrics.toolbarButtonSize),
+      optionsButton.heightAnchor.constraint(equalToConstant: Metrics.toolbarButtonSize),
 
       agentButton.trailingAnchor.constraint(equalTo: stripGuide.trailingAnchor, constant: -Metrics.toolbarButtonInset),
       agentButton.centerYAnchor.constraint(equalTo: stripGuide.centerYAnchor),
@@ -2997,7 +3004,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         constant: -(2 * Metrics.toolbarButtonInset + Metrics.toolbarButtonSize + Metrics.compactPillWidth + 6)
       )
       suggestionStripConstraints = [
-        suggestionBar.leadingAnchor.constraint(equalTo: toneButton.trailingAnchor, constant: 6),
+        suggestionBar.leadingAnchor.constraint(equalTo: optionsButton.trailingAnchor, constant: 6),
         trailing,
         suggestionBar.topAnchor.constraint(equalTo: stripGuide.topAnchor),
         suggestionBar.bottomAnchor.constraint(equalTo: stripGuide.bottomAnchor),
@@ -3061,25 +3068,40 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     ("excited", "Excited"),
   ]
 
-  private func refreshToneButton() {
+  // slider.horizontal.3 reads as "settings for this" on every iOS the extension supports (15.1+).
+  private static let optionsIcon = UIImage(systemName: "slider.horizontal.3")
+
+  private func refreshOptionsButton() {
     // isToneApplicable() fails open on a dead App Group — `guard let defaults`
-    // then `!= "0"` reads a live-but-empty suite as applicable — so the tone
-    // gate needs its own check. Dim and lock rather than isEnabled = false,
+    // then `!= "0"` reads a live-but-empty suite as applicable — so the
+    // options gate needs its own check. Dim and lock rather than isEnabled = false,
     // which applies UIButton.Configuration's own foreground transform on top.
     guard hasFullAccess else {
-      toneButton.menu = nil
-      toneButton.isUserInteractionEnabled = false
-      toneButton.alpha = 0.4
+      optionsButton.menu = nil
+      optionsButton.isUserInteractionEnabled = false
+      optionsButton.alpha = 0.4
+      showOptionsBadge(for: nil, languages: [])
       return
     }
     let provider = KeyboardHandoffProvider.shared
+    let translation = provider.translationSection()
+    let settings = UIAction(title: "Keyboard Settings…") { [weak self] _ in
+      self?.openKeyboardSettings()
+    }
+    optionsButton.menu = UIMenu(children: [makeToneMenu(provider), makeTranslateMenu(translation), settings])
+    optionsButton.isUserInteractionEnabled = true
+    // Keyboard Settings and Default/Off are always usable, so the button never dims here.
+    optionsButton.alpha = 1.0
+    showOptionsBadge(for: translation.selected, languages: translation.all)
+  }
+
+  private func makeToneMenu(_ provider: KeyboardHandoffProvider) -> UIMenu {
     let current = provider.currentTone()
     let applicable = provider.isToneApplicable()
 
     // When tone isn't applicable (private mode, or cleanup off) the styled tones
     // live behind Cloud. Lock every tone but Default so it reads as gated rather
-    // than broken, and show the reason as a short, single-line header instead of
-    // the old wrapping disabled row.
+    // than broken, and say why in the submenu's title.
     let lockImage = applicable ? nil : UIImage(systemName: "lock.fill")
     let actions: [UIAction] = Self.toneMenuItems.map { item in
       let locked = !applicable && item.value != "default"
@@ -3089,20 +3111,79 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         state: item.value == current ? .on : .off
       ) { [weak self] _ in
         KeyboardHandoffProvider.shared.setTone(item.value)
-        self?.refreshToneButton()
+        self?.refreshOptionsButton()
       }
       if locked { action.attributes = [.disabled] }
       return action
     }
+    return UIMenu(title: applicable ? "Tone" : "Tones are off in Local Mode", children: actions)
+  }
 
-    // Label the menu in both states: its purpose when usable, the upgrade path
-    // when locked. The header costs one row of the height-capped menu, so on
-    // shorter keyboards the last tone ("Excited") can fall into the scroll
-    // region instead of showing inline.
-    let menuTitle = applicable ? "Dictation Tone" : "Tones are off in Local Mode"
-    toneButton.menu = UIMenu(title: menuTitle, children: actions)
-    toneButton.isUserInteractionEnabled = true
-    toneButton.alpha = applicable ? 1.0 : 0.4
+  private func makeTranslateMenu(_ section: KeyboardOptionsMenu.TranslateSection) -> UIMenu {
+    // Off stays enabled when locked, so a stored language can always be cleared.
+    let off = UIAction(title: "Off", state: section.selected == nil ? .on : .off) { [weak self] _ in
+      KeyboardHandoffProvider.shared.setTranslationTarget(nil)
+      self?.translationTargetDidChange()
+    }
+    let languageAction = { [weak self] (language: TranslationLanguage) -> UIAction in
+      let action = UIAction(
+        title: language.label,
+        image: section.locked ? UIImage(systemName: "lock.fill") : nil,
+        state: language.code == section.selected ? .on : .off
+      ) { _ in
+        KeyboardHandoffProvider.shared.setTranslationTarget(language.code)
+        self?.translationTargetDidChange()
+      }
+      if section.locked { action.attributes = [.disabled] }
+      return action
+    }
+    var children: [UIMenuElement] = [off]
+    if !section.recents.isEmpty {
+      children.append(UIMenu(options: .displayInline, children: section.recents.map(languageAction)))
+    }
+    children.append(UIMenu(title: "All languages", children: section.all.map(languageAction)))
+    return UIMenu(
+      title: section.locked ? "Set up translation in OpenWhispr" : "Translate to", children: children
+    )
+  }
+
+  /// The target decides whether the direct path can take a dictation at all (it stands down for
+  /// a translation it can't run), so the pill's route is re-read too. Only at rest: a take,
+  /// a remote recording, a processing pill or a timed issue state owns the pill until it ends,
+  /// and refreshRecordButton() would tear that state down.
+  private func translationTargetDidChange() {
+    refreshOptionsButton()
+    if isRecordButtonAtRest { refreshRecordButton() }
+  }
+
+  private var isRecordButtonAtRest: Bool {
+    !isDirectTakeActive && !isRemoteRecordingActive && !isDarwinStartPending
+      && !isAgentRecordingActive && !isAgentGenerating && !isAgentReviewShown
+      && issueResetTimer == nil && waitForTranscriptTimer == nil && processingCancelButton.isHidden
+  }
+
+  /// A translation target replaces the icon with its badge ("ES"), so the button says what
+  /// dictation will do before the user speaks. Off goes back to the icon.
+  private func showOptionsBadge(for target: String?, languages: [TranslationLanguage]) {
+    if let badge = KeyboardOptionsMenu.badge(for: target) {
+      optionsButton.setImage(nil, for: .normal)
+      optionsButton.setTitle(badge, for: .normal)
+      let label = languages.first { $0.code == target }?.label ?? badge
+      optionsButton.accessibilityValue = "Translating to \(label)"
+    } else {
+      optionsButton.setTitle(nil, for: .normal)
+      optionsButton.setImage(Self.optionsIcon, for: .normal)
+      optionsButton.accessibilityValue = nil
+    }
+  }
+
+  private func openKeyboardSettings() {
+    guard let url = URL(string: "\(Self.appUrlScheme)://keyboard-settings") else { return }
+    guard let openURLAction else {
+      logRecordMarker("openKeyboardSettings.noOpener")
+      return
+    }
+    openURLAction(url)
   }
 
   /// The dictation deep link the agent button hands off with when the background
@@ -3139,7 +3220,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     agentLinkHosting = hosting
   }
 
-  /// Gating mirrors refreshToneButton: hidden when the agent is disabled, dimmed
+  /// Gating mirrors refreshOptionsButton: hidden when the agent is disabled, dimmed
   /// (with a transient upgrade pill on tap) when Cloud isn't on. When usable, the
   /// Link overlay is enabled only for the handoff path — an in-place tap goes
   /// through requestStart() in the press handler instead.
@@ -3187,7 +3268,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
     guard let url = components.url else { return }
 
-    let hosting = UIHostingController(rootView: DictationLinkView(url: url))
+    let hosting = UIHostingController(rootView: DictationLinkView(url: url) { [weak self] openURL in
+      self?.openURLAction = openURL
+    })
     hosting.view.backgroundColor = .clear
     hosting.view.isOpaque = false
     hosting.view.translatesAutoresizingMaskIntoConstraints = false
@@ -4786,9 +4869,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         showFullAccessPanel(animated: view.window != nil)
       }
       resetVoiceMeterBars()
-      // Neither control can reach the App Group either; refreshToneButton is
+      // Neither control can reach the App Group either; refreshOptionsButton is
       // not part of the normal refresh path, so call it explicitly.
-      refreshToneButton()
+      refreshOptionsButton()
       refreshAgentButton()
       logRecordMarker("refreshRecordButton.noFullAccess")
       return
@@ -6114,6 +6197,16 @@ private struct AgentResult {
   let updatedAtMs: Double?
 }
 
+/// What a dictation the keyboard sends itself translates into (`DirectDictationRuntime`'s
+/// `readTranslation`): the effective target and its English label, nil when either is missing.
+func directDictationTranslation() -> (code: String, label: String)? {
+  let provider = KeyboardHandoffProvider.shared
+  guard let code = provider.translationTarget(),
+    let label = provider.translationLanguages().first(where: { $0.code == code })?.label
+  else { return nil }
+  return (code: code, label: label)
+}
+
 private struct KeyboardHandoffProvider {
   static let shared = KeyboardHandoffProvider()
 
@@ -6166,6 +6259,12 @@ private struct KeyboardHandoffProvider {
   private let transcriptionStatusUpdatedAtMsKey = "keyboard_transcription_status_updated_at_ms"
   private let dictationToneKey = "keyboard_dictation_tone"
   private let toneApplicableKey = "keyboard_tone_applicable"
+  // Translation: the app writes the language list and whether translation is available; the
+  // target is shared (Off is the key's absence); only the keyboard writes its recents.
+  private let translationTargetKey = "keyboard_translation_target"
+  private let translationLanguagesKey = "keyboard_translation_languages"
+  private let translationApplicableKey = "keyboard_translation_applicable"
+  private let translationRecentsKey = "keyboard_translation_recents"
   // Dictation-agent mirror keys (app-written, persist across launches) and the
   // one-shot request / result channels shared with the main app.
   private let agentEnabledKey = "keyboard_agent_enabled"
@@ -6294,6 +6393,52 @@ private struct KeyboardHandoffProvider {
   func isToneApplicable() -> Bool {
     guard let defaults = UserDefaults(suiteName: appGroupId) else { return false }
     return defaults.string(forKey: toneApplicableKey) != "0"
+  }
+
+  // MARK: Translation
+
+  /// The language dictation is translated into; nil (Off) when translation isn't available or the
+  /// stored code is no longer listed.
+  func translationTarget() -> String? {
+    KeyboardOptionsMenu.effectiveTarget(
+      stored: UserDefaults(suiteName: appGroupId)?.string(forKey: translationTargetKey),
+      languages: translationLanguages(),
+      applicable: isTranslationApplicable())
+  }
+
+  /// nil removes the key (Off); a code also moves to the front of the recents.
+  func setTranslationTarget(_ code: String?) {
+    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    if let code {
+      defaults.set(code, forKey: translationTargetKey)
+      let recents = KeyboardOptionsMenu.recentsAfterSelecting(
+        code, current: KeyboardOptionsMenu.decodeRecents(defaults.string(forKey: translationRecentsKey)))
+      if let data = try? JSONEncoder().encode(recents), let json = String(data: data, encoding: .utf8) {
+        defaults.set(json, forKey: translationRecentsKey)
+      }
+    } else {
+      defaults.removeObject(forKey: translationTargetKey)
+    }
+    defaults.synchronize()
+  }
+
+  func translationLanguages() -> [TranslationLanguage] {
+    KeyboardOptionsMenu.decodeLanguages(UserDefaults(suiteName: appGroupId)?.string(forKey: translationLanguagesKey))
+  }
+
+  /// Fails closed, unlike tone: without the app saying so, translation is locked.
+  func isTranslationApplicable() -> Bool {
+    UserDefaults(suiteName: appGroupId)?.string(forKey: translationApplicableKey) == "1"
+  }
+
+  /// Everything the options menu's Translate to submenu shows, read in one pass.
+  func translationSection() -> KeyboardOptionsMenu.TranslateSection {
+    let defaults = UserDefaults(suiteName: appGroupId)
+    return KeyboardOptionsMenu.translateSection(
+      stored: defaults?.string(forKey: translationTargetKey),
+      languages: translationLanguages(),
+      recents: KeyboardOptionsMenu.decodeRecents(defaults?.string(forKey: translationRecentsKey)),
+      applicable: isTranslationApplicable())
   }
 
   // MARK: Dictation agent

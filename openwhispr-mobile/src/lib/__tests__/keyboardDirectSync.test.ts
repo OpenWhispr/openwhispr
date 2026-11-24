@@ -1,3 +1,4 @@
+import { DEFAULT_TRANSLATE_PROMPT } from '@/config/prompts/registry';
 import {
   buildKeyboardDirectConfig,
   startKeyboardDirectSync,
@@ -33,6 +34,7 @@ function inputs(overrides: Partial<KeyboardDirectInputs> = {}): KeyboardDirectIn
       prompt: 'Kubernetes, Gizmo',
     },
     snippets: [{ trigger: 'my email', replacement: 'a@b.co' }],
+    translationApplies: false,
     ...overrides,
   };
 }
@@ -54,7 +56,38 @@ describe('buildKeyboardDirectConfig', () => {
         prompt: 'Kubernetes, Gizmo',
       },
       snippets: [{ trigger: 'my email', replacement: 'a@b.co' }],
+      translation: { enabled: false, prompt: '' },
     });
+  });
+
+  it('carries the prompt when translation applies', () => {
+    const config = buildKeyboardDirectConfig(inputs({ translationApplies: true }));
+    expect(config.translation).toEqual({ enabled: true, prompt: DEFAULT_TRANSLATE_PROMPT });
+  });
+
+  it('carries no prompt when the direct path is off or translation does not apply', () => {
+    expect(buildKeyboardDirectConfig(inputs({ translationApplies: false })).translation).toEqual({
+      enabled: false,
+      prompt: '',
+    });
+    expect(
+      buildKeyboardDirectConfig(inputs({ settingEnabled: false, translationApplies: true }))
+        .translation,
+    ).toEqual({ enabled: false, prompt: '' });
+  });
+
+  it('never translates on OpenWhispr Cloud for a route whose AI runs elsewhere', () => {
+    // Cleanup off keeps the path on whatever cleanup is routed to, but the keyboard can only
+    // translate through /api/reason.
+    const config = buildKeyboardDirectConfig(
+      inputs({
+        cleanupEnabled: false,
+        translationApplies: true,
+        route: { provider: 'cloud', cleanupMode: 'local', cleanupUnavailable: false },
+      }),
+    );
+    expect(config.enabled).toBe(true);
+    expect(config.translation).toEqual({ enabled: false, prompt: '' });
   });
 
   it.each<[string, Partial<KeyboardDirectInputs>]>([

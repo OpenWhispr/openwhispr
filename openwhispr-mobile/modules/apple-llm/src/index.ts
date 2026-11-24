@@ -16,6 +16,8 @@ interface NativeAppleLLM {
   ): Promise<AppleLLMGenerateTextResponse>;
   // Missing on binaries built before it shipped; an OTA update can run this code there.
   cancelGeneration?(requestId: string): void;
+  // Same reason: absent on binaries built before it shipped.
+  getSupportedLanguages?(): Promise<string[]>;
   generateMeetingNotes(
     request: AppleLLMGenerateTextRequest,
   ): Promise<AppleLLMGenerateMeetingNotesResponse>;
@@ -55,6 +57,17 @@ export const AppleLLM = {
       };
     }
     return NativeModule.getAvailability();
+  },
+
+  // An empty array means unknown (no module, old binary, model or OS unavailable), not "none".
+  async getSupportedLanguages(): Promise<string[]> {
+    if (!NativeModule?.getSupportedLanguages) return [];
+    try {
+      const languages = await NativeModule.getSupportedLanguages();
+      return [...new Set(languages.map((code) => code.toLowerCase()))];
+    } catch {
+      return [];
+    }
   },
 
   async countTokens(request: AppleLLMTokenCountRequest): Promise<number | null> {

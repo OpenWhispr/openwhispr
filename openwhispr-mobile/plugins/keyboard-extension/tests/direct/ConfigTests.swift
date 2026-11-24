@@ -9,6 +9,11 @@ extension DirectDictationTests {
      "snippets":[{"trigger":"my email","replacement":"a@b.co"}],"futureField":1}
     """
 
+  static let translatedConfig = validConfig.replacingOccurrences(
+    of: #","futureField":1"#,
+    with: #","translation":{"enabled":true,"prompt":"Translate the text into {{targetLanguage}}."},"futureField":1"#
+  )
+
   static func testConfig() {
     let config = DirectDictationConfig.decode(validConfig)
     expect(config?.userId, "u1", "userId")
@@ -27,5 +32,10 @@ extension DirectDictationTests {
     expect(DirectDictationConfig.decode(sparse)?.language == nil, true, "language optional")
     expect(DirectDictationConfig.decode(sparse)?.cleanup.toneApplies, false, "toneApplies defaults false")
     expect(DirectDictationConfig.decode(sparse)?.dictionary.prompt, "", "prompt defaults empty")
+    // Snapshots written before translation have no "translation": it decodes as off.
+    expect(config?.translation, .init(enabled: false, prompt: ""), "translation missing decodes as off")
+    expect(DirectDictationConfig.decode(sparse)?.translation, .init(enabled: false, prompt: ""), "sparse translation off")
+    expect(DirectDictationConfig.decode(translatedConfig)?.translation,
+           .init(enabled: true, prompt: "Translate the text into {{targetLanguage}}."), "translation decoded")
   }
 }

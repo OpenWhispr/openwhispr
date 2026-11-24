@@ -41,6 +41,7 @@ import { initProductEvents } from '@/lib/productEvents';
 import { getCachedSession, type CachedSession } from '@/lib/authClient';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
 import { startKeyboardToneSync } from '@/lib/keyboardToneSync';
+import { startKeyboardTranslationSync } from '@/lib/keyboardTranslationSync';
 import { startKeyboardAgentSync } from '@/lib/keyboardAgentSync';
 import { startKeyboardCredentialSync } from '@/lib/keyboardCredentialSync';
 import { startKeyboardDirectSync } from '@/lib/keyboardDirectSync';
@@ -124,6 +125,7 @@ function RootLayout() {
   useEffect(() => {
     let started = false;
     let stopTone: (() => void) | undefined;
+    let stopTranslation: (() => void) | undefined;
     let stopAgent: (() => void) | undefined;
     let stopDirect: (() => void) | undefined;
     let stopTyping: (() => void) | undefined;
@@ -135,6 +137,7 @@ function RootLayout() {
       if (state.config !== null && !state.isLoading) {
         started = true;
         stopTone = startKeyboardToneSync();
+        stopTranslation = startKeyboardTranslationSync();
         stopAgent = startKeyboardAgentSync();
         stopDirect = startKeyboardDirectSync();
         stopTyping = startKeyboardTypingSync();
@@ -147,6 +150,7 @@ function RootLayout() {
     return () => {
       unsubscribe();
       stopTone?.();
+      stopTranslation?.();
       stopAgent?.();
       stopDirect?.();
       stopTyping?.();
