@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { createTranscriptId, useTranscriptStore } from '../store/useTranscriptStore';
@@ -17,6 +17,7 @@ import {
   NO_SPEECH_ERROR_MESSAGE,
 } from '../lib/permissions';
 import { getPreferredTranscriptionLanguage } from '../lib/transcriptionLanguage';
+import { acquireCaptureLease, releaseCaptureLease } from '../lib/captureLease';
 import { toFriendlyTranscriptionErrorMessage } from '../lib/transcriptionErrors';
 import { deleteManagedTranscriptAudio, retainTranscriptAudio } from '../lib/transcriptAudio';
 import { isUsageLimitError, type UsageLimitError } from '../lib/usageLimitError';
@@ -105,6 +106,8 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   // Whether the recording this hook started is still open. A call or Siri pauses the recorder,
   // which then reports not recording, so cancel can't read that from the recorder.
   const openRef = useRef(false);
+  // Meetings (background recording) park the keyboard's warm mic for as long as they capture.
+  const leaseHeldRef = useRef(false);
 
   const recorderOptions = getDefaultRecorderOptions();
   const audioRecorder = useAudioRecorder(recorderOptions);
@@ -113,6 +116,17 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   const saveToHistory = options.saveToHistory !== false;
   const cleanup = options.cleanup !== false;
   const isCancelled = (): boolean => options.shouldCancel?.() === true;
+
+  // Call only once the native recorder has stopped: releasing sooner lets the warm mic re-arm
+  // while this recorder's teardown is still deactivating the shared audio session.
+  const releaseLease = (): void => {
+    if (!leaseHeldRef.current) return;
+    leaseHeldRef.current = false;
+    releaseCaptureLease('meeting-local');
+  };
+
+  // The recorder belongs to this hook and goes down with it, so the lease must too.
+  useEffect(() => releaseLease, []);
 
   const ensureAudioSupport = () => {
     if (!isSupported || !expoAudio || !audioRecorder) {
@@ -157,6 +171,11 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         }
       }
 
+      if (allowsBackgroundRecording && !leaseHeldRef.current) {
+        await acquireCaptureLease('meeting-local');
+        leaseHeldRef.current = true;
+      }
+
       try {
         await audioModule.AudioModule.setAudioModeAsync({
           allowsRecording: true,
@@ -188,6 +207,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       setIsRecording(true);
       setCurrentText('');
     } catch (error) {
+      releaseLease();
       // Permission denial is a normal user state — surfaced by onError as a
       // friendly alert. Skip console.error so dev LogBox doesn't show a red toast.
       if (!isMicPermissionError(error)) {
@@ -217,6 +237,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         openRef.current = false;
       } finally {
         stoppingRef.current = false;
+        releaseLease();
       }
 
       const uri = recorder.uri;
@@ -516,6 +537,8 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         await audioRecorder.stop();
       } catch (stopError) {
         if (!paused) throw stopError;
+      } finally {
+        releaseLease();
       }
       openRef.current = false;
       if (uri) {
@@ -538,6 +561,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       openRef.current = false;
     } finally {
       stoppingRef.current = false;
+      releaseLease();
     }
     setIsRecording(false);
     setIsProcessing(false);

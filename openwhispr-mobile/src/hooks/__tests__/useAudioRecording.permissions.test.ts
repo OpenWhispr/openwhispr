@@ -5,6 +5,13 @@ import { isMicPermissionError } from '@/lib/permissions';
 // The recording path pulls in expo-sqlite-backed stores and the whole
 // transcription pipeline. None of it runs before the permission check, so mock
 // it away and keep these tests on the one branch Apple rejected us over.
+// Meetings' capture lease reaches Sentry and the native module, neither of which loads under
+// Jest; dictation never touches it.
+jest.mock('@/lib/captureLease', () => ({
+  acquireCaptureLease: jest.fn(),
+  releaseCaptureLease: jest.fn(),
+}));
+
 jest.mock('expo-file-system/legacy', () => ({ getInfoAsync: jest.fn() }));
 
 // permissions.ts re-exports the alert helper, which reaches nativewind through

@@ -14,6 +14,7 @@
 import { Buffer } from 'buffer';
 import * as Network from 'expo-network';
 import { api } from '@/lib/apiClient';
+import { acquireCaptureLease, releaseCaptureLease } from '@/lib/captureLease';
 import { withRetry, createApiRetryStrategy } from '@/lib/retry';
 import {
   LivePCMStreaming,
@@ -109,6 +110,8 @@ export async function startRealtimeMeetingWs(
   let flushTimer: ReturnType<typeof setInterval> | null = null;
   let rotationTimer: ReturnType<typeof setTimeout> | null = null;
   let frameSub: { remove(): void } | null = null;
+  // Flips false on the first release so every exit path can call releaseLease safely.
+  let leaseHeld = false;
 
   let legIndex = 0;
   let cumulativeOffsetMs = 0; // summed wall-clock duration of all prior legs
@@ -161,11 +164,21 @@ export async function startRealtimeMeetingWs(
     }
   };
 
+  const releaseLease = (): void => {
+    if (!leaseHeld) return;
+    leaseHeld = false;
+    releaseCaptureLease('meeting-cloud');
+  };
+
   // Mic + timers only, never the socket — a reconnectable close must not stop capture.
   const teardownCapture = (): void => {
     frameSub?.remove();
     frameSub = null;
-    LivePCMStreaming.stop().catch(() => {});
+    // Release only once the native stop has settled: re-arming the keyboard's warm mic while
+    // this teardown is still deactivating the audio session is the bug the lease prevents.
+    Promise.resolve(LivePCMStreaming.stop())
+      .catch(() => {})
+      .finally(releaseLease);
     if (flushTimer) {
       clearInterval(flushTimer);
       flushTimer = null;
@@ -402,11 +415,14 @@ export async function startRealtimeMeetingWs(
   frameSub = addPcmFrameListener((frame: PcmFrame) => {
     enqueuePcm(Buffer.from(frame.audio, 'base64'));
   });
+  await acquireCaptureLease('meeting-cloud');
+  leaseHeld = true;
   try {
     await LivePCMStreaming.start(sampleRate);
   } catch (error) {
     frameSub?.remove();
     frameSub = null;
+    releaseLease();
     throw error;
   }
 

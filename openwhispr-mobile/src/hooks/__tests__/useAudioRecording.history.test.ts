@@ -7,6 +7,13 @@ import { deleteManagedTranscriptAudio, retainTranscriptAudio } from '@/lib/trans
 import { isLocalModelMissingError } from '@/services/transcription/TranscriptionService';
 import { isUsageLimitError } from '@/lib/usageLimitError';
 
+// Meetings' capture lease reaches Sentry and the native module, neither of which loads under
+// Jest; dictation never touches it.
+jest.mock('@/lib/captureLease', () => ({
+  acquireCaptureLease: jest.fn(),
+  releaseCaptureLease: jest.fn(),
+}));
+
 jest.mock('expo-file-system/legacy', () => ({
   getInfoAsync: jest.fn(async () => ({ exists: true, size: 1024 })),
   deleteAsync: jest.fn(async () => undefined),

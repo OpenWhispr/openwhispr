@@ -8,6 +8,13 @@ import { useAudioRecording, type UseAudioRecordingOptions } from '../useAudioRec
 import { TranscriptionService } from '@/services/transcription/TranscriptionService';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 
+// Meetings' capture lease reaches Sentry and the native module, neither of which loads under
+// Jest; dictation never touches it.
+jest.mock('@/lib/captureLease', () => ({
+  acquireCaptureLease: jest.fn(),
+  releaseCaptureLease: jest.fn(),
+}));
+
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 jest.mock('expo-file-system/legacy', () => ({
   getInfoAsync: jest.fn(async () => ({ exists: true, size: 1024 })),

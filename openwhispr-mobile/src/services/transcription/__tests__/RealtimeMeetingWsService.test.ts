@@ -7,7 +7,8 @@
  */
 import { Buffer } from 'buffer';
 import { startRealtimeMeetingWs, type WebSocketLike } from '../RealtimeMeetingWsService';
-import { ROTATION_MS } from '../realtimeReconnect';
+import { ROTATION_MS, CONNECT_TIMEOUT_MS } from '../realtimeReconnect';
+import { acquireCaptureLease, releaseCaptureLease } from '@/lib/captureLease';
 import { MEETING_RECORDING_DISABLED_MESSAGE } from '../policyErrors';
 import { api } from '@/lib/apiClient';
 import * as Network from 'expo-network';
@@ -15,6 +16,11 @@ import { LivePCMStreaming, addPcmFrameListener } from '../../../../modules/live-
 
 jest.mock('@/lib/apiClient', () => ({
   api: { post: jest.fn() },
+}));
+
+jest.mock('@/lib/captureLease', () => ({
+  acquireCaptureLease: jest.fn(),
+  releaseCaptureLease: jest.fn(),
 }));
 
 jest.mock('expo-network', () => ({
@@ -162,6 +168,8 @@ beforeEach(() => {
   (LivePCMStreaming.start as jest.Mock).mockReset().mockResolvedValue(undefined);
   (LivePCMStreaming.stop as jest.Mock).mockReset().mockResolvedValue(undefined);
   (addPcmFrameListener as jest.Mock).mockReset().mockReturnValue({ remove: jest.fn() });
+  (acquireCaptureLease as jest.Mock).mockReset().mockResolvedValue(undefined);
+  (releaseCaptureLease as jest.Mock).mockReset();
 });
 
 afterEach(() => {
@@ -463,5 +471,117 @@ describe('startRealtimeMeetingWs — bounded outage buffer', () => {
     const bytes = leg2.appendedBytes();
     expect(bytes).toBeGreaterThan(0);
     expect(bytes).toBeLessThanOrEqual(4000);
+  });
+});
+
+describe('startRealtimeMeetingWs — capture lease', () => {
+  it('acquires the lease before the mic starts', async () => {
+    const order: string[] = [];
+    (acquireCaptureLease as jest.Mock).mockImplementation(async () => {
+      order.push('acquire');
+    });
+    (LivePCMStreaming.start as jest.Mock).mockImplementation(async () => {
+      order.push('start');
+    });
+
+    await boot();
+
+    expect(order).toEqual(['acquire', 'start']);
+    expect(acquireCaptureLease).toHaveBeenCalledWith('meeting-cloud');
+  });
+
+  it('does not start the mic until the acquire has resolved', async () => {
+    let grant: () => void = () => undefined;
+    (acquireCaptureLease as jest.Mock).mockReturnValue(
+      new Promise<void>((resolve) => {
+        grant = resolve;
+      }),
+    );
+
+    const startPromise = startRealtimeMeetingWs({}, {}, { wsFactory });
+    await flushMicro();
+    expect(LivePCMStreaming.start).not.toHaveBeenCalled();
+
+    grant();
+    await flushMicro();
+    expect(LivePCMStreaming.start).toHaveBeenCalledTimes(1);
+    lastLeg().open();
+    await startPromise;
+  });
+
+  it('releases only after the mic has stopped', async () => {
+    const { session } = await boot();
+    let finishStop: () => void = () => undefined;
+    (LivePCMStreaming.stop as jest.Mock).mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishStop = resolve;
+      }),
+    );
+
+    session.stop();
+    await flushMicro();
+    expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
+    expect(releaseCaptureLease).not.toHaveBeenCalled();
+
+    finishStop();
+    await flushMicro();
+    expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
+    expect(releaseCaptureLease).toHaveBeenCalledWith('meeting-cloud');
+  });
+
+  it('still releases when the native stop rejects', async () => {
+    const { session } = await boot();
+    (LivePCMStreaming.stop as jest.Mock).mockRejectedValue(new Error('stop failed'));
+
+    session.stop();
+    await flushMicro();
+
+    expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases when the mic fails to start', async () => {
+    (LivePCMStreaming.start as jest.Mock).mockRejectedValue(new Error('mic busy'));
+
+    await expect(startRealtimeMeetingWs({}, {}, { wsFactory })).rejects.toThrow('mic busy');
+
+    expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
+    expect(releaseCaptureLease).toHaveBeenCalledWith('meeting-cloud');
+  });
+
+  it('releases when the first leg never opens', async () => {
+    const startPromise = startRealtimeMeetingWs({}, {}, { wsFactory });
+    const outcome = expect(startPromise).rejects.toThrow('connect timeout');
+    await flushMicro();
+    await jest.advanceTimersByTimeAsync(CONNECT_TIMEOUT_MS + 1);
+    await outcome;
+    await flushMicro();
+
+    expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
+    expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases when the token is refused mid-meeting', async () => {
+    const { leg1 } = await boot({ onError: jest.fn() });
+    expect(releaseCaptureLease).not.toHaveBeenCalled();
+
+    (api.post as jest.Mock).mockRejectedValue(
+      Object.assign(new Error('Bad Request'), { status: 400 }),
+    );
+    leg1.serverClose(1006);
+    await flushMicro();
+    await jest.advanceTimersByTimeAsync(60_000);
+    await flushMicro();
+
+    expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases once when stop is called twice', async () => {
+    const { session } = await boot();
+
+    session.stop();
+    session.stop();
+    await flushMicro();
+
+    expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
   });
 });
