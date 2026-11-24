@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Text } from './Text';
 import { inset, raised, theme } from '@/android/theme';
@@ -6,6 +7,7 @@ import { inset, raised, theme } from '@/android/theme';
  * Android's one tab style (Dictionary's Words | Snippets): an inset, fully round grey track, the
  * picked tab a raised white pill with an ink label, 16 Medium labels, and an optional grey count.
  * Notes, the recorder, Style and Dictionary all use this, so every screen's tabs look the same.
+ * Options with an `icon` (Style's kinds of app) stack it above a 13 label in a taller tab.
  */
 const PICKED = raised;
 
@@ -16,6 +18,10 @@ export type SegmentedOption<T extends string> = {
   count?: number;
   /** A small orange dot after the label (a summary that's out of date). */
   dot?: boolean;
+  /** Drawn above the label; told whether its tab is picked, to match the surface behind it. */
+  icon?: (selected: boolean) => ReactNode;
+  /** What TalkBack reads when the label is a short form ("Personal" for "Personal messages"). */
+  accessibilityLabel?: string;
   testID?: string;
 };
 
@@ -32,6 +38,7 @@ export function SegmentedControl<T extends string>({
   scrollable?: boolean;
   disabled?: boolean;
 }) {
+  const stacked = options.some((option) => option.icon);
   const segments = (
     <View
       accessibilityRole="tablist"
@@ -47,30 +54,33 @@ export function SegmentedControl<T extends string>({
             accessibilityRole="tab"
             accessibilityState={{ selected, disabled }}
             accessibilityLabel={
-              option.count != null ? `${option.label}, ${option.count}` : option.label
+              option.accessibilityLabel ??
+              (option.count != null ? `${option.label}, ${option.count}` : option.label)
             }
             disabled={disabled}
             onPress={() => onChange(option.value)}
             style={({ pressed }) => [
               {
                 flex: scrollable ? undefined : 1,
-                minHeight: 38,
-                paddingHorizontal: 16,
+                minHeight: stacked ? 56 : 38,
+                paddingHorizontal: stacked ? 4 : 16,
+                paddingVertical: stacked ? 7 : 0,
                 borderRadius: 999,
-                flexDirection: 'row',
+                flexDirection: stacked ? 'column' : 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 6,
+                gap: stacked ? 4 : 6,
                 opacity: pressed ? 0.7 : 1,
               },
               selected && PICKED,
             ]}
           >
+            {option.icon?.(selected)}
             <Text
               numberOfLines={1}
               style={{
-                fontSize: 16,
-                lineHeight: 21,
+                fontSize: stacked ? 13 : 16,
+                lineHeight: stacked ? 17 : 21,
                 fontWeight: '500',
                 color: selected ? theme.ink : theme.secondary,
               }}

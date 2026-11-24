@@ -33,6 +33,14 @@ export const theme = {
   /** The dark toast pill; `toastSolid` is the snackbar with an action. */
   toast: 'rgba(29,29,36,0.92)',
   toastSolid: '#1D1D24',
+  /** Labels and icons on the brand glass. */
+  onGlass: '#FFFFFF',
+  /** Your own message bubble in an example (Style's previews). */
+  sentBubble: '#E3EBFC',
+  /** Words a tone drops, struck out in an example: the secondary grey at 45%. */
+  struck: 'rgba(102,99,110,0.45)',
+  /** The ring round a picked card (the tone setup's decks). */
+  pickedRing: 'rgba(52,102,226,0.9)',
   /** The brand glass gradient's two stops. */
   glassTop: '#5588F0',
   glassBottom: '#3466E2',

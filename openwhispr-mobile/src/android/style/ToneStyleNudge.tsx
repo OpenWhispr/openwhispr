@@ -3,8 +3,7 @@ import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useConfigStore } from '@/store/useConfigStore';
-import { glassEdge, gloss, glossPressed, home } from '../home/kit';
-import { raised, raisedPressed } from '../theme';
+import { flat, glass, glassPressed, raised, raisedPressed, theme } from '../theme';
 import { showToast } from '../settings/kit';
 import { useStyleT } from './strings';
 import { TONE_STYLE_NUDGE_MIN_WORDS, saveToneStyle, useToneStyle } from './toneStyle';
@@ -25,25 +24,25 @@ export function ToneStyleNudge({ words }: { words: number | undefined }) {
     );
   };
   return (
-    <View style={[glassEdge, { borderRadius: 20, padding: 16, gap: 14 }]}>
+    <View style={[flat, { borderRadius: 20, padding: 16, gap: 14 }]}>
       <View style={{ flexDirection: 'row', gap: 12 }}>
         <View
           style={{
             width: 36,
             height: 36,
             borderRadius: 10,
-            backgroundColor: home.tint,
+            backgroundColor: theme.selFill,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <SystemIcon name="sparkles" mdName="Sparkles" size={18} color={home.accent} />
+          <SystemIcon name="sparkles" mdName="Sparkles" size={18} color={theme.accent} />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '500', color: home.text }}>
+          <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '500', color: theme.ink }}>
             {t('nudgeTitle')}
           </Text>
-          <Text style={{ fontSize: 15, lineHeight: 20, color: home.secondary }}>
+          <Text style={{ fontSize: 15, lineHeight: 20, color: theme.secondary }}>
             {t('nudgeBody')}
           </Text>
         </View>
@@ -83,8 +82,8 @@ function NudgePill({
           alignItems: 'center',
           justifyContent: 'center',
         },
-        primary ? gloss : raised,
-        pressed && (primary ? glossPressed : raisedPressed),
+        primary ? glass : raised,
+        pressed && (primary ? glassPressed : raisedPressed),
       ]}
     >
       <Text
@@ -92,7 +91,7 @@ function NudgePill({
           fontSize: 15,
           lineHeight: 20,
           fontWeight: primary ? '600' : '500',
-          color: primary ? '#FFFFFF' : home.text,
+          color: primary ? theme.onGlass : theme.ink,
         }}
       >
         {label}
