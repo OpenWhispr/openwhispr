@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { PlatformColor, TextInput } from 'react-native';
 import { FormSheet } from '@/components/ui/FormSheet';
 import { AppFont } from '@/lib/fonts';
+import { useIosColor } from '@/config/colors.android';
 import { safeHaptics } from '@/lib/utils';
 import { NOTES_BUTTON_RADIUS } from './tokens';
 
@@ -26,6 +27,7 @@ export function createNewFolderSheet(
 ) {
   return function NewFolderSheet({ visible, onClose, onCreate, initialName }: NewFolderSheetProps) {
     const presentation = usePresentation(initialName);
+    const color = useIosColor();
     const prefilledName = presentation.initialName;
     const inputRef = useRef<TextInput>(null);
     const [name, setName] = useState('');
@@ -69,8 +71,9 @@ export function createNewFolderSheet(
           returnKeyType="done"
           onSubmitEditing={handleCreate}
           autoCapitalize="sentences"
-          className="h-12 px-3 text-[17px] text-label"
+          className="h-12 px-3 text-[17px]"
           style={{
+            color: color('label'),
             backgroundColor:
               presentation.backgroundColor ??
               (PlatformColor('tertiarySystemFill') as unknown as string),

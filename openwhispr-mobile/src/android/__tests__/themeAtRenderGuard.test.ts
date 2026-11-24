@@ -7,7 +7,11 @@ import path from 'path';
  *  - imports a static palette or recipe (`theme`, `flat`, `raised`, … from `theme.ts`, or the
  *    older token objects `home`, `look`, `notesLook`, `colors`, `ink`, `palette`, `authColors`),
  *  - builds a `StyleSheet` at module level, or
- *  - writes a colour (hex, rgb/rgba) into a module-level constant.
+ *  - writes a colour (hex, rgb/rgba) into a module-level constant, or
+ *  - colours through a NativeWind class whose value is fixed light on Android (`text-label`,
+ *    `bg-systemBackground`, …: `tailwind.config.js` gives them one hex each); read
+ *    `useIosColor()` from `@/config/colors.android` at render instead. Classes that look the
+ *    same in both schemes (`bg-brand`, `text-white`, `bg-black/40` scrims) are fine.
  * Every Android file is checked; the last ones moved in segment 7 (Account flows), so there is no
  * pending list any more.
  */
@@ -56,6 +60,9 @@ const LEGACY_TOKENS = new Set([
   'settings',
 ]);
 const COLOUR = /#[0-9a-f]{3,8}\b|\brgba?\(/i;
+/** NativeWind colour classes that stay light on Android whatever the scheme. */
+const LIGHT_ONLY_CLASS =
+  /(?:^|[\s'"`:])(?:bg|text|border|divide|placeholder|ring|tint)-(?:label|secondaryLabel|tertiaryLabel|quaternaryLabel|systemBackground|secondarySystemBackground|secondarySystemGroupedBackground|tertiarySystemFill|quaternarySystemFill|separator|link|systemRed|systemGreen|systemBlue|systemOrange|border|input|background|foreground|primary|secondary|destructive|muted|accent|popover|card)(?:\/\d+)?(?=$|[\s'"`])/;
 
 export function screenFiles(): string[] {
   const out: string[] = [];
@@ -130,6 +137,11 @@ export function moduleLevelColours(file: string): string[] {
     if (/StyleSheet\.create\(/.test(body)) hits.push(`${start}: module-level StyleSheet`);
     else if (COLOUR.test(body)) hits.push(`${start}: colour in a module-level constant`);
   }
+  lines.forEach((line, index) => {
+    const match = LIGHT_ONLY_CLASS.exec(line);
+    if (match)
+      hits.push(`${index + 1}: light-only class ${match[0].trim().replace(/^['"`:]/, '')}`);
+  });
   return hits;
 }
 
@@ -139,6 +151,14 @@ describe('theme at render guard (dark theme §3b)', () => {
   it('finds Android screen files to check', () => {
     expect(files.length).toBeGreaterThan(100);
     expect(files).toContain('src/android/Root.tsx');
+  });
+
+  it('flags a light-only NativeWind colour class', () => {
+    expect(LIGHT_ONLY_CLASS.test('className="text-[15px] text-label"')).toBe(true);
+    expect(LIGHT_ONLY_CLASS.test("'active:bg-tertiarySystemFill'")).toBe(true);
+    expect(LIGHT_ONLY_CLASS.test('className="border-b border-separator/40"')).toBe(true);
+    expect(LIGHT_ONLY_CLASS.test('className="bg-brand text-white bg-black/40"')).toBe(false);
+    expect(LIGHT_ONLY_CLASS.test("color('label')")).toBe(false);
   });
 
   it('reads colours at render in every Android file', () => {

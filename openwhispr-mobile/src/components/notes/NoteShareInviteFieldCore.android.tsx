@@ -44,7 +44,7 @@ export function createNoteShareInviteField(options: InvitePresentation = {}) {
   const presentation = {
     useCopy: () => ({ copy: (_key: string, fallback: string) => fallback }),
     useLabels: () => PRINCIPAL_LABEL,
-    inputClassName: 'py-1 text-[15px] text-label',
+    inputClassName: 'py-1 text-[15px]',
     numberOfLines: 1,
     inviteText: (query: string, _copy: NoteShareCopy): ReactNode => ['Invite ', query],
     ...options,
@@ -62,7 +62,7 @@ export function createNoteShareInviteField(options: InvitePresentation = {}) {
   }: NoteShareInviteFieldProps) {
     const { copy } = useCopy();
     const labels = useLabels();
-    const placeholderColor = useIosColor()('tertiaryLabel');
+    const color = useIosColor();
     const [suggestions, setSuggestions] = useState<AccessPrincipalSuggestion[]>([]);
     const [searchError, setSearchError] = useState(false);
     const searchable = Boolean(remoteId && access?.can_manage_access && onAddPrincipal);
@@ -123,13 +123,13 @@ export function createNoteShareInviteField(options: InvitePresentation = {}) {
         <TextInput
           accessibilityLabel={placeholder}
           className={presentation.inputClassName}
-          style={INPUT_STYLE}
+          style={[INPUT_STYLE, { color: color('label') }]}
           placeholder={
             searchable
               ? copy('noteAccess.searchPlaceholder', 'Add people or emails')
               : copy('noteAccess.email', 'Invite by email')
           }
-          placeholderTextColor={placeholderColor}
+          placeholderTextColor={color('tertiaryLabel')}
           autoCapitalize="none"
           autoCorrect={false}
           autoComplete="email"
@@ -142,7 +142,7 @@ export function createNoteShareInviteField(options: InvitePresentation = {}) {
           onSubmitEditing={onInvite}
         />
         {searchError && (
-          <Text className="pt-1 text-[12px] text-systemRed">
+          <Text className="pt-1 text-[12px]" style={{ color: color('systemRed') }}>
             {copy('noteAccess.searchError', 'Search unavailable. Try again.')}
           </Text>
         )}
@@ -160,11 +160,12 @@ export function createNoteShareInviteField(options: InvitePresentation = {}) {
         >
           <Text
             numberOfLines={presentation.numberOfLines}
-            className={busy ? 'text-[15px] text-tertiaryLabel' : 'text-[15px] text-link'}
+            className="text-[15px]"
+            style={{ color: color(busy ? 'tertiaryLabel' : 'link') }}
           >
             {presentation.inviteText(query, copy)}
           </Text>
-          <Text className="text-[12px] text-secondaryLabel">
+          <Text className="text-[12px]" style={{ color: color('secondaryLabel') }}>
             {copy('noteAccess.sendsEmail', 'Sends an email invitation')}
           </Text>
         </GroupedList.Row>,
@@ -185,33 +186,35 @@ export function createNoteShareInviteField(options: InvitePresentation = {}) {
         >
           <Text
             numberOfLines={presentation.numberOfLines}
-            className={busy ? 'text-[15px] text-tertiaryLabel' : 'text-[15px] text-label'}
+            className="text-[15px]"
+            style={{ color: color(busy ? 'tertiaryLabel' : 'label') }}
           >
             {name}
           </Text>
           <Text
             numberOfLines={presentation.numberOfLines}
-            className="text-[12px] text-secondaryLabel"
+            className="text-[12px]"
+            style={{ color: color('secondaryLabel') }}
           >
             {principal.name && principal.email ? principal.email : labels[principal.type]}
           </Text>
         </GroupedList.Row>,
       );
     }
-    return <View>{withDividers(rows)}</View>;
+    return <View>{withDividers(rows, color('separator'))}</View>;
   };
 }
 
 /** Rows inside one card slot, separated like the card's own rows. */
-function withDividers(rows: ReactElement[]): ReactNode[] {
+function withDividers(rows: ReactElement[], dividerColor: string): ReactNode[] {
   return rows.flatMap((row, index) =>
     index === 0
       ? [row]
       : [
           <View
             key={`divider-${row.key}`}
-            className="h-px bg-separator"
-            style={{ marginLeft: NOTES_ROW_CONTENT_INSET }}
+            className="h-px"
+            style={{ marginLeft: NOTES_ROW_CONTENT_INSET, backgroundColor: dividerColor }}
           />,
           row,
         ],

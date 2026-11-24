@@ -1,6 +1,7 @@
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { Alert, ActivityIndicator, Platform, Pressable, useColorScheme } from 'react-native';
+import { Alert, ActivityIndicator, Platform, Pressable } from 'react-native';
 import { MenuView, type MenuAction } from '@react-native-menu/menu';
+import { useTheme } from '@/android/ThemeProvider';
 import * as Sentry from '@sentry/react-native';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { GlassCapsule } from '@/components/ui/GlassIconButton';
@@ -52,7 +53,7 @@ export function NoteActionsMenu({
   const isPrivate = useNotesStore((s) => s.notes.find((n) => n.id === noteId)?.isPrivate === 1);
   const setNotePrivacy = useNotesStore((s) => s.setNotePrivacy);
 
-  const scheme = useColorScheme();
+  const scheme = useTheme().scheme;
   const iconColor = scheme === 'dark' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(0, 0, 0, 0.85)';
 
   const disabled = isRecording || processing;

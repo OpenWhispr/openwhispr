@@ -80,7 +80,11 @@ export function createNoteRow(
                     color="secondaryLabel"
                   />
                 )}
-                <Text className="flex-1 text-[16px] font-semibold text-label" numberOfLines={1}>
+                <Text
+                  className="flex-1 text-[16px] font-semibold"
+                  style={{ color: iosColor('label') }}
+                  numberOfLines={1}
+                >
                   {title}
                 </Text>
               </View>
@@ -90,8 +94,14 @@ export function createNoteRow(
                 </View>
               )}
             </View>
-            <Text className="text-[13px] text-secondaryLabel" numberOfLines={1}>
-              <Text className="font-semibold text-secondaryLabel">{timeLabel}</Text>
+            <Text
+              className="text-[13px]"
+              style={{ color: iosColor('secondaryLabel') }}
+              numberOfLines={1}
+            >
+              <Text className="font-semibold" style={{ color: iosColor('secondaryLabel') }}>
+                {timeLabel}
+              </Text>
               {timeLabel ? '  ' : ''}
               {preview}
             </Text>

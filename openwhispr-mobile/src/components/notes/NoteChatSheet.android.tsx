@@ -17,6 +17,7 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { MarkdownRenderer } from '@/components/notes/MarkdownRenderer';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { BRAND } from '@/config/colors';
+import { useIosColor } from '@/config/colors.android';
 import type { ChatOverNoteMessage } from '@/lib/notes/chatOverNote';
 import type { NoteChatSuggestion } from '@/lib/notes/noteChatSuggestions';
 
@@ -55,6 +56,7 @@ export function NoteChatSheet({
 }: NoteChatSheetProps) {
   const insets = useSafeAreaInsets();
   const { copy } = useAndroidCopy();
+  const color = useIosColor();
   const { height: windowHeight } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
   const keyboardHeight = useKeyboardHeight(visible);
@@ -91,21 +93,29 @@ export function NoteChatSheet({
           className="absolute inset-0 bg-black/40"
         />
         <View
-          className="rounded-t-[28px] bg-systemBackground px-5 pt-3"
+          className="rounded-t-[28px] px-5 pt-3"
           style={{
+            backgroundColor: color('systemBackground'),
             height: sheetHeight,
             paddingBottom: bottomPad,
             borderCurve: 'continuous',
           }}
         >
-          <View className="mb-2 self-center h-1.5 w-9 rounded-full bg-quaternaryLabel" />
+          <View
+            className="mb-2 self-center h-1.5 w-9 rounded-full"
+            style={{ backgroundColor: color('quaternaryLabel') }}
+          />
           <View className="mb-3 flex-row items-center justify-between">
             <View className="flex-1 pr-3">
-              <Text accessibilityRole="header" className="text-[19px] font-bold text-label">
+              <Text
+                accessibilityRole="header"
+                className="text-[19px] font-bold"
+                style={{ color: color('label') }}
+              >
                 {copy('editor.askNote', 'Ask about this note')}
               </Text>
               {!isAndroid ? (
-                <Text className="mt-1 text-[13px] text-secondaryLabel">
+                <Text className="mt-1 text-[13px]" style={{ color: color('secondaryLabel') }}>
                   {copy(
                     'noteChat.privacy',
                     "Answers use only this note. This chat is temporary and won't be saved.",
@@ -121,7 +131,7 @@ export function NoteChatSheet({
                 accessibilityRole="button"
                 accessibilityLabel={copy('noteChat.clearChat', 'Clear chat')}
               >
-                <Text className="text-[14px] font-medium text-link">
+                <Text className="text-[14px] font-medium" style={{ color: color('link') }}>
                   {copy('noteChat.clear', 'Clear')}
                 </Text>
               </Pressable>
@@ -146,7 +156,7 @@ export function NoteChatSheet({
             }}
           >
             {isAndroid ? (
-              <Text className="mb-3 text-[13px] text-secondaryLabel">
+              <Text className="mb-3 text-[13px]" style={{ color: color('secondaryLabel') }}>
                 {copy(
                   'noteChat.privacy',
                   "Answers use only this note. This chat is temporary and won't be saved.",
@@ -161,9 +171,12 @@ export function NoteChatSheet({
                     <View
                       key={message.id}
                       className={`max-w-[86%] rounded-[18px] px-3 py-2 ${
-                        isUser ? 'self-end bg-brand' : 'self-start bg-secondarySystemBackground'
+                        isUser ? 'self-end bg-brand' : 'self-start'
                       }`}
-                      style={{ borderCurve: 'continuous' }}
+                      style={[
+                        { borderCurve: 'continuous' },
+                        isUser ? null : { backgroundColor: color('secondarySystemBackground') },
+                      ]}
                     >
                       {isUser ? (
                         <Text className="text-[15px] leading-5 text-white">{message.text}</Text>
@@ -175,12 +188,15 @@ export function NoteChatSheet({
                 })}
                 {isProcessing ? (
                   <View
-                    className="max-w-[86%] self-start rounded-[18px] bg-secondarySystemBackground px-3 py-2"
-                    style={{ borderCurve: 'continuous' }}
+                    className="max-w-[86%] self-start rounded-[18px] px-3 py-2"
+                    style={{
+                      borderCurve: 'continuous',
+                      backgroundColor: color('secondarySystemBackground'),
+                    }}
                   >
                     <View className="flex-row items-center gap-2">
                       <ActivityIndicator size="small" color={BRAND} />
-                      <Text className="text-[14px] text-secondaryLabel">
+                      <Text className="text-[14px]" style={{ color: color('secondaryLabel') }}>
                         {copy('noteChat.thinking', 'Thinking...')}
                       </Text>
                     </View>
@@ -191,8 +207,13 @@ export function NoteChatSheet({
           </ScrollView>
 
           {error ? (
-            <View className="mb-2 rounded-xl bg-tertiarySystemFill px-3 py-2">
-              <Text className="text-[13px] text-secondaryLabel">{error}</Text>
+            <View
+              className="mb-2 rounded-xl px-3 py-2"
+              style={{ backgroundColor: color('tertiarySystemFill') }}
+            >
+              <Text className="text-[13px]" style={{ color: color('secondaryLabel') }}>
+                {error}
+              </Text>
               <Pressable
                 onPress={onRetry}
                 disabled={isProcessing}
@@ -200,7 +221,7 @@ export function NoteChatSheet({
                 accessibilityRole="button"
                 accessibilityLabel={copy('noteChat.retryQuestion', 'Retry chat question')}
               >
-                <Text className="text-[13px] font-semibold text-link">
+                <Text className="text-[13px] font-semibold" style={{ color: color('link') }}>
                   {copy('noteChat.retryAction', 'Retry')}
                 </Text>
               </Pressable>
@@ -228,10 +249,13 @@ export function NoteChatSheet({
                       : suggestion.label
                   }
                   accessibilityHint={copy('noteChat.sendsQuestion', 'Sends this question')}
-                  className="rounded-full bg-tertiarySystemFill px-4 py-2.5 active:opacity-70 disabled:opacity-50"
-                  style={{ borderCurve: 'continuous' }}
+                  className="rounded-full px-4 py-2.5 active:opacity-70 disabled:opacity-50"
+                  style={{
+                    borderCurve: 'continuous',
+                    backgroundColor: color('tertiarySystemFill'),
+                  }}
                 >
-                  <Text className="text-[15px] font-medium text-label">
+                  <Text className="text-[15px] font-medium" style={{ color: color('label') }}>
                     {suggestion.labelKey
                       ? copy(suggestion.labelKey, suggestion.label)
                       : suggestion.label}
@@ -241,7 +265,10 @@ export function NoteChatSheet({
             </ScrollView>
           ) : null}
 
-          <View className="flex-row items-end gap-2 rounded-[22px] bg-secondarySystemBackground px-3 py-2">
+          <View
+            className="flex-row items-end gap-2 rounded-[22px] px-3 py-2"
+            style={{ backgroundColor: color('secondarySystemBackground') }}
+          >
             <TextInput
               value={draft}
               onChangeText={onDraftChange}
@@ -250,10 +277,11 @@ export function NoteChatSheet({
                   ? copy('noteChat.questionPlaceholder', 'Ask a question...')
                   : copy('noteChat.noContent', 'No note content to ask about')
               }
-              placeholderTextColor="rgba(60,60,67,0.35)"
+              placeholderTextColor={color('tertiaryLabel')}
               multiline
               editable={canSend && !isProcessing}
-              className="max-h-[110px] flex-1 py-1 text-[16px] leading-5 text-label"
+              className="max-h-[110px] flex-1 py-1 text-[16px] leading-5"
+              style={{ color: color('label') }}
               textAlignVertical="top"
             />
             <Pressable
@@ -262,8 +290,9 @@ export function NoteChatSheet({
               accessibilityRole="button"
               accessibilityLabel={copy('noteChat.sendQuestion', 'Send question')}
               className={`${Platform.OS === 'android' ? 'h-12 w-12' : 'h-9 w-9'} items-center justify-center rounded-full ${
-                canSubmit ? 'bg-brand' : 'bg-tertiarySystemFill'
+                canSubmit ? 'bg-brand' : ''
               }`}
+              style={canSubmit ? undefined : { backgroundColor: color('tertiarySystemFill') }}
             >
               <SystemIcon
                 name="arrow.up"

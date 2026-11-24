@@ -6,7 +6,7 @@ export const FolderRow = createFolderRow(function useFolderRowPresentation(count
   return {
     countLabel: copy('library.noteCount', `${count} ${count === 1 ? 'note' : 'notes'}`, { count }),
     rowClassName: 'flex-row items-center justify-between gap-3',
-    labelClassName: 'min-w-0 flex-1 text-[17px] font-medium text-label',
+    labelClassName: 'min-w-0 flex-1 text-[17px] font-medium',
     labelLines: 2,
   };
 });

@@ -3,6 +3,7 @@ import { TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { Button } from '@/components/ui/Button';
+import { useIosColor } from '@/config/colors.android';
 import {
   createMoveToFolderSheet,
   type MoveFolderPresentation,
@@ -18,6 +19,7 @@ function useAndroidMoveFolderPresentation({
 }: MoveFolderPresentationProps): MoveFolderPresentation {
   const { t } = useTranslation('android');
   const { copy } = useAndroidCopy();
+  const color = useIosColor();
   const [creating, setCreating] = useState(false);
   const [folderName, setFolderName] = useState('');
   useEffect(() => {
@@ -35,7 +37,7 @@ function useAndroidMoveFolderPresentation({
       else onClose();
     },
     headerProps: (topInset) => ({ style: { paddingTop: topInset + 20 } }),
-    titleClassName: 'min-w-0 flex-1 text-[22px] font-bold text-label',
+    titleClassName: 'min-w-0 flex-1 text-[22px] font-bold',
     renderCreation: creating
       ? () => (
           <View className="gap-4">
@@ -45,7 +47,9 @@ function useAndroidMoveFolderPresentation({
               onChangeText={setFolderName}
               accessibilityLabel={t('folderName')}
               placeholder={t('folderName')}
-              className="min-h-12 rounded-xl bg-tertiarySystemFill px-4 text-base text-label"
+              placeholderTextColor={color('tertiaryLabel')}
+              className="min-h-12 rounded-xl px-4 text-base"
+              style={{ backgroundColor: color('tertiarySystemFill'), color: color('label') }}
             />
             <Button
               disabled={!folderName.trim()}

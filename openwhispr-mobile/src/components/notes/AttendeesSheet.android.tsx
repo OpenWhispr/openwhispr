@@ -12,7 +12,7 @@ export const AttendeesSheet = createAttendeesSheet(function useAttendeesPresenta
         guest: copy('noteDetails.guest', 'Guest'),
       }),
     headerStyle: (top) => ({ paddingTop: top + 20 }),
-    headerClassName: 'flex-1 pr-4 text-[22px] font-bold text-label',
+    headerClassName: 'flex-1 pr-4 text-[22px] font-bold',
     personClassName: 'gap-1',
   };
 });

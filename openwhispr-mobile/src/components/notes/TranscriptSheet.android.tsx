@@ -9,6 +9,7 @@ import { GlassCapsule, GlassIconButton } from '@/components/ui/GlassIconButton';
 import { displayFontFamily } from '@/lib/fonts';
 import type { TranscriptBlock } from '@/lib/diarization/transcriptDisplay';
 import { SpeakerTranscript } from './SpeakerTranscript';
+import { useIosColor } from '@/config/colors.android';
 
 interface TranscriptSheetProps {
   visible: boolean;
@@ -35,6 +36,7 @@ export function TranscriptSheet({
 }: TranscriptSheetProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const { copy } = useAndroidCopy();
+  const color = useIosColor();
 
   const handleShare = async (): Promise<void> => {
     try {
@@ -55,8 +57,11 @@ export function TranscriptSheet({
       onRequestClose={onClose}
     >
       <View
-        className="flex-1 bg-systemBackground"
-        style={Platform.OS === 'android' ? { paddingTop: insets.top } : undefined}
+        className="flex-1"
+        style={[
+          { backgroundColor: color('systemBackground') },
+          Platform.OS === 'android' ? { paddingTop: insets.top } : undefined,
+        ]}
       >
         <View
           className={
@@ -68,12 +73,12 @@ export function TranscriptSheet({
           <View className={Platform.OS === 'android' ? '' : 'flex-1'}>
             <Text
               accessibilityRole="header"
-              className="text-[28px] text-label"
-              style={{ fontFamily: displayFontFamily }}
+              className="text-[28px]"
+              style={{ fontFamily: displayFontFamily, color: color('label') }}
             >
               {copy('importTranscript', 'Transcript')}
             </Text>
-            <Text className="mt-1 text-[15px] leading-5 text-secondaryLabel">
+            <Text className="mt-1 text-[15px] leading-5" style={{ color: color('secondaryLabel') }}>
               {copy(
                 'noteDetails.transcriptSubtitle',
                 'Review, share or export the full transcript.',

@@ -3,6 +3,7 @@ import { Text } from '@/components/ui/Text';
 import { GroupedList } from './GroupedList';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import type { LucideIconName } from '@/components/ui/SystemIcon';
+import { useIosColor } from '@/config/colors.android';
 
 type FolderRowProps = {
   sfName: string;
@@ -36,6 +37,7 @@ export function createFolderRow(
     onLongPress,
   }: FolderRowProps) {
     const presentation = usePresentation(count);
+    const color = useIosColor();
     return (
       <GroupedList.Row
         onPress={onPress}
@@ -46,15 +48,16 @@ export function createFolderRow(
       >
         <View className={presentation.rowClassName ?? 'flex-row items-center justify-between'}>
           <Text
-            className={presentation.labelClassName ?? 'text-[17px] font-medium text-label'}
+            className={presentation.labelClassName ?? 'text-[17px] font-medium'}
+            style={{ color: color('label') }}
             numberOfLines={presentation.labelLines ?? 1}
           >
             {label}
           </Text>
           <View className="flex-row items-center gap-2">
             <Text
-              className="text-[15px] text-tertiaryLabel"
-              style={{ fontVariant: ['tabular-nums'] }}
+              className="text-[15px]"
+              style={{ fontVariant: ['tabular-nums'], color: color('tertiaryLabel') }}
             >
               {count}
             </Text>

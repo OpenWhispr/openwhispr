@@ -57,8 +57,8 @@ export const SearchField = forwardRef<TextInput, SearchFieldProps>(function Sear
         autoCapitalize="none"
         autoFocus={autoFocus}
         clearButtonMode="while-editing"
-        className="flex-1 py-0 text-[15px] text-label"
-        style={{ fontFamily: AppFont.regular }}
+        className="flex-1 py-0 text-[15px]"
+        style={{ fontFamily: AppFont.regular, color: iosColor('label') }}
       />
       {rightSlot}
     </View>

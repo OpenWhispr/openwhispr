@@ -17,6 +17,6 @@ export const SyncStatusLabel = createSyncStatusLabel(function useStatusPresentat
         .filter(Boolean)
         .join(' '),
     unlimitedLines: true,
-    conflictClassName: 'shrink text-[13px] font-medium text-systemOrange',
+    conflictClassName: 'shrink text-[13px] font-medium',
   };
 });

@@ -7,6 +7,7 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { SearchField } from '@/components/ui/SearchField';
 import { GlassBackButton } from '@/components/ui/GlassBackButton';
 import { safeHaptics } from '@/lib/utils';
+import { useIosColor } from '@/config/colors.android';
 
 type NotesTopBarProps = {
   showBack?: boolean;
@@ -30,6 +31,7 @@ export function NotesTopBar({
 }: NotesTopBarProps) {
   const { copy } = useAndroidCopy();
   const insets = useSafeAreaInsets();
+  const color = useIosColor();
   const hasTopRow = Boolean(showBack || rightSlots || title);
 
   return (
@@ -43,7 +45,8 @@ export function NotesTopBar({
               <Text
                 accessibilityRole="header"
                 numberOfLines={1}
-                className="text-[17px] font-semibold text-label"
+                className="text-[17px] font-semibold"
+                style={{ color: color('label') }}
               >
                 {title}
               </Text>

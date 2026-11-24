@@ -8,6 +8,7 @@ import { SpaceRow } from './SpaceRow';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { GlassIconButton } from '@/components/ui/GlassIconButton';
 import { safeHaptics } from '@/lib/utils';
+import { useIosColor } from '@/config/colors.android';
 import type { Folder, Space } from '@/data';
 
 export type MoveToFolderSheetProps = {
@@ -66,6 +67,7 @@ export function createMoveToFolderSheet(
     const presentation = usePresentation({ visible, onClose, onCreateAndPick });
     const copy = presentation.copy ?? defaultCopy;
     const insets = useSafeAreaInsets();
+    const color = useIosColor();
     const targets = folders.filter((f) => f.id !== excludeFolderId && !f.deletedAt);
     const title =
       activeSpaceId == null
@@ -103,14 +105,15 @@ export function createMoveToFolderSheet(
         presentationStyle="pageSheet"
         onRequestClose={presentation.onRequestClose ?? onClose}
       >
-        <View className="flex-1 bg-systemBackground">
+        <View className="flex-1" style={{ backgroundColor: color('systemBackground') }}>
           <View
             className="flex-row items-center justify-between px-6 pb-4 pt-8"
             {...presentation.headerProps?.(insets.top)}
           >
             <Text
               accessibilityRole="header"
-              className={presentation.titleClassName ?? 'text-[22px] font-bold text-label'}
+              className={presentation.titleClassName ?? 'text-[22px] font-bold'}
+              style={{ color: color('label') }}
             >
               {title}
             </Text>
@@ -145,7 +148,7 @@ export function createMoveToFolderSheet(
                       />
                     }
                   >
-                    <Text className="text-[17px] font-medium text-link">
+                    <Text className="text-[17px] font-medium" style={{ color: color('link') }}>
                       {copy('createFolder', 'Create New Folder')}
                     </Text>
                   </GroupedList.Row>
@@ -168,7 +171,10 @@ export function createMoveToFolderSheet(
 
                 {spaces.length > 0 && (
                   <View className="gap-2">
-                    <Text className="px-1 text-[13px] uppercase tracking-wider text-secondaryLabel">
+                    <Text
+                      className="px-1 text-[13px] uppercase tracking-wider"
+                      style={{ color: color('secondaryLabel') }}
+                    >
                       {copy('library.spaces', 'Spaces')}
                     </Text>
                     <GroupedList>

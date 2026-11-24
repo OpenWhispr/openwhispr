@@ -4,13 +4,15 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { safeHaptics } from '@/lib/utils';
+import { useIosColor } from '@/config/colors.android';
 
 // Android's native toolbar truncates long workflow names at large text sizes.
 // An intrinsic-height header keeps the full title and back control available.
 export function WorkflowSettingsHeader({ title, onBack }: { title: string; onBack: () => void }) {
   const { copy } = useAndroidCopy();
+  const color = useIosColor();
   return (
-    <View className="bg-systemBackground">
+    <View style={{ backgroundColor: color('systemBackground') }}>
       <SafeAreaView edges={['top', 'left', 'right']}>
         <View className="flex-row items-center gap-2 px-4 py-2">
           <Pressable
@@ -20,13 +22,17 @@ export function WorkflowSettingsHeader({ title, onBack }: { title: string; onBac
               safeHaptics('selection');
               onBack();
             }}
-            className="h-12 w-12 items-center justify-center rounded-full active:bg-tertiarySystemFill"
+            className="h-12 w-12 items-center justify-center rounded-full"
+            style={({ pressed }) =>
+              pressed ? { backgroundColor: color('tertiarySystemFill') } : null
+            }
           >
             <SystemIcon name="chevron.left" mdName="ArrowLeft" size={22} color="label" />
           </Pressable>
           <Text
             accessibilityRole="header"
-            className="min-w-0 flex-1 text-[18px] font-semibold text-label"
+            className="min-w-0 flex-1 text-[18px] font-semibold"
+            style={{ color: color('label') }}
           >
             {title}
           </Text>

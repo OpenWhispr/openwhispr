@@ -7,13 +7,14 @@ import {
   Pressable,
   ScrollView,
   View,
-  useColorScheme,
   type ViewStyle,
 } from 'react-native';
 import { MenuView, type MenuAction } from '@react-native-menu/menu';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
+import { useIosColor } from '@/config/colors.android';
+import { useTheme } from '@/android/ThemeProvider';
 import { GlassIconButton } from '@/components/ui/GlassIconButton';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { INVALID_EMAIL_ERROR, useNoteSharing } from '@/hooks/useNoteSharing';
@@ -104,13 +105,13 @@ function MessageRow({
   children: ReactNode;
   tone?: 'secondary' | 'error';
 }) {
+  const color = useIosColor();
   return (
     <GroupedList.Row>
       <Text
         accessibilityRole={tone === 'error' ? 'alert' : undefined}
-        className={
-          tone === 'error' ? 'text-[15px] text-systemRed' : 'text-[15px] text-secondaryLabel'
-        }
+        className="text-[15px]"
+        style={{ color: color(tone === 'error' ? 'systemRed' : 'secondaryLabel') }}
       >
         {children}
       </Text>
@@ -145,28 +146,38 @@ export function createNoteShareSheet(options: SheetPresentation = {}) {
       message: (failure: PrivacyFailure, _copy: NoteShareCopy) =>
         typeof failure === 'string' ? failure : null,
     },
-    headerClassName: 'text-[22px] font-bold text-label',
-    loadingRowClassName: 'text-[15px] text-secondaryLabel',
-    updatingClassName: 'text-[13px] text-secondaryLabel',
-    loadingClassName: 'text-secondaryLabel',
+    headerClassName: 'text-[22px] font-bold',
+    loadingRowClassName: 'text-[15px]',
+    updatingClassName: 'text-[13px]',
+    loadingClassName: '',
     ...options,
   };
   const { useCopy } = presentation;
 
   function LoadingRow({ label }: { label: string }) {
+    const color = useIosColor();
     return (
       <GroupedList.Row>
         <View className="flex-row items-center gap-2">
           <ActivityIndicator size="small" />
-          <Text className={presentation.loadingRowClassName}>{label}</Text>
+          <Text
+            className={presentation.loadingRowClassName}
+            style={{ color: color('secondaryLabel') }}
+          >
+            {label}
+          </Text>
         </View>
       </GroupedList.Row>
     );
   }
 
   function SectionLabel({ children }: { children: string }) {
+    const color = useIosColor();
     return (
-      <Text className="px-1 text-[13px] uppercase tracking-wider text-secondaryLabel">
+      <Text
+        className="px-1 text-[13px] uppercase tracking-wider"
+        style={{ color: color('secondaryLabel') }}
+      >
         {children}
       </Text>
     );
@@ -174,7 +185,12 @@ export function createNoteShareSheet(options: SheetPresentation = {}) {
 
   /** Supporting text under a card, like a grouped list's section footer. */
   function SectionFooter({ children }: { children: ReactNode }) {
-    return <Text className="px-4 text-[12px] text-secondaryLabel">{children}</Text>;
+    const color = useIosColor();
+    return (
+      <Text className="px-4 text-[12px]" style={{ color: color('secondaryLabel') }}>
+        {children}
+      </Text>
+    );
   }
 
   return function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: NoteShareSheetProps) {
@@ -188,7 +204,8 @@ export function createNoteShareSheet(options: SheetPresentation = {}) {
     const sharing = useNoteSharing(noteId, onFlushDraft);
     const router = useRouter();
     const insets = useSafeAreaInsets();
-    const scheme = useColorScheme();
+    const scheme = useTheme().scheme;
+    const color = useIosColor();
     const cloudBackupEnabled = useConfigStore((state) =>
       presentation.cloudBackupEnabled
         ? presentation.cloudBackupEnabled(state.config)
@@ -474,8 +491,12 @@ export function createNoteShareSheet(options: SheetPresentation = {}) {
       <View className="flex-row items-center gap-3 px-4 py-3">
         <RowIcon name={accessIcon} mdName={accessMdIcon} tone="brand" />
         <View className="min-w-0 flex-1">
-          <Text className="text-[15px] font-medium text-label">{accessTitle}</Text>
-          <Text className="text-[12px] text-secondaryLabel">{accessDetail}</Text>
+          <Text className="text-[15px] font-medium" style={{ color: color('label') }}>
+            {accessTitle}
+          </Text>
+          <Text className="text-[12px]" style={{ color: color('secondaryLabel') }}>
+            {accessDetail}
+          </Text>
         </View>
         {accessMenu.length > 0 && (
           <SystemIcon
@@ -499,7 +520,9 @@ export function createNoteShareSheet(options: SheetPresentation = {}) {
             accessibilityLabel={copy('noteSharing.general', 'General access')}
             accessibilityValue={{ text: `${accessTitle}. ${accessDetail}` }}
             accessibilityHint={copy('noteSharing.generalHint', 'Changes who can open this note')}
-            className="active:bg-tertiarySystemFill"
+            style={({ pressed }) =>
+              pressed ? { backgroundColor: color('tertiarySystemFill') } : null
+            }
           >
             {accessRowContent}
           </Pressable>
@@ -548,7 +571,7 @@ export function createNoteShareSheet(options: SheetPresentation = {}) {
       );
     } else if (linkManaged) {
       accessStrip = (
-        <Text className="px-4 py-3 text-[13px] text-secondaryLabel">
+        <Text className="px-4 py-3 text-[13px]" style={{ color: color('secondaryLabel') }}>
           {backupOff
             ? copy('noteSharing.missingLink', 'The full link isn’t saved on this device.')
             : copy(
@@ -578,7 +601,11 @@ export function createNoteShareSheet(options: SheetPresentation = {}) {
       <>
         {sharing.error && !unknown && !(privateNote && note?.remoteId) && (
           <View className="gap-1 px-1">
-            <Text accessibilityRole="alert" className="text-[13px] text-systemRed">
+            <Text
+              accessibilityRole="alert"
+              className="text-[13px]"
+              style={{ color: color('systemRed') }}
+            >
               {sharing.error}
             </Text>
             <View className="flex-row flex-wrap gap-x-6">
@@ -600,12 +627,20 @@ export function createNoteShareSheet(options: SheetPresentation = {}) {
           </View>
         )}
         {privacyError && (
-          <Text accessibilityRole="alert" className="px-1 text-[13px] text-systemRed">
+          <Text
+            accessibilityRole="alert"
+            className="px-1 text-[13px]"
+            style={{ color: color('systemRed') }}
+          >
             {privacyError}
           </Text>
         )}
         {sharing.message && (
-          <Text accessibilityRole="alert" className="px-1 text-[13px] text-secondaryLabel">
+          <Text
+            accessibilityRole="alert"
+            className="px-1 text-[13px]"
+            style={{ color: color('secondaryLabel') }}
+          >
             {sharing.message}
           </Text>
         )}
@@ -638,12 +673,16 @@ export function createNoteShareSheet(options: SheetPresentation = {}) {
 
     return (
       <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
-        <View className="flex-1 bg-systemBackground">
+        <View className="flex-1" style={{ backgroundColor: color('systemBackground') }}>
           <View
             className="flex-row items-center justify-between px-6 pb-4 pt-8"
             {...(presentation.headerStyle ? { style: presentation.headerStyle(insets.top) } : {})}
           >
-            <Text accessibilityRole="header" className={presentation.headerClassName}>
+            <Text
+              accessibilityRole="header"
+              className={presentation.headerClassName}
+              style={{ color: color('label') }}
+            >
               {copy('noteSharing.title', 'Share note')}
             </Text>
             {closable && (
@@ -663,7 +702,10 @@ export function createNoteShareSheet(options: SheetPresentation = {}) {
             {sharing.busy && (
               <View className="flex-row items-center gap-2 px-1" accessibilityRole="alert">
                 <ActivityIndicator size="small" />
-                <Text className={presentation.updatingClassName}>
+                <Text
+                  className={presentation.updatingClassName}
+                  style={{ color: color('secondaryLabel') }}
+                >
                   {copy('noteSharing.updating', 'Updating sharing…')}
                 </Text>
               </View>
@@ -759,7 +801,10 @@ export function createNoteShareSheet(options: SheetPresentation = {}) {
             ) : sharing.loading ? (
               <View className="flex-row items-center gap-3 px-1 py-3">
                 <ActivityIndicator />
-                <Text className={presentation.loadingClassName}>
+                <Text
+                  className={presentation.loadingClassName}
+                  style={{ color: color('secondaryLabel') }}
+                >
                   {copy('noteSharing.loading', 'Loading sharing settings…')}
                 </Text>
               </View>
@@ -848,7 +893,9 @@ export function createNoteShareSheet(options: SheetPresentation = {}) {
                   accessibilityLabel={copy('noteSharing.exportMarkdown', 'Export Markdown')}
                   leadingIconSlot={<RowIcon name="doc.richtext" mdName="FileCode" />}
                 >
-                  <Text className="text-[15px] text-label">Markdown</Text>
+                  <Text className="text-[15px]" style={{ color: color('label') }}>
+                    Markdown
+                  </Text>
                 </GroupedList.Row>
                 <GroupedList.Row
                   onPress={() => onExport('txt')}
@@ -856,7 +903,7 @@ export function createNoteShareSheet(options: SheetPresentation = {}) {
                   accessibilityLabel={copy('noteSharing.exportText', 'Export Plain Text')}
                   leadingIconSlot={<RowIcon name="doc.plaintext" mdName="FileText" />}
                 >
-                  <Text className="text-[15px] text-label">
+                  <Text className="text-[15px]" style={{ color: color('label') }}>
                     {copy('noteSharing.plainText', 'Plain text')}
                   </Text>
                 </GroupedList.Row>

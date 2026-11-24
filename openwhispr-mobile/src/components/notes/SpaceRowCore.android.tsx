@@ -4,6 +4,7 @@ import { Text } from '@/components/ui/Text';
 import { GroupedList } from './GroupedList';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import type { Space } from '@/data';
+import { useIosColor } from '@/config/colors.android';
 
 type SpaceRowProps = {
   space: Space;
@@ -23,16 +24,20 @@ export function createSpaceRow(
 ) {
   return function SpaceRow({ space, onPress }: SpaceRowProps) {
     const presentation = usePresentation(space.memberCount ?? 0);
+    const color = useIosColor();
     const name = (
       <Text
-        className="text-[17px] font-medium text-label"
+        className="text-[17px] font-medium"
+        style={{ color: color('label') }}
         numberOfLines={presentation.nameLines ?? 1}
       >
         {space.name}
       </Text>
     );
     const members = (
-      <Text className="text-[15px] text-tertiaryLabel">{presentation.memberLabel}</Text>
+      <Text className="text-[15px]" style={{ color: color('tertiaryLabel') }}>
+        {presentation.memberLabel}
+      </Text>
     );
     const chevron = (
       <SystemIcon name="chevron.right" mdName="ChevronRight" size={13} color="quaternaryLabel" />

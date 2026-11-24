@@ -15,7 +15,7 @@ import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
 import { Glass } from '@/components/ui/Glass';
 import { TAB_BAR_CLEARANCE } from '@/components/ui/tabBarClearance';
 import { safeHaptics } from '@/lib/utils';
-import { BRAND } from '@/config/colors.android';
+import { BRAND, useIosColor } from '@/config/colors.android';
 import { makeStyles } from '@/android/ThemeProvider';
 
 const SIZE = 56;
@@ -223,6 +223,7 @@ type MiniActionProps = {
 
 function MiniAction({ action, index, progress, onPress, pressableProps }: MiniActionProps) {
   const styles = useStyles();
+  const color = useIosColor();
   const start = index * STAGGER;
   const span = Math.max(1 - start, 0.0001);
   const bottom = BOTTOM + SIZE + 16 + index * (MINI_SIZE + MINI_GAP);
@@ -266,7 +267,11 @@ function MiniAction({ action, index, progress, onPress, pressableProps }: MiniAc
           style={styles.miniActionGlass}
         >
           <View pointerEvents="none" style={styles.miniActionContent}>
-            <Text numberOfLines={1} className="text-[13px] font-semibold text-label">
+            <Text
+              numberOfLines={1}
+              className="text-[13px] font-semibold"
+              style={{ color: color('label') }}
+            >
               {action.label}
             </Text>
             <View style={styles.miniIconSlot}>

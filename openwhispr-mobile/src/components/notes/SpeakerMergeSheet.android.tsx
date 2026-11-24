@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Modal, Platform, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import type { Speaker } from '@/data/types';
+import { useIosColor } from '@/config/colors.android';
 import { getSpeakerDisplayColor, getSpeakerDisplayName } from '@/lib/diarization/transcriptDisplay';
 
 interface SpeakerMergeSheetProps {
@@ -26,6 +27,7 @@ export function SpeakerMergeSheet({
   onMerge,
 }: SpeakerMergeSheetProps) {
   const { copy } = useAndroidCopy();
+  const color = useIosColor();
   const targets = useMemo(
     () => speakers.filter((speaker) => speaker.id !== sourceSpeaker?.id),
     [sourceSpeaker?.id, speakers],
@@ -50,19 +52,24 @@ export function SpeakerMergeSheet({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View className="flex-1 justify-end bg-black/30">
         <View
-          className="gap-4 rounded-t-[24px] bg-systemBackground px-5 pb-8 pt-5"
+          className="gap-4 rounded-t-[24px] px-5 pb-8 pt-5"
+          style={{ backgroundColor: color('systemBackground') }}
           testID="speaker-merge-sheet"
         >
-          <Text accessibilityRole="header" className="text-lg font-semibold text-label">
+          <Text
+            accessibilityRole="header"
+            className="text-lg font-semibold"
+            style={{ color: color('label') }}
+          >
             {copy('speakerControls.mergeTitle', 'Merge speaker')}
           </Text>
           {targets.length === 0 ? (
-            <Text className="text-[15px] text-secondaryLabel">
+            <Text className="text-[15px]" style={{ color: color('secondaryLabel') }}>
               {copy('speakerControls.noTargets', 'No other speakers to merge into.')}
             </Text>
           ) : (
             <>
-              <Text className="text-[14px] leading-5 text-secondaryLabel">
+              <Text className="text-[14px] leading-5" style={{ color: color('secondaryLabel') }}>
                 {copy(
                   'speakerControls.mergeBody',
                   `${targetName} survives. ${sourceName} disappears and its transcript moves into ${targetName}.`,
@@ -70,7 +77,7 @@ export function SpeakerMergeSheet({
                 )}
               </Text>
               {shouldWarnUnnamedTarget ? (
-                <Text className="text-[13px] leading-5 text-systemRed">
+                <Text className="text-[13px] leading-5" style={{ color: color('systemRed') }}>
                   {copy(
                     'speakerControls.unnamedWarning',
                     'The surviving speaker does not have a custom name.',
@@ -89,10 +96,14 @@ export function SpeakerMergeSheet({
                         (Platform.OS === 'android'
                           ? 'min-h-12 flex-row items-center gap-3 rounded-lg border px-3 py-3 '
                           : 'h-12 flex-row items-center gap-3 rounded-lg border px-3 ') +
-                        (selected
-                          ? 'border-brand bg-tertiarySystemFill'
-                          : 'border-separator bg-secondarySystemBackground')
+                        (selected ? 'border-brand' : '')
                       }
+                      style={{
+                        backgroundColor: selected
+                          ? color('tertiarySystemFill')
+                          : color('secondarySystemBackground'),
+                        ...(selected ? null : { borderColor: color('separator') }),
+                      }}
                       accessibilityRole="radio"
                       accessibilityState={{ selected }}
                       accessibilityLabel={copy('speakerControls.mergeInto', `Merge into ${name}`, {
@@ -106,7 +117,12 @@ export function SpeakerMergeSheet({
                           backgroundColor: getSpeakerDisplayColor(speaker, speaker.sortOrder),
                         }}
                       />
-                      <Text className="flex-1 text-[15px] font-medium text-label">{name}</Text>
+                      <Text
+                        className="flex-1 text-[15px] font-medium"
+                        style={{ color: color('label') }}
+                      >
+                        {name}
+                      </Text>
                     </Pressable>
                   );
                 })}
@@ -118,14 +134,17 @@ export function SpeakerMergeSheet({
               onPress={onCancel}
               className={
                 Platform.OS === 'android'
-                  ? 'min-h-12 flex-1 items-center justify-center rounded-lg bg-tertiarySystemFill px-3 py-3'
-                  : 'h-11 flex-1 items-center justify-center rounded-lg bg-tertiarySystemFill'
+                  ? 'min-h-12 flex-1 items-center justify-center rounded-lg px-3 py-3'
+                  : 'h-11 flex-1 items-center justify-center rounded-lg'
               }
               accessibilityRole="button"
               accessibilityLabel={copy('speakerControls.cancelMerge', 'Cancel merge')}
               testID="speaker-merge-cancel"
+              style={{ backgroundColor: color('tertiarySystemFill') }}
             >
-              <Text className="text-[15px] font-medium text-label">{copy('cancel', 'Cancel')}</Text>
+              <Text className="text-[15px] font-medium" style={{ color: color('label') }}>
+                {copy('cancel', 'Cancel')}
+              </Text>
             </Pressable>
             <Pressable
               onPress={() => {

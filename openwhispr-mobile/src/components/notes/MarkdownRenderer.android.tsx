@@ -3,7 +3,7 @@ import { View, ScrollView, StyleSheet, type StyleProp, type TextStyle } from 're
 import { Text } from '@/components/ui/Text';
 import { parseMarkdownBlocks, type MarkdownBlock } from './markdownBlocks';
 import { NOTES_GROUP_RADIUS } from './tokens';
-import { useIosColor } from '@/config/colors.android';
+import { iosColor as iosColorFor, useIosColor } from '@/config/colors.android';
 import { makeStyles } from '@/android/ThemeProvider';
 
 interface MarkdownRendererProps {
@@ -120,13 +120,13 @@ function MarkdownTable({ table, selectable }: { table: TableBlock; selectable: b
       showsHorizontalScrollIndicator={false}
       style={styles.tableScroller}
     >
-      <View className="overflow-hidden border-separator" style={styles.table}>
+      <View className="overflow-hidden" style={styles.table}>
         {allRows.map((row, rowIndex) => {
           const isHeader = rowIndex === 0;
           return (
             <View
               key={rowIndex}
-              className={`flex-row border-separator ${isHeader ? 'bg-secondarySystemBackground' : ''}`}
+              className="flex-row"
               style={isHeader ? styles.headerRow : styles.rowDivider}
             >
               {row.map((cell, column) => {
@@ -135,7 +135,7 @@ function MarkdownTable({ table, selectable }: { table: TableBlock; selectable: b
                 return (
                   <View
                     key={column}
-                    className="border-separator px-2.5 py-1.5"
+                    className="px-2.5 py-1.5"
                     style={[{ width }, column > 0 && styles.cellDivider]}
                   >
                     <InlineText
@@ -169,14 +169,7 @@ export function MarkdownRenderer({ content, selectable = false }: MarkdownRender
         }
 
         if (el.type === 'rule') {
-          return (
-            <View
-              key={i}
-              testID="markdown-rule"
-              className="my-2.5 bg-separator"
-              style={styles.rule}
-            />
-          );
+          return <View key={i} testID="markdown-rule" className="my-2.5" style={styles.rule} />;
         }
 
         if (el.type === 'table') {
@@ -284,8 +277,7 @@ export function MarkdownRenderer({ content, selectable = false }: MarkdownRender
   );
 }
 
-// Light keeps the NativeWind classes' colours; dark paints the lines and the header row from the
-// theme, since those classes don't follow the scheme.
+// The lines and the header row take the system colours of the scheme in use.
 const useStyles = makeStyles((t) => ({
   // A horizontal ScrollView defaults to flexGrow: 1 and would stretch to any
   // free height in its column, like the note chat sheet's.
@@ -294,21 +286,21 @@ const useStyles = makeStyles((t) => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: NOTES_GROUP_RADIUS,
     borderCurve: 'continuous',
-    ...(t.scheme === 'dark' && { borderColor: t.tokens.divider }),
+    borderColor: iosColorFor('separator', t.scheme),
   },
-  headerRow: t.scheme === 'dark' ? { backgroundColor: t.tokens.surface2 } : {},
+  headerRow: { backgroundColor: iosColorFor('secondarySystemBackground', t.scheme) },
   rowDivider: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    ...(t.scheme === 'dark' && { borderColor: t.tokens.divider }),
+    borderColor: iosColorFor('separator', t.scheme),
   },
   cellDivider: {
     borderLeftWidth: StyleSheet.hairlineWidth,
-    ...(t.scheme === 'dark' && { borderColor: t.tokens.divider }),
+    borderColor: iosColorFor('separator', t.scheme),
   },
   cellText: { fontSize: 15, lineHeight: 20 },
   headerCellText: { fontWeight: '600' },
   rule: {
     height: StyleSheet.hairlineWidth,
-    ...(t.scheme === 'dark' && { backgroundColor: t.tokens.divider }),
+    backgroundColor: iosColorFor('separator', t.scheme),
   },
 }));

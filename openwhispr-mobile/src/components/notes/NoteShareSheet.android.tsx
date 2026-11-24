@@ -16,8 +16,8 @@ export const NoteShareSheet = createNoteShareSheet({
       failed ? copy('noteSharing.enableFailed', 'Unable to enable cloud sync. Try again.') : null,
   },
   headerStyle: (top) => ({ paddingTop: top + 20 }),
-  headerClassName: 'min-w-0 flex-1 text-[22px] font-bold text-label',
-  loadingRowClassName: 'min-w-0 flex-1 text-[15px] text-secondaryLabel',
-  updatingClassName: 'min-w-0 flex-1 text-[13px] text-secondaryLabel',
-  loadingClassName: 'min-w-0 flex-1 text-secondaryLabel',
+  headerClassName: 'min-w-0 flex-1 text-[22px] font-bold',
+  loadingRowClassName: 'min-w-0 flex-1 text-[15px]',
+  updatingClassName: 'min-w-0 flex-1 text-[13px]',
+  loadingClassName: 'min-w-0 flex-1',
 });
