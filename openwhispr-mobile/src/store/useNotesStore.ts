@@ -1280,11 +1280,9 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   discardMeetingRecording: async (noteId) => {
     try {
       const uri = notesRepository.getNoteById(noteId)?.sourceFile;
-      if (!uri || !isManagedMeetingAudioUri(noteId, uri)) {
-        // Without the recording, what it still owed can never be transcribed.
-        await clearPendingBackfill(noteId);
-        return;
-      }
+      // A sidecar is only ever written beside a linked recording, and every path that
+      // deletes the recording deletes the sidecar with it, so without one there is none.
+      if (!uri || !isManagedMeetingAudioUri(noteId, uri)) return;
       await FileSystem.deleteAsync(uri, { idempotent: true });
       // The launch repair re-links a recording whose note has no sourceFile, so the link
       // goes only once the file is really gone.

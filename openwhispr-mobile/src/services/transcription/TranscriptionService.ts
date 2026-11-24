@@ -299,7 +299,8 @@ const uploadWithRetry = async (
 // Minimal status/text extraction for chunk uploads, which hit the plain
 // transcribe endpoint and only need the raw text back (no fused cleanup or
 // server-timing parsing — those are single-shot concerns).
-const parseChunkTranscriptionText = (response: { status: number; body: string }): string => {
+// Null when the chunk heard no speech.
+const parseChunkTranscriptionText = (response: { status: number; body: string }): string | null => {
   // One silent stretch of a long recording is no words, not a failed transcription;
   // throwing here would discard every other chunk's text.
   if (
@@ -307,7 +308,7 @@ const parseChunkTranscriptionText = (response: { status: number; body: string })
     typeof response.body === 'string' &&
     /NO_SPEECH_DETECTED|no speech/i.test(response.body)
   ) {
-    return '';
+    return null;
   }
   if (response.status === 401) {
     throw new Error('Session expired. Please sign in again.');
@@ -797,6 +798,7 @@ export class TranscriptionService {
       const texts: string[] = new Array(chunkUris.length);
       let nextIndex = 0;
       let firstError: unknown = null;
+      let heardNoSpeech = false;
 
       const worker = async (): Promise<void> => {
         while (firstError === null) {
@@ -823,7 +825,9 @@ export class TranscriptionService {
                 ),
               'transcribe',
             );
-            texts[index] = parseChunkTranscriptionText(response);
+            const chunkText = parseChunkTranscriptionText(response);
+            if (chunkText === null) heardNoSpeech = true;
+            texts[index] = chunkText ?? '';
           } catch (error) {
             firstError ??= error;
             return;
@@ -835,6 +839,9 @@ export class TranscriptionService {
       await Promise.all(Array.from({ length: workerCount }, () => worker()));
       if (firstError !== null) throw firstError;
       const text = stitchChunkTexts(texts);
+      // A wholly silent recording reports no speech as a single upload does, so callers
+      // show their no-speech state rather than saving an empty transcript.
+      if (!text && heardNoSpeech) throw new Error('No speech detected');
       if (chunkSeconds === null) return { text, duration: 0, provider: 'cloud' };
       // Per-chunk times let a meeting place this text on its recording's clock. They are
       // nominal: the native splitter starts a new chunk only at a decoded-buffer boundary,

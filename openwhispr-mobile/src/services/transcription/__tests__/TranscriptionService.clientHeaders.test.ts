@@ -248,6 +248,35 @@ describe('chunked transcription timing', (): void => {
     },
   );
 
+  it('reports no speech when every chunk of a long recording is silent', async (): Promise<void> => {
+    jest.mocked(FileSystem.getInfoAsync).mockResolvedValueOnce({
+      exists: true,
+      isDirectory: false,
+      uri: 'file:///recording.wav',
+      size: 8 * 1024 * 1024,
+      modificationTime: 0,
+    });
+    jest.mocked(AudioTools.splitToChunks).mockResolvedValue({
+      chunks: ['file:///c0.wav', 'file:///c1.wav'],
+      durationMs: 240_000,
+    });
+    jest.mocked(FileSystem.uploadAsync).mockResolvedValue({
+      status: 422,
+      body: JSON.stringify({ error: 'No speech detected in audio', code: 'NO_SPEECH_DETECTED' }),
+      headers: {},
+      mimeType: null,
+    } as Awaited<ReturnType<typeof FileSystem.uploadAsync>>);
+
+    // Callers show their no-speech state and drop the audio on this error, as for a short clip.
+    await expect(
+      TranscriptionService.transcribe({
+        audioUri: 'file:///recording.wav',
+        provider: 'cloud',
+        requestContext: 'keyboard',
+      }),
+    ).rejects.toThrow('No speech detected');
+  });
+
   it('returns no segments for ogg chunks, which are cut by size', async (): Promise<void> => {
     jest.mocked(FileSystem.getInfoAsync).mockResolvedValueOnce({
       exists: true,

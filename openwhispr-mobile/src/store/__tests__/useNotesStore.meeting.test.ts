@@ -818,7 +818,7 @@ describe('meeting post-pass', () => {
 
     expect(mockCloudTranscribe).not.toHaveBeenCalled();
     expect(mockExtractWavRange).not.toHaveBeenCalled();
-    expect(mockDeleteAsync).not.toHaveBeenCalledWith(RECORDING, expect.anything());
+    expect(mockDeleteAsync).not.toHaveBeenCalled();
     expect(status).toBe('done');
   });
 
