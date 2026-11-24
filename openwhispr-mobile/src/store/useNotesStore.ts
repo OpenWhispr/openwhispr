@@ -1,6 +1,7 @@
 import {
   clearPendingBackfill,
   isManagedMeetingAudioUri,
+  readPendingBackfill,
   savePendingBackfill,
 } from '@/lib/transcriptAudio';
 import { create } from 'zustand';
@@ -515,7 +516,8 @@ const errorCode = (error: unknown): string => {
 const backfillCloudMeeting = async (
   noteId: number,
   recordingUri: string,
-  live: CloudMeetingSegment[],
+  /** Read after the backfill, so the merge never drops a row saved while it ran. */
+  readLive: () => CloudMeetingSegment[],
   droppedWindows: CloudMeetingResult['droppedWindows'],
 ): Promise<{ transcript: CloudMeetingSegment[]; failedWindows: AudioWindow[] }> => {
   try {
@@ -525,8 +527,10 @@ const backfillCloudMeeting = async (
       createCloudPostPassDeps(getPreferredTranscriptionLanguage()),
     );
     // A note deleted meanwhile has lost its segments; writing would bring them back.
-    if (segments.length === 0 || !isLiveNote(noteId)) return { transcript: live, failedWindows };
-    const merged = mergeTranscript(live, segments);
+    if (segments.length === 0 || !isLiveNote(noteId)) {
+      return { transcript: readLive(), failedWindows };
+    }
+    const merged = mergeTranscript(readLive(), segments);
     notesRepository.replaceSegments(noteId, withNoteId(noteId, merged));
     return { transcript: merged, failedWindows };
   } catch (error) {
@@ -536,7 +540,7 @@ const backfillCloudMeeting = async (
       extra: { windows: droppedWindows.length },
     });
     // Nothing is known to be transcribed, so every gap is still owed.
-    return { transcript: live, failedWindows: droppedWindows };
+    return { transcript: readLive(), failedWindows: droppedWindows };
   }
 };
 
@@ -662,6 +666,12 @@ interface NotesStore {
     /** Audio the mic delivered, in seconds; spreads utterances that carry no timings. */
     capturedSeconds: number,
   ) => Promise<void>;
+  /**
+   * A done meeting whose backfill fell short: transcribes the stretches its sidecar still owes
+   * into the saved transcript, then deletes the recording, or keeps it for what is still owed.
+   * Never throws.
+   */
+  resumeMeetingBackfill: (noteId: number) => Promise<void>;
   /** A meeting with a recording and no transcript: transcribes the whole file through cloud chunks. */
   transcribeMeetingRecording: (noteId: number) => Promise<void>;
   /** Runs the diarizer on the note's recording and labels its segments. Never throws; false when it did nothing. */
@@ -675,7 +685,7 @@ interface NotesStore {
     index: number,
     capturedMs: number,
   ) => void;
-  /** recording → transcribing → done, keeping the segments already saved. */
+  /** recording or transcribing or diarizing → done, keeping the segments already saved. */
   keepCloudMeetingTranscript: (noteId: number) => void;
   /** Title and AI summary for a recovered meeting. */
   finishRecoveredMeetingNotes: (noteId: number) => Promise<void>;
@@ -1100,7 +1110,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
         ({ transcript, failedWindows } = await backfillCloudMeeting(
           noteId,
           recordingUri,
-          live,
+          () => live,
           result.droppedWindows,
         ));
       }
@@ -1124,6 +1134,30 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       }
       await settleMeetingRecording(noteId, failedWindows, get().discardMeetingRecording);
       await finalizeMeetingNoteContent(noteId);
+    } finally {
+      get().loadNotes();
+    }
+  },
+
+  resumeMeetingBackfill: async (noteId) => {
+    try {
+      const note = notesRepository.getNoteById(noteId);
+      if (!note || note.deletedAt) return;
+      if (notesRepository.getTranscriptionStatus(noteId) !== 'done') return;
+      const recordingUri = note.sourceFile;
+      if (!recordingUri || !isManagedMeetingAudioUri(noteId, recordingUri)) return;
+      const owed = await readPendingBackfill(noteId);
+      if (!owed || owed.length === 0) return;
+      // Re-read at merge time: the note is done, so the user may be editing it meanwhile.
+      const readSaved = (): CloudMeetingSegment[] =>
+        savedAsNew(noteId, notesRepository.getSegments(noteId));
+      const { failedWindows } = await backfillCloudMeeting(noteId, recordingUri, readSaved, owed);
+      await settleMeetingRecording(noteId, failedWindows, get().discardMeetingRecording);
+    } catch (error) {
+      Sentry.captureMessage('meeting-backfill-resume-failed', {
+        level: 'warning',
+        tags: { feature: 'meeting-post-pass', error_code: errorCode(error) },
+      });
     } finally {
       get().loadNotes();
     }
@@ -1324,7 +1358,10 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   },
 
   keepCloudMeetingTranscript: (noteId) => {
-    get().transitionStatus(noteId, 'transcribing');
+    // A meeting killed during its post-pass is already past recording.
+    if (notesRepository.getTranscriptionStatus(noteId) === 'recording') {
+      get().transitionStatus(noteId, 'transcribing');
+    }
     get().transitionStatus(noteId, 'done');
     // Live rows are local drafts; re-saving them makes the kept transcript syncable.
     notesRepository.replaceSegments(

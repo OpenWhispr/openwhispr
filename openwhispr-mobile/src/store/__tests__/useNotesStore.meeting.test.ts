@@ -7,6 +7,7 @@ const mockGetInfoAsync = jest.fn(
 const mockWriteAsStringAsync = jest.fn(
   async (_uri: string, _content: string): Promise<void> => undefined,
 );
+const mockReadAsStringAsync = jest.fn(async (_uri: string): Promise<string> => '');
 const mockCloudTranscribe = jest.fn();
 const mockExtractWavRange = jest.fn();
 jest.mock('expo-file-system/legacy', () => ({
@@ -15,6 +16,7 @@ jest.mock('expo-file-system/legacy', () => ({
   deleteAsync: (uri: string, options?: object) => mockDeleteAsync(uri, options),
   getInfoAsync: (uri: string) => mockGetInfoAsync(uri),
   writeAsStringAsync: (uri: string, content: string) => mockWriteAsStringAsync(uri, content),
+  readAsStringAsync: (uri: string) => mockReadAsStringAsync(uri),
 }));
 jest.mock('@/services/transcription/TranscriptionService', () => ({
   TranscriptionService: { transcribe: (...args: unknown[]) => mockCloudTranscribe(...args) },
@@ -563,6 +565,7 @@ describe('meeting post-pass', () => {
       filesOnDisk.add(uri);
       fileContents.set(uri, content);
     });
+    mockReadAsStringAsync.mockImplementation(async (uri: string) => fileContents.get(uri) ?? '');
     note = {
       id: 7,
       title: 'Untitled meeting',
@@ -1069,6 +1072,101 @@ describe('meeting post-pass', () => {
     });
   });
 
+  describe('resuming a backfill at launch', () => {
+    const owe = (windows: { startMs: number; endMs: number }[]): void => {
+      filesOnDisk.add(SIDECAR);
+      fileContents.set(SIDECAR, JSON.stringify({ version: 1, windows }));
+    };
+    const liveRow = (text: string, startMs: number, sortOrder: number) => ({
+      ...segment(text),
+      id: 100 + sortOrder,
+      startMs,
+      endMs: startMs + 1000,
+      speakerLabel: 'SPEAKER_00',
+      sortOrder,
+    });
+
+    beforeEach(() => {
+      status = 'done';
+      (notesRepository.getSegments as jest.Mock).mockReturnValue([
+        liveRow('Before.', 0, 0),
+        liveRow('After.', 200_000, 1),
+      ]);
+    });
+
+    it('merges the owed audio into the saved transcript and deletes the recording', async () => {
+      owe([{ startMs: 100_000, endMs: 110_000 }]);
+
+      await useNotesStore.getState().resumeMeetingBackfill(7);
+
+      expect(mockExtractWavRange).toHaveBeenCalledWith(RECORDING, 100_000, 110_000);
+      expect(savedTexts(0)).toEqual(['Before.', expect.stringContaining('Backfilled'), 'After.']);
+      // The saved rows keep their speakers; only their order numbers move.
+      expect((notesRepository.replaceSegments as jest.Mock).mock.calls[0][1][0]).toEqual(
+        expect.objectContaining({ text: 'Before.', speakerLabel: 'SPEAKER_00', startMs: 0 }),
+      );
+      expect(status).toBe('done');
+      expect(filesOnDisk.has(RECORDING)).toBe(false);
+      expect(filesOnDisk.has(SIDECAR)).toBe(false);
+      expect(note?.sourceFile).toBeNull();
+    });
+
+    it('keeps the recording and what is still owed when pieces fail again', async () => {
+      owe([
+        { startMs: 10_000, endMs: 20_000 },
+        { startMs: 30_000, endMs: 40_000 },
+      ]);
+      mockCloudTranscribe.mockImplementation(async ({ audioUri }: { audioUri: string }) => {
+        if (audioUri.endsWith('range-10000.wav')) return { text: 'Recovered.', duration: 0 };
+        throw new Error('Network request failed');
+      });
+
+      await useNotesStore.getState().resumeMeetingBackfill(7);
+
+      expect(savedTexts(0)).toEqual(['Before.', 'Recovered.', 'After.']);
+      expect(filesOnDisk.has(RECORDING)).toBe(true);
+      expect(note?.sourceFile).toBe(RECORDING);
+      expect(sidecarWindows()).toEqual([{ startMs: 30_000, endMs: 40_000 }]);
+    });
+
+    it('does nothing for a deleted note, a note not done, or no owed audio', async () => {
+      owe([{ startMs: 10_000, endMs: 20_000 }]);
+      note = { ...note, deletedAt: '2026-11-24' };
+      await useNotesStore.getState().resumeMeetingBackfill(7);
+      note = { ...note, deletedAt: null };
+      status = 'failed';
+      await useNotesStore.getState().resumeMeetingBackfill(7);
+      status = 'done';
+      owe([]);
+      await useNotesStore.getState().resumeMeetingBackfill(7);
+
+      expect(mockCloudTranscribe).not.toHaveBeenCalled();
+      expect(notesRepository.replaceSegments).not.toHaveBeenCalled();
+      expect(filesOnDisk.has(RECORDING)).toBe(true);
+    });
+
+    it('writes nothing for a note deleted while the owed audio was transcribed', async () => {
+      owe([{ startMs: 10_000, endMs: 20_000 }]);
+      mockCloudTranscribe.mockImplementation(async () => {
+        note = { ...note, deletedAt: '2026-11-24' };
+        return { text: 'Late.', duration: 0 };
+      });
+
+      await useNotesStore.getState().resumeMeetingBackfill(7);
+
+      expect(notesRepository.replaceSegments).not.toHaveBeenCalled();
+    });
+
+    it('never throws', async () => {
+      owe([{ startMs: 10_000, endMs: 20_000 }]);
+      (notesRepository.getNoteById as jest.Mock).mockImplementation(() => {
+        throw new Error('/private/db');
+      });
+
+      await expect(useNotesStore.getState().resumeMeetingBackfill(7)).resolves.toBeUndefined();
+    });
+  });
+
   describe('retry', () => {
     beforeEach(() => {
       status = 'failed';
@@ -1205,9 +1303,22 @@ describe('live cloud meeting transcript', () => {
     });
   });
 
+  it('keeps a transcript recovered mid-post-pass through legal status moves', () => {
+    (notesRepository.getTranscriptionStatus as jest.Mock).mockReset().mockReturnValue('diarizing');
+    (notesRepository.getSegments as jest.Mock).mockReturnValue([
+      { ...segment('One.'), id: 1, startMs: 0, endMs: 900, speakerLabel: null, sortOrder: 0 },
+    ]);
+
+    useNotesStore.getState().keepCloudMeetingTranscript(7);
+
+    expect(notesRepository.setTranscriptionStatus).toHaveBeenCalledTimes(1);
+    expect(notesRepository.setTranscriptionStatus).toHaveBeenCalledWith(7, 'done');
+  });
+
   it('keeps a recovered transcript and marks the note done', () => {
     (notesRepository.getTranscriptionStatus as jest.Mock)
       .mockReset()
+      .mockReturnValueOnce('recording') // keep reads where the meeting stopped
       .mockReturnValueOnce('recording')
       .mockReturnValueOnce('transcribing');
     (notesRepository.getSegments as jest.Mock).mockReturnValue([

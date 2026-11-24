@@ -3,15 +3,22 @@ jest.mock('expo-file-system/legacy', () => ({ documentDirectory: 'file:///docs/'
 jest.mock('@/data', () => ({ notesRepository: { getAllNotes: jest.fn(() => []) } }));
 jest.mock('@/store/useNotesStore', () => ({ useNotesStore: { getState: jest.fn() } }));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+jest.mock('expo-network', () => ({ getNetworkStateAsync: jest.fn() }));
+jest.mock('../../../modules/live-pcm-streaming/src', () => ({
+  LivePCMStreaming: { repairRecording: jest.fn() },
+}));
 jest.mock('@/lib/transcriptAudio', () => ({
   isManagedMeetingAudioUri: (noteId: number, uri?: string | null) =>
     uri === `file:///docs/meeting-${noteId}.wav`,
+  meetingRecordingUri: (noteId: number) => `file:///docs/meeting-${noteId}.wav`,
+  clearPendingBackfill: jest.fn(),
 }));
 
 import type { AppStateStatus } from 'react-native';
 import type { Note } from '@/data';
 import {
   MEETING_RESUME_MARKER_PREFIX,
+  STALE_RECORDING_MS,
   createdBeforeRuntime,
   recoverOrphanedMeetings,
   repairMeetingRecordings,
@@ -65,11 +72,39 @@ function makeDeps(notes: Note[], initialStorage: Record<string, string> = {}): H
     finishNotes: jest.fn(async (id: number) => {
       calls.push(`finish:${id}`);
     }),
+    repairRecording: jest.fn(async () => false),
+    recordingUri: (id: number) => `file:///docs/meeting-${id}.wav`,
+    linkRecording: jest.fn((id: number) => {
+      calls.push(`link:${id}`);
+    }),
+    labelSpeakers: jest.fn(async (id: number) => {
+      calls.push(`label:${id}`);
+      return true;
+    }),
+    hasSpeakerLabels: jest.fn(() => false),
+    discardRecording: jest.fn(async (id: number) => {
+      calls.push(`discard:${id}`);
+    }),
+    recordingAgeMs: jest.fn(async () => 0),
+    listPendingBackfills: jest.fn(async () => []),
+    getNote: jest.fn((id: number) => notes.find((candidate) => candidate.id === id) ?? null),
+    recordingExists: jest.fn(async () => true),
+    deletePendingBackfill: jest.fn(async (id: number) => {
+      calls.push(`clearSidecar:${id}`);
+    }),
+    wasRelinked: jest.fn(() => false),
+    isOnline: jest.fn(async () => true),
+    resumeBackfill: jest.fn(async (id: number) => {
+      calls.push(`backfill:${id}`);
+    }),
   };
   return { deps, store, calls };
 }
 
 const marker = (id: number): string => `${MEETING_RESUME_MARKER_PREFIX}${id}`;
+
+// Recovery reads the disk before it reaches the orphans.
+const flushMicrotasks = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 describe('recoverOrphanedMeetings with a saved live transcript', () => {
   const recordingNote = (id: number): Note =>
@@ -210,7 +245,7 @@ describe('recoverOrphanedMeetings', () => {
       () => new Promise<void>((resolve) => (becomeActive = resolve)),
     );
     const sweep = recoverOrphanedMeetings(deps);
-    await Promise.resolve();
+    await flushMicrotasks();
     expect(calls).toEqual(['failed:17']);
     becomeActive();
     await sweep;
@@ -224,7 +259,7 @@ describe('recoverOrphanedMeetings', () => {
       () => new Promise<void>((resolve) => (releaseFirst = resolve)),
     );
     const sweep = recoverOrphanedMeetings(deps);
-    await Promise.resolve();
+    await flushMicrotasks();
     expect(deps.resume).toHaveBeenCalledTimes(1);
     releaseFirst();
     await sweep;
@@ -235,6 +270,305 @@ describe('recoverOrphanedMeetings', () => {
     const { deps } = makeDeps([note({ id: 16 })]);
     await recoverOrphanedMeetings(deps);
     expect(deps.listNotes).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('recoverOrphanedMeetings with the meeting recording', () => {
+  const killed = (id: number, overrides: Partial<Note> = {}): Note =>
+    note({ id, transcriptionStatus: 'recording', sourceFile: null, ...overrides });
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it('repairs and links the recording of a killed cloud meeting', async () => {
+    const { deps } = makeDeps([killed(1)]);
+    (deps.repairRecording as jest.Mock).mockResolvedValue(true);
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(deps.repairRecording).toHaveBeenCalledWith('file:///docs/meeting-1.wav');
+    expect(deps.linkRecording).toHaveBeenCalledWith(1, 'file:///docs/meeting-1.wav');
+  });
+
+  it('labels speakers after keeping a recovered transcript', async () => {
+    const { deps, calls } = makeDeps([killed(2)]);
+    (deps.repairRecording as jest.Mock).mockResolvedValue(true);
+    (deps.hasTranscript as jest.Mock).mockReturnValue(true);
+    (deps.waitUntilActive as jest.Mock).mockImplementation(async () => {
+      calls.push('active');
+    });
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(calls).toEqual(['link:2', 'keep:2', 'active', 'label:2', 'discard:2', 'finish:2']);
+    expect(deps.markFailed).not.toHaveBeenCalled();
+    expect(deps.resume).not.toHaveBeenCalled();
+  });
+
+  it('transcribes a killed meeting from its recording when no transcript was saved', async () => {
+    const { deps, store, calls } = makeDeps([killed(3)]);
+    (deps.repairRecording as jest.Mock).mockResolvedValue(true);
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(calls).toEqual([
+      'link:3',
+      'failed:3',
+      `set:${marker(3)}`,
+      'resume:3',
+      `remove:${marker(3)}`,
+    ]);
+    expect(store.has(marker(3))).toBe(false);
+
+    // A resume that already ran once (its marker survived a crash) is not run again.
+    const second = makeDeps([killed(3)], { [marker(3)]: '1' });
+    (second.deps.repairRecording as jest.Mock).mockResolvedValue(true);
+    await recoverOrphanedMeetings(second.deps);
+    expect(second.deps.resume).not.toHaveBeenCalled();
+    expect(second.deps.markFailed).toHaveBeenCalledWith(3);
+    expect(second.store.has(marker(3))).toBe(false);
+  });
+
+  it('does not link a recording that could not be repaired', async () => {
+    const { deps, calls } = makeDeps([killed(4)]);
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(deps.linkRecording).not.toHaveBeenCalled();
+    expect(deps.resume).not.toHaveBeenCalled();
+    expect(calls).toEqual(['failed:4']);
+  });
+
+  it('leaves orphans without a recording exactly as before', async () => {
+    const { deps, calls } = makeDeps([killed(5), killed(6)]);
+    (deps.hasTranscript as jest.Mock).mockImplementation((id: number) => id === 5);
+    (deps.waitUntilActive as jest.Mock).mockImplementation(async () => {
+      calls.push('active');
+    });
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(calls).toEqual(['keep:5', 'active', 'finish:5', 'failed:6']);
+    expect(deps.labelSpeakers).not.toHaveBeenCalled();
+    expect(deps.discardRecording).not.toHaveBeenCalled();
+  });
+
+  it('discards the recording after recovering a transcript', async () => {
+    const { deps } = makeDeps([killed(7)]);
+    (deps.repairRecording as jest.Mock).mockResolvedValue(true);
+    (deps.hasTranscript as jest.Mock).mockReturnValue(true);
+    (deps.labelSpeakers as jest.Mock).mockRejectedValue(new Error('diarizer'));
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(deps.discardRecording).toHaveBeenCalledWith(7);
+    expect(deps.finishNotes).toHaveBeenCalledWith(7);
+  });
+
+  it('keeps the live transcript of a cloud meeting killed while labelling speakers', async () => {
+    const { deps, calls } = makeDeps([note({ id: 8, transcriptionStatus: 'diarizing' })]);
+    (deps.hasTranscript as jest.Mock).mockReturnValue(true);
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(calls).toEqual(['keep:8', 'label:8', 'discard:8', 'finish:8']);
+    expect(deps.markFailed).not.toHaveBeenCalled();
+    expect(deps.resume).not.toHaveBeenCalled();
+    expect(deps.repairRecording).not.toHaveBeenCalled();
+
+    // Killed after the labels were written: they are not redone.
+    const labelled = makeDeps([note({ id: 9, transcriptionStatus: 'diarizing' })]);
+    (labelled.deps.hasTranscript as jest.Mock).mockReturnValue(true);
+    (labelled.deps.hasSpeakerLabels as jest.Mock).mockReturnValue(true);
+    await recoverOrphanedMeetings(labelled.deps);
+    expect(labelled.calls).toEqual(['keep:9', 'discard:9', 'finish:9']);
+  });
+
+  it('keeps the live transcript of a cloud meeting killed during the post-pass', async () => {
+    const { deps, calls } = makeDeps([note({ id: 10, transcriptionStatus: 'transcribing' })]);
+    (deps.hasTranscript as jest.Mock).mockReturnValue(true);
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(calls).toEqual(['keep:10', 'label:10', 'discard:10', 'finish:10']);
+    expect(deps.resume).not.toHaveBeenCalled();
+  });
+
+  it('never resumes a cloud transcript that could not be kept', async () => {
+    const { deps, calls } = makeDeps([note({ id: 11, transcriptionStatus: 'diarizing' })]);
+    (deps.hasTranscript as jest.Mock).mockReturnValue(true);
+    (deps.keepTranscript as jest.Mock).mockImplementation(() => {
+      throw new Error('cannot transition');
+    });
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(calls).toEqual(['failed:11']);
+    expect(deps.resume).not.toHaveBeenCalled();
+  });
+
+  it('resumes the owed backfill of a kept transcript instead of discarding its recording', async () => {
+    const { deps, calls } = makeDeps([note({ id: 12, transcriptionStatus: 'transcribing' })]);
+    (deps.hasTranscript as jest.Mock).mockReturnValue(true);
+    (deps.hasSpeakerLabels as jest.Mock).mockReturnValue(true);
+    (deps.listPendingBackfills as jest.Mock).mockResolvedValue([12]);
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(calls).toEqual(['keep:12', 'backfill:12', 'finish:12']);
+  });
+
+  it('leaves an on-device meeting killed while transcribing exactly as before', async () => {
+    const { deps, calls } = makeDeps([
+      note({ id: 13, transcriptionStatus: 'transcribing', diarizationEnabled: 1 }),
+    ]);
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(calls).toEqual(['failed:13', `set:${marker(13)}`, 'resume:13', `remove:${marker(13)}`]);
+    expect(deps.keepTranscript).not.toHaveBeenCalled();
+    expect(deps.discardRecording).not.toHaveBeenCalled();
+  });
+
+  it('discards a failed cloud meeting recording older than 7 days', async () => {
+    const { deps } = makeDeps([
+      note({ id: 20, transcriptionStatus: 'failed', diarizationEnabled: 0 }),
+    ]);
+    (deps.recordingAgeMs as jest.Mock).mockResolvedValue(STALE_RECORDING_MS + 1);
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(deps.recordingAgeMs).toHaveBeenCalledWith('file:///docs/meeting-20.wav');
+    expect(deps.discardRecording).toHaveBeenCalledWith(20);
+  });
+
+  it('keeps a failed cloud meeting recording younger than 7 days', async () => {
+    const { deps } = makeDeps([
+      note({ id: 21, transcriptionStatus: 'failed', diarizationEnabled: 0 }),
+      note({ id: 22, transcriptionStatus: 'failed', diarizationEnabled: 0 }),
+    ]);
+    (deps.recordingAgeMs as jest.Mock).mockImplementation(async (uri: string) =>
+      uri.endsWith('-21.wav') ? 3 * DAY : null,
+    );
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(deps.discardRecording).not.toHaveBeenCalled();
+    expect(deps.markFailed).not.toHaveBeenCalled();
+    expect(deps.resume).not.toHaveBeenCalled();
+  });
+
+  it('applies the 7-day rule to a failed on-device meeting too', async () => {
+    const { deps } = makeDeps([
+      note({ id: 23, transcriptionStatus: 'failed', diarizationEnabled: 1 }),
+    ]);
+    (deps.recordingAgeMs as jest.Mock).mockResolvedValue(8 * DAY);
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(deps.discardRecording).toHaveBeenCalledWith(23);
+  });
+
+  it('never discards the recording of a note that is still recording, transcribing or diarizing', async () => {
+    const { deps } = makeDeps([
+      note({ id: 24, transcriptionStatus: 'recording' }),
+      note({ id: 25, transcriptionStatus: 'transcribing' }),
+      note({ id: 26, transcriptionStatus: 'diarizing' }),
+    ]);
+    (deps.recordingAgeMs as jest.Mock).mockResolvedValue(30 * DAY);
+    (deps.listPendingBackfills as jest.Mock).mockResolvedValue([24, 25, 26]);
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(deps.discardRecording).not.toHaveBeenCalled();
+    expect(deps.deletePendingBackfill).not.toHaveBeenCalled();
+  });
+
+  describe('a done meeting that still owes audio', () => {
+    const owing = (id: number): Note => note({ id, transcriptionStatus: 'done' });
+
+    it('resumes the backfill when online', async () => {
+      const { deps, calls } = makeDeps([owing(30), note({ id: 31, transcriptionStatus: 'done' })]);
+      (deps.listPendingBackfills as jest.Mock).mockResolvedValue([30]);
+
+      await recoverOrphanedMeetings(deps);
+
+      expect(calls).toEqual(['backfill:30']);
+    });
+
+    it('leaves everything when offline', async () => {
+      const { deps } = makeDeps([owing(32)]);
+      (deps.listPendingBackfills as jest.Mock).mockResolvedValue([32]);
+      (deps.isOnline as jest.Mock).mockResolvedValue(false);
+
+      await recoverOrphanedMeetings(deps);
+
+      expect(deps.resumeBackfill).not.toHaveBeenCalled();
+      expect(deps.discardRecording).not.toHaveBeenCalled();
+    });
+
+    it('discards a recording older than 7 days whatever the connection', async () => {
+      const { deps } = makeDeps([owing(33)]);
+      (deps.listPendingBackfills as jest.Mock).mockResolvedValue([33]);
+      (deps.isOnline as jest.Mock).mockResolvedValue(false);
+      (deps.recordingAgeMs as jest.Mock).mockResolvedValue(8 * DAY);
+
+      await recoverOrphanedMeetings(deps);
+
+      expect(deps.discardRecording).toHaveBeenCalledWith(33);
+      expect(deps.resumeBackfill).not.toHaveBeenCalled();
+    });
+
+    it('reports a failed resume and goes on to the next note', async () => {
+      const { deps } = makeDeps([owing(34), owing(35)]);
+      (deps.listPendingBackfills as jest.Mock).mockResolvedValue([34, 35]);
+      const failure = new Error('boom');
+      (deps.resumeBackfill as jest.Mock).mockRejectedValueOnce(failure);
+
+      await recoverOrphanedMeetings(deps);
+
+      expect(deps.reportError).toHaveBeenCalledWith(failure, 34);
+      expect(deps.resumeBackfill).toHaveBeenCalledWith(35);
+    });
+  });
+
+  it('removes a sidecar whose recording or note is gone', async () => {
+    const { deps } = makeDeps([note({ id: 40, transcriptionStatus: 'done' })]);
+    (deps.listPendingBackfills as jest.Mock).mockResolvedValue([40, 41]);
+    (deps.recordingExists as jest.Mock).mockResolvedValue(false);
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(deps.deletePendingBackfill).toHaveBeenCalledWith(40);
+    expect(deps.deletePendingBackfill).toHaveBeenCalledWith(41);
+    expect(deps.resumeBackfill).not.toHaveBeenCalled();
+  });
+
+  it('discards a leftover recording relinked to a done note with a transcript', async () => {
+    const { deps } = makeDeps([
+      note({ id: 50, transcriptionStatus: 'done' }),
+      note({ id: 51, transcriptionStatus: 'done' }),
+      note({ id: 52, transcriptionStatus: 'done' }),
+    ]);
+    (deps.wasRelinked as jest.Mock).mockImplementation((id: number) => id !== 52);
+    (deps.hasTranscript as jest.Mock).mockImplementation((id: number) => id !== 51);
+
+    await recoverOrphanedMeetings(deps);
+
+    expect((deps.discardRecording as jest.Mock).mock.calls).toEqual([[50]]);
+  });
+
+  it('keeps going when one note throws', async () => {
+    const { deps } = makeDeps([
+      note({ id: 60, transcriptionStatus: 'failed' }),
+      note({ id: 61, transcriptionStatus: 'failed' }),
+    ]);
+    (deps.recordingAgeMs as jest.Mock)
+      .mockRejectedValueOnce(new Error('stat'))
+      .mockResolvedValueOnce(8 * DAY);
+    (deps.listPendingBackfills as jest.Mock).mockRejectedValue(new Error('readdir'));
+
+    await expect(recoverOrphanedMeetings(deps)).resolves.toBeUndefined();
+
+    expect(deps.discardRecording).toHaveBeenCalledWith(61);
   });
 });
 
@@ -345,6 +679,28 @@ describe('repairMeetingRecordings', () => {
 
     expect(deps.deleteFile).toHaveBeenCalledWith('file:///docs/meeting-9.wav');
     expect(deps.restorePath).not.toHaveBeenCalled();
+  });
+
+  it('returns the notes it pointed back at their recording', async () => {
+    const deps = {
+      listRecordingFiles: jest.fn(async () => ['meeting-4.wav', 'meeting-5.wav']),
+      getNote: (id: number) => note(id === 4 ? { id, sourceFile: null } : { id }),
+      recordingUri: (id: number) => `file:///docs/meeting-${id}.wav`,
+      restorePath: jest.fn(),
+      deleteFile: jest.fn(),
+    };
+
+    expect(await repairMeetingRecordings(deps)).toEqual([4]);
+  });
+
+  it('leaves the recording of a meeting still marked recording to recovery', async () => {
+    const deps = await run(
+      ['meeting-4.wav'],
+      [note({ id: 4, transcriptionStatus: 'recording', sourceFile: null })],
+    );
+
+    expect(deps.restorePath).not.toHaveBeenCalled();
+    expect(deps.deleteFile).not.toHaveBeenCalled();
   });
 
   it('leaves notes that still point somewhere, other note types, and other files alone', async () => {
