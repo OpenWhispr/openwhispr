@@ -2,7 +2,7 @@ import type React from 'react';
 import { I18nManager } from 'react-native';
 import * as LucideIcons from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { BRAND, iosColor } from '@/config/colors';
+import { BRAND, useIosColor } from '@/config/colors.android';
 import type { LucideIconName, SystemIconColor } from './SystemIcon';
 
 export type { LucideIconName, SystemIconColor } from './SystemIcon';
@@ -38,6 +38,7 @@ export function SystemIcon({
   color?: SystemIconColor;
 }) {
   const { i18n } = useTranslation();
+  const iosColor = useIosColor();
   // An app-language change can retain a JS runtime with a stale native RTL flag.
   const language = i18n.resolvedLanguage || i18n.language;
   const rtl = language ? i18n.dir(language) === 'rtl' : I18nManager.isRTL;

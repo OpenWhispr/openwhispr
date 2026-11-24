@@ -4,9 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { getInferenceSelection } from '@/lib/inferenceRouting';
-import { Page, Button, Card, styles } from './ui';
+import { Page, Button, Card, useUiStyles } from './ui';
 export default function AssistantScreen() {
   const { t } = useTranslation();
+  const styles = useUiStyles();
   const [prompt, setPrompt] = useState('');
   const [answer, setAnswer] = useState('');
   const [busy, setBusy] = useState(false);

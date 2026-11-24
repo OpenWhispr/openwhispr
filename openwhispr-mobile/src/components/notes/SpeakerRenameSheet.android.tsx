@@ -12,7 +12,7 @@ import {
 import { useSpeakerRenameLayout } from './speakerRenameLayout';
 import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
-import { iosColor } from '@/config/colors';
+import { useIosColor } from '@/config/colors.android';
 
 export interface SpeakerRenameSuggestion {
   label: string;
@@ -36,6 +36,7 @@ export function SpeakerRenameSheet({
 }: SpeakerRenameSheetProps) {
   const { copy } = useAndroidCopy();
   const layout = useSpeakerRenameLayout();
+  const iosColor = useIosColor();
   const isAndroid = Platform.OS === 'android';
   const [name, setName] = useState(initialName);
   const trimmed = name.trim();

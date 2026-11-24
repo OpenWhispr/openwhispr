@@ -4,9 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { AndroidDictation, dictationEvents } from '../../modules/android-dictation/src';
-import { Card, Button, Row, styles } from './ui';
+import { Card, Button, Row, useUiStyles } from './ui';
 export function PermissionsContent() {
   const { t } = useTranslation();
+  const styles = useUiStyles();
   const [status, setStatus] = useState(AndroidDictation!.getStatus());
   const config = useConfigStore((s) => s.config);
   const [enabling, setEnabling] = useState(false);

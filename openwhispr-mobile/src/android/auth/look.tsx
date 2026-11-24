@@ -25,34 +25,55 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
 import { AppFont } from '@/lib/fonts';
-import { theme } from '../theme';
+import { makeStyles, themeFor } from '../ThemeProvider';
+import { useNavigationBarCanvas } from '../navigationBar';
 
 // The onboarding sign-in look (Figma "Android · Onboarding" v3-01b/c/d): blue glass background,
 // white glass pills without a drop shadow, see-through fields. One look for onboarding and the app.
-export const authColors = {
-  top: '#5A8DF4',
-  mid: '#2F62DE',
-  bottom: '#1C3FAE',
-  ink: theme.ink,
-  // The label on a white button over the blue: ink, never blue.
-  brandInk: theme.ink,
-  // Header glyphs (back, close) are ink like every other header (D4); the circle stays see-through.
-  icon: theme.ink,
-  // Words, the logo and the field caret on the blue.
-  onBlue: theme.onGlass,
-  glass: 'rgba(255,255,255,0.12)',
-  circle: 'rgba(255,255,255,0.72)',
-  line: 'rgba(255,255,255,0.75)',
-  faint: 'rgba(255,255,255,0.72)',
-  link: 'rgba(255,255,255,0.85)',
-  errorStroke: '#FF9B9B',
-  errorText: '#FFD3D3',
-};
+// The blue screens look the same in both schemes (dark design §3.7): every colour comes from the
+// light palette, and the white glass keeps its ink label.
+const blue = themeFor('light').tokens;
+
+function authPalette() {
+  return {
+    top: blue.signInTop,
+    mid: blue.signInMid,
+    bottom: blue.signInFoot,
+    ink: blue.ink,
+    // The label on a white button over the blue: ink, never blue.
+    brandInk: blue.ink,
+    // Header glyphs (back, close) are ink like every other header (D4); the circle stays see-through.
+    icon: blue.ink,
+    // Words, the logo and the field caret on the blue.
+    onBlue: blue.onGlass,
+    /** The white glass: white → its blue-grey foot. */
+    whiteTop: blue.surface,
+    whiteFoot: blue.whiteGlassFoot,
+    glass: 'rgba(255,255,255,0.12)',
+    circle: 'rgba(255,255,255,0.72)',
+    line: 'rgba(255,255,255,0.75)',
+    faint: 'rgba(255,255,255,0.72)',
+    link: 'rgba(255,255,255,0.85)',
+    errorStroke: blue.onBlueErrorLine,
+    errorText: blue.onBlueErrorText,
+  };
+}
+
+let palette: ReturnType<typeof authPalette> | undefined;
+
+/** The sign-in screens' colours. The same in both schemes; read at render like every other. */
+export function useAuthColors() {
+  return (palette ??= authPalette());
+}
 
 const FRAME_WIDTH = 393;
 
 /** The blue background: three-stop gradient, two faint diagonal streaks and two soft glows. */
 export function AuthBackground({ children }: { children: ReactNode }) {
+  const authColors = useAuthColors();
+  // The button bar takes the blue's foot with light icons, in both schemes (§3.7); the screens set
+  // a light status bar themselves.
+  useNavigationBarCanvas(authColors.bottom);
   const { width, height } = useWindowDimensions();
   const k = width / FRAME_WIDTH;
   return (
@@ -120,6 +141,8 @@ export function AuthHeader({
   /** Shown faded and locked, as while a reset link is sending (3.3). */
   disabled?: boolean;
 }) {
+  const s = useStyles();
+  const authColors = useAuthColors();
   return (
     <View style={s.header}>
       <View style={s.logo} accessibilityRole="image" accessibilityLabel="OpenWhispr">
@@ -150,6 +173,7 @@ export function AuthHeader({
 }
 
 export function AuthTitle({ children }: { children: string }) {
+  const s = useStyles();
   return (
     <Text accessibilityRole="header" style={s.title}>
       {children}
@@ -159,6 +183,7 @@ export function AuthTitle({ children }: { children: string }) {
 
 /** Body line under the title; <b>…</b> spans are drawn white and medium (an email, mostly). */
 export function AuthLine({ text, style }: { text: string; style?: StyleProp<TextStyle> }) {
+  const s = useStyles();
   const parts = text.split(/<b>(.*?)<\/b>/g);
   return (
     <Text style={[s.line, style]}>
@@ -189,7 +214,7 @@ type ButtonProps = {
 };
 
 /**
- * White brand glass: #FFFFFF → #E7ECF6, a white top highlight and rim, a faint navy bottom edge.
+ * White brand glass: white → `whiteGlassFoot`, a white top highlight and rim, a faint navy bottom edge.
  * No drop shadow (Josh, 19 Nov).
  */
 export function WhiteButton({
@@ -202,6 +227,8 @@ export function WhiteButton({
   icon,
   accessibilityLabel,
 }: ButtonProps) {
+  const s = useStyles();
+  const authColors = useAuthColors();
   const locked = disabled || busy || faded;
   return (
     <Pressable
@@ -217,7 +244,10 @@ export function WhiteButton({
         pressed && { transform: [{ scale: 0.98 }] },
       ]}
     >
-      <LinearGradient colors={['#FFFFFF', '#E7ECF6']} style={StyleSheet.absoluteFill} />
+      <LinearGradient
+        colors={[authColors.whiteTop, authColors.whiteFoot]}
+        style={StyleSheet.absoluteFill}
+      />
       <View pointerEvents="none" style={s.whiteRim} />
       <View pointerEvents="none" style={s.whiteBottom} />
       {icon ? <View style={s.icon}>{icon}</View> : null}
@@ -237,6 +267,8 @@ export function WhiteButton({
 
 /** See-through glass pill: Continue before an email is typed, Resend while it counts down. */
 export function ClearButton({ label, onPress, disabled, faded, accessibilityLabel }: ButtonProps) {
+  const s = useStyles();
+  const authColors = useAuthColors();
   return (
     <Pressable
       cssInterop={false}
@@ -267,6 +299,8 @@ export function TextButton({
   /** Full white, as "Continue without an account" is drawn. */
   strong?: boolean;
 }) {
+  const s = useStyles();
+  const authColors = useAuthColors();
   return (
     <Pressable
       cssInterop={false}
@@ -299,6 +333,8 @@ export const AuthField = forwardRef<
     };
   }
 >(function AuthField({ error, faded, reveal, style, value, onFocus, onBlur, ...props }, ref) {
+  const s = useStyles();
+  const authColors = useAuthColors();
   const [focused, setFocused] = useState(false);
   return (
     <View
@@ -354,6 +390,8 @@ export function FieldNote({
   /** A hint rather than a rule: regular weight, the body line's white. */
   quiet?: boolean;
 }) {
+  const s = useStyles();
+  const authColors = useAuthColors();
   return (
     <Text
       accessibilityLiveRegion={error ? 'polite' : 'none'}
@@ -369,6 +407,7 @@ export function FieldNote({
 }
 
 export function OrDivider({ label }: { label: string }) {
+  const s = useStyles();
   return (
     <View
       style={s.divider}
@@ -383,6 +422,7 @@ export function OrDivider({ label }: { label: string }) {
 }
 
 export function Legal({ text }: { text: string }) {
+  const s = useStyles();
   return <Text style={s.legal}>{text}</Text>;
 }
 
@@ -426,115 +466,118 @@ export const authLayout: { content: ViewStyle; stack: ViewStyle; group: ViewStyl
   group: { gap: 8 },
 };
 
-const s = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 36,
-    marginTop: 16,
-  },
-  logo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  logoWord: { fontFamily: AppFont.bold, fontSize: 20, lineHeight: 26, color: authColors.onBlue },
-  circle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: authColors.circle,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontFamily: AppFont.bold,
-    fontSize: 32,
-    lineHeight: 38,
-    letterSpacing: -0.32,
-    color: authColors.onBlue,
-  },
-  line: { fontFamily: AppFont.regular, fontSize: 17, lineHeight: 22, color: authColors.line },
-  strong: { fontFamily: AppFont.medium, color: authColors.onBlue },
-  pill: {
-    height: 50,
-    borderRadius: 25,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  whiteRim: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 25,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.7)',
-    borderTopColor: '#FFFFFF',
-  },
-  whiteBottom: {
-    position: 'absolute',
-    left: 18,
-    right: 18,
-    bottom: 0,
-    height: 1,
-    backgroundColor: 'rgba(20,51,140,0.14)',
-  },
-  clear: {
-    backgroundColor: authColors.glass,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.18)',
-    borderTopColor: 'rgba(255,255,255,0.35)',
-  },
-  icon: {
-    position: 'absolute',
-    left: 20,
-    top: 0,
-    bottom: 0,
-    width: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pillLabel: { fontFamily: AppFont.medium, fontSize: 17, lineHeight: 22 },
-  textButton: { minHeight: 50, alignItems: 'center', justifyContent: 'center' },
-  textLabel: { fontFamily: AppFont.medium, fontSize: 17, lineHeight: 22, color: authColors.link },
-  field: {
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: authColors.glass,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  fieldFocused: { borderColor: 'rgba(255,255,255,0.55)' },
-  fieldError: { borderColor: authColors.errorStroke },
-  input: {
-    flex: 1,
-    height: '100%',
-    paddingHorizontal: 14,
-    fontFamily: AppFont.regular,
-    fontSize: 17,
-    color: authColors.onBlue,
-  },
-  reveal: { paddingHorizontal: 14, height: '100%', justifyContent: 'center' },
-  revealLabel: { fontFamily: AppFont.medium, fontSize: 15, color: authColors.link },
-  note: { fontFamily: AppFont.medium, fontSize: 13, lineHeight: 18, color: authColors.onBlue },
-  divider: { flexDirection: 'row', alignItems: 'center', height: 16 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: authColors.glass },
-  dividerLabel: {
-    paddingHorizontal: 20,
-    fontFamily: AppFont.medium,
-    fontSize: 12,
-    lineHeight: 16,
-    letterSpacing: 0.96,
-    textTransform: 'uppercase',
-    color: authColors.faint,
-  },
-  legal: {
-    fontFamily: AppFont.regular,
-    fontSize: 13,
-    lineHeight: 18,
-    color: authColors.onBlue,
-    textAlign: 'center',
-  },
-  faded: { opacity: 0.5 },
-  pressed: { opacity: 0.7 },
+const useStyles = makeStyles(() => {
+  const authColors = authPalette();
+  return {
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      minHeight: 36,
+      marginTop: 16,
+    },
+    logo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    logoWord: { fontFamily: AppFont.bold, fontSize: 20, lineHeight: 26, color: authColors.onBlue },
+    circle: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: authColors.circle,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    title: {
+      fontFamily: AppFont.bold,
+      fontSize: 32,
+      lineHeight: 38,
+      letterSpacing: -0.32,
+      color: authColors.onBlue,
+    },
+    line: { fontFamily: AppFont.regular, fontSize: 17, lineHeight: 22, color: authColors.line },
+    strong: { fontFamily: AppFont.medium, color: authColors.onBlue },
+    pill: {
+      height: 50,
+      borderRadius: 25,
+      overflow: 'hidden',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 20,
+    },
+    whiteRim: {
+      ...StyleSheet.absoluteFillObject,
+      borderRadius: 25,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.7)',
+      borderTopColor: '#FFFFFF',
+    },
+    whiteBottom: {
+      position: 'absolute',
+      left: 18,
+      right: 18,
+      bottom: 0,
+      height: 1,
+      backgroundColor: 'rgba(20,51,140,0.14)',
+    },
+    clear: {
+      backgroundColor: authColors.glass,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: 'rgba(255,255,255,0.18)',
+      borderTopColor: 'rgba(255,255,255,0.35)',
+    },
+    icon: {
+      position: 'absolute',
+      left: 20,
+      top: 0,
+      bottom: 0,
+      width: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    pillLabel: { fontFamily: AppFont.medium, fontSize: 17, lineHeight: 22 },
+    textButton: { minHeight: 50, alignItems: 'center', justifyContent: 'center' },
+    textLabel: { fontFamily: AppFont.medium, fontSize: 17, lineHeight: 22, color: authColors.link },
+    field: {
+      height: 48,
+      borderRadius: 12,
+      backgroundColor: authColors.glass,
+      borderWidth: 1.5,
+      borderColor: 'transparent',
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    fieldFocused: { borderColor: 'rgba(255,255,255,0.55)' },
+    fieldError: { borderColor: authColors.errorStroke },
+    input: {
+      flex: 1,
+      height: '100%',
+      paddingHorizontal: 14,
+      fontFamily: AppFont.regular,
+      fontSize: 17,
+      color: authColors.onBlue,
+    },
+    reveal: { paddingHorizontal: 14, height: '100%', justifyContent: 'center' },
+    revealLabel: { fontFamily: AppFont.medium, fontSize: 15, color: authColors.link },
+    note: { fontFamily: AppFont.medium, fontSize: 13, lineHeight: 18, color: authColors.onBlue },
+    divider: { flexDirection: 'row', alignItems: 'center', height: 16 },
+    dividerLine: { flex: 1, height: 1, backgroundColor: authColors.glass },
+    dividerLabel: {
+      paddingHorizontal: 20,
+      fontFamily: AppFont.medium,
+      fontSize: 12,
+      lineHeight: 16,
+      letterSpacing: 0.96,
+      textTransform: 'uppercase',
+      color: authColors.faint,
+    },
+    legal: {
+      fontFamily: AppFont.regular,
+      fontSize: 13,
+      lineHeight: 18,
+      color: authColors.onBlue,
+      textAlign: 'center',
+    },
+    faded: { opacity: 0.5 },
+    pressed: { opacity: 0.7 },
+  };
 });

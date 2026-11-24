@@ -54,7 +54,7 @@ function onboardingColors(theme: AndroidTheme) {
     amberInk: k.amberInk,
     onGlass: k.onGlass,
     /** An error line under a practice or a download (light keeps its deeper red). */
-    error: theme.scheme === 'dark' ? k.error : '#B42318',
+    error: k.errorLine,
   };
 }
 
@@ -71,9 +71,6 @@ export function onboardingColorsFor(theme: AndroidTheme): OnboardingColors {
 export function useOnboardingColors(): OnboardingColors {
   return onboardingColorsFor(useTheme());
 }
-
-/** @deprecated Light only, for the launch screens (account flows, segment 7): read `useOnboardingColors()`. */
-export const colors = onboardingColorsFor(themeFor('light'));
 
 // The brand glass is the same blue in both schemes (design §1).
 export const GLASS_GRADIENT = [brand.glassTop, brand.glassBottom] as const;
@@ -163,7 +160,7 @@ export function GlassButton({ label, onPress, disabled, busy, style }: ButtonPro
   );
 }
 
-// White brand glass for the brand-blue screens: the approved sign-in recipe (white → #E7ECF6,
+// White brand glass for the brand-blue screens: the approved sign-in recipe (white → `whiteGlassFoot`,
 // a white top highlight and rim, a faint navy bottom edge). No drop shadow. Ink label, never blue.
 export function WhiteButton({ label, onPress, disabled, busy, style }: ButtonProps) {
   const s = useOnboardingStyles();
@@ -182,7 +179,10 @@ export function WhiteButton({ label, onPress, disabled, busy, style }: ButtonPro
         style,
       ]}
     >
-      <LinearGradient colors={[brand.surface, '#E7ECF6']} style={StyleSheet.absoluteFill} />
+      <LinearGradient
+        colors={[brand.surface, brand.whiteGlassFoot]}
+        style={StyleSheet.absoluteFill}
+      />
       <View pointerEvents="none" style={s.whiteRim} />
       <View pointerEvents="none" style={s.whiteBottom} />
       {busy ? (

@@ -1,9 +1,10 @@
 import { useTranslation } from 'react-i18next';
-import { iosColor } from '@/config/colors';
+import { useIosColor } from '@/config/colors.android';
 import { createNewFolderSheet, type NewFolderPresentation } from './NewFolderSheetCore.android';
 
 function useAndroidFolderPresentation(initialName?: string): NewFolderPresentation {
   const { t } = useTranslation('android');
+  const iosColor = useIosColor();
   return {
     initialName,
     title: t(initialName === undefined ? 'newFolder' : 'renameFolder'),

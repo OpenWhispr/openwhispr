@@ -137,7 +137,7 @@ jest.mock('../onboarding/flow', () => ({
 import { ThemeProvider } from '../ThemeProvider';
 import { darkTheme, lightTheme } from '../theme';
 import { Onboarding } from '../Onboarding';
-import { colors as lightOnboarding, GLASS_GRADIENT, Screen, GlassButton } from '../onboarding/kit';
+import { GLASS_GRADIENT, Screen, GlassButton } from '../onboarding/kit';
 import { PracticeBubble } from '../onboarding/PracticeBubble';
 import { PracticeMenu } from '../onboarding/practiceParts';
 import { PitchScreen } from '../onboarding/IntroScreens';
@@ -297,11 +297,6 @@ describe('a light/dark switch mid-onboarding (§3b)', () => {
     expect(screen.getByText('appsTitle')).toBeTruthy();
     expect(page()).toMatchObject({ backgroundColor: lightTheme.canvas });
   });
-});
-
-it('keeps a light-only palette for the launch screens until they move (segment 7)', () => {
-  expect(lightOnboarding.canvas).toBe(lightTheme.canvas);
-  expect(lightOnboarding.brandMid).toBe(lightTheme.accent);
 });
 
 describe('the practice keyboard across a light/dark switch (§3b)', () => {

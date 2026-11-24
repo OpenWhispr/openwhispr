@@ -82,6 +82,22 @@ export const lightTheme = {
   tabBar: '#FFFFFF',
   /** The raised gradient's middle, for a ring drawn to match a raised surface (Style's picked tab). */
   raisedFill: '#FFFFFF',
+  /** A stronger red for a live state (a recording's dot, an error badge); light keeps its own. */
+  errorVivid: '#E5372B',
+  /** An error line under a practice or a download: a deeper red on the light page. */
+  errorLine: '#B42318',
+  /**
+   * The sign-in screens' blue (auth/look) and the white glass on it. The blue screens look the same
+   * in both schemes (dark design §3.7), so these keep their values in dark.
+   */
+  signInTop: '#5A8DF4',
+  signInMid: '#2F62DE',
+  signInFoot: '#1C3FAE',
+  /** The white brand glass's foot: white → this, on the blue screens. */
+  whiteGlassFoot: '#E7ECF6',
+  /** A field's outline and its error line on the blue. */
+  onBlueErrorLine: '#FF9B9B',
+  onBlueErrorText: '#FFD3D3',
 } as const;
 
 export type ThemeTokens = { readonly [K in keyof typeof lightTheme]: string };
@@ -137,6 +153,14 @@ export const darkTheme = {
   glassBottom: lightTheme.glassBottom,
   tabBar: '#16171C',
   raisedFill: '#27282F',
+  errorVivid: '#FF6B61',
+  errorLine: '#FF6B61',
+  signInTop: lightTheme.signInTop,
+  signInMid: lightTheme.signInMid,
+  signInFoot: lightTheme.signInFoot,
+  whiteGlassFoot: lightTheme.whiteGlassFoot,
+  onBlueErrorLine: lightTheme.onBlueErrorLine,
+  onBlueErrorText: lightTheme.onBlueErrorText,
 } as const satisfies ThemeTokens;
 
 /** Files not on `useTheme()` yet read the light palette. */

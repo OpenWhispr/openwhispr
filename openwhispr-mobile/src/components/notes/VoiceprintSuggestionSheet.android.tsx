@@ -1,4 +1,4 @@
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
@@ -88,4 +88,4 @@ export function VoiceprintSuggestionSheet({
   );
 }
 
-const styles = StyleSheet.create({ androidSheet: { maxHeight: '90%' } });
+const styles = { androidSheet: { maxHeight: '90%' } } as const;

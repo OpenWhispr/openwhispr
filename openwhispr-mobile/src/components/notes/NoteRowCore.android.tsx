@@ -4,7 +4,7 @@ import { CloudOff } from 'lucide-react-native';
 import { GroupedList } from './GroupedList';
 import { SwipeableCard, type RestoreRow } from '@/components/ui/SwipeableCard';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { iosColor, BRAND } from '@/config/colors';
+import { BRAND, useIosColor } from '@/config/colors.android';
 import { formatNoteRowTime } from '@/lib/formatNoteRowTime';
 import type { DateBucketKey } from '@/lib/groupNotesByDate';
 import type { Note } from '@/data';
@@ -43,6 +43,7 @@ export function createNoteRow(
     tinted = false,
   }: NoteRowProps) {
     const presentation = usePresentation({ onDelete, onMove });
+    const iosColor = useIosColor();
     const copy = presentation.copy ?? defaultCopy;
     const title = note.title || copy('library.untitled', 'Untitled');
     const preview = (note.content || copy('library.noAdditionalText', 'No additional text'))

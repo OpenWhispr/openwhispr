@@ -7,17 +7,17 @@ import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { AppFont } from '@/lib/fonts';
-import { GlassButton, SecondaryButton, colors } from '../onboarding/kit';
+import { GlassButton, SecondaryButton } from '../onboarding/kit';
 import { BottomSheet } from '../settings/kit';
-import { look } from '../settings/look';
-import { flat, theme } from '../theme';
+import { makeStyles, themeFor, useTheme } from '../ThemeProvider';
 import { markEndedSheetShown, useEndedSession } from '../auth/endedSession';
 import { useLaunchT } from './strings';
 
 // The Android splash (app.base.json): Home's off-white canvas (Josh, 23 Nov), with
 // assets/splash-icon.png drawn 288 dp wide in the middle of the screen. The slow-open screen
-// repeats it exactly, so the hand-off can't be seen.
-const SPLASH_CANVAS = look.canvas;
+// repeats it exactly, so the hand-off can't be seen. The native splash has no dark variant, so
+// this screen keeps the light canvas and dark status icons in both schemes (dark design §3.7).
+const splash = themeFor('light');
 const SPLASH_ICON = require('../../../assets/splash-icon.png');
 const SPLASH_ICON_DP = 288;
 // The tile inside that image is 128 dp; the line sits 20 dp under it.
@@ -29,6 +29,7 @@ const LINE_OFFSET = 128 / 2 + 20;
  */
 export function LaunchSplash({ slow }: { slow: boolean }) {
   const t = useLaunchT();
+  const launch = useSplashStyles();
   return (
     <View style={launch.screen} accessibilityLabel={slow ? t('opening') : undefined}>
       <StatusBar style="dark" />
@@ -52,6 +53,8 @@ export function LaunchSplash({ slow }: { slow: boolean }) {
  */
 export function CouldNotOpen({ details, onRetry }: { details: string; onRetry: () => void }) {
   const t = useLaunchT();
+  const { scheme } = useTheme();
+  const launch = useStyles();
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;
@@ -60,7 +63,7 @@ export function CouldNotOpen({ details, onRetry }: { details: string; onRetry: (
   }, [copied]);
   return (
     <SafeAreaView style={launch.errorScreen} edges={['top', 'bottom']}>
-      <StatusBar style="dark" />
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <View style={launch.errorBody}>
         <View style={launch.errorTile}>
           <Text style={launch.errorMark}>!</Text>
@@ -89,6 +92,8 @@ export function CouldNotOpen({ details, onRetry }: { details: string; onRetry: (
  */
 export function SignedOutSheet() {
   const t = useLaunchT();
+  const theme = useTheme();
+  const launch = useStyles();
   const pending = useEndedSession((state) => state.sheetPending && state.user !== null);
   const close = () => markEndedSheetShown();
   return (
@@ -99,7 +104,7 @@ export function SignedOutSheet() {
       body={t('signedOutBody')}
       above={
         <View style={launch.lockTile}>
-          <SystemIcon name="lock.fill" mdName="Lock" size={18} color={theme.ink} />
+          <SystemIcon name="lock.fill" mdName="Lock" size={18} color={theme.tokens.ink} />
         </View>
       }
     >
@@ -124,10 +129,11 @@ export function SignedOutSheet() {
   );
 }
 
-const launch = StyleSheet.create({
+// The same in both schemes: it repeats the native splash.
+const useSplashStyles = makeStyles(() => ({
   screen: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: SPLASH_CANVAS,
+    backgroundColor: splash.tokens.canvas,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -139,8 +145,11 @@ const launch = StyleSheet.create({
     marginTop: LINE_OFFSET,
     alignItems: 'center',
   },
-  line: { color: colors.tertiary, fontSize: 15, lineHeight: 20, textAlign: 'center' },
-  errorScreen: { flex: 1, backgroundColor: look.canvas, paddingHorizontal: 16 },
+  line: { color: splash.tokens.tertiary, fontSize: 15, lineHeight: 20, textAlign: 'center' },
+}));
+
+const useStyles = makeStyles(({ tokens: k, flat }) => ({
+  errorScreen: { flex: 1, backgroundColor: k.canvas, paddingHorizontal: 16 },
   errorBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   errorTile: {
     ...flat,
@@ -151,16 +160,16 @@ const launch = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 8,
   },
-  errorMark: { color: theme.amber, fontSize: 26, lineHeight: 30, fontFamily: AppFont.bold },
+  errorMark: { color: k.amber, fontSize: 26, lineHeight: 30, fontFamily: AppFont.bold },
   errorTitle: {
-    color: colors.ink,
+    color: k.ink,
     fontSize: 22,
     lineHeight: 28,
     fontFamily: AppFont.medium,
     textAlign: 'center',
   },
   errorText: {
-    color: colors.tertiary,
+    color: k.tertiary,
     fontSize: 16,
     lineHeight: 22,
     textAlign: 'center',
@@ -177,5 +186,5 @@ const launch = StyleSheet.create({
     justifyContent: 'center',
   },
   notNow: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  notNowLabel: { color: colors.ink, fontSize: 16, fontFamily: AppFont.medium },
-});
+  notNowLabel: { color: k.ink, fontSize: 16, fontFamily: AppFont.medium },
+}));

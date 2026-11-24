@@ -160,9 +160,7 @@ export function RecordingView({
         ? dark
           ? n.theme.tokens.warning
           : '#F59E0B'
-        : dark
-          ? n.error
-          : '#E5372B';
+        : n.theme.tokens.errorVivid;
   const pill = t(status === 'reconnecting' ? 'reconnecting' : 'recording', {
     time: clock(elapsedSeconds),
   });

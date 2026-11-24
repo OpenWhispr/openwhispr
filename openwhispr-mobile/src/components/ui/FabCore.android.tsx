@@ -15,8 +15,8 @@ import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
 import { Glass } from '@/components/ui/Glass';
 import { TAB_BAR_CLEARANCE } from '@/components/ui/tabBarClearance';
 import { safeHaptics } from '@/lib/utils';
-
-const BRAND = '#007AFF';
+import { BRAND } from '@/config/colors.android';
+import { makeStyles } from '@/android/ThemeProvider';
 
 const SIZE = 56;
 const MINI_SIZE = 44;
@@ -65,6 +65,7 @@ export function createFab(usePresentation: () => FabPresentation = () => ({})) {
     onActionPress,
   }: FabProps) {
     const presentation = usePresentation();
+    const styles = useStyles();
     const isFocused = useIsFocused();
     const hasMenu = (actions?.length ?? 0) > 0;
     const [open, setOpen] = useState(false);
@@ -199,6 +200,7 @@ function BrandDiscMark({
   mdIcon: LucideIconName;
   pointerEvents?: 'auto' | 'none';
 }) {
+  const styles = useStyles();
   if (icon !== 'plus') {
     return <SystemIcon name={icon} mdName={mdIcon} size={24} color="#FFF" />;
   }
@@ -220,6 +222,7 @@ type MiniActionProps = {
 };
 
 function MiniAction({ action, index, progress, onPress, pressableProps }: MiniActionProps) {
+  const styles = useStyles();
   const start = index * STAGGER;
   const span = Math.max(1 - start, 0.0001);
   const bottom = BOTTOM + SIZE + 16 + index * (MINI_SIZE + MINI_GAP);
@@ -282,7 +285,8 @@ function MiniAction({ action, index, progress, onPress, pressableProps }: MiniAc
   );
 }
 
-const styles = StyleSheet.create({
+// The mini actions are light glass in light and the dark surface in dark (dark design §1).
+const useStyles = makeStyles((t) => ({
   menuLayer: {
     zIndex: 9500,
   },
@@ -290,7 +294,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     height: MINI_SIZE,
     borderRadius: MINI_SIZE / 2,
-    backgroundColor: 'rgba(248,248,250,0.94)',
+    backgroundColor: t.scheme === 'dark' ? t.tokens.surface : 'rgba(248,248,250,0.94)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.18,
@@ -300,19 +304,19 @@ const styles = StyleSheet.create({
   miniActionBase: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: MINI_SIZE / 2,
-    backgroundColor: 'rgba(248,248,250,0.94)',
+    backgroundColor: t.scheme === 'dark' ? t.tokens.surface : 'rgba(248,248,250,0.94)',
   },
   miniActionGlass: {
     height: MINI_SIZE,
     borderRadius: MINI_SIZE / 2,
-    backgroundColor: 'rgba(255,255,255,0.42)',
+    backgroundColor: t.scheme === 'dark' ? t.tokens.hairline : 'rgba(255,255,255,0.42)',
     overflow: 'hidden',
   },
   miniActionHighlight: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: MINI_SIZE / 2,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(60,60,67,0.14)',
+    borderColor: t.scheme === 'dark' ? t.tokens.divider : 'rgba(60,60,67,0.14)',
   },
   miniActionContent: {
     height: MINI_SIZE,
@@ -336,7 +340,7 @@ const styles = StyleSheet.create({
   plusStroke: {
     position: 'absolute',
     borderRadius: 2,
-    backgroundColor: '#FFF',
+    backgroundColor: t.tokens.onGlass,
   },
   plusHorizontal: {
     width: 22,
@@ -346,4 +350,4 @@ const styles = StyleSheet.create({
     width: 2.5,
     height: 22,
   },
-});
+}));

@@ -1,6 +1,6 @@
 import { ReactNode, forwardRef } from 'react';
 import { View, TextInput, type TextInputProps } from 'react-native';
-import { iosColor } from '@/config/colors';
+import { useIosColor } from '@/config/colors.android';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { AppFont } from '@/lib/fonts';
 
@@ -32,6 +32,7 @@ export const SearchField = forwardRef<TextInput, SearchFieldProps>(function Sear
   },
   ref,
 ) {
+  const iosColor = useIosColor();
   return (
     <View
       style={{

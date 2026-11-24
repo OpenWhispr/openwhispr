@@ -82,7 +82,7 @@ function buildHomeLook(theme: AndroidTheme): HomeLook {
     fill: k.track,
     tint: k.selFill,
     tile: k.tile,
-    error: dark ? k.error : '#E5372B',
+    error: k.errorVivid,
     warning: dark ? k.amber : '#C27A00',
     disabled: k.disabled,
     onGlass: k.onGlass,
@@ -119,8 +119,8 @@ export function useHome(): HomeLook {
   return homeLook(useTheme());
 }
 
-// Light only, for files the dark theme hasn't moved to `useHome()`/`useTheme()` yet (see
-// `__tests__/themeAtRenderPending.ts`). Remove each once nothing imports it.
+// Light only. The theme-at-render guard keeps every Android file off these, so they can go once
+// no test reads them either.
 const lightLook = homeLook(themeFor('light'));
 /** @deprecated Light only: read `useHome().c`. */
 export const home = lightLook.c;

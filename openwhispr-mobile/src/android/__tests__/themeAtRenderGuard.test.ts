@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { PENDING } from './themeAtRenderPending';
 
 /**
  * Dark theme §3b: a screen half-drawn during a light/dark switch can't keep old colours, so every
@@ -9,8 +8,8 @@ import { PENDING } from './themeAtRenderPending';
  *    older token objects `home`, `look`, `notesLook`, `colors`, `ink`, `palette`, `authColors`),
  *  - builds a `StyleSheet` at module level, or
  *  - writes a colour (hex, rgb/rgba) into a module-level constant.
- * Files still to move are listed in `themeAtRenderPending.ts`, grouped by the segment that moves
- * them; an entry whose file is clean fails too, so take files off the list as you move them.
+ * Every Android file is checked; the last ones moved in segment 7 (Account flows), so there is no
+ * pending list any more.
  */
 const ROOT = path.resolve(__dirname, '../../..');
 
@@ -136,24 +135,16 @@ export function moduleLevelColours(file: string): string[] {
 
 describe('theme at render guard (dark theme §3b)', () => {
   const files = screenFiles();
-  const pending = new Set(PENDING);
 
   it('finds Android screen files to check', () => {
     expect(files.length).toBeGreaterThan(100);
     expect(files).toContain('src/android/Root.tsx');
   });
 
-  it('reads colours at render outside the pending list', () => {
-    const offenders = files
-      .filter((file) => !pending.has(file))
-      .flatMap((file) => moduleLevelColours(file).map((hit) => `${file}: ${hit}`));
-    expect(offenders).toEqual([]);
-  });
-
-  it('lists only files that still need moving', () => {
-    const clean = PENDING.filter(
-      (file) => !files.includes(file) || moduleLevelColours(file).length === 0,
+  it('reads colours at render in every Android file', () => {
+    const offenders = files.flatMap((file) =>
+      moduleLevelColours(file).map((hit) => `${file}: ${hit}`),
     );
-    expect(clean).toEqual([]);
+    expect(offenders).toEqual([]);
   });
 });

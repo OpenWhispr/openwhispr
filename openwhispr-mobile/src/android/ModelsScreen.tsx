@@ -17,13 +17,14 @@ import {
   modelSupported,
   type AndroidModelId,
 } from './models';
-import { Button, Card, Row, styles } from './ui';
+import { Button, Card, Row, useUiStyles } from './ui';
 import type { AndroidSpeechModelId } from './speechSelection';
 import type { UserConfig } from '@/types';
 import { speechModelSupportsLanguages } from './speechCapabilities';
 import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
 export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { t } = useTranslation();
+  const styles = useUiStyles();
   const config = useConfigStore((s) => s.config);
   const privateMode = useProcessingModeStore((s) => s.activeMode === 'private');
   const [requestedPrivateMode, setRequestedPrivateMode] = useState<boolean | null>(null);

@@ -16,6 +16,7 @@ import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { useSheetDragToDismiss } from '@/hooks/useSheetDragToDismiss';
+import { makeStyles } from '@/android/ThemeProvider';
 
 const SHEET_RADIUS = 28;
 // Gap below the safe-area inset, leaving a sliver of the dimmed screen above the
@@ -24,13 +25,16 @@ const SHEET_TOP_PEEK = 8;
 // Breathing room between the primary button and the keyboard's top edge.
 const BUTTON_KEYBOARD_GAP = 10;
 
-const SUBMIT_SHADOW: ViewStyle = {
-  shadowColor: '#2457D6',
-  shadowOpacity: 0.35,
-  shadowRadius: 14,
-  shadowOffset: { width: 0, height: 8 },
-  elevation: 4,
-};
+// The brand glass's blue glow under Submit: the same in both schemes (the glass doesn't change).
+const useStyles = makeStyles(() => ({
+  submitShadow: {
+    shadowColor: '#2457D6',
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+  },
+}));
 
 type FormSheetProps = {
   visible: boolean;
@@ -86,6 +90,7 @@ export function createFormSheet(usePresentation: () => FormSheetPresentation = (
     children,
   }: FormSheetProps) {
     const presentation = usePresentation();
+    const { submitShadow } = useStyles();
     const copy = presentation.copy ?? defaultCopy;
     const insets = useSafeAreaInsets();
     const keyboardHeight = useKeyboardHeight(visible);
@@ -100,10 +105,10 @@ export function createFormSheet(usePresentation: () => FormSheetPresentation = (
     const closeLabel = copy('close', 'Close');
     const submitButton: ButtonPresentation = presentation.submitButton?.(
       canSubmit,
-      SUBMIT_SHADOW,
+      submitShadow,
     ) ?? {
       style: ({ pressed }) => [
-        canSubmit ? SUBMIT_SHADOW : null,
+        canSubmit ? submitShadow : null,
         { borderCurve: 'continuous', opacity: pressed && canSubmit ? 0.9 : 1 },
       ],
       className: `relative h-[52px] items-center justify-center rounded-full ${

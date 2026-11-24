@@ -50,8 +50,8 @@ export function useSettingsLook(): SettingsLook {
   return settingsLookFor(useHome().theme);
 }
 
-// Light only, for files the dark theme hasn't moved yet (onboarding, account flows; see
-// `__tests__/themeAtRenderPending.ts`). Remove each once nothing imports it.
+// Light only. The theme-at-render guard keeps every Android file off these, so they can go once
+// no test reads them either.
 const lightLook = settingsLookFor(themeFor('light'));
 /** @deprecated Light only: read `useSettingsLook().look`. */
 export const look = lightLook.look;

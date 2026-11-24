@@ -7,7 +7,7 @@ import type {
   NoteAccessState,
   NoteShareInvitation,
 } from '@/data/remote/noteSharingTypes';
-import { iosColor } from '@/config/colors';
+import { useIosColor } from '@/config/colors.android';
 import { AppFont } from '@/lib/fonts';
 import { isValidEmail } from '@/lib/utils';
 import { isGroupPrincipal } from '@/lib/notes/noteShareAccess';
@@ -16,7 +16,6 @@ import { NOTES_ROW_CONTENT_INSET } from './tokens';
 import { PRINCIPAL_LABEL, PrincipalAvatar, RowIcon } from './NoteSharePrincipal';
 import type { NoteShareCopy } from './NoteSharePrincipalCore.android';
 
-const PLACEHOLDER_COLOR = iosColor('tertiaryLabel');
 const INPUT_STYLE: TextStyle = { fontFamily: AppFont.regular };
 
 interface NoteShareInviteFieldProps {
@@ -63,6 +62,7 @@ export function createNoteShareInviteField(options: InvitePresentation = {}) {
   }: NoteShareInviteFieldProps) {
     const { copy } = useCopy();
     const labels = useLabels();
+    const placeholderColor = useIosColor()('tertiaryLabel');
     const [suggestions, setSuggestions] = useState<AccessPrincipalSuggestion[]>([]);
     const [searchError, setSearchError] = useState(false);
     const searchable = Boolean(remoteId && access?.can_manage_access && onAddPrincipal);
@@ -129,7 +129,7 @@ export function createNoteShareInviteField(options: InvitePresentation = {}) {
               ? copy('noteAccess.searchPlaceholder', 'Add people or emails')
               : copy('noteAccess.email', 'Invite by email')
           }
-          placeholderTextColor={PLACEHOLDER_COLOR}
+          placeholderTextColor={placeholderColor}
           autoCapitalize="none"
           autoCorrect={false}
           autoComplete="email"
