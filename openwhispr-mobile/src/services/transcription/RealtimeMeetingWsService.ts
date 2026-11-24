@@ -139,8 +139,9 @@ export async function startRealtimeMeetingWs(
   let sendDroppedBytes = 0;
   // Capture-clock stretches lost outside the ring: failed sends, audio still buffered when the
   // session ended with no socket to take it, and audio a leg was sent but died before
-  // transcribing. The ring records its own evictions. None of it counts toward droppedMs: that
-  // figure drives the partial-recording alert, and this audio is recovered from the file.
+  // transcribing. The ring records its own evictions. Only failed sends also count toward
+  // droppedMs; the abandoned and dead-leg stretches don't, since that figure drives the
+  // partial-recording alert and this audio is recovered from the file.
   const lostWindows: AudioWindow[] = [];
   // Merged as it grows, so a flaky stretch can't add an entry per flush tick.
   const addLostWindow = (window: AudioWindow): void => {
