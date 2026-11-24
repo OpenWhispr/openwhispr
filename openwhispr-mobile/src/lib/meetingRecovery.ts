@@ -1,7 +1,6 @@
 import 'expo-sqlite/localStorage/install';
 import { AppState, type AppStateStatus } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as Network from 'expo-network';
 import type { Note } from '@/data';
 import { notesRepository } from '@/data';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
@@ -15,7 +14,11 @@ import {
   readPendingBackfill,
   savePendingBackfill,
 } from '@/lib/transcriptAudio';
-import { owedWindowsFromSegments, recordingDurationMs } from '@/lib/notes/meetingPostPass';
+import {
+  isDeviceOnline,
+  owedWindowsFromSegments,
+  recordingDurationMs,
+} from '@/lib/notes/meetingPostPass';
 import type { AudioWindow } from '@/services/transcription/realtimeReconnect';
 import { useNotesStore } from '@/store/useNotesStore';
 import type { TranscriptionStatus } from '@/types';
@@ -35,6 +38,8 @@ export const STALE_RECORDING_MS = 7 * 24 * 60 * 60 * 1000;
 export interface MeetingRecoveryDeps {
   listNotes(): Note[];
   markFailed(noteId: number): void;
+  /** done → failed through the legal moves, for a done note whose audio was never transcribed. */
+  reopenAsFailed(noteId: number): void;
   /** Settles once a resume can run without iOS suspending it. */
   waitUntilActive(): Promise<void>;
   resume(noteId: number): Promise<void>;
@@ -79,7 +84,8 @@ export interface MeetingRecoveryDeps {
   owesBackfill(noteId: number): Promise<boolean>;
   /** The sidecar's windows, or null when it can't be read. */
   readPendingBackfill(noteId: number): Promise<AudioWindow[] | null>;
-  recordingDurationMs(uri: string): Promise<number>;
+  /** Null when the length can't be read. */
+  recordingDurationMs(uri: string): Promise<number | null>;
   /** The saved segments' times. */
   getSegmentTimes(noteId: number): { startMs: number; endMs: number }[];
   /** Rejects when it can't be written. */
@@ -91,6 +97,7 @@ export interface MeetingRecoveryDeps {
  * A readable sidecar wins: once written, later launches resume from it rather than derive again.
  * Otherwise the windows come from the saved segments against the recording's length, and the
  * sidecar is (re)written, or removed when nothing is owed. Rejects when that write fails.
+ * A recording whose length can't be read counts as owing: nothing is derived or removed.
  */
 async function prepareOwedBackfill(
   noteId: number,
@@ -99,6 +106,7 @@ async function prepareOwedBackfill(
 ): Promise<boolean> {
   if (hasSidecar && ((await deps.readPendingBackfill(noteId))?.length ?? 0) > 0) return true;
   const durationMs = await deps.recordingDurationMs(deps.recordingUri(noteId));
+  if (durationMs == null) return true;
   const owed = owedWindowsFromSegments(deps.getSegmentTimes(noteId), durationMs);
   if (owed.length === 0) {
     if (hasSidecar) await deps.deletePendingBackfill(noteId);
@@ -161,18 +169,24 @@ async function sweepSettledRecordings(
           return;
         }
       }
-      // A Stop pressed while the session was still connecting can leave a recording nothing
-      // linked; this launch's repair linked it again. Its transcript may still miss some of it.
-      const relinkedLeftover =
-        note.transcriptionStatus === 'done' &&
-        !hasSidecar &&
-        deps.wasRelinked(note.id) &&
-        deps.hasTranscript(note.id);
-      if (!hasSidecar && !relinkedLeftover) return;
+      // A recording nothing linked (Stop before the session existed, a writer that failed),
+      // linked again by this launch's repair.
+      if (note.transcriptionStatus === 'done' && !hasSidecar && deps.wasRelinked(note.id)) {
+        if (deps.hasTranscript(note.id)) {
+          // Only a sidecar marks a done note as a cloud meeting that still owes audio. Without
+          // one this may be an on-device meeting, whose audio must never be uploaded, so
+          // nothing is derived from its transcript and the leftover goes.
+          await deps.discardRecording(note.id);
+        } else {
+          // Done with nothing transcribed: the recording is the only copy of the meeting, so
+          // the note gets Retry (and the 7-day rule) instead of the processed-recording delete.
+          deps.reopenAsFailed(note.id);
+        }
+        return;
+      }
+      if (!hasSidecar) return;
       if (await prepareOwedBackfill(note.id, hasSidecar, deps)) {
         backfills.push(note.id);
-      } else if (relinkedLeftover) {
-        await deps.discardRecording(note.id);
       } else {
         pendingBackfills.delete(note.id);
       }
@@ -367,7 +381,10 @@ export async function recoverOrphanedMeetings(deps: MeetingRecoveryDeps): Promis
   }
 
   // Last: each is a run of network requests, and nothing above should wait behind them.
-  if (backfills.length > 0 && (await deps.isOnline().catch(() => false))) {
+  if (backfills.length === 0) return;
+  // A background launch would be suspended mid-upload.
+  await deps.waitUntilActive();
+  if (await deps.isOnline().catch(() => false)) {
     for (const noteId of backfills) {
       await attempt(deps, noteId, () => deps.resumeBackfill(noteId));
     }
@@ -389,7 +406,8 @@ export interface MeetingRecordingRepairDeps {
  * Sync pulls used to erase a meeting's recording path, leaving the note with no playback
  * or Retry and its recording on disk with nothing pointing at it. Points each such note
  * back at its recording, and deletes recordings whose note is gone for good (hard-deleted
- * notes can only have deleted their recording through that path). Returns the notes it linked.
+ * notes can only have deleted their recording through that path) or in the trash, where no
+ * sweep would ever reach a recording linked again. Returns the notes it linked.
  */
 export async function repairMeetingRecordings(deps: MeetingRecordingRepairDeps): Promise<number[]> {
   const relinked: number[] = [];
@@ -398,7 +416,7 @@ export async function repairMeetingRecordings(deps: MeetingRecordingRepairDeps):
     if (!noteId) continue;
     const note = deps.getNote(noteId);
     const uri = deps.recordingUri(noteId);
-    if (!note) deps.deleteFile(uri);
+    if (!note || note.deletedAt) deps.deleteFile(uri);
     // A note still recording is either this launch's live meeting or a killed one, whose
     // recording recovery repairs before linking it.
     else if (
@@ -461,6 +479,14 @@ const errorCode = (error: unknown): string => {
 };
 
 // Fixed strings and codes only: errors here can carry file paths.
+const listPendingBackfillIds = async (directory: string | null): Promise<number[]> =>
+  directory
+    ? (await FileSystem.readDirectoryAsync(directory)).flatMap((name) => {
+        const noteId = Number(PENDING_BACKFILL_FILE.exec(name)?.[1]);
+        return noteId ? [noteId] : [];
+      })
+    : [];
+
 const reportRecoveryError = (error: unknown, noteId?: number): void => {
   Sentry.captureMessage('meeting-recovery-failed', {
     level: 'warning',
@@ -501,6 +527,12 @@ export function startMeetingRecoveryOnce(): void {
             .getAllNotes()
             .filter((note) => createdBeforeRuntime(note, RUNTIME_STARTED_AT_MS)),
         markFailed: (noteId) => useNotesStore.getState().transitionStatus(noteId, 'failed'),
+        reopenAsFailed: (noteId) => {
+          // done may only move to transcribing; a kill between the two leaves an orphan with
+          // a recording and no transcript, which the next launch marks failed and resumes.
+          useNotesStore.getState().transitionStatus(noteId, 'transcribing');
+          useNotesStore.getState().transitionStatus(noteId, 'failed');
+        },
         waitUntilActive: () => waitForAppActive(AppState),
         hasTranscript: (noteId) => notesRepository.getSegments(noteId).length > 0,
         keepTranscript: (noteId) => useNotesStore.getState().keepCloudMeetingTranscript(noteId),
@@ -524,13 +556,7 @@ export function startMeetingRecoveryOnce(): void {
             ? Date.now() - info.modificationTime * 1000
             : null;
         },
-        listPendingBackfills: async () =>
-          directory
-            ? (await FileSystem.readDirectoryAsync(directory)).flatMap((name) => {
-                const noteId = Number(PENDING_BACKFILL_FILE.exec(name)?.[1]);
-                return noteId ? [noteId] : [];
-              })
-            : [],
+        listPendingBackfills: () => listPendingBackfillIds(directory),
         getNote: (noteId) => notesRepository.getNoteById(noteId),
         // Unsure counts as there, so a sidecar is never dropped on a failed read.
         recordingExists: (noteId) =>
@@ -540,11 +566,7 @@ export function startMeetingRecoveryOnce(): void {
           ),
         deletePendingBackfill: clearPendingBackfill,
         wasRelinked: (noteId) => relinked.has(noteId),
-        isOnline: () =>
-          Network.getNetworkStateAsync().then(
-            (state) => state.isConnected !== false,
-            () => true,
-          ),
+        isOnline: isDeviceOnline,
         resumeBackfill: (noteId) => useNotesStore.getState().resumeMeetingBackfill(noteId),
         listProcessedRecordings: () =>
           notesRepository

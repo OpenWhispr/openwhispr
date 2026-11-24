@@ -21,9 +21,11 @@ import {
   createCloudPostPassDeps,
   mergeTranscript,
   owedWindowsFromSegments,
+  recordingDurationMs,
   transcribeRecordingToSegments,
   type PostPassDeps,
 } from '../meetingPostPass';
+import { EmptyWavRangeError } from '../wavRange';
 import type { CloudMeetingSegment } from '../cloudMeetingSegments';
 
 const RECORDING = 'file:///app/documents/meeting-7.wav';
@@ -118,7 +120,7 @@ describe('backfillDroppedAudio', () => {
 
   it('does not stop at a stretch the recording cannot give', async () => {
     const deps = makeDeps();
-    (deps.extract as jest.Mock).mockRejectedValueOnce(new Error('Recording has no audio'));
+    (deps.extract as jest.Mock).mockRejectedValueOnce(new EmptyWavRangeError());
     const { segments, failed, failedWindows } = await backfillDroppedAudio(
       RECORDING,
       [
@@ -159,7 +161,7 @@ describe('backfillDroppedAudio', () => {
   it('skips a stretch the recording does not hold', async () => {
     const deps = makeDeps();
     (deps.extract as jest.Mock).mockImplementation(async (_uri: string, startMs: number) => {
-      if (startMs === 0) throw new Error('Recording has no audio in that range');
+      if (startMs === 0) throw new EmptyWavRangeError();
       return `file:///app/cache/range-${startMs}.wav`;
     });
     const { segments, failed } = await backfillDroppedAudio(
@@ -172,6 +174,32 @@ describe('backfillDroppedAudio', () => {
     );
     expect(failed).toBe(0);
     expect(segments.map((s) => s.startMs)).toEqual([20_000]);
+  });
+
+  it('stops and owes a stretch it could not cut from the recording, with the rest', async () => {
+    const deps = makeDeps();
+    (deps.extract as jest.Mock).mockImplementation(async (_uri: string, startMs: number) => {
+      // A full disk: the stretch is in the recording, but its copy can't be written.
+      if (startMs >= 20_000) throw new Error('No space left on device');
+      return `file:///app/cache/range-${startMs}.wav`;
+    });
+    const { segments, failed, failedWindows } = await backfillDroppedAudio(
+      RECORDING,
+      [
+        { startMs: 0, endMs: 10_000 },
+        { startMs: 20_000, endMs: 30_000 },
+        { startMs: 40_000, endMs: 50_000 },
+      ],
+      deps,
+    );
+    expect(segments.map((s) => s.startMs)).toEqual([0]);
+    expect(failed).toBe(2);
+    expect(failedWindows).toEqual([
+      { startMs: 20_000, endMs: 30_000 },
+      { startMs: 40_000, endMs: 50_000 },
+    ]);
+    // The third is not tried: the same disk would refuse it too.
+    expect(deps.extract).toHaveBeenCalledTimes(2);
   });
 
   it('always cleans up the extracted file', async () => {
@@ -331,6 +359,18 @@ describe('cloud transcription of a recording', () => {
     await expect(transcribeRecordingToSegments(RECORDING, undefined)).resolves.toEqual([
       { text: 'Short.', startMs: 0, endMs: 5000, speakerLabel: null, sortOrder: 0 },
     ]);
+  });
+
+  it('reads the length of a recording from its size, and null when it cannot tell', async () => {
+    mockGetInfo.mockResolvedValue({ exists: true, size: 44 + 32 * 5000 });
+    await expect(recordingDurationMs(RECORDING)).resolves.toBe(5000);
+    mockGetInfo.mockResolvedValue({ exists: false });
+    await expect(recordingDurationMs(RECORDING)).resolves.toBe(0);
+    // Unknown is not empty: a caller must not take it as a recording that owes nothing.
+    mockGetInfo.mockRejectedValue(new Error('stat failed'));
+    await expect(recordingDurationMs(RECORDING)).resolves.toBeNull();
+    mockGetInfo.mockResolvedValue({ exists: true });
+    await expect(recordingDurationMs(RECORDING)).resolves.toBeNull();
   });
 
   it('rejects when the cloud cannot be reached', async () => {

@@ -57,6 +57,7 @@ import {
 import {
   backfillDroppedAudio,
   createCloudPostPassDeps,
+  isDeviceOnline,
   mergeTranscript,
   recordingDurationMs,
   transcribeRecordingToSegments,
@@ -544,10 +545,27 @@ const backfillCloudMeeting = async (
   }
 };
 
+const windowsMs = (windows: AudioWindow[]): number =>
+  windows.reduce((sum, window) => sum + (window.endMs - window.startMs), 0);
+
+/** Writes what the recording still owes beside it; false when it could not be written. */
+const recordOwedAudio = async (noteId: number, windows: AudioWindow[]): Promise<boolean> => {
+  try {
+    await savePendingBackfill(noteId, windows);
+    return true;
+  } catch (error) {
+    Sentry.captureMessage('meeting-backfill-sidecar-failed', {
+      level: 'warning',
+      tags: { feature: 'meeting-post-pass', error_code: errorCode(error) },
+    });
+    return false;
+  }
+};
+
 /**
- * Keeps the recording and records what it still owes when a backfill fell short; otherwise
- * deletes it. A sidecar that can't be written leaves nothing to resume from, so the
- * recording goes too.
+ * Brings the list beside the recording up to what is still owed after a backfill, and deletes
+ * the recording once nothing is. A recording that still owes audio is always kept, even when
+ * the list can't be rewritten: the earlier list (written before the backfill) still names it.
  */
 const settleMeetingRecording = async (
   noteId: number,
@@ -561,21 +579,14 @@ const settleMeetingRecording = async (
   Sentry.captureMessage('meeting-post-pass-incomplete', {
     level: 'warning',
     tags: { feature: 'meeting-post-pass' },
-    extra: {
-      failedPieces: failedWindows.length,
-      failedMs: failedWindows.reduce((sum, w) => sum + (w.endMs - w.startMs), 0),
-    },
+    extra: { failedPieces: failedWindows.length, failedMs: windowsMs(failedWindows) },
   });
-  try {
-    await savePendingBackfill(noteId, failedWindows);
-  } catch (error) {
-    Sentry.captureMessage('meeting-backfill-sidecar-failed', {
-      level: 'warning',
-      tags: { feature: 'meeting-post-pass', error_code: errorCode(error) },
-    });
-    await discard(noteId);
-  }
+  await recordOwedAudio(noteId, failedWindows);
 };
+
+// One backfill per note at a time: launch recovery, a return to the foreground and Stop can
+// all reach the same note, and two runs would upload and merge the same stretches twice.
+const meetingBackfillsInFlight = new Set<number>();
 
 interface NotesStore {
   /** The active workspace's Private folders (see NotesRepository.getPrivateFolders) — every UI
@@ -665,11 +676,14 @@ interface NotesStore {
     result: CloudMeetingResult,
     /** Audio the mic delivered, in seconds; spreads utterances that carry no timings. */
     capturedSeconds: number,
-  ) => Promise<void>;
+  ) => Promise<{
+    /** Audio the note is done without, still to be transcribed from its recording. */
+    owedMs: number;
+  }>;
   /**
-   * A done meeting whose backfill fell short: transcribes the stretches its sidecar still owes
-   * into the saved transcript, then deletes the recording, or keeps it for what is still owed.
-   * Never throws.
+   * A done cloud meeting whose backfill fell short: transcribes the stretches its sidecar still
+   * owes into the saved transcript, then deletes the recording, or keeps it for what is still
+   * owed. Uploads nothing for a note that may not use the cloud. Never throws.
    */
   resumeMeetingBackfill: (noteId: number) => Promise<void>;
   /** A meeting with a recording and no transcript: transcribes the whole file through cloud chunks. */
@@ -1097,6 +1111,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   },
 
   finalizeCloudMeeting: async (noteId, result, capturedSeconds) => {
+    meetingBackfillsInFlight.add(noteId);
     try {
       get().transitionStatus(noteId, 'transcribing'); // recording -> transcribing
       const live = mapUtterancesToSegments(result.utterances, capturedSeconds);
@@ -1105,29 +1120,43 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       const recordingUri = isManagedMeetingAudioUri(noteId, result.recordingUri)
         ? result.recordingUri
         : null;
-      let transcript = live;
-      let failedWindows: AudioWindow[] = [];
-      const heardLive = live.some((segment) => segment.text?.trim());
-      // With no live text the whole file is transcribed anyway; backfilling first would only
-      // add a wait (offline, a long one).
-      if (recordingUri && heardLive && result.droppedWindows.length > 0) {
-        ({ transcript, failedWindows } = await backfillCloudMeeting(
-          noteId,
-          recordingUri,
-          () => live,
-          result.droppedWindows,
-        ));
+      if (recordingUri && notesRepository.getNoteById(noteId)?.sourceFile !== recordingUri) {
+        notesRepository.updateNoteMeta(noteId, { sourceFile: recordingUri });
       }
-      if (recordingUri && !transcript.some((segment) => segment.text?.trim())) {
-        if (notesRepository.getNoteById(noteId)?.sourceFile !== recordingUri) {
-          notesRepository.updateNoteMeta(noteId, { sourceFile: recordingUri });
+      const heardLive = live.some((segment) => segment.text?.trim());
+      if (recordingUri && !heardLive) {
+        // Nothing heard live (often offline the whole time): the whole file is transcribed.
+        // Offline that would only hold the processing screen through upload timeouts, so the
+        // note ends failed at once with its recording, which is what the note's Retry needs.
+        if (!(await isDeviceOnline())) {
+          get().transitionStatus(noteId, 'failed');
+          return { owedMs: 0 };
         }
-        // Nothing heard live or in the gaps (often offline the whole time). A failure leaves
-        // the note failed with its recording, which is what the note's Retry needs.
+        // A failure leaves the note failed with its recording too.
         await get()
           .transcribeMeetingRecording(noteId)
           .catch(() => undefined);
-        return;
+        return { owedMs: 0 };
+      }
+      let transcript = live;
+      let owed: AudioWindow[] = recordingUri ? result.droppedWindows : [];
+      if (recordingUri && owed.length > 0) {
+        // Before the first upload: a kill from here on leaves the list on disk, so the launch
+        // recovery transcribes exactly these stretches instead of deleting a recording that
+        // looks processed. A list that can't be written does not stop the pass.
+        await recordOwedAudio(noteId, owed);
+        // Offline every piece would wait out its timeouts; the stretches stay owed instead.
+        if (await isDeviceOnline()) {
+          ({ transcript, failedWindows: owed } = await backfillCloudMeeting(
+            noteId,
+            recordingUri,
+            () => live,
+            owed,
+          ));
+        }
+        // Before done, so a done note's list never claims less than its recording owes. With
+        // nothing owed the discard below removes the list with the recording.
+        if (owed.length > 0 && isLiveNote(noteId)) await recordOwedAudio(noteId, owed);
       }
       // While the recording is still on disk: the diarizer reads it. Leaves the status at
       // transcribing or diarizing, both of which may move to done. An utterance the session
@@ -1140,17 +1169,35 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       if (transcript.some((segment) => segment.text?.trim())) {
         logTranscriptionCompleted({ source: 'meeting', provider: 'cloud' });
       }
-      await settleMeetingRecording(noteId, failedWindows, get().discardMeetingRecording);
+      if (owed.length === 0 || !isLiveNote(noteId)) {
+        await get().discardMeetingRecording(noteId);
+      } else {
+        // The recording stays linked. If its list could not be written either, the launch
+        // clean-up will take this done note for a processed one and delete the recording:
+        // accepted, since a phone that can't write a few bytes can't keep the audio safe anyway.
+        Sentry.captureMessage('meeting-post-pass-incomplete', {
+          level: 'warning',
+          tags: { feature: 'meeting-post-pass' },
+          extra: { failedPieces: owed.length, failedMs: windowsMs(owed) },
+        });
+      }
       await finalizeMeetingNoteContent(noteId);
+      return { owedMs: isLiveNote(noteId) ? windowsMs(owed) : 0 };
     } finally {
+      meetingBackfillsInFlight.delete(noteId);
       get().loadNotes();
     }
   },
 
   resumeMeetingBackfill: async (noteId) => {
+    if (meetingBackfillsInFlight.has(noteId)) return;
+    meetingBackfillsInFlight.add(noteId);
     try {
       const note = notesRepository.getNoteById(noteId);
       if (!note || note.deletedAt) return;
+      // The recording of a meeting that may not use the cloud (signed out, Private) never
+      // leaves the phone. Only a cloud meeting has a sidecar at all, which is read below.
+      if (!canUseCloudForMeetingNote(note)) return;
       if (notesRepository.getTranscriptionStatus(noteId) !== 'done') return;
       const recordingUri = note.sourceFile;
       if (!recordingUri || !isManagedMeetingAudioUri(noteId, recordingUri)) return;
@@ -1167,6 +1214,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
         tags: { feature: 'meeting-post-pass', error_code: errorCode(error) },
       });
     } finally {
+      meetingBackfillsInFlight.delete(noteId);
       get().loadNotes();
     }
   },

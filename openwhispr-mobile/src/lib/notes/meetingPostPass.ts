@@ -1,8 +1,9 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Network from 'expo-network';
 import type { AudioWindow } from '../../services/transcription/realtimeReconnect';
 import type { TranscriptionResponse } from '../../types';
 import type { CloudMeetingSegment } from './cloudMeetingSegments';
-import { WAV_HEADER_BYTES, extractWavRange, splitWindows } from './wavRange';
+import { EmptyWavRangeError, WAV_HEADER_BYTES, extractWavRange, splitWindows } from './wavRange';
 
 /** Two minutes of 16 kHz mono WAV (~3.84 MB) stays under the cloud's inline upload limit. */
 export const BACKFILL_CHUNK_MS = 120_000;
@@ -42,7 +43,9 @@ export interface BackfillResult {
 /**
  * Transcribes each dropped stretch and returns segments for the text it got. Never rejects.
  * Stops at the first piece that fails twice: offline, every later piece would wait out the
- * same upload timeouts while the user watches the processing screen.
+ * same upload timeouts while the user watches the processing screen. A piece that can't be cut
+ * from the recording (a full disk, an unreadable file) stops it the same way: only a stretch
+ * the recording doesn't hold is skipped.
  */
 export async function backfillDroppedAudio(
   recordingUri: string,
@@ -56,9 +59,12 @@ export async function backfillDroppedAudio(
     let pieceUri: string;
     try {
       pieceUri = await deps.extract(recordingUri, piece.startMs, piece.endMs);
-    } catch {
+    } catch (error) {
       // The recording may not reach this far (it stopped early): nothing to transcribe.
-      continue;
+      if (error instanceof EmptyWavRangeError) continue;
+      // Anything else says nothing about the audio, which is still owed.
+      const failedWindows = pieces.slice(index);
+      return { segments, failed: failedWindows.length, failedWindows };
     }
     let text: string | null;
     try {
@@ -179,12 +185,24 @@ export function createCloudPostPassDeps(language: string | undefined): PostPassD
   };
 }
 
-/** A meeting recording's length from its size; 0 when it can't be read. */
-export const recordingDurationMs = async (uri: string): Promise<number> => {
+/**
+ * A meeting recording's length from its size: 0 when there is no file, and null when its size
+ * can't be read, which a caller must not take for a recording that holds nothing.
+ */
+export const recordingDurationMs = async (uri: string): Promise<number | null> => {
   const info = await FileSystem.getInfoAsync(uri).catch(() => null);
-  const bytes = info?.exists && 'size' in info ? info.size : 0;
-  return Math.max(0, Math.floor((bytes - WAV_HEADER_BYTES) / RECORDING_BYTES_PER_MS));
+  if (!info) return null;
+  if (!info.exists) return 0;
+  if (!('size' in info) || typeof info.size !== 'number') return null;
+  return Math.max(0, Math.floor((info.size - WAV_HEADER_BYTES) / RECORDING_BYTES_PER_MS));
 };
+
+/** Unsure counts as online: a wrong guess costs one failed upload, never an attempt not made. */
+export const isDeviceOnline = (): Promise<boolean> =>
+  Network.getNetworkStateAsync().then(
+    (state) => state.isConnected !== false,
+    () => true,
+  );
 
 /** Transcribes a whole meeting recording through the cloud; rejects when the cloud can't be reached. */
 export async function transcribeRecordingToSegments(
@@ -210,7 +228,7 @@ export async function transcribeRecordingToSegments(
     {
       text,
       startMs: 0,
-      endMs: await recordingDurationMs(recordingUri),
+      endMs: (await recordingDurationMs(recordingUri)) ?? 0,
       speakerLabel: null,
       sortOrder: 0,
     },

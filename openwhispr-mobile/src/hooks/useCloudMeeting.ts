@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import * as FileSystem from 'expo-file-system/legacy';
 import {
   startRealtimeMeetingWs,
   type RealtimeSession,
@@ -13,6 +14,7 @@ import {
   type CloudMeetingStatus,
 } from '@/lib/notes/meetingCapture';
 import { reportCaptureInterrupted, reportSessionEnded } from '@/lib/meetingCaptureTelemetry';
+import { WAV_HEADER_BYTES } from '@/lib/notes/wavRange';
 
 export type { CloudMeetingStatus } from '@/lib/notes/meetingCapture';
 
@@ -20,9 +22,23 @@ export interface CloudMeetingResult {
   utterances: RealtimeUtterance[];
   /** Windows of audio the live stream never received; the recording may still hold them. */
   droppedWindows: AudioWindow[];
-  /** The recording to trust; null when it failed, was never requested, or no session ran. */
+  /**
+   * The recording to read; null when it was never requested, no session ran, or its writer
+   * failed before any audio reached the file.
+   */
   recordingUri: string | null;
 }
+
+// A writer that fails keeps the file when it already holds audio, and that audio is still the
+// only copy of what the stream missed. Unreadable counts as holding audio: never hide it.
+const recordingHoldsAudio = async (uri: string): Promise<boolean> => {
+  try {
+    const info = await FileSystem.getInfoAsync(uri);
+    return info.exists && 'size' in info && info.size > WAV_HEADER_BYTES;
+  } catch {
+    return true;
+  }
+};
 
 export interface CloudMeeting {
   status: CloudMeetingStatus;
@@ -266,10 +282,11 @@ export function useCloudMeeting({
     await session.stop();
     // Read after the stop settles: the stop itself can add dropped windows or fail the file.
     const uri = recordingUriRef.current;
+    const usable = !!uri && (!recordingFailedRef.current || (await recordingHoldsAudio(uri)));
     return {
       utterances: session.utterances(),
       droppedWindows: session.droppedWindows(),
-      recordingUri: uri && !recordingFailedRef.current ? uri : null,
+      recordingUri: uri && usable ? uri : null,
     };
   }, []);
 

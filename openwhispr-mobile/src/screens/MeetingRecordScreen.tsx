@@ -339,6 +339,8 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
         saveRawNotesNow();
         const stableUri = `${FileSystem.documentDirectory}meeting-${noteId}.wav`;
         await FileSystem.copyAsync({ from: uri, to: stableUri });
+        // The recorder's own file is a second copy of the meeting that nothing else deletes.
+        await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
         await runMeetingPipeline(noteId, stableUri, count);
         router.replace(`/(tabs)/(notes)/${noteId}`);
         reportMeetingFinished({
@@ -446,7 +448,15 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
         alertIfPartialCapture(result.recordingUri ? recordedCoverage : coverage);
       } catch (error) {
         markNoteFailed(noteId);
-        Sentry.captureException(error);
+        // A fixed message and a code: the error itself can carry a file path.
+        const code = (error as { code?: unknown } | null)?.code;
+        Sentry.captureMessage('meeting-finalize-failed', {
+          level: 'error',
+          tags: {
+            feature: 'meeting-post-pass',
+            error_code: typeof code === 'string' ? code : 'unknown',
+          },
+        });
         setPhase('prompt');
       }
     } finally {

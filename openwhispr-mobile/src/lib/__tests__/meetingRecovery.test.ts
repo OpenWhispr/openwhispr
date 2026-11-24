@@ -49,6 +49,9 @@ function makeDeps(notes: Note[], initialStorage: Record<string, string> = {}): H
     markFailed: jest.fn((id: number) => {
       calls.push(`failed:${id}`);
     }),
+    reopenAsFailed: jest.fn((id: number) => {
+      calls.push(`reopenFailed:${id}`);
+    }),
     waitUntilActive: jest.fn(() => Promise.resolve()),
     resume: jest.fn(async (id: number) => {
       calls.push(`resume:${id}`);
@@ -591,7 +594,9 @@ describe('recoverOrphanedMeetings with the meeting recording', () => {
       expect(harness.deps.resumeBackfill).not.toHaveBeenCalled();
     });
 
-    it('backfills a relinked leftover whose transcript misses audio instead of discarding it', async () => {
+    it('never derives or uploads audio for a relinked leftover with no sidecar', async () => {
+      // Nothing marks this done note as a cloud meeting: it may have been recorded on-device,
+      // whose audio must never go to the cloud.
       const harness = makeDeps([note({ id: 76, transcriptionStatus: 'done' })]);
       (harness.deps.wasRelinked as jest.Mock).mockReturnValue(true);
       (harness.deps.hasTranscript as jest.Mock).mockReturnValue(true);
@@ -600,10 +605,34 @@ describe('recoverOrphanedMeetings with the meeting recording', () => {
 
       await recoverOrphanedMeetings(harness.deps);
 
-      expect(harness.deps.savePendingBackfill).toHaveBeenCalledWith(76, [
-        { startMs: 10_000, endMs: 60_000 },
-      ]);
-      expect(harness.deps.resumeBackfill).toHaveBeenCalledWith(76);
+      expect(harness.deps.recordingDurationMs).not.toHaveBeenCalled();
+      expect(harness.deps.savePendingBackfill).not.toHaveBeenCalled();
+      expect(harness.deps.resumeBackfill).not.toHaveBeenCalled();
+      expect(harness.deps.discardRecording).toHaveBeenCalledWith(76);
+    });
+
+    it('keeps the recording of a killed meeting whose length cannot be read', async () => {
+      const harness = makeDeps([killed(78)]);
+      killedWithText(78, harness);
+      (harness.deps.recordingDurationMs as jest.Mock).mockResolvedValue(null);
+
+      await recoverOrphanedMeetings(harness.deps);
+
+      // Unknown is not empty: nothing is derived and nothing is deleted.
+      expect(harness.deps.savePendingBackfill).not.toHaveBeenCalled();
+      expect(harness.deps.discardRecording).not.toHaveBeenCalled();
+      expect(harness.deps.finishNotes).toHaveBeenCalledWith(78);
+    });
+
+    it('keeps a done recording and its unreadable sidecar when the length cannot be read', async () => {
+      const harness = makeDeps([note({ id: 79, transcriptionStatus: 'done' })]);
+      (harness.deps.listPendingBackfills as jest.Mock).mockResolvedValue([79]);
+      (harness.deps.readPendingBackfill as jest.Mock).mockResolvedValue(null);
+      (harness.deps.recordingDurationMs as jest.Mock).mockResolvedValue(null);
+
+      await recoverOrphanedMeetings(harness.deps);
+
+      expect(harness.deps.deletePendingBackfill).not.toHaveBeenCalled();
       expect(harness.deps.discardRecording).not.toHaveBeenCalled();
     });
   });
@@ -692,6 +721,45 @@ describe('recoverOrphanedMeetings with the meeting recording', () => {
     await recoverOrphanedMeetings(deps);
 
     expect((deps.discardRecording as jest.Mock).mock.calls).toEqual([[50]]);
+  });
+
+  it('reopens a relinked done note with no transcript as failed, keeping its recording', async () => {
+    // Its audio was never transcribed (Stop before the session existed, or a writer that
+    // failed): the recording is the only copy, so the note gets Retry instead of a delete.
+    const notes = [note({ id: 53, transcriptionStatus: 'done' })];
+    const { deps, calls } = makeDeps(notes);
+    (deps.wasRelinked as jest.Mock).mockReturnValue(true);
+    (deps.reopenAsFailed as jest.Mock).mockImplementation((id: number) => {
+      calls.push(`reopenFailed:${id}`);
+      notes[0] = note({ id, transcriptionStatus: 'failed' });
+    });
+    // As in production, the processed list is read after the sweep.
+    (deps.listProcessedRecordings as jest.Mock).mockImplementation(() =>
+      notes
+        .filter((candidate) => candidate.transcriptionStatus === 'done')
+        .map((candidate) => ({
+          noteId: candidate.id,
+          uri: `file:///docs/meeting-${candidate.id}.wav`,
+        })),
+    );
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(calls).toEqual(['reopenFailed:53']);
+    expect(deps.discardRecording).not.toHaveBeenCalled();
+    expect(deps.resumeBackfill).not.toHaveBeenCalled();
+  });
+
+  it('waits for the app to be active before resuming a settled backfill', async () => {
+    const { deps, calls } = makeDeps([note({ id: 54, transcriptionStatus: 'done' })]);
+    (deps.listPendingBackfills as jest.Mock).mockResolvedValue([54]);
+    (deps.waitUntilActive as jest.Mock).mockImplementation(async () => {
+      calls.push('active');
+    });
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(calls).toEqual(['active', 'backfill:54']);
   });
 
   describe('recordings left on finished meetings', () => {
@@ -882,6 +950,22 @@ describe('repairMeetingRecordings', () => {
     const deps = await run(['meeting-9.wav'], []);
 
     expect(deps.deleteFile).toHaveBeenCalledWith('file:///docs/meeting-9.wav');
+    expect(deps.restorePath).not.toHaveBeenCalled();
+  });
+
+  it('deletes the recording of a note in the trash instead of linking it', async () => {
+    const deps = await run(
+      ['meeting-4.wav', 'meeting-5.wav'],
+      [
+        note({ id: 4, sourceFile: null, deletedAt: '2026-11-24 10:00:00' }),
+        note({ id: 5, deletedAt: '2026-11-24 10:00:00' }),
+      ],
+    );
+
+    expect((deps.deleteFile as jest.Mock).mock.calls).toEqual([
+      ['file:///docs/meeting-4.wav'],
+      ['file:///docs/meeting-5.wav'],
+    ]);
     expect(deps.restorePath).not.toHaveBeenCalled();
   });
 

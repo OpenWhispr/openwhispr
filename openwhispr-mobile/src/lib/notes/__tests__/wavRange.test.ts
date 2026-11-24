@@ -1,6 +1,12 @@
 import { Buffer } from 'buffer';
 import * as FileSystem from 'expo-file-system/legacy';
-import { extractWavRange, splitWindows, WAV_HEADER_BYTES, wavByteRange } from '../wavRange';
+import {
+  EmptyWavRangeError,
+  extractWavRange,
+  splitWindows,
+  WAV_HEADER_BYTES,
+  wavByteRange,
+} from '../wavRange';
 
 jest.mock('expo-file-system/legacy', () => ({
   cacheDirectory: 'file:///cache/',
@@ -156,5 +162,19 @@ describe('extractWavRange', (): void => {
   it('rejects an empty range without writing a file', async (): Promise<void> => {
     await expect(extractWavRange('file:///source.wav', 20_000, 30_000)).rejects.toThrow();
     expect(FileSystem.writeAsStringAsync).not.toHaveBeenCalled();
+  });
+
+  it('tells a range with no audio apart from a failure to read or write it', async (): Promise<void> => {
+    await expect(extractWavRange('file:///source.wav', 20_000, 30_000)).rejects.toBeInstanceOf(
+      EmptyWavRangeError,
+    );
+    jest.mocked(FileSystem.readAsStringAsync).mockResolvedValue('');
+    await expect(extractWavRange('file:///source.wav', 1000, 3000)).rejects.toBeInstanceOf(
+      EmptyWavRangeError,
+    );
+    jest.mocked(FileSystem.readAsStringAsync).mockRejectedValue(new Error('read failed'));
+    await expect(extractWavRange('file:///source.wav', 1000, 3000)).rejects.not.toBeInstanceOf(
+      EmptyWavRangeError,
+    );
   });
 });

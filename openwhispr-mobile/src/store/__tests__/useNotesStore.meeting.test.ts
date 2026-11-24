@@ -18,6 +18,14 @@ jest.mock('expo-file-system/legacy', () => ({
   writeAsStringAsync: (uri: string, content: string) => mockWriteAsStringAsync(uri, content),
   readAsStringAsync: (uri: string) => mockReadAsStringAsync(uri),
 }));
+const mockNetworkState = jest.fn(
+  async (): Promise<{ isConnected: boolean }> => ({
+    isConnected: true,
+  }),
+);
+jest.mock('expo-network', () => ({
+  getNetworkStateAsync: () => mockNetworkState(),
+}));
 jest.mock('@/services/transcription/TranscriptionService', () => ({
   TranscriptionService: { transcribe: (...args: unknown[]) => mockCloudTranscribe(...args) },
 }));
@@ -544,7 +552,7 @@ describe('meeting post-pass', () => {
       Parameters<ReturnType<typeof useNotesStore.getState>['finalizeCloudMeeting']>[1]
     >,
     capturedSeconds = 3600,
-  ): Promise<void> =>
+  ): Promise<{ owedMs: number }> =>
     useNotesStore
       .getState()
       .finalizeCloudMeeting(
@@ -560,6 +568,7 @@ describe('meeting post-pass', () => {
 
   beforeEach(() => {
     mockAuthState.user = signedInUser;
+    mockNetworkState.mockResolvedValue({ isConnected: true });
     status = 'recording';
     filesOnDisk = new Set([RECORDING]);
     fileContents = new Map();
@@ -706,22 +715,135 @@ describe('meeting post-pass', () => {
     });
   });
 
-  it('deletes the recording when what it still owes cannot be recorded', async () => {
+  it('keeps the recording when what it still owes cannot be recorded', async () => {
     mockCloudTranscribe.mockRejectedValue(new Error('Network request failed'));
-    mockWriteAsStringAsync.mockRejectedValueOnce(new Error('disk full'));
+    mockWriteAsStringAsync.mockRejectedValue(new Error('disk full'));
 
     await finalize({
       utterances: [utterance('Live.', 0, 1000)],
       droppedWindows: [{ startMs: 10_000, endMs: 20_000 }],
     });
 
+    // The post-pass still ran from the list in memory.
+    expect(mockExtractWavRange).toHaveBeenCalledWith(RECORDING, 10_000, 20_000);
     expect(status).toBe('done');
-    expect(filesOnDisk.has(RECORDING)).toBe(false);
-    expect(note?.sourceFile).toBeNull();
+    expect(filesOnDisk.has(RECORDING)).toBe(true);
+    expect(note?.sourceFile).toBe(RECORDING);
     expect(Sentry.captureMessage).toHaveBeenCalledWith(
       'meeting-backfill-sidecar-failed',
       expect.objectContaining({ tags: expect.objectContaining({ feature: 'meeting-post-pass' }) }),
     );
+  });
+
+  it('records every dropped stretch beside the recording before the post-pass starts', async () => {
+    const windows = [
+      { startMs: 10_000, endMs: 20_000 },
+      { startMs: 30_000, endMs: 40_000 },
+    ];
+    const seenAtFirstUpload: { sidecar: unknown; status: string }[] = [];
+    mockCloudTranscribe.mockImplementation(async () => {
+      if (seenAtFirstUpload.length === 0)
+        seenAtFirstUpload.push({ sidecar: sidecarWindows(), status });
+      return { text: 'Recovered.', duration: 0 };
+    });
+
+    await finalize({ utterances: [utterance('Live.', 0, 1000)], droppedWindows: windows });
+
+    // A kill during the uploads leaves a note that is not done, with the list on disk.
+    expect(seenAtFirstUpload).toEqual([{ sidecar: windows, status: 'transcribing' }]);
+    expect(status).toBe('done');
+    expect(sidecarWindows()).toBeNull();
+  });
+
+  it('is done only once the list beside the recording says what is still owed', async () => {
+    mockCloudTranscribe.mockImplementation(async ({ audioUri }: { audioUri: string }) => {
+      if (audioUri.endsWith('range-10000.wav')) return { text: 'Recovered.', duration: 0 };
+      throw new Error('Network request failed');
+    });
+    const statusAtWrite: string[] = [];
+    mockWriteAsStringAsync.mockImplementation(async (uri: string, content: string) => {
+      statusAtWrite.push(status);
+      filesOnDisk.add(uri);
+      fileContents.set(uri, content);
+    });
+
+    await finalize({
+      utterances: [utterance('Live.', 0, 1000)],
+      droppedWindows: [
+        { startMs: 10_000, endMs: 20_000 },
+        { startMs: 30_000, endMs: 40_000 },
+      ],
+    });
+
+    expect(statusAtWrite.length).toBeGreaterThanOrEqual(2);
+    expect(statusAtWrite).not.toContain('done');
+    expect(status).toBe('done');
+    expect(sidecarWindows()).toEqual([{ startMs: 30_000, endMs: 40_000 }]);
+  });
+
+  it('says how much audio the note still owes', async () => {
+    await expect(
+      finalize({
+        utterances: [utterance('Live.', 0, 1000)],
+        droppedWindows: [{ startMs: 10_000, endMs: 20_000 }],
+      }),
+    ).resolves.toEqual({ owedMs: 0 });
+
+    status = 'recording';
+    filesOnDisk.add(RECORDING);
+    note = { ...note, sourceFile: RECORDING };
+    mockCloudTranscribe.mockRejectedValue(new Error('Network request failed'));
+    await expect(
+      finalize({
+        utterances: [utterance('Live.', 0, 1000)],
+        droppedWindows: [
+          { startMs: 10_000, endMs: 20_000 },
+          { startMs: 30_000, endMs: 45_000 },
+        ],
+      }),
+    ).resolves.toEqual({ owedMs: 25_000 });
+  });
+
+  describe('stopped with no connection', () => {
+    beforeEach(() => {
+      mockNetworkState.mockResolvedValue({ isConnected: false });
+    });
+
+    it('ends done with the live text and keeps the recording for the stretches it owes', async () => {
+      const windows = [{ startMs: 10_000, endMs: 70_000 }];
+
+      const outcome = await finalize({
+        utterances: [utterance('Live.', 0, 1000)],
+        droppedWindows: windows,
+      });
+
+      // Nothing is uploaded: each attempt would only wait out a timeout on the processing screen.
+      expect(mockExtractWavRange).not.toHaveBeenCalled();
+      expect(mockCloudTranscribe).not.toHaveBeenCalled();
+      expect(status).toBe('done');
+      expect(filesOnDisk.has(RECORDING)).toBe(true);
+      expect(note?.sourceFile).toBe(RECORDING);
+      expect(sidecarWindows()).toEqual(windows);
+      expect(outcome).toEqual({ owedMs: 60_000 });
+    });
+
+    it('ends failed with the recording and Retry when nothing was heard live', async () => {
+      note = { ...note, sourceFile: null };
+
+      await finalize({ utterances: [], droppedWindows: [{ startMs: 0, endMs: 600_000 }] });
+
+      expect(mockCloudTranscribe).not.toHaveBeenCalled();
+      expect(status).toBe('failed');
+      expect(filesOnDisk.has(RECORDING)).toBe(true);
+      expect(note?.sourceFile).toBe(RECORDING);
+    });
+
+    it('still finishes a meeting that dropped nothing', async () => {
+      await finalize({ utterances: [utterance('All heard.', 0, 1000)] });
+
+      expect(status).toBe('done');
+      expect(filesOnDisk.has(RECORDING)).toBe(false);
+    });
   });
 
   it('goes straight to the whole file when nothing was heard live', async () => {
@@ -797,7 +919,7 @@ describe('meeting post-pass', () => {
   it('ends failed with the recording linked when nothing could be transcribed', async () => {
     mockCloudTranscribe.mockRejectedValue(new Error('Network request failed'));
 
-    await expect(finalize({ utterances: [] })).resolves.toBeUndefined();
+    await expect(finalize({ utterances: [] })).resolves.toEqual({ owedMs: 0 });
 
     expect(status).toBe('failed');
     expect(mockDeleteAsync).not.toHaveBeenCalled();
@@ -1193,6 +1315,44 @@ describe('meeting post-pass', () => {
       expect(mockCloudTranscribe).not.toHaveBeenCalled();
       expect(notesRepository.replaceSegments).not.toHaveBeenCalled();
       expect(filesOnDisk.has(RECORDING)).toBe(true);
+    });
+
+    it('uploads nothing for a meeting that may not use the cloud', async () => {
+      owe([{ startMs: 10_000, endMs: 20_000 }]);
+      // Signed out: the audio stays on the phone until the cloud is allowed again.
+      mockAuthState.user = null;
+      await useNotesStore.getState().resumeMeetingBackfill(7);
+      mockAuthState.user = signedInUser;
+      note = { ...note, isPrivate: 1 };
+      await useNotesStore.getState().resumeMeetingBackfill(7);
+
+      expect(mockExtractWavRange).not.toHaveBeenCalled();
+      expect(mockCloudTranscribe).not.toHaveBeenCalled();
+      expect(filesOnDisk.has(RECORDING)).toBe(true);
+      expect(sidecarWindows()).toEqual([{ startMs: 10_000, endMs: 20_000 }]);
+    });
+
+    it('runs one resume at a time for a note', async () => {
+      owe([{ startMs: 100_000, endMs: 110_000 }]);
+
+      await Promise.all([
+        useNotesStore.getState().resumeMeetingBackfill(7),
+        useNotesStore.getState().resumeMeetingBackfill(7),
+      ]);
+
+      expect(mockCloudTranscribe).toHaveBeenCalledTimes(1);
+      expect(notesRepository.replaceSegments).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the recording when what is still owed cannot be written again', async () => {
+      owe([{ startMs: 10_000, endMs: 20_000 }]);
+      mockCloudTranscribe.mockRejectedValue(new Error('Network request failed'));
+      mockWriteAsStringAsync.mockRejectedValue(new Error('disk full'));
+
+      await useNotesStore.getState().resumeMeetingBackfill(7);
+
+      expect(filesOnDisk.has(RECORDING)).toBe(true);
+      expect(sidecarWindows()).toEqual([{ startMs: 10_000, endMs: 20_000 }]);
     });
 
     it('writes nothing for a note deleted while the owed audio was transcribed', async () => {

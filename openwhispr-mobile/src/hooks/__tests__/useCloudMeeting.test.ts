@@ -24,6 +24,12 @@ jest.mock('../../../modules/live-pcm-streaming/src', () => ({
   },
 }));
 
+const mockGetInfo = jest.fn();
+
+jest.mock('expo-file-system/legacy', () => ({
+  getInfoAsync: (...args: unknown[]) => mockGetInfo(...args),
+}));
+
 jest.mock('@/lib/meetingCaptureTelemetry', () => ({
   reportCaptureInterrupted: jest.fn(),
   reportSessionEnded: jest.fn(),
@@ -69,6 +75,7 @@ beforeEach(() => {
   sessions = [];
   mockFailedListeners.length = 0;
   mockRemove.mockClear();
+  mockGetInfo.mockReset().mockResolvedValue({ exists: false });
   (reportCaptureInterrupted as jest.Mock).mockClear();
   mockStart.mockReset().mockImplementation((_opts: unknown, callbacks: RealtimeCallbacks) => {
     const start = deferred<RealtimeSession>();
@@ -347,6 +354,58 @@ describe('useCloudMeeting', () => {
       droppedWindows: windows,
       recordingUri: 'file:///docs/meeting-7.wav',
     });
+  });
+
+  it('returns a recording whose writer failed when the file still holds audio', async () => {
+    const { result } = setup(true, 'file:///docs/meeting-7.wav');
+    const fake = latest();
+    await goLive(fake);
+    act(() => {
+      mockFailedListeners[0]();
+    });
+    // The writer keeps a file it had already written audio to.
+    mockGetInfo.mockResolvedValue({ exists: true, size: 44 + 32_000 });
+    let stopped: Promise<CloudMeetingResult> = Promise.resolve({
+      utterances: [],
+      droppedWindows: [],
+      recordingUri: null,
+    });
+    act(() => {
+      stopped = result.current.stop();
+    });
+    let value: CloudMeetingResult | null = null;
+    await act(async () => {
+      fake.drain.resolve();
+      value = await stopped;
+    });
+    expect((value as unknown as CloudMeetingResult).recordingUri).toBe(
+      'file:///docs/meeting-7.wav',
+    );
+    expect(mockGetInfo).toHaveBeenCalledWith('file:///docs/meeting-7.wav');
+  });
+
+  it('returns no recording when the failed file holds only a header', async () => {
+    const { result } = setup(true, 'file:///docs/meeting-7.wav');
+    const fake = latest();
+    await goLive(fake);
+    act(() => {
+      mockFailedListeners[0]();
+    });
+    mockGetInfo.mockResolvedValue({ exists: true, size: 44 });
+    let stopped: Promise<CloudMeetingResult> = Promise.resolve({
+      utterances: [],
+      droppedWindows: [],
+      recordingUri: 'x',
+    });
+    act(() => {
+      stopped = result.current.stop();
+    });
+    let value: CloudMeetingResult | null = null;
+    await act(async () => {
+      fake.drain.resolve();
+      value = await stopped;
+    });
+    expect((value as unknown as CloudMeetingResult).recordingUri).toBeNull();
   });
 
   it('returns no recording after a recording-failed event, and not for a later session', async () => {

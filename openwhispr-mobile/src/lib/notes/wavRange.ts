@@ -42,7 +42,23 @@ const buildWavHeader = (dataBytes: number): Buffer => {
   return header;
 };
 
-/** Writes that stretch to a new WAV in the cache directory. Rejects when the range is empty. */
+/**
+ * The recording holds no audio in the range asked for (it ends earlier, or the range is empty).
+ * Told apart from every other failure, which says nothing about what the recording holds.
+ */
+export class EmptyWavRangeError extends Error {
+  readonly code = 'empty_range';
+
+  constructor() {
+    super('Recording has no audio in that range');
+    this.name = 'EmptyWavRangeError';
+  }
+}
+
+/**
+ * Writes that stretch to a new WAV in the cache directory. Rejects with EmptyWavRangeError when
+ * the recording has no audio there, and with the underlying error when it can't be read or written.
+ */
 export async function extractWavRange(
   sourceUri: string,
   startMs: number,
@@ -59,7 +75,7 @@ export async function extractWavRange(
   const fileBytes = info.exists && 'size' in info ? info.size : 0;
   const { offset, length } = wavByteRange(startMs, endMs, fileBytes);
   if (!(length > 0)) {
-    throw new Error('Recording has no audio in that range');
+    throw new EmptyWavRangeError();
   }
   const base64 = await FileSystem.readAsStringAsync(sourceUri, {
     encoding: FileSystem.EncodingType.Base64,
@@ -70,7 +86,7 @@ export async function extractWavRange(
   // A short read (the file shrank) must not leave a half sample or a header-only file.
   const data = read.subarray(0, read.length - (read.length % BYTES_PER_SAMPLE));
   if (data.length === 0) {
-    throw new Error('Recording has no audio in that range');
+    throw new EmptyWavRangeError();
   }
   const wav = Buffer.concat([buildWavHeader(data.length), data]);
   const destination = `${cacheDirectory}meeting-range-${Date.now()}-${Math.random()
