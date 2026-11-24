@@ -128,9 +128,14 @@ export function captureCoverage(recordedMs: number, elapsedMs: number): CaptureC
 
 export const PARTIAL_CAPTURE_TITLE = "Part of this meeting wasn't recorded";
 
-const formatMinutes = (seconds: number): string =>
-  seconds < 60 ? 'under 1 min' : `${Math.round(seconds / 60)} min`;
+// Recorded rounds down and elapsed rounds up: with 30 s or more missing, rounding both the
+// same way could print "30 min of this 30 min meeting".
+const formatRecordedMinutes = (seconds: number): string =>
+  seconds < 60 ? 'under 1 min' : `${Math.floor(seconds / 60)} min`;
+
+const formatElapsedMinutes = (seconds: number): string =>
+  `${Math.max(1, Math.ceil(seconds / 60))} min`;
 
 export function partialCaptureMessage(coverage: CaptureCoverage): string {
-  return `OpenWhispr recorded ${formatMinutes(coverage.recordedSeconds)} of this ${formatMinutes(coverage.elapsedSeconds)} meeting. The rest was missed while the microphone or the connection was interrupted.`;
+  return `OpenWhispr recorded ${formatRecordedMinutes(coverage.recordedSeconds)} of this ${formatElapsedMinutes(coverage.elapsedSeconds)} meeting. The rest was missed while the microphone or the connection was interrupted.`;
 }

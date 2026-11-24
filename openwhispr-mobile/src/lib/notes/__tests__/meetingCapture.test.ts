@@ -136,6 +136,32 @@ describe('partialCaptureMessage', () => {
     );
   });
 
+  it('rounds recorded minutes down and elapsed minutes up so they never read equal', () => {
+    expect(partialCaptureMessage(captureCoverage(1_770_000, 1_800_000))).toContain(
+      'recorded 29 min of this 30 min meeting',
+    );
+    expect(partialCaptureMessage(captureCoverage(10_000, 50_000))).toContain(
+      'recorded under 1 min of this 1 min meeting',
+    );
+    const cases: [number, number][] = [
+      [1_770_000, 1_800_000],
+      [1_789_000, 1_830_000],
+      [3_570_000, 3_600_000],
+      [59_000, 89_000],
+      [119_000, 150_000],
+      [540_000, 3_660_000],
+    ];
+    for (const [recordedMs, elapsedMs] of cases) {
+      const coverage = captureCoverage(recordedMs, elapsedMs);
+      expect(coverage.isPartial).toBe(true);
+      const match = partialCaptureMessage(coverage).match(
+        /recorded (under 1|\d+) min of this (\d+) min/,
+      );
+      const recorded = match?.[1] === 'under 1' ? 0 : Number(match?.[1]);
+      expect(Number(match?.[2])).toBeGreaterThan(recorded);
+    }
+  });
+
   it('says under 1 min when less than a minute was recorded', () => {
     expect(partialCaptureMessage(captureCoverage(20_000, 90_000))).toContain(
       'recorded under 1 min of this 2 min meeting',

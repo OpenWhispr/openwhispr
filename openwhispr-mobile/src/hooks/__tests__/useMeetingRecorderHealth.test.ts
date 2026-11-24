@@ -1,5 +1,9 @@
 import { act, renderHook } from '@testing-library/react-native';
-import { useMeetingRecorderHealth, type HealthRecorder } from '../useMeetingRecorderHealth';
+import {
+  useMeetingRecorderHealth,
+  type HealthRecorder,
+  type RecorderHealth,
+} from '../useMeetingRecorderHealth';
 
 type FakeRecorder = HealthRecorder & {
   getStatus: jest.Mock;
@@ -124,6 +128,44 @@ describe('useMeetingRecorderHealth', () => {
     tick(5000);
 
     expect(recorder.record).toHaveBeenCalledTimes(calls);
+  });
+
+  it('starts each active period as capturing with a zero clock', () => {
+    const paused = fakeRecorder(false, 42_000);
+    const resumed = fakeRecorder(true, 1_000);
+    const renders: RecorderHealth[] = [];
+    const { rerender } = renderHook(
+      ({ recorder, active }: { recorder: FakeRecorder; active: boolean }) => {
+        const health = useMeetingRecorderHealth(recorder, active, () => false);
+        renders.push(health);
+        return health;
+      },
+      { initialProps: { recorder: paused, active: true } },
+    );
+    expect(renders[0]).toEqual({ capturing: true, capturedMs: 0 });
+    tick(1000);
+    rerender({ recorder: paused, active: false });
+    expect(renders.at(-1)).toEqual({ capturing: false, capturedMs: 42_000 });
+
+    const firstNewRender = renders.length;
+    rerender({ recorder: resumed, active: true });
+
+    expect(renders[firstNewRender]).toEqual({ capturing: true, capturedMs: 0 });
+    expect(renders.at(-1)).toEqual({ capturing: true, capturedMs: 1_000 });
+  });
+
+  it('keeps the last values after it becomes inactive', () => {
+    const recorder = fakeRecorder(false, 4_200);
+    const { result, rerender } = renderHook(
+      ({ active }: { active: boolean }) => useMeetingRecorderHealth(recorder, active, () => false),
+      { initialProps: { active: true } },
+    );
+    tick(1000);
+
+    rerender({ active: false });
+    tick(5000);
+
+    expect(result.current).toEqual({ capturing: false, capturedMs: 4_200 });
   });
 
   it('stops polling on unmount', () => {

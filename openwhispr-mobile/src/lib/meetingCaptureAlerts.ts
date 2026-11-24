@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Alert, AppState } from 'react-native';
+import { Alert, AppState, Platform } from 'react-native';
 import { getNotificationStatus } from '@/lib/notifications';
 import {
   PARTIAL_CAPTURE_TITLE,
@@ -29,6 +29,8 @@ function loadNotifications(): NotificationsModule | null {
 
 /** Schedules "recording paused" 20 s out. Null when the app is active or notifications are not granted. Never asks for permission. */
 export async function scheduleCapturePausedNotification(): Promise<string | null> {
+  // iOS only: Android never raised this notice and keeps behaving as before.
+  if (Platform.OS !== 'ios') return null;
   if (AppState.currentState === 'active') return null;
   if ((await getNotificationStatus()) !== 'granted') return null;
   const notifications = loadNotifications();

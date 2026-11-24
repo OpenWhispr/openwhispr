@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react-native';
-import { Alert, AppState, type AppStateStatus } from 'react-native';
+import { Alert, AppState, Platform, type AppStateStatus } from 'react-native';
 import { captureCoverage } from '@/lib/notes/meetingCapture';
 import {
   alertIfPartialCapture,
@@ -27,6 +27,10 @@ jest.mock('@/lib/notifications', () => ({
 let appStateListener: ((state: AppStateStatus) => void) | undefined;
 const mockRemoveAppStateListener = jest.fn();
 
+function setPlatform(os: 'ios' | 'android'): void {
+  Object.defineProperty(Platform, 'OS', { value: os, configurable: true });
+}
+
 function setAppState(state: AppStateStatus): void {
   Object.defineProperty(AppState, 'currentState', { value: state, configurable: true });
 }
@@ -38,6 +42,7 @@ beforeEach(() => {
   mockCancel.mockResolvedValue(undefined);
   mockGetNotificationStatus.mockResolvedValue('granted');
   setAppState('background');
+  setPlatform('ios');
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
     appStateListener = listener as (state: AppStateStatus) => void;
     return { remove: mockRemoveAppStateListener } as unknown as ReturnType<
@@ -60,6 +65,13 @@ describe('scheduleCapturePausedNotification', () => {
       },
       trigger: { type: 'timeInterval', seconds: 20 },
     });
+  });
+
+  it('returns null off iOS without touching notifications', async () => {
+    setPlatform('android');
+    await expect(scheduleCapturePausedNotification()).resolves.toBeNull();
+    expect(mockSchedule).not.toHaveBeenCalled();
+    expect(mockGetNotificationStatus).not.toHaveBeenCalled();
   });
 
   it('returns null when the app is active', async () => {
