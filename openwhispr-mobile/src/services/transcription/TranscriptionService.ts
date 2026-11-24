@@ -1,5 +1,10 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { AudioPurpose, TranscriptionRequest, TranscriptionResponse } from '../../types';
+import {
+  AudioPurpose,
+  TranscriptionRequest,
+  TranscriptionResponse,
+  WhisperSegment,
+} from '../../types';
 import {
   API_ENDPOINTS,
   CLOUD_CHUNK_CONCURRENCY,
@@ -812,7 +817,17 @@ export class TranscriptionService {
       const workerCount = Math.min(CLOUD_CHUNK_CONCURRENCY, chunkUris.length);
       await Promise.all(Array.from({ length: workerCount }, () => worker()));
       if (firstError !== null) throw firstError;
-      return { text: stitchChunkTexts(texts), duration: 0, provider: 'cloud' };
+      // Per-chunk times let a meeting place this text on its recording's clock.
+      const segments: WhisperSegment[] = [];
+      texts.forEach((text, index) => {
+        if (!text.trim()) return;
+        segments.push({
+          text,
+          t0: index * CLOUD_CHUNK_SECONDS * 100,
+          t1: (index + 1) * CLOUD_CHUNK_SECONDS * 100,
+        });
+      });
+      return { text: stitchChunkTexts(texts), duration: 0, provider: 'cloud', segments };
     } finally {
       await AudioTools.cleanup(chunkUris);
     }

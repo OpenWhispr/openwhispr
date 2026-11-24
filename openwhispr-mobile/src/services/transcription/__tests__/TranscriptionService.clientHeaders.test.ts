@@ -153,3 +153,45 @@ describe('declared audio purpose', (): void => {
     },
   );
 });
+
+describe('chunked transcription timing', (): void => {
+  it('returns one timed segment per chunk and skips empty chunks', async (): Promise<void> => {
+    jest.mocked(FileSystem.getInfoAsync).mockResolvedValueOnce({
+      exists: true,
+      isDirectory: false,
+      uri: 'file:///recording.wav',
+      size: 8 * 1024 * 1024,
+      modificationTime: 0,
+    });
+    jest.mocked(AudioTools.splitToChunks).mockResolvedValue({
+      chunks: ['file:///c0.wav', 'file:///c1.wav', 'file:///c2.wav'],
+      durationMs: 360_000,
+    });
+    const textByChunk: Record<string, string> = {
+      'file:///c0.wav': 'First part.',
+      'file:///c1.wav': '',
+      'file:///c2.wav': 'Last part.',
+    };
+    jest.mocked(FileSystem.uploadAsync).mockImplementation(
+      async (_url, fileUri) =>
+        ({
+          status: 200,
+          body: JSON.stringify({ text: textByChunk[fileUri] }),
+          headers: {},
+          mimeType: null,
+        }) as Awaited<ReturnType<typeof FileSystem.uploadAsync>>,
+    );
+
+    const result = await TranscriptionService.transcribe({
+      audioUri: 'file:///recording.wav',
+      provider: 'cloud',
+      requestContext: 'keyboard',
+    });
+
+    expect(result.text).toBe('First part. Last part.');
+    expect(result.segments).toEqual([
+      { text: 'First part.', t0: 0, t1: 12_000 },
+      { text: 'Last part.', t0: 24_000, t1: 36_000 },
+    ]);
+  });
+});
