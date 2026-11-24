@@ -53,6 +53,7 @@ const MOCKS = {
         newChat() { globalThis.__chat.newChats += 1; },
         fork: async () => null,
         regenerate() {},
+        settled: async () => {},
       };
     }
   `,
@@ -1783,6 +1784,75 @@ test("an answer the field refused stays in the window", async (t) => {
   assert.equal(pastes.length, 1);
   assert.equal(hides(), 0);
   assert.equal(globalThis.__chat.newChats, 0);
+});
+
+// A spoken turn of a call started from the typing layout.
+async function callTurn(view, text) {
+  await React.act(async () => view.main.handlers.open({ layout: "typing" }));
+  await React.act(async () => view.button("Start Voice Agent").click());
+  const ended = [];
+  await React.act(async () => globalThis.__call.options.onSpeechStart());
+  await React.act(async () =>
+    globalThis.__call.options.onUserTurn({
+      text,
+      speech: { onEnd: (outcome) => ended.push(outcome) },
+      replyLanguage: null,
+      dryRunWrites: false,
+      joinedRequest: null,
+      isCurrent: () => true,
+    })
+  );
+  return ended;
+}
+
+test("a call types an answer into the field the user is in as they speak, and stays in its pill", async (t) => {
+  const view = await mountWindow(t);
+  const probes = [];
+  const pastes = [];
+  let hides = 0;
+  Object.assign(view.happyWindow.electronAPI, {
+    captureSelectedText: async (options) => {
+      probes.push(options);
+      return { status: "editable", sessionId: "caret-1" };
+    },
+    pasteAtCapturedTarget: async (...args) => {
+      pastes.push(args);
+      return { success: true };
+    },
+    cancelSelectionEdit: async () => {},
+    agentWindowHide: async () => {
+      hides += 1;
+      return true;
+    },
+  });
+  await callTurn(view, "Write a thank-you note to my team");
+  const options = globalThis.__chat.sentOptions[0];
+
+  assert.deepEqual(probes, [{ probeEditable: true, refreshTarget: true }]);
+  assert.equal(options.plainTextResponse, true);
+  assert.ok(options.voice, "the reply is still spoken");
+  await React.act(async () =>
+    options.onComplete({ assistantId: "a1", content: "**Thanks**, team!", onlyRead: true })
+  );
+  await view.settle();
+  assert.deepEqual(pastes, [["caret-1", "Thanks, team!"]]);
+  assert.equal(hides, 0, "the call goes on");
+  assert.ok(view.button("End call"), "in its pill");
+});
+
+test("a call turn spoken with no writable field in front is answered as before", async (t) => {
+  const view = await mountWindow(t);
+  const released = [];
+  Object.assign(view.happyWindow.electronAPI, {
+    captureSelectedText: async () => ({ status: "selected", sessionId: "selection-1", text: "Hi" }),
+    cancelSelectionEdit: async (sessionId) => released.push(sessionId),
+  });
+  await callTurn(view, "What's on my calendar?");
+  const options = globalThis.__chat.sentOptions[0];
+
+  assert.deepEqual(released, ["selection-1"], "a selection there is left alone");
+  assert.equal(options.plainTextResponse, undefined);
+  assert.equal(options.onComplete, undefined);
 });
 
 test("Call on a take still listening drops it and starts once the take lets go of the microphone", async (t) => {

@@ -1863,7 +1863,11 @@ declare global {
             clipboardCopied: true;
           }
       >;
-      captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
+      captureSelectedText?: (options?: {
+        probeEditable?: boolean;
+        /** Read the app in front now rather than the one the hotkey was pressed over. */
+        refreshTarget?: boolean;
+      }) => Promise<
         | {
             status: "selected";
             sessionId: string;

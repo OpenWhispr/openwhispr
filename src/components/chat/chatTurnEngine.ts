@@ -1113,7 +1113,7 @@ export function createChatTurnEngine(
         settings.uiLanguage
       );
       if (options?.voice) {
-        systemPrompt += `\n\n${getSpokenReplyRule(options.voice.replyLanguage)}`;
+        systemPrompt += `\n\n${getSpokenReplyRule(options.voice.replyLanguage, Boolean(options.plainTextResponse))}`;
       }
 
       // A whole-note action asks with its own text in place of the saved

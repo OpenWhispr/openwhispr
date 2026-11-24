@@ -5013,6 +5013,14 @@ class IPCHandlers {
       if (!this.selectionManager) {
         return { status: "unavailable", code: "selection_manager_unavailable" };
       }
+      // A voice call reads the app in front as each turn is spoken, not the one
+      // its hotkey was pressed over; with the asking window focused there is no
+      // field of another app to read.
+      if (options.refreshTarget === true) {
+        if (event.sender.isFocused()) return { status: "none" };
+        void this.textEditMonitor?.captureTargetPid?.();
+        void this.selectionManager.captureTarget({ force: true });
+      }
       return this.selectionManager.captureSelectedText({
         probeEditable: options.probeEditable === true,
       });

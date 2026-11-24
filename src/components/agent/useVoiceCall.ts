@@ -60,6 +60,8 @@ interface UseVoiceCallOptions {
    * did, and that turn's reply goes on being spoken as it resumes.
    */
   answersCard: (text: string) => boolean;
+  /** The user started speaking (not in the harness): a turn may follow. */
+  onSpeechStart: () => void;
   /** A finished spoken turn that starts a request. */
   onUserTurn: (turn: VoiceCallTurn) => void;
   /** The reply being spoken was dropped (barge-in or Stop): its turn should stop too. */
@@ -139,6 +141,7 @@ function uiSpokenLanguage(uiLanguage: string): SpokenLanguage {
  */
 export function useVoiceCall({
   answersCard,
+  onSpeechStart,
   onUserTurn,
   onReplyDropped,
   onEnded,
@@ -193,6 +196,7 @@ export function useVoiceCall({
   const revertedLanguageRef = useRef<VoiceCallLanguage | null>(null);
   const callbacks = {
     answersCard,
+    onSpeechStart,
     onUserTurn,
     onReplyDropped,
     onEnded,
@@ -648,6 +652,7 @@ export function useVoiceCall({
       if (event.type !== "error") lastActivityRef.current = Date.now();
       if (event.type === "speech-start") {
         lastSpeechStartAtRef.current = event.at;
+        if (!harnessRef.current) callbacksRef.current.onSpeechStart();
         if (utteranceRef.current && !heldForSpeechRef.current) {
           // Held, the reply still reads as speaking: Stop and Esc stop it meanwhile.
           holdForSpeech(true);

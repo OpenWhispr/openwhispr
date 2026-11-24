@@ -144,6 +144,23 @@ async function captureRequestScreen(): Promise<ChatImageAttachment | null> {
   return captureScreenNow();
 }
 
+const releaseCapture = (sessionId: string | null) => {
+  if (sessionId) void window.electronAPI?.cancelSelectionEdit?.(sessionId).catch(() => {});
+};
+
+// A call's turn reads the field the user is in as they speak, wherever its
+// hotkey was pressed: a writable one in another app, with auto-paste on, takes
+// the answer. A selection there is left alone.
+async function captureCallCaret(): Promise<string | null> {
+  if (!getSettings().autoPasteEnabled) return null;
+  const capture = await window.electronAPI
+    ?.captureSelectedText?.({ probeEditable: true, refreshTarget: true })
+    .catch(() => null);
+  if (capture?.status === "editable") return capture.sessionId;
+  if (capture?.status === "selected") releaseCapture(capture.sessionId);
+  return null;
+}
+
 /**
  * The agent window's root (`?agent=true`): the pill, the composer above it and
  * the modal, over one running chat. Recording, the turn, the draft and the
@@ -413,6 +430,28 @@ export default function AgentWindow() {
     return true;
   }, [agentAllowed, dispatch, policyResolved]);
 
+  // An answer that only read is typed into the field its request was spoken
+  // over; one that asked or acted, or that a newer request overtook, stays
+  // here. Once it is in, the window hides and keeps the chat (`hides`); a
+  // call goes on in its pill.
+  const deliverToCaret = useCallback(
+    (sessionId: string, press: number, hides: boolean) =>
+      async ({ content, onlyRead }: { content: string; onlyRead: boolean }): Promise<void> => {
+        if (caretDeliveryRef.current !== sessionId) return;
+        if (!onlyRead || press !== pressRef.current) {
+          cancelCaretDelivery();
+          return;
+        }
+        const result = await window.electronAPI
+          ?.pasteAtCapturedTarget?.(sessionId, markdownToPlainText(content) || content)
+          .catch(() => null);
+        if (caretDeliveryRef.current !== sessionId) return;
+        caretDeliveryRef.current = null;
+        if (hides && result?.success && press === pressRef.current) hideKeepingChatRef.current();
+      },
+    [cancelCaretDelivery]
+  );
+
   const submit = useCallback(
     (text: string, typed: boolean, extras?: RequestExtras) => {
       if (refuseIfRestricted()) return;
@@ -458,27 +497,6 @@ export default function AgentWindow() {
       };
       const caretSessionId = extras?.caretSessionId;
       caretDeliveryRef.current = caretSessionId ?? null;
-      // An answer that only read is typed into the field the take was spoken
-      // over; one that asked or acted, or that a newer take overtook, stays here.
-      const deliverToCaret = async ({
-        content,
-        onlyRead,
-      }: {
-        content: string;
-        onlyRead: boolean;
-      }): Promise<void> => {
-        if (!caretSessionId || caretDeliveryRef.current !== caretSessionId) return;
-        if (!onlyRead || press !== pressRef.current) {
-          cancelCaretDelivery();
-          return;
-        }
-        const result = await window.electronAPI
-          ?.pasteAtCapturedTarget?.(caretSessionId, markdownToPlainText(content) || content)
-          .catch(() => null);
-        if (caretDeliveryRef.current !== caretSessionId) return;
-        caretDeliveryRef.current = null;
-        if (result?.success && press === pressRef.current) hideKeepingChatRef.current();
-      };
       void (async () => {
         dispatch({
           type: "submitted",
@@ -490,13 +508,15 @@ export default function AgentWindow() {
         return sendRef.current(text, {
           ...(selectedContext ? { selectedContext } : {}),
           ...(attachment ? { attachment } : {}),
-          ...(caretSessionId ? { plainTextResponse: true, onComplete: deliverToCaret } : {}),
+          ...(caretSessionId
+            ? { plainTextResponse: true, onComplete: deliverToCaret(caretSessionId, press, true) }
+            : {}),
         });
       })().then((sent) => {
         if (!sent) restoreUnsent();
       }, restoreUnsent);
     },
-    [cancelCaretDelivery, dispatch, refuseIfRestricted, stopReading]
+    [cancelCaretDelivery, deliverToCaret, dispatch, refuseIfRestricted, stopReading]
   );
 
   const handleTranscript = useCallback(
@@ -648,6 +668,24 @@ export default function AgentWindow() {
   const transcribing = voice.status === "transcribing";
   const { cancel: cancelTake } = voice;
 
+  // A call reads the caret as the user starts to speak, so the read (a copy
+  // that can wait a second on Windows and Linux) runs while they talk. One
+  // read at a time; the next turn takes the latest, and one it never takes is let go.
+  const callCaretRef = useRef<{ sessionId: Promise<string | null>; done: boolean } | null>(null);
+  const releaseCallCaret = useCallback(() => {
+    void callCaretRef.current?.sessionId.then(releaseCapture);
+    callCaretRef.current = null;
+  }, []);
+  const readCallCaret = useCallback(() => {
+    if (callCaretRef.current?.done === false) return;
+    releaseCallCaret();
+    const read = { sessionId: captureCallCaret(), done: false };
+    void read.sessionId.then(() => {
+      read.done = true;
+    });
+    callCaretRef.current = read;
+  }, [releaseCallCaret]);
+
   // A spoken turn of a call: sent into the chat on screen with what the next
   // request carries, and answered for speech. A turn still running (talked
   // over, or left from typing) stops first: one stream runs per window.
@@ -666,13 +704,18 @@ export default function AgentWindow() {
       }
       const interrupts = chatBusyRef.current;
       if (interrupts) cancelTurn();
-      await chatSettled();
+      cancelCaretDelivery();
+      const caretRead = callCaretRef.current;
+      callCaretRef.current = null;
+      const [caretSessionId] = await Promise.all([caretRead?.sessionId ?? null, chatSettled()]);
       const current = stateRef.current;
       // Dropped while the old turn stopped (a stop word, another request, New chat): never sent.
       if (!isCurrent() || !current.call || current.call.stopped) {
+        releaseCapture(caretSessionId);
         speech.onEnd("stopped");
         return;
       }
+      caretDeliveryRef.current = caretSessionId;
       dispatch({
         type: "submitted",
         typed: false,
@@ -684,6 +727,12 @@ export default function AgentWindow() {
         const options = {
           ...(current.selectedContext ? { selectedContext: current.selectedContext } : {}),
           ...(current.attachment ? { attachment: current.attachment } : {}),
+          ...(caretSessionId
+            ? {
+                plainTextResponse: true,
+                onComplete: deliverToCaret(caretSessionId, pressRef.current, false),
+              }
+            : {}),
           voice: { replyLanguage, speech, dryRunWrites, interrupts: interrupts && !joinedRequest },
         };
         // A request a pause cut short is answered whole, in place of its first half.
@@ -696,7 +745,7 @@ export default function AgentWindow() {
         speech.onEnd("error");
       }
     },
-    [cancelTurn, chatSettled, dispatch, refuseIfRestricted]
+    [cancelCaretDelivery, cancelTurn, chatSettled, deliverToCaret, dispatch, refuseIfRestricted]
   );
 
   const voiceCall = useVoiceCall({
@@ -708,8 +757,12 @@ export default function AgentWindow() {
       answerWithText(card.key, text, { append: true });
       return true;
     },
+    onSpeechStart: readCallCaret,
     onUserTurn: (turn) => void sendSpokenTurn(turn),
-    onReplyDropped: cancelTurn,
+    onReplyDropped: () => {
+      cancelCaretDelivery();
+      cancelTurn();
+    },
     onEnded: (reason) => {
       dispatch({ type: "endCall" });
       dispatch({ type: "notice", notice: CALL_END_NOTICES[reason] });
@@ -727,6 +780,9 @@ export default function AgentWindow() {
     setInputHeld: holdCallInput,
   } = voiceCall;
   const callActive = state.call !== null && !state.call.stopped;
+  useEffect(() => {
+    if (!callActive) releaseCallCaret();
+  }, [callActive, releaseCallCaret]);
 
   // A card asking for a key: nothing said meanwhile is transcribed.
   useEffect(() => {
@@ -788,7 +844,7 @@ export default function AgentWindow() {
   }, [callCard, callCardHidden, callFailed, dispatch, state.call, state.layout]);
 
   // Call on a take still listening drops what it heard: the call starts once
-  // the take lets go of the microphone.
+  // the take lets go of the microphone, reading the caret itself at each turn.
   // What the press read (another app's selection, a screenshot) stays for its first request.
   const [callAfterTake, setCallAfterTake] = useState(false);
   const startCall = useCallback(async () => {
@@ -838,11 +894,12 @@ export default function AgentWindow() {
 
   // End stops the call, what it is saying, and the turn it is running; the chat stays.
   const endCall = useCallback(() => {
+    cancelCaretDelivery();
     if (chatBusyRef.current) cancelTurn();
     voiceCallRef.current.clearFailure();
     void endVoiceCall();
     dispatch({ type: "endCall" });
-  }, [cancelTurn, dispatch, endVoiceCall]);
+  }, [cancelCaretDelivery, cancelTurn, dispatch, endVoiceCall]);
 
   // The organization turned the assistant off mid-call: the call ends and says
   // why. A policy still loading (a refetch) leaves it running.

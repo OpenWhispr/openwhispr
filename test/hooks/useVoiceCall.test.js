@@ -51,6 +51,7 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
     languageSettings: [],
     warmed: [],
     dropped: 0,
+    speechStarts: 0,
     ended: [],
     transcriptionFailures: 0,
   };
@@ -221,6 +222,9 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
   function Harness() {
     hook.current = useVoiceCall({
       answersCard: (text) => state.answersCard(text),
+      onSpeechStart: () => {
+        calls.speechStarts += 1;
+      },
       onUserTurn: (turn) => calls.turns.push(turn),
       onReplyDropped: () => {
         calls.dropped += 1;
@@ -552,6 +556,7 @@ test("talking over a reply pauses it; noise lets it go on; words stop it and its
   await hear();
 
   await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 0 }));
+  assert.equal(calls.speechStarts, 1, "the window hears the user start to speak");
   assert.deepEqual(calls.player, ["pause"]);
   await say("");
   assert.deepEqual(calls.player, ["pause", "resume"]);
@@ -1018,15 +1023,17 @@ test("Stop over a waiting card's read-out silences it and keeps the turn", async
 });
 
 test("in the harness, every line is a request of its own, never a card's answer", async (t) => {
-  const { hook, calls, pending, state, act, say } = await mountVoiceCall(t);
+  const { hook, calls, pending, state, act, say, events } = await mountVoiceCall(t);
   state.answersCard = () => true;
   await act(() => void hook.current.start({ harness: true }));
   await act(() => pending.readiness.at(-1).resolve({ ready: true }));
   await act(() => pending.start.at(-1).resolve({ sessionId: 7, sampleRate: 44100 }));
 
+  await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 0 }));
   await say("what's the capital of Australia");
   assert.equal(calls.turns.length, 1);
   assert.equal(calls.turns[0].dryRunWrites, true);
+  assert.equal(calls.speechStarts, 0, "its scripted speech reads no field");
 });
 
 test("a language no model hears is set back once, without asking main again", async (t) => {

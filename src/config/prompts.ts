@@ -311,12 +311,25 @@ const SPOKEN_LANGUAGE_NAMES: Record<SpokenLanguage, string> = {
 // The tool line comes first: brevity alone made a local model answer from
 // memory instead of using its tools (2/10 tool use in #2349's harness, 9/10 with it).
 const SPOKEN_REPLY_RULE =
-  "This request was spoken in a live voice call, and your reply will be read aloud. When a tool could help, call it in this same response; never just say you will check. Answer in one or two short sentences unless the user asks for more. When asked to do something, say first what you did, or that you couldn't and why. Never write out an email, message or other draft in your reply unless the user asks to hear it. Never use Markdown, lists, tables, headings, code, links or emoji, and write numbers, times and dates the way a person would say them, with month and weekday names in full (Tuesday, not Tue; November 19, not Nov 19), never dates in digits (11/19, 2026-11-19), and 3 PM rather than 3:00 PM.";
+  "This request was spoken in a live voice call, and your reply will be read aloud. When a tool could help, call it in this same response; never just say you will check. Answer in one or two short sentences unless the user asks for more.";
+// Left out when the reply is also typed at the user's caret: there it is the text itself.
+const SPOKEN_REPLY_ACTIONS =
+  "When asked to do something, say first what you did, or that you couldn't and why. Never write out an email, message or other draft in your reply unless the user asks to hear it.";
+const SPOKEN_REPLY_FORMAT =
+  "Never use Markdown, lists, tables, headings, code, links or emoji, and write numbers, times and dates the way a person would say them, with month and weekday names in full (Tuesday, not Tue; November 19, not Nov 19), never dates in digits (11/19, 2026-11-19), and 3 PM rather than 3:00 PM.";
 
-/** How a reply read aloud in a voice call is written, and in which language (null: the one spoken). */
-export function getSpokenReplyRule(language: SpokenLanguage | null): string {
+/**
+ * How a reply read aloud in a voice call is written, and in which language
+ * (null: the one spoken). `typedAtCaret`: it is also typed where the user is typing.
+ */
+export function getSpokenReplyRule(language: SpokenLanguage | null, typedAtCaret = false): string {
   const name = language ? SPOKEN_LANGUAGE_NAMES[language] : undefined;
-  return `${SPOKEN_REPLY_RULE} ${name ? `Reply in ${name}.` : "Reply in the language the user spoke."}`;
+  return [
+    SPOKEN_REPLY_RULE,
+    ...(typedAtCaret ? [] : [SPOKEN_REPLY_ACTIONS]),
+    SPOKEN_REPLY_FORMAT,
+    name ? `Reply in ${name}.` : "Reply in the language the user spoke.",
+  ].join(" ");
 }
 
 /**
