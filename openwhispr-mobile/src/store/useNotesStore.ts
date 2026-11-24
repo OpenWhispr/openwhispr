@@ -1069,6 +1069,10 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       if (identifyMeetingSpeakers(noteId, result.speakerEmbeddingsByLabel)) {
         set((state) => ({ transcriptRevision: state.transcriptRevision + 1 }));
       }
+      // processMeeting returns only once the note is done, and the diarizer and identification
+      // are the recording's last readers (the banner works from the embeddings kept above). A
+      // throw above leaves the note failed with its recording, which Retry needs.
+      await get().discardMeetingRecording(noteId);
       await finalizeMeetingNoteContent(noteId);
     } finally {
       get().loadNotes();

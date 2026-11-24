@@ -357,8 +357,7 @@ export default function NoteEditorScreen({
     [meetingSpeakerEmbeddings, note, speakers, transcriptSegments, voiceProfiles],
   );
   const showVoiceSetupBanner = shouldOfferVoiceSetup({
-    isOnDeviceMeeting:
-      note?.noteType === 'meeting' && isManagedMeetingAudioUri(note.id, note.sourceFile),
+    hasSpeakerLabels: note?.noteType === 'meeting' && note.diarizationEnabled === 1,
     transcriptStatus,
     hasOwnerProfile: voiceProfiles.some((profile) => profile.isOwner === 1),
     dismissed: voiceSetupDismissed,

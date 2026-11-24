@@ -11,6 +11,7 @@ import {
   clearPendingBackfill,
   isManagedMeetingAudioUri,
   meetingRecordingUri,
+  readPendingBackfill,
 } from '@/lib/transcriptAudio';
 import { useNotesStore } from '@/store/useNotesStore';
 import type { TranscriptionStatus } from '@/types';
@@ -68,6 +69,10 @@ export interface MeetingRecoveryDeps {
   isOnline(): Promise<boolean>;
   /** Transcribes what a done meeting's sidecar still owes; never throws. */
   resumeBackfill(noteId: number): Promise<void>;
+  /** Done meetings that still link their managed recording, read when called. */
+  listProcessedRecordings(): { noteId: number; uri: string }[];
+  /** True when the note's sidecar can be read and lists audio still owed. */
+  owesBackfill(noteId: number): Promise<boolean>;
 }
 
 const attempt = async (
@@ -130,11 +135,30 @@ async function sweepSettledRecordings(
       ) {
         await deps.discardRecording(note.id);
       }
-      // Next task: listProcessedRecordings — every other done note with a linked recording is
-      // discarded here. Notes in `pendingBackfills` must stay excluded: their recording is owed.
     });
   }
   return backfills;
+}
+
+/**
+ * A processed meeting's recording is temporary, but earlier versions kept it, and a discard can
+ * fail. Read after the sweep, so recordings the launch repair linked again are listed and ones
+ * the sweep discarded are not. A recording whose sidecar still owes audio is kept for its resume.
+ */
+async function discardProcessedRecordings(deps: MeetingRecoveryDeps): Promise<void> {
+  let processed: { noteId: number; uri: string }[] = [];
+  try {
+    processed = deps.listProcessedRecordings();
+  } catch (error) {
+    deps.reportError(error, 0);
+  }
+  for (const { noteId, uri } of processed) {
+    if (uri !== deps.recordingUri(noteId)) continue;
+    await attempt(deps, noteId, async () => {
+      if (await deps.owesBackfill(noteId)) return;
+      await deps.discardRecording(noteId);
+    });
+  }
 }
 
 /** Repairs a killed meeting's recording and links it; true when the note has a usable recording. */
@@ -257,6 +281,7 @@ async function recoverOrphan(
  * - Anything else is marked failed, which surfaces the note's Retry.
  * - A failed meeting's recording older than STALE_RECORDING_MS is deleted, and a done meeting
  *   that still owes audio from its recording gets it transcribed when online.
+ * - Any other done meeting's recording is deleted: a processed meeting keeps no audio.
  *
  * Safe to run twice; one note's failure never stops the others.
  */
@@ -270,6 +295,8 @@ export async function recoverOrphanedMeetings(deps: MeetingRecoveryDeps): Promis
   }
 
   const backfills = await sweepSettledRecordings(notes, pendingBackfills, deps);
+  // Before the orphans: those still read recording, transcribing or diarizing, so none is listed.
+  await discardProcessedRecordings(deps);
 
   const orphans = notes.filter(
     (note) =>
@@ -461,6 +488,18 @@ export function startMeetingRecoveryOnce(): void {
             () => true,
           ),
         resumeBackfill: (noteId) => useNotesStore.getState().resumeMeetingBackfill(noteId),
+        listProcessedRecordings: () =>
+          notesRepository
+            .getAllNotes()
+            .filter(
+              (note) =>
+                note.noteType === 'meeting' &&
+                note.transcriptionStatus === 'done' &&
+                createdBeforeRuntime(note, RUNTIME_STARTED_AT_MS) &&
+                isManagedMeetingAudioUri(note.id, note.sourceFile),
+            )
+            .map((note) => ({ noteId: note.id, uri: meetingRecordingUri(note.id) })),
+        owesBackfill: async (noteId) => ((await readPendingBackfill(noteId))?.length ?? 0) > 0,
       });
     })
     .catch((error: unknown) => {

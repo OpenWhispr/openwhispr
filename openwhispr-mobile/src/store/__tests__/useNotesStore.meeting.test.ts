@@ -1472,6 +1472,85 @@ describe('runMeetingPipeline', () => {
     });
   });
 
+  describe('the recording', () => {
+    const recordingUri = 'file:///app/documents/meeting-7.wav';
+    const meetingWithRecording = {
+      id: 7,
+      title: 'Untitled meeting',
+      noteType: 'meeting',
+      sourceFile: recordingUri,
+      deletedAt: null,
+      isPrivate: 0,
+      participants: null,
+    };
+
+    beforeEach(() => {
+      (notesRepository.getNoteById as jest.Mock).mockReturnValue(meetingWithRecording);
+    });
+
+    it('deletes the recording once an on-device meeting is done', async () => {
+      (notesRepository.getSegments as jest.Mock).mockReturnValue([segment('Transcript')]);
+
+      await useNotesStore.getState().runMeetingPipeline(7, recordingUri, 2);
+
+      expect(mockDeleteAsync.mock.calls.filter(([uri]) => uri === recordingUri)).toHaveLength(1);
+      expect(notesRepository.updateNoteMeta).toHaveBeenCalledWith(7, { sourceFile: null });
+    });
+
+    it('keeps the recording when the on-device pipeline fails', async () => {
+      mockProcessMeeting.mockImplementationOnce(async () => {
+        notesRepository.setTranscriptionStatus(7, 'failed');
+        throw new Error('transcription failed');
+      });
+
+      await expect(useNotesStore.getState().runMeetingPipeline(7, recordingUri, 2)).rejects.toThrow(
+        'transcription failed',
+      );
+
+      expect(notesRepository.setTranscriptionStatus).toHaveBeenLastCalledWith(7, 'failed');
+      expect(mockDeleteAsync).not.toHaveBeenCalledWith(recordingUri, expect.anything());
+      expect(notesRepository.updateNoteMeta).not.toHaveBeenCalledWith(7, { sourceFile: null });
+    });
+
+    it('still identifies speakers before the recording goes', async () => {
+      mockConfigState.config.autoGenerateNoteTitle = true;
+      mockAuthState.user = signedInUser;
+      (notesRepository.getSegments as jest.Mock).mockReturnValue([segment('Transcript')]);
+      (notesRepository.getSpeakerProfiles as jest.Mock).mockReturnValue([
+        {
+          id: 99,
+          displayName: 'Me',
+          email: null,
+          isOwner: 1,
+          embedding: [1, 0],
+          sampleCount: 1,
+          consentAt: '2026-06-19T12:00:00.000Z',
+          createdAt: null,
+          updatedAt: null,
+        },
+      ]);
+      (notesRepository.getSpeakers as jest.Mock).mockReturnValue([
+        speaker({ id: 10, speakerLabel: 'speaker_0' }),
+      ]);
+
+      await useNotesStore.getState().runMeetingPipeline(7, recordingUri, 2);
+
+      expect(notesRepository.updateSpeaker).toHaveBeenCalledWith(
+        10,
+        expect.objectContaining({ profileId: 99 }),
+      );
+      // The pipeline's embeddings stay in memory for That's me once the file is gone.
+      expect(useNotesStore.getState().meetingSpeakerEmbeddingsByNoteId[7]).toEqual({
+        speaker_0: [1, 0],
+      });
+      const identifiedAt = (notesRepository.updateSpeaker as jest.Mock).mock.invocationCallOrder[0];
+      const deletedAt = mockDeleteAsync.mock.invocationCallOrder[0];
+      const titledAt = mockGenerateNoteTitle.mock.invocationCallOrder[0];
+      expect(identifiedAt).toBeLessThan(deletedAt);
+      expect(deletedAt).toBeLessThan(titledAt);
+    });
+  });
+
   it('does not replace a selected calendar title with transcript auto-title', async () => {
     mockAuthState.user = signedInUser;
     mockConfigState.config.autoGenerateNoteTitle = true;

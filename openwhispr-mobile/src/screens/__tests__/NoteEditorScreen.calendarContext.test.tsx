@@ -1844,8 +1844,15 @@ describe('NoteEditorScreen voice setup', () => {
     expect(mockLoadVoiceProfiles).toHaveBeenCalled();
   });
 
-  it('does not offer it on a meeting recorded elsewhere, or once you have a profile', () => {
-    mockNote = note({ sourceFile: null });
+  it('offers it once the recording is gone, from the samples held in memory', () => {
+    mockNote = note({ sourceFile: null, transcriptionStatus: 'done' });
+    mockNotesState.notes = [mockNote];
+    const { getByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId('voice-setup-banner')).toBeTruthy();
+  });
+
+  it('does not offer it on a meeting without speaker labels, or once you have a profile', () => {
+    mockNote = note({ sourceFile: 'managed://meeting-7.wav', diarizationEnabled: 0 });
     mockNotesState.notes = [mockNote];
     const { queryByTestId, rerender } = render(<NoteEditorScreen />);
     expect(queryByTestId('voice-setup-banner')).toBeNull();

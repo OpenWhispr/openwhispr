@@ -97,6 +97,8 @@ function makeDeps(notes: Note[], initialStorage: Record<string, string> = {}): H
     resumeBackfill: jest.fn(async (id: number) => {
       calls.push(`backfill:${id}`);
     }),
+    listProcessedRecordings: jest.fn(() => []),
+    owesBackfill: jest.fn(async () => false),
   };
   return { deps, store, calls };
 }
@@ -554,6 +556,72 @@ describe('recoverOrphanedMeetings with the meeting recording', () => {
     await recoverOrphanedMeetings(deps);
 
     expect((deps.discardRecording as jest.Mock).mock.calls).toEqual([[50]]);
+  });
+
+  describe('recordings left on finished meetings', () => {
+    const processed = (...ids: number[]): { noteId: number; uri: string }[] =>
+      ids.map((noteId) => ({ noteId, uri: `file:///docs/meeting-${noteId}.wav` }));
+
+    it('discards recordings left on finished meetings by earlier versions', async () => {
+      const { deps } = makeDeps([
+        note({ id: 70, transcriptionStatus: 'done', diarizationEnabled: 1 }),
+        note({ id: 71, transcriptionStatus: 'done', diarizationEnabled: 1 }),
+        note({ id: 72, transcriptionStatus: 'failed', diarizationEnabled: 1 }),
+      ]);
+      (deps.listProcessedRecordings as jest.Mock).mockReturnValue(processed(70, 71));
+
+      await recoverOrphanedMeetings(deps);
+
+      expect((deps.discardRecording as jest.Mock).mock.calls).toEqual([[70], [71]]);
+    });
+
+    it('keeps a recording that still owes audio and resumes it', async () => {
+      const { deps, calls } = makeDeps([note({ id: 73, transcriptionStatus: 'done' })]);
+      (deps.listPendingBackfills as jest.Mock).mockResolvedValue([73]);
+      (deps.listProcessedRecordings as jest.Mock).mockReturnValue(processed(73));
+      (deps.owesBackfill as jest.Mock).mockResolvedValue(true);
+
+      await recoverOrphanedMeetings(deps);
+
+      expect(calls).toEqual(['backfill:73']);
+    });
+
+    it('discards one whose sidecar holds nothing it can use', async () => {
+      const { deps } = makeDeps([note({ id: 74, transcriptionStatus: 'done' })]);
+      (deps.listPendingBackfills as jest.Mock).mockResolvedValue([74]);
+      (deps.listProcessedRecordings as jest.Mock).mockReturnValue(processed(74));
+
+      await recoverOrphanedMeetings(deps);
+
+      expect(deps.owesBackfill).toHaveBeenCalledWith(74);
+      expect(deps.discardRecording).toHaveBeenCalledWith(74);
+    });
+
+    it('runs after the sweep and before the orphans, and never on a note in flight', async () => {
+      const { deps, calls } = makeDeps([
+        note({ id: 75, transcriptionStatus: 'transcribing', diarizationEnabled: 1 }),
+      ]);
+      (deps.listProcessedRecordings as jest.Mock).mockImplementation(() => {
+        calls.push('listProcessed');
+        return [];
+      });
+
+      await recoverOrphanedMeetings(deps);
+
+      expect(calls[0]).toBe('listProcessed');
+      expect(deps.discardRecording).not.toHaveBeenCalled();
+    });
+
+    it('keeps going when one discard throws', async () => {
+      const { deps } = makeDeps([]);
+      (deps.listProcessedRecordings as jest.Mock).mockReturnValue(processed(76, 77));
+      (deps.discardRecording as jest.Mock).mockRejectedValueOnce(new Error('rm'));
+
+      await recoverOrphanedMeetings(deps);
+
+      expect(deps.discardRecording).toHaveBeenCalledWith(77);
+      expect(deps.reportError).toHaveBeenCalledWith(expect.any(Error), 76);
+    });
   });
 
   it('keeps going when one note throws', async () => {
