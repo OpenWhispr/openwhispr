@@ -6,7 +6,12 @@ import { tokenTimingsToWhisperSegments } from '@/services/transcription/parakeet
 import type { TranscriptionResponse } from '@/types';
 import i18n from './strings';
 import Constants from 'expo-constants';
-import { selectedSpeechModel, type AndroidSpeechModelId } from './speechSelection';
+import {
+  canTranscribeMeetings,
+  meetingSpeechModel,
+  selectedSpeechModel,
+  type AndroidSpeechModelId,
+} from './speechSelection';
 import { speechModelSupportsLanguages } from './speechCapabilities';
 import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
 
@@ -24,10 +29,17 @@ export const LocalSpeechModel = {
     },
   ): Promise<TranscriptionResponse> {
     const job = generation;
-    const model = options.androidModel ?? selectedSpeechModel();
+    // Word timings mean a meeting, which uses a meeting model whatever dictation uses.
+    const model =
+      options.androidModel ??
+      (options.wordTimestamps
+        ? ((await meetingSpeechModel(
+            options.language && options.language !== 'auto' ? [options.language] : undefined,
+          )) ?? selectedSpeechModel())
+        : selectedSpeechModel());
     return withAndroidInference(async () => {
       if (job !== generation || options.signal?.aborted) throw new Error(i18n.t('cancelled'));
-      if (options.wordTimestamps && model !== 'parakeet-v3')
+      if (options.wordTimestamps && !canTranscribeMeetings(model))
         throw new Error(i18n.t('meetingSpeechNeeded'));
       const languages =
         options.language && options.language !== 'auto'

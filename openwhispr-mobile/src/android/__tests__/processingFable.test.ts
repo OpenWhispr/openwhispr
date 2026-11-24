@@ -187,10 +187,8 @@ describe('Processing · Fable’s take', () => {
     expect(useConfigStore.getState().config?.inference?.dictation).toEqual({ mode: 'local' });
     // Qwen isn't on the phone: cleanup waits for it.
     expect(useConfigStore.getState().config?.inference?.cleanup).toBeUndefined();
-    await expect(places.missingForEverything()).resolves.toEqual([
-      'qwen-balanced',
-      'meeting-speakers',
-    ]);
+    // Meetings record with Parakeet, already here; Meeting speakers downloads by itself.
+    await expect(places.missingForEverything()).resolves.toEqual(['qwen-balanced']);
   });
 
   it('Cancel stops the queued downloads; tasks that moved stay, waiting tasks stay put', async () => {
@@ -208,10 +206,8 @@ describe('Processing · Fable’s take', () => {
     );
     mockReady.add('parakeet-v3');
     await places.moveTasksOnDevice(['dictation', 'cleanup', 'meeting']);
-    expect(places.usePhoneQueue.getState().jobs.map((job) => job.id)).toEqual([
-      'qwen-balanced',
-      'meeting-speakers',
-    ]);
+    // Meetings need only their Meeting recording model, Parakeet, which is here.
+    expect(places.usePhoneQueue.getState().jobs.map((job) => job.id)).toEqual(['qwen-balanced']);
     places.cancelPhoneDownloads();
     expect(models.cancelAndroidDownload).toHaveBeenCalledWith('qwen-balanced');
     expect(places.usePhoneQueue.getState().jobs).toEqual([]);
@@ -219,6 +215,6 @@ describe('Processing · Fable’s take', () => {
     const inference = useConfigStore.getState().config?.inference;
     expect(inference?.dictation).toEqual({ mode: 'local' });
     expect(inference?.cleanup).toBeUndefined();
-    expect(inference?.meeting).toBeUndefined();
+    expect(inference?.meeting).toEqual({ mode: 'local' });
   });
 });

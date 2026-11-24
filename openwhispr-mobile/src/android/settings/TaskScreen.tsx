@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
@@ -10,13 +9,14 @@ import { resolveCustomPrompt } from '@/config/prompts/registry';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
 import { providerDisplayName, type InferenceMode } from '@/lib/mobileProviders';
 import { switchWorkflowMode } from '@/lib/workflowModeSwitch.android';
-import { home, type } from '../home/kit';
+import { home } from '../home/kit';
 import { BottomSheet, Group, ListRow, SettingsPage, useReduceMotion } from './kit';
 import { KEY_CHECK_COLORS } from './KeyCheckMark';
 import type { KeyProviderId } from './keyCheck';
 import { KeySheet } from './KeySheet';
 import { SpeechModelSheet } from './ModelSheet';
-import { modelName, useModelsReady } from './modelCatalog';
+import { formatSize, meetingModelRows, modelName, useModelsReady } from './modelCatalog';
+import { ANDROID_MODELS } from '../models';
 import {
   KEY_PROVIDERS,
   TASKS,
@@ -145,9 +145,6 @@ function MeetingsTask() {
   ];
   return (
     <SettingsPage title={t('meetings')}>
-      <Text style={[type.subhead, { color: home.secondary, paddingHorizontal: 4 }]}>
-        {t('meetingsIntro')}
-      </Text>
       <Group title={t('transcribeMeetings')}>
         {rows.map((row) => (
           <ListRow
@@ -169,18 +166,25 @@ function MeetingsTask() {
           <ListRow title={t('addAnotherKey')} onPress={() => setSheet(true)} />
         )}
       </Group>
-      <Group title={t('speakerNames')}>
-        <ListRow
-          icon="UsersRound"
-          title={t('meetingSpeakers')}
-          subtitle={t('meetingSpeakersBody')}
-          value={ready['meeting-speakers'] ? t('ready') : t('download')}
-          valueAccent={!ready['meeting-speakers']}
-          onPress={() =>
-            router.push({ pathname: '/android-model', params: { kind: 'diarization' } })
-          }
-        />
-      </Group>
+      {mode === 'local' ? (
+        // S8: a meeting on the phone needs a Meeting recording model. Meeting speakers isn't
+        // shown: it downloads by itself at launch (liveSpeakers/speakerModel.ts).
+        <Group title={t('onDeviceModel')}>
+          {meetingModelRows().map((row) => (
+            <ListRow
+              key={row.id}
+              icon="AudioLines"
+              title={modelName(row.id)}
+              subtitle={`${t('meetingRecording')} · ${formatSize(ANDROID_MODELS[row.id].bytes)}`}
+              value={ready[row.id] ? t('ready') : t('download')}
+              valueAccent={!ready[row.id]}
+              onPress={() =>
+                router.push({ pathname: '/android-model', params: { kind: 'meeting' } })
+              }
+            />
+          ))}
+        </Group>
+      ) : null}
       <KeySheet
         visible={sheet}
         onClose={() => setSheet(false)}

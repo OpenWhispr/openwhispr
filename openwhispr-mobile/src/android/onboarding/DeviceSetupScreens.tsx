@@ -35,7 +35,8 @@ const ROWS: Record<
   assistant: { name: 'assistantName', body: 'assistantBody', icon: 'sparkle' },
   speakers: { name: 'speakersName', body: 'speakersBody', icon: 'Users' },
 };
-const EXTRAS: DeviceExtra[] = ['cleanup', 'assistant', 'speakers'];
+// Meeting speakers isn't offered: it downloads by itself at launch (liveSpeakers/speakerModel.ts).
+const EXTRAS: DeviceExtra[] = ['cleanup', 'assistant'];
 
 // Big models read in tens of megabytes, as the board does (490 MB, 670 MB); small ones exactly (42 MB).
 const megabytes = (bytes: number) =>

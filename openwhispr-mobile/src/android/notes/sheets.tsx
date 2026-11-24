@@ -12,6 +12,7 @@ import { timeOf } from './rows';
 import { useNotesT } from './strings';
 import type { Workspace } from './library';
 import { parseCalendarParticipants } from '@/lib/calendar/meetingContext';
+import { MeetingModelList, MeetingModelRow } from './meetingModelSheet';
 
 /** A row with a tile, a title and a line under it; used by every sheet here. */
 function SheetRow({
@@ -320,6 +321,7 @@ export function StartSheet({
   now,
   onChange,
   onStart,
+  onModelsChanged,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -329,17 +331,40 @@ export function StartSheet({
   onDevice: boolean;
   /** The provider of the key saved for meetings (Settings → Processing → Meetings), if any. */
   keyName?: string | null;
+  /** No speech model that can transcribe meetings is on the phone (On device only). */
   needsModel: boolean;
   now: number;
   onChange: () => void;
   onStart: () => void;
+  /** A model finished downloading on the sheet: read what the meeting needs again. */
+  onModelsChanged?: () => void;
 }) {
   const t = useNotesT();
   const n = useNotesLook();
   const [picking, setPicking] = useState(false);
+  const [choosingModel, setChoosingModel] = useState(false);
   useEffect(() => {
-    if (!visible) setPicking(false);
+    if (!visible) {
+      setPicking(false);
+      setChoosingModel(false);
+    }
   }, [visible]);
+  if (choosingModel)
+    return (
+      <BottomSheet
+        visible={visible}
+        onClose={onClose}
+        title={t('meetingModelListTitle')}
+        onBack={() => setChoosingModel(false)}
+      >
+        <MeetingModelList
+          onModelReady={() => {
+            setChoosingModel(false);
+            onModelsChanged?.();
+          }}
+        />
+      </BottomSheet>
+    );
   const people = event
     ? (parseCalendarParticipants(event.attendeesJson) ?? []).filter((person) => !person.resource)
         .length
@@ -423,12 +448,11 @@ export function StartSheet({
             </Pressable>
           }
         />
-        {onDevice && needsModel ? (
-          <ListRow
-            icon="Download"
-            title={t('needsSpeechModel')}
-            subtitle={t('needsSpeechModelBody')}
-            onPress={onChange}
+        {onDevice ? (
+          <MeetingModelRow
+            needsModel={needsModel}
+            onChoose={() => setChoosingModel(true)}
+            onLanded={() => onModelsChanged?.()}
           />
         ) : null}
       </Card>

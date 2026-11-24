@@ -25,6 +25,11 @@ const mockState = {
     spaceId === 9 ? [{ id: 20, name: 'Reviews', isDefault: 0, spaceId: 9 }] : [],
 };
 
+// The Start sheet's model rows read the phone's models and settings; not under test here.
+jest.mock('../meetingModelSheet', () => ({
+  MeetingModelList: () => null,
+  MeetingModelRow: () => null,
+}));
 jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockPush(...args) },
   useFocusEffect: (callback: () => void) => require('react').useEffect(callback, [callback]),

@@ -27,6 +27,11 @@ jest.mock('react-native/Libraries/Utilities/useColorScheme', () => ({
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
+// The Start sheet's model rows read the phone's models and settings; not under test here.
+jest.mock('../meetingModelSheet', () => ({
+  MeetingModelList: () => null,
+  MeetingModelRow: () => null,
+}));
 jest.mock('expo-router', () => ({
   router: { push: jest.fn() },
   useFocusEffect: (callback: () => void) => require('react').useEffect(callback, [callback]),

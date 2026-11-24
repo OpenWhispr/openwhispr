@@ -21,6 +21,11 @@ jest.mock('@/components/ui/SystemIcon', () => ({
     return <Glyph testID="glyph" accessibilityHint={color} />;
   },
 }));
+// The Start sheet's model rows read the phone's models and settings; not under test here.
+jest.mock('../meetingModelSheet', () => ({
+  MeetingModelList: () => null,
+  MeetingModelRow: () => null,
+}));
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), canGoBack: () => false } }));
 jest.mock('react-native-gesture-handler', () => ({
   GestureDetector: ({ children }: { children: React.ReactNode }) => children,

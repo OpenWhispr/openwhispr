@@ -8,18 +8,21 @@ import i18n from '../strings';
 import { home } from '../home/kit';
 import { Badge, ListRow, settings, showToast } from './kit';
 import { DownloadRing, type RingPhase } from './DownloadRing';
+import { look } from './look';
 import { formatSize, modelName, type MODEL_ROWS } from './modelCatalog';
 import { settingsT, useSettingsT } from './strings';
-import { speakerModelRemovedByUser } from '../liveSpeakers/speakerModel';
 
 type Row = (typeof MODEL_ROWS)[number];
 
-/** Starts a download; a cancel says so at the bottom, any other failure is a dialog. */
-export function startModelDownload(id: Row['id']) {
-  if (id === 'meeting-speakers') speakerModelRemovedByUser(false);
+/**
+ * Starts a download; a cancel says so at the bottom. Any other failure is a dialog, or goes to
+ * `onError` for a row that shows it in place.
+ */
+export function startModelDownload(id: Row['id'], onError?: (message: string) => void) {
   downloadAndroidModel(id).catch((error: Error) => {
     if (error.message === i18n.t('downloadCancelled'))
       showToast(settingsT('downloadCancelled'), 'neutral');
+    else if (onError) onError(error.message);
     else Alert.alert(settingsT('downloadProblem'), error.message, [{ text: settingsT('ok') }]);
   });
 }
@@ -50,6 +53,8 @@ export function ModelRow({
   reduceMotion,
   onUse,
   onSettled,
+  inlineErrors,
+  line,
 }: {
   row: Row;
   ready: boolean;
@@ -59,8 +64,13 @@ export function ModelRow({
   reduceMotion: boolean;
   onUse?: () => void;
   onSettled?: (ready: boolean) => void;
+  /** A failed download shows its reason on the row with Try again, not in a dialog. */
+  inlineErrors?: boolean;
+  /** The row's second line in place of the catalog's (the size still follows). */
+  line?: string;
 }) {
   const t = useSettingsT();
+  const [failure, setFailure] = useState<string | null>(null);
   // Between the last byte and the readiness check the ring keeps spinning; never "Download".
   const [ending, setEnding] = useState<'checking' | 'done' | null>(null);
   const downloading = progress !== undefined;
@@ -115,7 +125,8 @@ export function ModelRow({
   }, [phase, reduceMotion, badge]);
 
   const name = modelName(row.id);
-  const lineText = row.line ? `${t(row.line)} · ${formatSize(total)}` : formatSize(total);
+  const description = line ?? (row.line ? t(row.line) : null);
+  const lineText = description ? `${description} · ${formatSize(total)}` : formatSize(total);
   const subtitle =
     phase === 'downloading'
       ? [
@@ -148,7 +159,7 @@ export function ModelRow({
             },
           ]}
         >
-          {t('download')}
+          {failure && !phase ? t('tryAgain') : t('download')}
         </Animated.Text>
       )}
       {phase && (
@@ -188,8 +199,15 @@ export function ModelRow({
         ) : undefined
       }
       subtitle={
-        <Text style={[settings.subtitle, settings.tabular]} accessibilityLiveRegion="polite">
-          {subtitle}
+        <Text
+          style={[
+            settings.subtitle,
+            settings.tabular,
+            failure && !phase ? { color: look.error } : null,
+          ]}
+          accessibilityLiveRegion="polite"
+        >
+          {failure && !phase ? failure : subtitle}
         </Text>
       }
       selected={selected}
@@ -202,7 +220,10 @@ export function ModelRow({
             ? inUse
               ? undefined
               : onUse
-            : () => startModelDownload(row.id)
+            : () => {
+                setFailure(null);
+                startModelDownload(row.id, inlineErrors ? setFailure : undefined);
+              }
       }
     />
   );
