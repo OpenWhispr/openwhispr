@@ -2,9 +2,9 @@ import { buildWav, WAV_HEADER_BYTES } from "../utils/wavBuilder";
 
 // Decodes an offline Parakeet recording's finished stretches while the user is
 // still speaking, so after stop only the tail is left to transcribe. Recordings
-// the batch path would keep whole are never cut, and longer ones are cut at
-// clear pauses. Each stretch is capitalised and punctuated on its own, so a
-// long recording gets more seams than the batch path's one per 15 s.
+// the batch path would keep whole are never cut, and longer ones are cut where
+// the batch splitter looks for its cuts, so the text has as many seams (each
+// stretch is capitalised and punctuated on its own) as the batch path's.
 
 const SAMPLE_RATE = 16000;
 const FRAME_SAMPLES = 160; // 10 ms
@@ -12,13 +12,12 @@ const FRAMES_PER_SECOND = SAMPLE_RATE / FRAME_SAMPLES;
 // The batch path decodes a recording up to its segment cap plus tail allowance
 // in one piece (parakeetSegmentation); cutting earlier would change the text.
 const FIRST_CUT_SECONDS = 15.5;
-// A stretch shorter than this is left to grow: a lone short clause decodes
-// with too little context.
-const MIN_SECONDS = 6;
 // The batch path's segment cap (parakeetServer MAX_SEGMENT_SECONDS); past it
 // the cut is forced at the quietest moment, as the batch path does.
 const MAX_SECONDS = 15;
-const FORCED_SEARCH_SECONDS = 4;
+// The batch splitter looks for its cut in the last 4 s before the cap
+// (parakeetSegmentation SEARCH_SECONDS). An earlier cut would add seams.
+const MIN_SECONDS = MAX_SECONDS - 4;
 // Twice the batch splitter's window: a pause this long is rarely inside a word
 // or a sentence, so live cuts seldom split a clause the cleanup must rejoin.
 const PAUSE_FRAMES = 20;
@@ -31,7 +30,9 @@ const GUARD_FRAMES = 0.3 * FRAMES_PER_SECOND;
 // A tail shorter than this holds no word; skipping it saves a round trip.
 const MIN_TAIL_SECONDS = 0.1;
 // Decoded alone, a tail this short invents filler from room tone or drops a
-// lone word, so one with speech is decoded together with the stretch before it.
+// lone word. One with speech is decoded together with the stretch before it,
+// and one without is skipped. A longer tail is always decoded: it may be a
+// last sentence spoken much more quietly than the rest.
 const SHORT_TAIL_SECONDS = 2;
 // parakeetServer's SILENCE_RMS_THRESHOLD: quieter audio is never decoded, so
 // an empty result below it means silence, and above it a failed decode.
@@ -91,24 +92,18 @@ export function findLiveCut(samples) {
   const frames = energies.length;
   const minFrames = MIN_SECONDS * FRAMES_PER_SECOND;
   const maxFrames = MAX_SECONDS * FRAMES_PER_SECOND;
-  if (frames < minFrames) return null;
-
-  // An all-silent stretch (a muted mic) has no pause to find.
-  const average = averageOf(energies);
   const searchEnd = Math.min(frames - GUARD_FRAMES, maxFrames) - PAUSE_FRAMES;
-  if (average > 0 && searchEnd >= minFrames) {
-    const pause = quietestWindow(energies, minFrames, searchEnd);
-    if (pause.energy / PAUSE_FRAMES < average * PAUSE_ENERGY_RATIO) {
-      return (pause.start + PAUSE_FRAMES / 2) * FRAME_SAMPLES;
-    }
-  }
-  if (frames < maxFrames + GUARD_FRAMES) return null;
-  const forced = quietestWindow(
-    energies,
-    maxFrames - FORCED_SEARCH_SECONDS * FRAMES_PER_SECOND,
-    maxFrames - PAUSE_FRAMES
-  );
-  return (forced.start + PAUSE_FRAMES / 2) * FRAME_SAMPLES;
+  if (searchEnd < minFrames) return null;
+
+  // An all-silent stretch (a muted mic) has nothing to decode.
+  const average = averageOf(energies);
+  if (average === 0) return null;
+  const quietest = quietestWindow(energies, minFrames, searchEnd);
+  const isPause = quietest.energy / PAUSE_FRAMES < average * PAUSE_ENERGY_RATIO;
+  // Without a pause the stretch grows to the cap, plus the guard that keeps
+  // the forced cut clear of the newest audio.
+  if (!isPause && frames < maxFrames + GUARD_FRAMES) return null;
+  return (quietest.start + PAUSE_FRAMES / 2) * FRAME_SAMPLES;
 }
 
 export class LiveParakeetDecoder {
@@ -158,12 +153,15 @@ export class LiveParakeetDecoder {
     this._cut += cut;
   }
 
-  async _decode(samples) {
+  // `quiet` audio is no louder than the recording's pauses, so an empty
+  // result for it is silence too.
+  async _decode(samples, quiet = false) {
     const wav = await buildWav(samples, SAMPLE_RATE).arrayBuffer();
     const result = await this._transcribe(wav);
     // A partial decode is left to the batch path, which reports it to the user.
     if (result?.success && !result.warning) return result.text;
-    if (result?.code === "NO_SPEECH_DETECTED" && rms(samples) < SILENCE_RMS) return "";
+    const silent = quiet || rms(samples) < SILENCE_RMS;
+    if (result?.code === "NO_SPEECH_DETECTED" && silent) return "";
     throw new Error(result?.message || "Live Parakeet segment failed");
   }
 
@@ -192,12 +190,13 @@ export class LiveParakeetDecoder {
       if (samples.length < this._cut) return null;
       const parts = this._parts.map((part) => part.text);
       const tail = samples.subarray(this._cut);
-      if (tail.length >= MIN_TAIL_SECONDS * SAMPLE_RATE && this._hasSpeech(samples, tail)) {
-        if (tail.length < SHORT_TAIL_SECONDS * SAMPLE_RATE) {
+      if (tail.length >= MIN_TAIL_SECONDS * SAMPLE_RATE) {
+        const spoken = this._hasSpeech(samples, tail);
+        if (tail.length >= SHORT_TAIL_SECONDS * SAMPLE_RATE) {
+          parts.push(this._decode(tail, !spoken));
+        } else if (spoken) {
           const last = this._parts[this._parts.length - 1];
           parts[parts.length - 1] = this._decode(samples.subarray(last.start));
-        } else {
-          parts.push(this._decode(tail));
         }
       }
       const text = (await Promise.all(parts)).filter(Boolean).join(" ");

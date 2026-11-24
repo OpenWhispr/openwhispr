@@ -41,41 +41,42 @@ async function pollAll(decoder) {
   }
 }
 
-test("findLiveCut waits for six seconds of audio", async () => {
+test("findLiveCut leaves a pause before eleven seconds alone, as the batch splitter does", async () => {
   const { findLiveCut } = await load();
-  assert.equal(findLiveCut(speech(5.5, [[3, 3.5]])), null);
+  assert.equal(findLiveCut(speech(14, [[8, 8.4]])), null);
 });
 
 test("findLiveCut cuts inside a clear pause", async () => {
   const { findLiveCut } = await load();
-  const cut = findLiveCut(speech(10, [[8, 8.4]]));
-  assert.ok(cut >= 8 * RATE && cut < 8.4 * RATE, `cut at ${cut / RATE}s`);
+  const cut = findLiveCut(speech(14, [[12, 12.4]]));
+  assert.ok(cut >= 12 * RATE && cut < 12.4 * RATE, `cut at ${cut / RATE}s`);
 });
 
 test("findLiveCut takes room tone 20 dB down as a pause", async () => {
   const { findLiveCut } = await load();
-  const cut = findLiveCut(speech(10, [[8, 8.4]], 400));
-  assert.ok(cut >= 8 * RATE && cut < 8.4 * RATE, `cut at ${cut / RATE}s`);
+  const cut = findLiveCut(speech(14, [[12, 12.4]], 400));
+  assert.ok(cut >= 12 * RATE && cut < 12.4 * RATE, `cut at ${cut / RATE}s`);
 });
 
 test("findLiveCut does not take a soft syllable 12 dB down for a pause", async () => {
   const { findLiveCut } = await load();
-  assert.equal(findLiveCut(speech(12, [[9, 9.25]], 2000)), null);
+  assert.equal(findLiveCut(speech(14, [[12, 12.25]], 2000)), null);
 });
 
 test("findLiveCut ignores a pause too short to end a sentence", async () => {
   const { findLiveCut } = await load();
-  assert.equal(findLiveCut(speech(10, [[8, 8.1]])), null);
+  assert.equal(findLiveCut(speech(14, [[12, 12.1]])), null);
 });
 
 test("findLiveCut ignores a pause still at the newest audio", async () => {
   const { findLiveCut } = await load();
-  assert.equal(findLiveCut(speech(8.3, [[8, 8.3]])), null);
+  assert.equal(findLiveCut(speech(12.3, [[12, 12.3]])), null);
 });
 
-test("findLiveCut finds no pause in a muted mic", async () => {
+test("findLiveCut never cuts a muted mic, even past the cap", async () => {
   const { findLiveCut } = await load();
-  assert.equal(findLiveCut(new Int16Array(10 * RATE)), null);
+  assert.equal(findLiveCut(new Int16Array(14 * RATE)), null);
+  assert.equal(findLiveCut(new Int16Array(40 * RATE)), null);
 });
 
 test("findLiveCut forces a cut at the quietest moment by fifteen seconds", async () => {
@@ -89,7 +90,7 @@ test("findLiveCut forces a cut at the quietest moment by fifteen seconds", async
 
 test("a recording the batch path keeps whole is never cut", async () => {
   const { LiveParakeetDecoder } = await load();
-  const samples = speech(15, [[8, 8.4]]);
+  const samples = speech(15, [[12, 12.4]]);
   let calls = 0;
   const decoder = new LiveParakeetDecoder(
     fakeTap(samples),
@@ -108,9 +109,9 @@ test("stretches join in recording order with the tail, each decoded once", async
   const { LiveParakeetDecoder } = await load();
   const { buildWav } = await loadWav();
   const samples = speech(40, [
-    [10, 10.4],
-    [20, 20.4],
-    [30, 30.4],
+    [12, 12.4],
+    [24, 24.4],
+    [36, 36.4],
   ]);
   const lengths = [];
   const decoder = new LiveParakeetDecoder(
@@ -141,8 +142,8 @@ test("stretches join in recording order with the tail, each decoded once", async
 test("only one stretch is decoded at a time", async () => {
   const { LiveParakeetDecoder } = await load();
   const samples = speech(40, [
-    [10, 10.4],
-    [20, 20.4],
+    [12, 12.4],
+    [24, 24.4],
   ]);
   let release;
   const decoder = new LiveParakeetDecoder(
@@ -166,7 +167,7 @@ test("only one stretch is decoded at a time", async () => {
 test("a silent stretch adds nothing to the text", async () => {
   const { LiveParakeetDecoder } = await load();
   const { buildWav } = await loadWav();
-  const samples = speech(20, [[0, 8]]);
+  const samples = speech(26, [[0, 12.4]]);
   let calls = 0;
   const decoder = new LiveParakeetDecoder(
     fakeTap(samples),
@@ -183,7 +184,7 @@ test("a silent stretch adds nothing to the text", async () => {
 test("an audible stretch that decodes empty hands the recording to the batch path", async () => {
   const { LiveParakeetDecoder } = await load();
   const { buildWav } = await loadWav();
-  const samples = speech(20, [[10, 10.4]]);
+  const samples = speech(20, [[12, 12.4]]);
   let calls = 0;
   const decoder = new LiveParakeetDecoder(
     fakeTap(samples),
@@ -200,7 +201,7 @@ test("an audible stretch that decodes empty hands the recording to the batch pat
 test("a partial stretch hands the recording to the batch path, which reports it", async () => {
   const { LiveParakeetDecoder } = await load();
   const { buildWav } = await loadWav();
-  const samples = speech(20, [[10, 10.4]]);
+  const samples = speech(20, [[12, 12.4]]);
   const decoder = new LiveParakeetDecoder(
     fakeTap(samples),
     async () => ({ success: true, text: "Some.", warning: "truncated" }),
@@ -213,7 +214,7 @@ test("a partial stretch hands the recording to the batch path, which reports it"
 test("a failed or rejected stretch hands the recording to the batch path", async () => {
   const { LiveParakeetDecoder } = await load();
   const { buildWav } = await loadWav();
-  const samples = speech(20, [[10, 10.4]]);
+  const samples = speech(20, [[12, 12.4]]);
   for (const transcribe of [
     async () => ({ success: false, error: "invalid_response" }),
     async () => {
@@ -226,7 +227,7 @@ test("a failed or rejected stretch hands the recording to the batch path", async
   }
 });
 
-test("a recording with no speech anywhere hands back null", async () => {
+test("a muted recording is never decoded live and hands back null", async () => {
   const { LiveParakeetDecoder } = await load();
   const { buildWav } = await loadWav();
   const samples = new Int16Array(20 * RATE);
@@ -240,19 +241,19 @@ test("a recording with no speech anywhere hands back null", async () => {
     ROUTE
   );
   await pollAll(decoder);
-  assert.equal(decoder.segmentCount, 1);
+  assert.equal(decoder.segmentCount, 0);
   assert.equal(await decoder.finish(buildWav(samples, RATE), ROUTE), null);
-  assert.equal(calls, 1, "the silent tail is not decoded");
+  assert.equal(calls, 0);
 });
 
-test("a tail of room tone after the last cut is not decoded", async () => {
+test("a short tail of room tone after the last cut is not decoded", async () => {
   const { LiveParakeetDecoder } = await load();
   const { buildWav } = await loadWav();
   const samples = speech(
-    22,
+    26,
     [
-      [10, 10.4],
-      [20.5, 22],
+      [12, 12.4],
+      [24, 26],
     ],
     400
   );
@@ -271,12 +272,63 @@ test("a tail of room tone after the last cut is not decoded", async () => {
   assert.equal(lengths.length, 2);
 });
 
+// A last sentence 26 dB below the rest: no louder than a pause, but too long
+// to be one.
+const quietEnding = () =>
+  speech(
+    30,
+    [
+      [12, 12.4],
+      [24, 30],
+    ],
+    400
+  );
+
+test("a long quiet tail is still decoded, so a last sentence spoken softly is kept", async () => {
+  const { LiveParakeetDecoder } = await load();
+  const { buildWav } = await loadWav();
+  const samples = quietEnding();
+  const lengths = [];
+  const decoder = new LiveParakeetDecoder(
+    fakeTap(samples),
+    async (wav) => {
+      lengths.push(pcmLength(wav));
+      return { success: true, text: `Part ${lengths.length}.` };
+    },
+    ROUTE
+  );
+  await pollAll(decoder);
+  assert.equal(decoder.segmentCount, 2);
+  const text = await decoder.finish(buildWav(samples, RATE), ROUTE);
+  assert.equal(text, "Part 1. Part 2. Part 3.");
+  assert.ok(lengths[2] >= 2 * RATE, `tail of ${lengths[2] / RATE}s`);
+  assert.equal(lengths[0] + lengths[1] + lengths[2], samples.length);
+});
+
+test("a long quiet tail that decodes empty is a pause, not a failed decode", async () => {
+  const { LiveParakeetDecoder } = await load();
+  const { buildWav } = await loadWav();
+  const samples = quietEnding();
+  let calls = 0;
+  const decoder = new LiveParakeetDecoder(
+    fakeTap(samples),
+    async () =>
+      ++calls === 3
+        ? { success: false, code: "NO_SPEECH_DETECTED" }
+        : { success: true, text: `Part ${calls}.` },
+    ROUTE
+  );
+  await pollAll(decoder);
+  assert.equal(await decoder.finish(buildWav(samples, RATE), ROUTE), "Part 1. Part 2.");
+  assert.equal(calls, 3);
+});
+
 test("a short spoken tail is decoded together with the stretch before it", async () => {
   const { LiveParakeetDecoder } = await load();
   const { buildWav } = await loadWav();
-  const samples = speech(22, [
-    [10, 10.4],
-    [20.5, 21.5],
+  const samples = speech(26, [
+    [12, 12.4],
+    [24.5, 25.5],
   ]);
   const lengths = [];
   const decoder = new LiveParakeetDecoder(
@@ -297,7 +349,7 @@ test("a short spoken tail is decoded together with the stretch before it", async
 test("a tail under a tenth of a second is skipped", async () => {
   const { LiveParakeetDecoder } = await load();
   const { buildWav } = await loadWav();
-  const samples = speech(20, [[10, 10.4]]);
+  const samples = speech(20, [[12, 12.4]]);
   let calls = 0;
   const decoder = new LiveParakeetDecoder(
     fakeTap(samples),
@@ -308,7 +360,7 @@ test("a tail under a tenth of a second is skipped", async () => {
     ROUTE
   );
   await pollAll(decoder);
-  const cut = 10.1 * RATE;
+  const cut = 12.1 * RATE;
   const text = await decoder.finish(buildWav(samples.subarray(0, cut + 0.05 * RATE), RATE), ROUTE);
   assert.equal(text, "Part.");
   assert.equal(calls, 1);
@@ -317,7 +369,7 @@ test("a tail under a tenth of a second is skipped", async () => {
 test("finish decodes the tail once however often it is called", async () => {
   const { LiveParakeetDecoder } = await load();
   const { buildWav } = await loadWav();
-  const samples = speech(20, [[10, 10.4]]);
+  const samples = speech(20, [[12, 12.4]]);
   let calls = 0;
   const decoder = new LiveParakeetDecoder(
     fakeTap(samples),
@@ -336,7 +388,7 @@ test("finish decodes the tail once however often it is called", async () => {
 test("finish discards the live text when the model or language changed", async () => {
   const { LiveParakeetDecoder } = await load();
   const { buildWav } = await loadWav();
-  const samples = speech(20, [[10, 10.4]]);
+  const samples = speech(20, [[12, 12.4]]);
   const decoder = new LiveParakeetDecoder(
     fakeTap(samples),
     async () => ({ success: true, text: "x" }),
@@ -357,7 +409,7 @@ test("finish defers to the batch path when nothing was decoded live or the captu
   idle._poll();
   assert.equal(await idle.finish(buildWav(short, RATE), ROUTE), null);
 
-  const samples = speech(20, [[10, 10.4]]);
+  const samples = speech(20, [[12, 12.4]]);
   const noWav = new LiveParakeetDecoder(fakeTap(samples), ok, ROUTE);
   await pollAll(noWav);
   assert.equal(await noWav.finish(null, ROUTE), null);
@@ -370,7 +422,7 @@ test("finish defers to the batch path when nothing was decoded live or the captu
 
 test("new audio from the tap drives the cut checks until stop detaches it", async () => {
   const { LiveParakeetDecoder } = await load();
-  const samples = speech(20, [[10, 10.4]]);
+  const samples = speech(20, [[12, 12.4]]);
   const tap = fakeTap(samples);
   let decodes = 0;
   const decoder = new LiveParakeetDecoder(
@@ -412,7 +464,7 @@ test("PcmTap reports each chunk's running count and reads 0 once dropped", async
 test("a dropped tap stops the cuts and hands the recording to the batch path", async () => {
   const { LiveParakeetDecoder } = await load();
   const { buildWav } = await loadWav();
-  const samples = speech(20, [[10, 10.4]]);
+  const samples = speech(20, [[12, 12.4]]);
   const tap = { sampleCount: 0, copySamples: () => new Int16Array(0) };
   const decoder = new LiveParakeetDecoder(tap, async () => ({ success: true, text: "x" }), ROUTE);
   decoder._poll();
