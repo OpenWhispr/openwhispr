@@ -292,6 +292,7 @@ extension DirectDictationTests {
     machineLocalCancelWhileTranscribing()
     machineCloudResultWaitsForSameDocument()
     machineUndeliveredTextExpires()
+    machineLocalEmptyTextFails()
   }
 
   /// The contract's Local snapshot for `model`, with an English hint and cleanup switched on
@@ -490,6 +491,21 @@ extension DirectDictationTests {
     h.dictation.keyboardDidAppear()
     expect(h.texts, ["hello"], "local disappear recording: typed on return")
     expect(h.networkCalls, 0, "local disappear recording: no network")
+  }
+
+  // A transcriber that reports success with no words: a failed take, never an empty insert.
+  static func machineLocalEmptyTextFails() {
+    let h = Harness()
+    defer { h.cleanup() }
+    h.useLocal(.parakeetV2)
+    h.record(seconds: 1)
+    h.dictation.confirm()
+    h.transcriber.succeed(" \n ")
+    expect(h.state, .failed(.tryAgain), "local empty: try again")
+    expect(h.texts, [], "local empty: nothing typed")
+    expect(h.store.record(jobId: "job-1")?.status, .failed, "local empty: record failed")
+    expect(h.files(), ["job-1.json", "job-1.pcm"], "local empty: PCM kept for a retry")
+    expect(h.networkCalls, 0, "local empty: no network")
   }
 
   static func machineLocalCancelWhileTranscribing() {

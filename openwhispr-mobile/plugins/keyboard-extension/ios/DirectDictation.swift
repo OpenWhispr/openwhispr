@@ -394,9 +394,10 @@ final class DirectDictation {
       guard let self, self.job?.token == token else { return }
       self.inFlight = nil
       switch result {
-      case let .success(text):
+      // No words is a failed take (its PCM kept for a retry), never an empty insert.
+      case let .success(text) where !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty:
         self.finish(text: text, original: text, cleanupApplied: nil)
-      case .failure:
+      case .success, .failure:
         self.failJob(.tryAgain, turnOff: false)
       }
     }
