@@ -81,6 +81,11 @@ public class LivePCMStreamingModule: Module {
       return self.repairRecording(uri: uri)
     }
 
+    AsyncFunction("excludeFromBackup") { (uri: String) -> Bool in
+      guard let url = Self.fileUrl(from: uri) else { return false }
+      return MeetingRecordingWriter.excludeFromBackup(url)
+    }
+
     AsyncFunction("stop") { (promise: Promise) in
       self.teardown()
       promise.resolve(nil)

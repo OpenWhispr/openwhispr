@@ -23,7 +23,34 @@ struct MeetingRecordingWriterTests {
     try writeFailureStopsWritingAndReportsOnce(dir)
     try failureBeforeAnyAudioRemovesTheFile(dir)
     failureKeepsAFileThatHoldsAudio()
+    try recordingIsKeptOutOfBackups(dir)
     print("MeetingRecordingWriterTests: all passed")
+  }
+
+  static func isExcludedFromBackup(_ url: URL) throws -> Bool {
+    // A fresh URL: resource values are cached on the instance that read them.
+    let fresh = URL(fileURLWithPath: url.path)
+    return try fresh.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup ?? false
+  }
+
+  static func recordingIsKeptOutOfBackups(_ dir: URL) throws {
+    let url = dir.appendingPathComponent("backup.wav")
+    let writer = try MeetingRecordingWriter(url: url)
+    expect(try isExcludedFromBackup(url), "a new recording is excluded from backups")
+    writer.append(chunk)
+    writer.finish()
+    expect(try isExcludedFromBackup(url), "a finished recording stays excluded")
+    expect(MeetingRecordingWriter.repairHeader(at: url), "repair succeeds")
+    expect(try isExcludedFromBackup(url), "a repaired recording stays excluded")
+
+    let other = dir.appendingPathComponent("sidecar.json")
+    try Data("{}".utf8).write(to: other)
+    expect(try !isExcludedFromBackup(other), "a plain file starts included")
+    expect(MeetingRecordingWriter.excludeFromBackup(other), "excluding an existing file succeeds")
+    expect(try isExcludedFromBackup(other), "the file is now excluded")
+    expect(
+      !MeetingRecordingWriter.excludeFromBackup(dir.appendingPathComponent("missing.json")),
+      "excluding a missing file reports false")
   }
 
   static func expect(_ condition: Bool, _ message: String) {

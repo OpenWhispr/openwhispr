@@ -49,6 +49,25 @@ final class MeetingRecordingWriter {
       throw error
     }
     handle = fileHandle
+    // The recording lives in Documents only so iOS never purges it mid-meeting; it is
+    // temporary and must not ride along in an iCloud or device backup.
+    Self.excludeFromBackup(url)
+  }
+
+  /// Marks a file as left out of iCloud and device backups. False when it could
+  /// not be set (the file is missing). A file written again by replacing it
+  /// loses the mark and needs it set again.
+  @discardableResult
+  static func excludeFromBackup(_ url: URL) -> Bool {
+    var target = url
+    var values = URLResourceValues()
+    values.isExcludedFromBackup = true
+    do {
+      try target.setResourceValues(values)
+      return true
+    } catch {
+      return false
+    }
   }
 
   func append(_ pcm16: Data) {
