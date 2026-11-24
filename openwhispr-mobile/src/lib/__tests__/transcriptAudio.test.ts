@@ -19,6 +19,7 @@ jest.mock('expo-file-system/legacy', () => ({
 import * as FileSystem from 'expo-file-system/legacy';
 import {
   clearPendingBackfill,
+  hasPendingBackfillFile,
   isManagedMeetingAudioUri,
   meetingBackfillUri,
   meetingRecordingUri,
@@ -75,6 +76,17 @@ describe('pending backfill sidecar', () => {
     await expect(clearPendingBackfill(7)).resolves.toBeUndefined();
     jest.mocked(FileSystem.deleteAsync).mockRejectedValueOnce(new Error('disk'));
     await expect(clearPendingBackfill(7)).resolves.toBeUndefined();
+  });
+
+  it('keeps a done meeting recording whose sidecar cannot be read', async () => {
+    // The launch clean-up asks this, not readPendingBackfill: a sidecar it can't parse still
+    // means the recording owes audio.
+    mockFiles.set(meetingBackfillUri(7), '{');
+    await expect(readPendingBackfill(7)).resolves.toBeNull();
+    await expect(hasPendingBackfillFile(7)).resolves.toBe(true);
+    await expect(hasPendingBackfillFile(8)).resolves.toBe(false);
+    jest.mocked(FileSystem.getInfoAsync).mockRejectedValueOnce(new Error('stat'));
+    await expect(hasPendingBackfillFile(8)).resolves.toBe(true);
   });
 
   it('rejects when the sidecar cannot be saved', async () => {

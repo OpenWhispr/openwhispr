@@ -1165,6 +1165,20 @@ describe('meeting post-pass', () => {
       expect(sidecarWindows()).toEqual([{ startMs: 30_000, endMs: 40_000 }]);
     });
 
+    it('does not add a piece a killed earlier resume already merged', async () => {
+      owe([{ startMs: 100_000, endMs: 110_000 }]);
+      (notesRepository.getSegments as jest.Mock).mockReturnValue([
+        liveRow('Before.', 0, 0),
+        { ...liveRow('Merged earlier.', 100_000, 1), endMs: 110_000, speakerLabel: null },
+        liveRow('After.', 200_000, 2),
+      ]);
+
+      await useNotesStore.getState().resumeMeetingBackfill(7);
+
+      expect(savedTexts(0)).toEqual(['Before.', 'Merged earlier.', 'After.']);
+      expect(filesOnDisk.has(RECORDING)).toBe(false);
+    });
+
     it('does nothing for a deleted note, a note not done, or no owed audio', async () => {
       owe([{ startMs: 10_000, endMs: 20_000 }]);
       note = { ...note, deletedAt: '2026-11-24' };

@@ -11,8 +11,12 @@ import {
   clearPendingBackfill,
   isManagedMeetingAudioUri,
   meetingRecordingUri,
+  hasPendingBackfillFile,
   readPendingBackfill,
+  savePendingBackfill,
 } from '@/lib/transcriptAudio';
+import { owedWindowsFromSegments, recordingDurationMs } from '@/lib/notes/meetingPostPass';
+import type { AudioWindow } from '@/services/transcription/realtimeReconnect';
 import { useNotesStore } from '@/store/useNotesStore';
 import type { TranscriptionStatus } from '@/types';
 import { LivePCMStreaming } from '../../modules/live-pcm-streaming/src';
@@ -71,8 +75,37 @@ export interface MeetingRecoveryDeps {
   resumeBackfill(noteId: number): Promise<void>;
   /** Done meetings that still link their managed recording, read when called. */
   listProcessedRecordings(): { noteId: number; uri: string }[];
-  /** True when the note's sidecar can be read and lists audio still owed. */
+  /** True while the note's sidecar file exists, readable or not. */
   owesBackfill(noteId: number): Promise<boolean>;
+  /** The sidecar's windows, or null when it can't be read. */
+  readPendingBackfill(noteId: number): Promise<AudioWindow[] | null>;
+  recordingDurationMs(uri: string): Promise<number>;
+  /** The saved segments' times. */
+  getSegmentTimes(noteId: number): { startMs: number; endMs: number }[];
+  /** Rejects when it can't be written. */
+  savePendingBackfill(noteId: number, windows: AudioWindow[]): Promise<void>;
+}
+
+/**
+ * Makes sure the note's sidecar lists what its recording still owes; false when it owes nothing.
+ * A readable sidecar wins: once written, later launches resume from it rather than derive again.
+ * Otherwise the windows come from the saved segments against the recording's length, and the
+ * sidecar is (re)written, or removed when nothing is owed. Rejects when that write fails.
+ */
+async function prepareOwedBackfill(
+  noteId: number,
+  hasSidecar: boolean,
+  deps: MeetingRecoveryDeps,
+): Promise<boolean> {
+  if (hasSidecar && ((await deps.readPendingBackfill(noteId))?.length ?? 0) > 0) return true;
+  const durationMs = await deps.recordingDurationMs(deps.recordingUri(noteId));
+  const owed = owedWindowsFromSegments(deps.getSegmentTimes(noteId), durationMs);
+  if (owed.length === 0) {
+    if (hasSidecar) await deps.deletePendingBackfill(noteId);
+    return false;
+  }
+  await deps.savePendingBackfill(noteId, owed);
+  return true;
 }
 
 const attempt = async (
@@ -113,27 +146,35 @@ async function sweepSettledRecordings(
     // launch is running, and orphans are recovered below.
     if (note.transcriptionStatus !== 'done' && note.transcriptionStatus !== 'failed') continue;
     if (!isManagedMeetingAudioUri(note.id, note.sourceFile)) continue;
-    const owes = note.transcriptionStatus === 'done' && pendingBackfills.has(note.id);
+    const hasSidecar = note.transcriptionStatus === 'done' && pendingBackfills.has(note.id);
     await attempt(deps, note.id, async () => {
-      if (note.transcriptionStatus === 'failed' || owes) {
+      if (note.transcriptionStatus === 'failed' || hasSidecar) {
         const ageMs = await deps.recordingAgeMs(deps.recordingUri(note.id));
-        if (ageMs != null && ageMs > STALE_RECORDING_MS) {
+        const status = deps.getNote(note.id)?.transcriptionStatus;
+        // Read again: a Retry may have started since the list was read.
+        if (
+          ageMs != null &&
+          ageMs > STALE_RECORDING_MS &&
+          (status === 'failed' || status === 'done')
+        ) {
           await deps.discardRecording(note.id);
           return;
         }
       }
-      if (owes) {
-        backfills.push(note.id);
-        return;
-      }
       // A Stop pressed while the session was still connecting can leave a recording nothing
-      // linked; this launch's repair linked it again, and a done transcript no longer needs it.
-      if (
+      // linked; this launch's repair linked it again. Its transcript may still miss some of it.
+      const relinkedLeftover =
         note.transcriptionStatus === 'done' &&
+        !hasSidecar &&
         deps.wasRelinked(note.id) &&
-        deps.hasTranscript(note.id)
-      ) {
+        deps.hasTranscript(note.id);
+      if (!hasSidecar && !relinkedLeftover) return;
+      if (await prepareOwedBackfill(note.id, hasSidecar, deps)) {
+        backfills.push(note.id);
+      } else if (relinkedLeftover) {
         await deps.discardRecording(note.id);
+      } else {
+        pendingBackfills.delete(note.id);
       }
     });
   }
@@ -182,19 +223,22 @@ async function repairOrphanRecording(note: Note, deps: MeetingRecoveryDeps): Pro
   return true;
 }
 
-/** After a kept transcript: speakers from the recording, then the recording goes, then the notes. */
+/**
+ * After a kept transcript: speakers from the recording, then the audio the transcript misses
+ * (which deletes the recording once nothing is left owed), or the recording goes; then the notes.
+ */
 async function finishKeptMeeting(
   noteId: number,
   hasRecording: boolean,
-  pendingBackfills: ReadonlySet<number>,
+  owesAudio: boolean,
   deps: MeetingRecoveryDeps,
 ): Promise<void> {
   if (hasRecording) {
     // A kill after the labels were written leaves them; labelling again only redoes the work.
     if (!deps.hasSpeakerLabels(noteId))
       await attempt(deps, noteId, () => deps.labelSpeakers(noteId));
-    if (pendingBackfills.has(noteId)) {
-      // The recording still owes audio; offline it waits for the next launch.
+    if (owesAudio) {
+      // Offline the recording and its sidecar wait for the next launch.
       if (await deps.isOnline().catch(() => false)) {
         await attempt(deps, noteId, () => deps.resumeBackfill(noteId));
       }
@@ -232,10 +276,23 @@ async function recoverOrphan(
       deps.reportError(error, note.id);
     }
     if (kept) {
+      // Before the wait: a background launch killed while waiting finds the sidecar next time,
+      // so the launch clean-up keeps the recording for the audio the transcript misses. The
+      // tail after the last utterance and the gaps the stream dropped were known only in memory.
+      let owesAudio = false;
+      if (hasRecording) {
+        try {
+          owesAudio = await prepareOwedBackfill(note.id, pendingBackfills.has(note.id), deps);
+        } catch (error) {
+          deps.reportError(error, note.id);
+          // Unsure what the recording holds: keep it.
+          owesAudio = true;
+        }
+      }
       // After the keep: the note is already done, so a background launch killed
       // while waiting loses only the labels, title and summary.
       await deps.waitUntilActive();
-      await finishKeptMeeting(note.id, hasRecording, pendingBackfills, deps);
+      await finishKeptMeeting(note.id, hasRecording, owesAudio, deps);
       return;
     }
   }
@@ -274,7 +331,8 @@ async function recoverOrphan(
  * terminated the app after a lock-screen End), and tidies settled meetings' recordings.
  *
  * - A meeting with saved segments (a cloud meeting's live transcript) is reopened as done with
- *   them; then its speakers are labelled from the recording and the recording is deleted.
+ *   them; then its speakers are labelled from the recording, the audio the transcript misses
+ *   is transcribed from it, and the recording is deleted once nothing is left owed.
  * - A killed meeting with a recording and no transcript is marked failed and resumed once
  *   through Retry. The marker is set before the resume and cleared when it settles, so a resume
  *   that itself kills the app is not retried on the next launch.
@@ -499,7 +557,12 @@ export function startMeetingRecoveryOnce(): void {
                 isManagedMeetingAudioUri(note.id, note.sourceFile),
             )
             .map((note) => ({ noteId: note.id, uri: meetingRecordingUri(note.id) })),
-        owesBackfill: async (noteId) => ((await readPendingBackfill(noteId))?.length ?? 0) > 0,
+        owesBackfill: hasPendingBackfillFile,
+        readPendingBackfill,
+        recordingDurationMs,
+        getSegmentTimes: (noteId) =>
+          notesRepository.getSegments(noteId).map(({ startMs, endMs }) => ({ startMs, endMs })),
+        savePendingBackfill,
       });
     })
     .catch((error: unknown) => {

@@ -16,9 +16,11 @@ jest.mock('@/lib/permissions', () => ({
 import {
   BACKFILL_CHUNK_MS,
   BACKFILL_MIN_MS,
+  OWED_GAP_MIN_MS,
   backfillDroppedAudio,
   createCloudPostPassDeps,
   mergeTranscript,
+  owedWindowsFromSegments,
   transcribeRecordingToSegments,
   type PostPassDeps,
 } from '../meetingPostPass';
@@ -205,8 +207,26 @@ describe('mergeTranscript', () => {
   });
 
   it('puts live text first when a backfilled piece starts at the same time', () => {
-    const merged = mergeTranscript([seg('live', 5000, 0)], [seg('backfilled', 5000, 0)]);
+    const merged = mergeTranscript(
+      [seg('live', 5000, 0)],
+      [{ ...seg('backfilled', 5000, 0), endMs: 125_000 }],
+    );
     expect(merged.map((s) => s.text)).toEqual(['live', 'backfilled']);
+  });
+
+  it('skips a backfilled piece already in the note from an earlier resume', () => {
+    const earlier = { ...seg('piece', 10_000, 0), endMs: 20_000 };
+    const merged = mergeTranscript(
+      [seg('live', 0, 0), earlier],
+      [{ ...earlier, text: 'piece again' }, seg('new', 30_000, 1)],
+    );
+    expect(merged.map((s) => s.text)).toEqual(['live', 'piece', 'new']);
+  });
+
+  it('keeps a backfilled piece whose window matches only a labelled row', () => {
+    const labelled = { ...seg('live', 10_000, 0), endMs: 20_000, speakerLabel: 'SPEAKER_00' };
+    const merged = mergeTranscript([labelled], [{ ...labelled, speakerLabel: null, text: 'b' }]);
+    expect(merged.map((s) => s.text)).toEqual(['live', 'b']);
   });
 
   it('never alters a live segment', () => {
@@ -214,6 +234,50 @@ describe('mergeTranscript', () => {
     const merged = mergeTranscript(live, []);
     expect(merged).toEqual([{ ...live[0], sortOrder: 0 }]);
     expect(live[0].sortOrder).toBe(4);
+  });
+});
+
+describe('owedWindowsFromSegments', () => {
+  const at = (startMs: number, endMs: number): { startMs: number; endMs: number } => ({
+    startMs,
+    endMs,
+  });
+
+  it('owes the head, long gaps and the tail', () => {
+    expect(OWED_GAP_MIN_MS).toBe(15_000);
+    expect(owedWindowsFromSegments([at(5000, 10_000), at(40_000, 50_000)], 60_000)).toEqual([
+      at(0, 5000),
+      at(10_000, 40_000),
+      at(50_000, 60_000),
+    ]);
+  });
+
+  it('ignores a gap shorter than 15 seconds', () => {
+    expect(owedWindowsFromSegments([at(0, 10_000), at(24_000, 30_000)], 30_000)).toEqual([]);
+  });
+
+  it('measures gaps from the furthest end when segments overlap', () => {
+    expect(
+      owedWindowsFromSegments([at(0, 50_000), at(10_000, 20_000), at(60_000, 70_000)], 70_000),
+    ).toEqual([]);
+    // Out of order: sorted by start, so the 5-second gap is not owed.
+    expect(owedWindowsFromSegments([at(40_000, 60_000), at(0, 20_000)], 60_000)).toEqual([
+      at(20_000, 40_000),
+    ]);
+  });
+
+  it('owes the whole file when nothing was saved', () => {
+    expect(owedWindowsFromSegments([], 90_000)).toEqual([at(0, 90_000)]);
+  });
+
+  it('drops pieces shorter than the backfill minimum and values it cannot trust', () => {
+    expect(
+      owedWindowsFromSegments(
+        [at(BACKFILL_MIN_MS - 1, 10_000), at(Number.NaN, 5), at(30_000, 20_000)],
+        10_000 + BACKFILL_MIN_MS - 1,
+      ),
+    ).toEqual([]);
+    expect(owedWindowsFromSegments([], Number.NaN)).toEqual([]);
   });
 });
 

@@ -89,6 +89,19 @@ export async function readPendingBackfill(noteId: number): Promise<AudioWindow[]
   }
 }
 
+/**
+ * Whether a sidecar file is there, readable or not: one that can't be parsed still means the
+ * recording owes audio. True when the answer can't be read, so a recording is never deleted on
+ * a failed check.
+ */
+export async function hasPendingBackfillFile(noteId: number): Promise<boolean> {
+  try {
+    return (await FileSystem.getInfoAsync(meetingBackfillUri(noteId))).exists;
+  } catch {
+    return true;
+  }
+}
+
 /** Idempotent; never throws. */
 export async function clearPendingBackfill(noteId: number): Promise<void> {
   await FileSystem.deleteAsync(meetingBackfillUri(noteId), { idempotent: true }).catch(

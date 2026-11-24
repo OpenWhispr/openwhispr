@@ -8,6 +8,8 @@ import { WAV_HEADER_BYTES, extractWavRange, splitWindows } from './wavRange';
 export const BACKFILL_CHUNK_MS = 120_000;
 /** Shorter scraps are mostly the edge of an outage and rarely hold a word. */
 export const BACKFILL_MIN_MS = 2000;
+/** A pause in a saved transcript shorter than this is people not talking, not missing audio. */
+export const OWED_GAP_MIN_MS = 15_000;
 
 const RECORDING_BYTES_PER_MS = 32;
 
@@ -84,15 +86,61 @@ export async function backfillDroppedAudio(
   return { segments, failed: 0, failedWindows: [] };
 }
 
-/** Live and backfilled segments in time order, sortOrder renumbered. */
+/**
+ * Live and backfilled segments in time order, sortOrder renumbered. A backfilled piece whose exact
+ * window already holds an unlabelled row was merged by an earlier resume that died before it
+ * could record so, and is left out.
+ */
 export function mergeTranscript(
   live: CloudMeetingSegment[],
   backfilled: CloudMeetingSegment[],
 ): CloudMeetingSegment[] {
+  const merged = new Set(
+    live.filter((row) => row.speakerLabel == null).map((row) => `${row.startMs}:${row.endMs}`),
+  );
+  const fresh = backfilled.filter((piece) => !merged.has(`${piece.startMs}:${piece.endMs}`));
   // Array.prototype.sort is stable, so live text stays ahead of a backfilled piece at the same time.
-  return [...live, ...backfilled]
+  return [...live, ...fresh]
     .sort((a, b) => a.startMs - b.startMs)
     .map((segment, index) => ({ ...segment, sortOrder: index }));
+}
+
+/**
+ * The stretches of a recording a saved transcript doesn't cover: before its first segment, long
+ * pauses between segments, and after its last. For a meeting whose list of dropped audio was lost
+ * (the app was killed), this is the best account of what the recording still holds.
+ */
+export function owedWindowsFromSegments(
+  segments: { startMs: number; endMs: number }[],
+  durationMs: number,
+): AudioWindow[] {
+  if (!Number.isFinite(durationMs) || durationMs <= 0) return [];
+  const owed: AudioWindow[] = [];
+  const owe = (startMs: number, endMs: number, minMs: number): void => {
+    if (endMs - startMs >= Math.max(minMs, BACKFILL_MIN_MS)) owed.push({ startMs, endMs });
+  };
+  const sorted = segments
+    .filter(
+      (segment) =>
+        Number.isFinite(segment.startMs) &&
+        Number.isFinite(segment.endMs) &&
+        segment.startMs >= 0 &&
+        segment.endMs >= segment.startMs,
+    )
+    .sort((a, b) => a.startMs - b.startMs);
+  if (sorted.length === 0) {
+    owe(0, durationMs, 0);
+    return owed;
+  }
+  owe(0, Math.min(sorted[0].startMs, durationMs), 0);
+  // The furthest end so far: an overlapping segment never opens a gap inside another.
+  let coveredTo = sorted[0].endMs;
+  for (const segment of sorted.slice(1)) {
+    owe(coveredTo, Math.min(segment.startMs, durationMs), OWED_GAP_MIN_MS);
+    coveredTo = Math.max(coveredTo, segment.endMs);
+  }
+  owe(coveredTo, durationMs, 0);
+  return owed;
 }
 
 /* eslint-disable @typescript-eslint/no-var-requires */
