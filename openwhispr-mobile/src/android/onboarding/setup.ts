@@ -12,8 +12,8 @@ export function privateSupported(): boolean {
 /**
  * Everything on the phone, no cloud backup. Only what "Set up your device" added is on: cleanup
  * runs only when Cleanup was added, and holding the bubble opens its menu (Assistant, Translate,
- * Edit selection) only when the Assistant was added. Speaker names need their model, which only
- * Meeting speakers downloads. Settings › Processing turns each on later and downloads it there.
+ * Edit selection) only when the Assistant was added. Speaker names need their model, which
+ * downloads by itself at launch. Settings › Processing turns each on later and downloads it there.
  */
 export async function applyPrivateConfig(
   choices: { cleanup: boolean; assistant: boolean } = { cleanup: true, assistant: true },

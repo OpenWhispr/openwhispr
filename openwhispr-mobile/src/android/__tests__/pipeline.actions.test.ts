@@ -66,7 +66,15 @@ jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
   LocalTranscriptionService: { cancelTranscription: jest.fn() },
 }));
 jest.mock('@/lib/permissions', () => ({ isNoSpeechError: () => false }));
-jest.mock('@/android/models', () => ({ modelReady: async () => true }));
+jest.mock('@/android/models', () => ({
+  modelReady: async () => true,
+  ANDROID_MODELS: {
+    'parakeet-v3': { kind: 'speech', meetings: true },
+    'moonshine-small': { kind: 'speech' },
+    'moonshine-tiny': { kind: 'speech' },
+  },
+  modelSupported: () => true,
+}));
 jest.mock('@/android/LocalTextModel', () => ({ selectedTextModel: () => 'qwen-balanced' }));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: { id: 'test', isAnonymous: false } }) },

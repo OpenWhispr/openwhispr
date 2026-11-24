@@ -13,6 +13,8 @@ export const ANDROID_MODELS = {
   'parakeet-v3': {
     title: 'Parakeet v3',
     kind: 'speech',
+    // Gives word timings over long recordings, so it can transcribe meetings.
+    meetings: true,
     bytes: 670478772,
     files: [
       {

@@ -16,7 +16,14 @@ import { KEY_CHECK_COLORS } from './KeyCheckMark';
 import type { KeyProviderId } from './keyCheck';
 import { KeySheet } from './KeySheet';
 import { SpeechModelSheet } from './ModelSheet';
-import { MODEL_ROWS, formatSize, modelName, useModelsReady, type ModelKind } from './modelCatalog';
+import {
+  MODEL_ROWS,
+  formatSize,
+  meetingModelRows,
+  modelName,
+  useModelsReady,
+  type ModelKind,
+} from './modelCatalog';
 import {
   KEY_PROVIDERS,
   TASKS,
@@ -98,10 +105,18 @@ function LiftValue({
   );
 }
 
-const KIND_ICON = { speech: 'AudioLines', text: 'Sparkles', diarization: 'UsersRound' } as const;
-const KIND_TITLE: Record<ModelKind, SettingsKey> = {
+/** `meeting`: the speech model meetings on the phone transcribe with (Meeting recording). */
+type PhoneKind = ModelKind | 'meeting';
+const KIND_ICON = {
+  speech: 'AudioLines',
+  text: 'Sparkles',
+  meeting: 'AudioLines',
+  diarization: 'UsersRound',
+} as const;
+const KIND_TITLE: Record<PhoneKind, SettingsKey> = {
   speech: 'speech',
   text: 'textCleanup',
+  meeting: 'meetingRecording',
   diarization: 'meetingSpeakers',
 };
 const TASK_TITLE: Record<KeyTask, SettingsKey> = {
@@ -177,15 +192,18 @@ export default function ProcessingScreen() {
   const onPhone = TASKS.filter(
     (task) => effectiveSelection(config, task, activeMode, cloudAccess).mode === 'local',
   );
-  const kinds: ModelKind[] = [
+  const kinds: PhoneKind[] = [
     ...(onPhone.some((task) => task === 'dictation' || task === 'upload')
       ? ['speech' as const]
       : []),
     ...(onPhone.some((task) => task === 'cleanup' || task === 'notes' || task === 'agent')
       ? ['text' as const]
       : []),
-    ...(config?.inference?.meeting?.mode === 'local' ? ['diarization' as const] : []),
+    ...(config?.inference?.meeting?.mode === 'local' ? (['meeting', 'diarization'] as const) : []),
   ];
+  const meetingRows = meetingModelRows();
+  const meetingId: AndroidModelId =
+    meetingRows.find((row) => ready[row.id])?.id ?? meetingRows[0]?.id ?? 'parakeet-v3';
   const speechId: AndroidSpeechModelId = config?.androidSpeechModel ?? 'parakeet-v3';
   const textId: AndroidModelId = config?.androidTextModel ?? 'qwen-balanced';
   const modelValue = (id: AndroidModelId) =>
@@ -252,7 +270,14 @@ export default function ProcessingScreen() {
       {kinds.length > 0 && (
         <Group title={t('thisPhone')}>
           {kinds.map((kind) => {
-            const id = kind === 'speech' ? speechId : kind === 'text' ? textId : 'meeting-speakers';
+            const id =
+              kind === 'speech'
+                ? speechId
+                : kind === 'text'
+                  ? textId
+                  : kind === 'meeting'
+                    ? meetingId
+                    : 'meeting-speakers';
             const row = MODEL_ROWS.find((item) => item.id === id)!;
             return (
               <ListRow

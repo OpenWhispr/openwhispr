@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
-import { ANDROID_MODELS, modelReady, useModelDownloads, type AndroidModelId } from '../models';
+import {
+  ANDROID_MODELS,
+  modelReady,
+  modelSupported,
+  useModelDownloads,
+  type AndroidModelId,
+} from '../models';
+import { canTranscribeMeetings } from '../speechSelection';
 import type { SettingsKey } from './strings';
 
 export type ModelKind = 'speech' | 'text' | 'diarization';
@@ -31,6 +38,12 @@ export const MODEL_ROWS: {
     line: 'meetingSpeakersBody',
   },
 ];
+
+/** The speech models a meeting on the phone can be recorded with, in catalog order. */
+export const meetingModelRows = () =>
+  MODEL_ROWS.filter(
+    (row) => row.kind === 'speech' && canTranscribeMeetings(row.id) && modelSupported(row.id),
+  );
 
 export const modelName = (id: AndroidModelId) =>
   MODEL_ROWS.find((row) => row.id === id)?.name ?? ANDROID_MODELS[id].title;

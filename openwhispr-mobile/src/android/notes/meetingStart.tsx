@@ -18,6 +18,12 @@ export function useMeetingStart(place: { folderId?: number; spaceId?: number }) 
   const [onDevice, setOnDevice] = useState(false);
   const [keyName, setKeyName] = useState<string | null>(null);
   const [needsModel, setNeedsModel] = useState(false);
+  const checkModel = () =>
+    useNotesStore
+      .getState()
+      .isLocalAsrModelReady()
+      .then((ready) => setNeedsModel(!ready))
+      .catch(() => setNeedsModel(false));
   return {
     open(preferred?: GoogleCalendarEvent | null) {
       const local = meetingOnDevice();
@@ -32,12 +38,7 @@ export function useMeetingStart(place: { folderId?: number; spaceId?: number }) 
         key ? (KEY_PROVIDERS.find(({ id }) => id === key.providerId)?.name ?? null) : null,
       );
       setNeedsModel(false);
-      if (local)
-        useNotesStore
-          .getState()
-          .isLocalAsrModelReady()
-          .then((ready) => setNeedsModel(!ready))
-          .catch(() => setNeedsModel(false));
+      if (local) void checkModel();
       // A meeting under way or within the hour is the likely one; otherwise none.
       setEvent(
         preferred !== undefined
@@ -61,6 +62,7 @@ export function useMeetingStart(place: { folderId?: number; spaceId?: number }) 
           setVisible(false);
           router.push('/(account)/ai-models');
         }}
+        onModelsChanged={() => void checkModel()}
         onStart={() => {
           setVisible(false);
           startMeeting({ ...place, eventId: event?.id, autostart: true });

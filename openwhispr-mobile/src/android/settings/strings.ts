@@ -250,7 +250,7 @@ export const settingsEnglish = {
   // Processing v2
   defaultForEveryTask: 'Default for every task',
   tasks: 'Tasks',
-  meetings: 'Meetings',
+  meetings: 'Meeting recording',
   changed: 'Changed',
   allOnDevice: 'Everything stays on this phone',
   offInSettings: 'Off in Settings',
@@ -265,14 +265,16 @@ export const settingsEnglish = {
   done: 'Done',
   meetingCloudValue: 'OpenWhispr Cloud',
   meetingPhoneValue: 'On device',
-  meetingsIntro:
-    'Meetings need a model that can transcribe while people talk, or the phone can transcribe after the meeting ends.',
   transcribeMeetings: 'Transcribe meetings',
   meetingCloud: 'OpenWhispr Cloud',
   meetingCloudBody: 'Words appear as people talk. Needs an account.',
   meetingPhone: 'On device',
   meetingPhoneBody: 'Private, with speaker names. Takes a few minutes.',
   speakerNames: 'Speaker names',
+  meetingRecording: 'Meeting recording',
+  onDeviceModel: 'On device model',
+  nothingMeetingRecording:
+    'Nothing downloaded yet. On device meetings need one of these to transcribe.',
   useOwnKey: 'Use your own key',
   provider: 'Provider',
   apiKey: 'API key',
