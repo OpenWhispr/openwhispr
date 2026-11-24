@@ -12,8 +12,22 @@ export interface PcmFrame {
   timestampMs: number;
 }
 
+/**
+ * Whether the microphone is delivering audio. iOS stops capture for calls,
+ * Siri, alarms and route changes; the module restarts itself and reports both
+ * edges so the recording can show it and keep its clock honest.
+ */
+export interface CaptureStateEvent {
+  state: 'capturing' | 'interrupted';
+  /** 'interruption' | 'stalled' | 'interruptionEnded' | 'configurationChange' | 'mediaServicesReset' | 'watchdog' */
+  reason: string;
+  /** Audio captured so far, in ms. */
+  capturedMs: number;
+}
+
 type LivePCMStreamingEvents = {
   'pcm-frame': (frame: PcmFrame) => void;
+  'capture-state': (event: CaptureStateEvent) => void;
 };
 
 interface NativeLivePCMStreaming {
@@ -62,4 +76,11 @@ export const LivePCMStreaming = {
 export function addPcmFrameListener(callback: (frame: PcmFrame) => void): EventSubscription | null {
   if (!NativeModuleEvents) return null;
   return NativeModuleEvents.addListener('pcm-frame', callback);
+}
+
+export function addCaptureStateListener(
+  callback: (event: CaptureStateEvent) => void,
+): EventSubscription | null {
+  if (!NativeModuleEvents) return null;
+  return NativeModuleEvents.addListener('capture-state', callback);
 }
