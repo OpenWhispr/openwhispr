@@ -7,10 +7,9 @@ import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
 import { useTranscriptStore } from '@/store/useTranscriptStore.android';
 import { applyHistoryRetention } from '../pipeline';
 import { SettingsPage, showToast } from '../settings/kit';
-import { edgeCard } from '../settings/look';
 import { SearchField } from '../controls';
 import { useHomeT } from './strings';
-import { home, SectionHeader, type } from './kit';
+import { SectionHeader, useHome } from './kit';
 import { groupHistory, matchHistory } from './model';
 import { HistoryRow } from './Sections';
 
@@ -21,6 +20,7 @@ const SYSTEM_CONFIRMS_COPY = Platform.OS === 'android' && Number(Platform.Versio
 export default function HistoryPage() {
   const h = useHomeT();
   const { t, i18n } = useTranslation();
+  const { type, card } = useHome();
   const history = useTranscriptStore((s) => s.transcripts);
   const [query, setQuery] = useState('');
   const [retrying, setRetrying] = useState(false);
@@ -64,10 +64,8 @@ export default function HistoryPage() {
         clearLabel={h('clearSearch')}
       />
       {!history.length ? (
-        <View style={[edgeCard, { padding: 14, gap: 4 }]}>
-          <Text style={{ fontSize: 16, lineHeight: 22, fontWeight: '500', color: home.text }}>
-            {t('emptyHistory')}
-          </Text>
+        <View style={[card, { padding: 14, gap: 4 }]}>
+          <Text style={type.rowTitle}>{t('emptyHistory')}</Text>
           <Text style={type.footnote}>{t('emptyHistoryBody')}</Text>
         </View>
       ) : !groups.length ? (
@@ -81,7 +79,7 @@ export default function HistoryPage() {
         groups.map((group) => (
           <View key={group.key} style={{ gap: 8 }}>
             <SectionHeader title={group.title} />
-            <View style={edgeCard}>
+            <View style={card}>
               {group.rows.map(({ item, meta }, index) => (
                 <HistoryRow
                   key={item.id}

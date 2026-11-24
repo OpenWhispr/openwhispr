@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useConfigStore } from '@/store/useConfigStore';
-import { flat, glass, glassPressed, raised, raisedPressed, theme } from '../theme';
+import { useTheme } from '../ThemeProvider';
 import { showToast } from '../settings/kit';
 import { useStyleT } from './strings';
 import { TONE_STYLE_NUDGE_MIN_WORDS, saveToneStyle, useToneStyle } from './toneStyle';
@@ -16,6 +16,7 @@ export function ToneStyleNudge({ words }: { words: number | undefined }) {
   const t = useStyleT();
   const style = useToneStyle();
   const ready = useConfigStore((s) => Boolean(s.config));
+  const { flat, tokens: theme } = useTheme();
   if (!ready || style.setUp || style.nudgeDismissed || (words ?? 0) < TONE_STYLE_NUDGE_MIN_WORDS)
     return null;
   const dismiss = () => {
@@ -69,6 +70,7 @@ function NudgePill({
   primary?: boolean;
   onPress: () => void;
 }) {
+  const { glass, glassPressed, raised, raisedPressed, tokens: theme } = useTheme();
   return (
     <Pressable
       cssInterop={false}

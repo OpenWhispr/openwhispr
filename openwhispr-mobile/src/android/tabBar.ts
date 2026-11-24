@@ -1,5 +1,5 @@
 import type { TextProps, TextStyle } from 'react-native';
-import { home } from './home/kit';
+import { useTheme, type AndroidTheme } from './ThemeProvider';
 
 /** Figma "Android · Main navigation", option A: the bar is 80 dp above the system inset. */
 export const TAB_BAR_HEIGHT = 80;
@@ -48,10 +48,10 @@ export function shouldShowTabBar({
 }
 
 /** Space Grotesk 12, Bold when selected and Medium otherwise; one line, never shrunk. */
-export function tabLabelProps(selected: boolean): Pick<
-  TextProps,
-  'numberOfLines' | 'maxFontSizeMultiplier' | 'adjustsFontSizeToFit'
-> & {
+export function tabLabelProps(
+  selected: boolean,
+  theme: AndroidTheme,
+): Pick<TextProps, 'numberOfLines' | 'maxFontSizeMultiplier' | 'adjustsFontSizeToFit'> & {
   style: TextStyle;
 } {
   return {
@@ -62,17 +62,24 @@ export function tabLabelProps(selected: boolean): Pick<
       fontFamily: selected ? 'SpaceGrotesk_700Bold' : 'SpaceGrotesk_500Medium',
       fontSize: 12,
       lineHeight: 16,
-      color: selected ? home.text : home.secondary,
+      color: selected ? theme.tokens.ink : theme.tokens.secondary,
       textAlign: 'center',
     },
   };
 }
 
-export const tabColors = {
-  /** White with a hairline on top (Figma variant 1); pages sit on bg/canvas. */
-  bar: home.surface,
-  hairline: home.divider,
-  pill: home.tint,
-  iconSelected: home.accent,
-  icon: home.secondary,
-} as const;
+/** The bar's colours: white with a hairline on top in light, one step above the page in dark (K2). */
+export function tabColorsFor(theme: AndroidTheme) {
+  return {
+    bar: theme.tokens.tabBar,
+    hairline: theme.tokens.divider,
+    pill: theme.tokens.selFill,
+    iconSelected: theme.tokens.accent,
+    icon: theme.tokens.secondary,
+  };
+}
+
+/** The bar's colours for the scheme in use (`tabColorsFor`). */
+export function useTabColors() {
+  return tabColorsFor(useTheme());
+}

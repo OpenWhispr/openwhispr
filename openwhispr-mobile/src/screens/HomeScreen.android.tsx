@@ -41,8 +41,7 @@ import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { buildUsageGateParams, SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import type { Recording } from '../../modules/android-dictation/src';
 import { useHomeT } from '@/android/home/strings';
-import { AccountAvatar, home, IconTile, PillButton, SectionHeader, type } from '@/android/home/kit';
-import { edgeCard, look } from '@/android/settings/look';
+import { AccountAvatar, IconTile, PillButton, SectionHeader, useHome } from '@/android/home/kit';
 import { showToast as showSettingsToast } from '@/android/settings/kit';
 import { BubbleCard } from '@/android/home/BubbleCard';
 import { Notch, NOTCH_REACH } from '@/android/home/Notch';
@@ -61,7 +60,6 @@ const NOTCH_SPACE = NOTCH_REACH + 12 - SECTION_GAP;
 const SCROLL_TO_HISTORY_MS = 950;
 /** Home shows the newest History rows; "See all history" opens the rest. */
 const HOME_HISTORY_ROWS = 5;
-const CARD_TITLE = { fontSize: 16, lineHeight: 22, fontWeight: '500' as const, color: home.text };
 
 /** ScrollView's own animated scroll is quick and fixed; this one eases in and out slowly. */
 function smoothScroll(
@@ -94,6 +92,7 @@ export default function AndroidHome() {
   useAppInit();
   const { t } = useTranslation();
   const h = useHomeT();
+  const { c, type, card } = useHome();
   // Recordings saved on this phone before accounts; loaded while signed out.
   const [archive, setArchive] = useState<Transcript[] | null>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -423,10 +422,7 @@ export default function AndroidHome() {
   }, [notch, newestId, newestAt]);
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: look.canvas }}
-      edges={['top', 'left', 'right']}
-    >
+    <SafeAreaView style={{ flex: 1, backgroundColor: c.canvas }} edges={['top', 'left', 'right']}>
       <View
         style={{
           flexDirection: 'row',
@@ -488,19 +484,19 @@ export default function AndroidHome() {
           </View>
         </Animated.View>
         {pending.text || pending.error ? (
-          <View style={[edgeCard, { padding: 14, gap: 12 }]}>
+          <View style={[card, { padding: 14, gap: 12 }]}>
             {/* A tile and a title say why the card is here: the bubble couldn't type the text,
                 or something failed and this is what was kept. */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <IconTile
                 icon={pending.text ? 'Save' : 'TriangleAlert'}
-                color={pending.text ? home.text : home.error}
+                color={pending.text ? c.text : c.error}
               />
               <View style={{ flex: 1, gap: 2 }}>
-                {pending.text ? <Text style={CARD_TITLE}>{h('savedInOpenWhispr')}</Text> : null}
+                {pending.text ? <Text style={type.rowTitle}>{h('savedInOpenWhispr')}</Text> : null}
                 <Text
                   accessibilityRole={pending.error ? 'alert' : undefined}
-                  style={pending.text ? type.footnote : [CARD_TITLE, { fontWeight: '400' }]}
+                  style={pending.text ? type.footnote : [type.rowTitle, { fontWeight: '400' }]}
                 >
                   {!pending.error || pending.error === t('insertionFailed')
                     ? h('bubbleCouldntType')
@@ -509,7 +505,7 @@ export default function AndroidHome() {
               </View>
             </View>
             {pending.text ? (
-              <Text selectable style={{ fontSize: 17, lineHeight: 24, color: home.text }}>
+              <Text selectable style={{ fontSize: 17, lineHeight: 24, color: c.text }}>
                 {pending.text}
               </Text>
             ) : null}
@@ -542,7 +538,7 @@ export default function AndroidHome() {
                     onPress={() => {
                       void refreshInsights();
                     }}
-                    style={[type.footnote, { color: home.accent, paddingVertical: 8 }]}
+                    style={[type.footnote, { color: c.accent, paddingVertical: 8 }]}
                   >
                     {h('retry')}
                   </Text>
@@ -560,10 +556,10 @@ export default function AndroidHome() {
         >
           <SectionHeader title={h('history')} />
           {historyError ? (
-            <View style={[edgeCard, { padding: 14, gap: 12 }]}>
+            <View style={[card, { padding: 14, gap: 12 }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <IconTile icon="TriangleAlert" color="#C27A00" />
-                <Text accessibilityRole="alert" style={[CARD_TITLE, { flex: 1 }]}>
+                <IconTile icon="TriangleAlert" color={c.warning} />
+                <Text accessibilityRole="alert" style={[type.rowTitle, { flex: 1 }]}>
                   {historyError}
                 </Text>
               </View>
@@ -581,8 +577,8 @@ export default function AndroidHome() {
             </View>
           ) : null}
           {!history.length && !historyError ? (
-            <View style={[edgeCard, { padding: 14, gap: 4 }]}>
-              <Text style={CARD_TITLE}>{t('emptyHistory')}</Text>
+            <View style={[card, { padding: 14, gap: 4 }]}>
+              <Text style={type.rowTitle}>{t('emptyHistory')}</Text>
               <Text style={type.footnote}>{t('emptyHistoryBody')}</Text>
             </View>
           ) : null}

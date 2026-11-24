@@ -42,6 +42,17 @@ const LEGACY_TOKENS = new Set([
   'ink',
   'palette',
   'authColors',
+  // home/kit's light-only exports, kept for files not moved yet (read `useHome()` instead).
+  'type',
+  'glassEdge',
+  'TILE_FILL',
+  // settings/look's static light surfaces and text.
+  'edge',
+  'edgeCard',
+  'edgeField',
+  'bodyText',
+  'sectionLabel',
+  'cardStyle',
 ]);
 const COLOUR = /#[0-9a-f]{3,8}\b|\brgba?\(/i;
 
@@ -68,8 +79,8 @@ export function screenFiles(): string[] {
 export function moduleLevelColours(file: string): string[] {
   const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
   const hits: string[] = [];
-  // Value imports (not `import type`) from a relative module.
-  const imports = /import\s+(?!type\b)\{([^}]*)\}\s+from\s+'(\.[^']*)'/g;
+  // Value imports (not `import type`) from a relative module or from `@/android/…`.
+  const imports = /import\s+(?!type\b)\{([^}]*)\}\s+from\s+'(\.[^']*|@\/android\/[^']*)'/g;
   for (let match = imports.exec(source); match; match = imports.exec(source)) {
     const names = match[1]
       .split(',')

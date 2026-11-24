@@ -4,17 +4,6 @@
  * it's clean; the guard fails on an entry that no longer needs to be here.
  */
 export const PENDING: string[] = [
-  // 1 · Home
-  'src/android/ImportAudioScreen.tsx',
-  'src/android/Tabs.tsx',
-  'src/android/home/BubbleCard.tsx',
-  'src/android/home/HistoryPage.tsx',
-  'src/android/home/Notch.tsx',
-  'src/android/home/OlderRecordings.tsx',
-  'src/android/home/Sections.tsx',
-  'src/android/home/TryItRecorder.tsx',
-  'src/android/home/kit.tsx',
-  'src/android/tabBar.ts',
   // 2 · Notes
   'src/android/CloudMeetingScreen.tsx',
   'src/android/MeetingRecordScreen.tsx',
@@ -33,6 +22,11 @@ export const PENDING: string[] = [
   'src/android/notes/noteSheets.tsx',
   'src/android/notes/rows.tsx',
   'src/android/notes/sheets.tsx',
+  'src/screens/NoteEditorCore.android.tsx',
+  'src/screens/VoiceEnrollmentScreen.android.tsx',
+  'src/screens/VoiceProfileDetailScreen.android.tsx',
+  'src/screens/VoiceProfilesScreen.android.tsx',
+  'src/screens/WorkflowSettingsScreen.android.tsx',
   // 3 · Dictionary
   'src/android/dictionary/DictionaryRoot.tsx',
   'src/android/dictionary/Empty.tsx',
@@ -43,7 +37,6 @@ export const PENDING: string[] = [
   // 4 · Style
   'src/android/StyleScreen.tsx',
   'src/android/style/ToneSetupScreen.tsx',
-  'src/android/style/ToneStyleNudge.tsx',
   'src/android/style/kit.tsx',
   // 5 · Settings
   'src/android/LanguageSheet.tsx',
@@ -69,6 +62,13 @@ export const PENDING: string[] = [
   'src/android/settings/kit.tsx',
   'src/android/settings/look.ts',
   'src/components/ui/SettingsSection.android.tsx',
+  'src/android/DeviceCheckScreen.tsx',
+  'src/android/PlanContent.tsx',
+  'src/android/settings/PermissionsScreen.tsx',
+  'src/screens/LicensesScreen.android.tsx',
+  'src/screens/PrivacyDataScreen.android.tsx',
+  'src/screens/ReferralScreen.android.tsx',
+  'src/screens/TranscriptionLanguageScreen.android.tsx',
   // 6 · Onboarding + bubble
   'src/android/Practice.tsx',
   'src/android/onboarding/AppsScreen.tsx',
@@ -86,11 +86,13 @@ export const PENDING: string[] = [
   'src/android/auth/VerifyLinkScreen.tsx',
   'src/android/auth/look.tsx',
   'src/android/launch/LaunchScreens.tsx',
+  'src/screens/AccountScreen.android.tsx',
   // Shared (move with the first segment that needs them: controls, ui, the .android components, colors.android)
-  'src/android/controls.tsx',
   'src/android/ui.tsx',
+  'src/components/ui/Fab.android.tsx',
   'src/components/ui/FabCore.android.tsx',
   'src/components/ui/FormSheetCore.android.tsx',
+  'src/components/ui/SegmentedControl.android.tsx',
   'src/components/ui/SwipeableCardCore.android.tsx',
   'src/config/colors.android.ts',
 ];

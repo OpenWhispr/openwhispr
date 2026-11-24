@@ -16,7 +16,7 @@ import { type } from '../home/kit';
 import { SearchField } from '../controls';
 import { theme } from '../theme';
 import { useNavigationBarCanvas } from '../navigationBar';
-import { tabColors } from '../tabBar';
+import { useTabColors } from '../tabBar';
 import { useSettingsToast } from '../settings/kit';
 import { Card, IconButton, NewButton, NotesHeader, SectionLabel, notesLook } from '../notes/look';
 import { SwipeRow } from '../notes/rows';
@@ -311,7 +311,7 @@ export default function DictionaryRoot() {
   const t = useDictionaryT();
   const scroll = useRef<ScrollView>(null);
   useScrollToTop(scroll);
-  useNavigationBarCanvas(tabColors.bar);
+  useNavigationBarCanvas(useTabColors().bar);
 
   const allEntries = useDictionaryStore((s) => s.entries);
   const wordsLoaded = useDictionaryStore((s) => s.isLoaded);

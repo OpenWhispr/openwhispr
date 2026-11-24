@@ -22,6 +22,7 @@ import { bodyText, edge, edgeCard, look, sectionLabel } from './look';
 import { noOrphan, useSettingsT } from './strings';
 import { inset as insetTrack, knob, raised, raisedPressed, theme } from '../theme';
 import { useNavigationBar, useNavigationBarCanvas } from '../navigationBar';
+import { useTheme } from '../ThemeProvider';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { TAB_BAR_HEIGHT } from '../tabBar';
 
@@ -69,10 +70,12 @@ export function SettingsPage({
   // Gestures: edge to edge, the list scrolls under the handle. Buttons: the bar is part of the
   // page (canvas colour) and nothing scrolls under it.
   const { buttons, inset } = useNavigationBar();
-  useNavigationBarCanvas(look.canvas);
+  const th = useTheme();
+  const ink = th.tokens.ink;
+  useNavigationBarCanvas(th.tokens.canvas);
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: look.canvas }}
+      style={{ flex: 1, backgroundColor: th.tokens.canvas }}
       edges={buttons ? ['top', 'left', 'right', 'bottom'] : ['top', 'left', 'right']}
     >
       <View
@@ -94,7 +97,7 @@ export function SettingsPage({
               router.canGoBack() ? router.back() : router.replace('/(tabs)/(record)')
             }
             style={({ pressed }) => [
-              raised,
+              th.raised,
               {
                 width: 36,
                 height: 36,
@@ -102,10 +105,10 @@ export function SettingsPage({
                 alignItems: 'center',
                 justifyContent: 'center',
               },
-              pressed && raisedPressed,
+              pressed && th.raisedPressed,
             ]}
           >
-            <SystemIcon name="chevron.left" mdName="ChevronLeft" size={22} color={home.text} />
+            <SystemIcon name="chevron.left" mdName="ChevronLeft" size={22} color={ink} />
           </Pressable>
         </View>
         <Text
@@ -115,7 +118,7 @@ export function SettingsPage({
           // long; a longer one is cut in the middle. Android ignores minimumFontScale.
           adjustsFontSizeToFit={title.length <= 24}
           ellipsizeMode="middle"
-          style={[settings.title, { flex: 1, textAlign: 'center', lineHeight: 24 }]}
+          style={[settings.title, { color: ink, flex: 1, textAlign: 'center', lineHeight: 24 }]}
         >
           {title}
         </Text>
@@ -127,17 +130,17 @@ export function SettingsPage({
               onPress={right.onPress}
               hitSlop={6}
               style={({ pressed }) => [
-                raised,
+                th.raised,
                 {
                   minHeight: 36,
                   paddingHorizontal: 16,
                   borderRadius: 18,
                   justifyContent: 'center',
                 },
-                pressed && raisedPressed,
+                pressed && th.raisedPressed,
               ]}
             >
-              <Text style={[type.subhead, { fontWeight: '500' }]}>{right.label}</Text>
+              <Text style={[type.subhead, { color: ink, fontWeight: '500' }]}>{right.label}</Text>
             </Pressable>
           )}
         </View>
@@ -260,6 +263,7 @@ export function Toggle({
   label: string;
 }) {
   const reduceMotion = useReduceMotion();
+  const th = useTheme();
   const position = useRef(new Animated.Value(value ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(position, {
@@ -286,7 +290,7 @@ export function Toggle({
           height: 28,
           borderRadius: 999,
           padding: 2,
-          ...insetTrack,
+          ...th.inset,
         }}
       >
         {/* On, the track is the brand glass; it fades in over the grey. */}
@@ -294,7 +298,7 @@ export function Toggle({
           pointerEvents="none"
           style={[
             { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderRadius: 999 },
-            gloss,
+            th.glass,
             { opacity: position },
           ]}
         />
@@ -303,7 +307,7 @@ export function Toggle({
             width: 39,
             height: 24,
             borderRadius: 999,
-            ...knob,
+            ...th.knob,
             transform: [
               { translateX: position.interpolate({ inputRange: [0, 1], outputRange: [0, 21] }) },
             ],
@@ -691,6 +695,7 @@ export function showToast(
 /** Mounted once at the root, so a toast survives the screen that raised it going away. */
 export function SettingsToastHost() {
   const { message, tone, id, action, options } = useSettingsToast();
+  const { tokens: theme, scheme } = useTheme();
   const { inset } = useNavigationBar();
   // With the keyboard up (a note being typed in), the toast sits just above it, not behind it.
   // Android's keyboard height leaves out the navigation bar, as in BottomSheet.
@@ -759,7 +764,8 @@ export function SettingsToastHost() {
             borderTopWidth: 1,
             borderTopColor: theme.toastRim,
             // 12 blur, 4 down: the 16 dp margin holds the whole shadow.
-            boxShadow: '0px 4px 12px rgba(0,0,0,0.18)',
+            boxShadow:
+              scheme === 'dark' ? '0px 4px 12px rgba(0,0,0,0.45)' : '0px 4px 12px rgba(0,0,0,0.18)',
           },
           action && { alignSelf: 'stretch' },
         ]}
@@ -869,6 +875,7 @@ export function BottomSheet({
   above?: React.ReactNode;
 }) {
   const t = useSettingsT();
+  const th = useTheme();
   const reduceMotion = useReduceMotion();
   const keyboard = useKeyboardHeight(visible);
   // Android's keyboard height leaves out the navigation bar, and a SafeAreaView inside a Modal
@@ -915,7 +922,7 @@ export function BottomSheet({
       <View style={{ flex: 1, justifyContent: 'flex-end' }} pointerEvents="box-none">
         <Animated.View
           style={{
-            backgroundColor: look.canvas,
+            backgroundColor: th.tokens.canvas,
             // The safe-area view below can't round its own corners, so this view does.
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
@@ -936,7 +943,7 @@ export function BottomSheet({
                 width: 36,
                 height: 4,
                 borderRadius: 2,
-                backgroundColor: look.track,
+                backgroundColor: th.tokens.track,
               }}
             />
             <View style={{ gap: 6 }}>
@@ -956,7 +963,7 @@ export function BottomSheet({
                       name="chevron.left"
                       mdName="ChevronLeft"
                       size={22}
-                      color={home.text}
+                      color={th.tokens.ink}
                     />
                   </Pressable>
                 )}
@@ -964,7 +971,7 @@ export function BottomSheet({
                   accessibilityRole="header"
                   style={[
                     settings.title,
-                    { fontSize: 20, lineHeight: 26, flexShrink: 1 },
+                    { color: th.tokens.ink, fontSize: 20, lineHeight: 26, flexShrink: 1 },
                     trailing ? { flex: 1 } : null,
                   ]}
                 >
@@ -973,7 +980,7 @@ export function BottomSheet({
                 {trailing}
               </View>
               {body && (
-                <Text textBreakStrategy="balanced" style={bodyText}>
+                <Text textBreakStrategy="balanced" style={[bodyText, { color: th.tokens.ink }]}>
                   {noOrphan(body)}
                 </Text>
               )}

@@ -13,7 +13,7 @@ import { withNotesRouteOwner } from '@/lib/notes/noteRouteOwner';
 import { safeHaptics } from '@/lib/utils';
 import { gloss, glossPressed, home } from '../home/kit';
 import { useNavigationBarCanvas } from '../navigationBar';
-import { tabColors } from '../tabBar';
+import { useTabColors } from '../tabBar';
 import { useSettingsToast } from '../settings/kit';
 import {
   Card,
@@ -52,7 +52,7 @@ export default function NotesRoot() {
   const t = useNotesT();
   const scroll = useRef<ScrollView>(null);
   useScrollToTop(scroll);
-  useNavigationBarCanvas(tabColors.bar);
+  useNavigationBarCanvas(useTabColors().bar);
   const { folders, isInitialized, initialize, createFolder } = useNotesStore();
   useEffect(() => {
     if (!isInitialized) initialize();

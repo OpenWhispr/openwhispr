@@ -11,8 +11,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useHomeT } from './strings';
-import { home } from './kit';
-import { look } from '../settings/look';
+import { useHome } from './kit';
 
 const NARROW_WIDTH = 72;
 const NARROW_HEIGHT = 30;
@@ -56,14 +55,15 @@ function Ring({ value }: { value: Animated.Value }) {
     outputRange: [RING_LENGTH, 0],
     extrapolate: 'clamp',
   });
+  const { c } = useHome();
   return (
     <Svg width={20} height={20} viewBox="0 0 20 20">
-      <Circle cx={10} cy={10} r={RING_RADIUS} stroke={home.fill} strokeWidth={2.5} fill="none" />
+      <Circle cx={10} cy={10} r={RING_RADIUS} stroke={c.fill} strokeWidth={2.5} fill="none" />
       <AnimatedCircle
         cx={10}
         cy={10}
         r={RING_RADIUS}
-        stroke={home.accent}
+        stroke={c.accent}
         strokeWidth={2.5}
         fill="none"
         strokeLinecap="round"
@@ -76,10 +76,11 @@ function Ring({ value }: { value: Animated.Value }) {
 }
 
 function StateIcon({ state, ring }: { state: ShownState; ring: Animated.Value }) {
+  const { c } = useHome();
   if (state.kind === 'done')
-    return <SystemIcon name="checkmark" mdName="Check" size={18} color={home.accent} />;
+    return <SystemIcon name="checkmark" mdName="Check" size={18} color={c.accent} />;
   if (state.progress !== undefined) return <Ring value={ring} />;
-  return <ActivityIndicator size="small" color={home.accent} />;
+  return <ActivityIndicator size="small" color={c.accent} />;
 }
 
 /**
@@ -110,6 +111,8 @@ export function Notch({
   onFinished: () => void;
 }) {
   const t = useHomeT();
+  const { c, theme } = useHome();
+  const dark = theme.scheme === 'dark';
   const fullWidth = notchWidth(cardWidth);
   const width = useRef(new Animated.Value(NARROW_WIDTH)).current;
   const height = useRef(new Animated.Value(NARROW_HEIGHT)).current;
@@ -285,15 +288,15 @@ export function Notch({
           opacity: fade,
           marginTop: -1,
           transform: [{ translateY: drop }],
-          // A white tab with the glass edge and no top line: it overlaps the card's bottom
+          // A card-coloured tab with the glass edge and no top line: it overlaps the card's bottom
           // hairline by 1 px, so the two read as one piece.
-          backgroundColor: home.surface,
+          backgroundColor: c.surface,
           borderBottomLeftRadius: bottomRadius,
           borderBottomRightRadius: bottomRadius,
           borderWidth: 1,
           borderTopWidth: 0,
-          borderColor: look.hairline,
-          boxShadow: '0px 2px 10px rgba(15,23,42,0.06)',
+          borderColor: c.hairline,
+          boxShadow: dark ? '0px 2px 10px rgba(0,0,0,0.35)' : '0px 2px 10px rgba(15,23,42,0.06)',
           alignItems: 'center',
           justifyContent: 'center',
         }}
@@ -306,10 +309,10 @@ export function Notch({
             left: -SHOULDER,
             width: SHOULDER,
             height: SHOULDER,
-            backgroundColor: home.surface,
+            backgroundColor: c.surface,
           }}
         >
-          <View style={{ flex: 1, backgroundColor: look.canvas, borderTopRightRadius: SHOULDER }} />
+          <View style={{ flex: 1, backgroundColor: c.canvas, borderTopRightRadius: SHOULDER }} />
         </View>
         <View
           style={{
@@ -318,10 +321,10 @@ export function Notch({
             right: -SHOULDER,
             width: SHOULDER,
             height: SHOULDER,
-            backgroundColor: home.surface,
+            backgroundColor: c.surface,
           }}
         >
-          <View style={{ flex: 1, backgroundColor: look.canvas, borderTopLeftRadius: SHOULDER }} />
+          <View style={{ flex: 1, backgroundColor: c.canvas, borderTopLeftRadius: SHOULDER }} />
         </View>
         {open ? (
           <Animated.View
@@ -353,7 +356,7 @@ export function Notch({
                   fontSize: 14,
                   lineHeight: 18,
                   fontWeight: '500',
-                  color: home.text,
+                  color: c.text,
                 }}
               >
                 {shown.text}
@@ -362,7 +365,7 @@ export function Notch({
                 <Text
                   numberOfLines={1}
                   ellipsizeMode="middle"
-                  style={{ flexShrink: 1, fontSize: 13, lineHeight: 18, color: home.tertiary }}
+                  style={{ flexShrink: 1, fontSize: 13, lineHeight: 18, color: c.tertiary }}
                 >
                   {busy.detail}
                 </Text>
@@ -384,7 +387,7 @@ export function Notch({
                   opacity: pressed ? 0.5 : 1,
                 })}
               >
-                <SystemIcon name="xmark" mdName="X" size={18} color={home.secondary} />
+                <SystemIcon name="xmark" mdName="X" size={18} color={c.secondary} />
               </Pressable>
             ) : null}
           </Animated.View>

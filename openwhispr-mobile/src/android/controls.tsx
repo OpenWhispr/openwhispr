@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { AppFont } from '@/lib/fonts';
-import { flat, glass, inset, theme } from './theme';
+import { useTheme } from './ThemeProvider';
 
 /**
  * The one progress bar: an inset grey track, 6 tall and fully round, that fills with the brand
@@ -29,6 +29,7 @@ export function ProgressBar({
   accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
 }) {
+  const { inset, glass } = useTheme();
   const share = value === undefined ? undefined : Math.min(1, Math.max(0, value));
   return (
     <View
@@ -65,6 +66,7 @@ export function ProgressBar({
 const SWEEP_SHARE = 0.35;
 
 function Sweep({ height }: { height: number }) {
+  const { glass } = useTheme();
   const [width, setWidth] = useState(0);
   const [reduce, setReduce] = useState(false);
   const x = useRef(new Animated.Value(0)).current;
@@ -121,7 +123,7 @@ function Sweep({ height }: { height: number }) {
 }
 
 /**
- * The one search field: a flat white field, corners 12, 48 tall, a magnifier and a tertiary
+ * The one search field: a flat field (white in light), corners 12, 48 tall, a magnifier and a tertiary
  * placeholder, and a clear button once something is typed.
  */
 export const SearchField = forwardRef<
@@ -135,6 +137,7 @@ export const SearchField = forwardRef<
     style?: StyleProp<ViewStyle>;
   } & Omit<TextInputProps, 'value' | 'onChangeText' | 'placeholder' | 'style'>
 >(function SearchField({ value, onChangeText, placeholder, clearLabel, style, ...input }, ref) {
+  const { flat, tokens: theme } = useTheme();
   return (
     <View
       style={[
