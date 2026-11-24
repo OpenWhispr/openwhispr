@@ -122,6 +122,7 @@ final class DirectDictation {
     let text: String
     let userId: String
     let documentID: UUID
+    let finishedAtMs: Int64
   }
 
   private var undeliveredText: ResultForInsertion?
@@ -211,9 +212,14 @@ final class DirectDictation {
 
   func keyboardDidAppear() {
     keyboardVisible = true
-    // Kept until it reaches the field and account it was spoken for, or a newer take starts.
-    if let result = undeliveredText, insertIfDestinationMatches(result) {
-      undeliveredText = nil
+    // Kept until it reaches the field and account it was spoken for, a newer take starts, or
+    // it is older than a take may be resumed: an old dictation is never typed unprompted.
+    if let result = undeliveredText {
+      if deps.store.now() - result.finishedAtMs >= DirectDictationStore.resumeWindowMs {
+        undeliveredText = nil
+      } else if insertIfDestinationMatches(result) {
+        undeliveredText = nil
+      }
     }
     switch state {
     case .idle, .failed: break
@@ -478,7 +484,9 @@ final class DirectDictation {
     )
     job = nil
     state = .idle
-    let result = ResultForInsertion(text: expanded, userId: current.config.userId, documentID: current.documentID)
+    let result = ResultForInsertion(
+      text: expanded, userId: current.config.userId, documentID: current.documentID, finishedAtMs: deps.store.now()
+    )
     if keyboardVisible {
       _ = insertIfDestinationMatches(result)
     } else {

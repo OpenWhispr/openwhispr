@@ -291,6 +291,7 @@ extension DirectDictationTests {
     machineLocalDisappearWhileRecording()
     machineLocalCancelWhileTranscribing()
     machineCloudResultWaitsForSameDocument()
+    machineUndeliveredTextExpires()
   }
 
   /// The contract's Local snapshot for `model`, with an English hint and cleanup switched on
@@ -503,6 +504,48 @@ extension DirectDictationTests {
     expect(h.files(), [], "local cancel: no files")
     h.transcriber.succeed("late")
     expect(h.texts, [], "local cancel: a late result inserts nothing")
+  }
+
+  // Text left undelivered waits only as long as a take may be resumed: coming back to the field
+  // much later must not type an old dictation unprompted.
+  static func machineUndeliveredTextExpires() {
+    let window = Double(DirectDictationStore.resumeWindowMs) / 1000
+
+    let inside = Harness()
+    defer { inside.cleanup() }
+    inside.useLocal(.parakeetV2)
+    inside.record(seconds: 1)
+    inside.dictation.confirm()
+    inside.dictation.keyboardWillDisappear()
+    inside.transcriber.succeed("still fresh")
+    inside.scheduler.advance(seconds: window - 1)
+    inside.dictation.keyboardDidAppear()
+    expect(inside.texts, ["still fresh"], "undelivered: typed inside the window")
+
+    let late = Harness()
+    defer { late.cleanup() }
+    late.useLocal(.parakeetV2)
+    late.record(seconds: 1)
+    late.dictation.confirm()
+    late.dictation.keyboardWillDisappear()
+    late.transcriber.succeed("too old")
+    late.scheduler.advance(seconds: window + 1)
+    late.dictation.keyboardDidAppear()
+    expect(late.texts, [], "undelivered: a Local result is dropped after the window")
+    expect(late.store.record(jobId: "job-1")?.status, .completed, "undelivered: still saved for History")
+    late.dictation.keyboardWillDisappear()
+    late.dictation.keyboardDidAppear()
+    expect(late.texts, [], "undelivered: and never typed later")
+
+    let cloud = Harness()
+    defer { cloud.cleanup() }
+    cloud.record(seconds: 1)
+    cloud.dictation.confirm()
+    cloud.dictation.keyboardWillDisappear()
+    cloud.transport.uploads.first?.complete(200, sentText)
+    cloud.scheduler.advance(seconds: window + 1)
+    cloud.dictation.keyboardDidAppear()
+    expect(cloud.texts, [], "undelivered: a Cloud result is dropped after the window too")
   }
 
   // The same keep-until-delivered rule for a Cloud take answered while hidden.

@@ -37,7 +37,8 @@ final class DirectDictationStore {
   static let maxFailedAudio = 10
 
   private let directory: URL
-  private let now: () -> Int64
+  /// Epoch milliseconds; the state machine reads it too, so its tests share the store's clock.
+  let now: () -> Int64
   private let fileManager = FileManager.default
 
   init(directory: URL, now: @escaping () -> Int64) {
