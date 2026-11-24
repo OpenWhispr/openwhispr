@@ -122,6 +122,9 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
 
   // On-device interruptions this meeting, for the finish report. The cloud hook counts its own.
   const localInterruptionsRef = useRef(0);
+  // Stop, the lock screen's End and the notification can all ask to finish; a second finish
+  // would stop an already stopped recorder and overwrite the first one's result mid-flight.
+  const finishingRef = useRef(false);
   const wasLocalCapturingRef = useRef(false);
   useEffect(() => {
     if (phase !== 'recording') {
@@ -312,37 +315,43 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   };
 
   const finish = async (): Promise<void> => {
-    // Measured at Stop: transcription below can take minutes and must not count as missed time.
-    const coverage = captureCoverage(
-      recorderHealth.capturedMs,
-      meetingStartedAt == null ? 0 : Date.now() - meetingStartedAt,
-    );
-    setPhase('processing');
+    if (finishingRef.current) return;
+    finishingRef.current = true;
     try {
-      const uri = await recording.stopRecordingRaw();
-      if (!uri || noteId == null) {
+      // Measured at Stop: transcription below can take minutes and must not count as missed time.
+      const coverage = captureCoverage(
+        recorderHealth.capturedMs,
+        meetingStartedAt == null ? 0 : Date.now() - meetingStartedAt,
+      );
+      setPhase('processing');
+      try {
+        const uri = await recording.stopRecordingRaw();
+        if (!uri || noteId == null) {
+          saveRawNotesNow();
+          if (noteId != null) markNoteFailed(noteId);
+          setPhase('prompt');
+          return;
+        }
         saveRawNotesNow();
+        const stableUri = `${FileSystem.documentDirectory}meeting-${noteId}.wav`;
+        await FileSystem.copyAsync({ from: uri, to: stableUri });
+        await runMeetingPipeline(noteId, stableUri, count);
+        router.replace(`/(tabs)/(notes)/${noteId}`);
+        reportMeetingFinished({
+          path: 'local',
+          coverage,
+          interruptions: localInterruptionsRef.current,
+          reconnects: 0,
+          droppedSeconds: 0,
+        });
+        alertIfPartialCapture(coverage);
+      } catch (error) {
         if (noteId != null) markNoteFailed(noteId);
+        Sentry.captureException(error);
         setPhase('prompt');
-        return;
       }
-      saveRawNotesNow();
-      const stableUri = `${FileSystem.documentDirectory}meeting-${noteId}.wav`;
-      await FileSystem.copyAsync({ from: uri, to: stableUri });
-      await runMeetingPipeline(noteId, stableUri, count);
-      router.replace(`/(tabs)/(notes)/${noteId}`);
-      reportMeetingFinished({
-        path: 'local',
-        coverage,
-        interruptions: localInterruptionsRef.current,
-        reconnects: 0,
-        droppedSeconds: 0,
-      });
-      alertIfPartialCapture(coverage);
-    } catch (error) {
-      if (noteId != null) markNoteFailed(noteId);
-      Sentry.captureException(error);
-      setPhase('prompt');
+    } finally {
+      finishingRef.current = false;
     }
   };
 
@@ -383,42 +392,50 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   };
 
   const finishCloud = async (): Promise<void> => {
-    // Read these before awaiting: the stop waits for the last turn and state moves on meanwhile.
-    const captured = cloudMeeting.capturedSeconds;
-    const coverage = captureCoverage(
-      (cloudMeeting.capturedSeconds - cloudMeeting.droppedSeconds) * 1000,
-      meetingStartedAt == null ? 0 : Date.now() - meetingStartedAt,
-    );
-    const hadError = cloudMeeting.status === 'error';
-    const { interruptions, reconnects, droppedSeconds } = cloudMeeting;
-    setPhase('processing');
-    const utterances = await cloudMeeting.stop();
-    if (noteId == null) {
-      setPhase('prompt');
-      return;
-    }
-    saveRawNotesNow();
-    // A failed session with nothing transcribed shouldn't become a done, empty note.
-    if (hadError && utterances.length === 0) {
-      markNoteFailed(noteId);
-      setPhase('prompt');
-      return;
-    }
+    if (finishingRef.current) return;
+    finishingRef.current = true;
     try {
-      await finalizeCloudMeeting(noteId, utterances, captured);
-      router.replace(`/(tabs)/(notes)/${noteId}`);
-      reportMeetingFinished({
-        path: 'cloud',
-        coverage,
-        interruptions,
-        reconnects,
-        droppedSeconds,
-      });
-      alertIfPartialCapture(coverage);
-    } catch (error) {
-      markNoteFailed(noteId);
-      Sentry.captureException(error);
-      setPhase('prompt');
+      // Read these before awaiting: the stop waits for the last turn and state moves on meanwhile.
+      const captured = cloudMeeting.capturedSeconds;
+      // From when capture began, not note creation: the first-run mic prompt and the connect
+      // come in between and would read as missed meeting time.
+      const coverage = captureCoverage(
+        (cloudMeeting.capturedSeconds - cloudMeeting.droppedSeconds) * 1000,
+        cloudMeeting.liveSinceMs == null ? 0 : Date.now() - cloudMeeting.liveSinceMs,
+      );
+      const hadError = cloudMeeting.status === 'error';
+      const { interruptions, reconnects, droppedSeconds } = cloudMeeting;
+      setPhase('processing');
+      const utterances = await cloudMeeting.stop();
+      if (noteId == null) {
+        setPhase('prompt');
+        return;
+      }
+      saveRawNotesNow();
+      // A failed session with nothing transcribed shouldn't become a done, empty note.
+      if (hadError && utterances.length === 0) {
+        markNoteFailed(noteId);
+        setPhase('prompt');
+        return;
+      }
+      try {
+        await finalizeCloudMeeting(noteId, utterances, captured);
+        router.replace(`/(tabs)/(notes)/${noteId}`);
+        reportMeetingFinished({
+          path: 'cloud',
+          coverage,
+          interruptions,
+          reconnects,
+          droppedSeconds,
+        });
+        alertIfPartialCapture(coverage);
+      } catch (error) {
+        markNoteFailed(noteId);
+        Sentry.captureException(error);
+        setPhase('prompt');
+      }
+    } finally {
+      finishingRef.current = false;
     }
   };
 

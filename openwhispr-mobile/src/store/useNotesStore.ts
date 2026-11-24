@@ -542,7 +542,8 @@ interface NotesStore {
   finalizeCloudMeeting: (
     noteId: number,
     utterances: RealtimeUtterance[],
-    elapsedSeconds: number,
+    /** Audio the mic delivered, in seconds; spreads utterances that carry no timings. */
+    capturedSeconds: number,
   ) => Promise<void>;
   /** Saves one live utterance. Never throws: a failed write is reported and the meeting goes on. */
   appendCloudMeetingUtterance: (
@@ -952,10 +953,10 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     await get().runMeetingPipeline(noteId, note.sourceFile, note.expectedSpeakerCount ?? undefined);
   },
 
-  finalizeCloudMeeting: async (noteId, utterances, elapsedSeconds) => {
+  finalizeCloudMeeting: async (noteId, utterances, capturedSeconds) => {
     try {
       get().transitionStatus(noteId, 'transcribing'); // recording -> transcribing
-      const segments = mapUtterancesToSegments(utterances, elapsedSeconds).map((segment) => ({
+      const segments = mapUtterancesToSegments(utterances, capturedSeconds).map((segment) => ({
         ...segment,
         noteId,
       }));

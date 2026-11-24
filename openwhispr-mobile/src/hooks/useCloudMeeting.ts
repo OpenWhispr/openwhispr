@@ -27,6 +27,11 @@ export interface CloudMeeting {
   interruptions: number;
   /** Times the socket dropped and had to reconnect. */
   reconnects: number;
+  /**
+   * Epoch ms at which the session started capturing; null until then. The mic prompt and
+   * connect come before it, so a meeting's recorded share is measured from here.
+   */
+  liveSinceMs: number | null;
   /** Stops the session, waits for the last turn, and returns every finalized utterance. */
   stop: () => Promise<RealtimeUtterance[]>;
 }
@@ -61,9 +66,9 @@ export function useCloudMeeting({
   const [droppedSeconds, setDroppedSeconds] = useState(initial.droppedSeconds);
   const [interruptions, setInterruptions] = useState(initial.interruptions);
   const [reconnects, setReconnects] = useState(initial.reconnects);
+  const [liveSinceMs, setLiveSinceMs] = useState<number | null>(null);
 
   const sessionRef = useRef<RealtimeSession | null>(null);
-  const startedAtRef = useRef<number | null>(null);
   const stoppedRef = useRef(false);
   // Bumped per recording so a previous session still draining its last turn can't write
   // into the next one.
@@ -86,7 +91,6 @@ export function useCloudMeeting({
     generationRef.current = generation;
     const fresh = initialCloudMeetingSession(Date.now());
     stoppedRef.current = false;
-    startedAtRef.current = null;
     utteranceCountRef.current = fresh.utteranceCount;
     clockRef.current = fresh.clock;
     micCapturingRef.current = fresh.capturing;
@@ -115,6 +119,7 @@ export function useCloudMeeting({
     setDroppedSeconds(fresh.droppedSeconds);
     setInterruptions(fresh.interruptions);
     setReconnects(fresh.reconnects);
+    setLiveSinceMs(null);
     const isCurrent = (): boolean => generationRef.current === generation;
     const isLive = (): boolean => isCurrent() && !stoppedRef.current;
     startRealtimeMeetingWs(
@@ -162,14 +167,16 @@ export function useCloudMeeting({
       },
     )
       .then((session) => {
-        if (cancelled) {
+        // Stop pressed while connecting already answered with no utterances; nothing would
+        // stop this session later while the screen keeps the hook enabled.
+        if (cancelled || stoppedRef.current) {
           void session.stop();
           return;
         }
         liveSession = session;
         sessionRef.current = session;
         const now = Date.now();
-        startedAtRef.current = now;
+        setLiveSinceMs(now);
         // Startup can take seconds; the stall clock starts when capture does.
         clockRef.current = { ...clockRef.current, lastGrowthAtMs: now };
         setStarted(true);
@@ -197,8 +204,7 @@ export function useCloudMeeting({
     if (!started || failed) return;
     const update = (): void => {
       const session = sessionRef.current;
-      const startedAt = startedAtRef.current;
-      if (!session || startedAt == null) return;
+      if (!session) return;
       const now = Date.now();
       const capturedMs = session.capturedMs();
       const growth = trackCaptureGrowth(clockRef.current, capturedMs, now);
@@ -252,6 +258,7 @@ export function useCloudMeeting({
     droppedSeconds,
     interruptions,
     reconnects,
+    liveSinceMs,
     stop,
   };
 }

@@ -896,3 +896,118 @@ describe('startRealtimeMeetingWs — stop finishes the last turn', () => {
     expect(session.droppedMs()).toBe(1000);
   });
 });
+
+const speechStarted = (itemId: string, audioStartMs: number): WsMessage => ({
+  type: 'input_audio_buffer.speech_started',
+  item_id: itemId,
+  audio_start_ms: audioStartMs,
+});
+
+describe('startRealtimeMeetingWs — timestamps across legs', () => {
+  // sampleRate 100 → 200 bytes a second, so 1000 bytes are 5 s of captured audio.
+  it('stamps a reconnected leg from where its audio sits in the capture', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    emitFrame(new Array(1000).fill(1));
+    await jest.advanceTimersByTimeAsync(FLUSH_MS + 10); // all 5 s reach leg one
+    leg1.emit(speechStarted('a', 1_000));
+    leg1.emit(completed('a', 'first'));
+
+    ageLeg();
+    leg1.serverClose(1006);
+    await flushMicro(); // the replacement leg is connecting
+    emitFrame(new Array(400).fill(2)); // 2 s held in the buffer for the new leg
+    const leg2 = lastLeg();
+    leg2.open();
+    await flushMicro();
+
+    // Leg two's clock starts at captured 5 s, the first byte it was sent.
+    leg2.emit(speechStarted('b', 500));
+    leg2.emit(completed('b', 'second'));
+    expect(session.utterances().map((u) => u.startMs)).toEqual([1_000, 5_500]);
+  });
+
+  it('stamps a rotated leg from where its audio sits in the capture, not by wall clock', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    emitFrame(new Array(1000).fill(1));
+    await jest.advanceTimersByTimeAsync(FLUSH_MS + 10);
+    leg1.emit(speechStarted('a', 1_000));
+    leg1.emit(completed('a', 'first'));
+
+    await advanceToRotation();
+    await flushMicro(); // the new leg is connecting; the old one still takes audio
+    emitFrame(new Array(200).fill(2)); // 1 s not yet flushed when the legs swap
+    const leg2 = lastLeg();
+    leg2.open();
+    await flushMicro();
+
+    leg2.emit(speechStarted('b', 300));
+    leg2.emit(completed('b', 'second'));
+    expect(session.utterances().map((u) => u.startMs)).toEqual([1_000, 5_300]);
+  });
+});
+
+describe('startRealtimeMeetingWs — closes past the rotation age', () => {
+  it('backs off when every new leg is closed at once after 55 minutes', async () => {
+    const { session } = await boot();
+    await advanceToRotation();
+    await flushMicro();
+    const leg2 = lastLeg();
+    leg2.open();
+    await flushMicro();
+    // Past the rotate-on-close threshold, and leg two has lived long enough.
+    jest.advanceTimersByTime(5 * 60 * 1000);
+    (api.post as jest.Mock).mockClear();
+
+    leg2.serverClose(1006);
+    await flushMicro();
+    expect(api.post as jest.Mock).toHaveBeenCalledTimes(1);
+
+    for (const [index, waitMs] of [1_000, 2_000, 4_000].entries()) {
+      const leg = lastLeg();
+      leg.open();
+      await flushMicro();
+      leg.serverClose(1006);
+      await flushMicro();
+      await jest.advanceTimersByTimeAsync(waitMs - 1);
+      await flushMicro();
+      expect(api.post as jest.Mock).toHaveBeenCalledTimes(index + 1);
+      await jest.advanceTimersByTimeAsync(1);
+      await flushMicro();
+      expect(api.post as jest.Mock).toHaveBeenCalledTimes(index + 2);
+    }
+
+    // Stop during the next wait: nothing more is fetched or opened.
+    const leg = lastLeg();
+    leg.open();
+    await flushMicro();
+    leg.serverClose(1006);
+    await flushMicro();
+    const sockets = FakeWebSocket.instances.length;
+    await session.stop();
+    await jest.advanceTimersByTimeAsync(60_000);
+    await flushMicro();
+    expect(api.post as jest.Mock).toHaveBeenCalledTimes(4);
+    expect(FakeWebSocket.instances.length).toBe(sockets);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+});
+
+describe('startRealtimeMeetingWs — word limit on reconnect', () => {
+  it('ends the session when the token endpoint answers 429', async () => {
+    const callbacks = { onError: jest.fn(), onClose: jest.fn() };
+    const { leg1 } = await boot(callbacks);
+
+    (api.post as jest.Mock)
+      .mockClear()
+      .mockRejectedValue(Object.assign(new Error('Too Many Requests'), { status: 429 }));
+    leg1.serverClose(1006);
+    await flushMicro();
+    await jest.advanceTimersByTimeAsync(60_000);
+    await flushMicro();
+
+    expect(api.post as jest.Mock).toHaveBeenCalledTimes(1);
+    expect(callbacks.onError).toHaveBeenCalledTimes(1);
+    expect(callbacks.onClose).toHaveBeenCalledTimes(1);
+    expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
+  });
+});

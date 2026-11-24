@@ -9,8 +9,8 @@
  * (rotation, Stop) is committed and kept open until its last turn is transcribed, up to
  * STOP_FLUSH_TIMEOUT_MS, so the final words of a leg are not cut off. One reducer means utterances
  * accumulate across every leg; each leg's messages are rewritten first (item_id
- * namespaced, timings offset) so a fresh leg's restarted ids/clock don't collide with
- * or rewind the transcript.
+ * namespaced, timings offset onto the capture clock) so a fresh leg's restarted ids/clock
+ * don't collide with or rewind the transcript.
  *
  * Auth rides in the WS subprotocol, not a header — RN mangles custom WS headers on iOS.
  */
@@ -131,6 +131,7 @@ export async function startRealtimeMeetingWs(
   let flushTimer: ReturnType<typeof setInterval> | null = null;
   let rotationTimer: ReturnType<typeof setTimeout> | null = null;
   let reconnectDelayTimer: ReturnType<typeof setTimeout> | null = null;
+  let rotateDelayTimer: ReturnType<typeof setTimeout> | null = null;
   // Legs in a row the server closed within SHORT_LEG_MS of opening.
   let consecutiveShortLegs = 0;
   let frameSub: { remove(): void } | null = null;
@@ -145,7 +146,6 @@ export async function startRealtimeMeetingWs(
   let stopPromise: Promise<void> | null = null;
 
   let legIndex = 0;
-  let cumulativeOffsetMs = 0; // summed wall-clock duration of all prior legs
   let legStartedAt = 0;
   let sessionStartedAt = 0; // drives the rotate-vs-reconnect age
 
@@ -290,6 +290,10 @@ export async function startRealtimeMeetingWs(
       clearTimeout(reconnectDelayTimer);
       reconnectDelayTimer = null;
     }
+    if (rotateDelayTimer) {
+      clearTimeout(rotateDelayTimer);
+      rotateDelayTimer = null;
+    }
     // Close any in-flight connect so a stop doesn't leave it to time out (and re-enter retry).
     if (connectingWs) {
       closeWs(connectingWs);
@@ -391,9 +395,10 @@ export async function startRealtimeMeetingWs(
       };
     });
 
+  // The offset is set when the leg is swapped in, once it is known which audio it gets first.
   const openLeg = (clientSecret: string): Promise<WebSocketLike> => {
     legIndex += 1;
-    return connectLeg(clientSecret, { legIndex, offsetMs: cumulativeOffsetMs });
+    return connectLeg(clientSecret, { legIndex, offsetMs: 0 });
   };
 
   const scheduleRotation = (): void => {
@@ -409,6 +414,11 @@ export async function startRealtimeMeetingWs(
   // and closes it once its last turn is in. Always re-arm the rotation clock onto the new leg.
   const swapCurrentLeg = (ws: WebSocketLike): void => {
     const previous = currentWs;
+    // The server's clock restarts at 0 with the first audio this leg receives: whatever the
+    // ring still holds, which is the newest audio captured. Its offset is therefore that
+    // audio's position in the capture, so timings stay on one clock across every leg.
+    const meta = legMeta.get(ws);
+    if (meta) meta.offsetMs = bytesToMs(capturedBytes - pcmRing.byteLength);
     currentWs = ws;
     legStartedAt = Date.now();
     // Rotation fires no reconnect callback, so this is the only signal that clears a
@@ -431,9 +441,7 @@ export async function startRealtimeMeetingWs(
     notifyClose();
   };
 
-  // Replace a dead leg with a fresh one (capped backoff, no attempt limit), mic never stopping. Keeps
-  // cumulativeOffsetMs unchanged: the new session's restarted clock rewinds this leg's
-  // ms labels, but display order is by sortOrder (utterance index), not startMs.
+  // Replace a dead leg with a fresh one (capped backoff, no attempt limit), mic never stopping.
   // `delayMs` holds the first attempt back (after short-lived legs); clearTimers cancels it.
   const attemptReconnect = (delayMs = 0): void => {
     if (terminated || reconnecting || rotating) return;
@@ -491,9 +499,6 @@ export async function startRealtimeMeetingWs(
   const rollLeg = async (): Promise<void> => {
     if (terminated || reconnecting || rotating) return;
     rotating = true;
-    // Advance the offset by the old leg's duration BEFORE opening the new leg so its
-    // fresh-clock messages stamp continuously.
-    cumulativeOffsetMs += Date.now() - legStartedAt;
     try {
       const clientSecret = await fetchClientSecret();
       const newWs = await openLeg(clientSecret);
@@ -528,7 +533,22 @@ export async function startRealtimeMeetingWs(
     if (decision === 'terminal') {
       goTerminal(new Error(`Realtime WebSocket closed (code ${code ?? 'unknown'})`));
     } else if (decision === 'rotate') {
-      void rollLeg();
+      // Past the rotation age every close rotates, so a server that accepts and drops every
+      // leg would otherwise get an unthrottled token-mint loop for the rest of the meeting.
+      const delayMs = shortLegBackoffMs(consecutiveShortLegs);
+      if (delayMs === 0) {
+        void rollLeg();
+        return;
+      }
+      // The dead leg's scheduled rotation must not jump the wait; the swap re-arms it.
+      if (rotationTimer) {
+        clearTimeout(rotationTimer);
+        rotationTimer = null;
+      }
+      rotateDelayTimer = setTimeout(() => {
+        rotateDelayTimer = null;
+        void rollLeg();
+      }, delayMs);
     } else {
       attemptReconnect(shortLegBackoffMs(consecutiveShortLegs));
     }

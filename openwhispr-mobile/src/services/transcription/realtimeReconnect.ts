@@ -125,7 +125,7 @@ interface LegOffsetEvent {
 }
 
 /**
- * Shift a server event's audio timings by the leg's cumulative offset. Returned
+ * Shift a server event's audio timings by the leg's offset on the capture clock. Returned
  * untouched when the offset is zero or the event carries no timings (so null timings
  * still reach the reducer's fallback). Never mutates the input.
  */

@@ -84,7 +84,10 @@ const joinText = (left: string, right: string): string =>
 export const UNLABELED_BLOCK_GAP_MS = 2000;
 export const UNLABELED_BLOCK_MAX_MS = 60000;
 
+// A start before the block's own start is a timeline that jumped backwards (e.g. timings
+// from before a fix stamped a reconnected leg from 0); merging it would swallow everything after.
 const continuesUnlabeledBlock = (previous: TranscriptBlock, segment: Segment): boolean =>
+  segment.startMs >= previous.startMs &&
   segment.startMs - previous.endMs < UNLABELED_BLOCK_GAP_MS &&
   segment.startMs - previous.startMs < UNLABELED_BLOCK_MAX_MS;
 

@@ -272,4 +272,48 @@ describe('groupTranscriptSegments unlabeled blocks', () => {
     );
     expect(blocks).toHaveLength(1);
   });
+
+  it('starts a new unlabeled block when the timeline jumps backwards', () => {
+    const blocks = groupTranscriptSegments(
+      [
+        segment({ id: 1, sortOrder: 0, startMs: 1_800_000, endMs: 1_801_000, text: 'before' }),
+        segment({ id: 2, sortOrder: 1, startMs: 500, endMs: 1_500, text: 'after' }),
+      ],
+      [],
+    );
+    expect(blocks.map((block) => block.text)).toEqual(['before', 'after']);
+    expect(blocks.map((block) => block.timestamp)).toEqual(['30:00', '0:00']);
+  });
+
+  it('splits unlabeled lines on a pause inside a note that has speakers', () => {
+    const blocks = groupTranscriptSegments(
+      [
+        segment({
+          id: 1,
+          sortOrder: 0,
+          startMs: 0,
+          endMs: 1_000,
+          text: 'a1',
+          speakerLabel: 'SPEAKER_00',
+        }),
+        segment({
+          id: 2,
+          sortOrder: 1,
+          startMs: 20_000,
+          endMs: 21_000,
+          text: 'a2',
+          speakerLabel: 'SPEAKER_00',
+        }),
+        segment({ id: 3, sortOrder: 2, startMs: 22_000, endMs: 23_000, text: 'u1' }),
+        segment({ id: 4, sortOrder: 3, startMs: 23_500, endMs: 24_000, text: 'u2' }),
+        segment({ id: 5, sortOrder: 4, startMs: 27_000, endMs: 28_000, text: 'u3' }),
+      ],
+      [speaker({ displayName: 'Alice' })],
+    );
+    expect(blocks.map((block) => [block.speakerName, block.text])).toEqual([
+      ['Alice', 'a1 a2'],
+      ['Unknown speaker', 'u1 u2'],
+      ['Unknown speaker', 'u3'],
+    ]);
+  });
 });
