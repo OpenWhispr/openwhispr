@@ -5,6 +5,7 @@ import {
   downloadParakeetModel,
   stagedParakeetBytes,
 } from './parakeetModelDownloader';
+import { refreshKeyboardEngine } from './keyboardEngineRefresh';
 import { tokenTimingsToWhisperSegments } from './parakeetSegments';
 
 export interface ParakeetTranscribeServiceOptions {
@@ -12,14 +13,6 @@ export interface ParakeetTranscribeServiceOptions {
   /** Base ISO code hint for v3's language filter; omit for auto language ID. Ignored by v2. */
   language?: string;
   wordTimestamps?: boolean;
-}
-
-// The keyboard's snapshot says which model it can run, so it must hear when one lands or goes.
-// Required lazily: keyboardLocalEngine imports LocalTranscriptionService, which imports this file.
-function refreshKeyboardEngine(): void {
-  const { refreshKeyboardLocalEngine } =
-    require('@/lib/keyboardLocalEngine') as typeof import('@/lib/keyboardLocalEngine');
-  refreshKeyboardLocalEngine().catch(() => {});
 }
 
 /**
