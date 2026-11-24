@@ -267,21 +267,20 @@ export const ASSEMBLYAI_DICTATION_LANGUAGES = new Set([
   "zu",
 ]);
 
-// The live catalog decides first: an offered model is sent as is, and a retired one
-// moves to its replacement. The prefix rules then keep a model the catalog does not know
-// yet (a remote addition before its catalog loads) instead of resetting it;
-// transcriptionRouteModelAgreement.test.js pins them to every shipping model.
+// The live catalog decides first: an offered model is sent as is, a streaming one moves to
+// the provider's batch model when it names one, and a retired one moves to its replacement.
+// The prefix rules then keep a model the catalog does not know yet (a remote addition before
+// its catalog loads) instead of resetting it; transcriptionRouteModelAgreement.test.js pins
+// them to every shipping model.
 export function resolveByokModel(provider: string, configuredModel?: string): string {
   const trimmed = (configuredModel || "").trim();
   if (provider === "custom") return trimmed || "whisper-1";
   if (trimmed) {
     const catalogProvider = getRegistryData().transcriptionProviders.find((p) => p.id === provider);
+    const listed = catalogProvider?.models.find((model) => model.id === trimmed);
+    if (listed?.streaming && catalogProvider?.batchModel) return catalogProvider.batchModel;
     // A Note Recording-only model has no batch endpoint, so it falls to the rules below.
-    if (
-      !isNoteRecordingOnlyTranscriptionModel(provider, trimmed) &&
-      catalogProvider?.models.some((model) => model.id === trimmed)
-    )
-      return trimmed;
+    if (listed && !isNoteRecordingOnlyTranscriptionModel(provider, trimmed)) return trimmed;
     const replacement = retiredReplacement("transcriptionProviders", provider, trimmed);
     if (replacement) return replacement;
     const matchesProvider =
