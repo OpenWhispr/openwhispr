@@ -28,6 +28,26 @@
 //                      that differs is refused (a batch create drops the folder);
 //                      an explicit null is the account's defaultWorkspaceId
 
+// `folderNamesPerParent` models the subfolder API: a personal folder create
+// that names a parent takes a same-named folder only under that parent, and
+// one elsewhere in the account's personal folders (a legacy unplaced one
+// included) answers 409 folder_name_taken with no winner; a batch create
+// returns such refusals per row (`refused`) and creates the rest.
+// `subfolderPlacement` models a subfolder's placement: one left out takes its
+// parent's, and one named (null being the default workspace) that isn't the
+// parent's answers 400 invalid_parent_folder. An unplaced parent counts as the
+// default only when the subfolder leaves the placement out.
+// `subfolderScope` models the rest of lib/folders-service.ts's nesting. A parent
+// must be a live top-level folder in the scope the write leaves the folder in (a
+// space folder under a folder of that space, a personal one under a personal
+// folder), other than the folder, which may be neither a default folder nor a
+// parent itself; anything else answers 400 invalid_parent_folder
+// (assertValidParent). A space change with no parent in the payload takes the
+// folder top-level (updateFolder), and leaves its subfolders that stay in
+// another space top-level there (unnestSubfolders). What a move does to notes
+// (relocate_private_folder_children, detachNotesLeftInPreviousSpace) isn't
+// modelled: the real API then refuses a note's next PATCH as
+// note_version_conflict on base_updated_at, which this fake's guards don't model.
 // `userId` models one account's note ownership and separates its cloud ids.
 // `adoptDefaultFolders` models the server returning an existing personal
 // default when another device creates the same name in the same workspace.
@@ -75,7 +95,7 @@ const NOTE_FIELDS = [
   "expected_speaker_count",
 ];
 
-const FOLDER_FIELDS = ["name", "is_default", "sort_order"];
+const FOLDER_FIELDS = ["name", "is_default", "sort_order", "parent_folder_id"];
 
 // `messages` rides along as a stored field; of the routes returning a conversation,
 // only the list includes it, as api/conversations/list.ts does. A row stored
@@ -109,7 +129,7 @@ const NOTE_DEFAULTS = {
   expected_speaker_count: null,
 };
 
-const FOLDER_DEFAULTS = { name: "", is_default: false, sort_order: 0 };
+const FOLDER_DEFAULTS = { name: "", is_default: false, sort_order: 0, parent_folder_id: null };
 
 const CONVERSATION_DEFAULTS = { title: "Untitled", archived_at: null, messages: [] };
 
@@ -133,6 +153,9 @@ function createFakeCloud(config = {}) {
     updatedAtClamp: true,
     userId: null,
     adoptDefaultFolders: false,
+    folderNamesPerParent: false,
+    subfolderPlacement: false,
+    subfolderScope: false,
     revisionGuard: false,
     serverDate: false,
     ...config,
@@ -191,7 +214,12 @@ function createFakeCloud(config = {}) {
         continue;
       }
       const value = incoming[key];
-      if (cfg.coalesceOnConflict && (value === null || value === undefined) && row[key] != null) {
+      if (
+        cfg.coalesceOnConflict &&
+        (value === null || value === undefined) &&
+        row[key] != null &&
+        !collection.clearable?.includes(key)
+      ) {
         next[key] = row[key];
         continue;
       }
@@ -274,7 +302,69 @@ function createFakeCloud(config = {}) {
     throw new HttpError(400, "Folder not found");
   }
 
+  // As lib/folders-service.ts checks a subfolder's parent and placement.
+  function placeSubfolder(input) {
+    if (!cfg.subfolderPlacement || !input.parent_folder_id || input.space_id) return input;
+    const parent = folders.get(input.parent_folder_id);
+    if (!parent || parent.deleted_at) return input;
+    if (!("private_workspace_id" in input)) {
+      return { ...input, private_workspace_id: parent.private_workspace_id ?? null };
+    }
+    const named = input.private_workspace_id ?? cfg.defaultWorkspaceId ?? null;
+    if (!sameValue(named, parent.private_workspace_id ?? null)) {
+      throw new HttpError(400, "Invalid parent folder", "invalid_parent_folder");
+    }
+    return input;
+  }
+
+  // As assertValidParent: `existing` is the row the write lands on, if any.
+  function assertValidParent(input, existing) {
+    if (!cfg.subfolderScope || !input.parent_folder_id) return;
+    const parent = folders.get(input.parent_folder_id);
+    const spaceId = "space_id" in input ? (input.space_id ?? null) : (existing?.space_id ?? null);
+    const isParent =
+      !!existing &&
+      [...folders.values()].some((row) => row.parent_folder_id === existing.id && !row.deleted_at);
+    if (
+      !parent ||
+      parent.deleted_at ||
+      parent.parent_folder_id ||
+      parent === existing ||
+      isParent ||
+      (existing ? existing.is_default : input.is_default) ||
+      (parent.space_id ?? null) !== spaceId
+    ) {
+      throw new HttpError(400, "Invalid parent folder", "invalid_parent_folder");
+    }
+  }
+
+  // A space change, given the folder's space before the write: with no parent in
+  // the payload the folder goes top-level, and subfolders left in another space
+  // go top-level there.
+  function afterFolderWrite(row, spaceBefore, input) {
+    const spaceId = row.space_id ?? null;
+    if (!cfg.subfolderScope || spaceBefore === spaceId) return;
+    if (!("parent_folder_id" in input)) row.parent_folder_id = null;
+    for (const child of folders.values()) {
+      if (child.parent_folder_id !== row.id || child.deleted_at) continue;
+      if ((child.space_id ?? null) === spaceId) continue;
+      child.parent_folder_id = null;
+      child.updated_at = bump(child);
+    }
+  }
+
   function createFolder(input) {
+    input = placeSubfolder(input);
+    const existing = findByClientId(folderCollection, input.client_folder_id);
+    assertValidParent(input, existing);
+    if (cfg.folderNamesPerParent && !input.space_id && "parent_folder_id" in input) {
+      for (const row of folders.values()) {
+        if (row.deleted_at || row.space_id || row.name !== input.name) continue;
+        if (row.client_folder_id === input.client_folder_id) continue;
+        if ((row.parent_folder_id ?? null) === (input.parent_folder_id ?? null)) return row;
+        throw new HttpError(409, "Folder name already taken", "folder_name_taken");
+      }
+    }
     if (cfg.adoptDefaultFolders && input.is_default && !input.space_id) {
       for (const row of folders.values()) {
         if (
@@ -287,7 +377,10 @@ function createFakeCloud(config = {}) {
           return row;
       }
     }
-    return upsertRow(folderCollection, input);
+    const spaceBefore = existing && (existing.space_id ?? null);
+    const row = upsertRow(folderCollection, input);
+    if (existing) afterFolderWrite(row, spaceBefore, input);
+    return row;
   }
 
   function findByClientId(collection, clientId) {
@@ -381,6 +474,9 @@ function createFakeCloud(config = {}) {
     store: folders,
     fields: FOLDER_FIELDS,
     defaults: FOLDER_DEFAULTS,
+    // The API gates the parent on the key's presence: an explicit null
+    // moves the folder to the top level.
+    clearable: ["parent_folder_id"],
     clientKey: "client_folder_id",
     prefix: "folder",
     scoped: true,
@@ -678,16 +774,30 @@ function createFakeCloud(config = {}) {
       }
       case "POST /api/folders/batch-create": {
         const inputs = Array.isArray(body?.folders) ? body.folders : [];
+        if (inputs.length > 50) throw new HttpError(400, "too many folders", "validation_error");
         const created = [];
+        const refused = [];
         for (const input of inputs) {
-          created.push(createFolder(input));
+          try {
+            created.push(createFolder(input));
+          } catch (error) {
+            if (!cfg.folderNamesPerParent || !(error instanceof HttpError) || !error.code) {
+              throw error;
+            }
+            refused.push({ client_folder_id: input.client_folder_id ?? null, code: error.code });
+          }
         }
-        return { created };
+        return cfg.folderNamesPerParent ? { created, refused } : { created };
       }
       case "PATCH /api/folders/update": {
         const { id, ...updates } = body ?? {};
         const row = requireLive(folderCollection, id);
-        return applyWrite(folderCollection, row, updates);
+        const input = placeSubfolder(updates);
+        assertValidParent(input, row);
+        const spaceBefore = row.space_id ?? null;
+        applyWrite(folderCollection, row, input);
+        afterFolderWrite(row, spaceBefore, input);
+        return row;
       }
       case "GET /api/me/spaces":
         if (spaces.size === 0 && !cfg.privateWorkspacePlacement)
@@ -702,6 +812,10 @@ function createFakeCloud(config = {}) {
             : {}),
         };
       case "DELETE /api/folders/delete":
+        // The server tombstones the folder's notes with it.
+        for (const row of notes.values()) {
+          if (row.folder_id === body?.id && !row.deleted_at) tombstone(noteCollection, row.id);
+        }
         tombstone(folderCollection, body?.id);
         return {};
       case "GET /api/folders/list": {
@@ -877,6 +991,7 @@ function createFakeCloud(config = {}) {
         error: failure.error ?? "fake cloud failure",
         status: failure.status ?? 500,
         code: failure.code,
+        details: failure.details,
       };
     }
 
@@ -975,6 +1090,12 @@ function createFakeCloud(config = {}) {
   };
 }
 
+// The `since` a client's note or folder delta sends for a stored cursor: it
+// re-reads 10 seconds before it (DELTA_READ_OVERLAP_MS in SyncService).
+function deltaSince(cursor) {
+  return new Date(Math.max(0, Date.parse(cursor) - 10_000)).toISOString();
+}
+
 // One cloud per account. Real cloud ids are UUIDs, so two accounts' clouds
 // never hold the same id; each of these mints its ids in a space of its own.
 let accountClouds = 0;
@@ -982,4 +1103,4 @@ function createAccountCloud(config = {}) {
   return createFakeCloud({ idSpace: `cloud${++accountClouds}-`, ...config });
 }
 
-module.exports = { createFakeCloud, createAccountCloud, normalizeTimestamp };
+module.exports = { createFakeCloud, createAccountCloud, normalizeTimestamp, deltaSince };

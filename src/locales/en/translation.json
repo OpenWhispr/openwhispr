@@ -4277,6 +4277,9 @@
     "mutationErrors": {
       "folderNameRequired": "Enter a folder name.",
       "folderAlreadyExists": "A folder with that name already exists.",
+      "folderNameTakenIn": "“{{name}}” is already used in “{{parent}}”. A folder name can only be used once in each space.",
+      "folderNameTakenTopLevel": "“{{name}}” is already used at the top level. A folder name can only be used once in each space.",
+      "reservedSubfolderName": "“{{name}}” is the name of a default folder in Private, so a subfolder can't use it.",
       "folderNotFound": "That folder could not be found.",
       "defaultFolderImmutable": "Default folders cannot be changed.",
       "spaceNameRequired": "Enter a space name.",
@@ -4330,6 +4333,8 @@
       "confirmMoveInTitle": "Move to {{space}}?",
       "confirmMoveIn": "Everyone in {{space}} will be able to view and edit this note. Notes can't be moved back out of a teamspace later.",
       "confirmMoveInFolder": "Everyone in {{space}} will be able to view and edit this folder and its notes. Folders and notes can't be moved back out of a teamspace later.",
+      "confirmMoveInFolderSubfolders": "Everyone in {{space}} will be able to view and edit this folder, including {{subfolders}} and {{notes}}. Folders and notes can't be moved back out of a teamspace later.",
+      "confirmMoveInSubfolder": "Everyone in {{space}} will be able to view and edit this subfolder and its notes. It will become a top-level folder in {{space}}, and this move can't be undone.",
       "cantMoveOut": "Notes can't be moved out of a teamspace.",
       "cantMoveTeammate": "Only the note's owner or a workspace admin can move it to another space.",
       "moved": "Moved “{{title}}” to {{target}}",
@@ -4406,7 +4411,7 @@
         "title": "Teamspace",
         "description": "A shared area inside a workspace. Add people or teams to give them access."
       },
-      "contents": "Each space can contain folders and notes.",
+      "contents": "Each space can contain folders and notes, and each folder can have subfolders.",
       "done": "Got it",
       "reopen": "Learn how spaces are organized"
     },
@@ -4419,13 +4424,18 @@
       "title": "Folders",
       "soon": "Soon",
       "folderName": "Folder name",
+      "topLevel": "Top level",
       "couldNotCreate": "Couldn't create folder",
       "couldNotRename": "Couldn't rename folder",
       "couldNotDelete": "Couldn't delete folder",
       "deleteTitle": "Delete folder?",
       "deleteDescription": "This will permanently delete \"{{name}}\" and its {{count}} note(s). This cannot be undone.",
       "deleteDescriptionEmpty": "This will permanently delete \"{{name}}\". This cannot be undone.",
-      "deleteConfirm": "Delete folder and notes"
+      "deleteDescriptionSubfolders": "This will permanently delete \"{{name}}\", including {{subfolders}} and {{notes}}. This cannot be undone.",
+      "subfolderCount_one": "{{count}} subfolder",
+      "subfolderCount_other": "{{count}} subfolders",
+      "deleteConfirm": "Delete folder and notes",
+      "recordingInFolder": "“{{title}}” in this folder is being recorded. Stop the recording, then delete the folder."
     },
     "list": {
       "title": "Notes",
@@ -4612,6 +4622,11 @@
           "empty": "Add headings to build the table of contents."
         }
       },
+      "lostNoteCopy": {
+        "title": "Your latest edits are in a new note",
+        "description": "“{{title}}” was deleted before they were saved. The new note is in Private.",
+        "open": "Open note"
+      },
       "muteMic": "Mute microphone",
       "unmuteMic": "Unmute microphone",
       "micMuted": "Microphone muted"
@@ -4762,7 +4777,12 @@
       "recordingDisabledByOrg": "Meeting recording is disabled by your organization.",
       "stoppedAccountChanged": "Recording stopped because you signed out or switched accounts.",
       "stoppedPolicyUnresolved": "Recording stopped because your organization's settings couldn't be checked.",
-      "stoppedWorkspaceChanged": "Recording stopped because you switched workspaces."
+      "stoppedWorkspaceChanged": "Recording stopped because you switched workspaces.",
+      "recordingCopy": {
+        "title": "Recording moved to a new note",
+        "description": "“{{title}}” was deleted during the recording. The transcript is saved in a new note in Private.",
+        "open": "Open note"
+      }
     },
     "meetingPill": {
       "returnToNote": "Return to recording",
@@ -4794,6 +4814,7 @@
       "searchFolders": "Search folders...",
       "noResults": "No folders found",
       "newFolder": "New folder",
+      "newSubfolder": "New subfolder",
       "showInFileManager": "Show in {{manager}}"
     },
     "actions": {
@@ -5010,6 +5031,7 @@
         "members_one": "{{count}} member",
         "members_other": "{{count}} members"
       },
+      "subfolders": "Subfolders",
       "banner": {
         "title": {
           "team": "Your teamspace",
@@ -6840,7 +6862,7 @@
         "FOLDER_UNAVAILABLE": "This destination is unavailable. Choose another folder.",
         "SPACE_UNAVAILABLE": "This destination is unavailable. Choose another folder.",
         "FOLDER_NAME_REQUIRED": "Enter a folder name.",
-        "FOLDER_NAME_TAKEN": "A folder with that name already exists in this location.",
+        "FOLDER_NAME_TAKEN": "A folder with that name already exists in this space.",
         "CREATE_FAILED": "Could not finish. Please retry.",
         "LINKED_NOTE_CHANGED": "Review the destination, then join again.",
         "NOTE_UNAVAILABLE": "This note is unavailable. Retry without creating a replacement.",

@@ -1956,3 +1956,100 @@ for (const failure of ["after rename", "after new ledger row"]) {
     );
   });
 }
+
+for (const name of [
+  "12-plan.md",
+  "12-Plan.MD",
+  "12-plan-transcript.md",
+  "12-plan-transcript.txt",
+  "edited-12-plan.md",
+  "edited-2-12-plan.md",
+]) {
+  test(`a folder named like a note file never takes a note file's name (${name})`, (t) => {
+    const basePath = tempMirror(t);
+    const parent = { ...placement("Private notes", "Client A"), folder: "Client A" };
+    const child = { ...placement("Private notes", "Client A", name), folder: `Client A/${name}` };
+    markdownMirror.ensureFolder(child, 31);
+    markdownMirror.writeNote({ id: 12, title: "Plan", content: "Parent body" }, parent);
+    markdownMirror.writeNote({ id: 13, title: "Inside", content: "Child body" }, child);
+
+    const childDir = markdownMirror.getFolderPath(child);
+    assert.notEqual(path.basename(childDir), name);
+    assert.match(path.basename(childDir), / \([0-9a-f]{8}\)$/);
+    assert.equal(path.dirname(childDir), path.join(basePath, "Private notes", "Client A"));
+    assert.ok(fs.readFileSync(markdownMirror.getNotePath(12), "utf8").endsWith("Parent body"));
+    assert.ok(fs.readFileSync(markdownMirror.getNotePath(13), "utf8").endsWith("Child body"));
+  });
+}
+
+test("folder names that merely start with digits keep their names", (t) => {
+  const basePath = tempMirror(t);
+  for (const name of ["2026-Q1", "12-plans", "12-plan.md.bak"]) {
+    markdownMirror.ensureFolder(placement("Private notes", name));
+    assert.equal(fs.existsSync(path.join(basePath, "Private notes", name)), true);
+  }
+});
+
+test("a parent's whole-folder move carries its subfolder's directory, notes and files", (t) => {
+  const basePath = tempMirror(t);
+  const parent = { ...placement("Private notes", "P"), folder: "P" };
+  const child = { ...placement("Private notes", "P", "C"), folder: "P/C" };
+  const renamed = { ...placement("Private notes", "R"), folder: "R" };
+  const renamedChild = { ...placement("Private notes", "R", "C"), folder: "R/C" };
+  markdownMirror.ensureFolder(parent, 40);
+  markdownMirror.ensureFolder(child, 41);
+  const note = callNote(42);
+  markdownMirror.writeNote(note, child);
+  markdownMirror.writeTranscript(note, child, {});
+  fs.writeFileSync(path.join(basePath, "Private notes", "P", "C", "figure.png"), "image");
+
+  assert.equal(markdownMirror.relocateFolderDir("Private notes/P", renamed, 40), true);
+  assert.equal(fs.existsSync(path.join(basePath, "Private notes", "P")), false);
+  assert.equal(
+    fs.readFileSync(path.join(basePath, "Private notes", "R", "C", "figure.png"), "utf8"),
+    "image"
+  );
+  assert.ok(
+    markdownMirror
+      .recordedFiles()
+      .some(
+        (entry) =>
+          entry.kind === "dir" && entry.ownerId === 41 && entry.relPath === "Private notes/R/C"
+      )
+  );
+
+  markdownMirror.writeNote(note, renamedChild);
+  markdownMirror.writeTranscript(note, renamedChild, {});
+  const text = fs.readFileSync(markdownMirror.getNotePath(note.id), "utf8");
+  assert.equal(readFrontmatter(text).folder, "R/C");
+  assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes", "R", "C")).sort(), [
+    "42-call-transcript.md",
+    "42-call.md",
+    "figure.png",
+  ]);
+});
+
+test("a folder never moves into its own subfolder's directory, however the disk spells it", (t) => {
+  const basePath = tempMirror(t);
+  const source = placement("Private notes", "projects");
+  markdownMirror.ensureFolder(source, 50);
+  markdownMirror.writeNote({ id: 51, title: "Plan", content: "Body" }, source);
+  fs.writeFileSync(path.join(basePath, "Private notes", "projects", "figure.png"), "image");
+  const caseInsensitive = fs.existsSync(path.join(basePath, "Private notes", "PROJECTS"));
+
+  const moved = markdownMirror.relocateFolderDir(
+    "Private notes/projects",
+    placement("Private notes", "Projects", "projects"),
+    50
+  );
+
+  assert.equal(moved, !caseInsensitive);
+  const figure = caseInsensitive
+    ? path.join(basePath, "Private notes", "projects", "figure.png")
+    : path.join(basePath, "Private notes", "Projects", "projects", "figure.png");
+  assert.equal(fs.readFileSync(figure, "utf8"), "image");
+  assert.ok(fs.readFileSync(markdownMirror.getNotePath(51), "utf8").endsWith("Body"));
+  if (caseInsensitive) {
+    assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes")), ["projects"]);
+  }
+});
