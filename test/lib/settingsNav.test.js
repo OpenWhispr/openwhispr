@@ -197,3 +197,26 @@ test("a meeting's refusal opens Speech-to-Text on its Note Recording tab", async
   assert.equal(nav.SECTION_ALIASES.noteRecording, "speechToText");
   assert.equal(nav.LEGACY_SUB_TAB.noteRecording, "noteRecording");
 });
+
+const BILLING_WORKSPACE_ID = "3f2b8c1e-9a4d-4e6f-8b1a-2c3d4e5f6a7b";
+
+test("parsePlansBillingTarget: plansBilling is Personal, a workspace target names its id", async () => {
+  const { parsePlansBillingTarget } = await load();
+  assert.deepEqual(parsePlansBillingTarget("plansBilling"), { kind: "personal" });
+  assert.deepEqual(parsePlansBillingTarget(`plansBilling:workspace:${BILLING_WORKSPACE_ID}`), {
+    kind: "workspace",
+    workspaceId: BILLING_WORKSPACE_ID,
+  });
+  assert.equal(parsePlansBillingTarget("llms"), null);
+  assert.equal(parsePlansBillingTarget(undefined), null);
+  assert.equal(parsePlansBillingTarget("plansBilling:workspace:nope"), null);
+});
+
+test("a workspace billing target resolves to the plansBilling section", async () => {
+  const { buildSettingsNav, resolveSettingsSection } = await load();
+  const nav = buildSettingsNav(SIGNED_IN_MEMBER);
+  assert.equal(
+    resolveSettingsSection(`plansBilling:workspace:${BILLING_WORKSPACE_ID}`, nav),
+    "plansBilling"
+  );
+});

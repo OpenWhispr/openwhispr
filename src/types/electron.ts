@@ -211,7 +211,10 @@ export interface MeetingNotificationData {
   /** Set while the org refuses meeting recording: the card can only join. */
   recordingRefusal?: Extract<
     MeetingError,
-    "POLICY_MEETING_RECORDING_DISABLED" | "POLICY_UNRESOLVABLE"
+    | "POLICY_MEETING_RECORDING_DISABLED"
+    | "POLICY_UNRESOLVABLE"
+    | "POLICY_EXTERNAL_ATTENDEES"
+    | "POLICY_ATTENDEES_UNVERIFIABLE"
   >;
 }
 
@@ -260,6 +263,8 @@ export type MeetingError =
   | "NOTE_UNAVAILABLE"
   | "START_FAILED"
   | "POLICY_MEETING_RECORDING_DISABLED"
+  | "POLICY_EXTERNAL_ATTENDEES"
+  | "POLICY_ATTENDEES_UNVERIFIABLE"
   | "POLICY_UNRESOLVABLE";
 
 export type MeetingResult<T> =
@@ -290,8 +295,9 @@ export interface IpcErrorFields {
  * Proxied-transcription IPC results. `ipcMain.handle` drops custom error props on
  * rejection, so these handlers resolve with a serialized error instead of throwing.
  */
-export type ProxyTranscriptionResult =
-  { text: string; model?: string; error?: undefined } | (IpcErrorFields & { text?: undefined });
+export type ProxyTranscriptionResult<SuccessFields = unknown> =
+  | ({ text: string; model?: string; error?: undefined } & SuccessFields)
+  | (IpcErrorFields & { text?: undefined });
 
 export interface AuthTokenState {
   token: string | null;
@@ -953,6 +959,10 @@ export interface Workspace {
   role: WorkspaceRole;
   is_billable?: boolean;
   billing_manager?: string | null;
+  // Absent before API release 4.
+  billing_manager_email?: string | null;
+  member_count?: number;
+  invitation_count?: number;
   // Absent on API responses that predate capabilities; read through workspaceCan().
   capabilities?: WorkspaceCapabilities;
   has_subscription?: boolean;
@@ -960,6 +970,8 @@ export interface Workspace {
   is_default: boolean;
   // Some account's default workspace, the caller's or another member's.
   is_account_default: boolean;
+  // Absent on API responses that predate workspace icons.
+  icon_url?: string | null;
 }
 
 export interface OwnedMemberContent {
@@ -1920,7 +1932,11 @@ declare global {
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
       openSettingsSection?: (
-        section: SettingsTarget | ProviderSettingsTarget | "plansBilling"
+        section:
+          | SettingsTarget
+          | ProviderSettingsTarget
+          | "plansBilling"
+          | `plansBilling:workspace:${string}`
       ) => Promise<{ success: boolean }>;
       captureDictationTarget?: () => Promise<{ success: boolean; pid: number | null }>;
       captureDictationAppCategory?: () => Promise<ToneAppCategory>;
@@ -1956,7 +1972,7 @@ declare global {
       >;
 
       // Org policy (see src/types/policy.ts)
-      getEffectivePolicy?: () => Promise<EffectivePolicySnapshot>;
+      getEffectivePolicy?: (options?: { refresh?: boolean }) => Promise<EffectivePolicySnapshot>;
       onEffectivePolicyChanged?: (
         callback: (snapshot: EffectivePolicySnapshot) => void
       ) => () => void;
@@ -2055,6 +2071,8 @@ declare global {
           cohereModel: string;
           whisperModel: string;
           preferredLanguage?: string;
+          translationSourceLanguage?: string;
+          keyterms?: string[];
           transcriptionMode?: InferenceMode;
           remoteTranscriptionType?: SelfHostedType;
           remoteTranscriptionUrl?: string;
@@ -2070,6 +2088,8 @@ declare global {
         success: boolean;
         transcription?: TranscriptionItem;
         warning?: string;
+        // The transcript as the provider rewrote it (AssemblyAI Dictation).
+        cleanedText?: string;
         error?: string;
         code?: string;
         messageKey?: string;
@@ -2975,6 +2995,12 @@ declare global {
         language?: string;
         keyterms?: string[];
       }) => Promise<ProxyTranscriptionResult>;
+      proxyElevenlabsTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        model?: string;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<ProxyTranscriptionResult<{ acceptedKeyterms: string[] }>>;
 
       // Groq API key management
       getGroqKey: () => Promise<string | null>;
@@ -3026,6 +3052,15 @@ declare global {
       saveDeepgramKey?: (key: string) => Promise<void>;
       getAssemblyAIKey?: () => Promise<string | null>;
       saveAssemblyAIKey?: (key: string) => Promise<void>;
+      proxyAssemblyAiTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        mimeType?: string;
+        durationSeconds?: number | null;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<ProxyTranscriptionResult & { cleanedText?: string }>;
+      getElevenlabsKey?: () => Promise<string | null>;
+      saveElevenlabsKey?: (key: string) => Promise<void>;
 
       // Custom endpoint API keys
       getSelfHostedSttHeaders?: () => Promise<string | null>;
@@ -3388,7 +3423,7 @@ declare global {
         error?: string;
         code?: string;
       }>;
-      cloudBillingPortal?: () => Promise<{
+      cloudBillingPortal?: (expectedAuthGeneration?: number) => Promise<{
         success: boolean;
         url?: string;
         error?: string;
@@ -3474,6 +3509,7 @@ declare global {
       // BYOK audio file transcription
       transcribeAudioFileByok?: (options: {
         filePath: string;
+        durationSeconds?: number;
         requestId?: string;
         purpose?: "dictation" | "upload";
         apiKey: string;
@@ -3993,6 +4029,20 @@ declare global {
           speakerIndexBase?: number;
         } & PolicyFailureMetadata
       >;
+      checkMeetingRecordingStart?: (options: {
+        noteId: number | null;
+        sessionId: string;
+      }) => Promise<{ success: true } | { success: false; code: string }>;
+      releaseMeetingRecordingStart?: (sessionId: string) => void;
+      onMeetingRecordingAdmissionRevoked?: (
+        callback: (data: {
+          sessionId: string;
+          code:
+            | "POLICY_EXTERNAL_ATTENDEES"
+            | "POLICY_ATTENDEES_UNVERIFIABLE"
+            | "AUDIO_OPERATION_CANCELLED";
+        }) => void
+      ) => () => void;
       isMeetingRecordingDisabled?: () => Promise<boolean>;
       meetingRecordingRefused?: (details: {
         noteId: number | null;
@@ -4007,6 +4057,10 @@ declare global {
       meetingTranscriptionSetSystemAudioAvailable?: (
         sessionId: string,
         available: boolean
+      ) => Promise<{ success: boolean; reason?: "stale-session" }>;
+      meetingTranscriptionSetMicMuted?: (
+        sessionId: string,
+        muted: boolean
       ) => Promise<{ success: boolean; reason?: "stale-session" }>;
       meetingTranscriptionStop?: (
         expectedSessionId?: string,
@@ -4299,7 +4353,8 @@ declare global {
         status?: "ready" | "cancel"
       ) => Promise<MeetingResult<NoteItem>>;
       joinCalendarMeeting?: (
-        eventId: string
+        eventId: string,
+        notesOnly?: boolean
       ) => Promise<{ success: boolean; code?: string; error?: string }>;
       // Resolves with nothing once started, or with why it could not start.
       startManualMeeting?: () => Promise<{ success: false; code?: string; error: string } | void>;

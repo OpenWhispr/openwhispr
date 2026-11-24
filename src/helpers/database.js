@@ -1961,6 +1961,27 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      this.db.transaction(() => {
+        const columns = this.db.pragma("table_info(calendar_events)");
+        // Older caches discarded provider visibility flags. A full sync replaces
+        // these provisional rows as soon as each provider can supply a roster.
+        if (!columns.some((column) => column.name === "attendees_omitted")) {
+          this.db.exec(`
+            ALTER TABLE calendar_events ADD COLUMN attendees_omitted INTEGER NOT NULL DEFAULT 0;
+            UPDATE calendar_events SET attendees_omitted = 1;
+            UPDATE google_calendars SET sync_token = NULL, sync_token_expires_at = NULL;
+            UPDATE microsoft_calendars SET sync_token = NULL, sync_token_expires_at = NULL;
+          `);
+        }
+        // Apple previously discarded the host address when the user organized
+        // the event. The next EventKit snapshot restores it.
+        if (!columns.some((column) => column.name === "organizer_self")) {
+          this.db.exec(`
+            ALTER TABLE calendar_events ADD COLUMN organizer_self INTEGER NOT NULL DEFAULT 0;
+            UPDATE calendar_events SET attendees_omitted = 1 WHERE provider = 'apple';
+          `);
+        }
+      })();
       // The event's page in Google Calendar or Outlook on the web; Apple has
       // none. The user_version 5 full sync fills it for rows in the sync window.
       try {
@@ -5938,6 +5959,15 @@ class DatabaseManager {
     if (this.noteUndoReady) noteUndo.discardNoteUndo(this, id, token);
   }
 
+  _notifyChangedMeetingInvite(previous, note) {
+    if (!previous || (previous.calendar_event_id || null) === (note.calendar_event_id || null))
+      return;
+    // A cloud sync or undo can wrap this write in another transaction. Read the
+    // final link after commit so a rolled-back change cannot end a live meeting.
+    if (this.db.inTransaction) queueMicrotask(() => this.onCalendarEventsUpdated?.(note.id));
+    else this.onCalendarEventsUpdated?.(note.id);
+  }
+
   updateNote(id, updates, options) {
     if (options?.undoable && this.noteUndoReady) {
       return noteUndo.updateNoteWithUndo(this, id, updates, options.expected, options.turn);
@@ -6128,6 +6158,7 @@ class DatabaseManager {
       if (result.changes === 0) return { success: false, error: "Note not found" };
       const fetchStmt = this.db.prepare("SELECT * FROM notes WHERE id = ?");
       const note = fetchStmt.get(id);
+      this._notifyChangedMeetingInvite(previous, note);
       return { success: true, note };
     } catch (error) {
       debugLogger.error("Error updating note", { error: error.message }, "notes");
@@ -9154,6 +9185,7 @@ class DatabaseManager {
         this._removeContactSources("source = ?", contactSource("google", email));
       });
       transaction();
+      this.onCalendarEventsUpdated?.();
       return { success: true };
     } catch (error) {
       debugLogger.error("Error removing Google account", { error: error.message }, "gcal");
@@ -9284,7 +9316,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       const transaction = this.db.transaction((eventList) => {
         const stmt = this.db.prepare(
-          "INSERT OR REPLACE INTO calendar_events (id, calendar_id, provider, summary, start_time, end_time, is_all_day, status, availability_status, self_response_status, hangout_link, conference_data, organizer_email, attendees_count, attendees, web_link, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+          "INSERT OR REPLACE INTO calendar_events (id, calendar_id, provider, summary, start_time, end_time, is_all_day, status, availability_status, self_response_status, hangout_link, conference_data, organizer_email, attendees_count, attendees, web_link, attendees_omitted, organizer_self, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
         );
         for (const e of eventList) {
           stmt.run(
@@ -9303,11 +9335,15 @@ class DatabaseManager {
             e.organizer_email || null,
             e.attendees_count || 0,
             e.attendees || null,
-            e.web_link || null
+            e.web_link || null,
+            e.attendees_omitted ? 1 : 0,
+            e.organizer_self ? 1 : 0
           );
         }
       });
       transaction(events);
+      // Apple replaces its snapshot in an outer transaction and notifies on commit.
+      if (!this.db.inTransaction) this.onCalendarEventsUpdated?.();
       return { success: true };
     } catch (error) {
       debugLogger.error("Error upserting calendar events", { error: error.message }, "gcal");
@@ -9601,8 +9637,8 @@ class DatabaseManager {
   // colleague's shared Google calendar (whose people still come through
   // contacts). Contacts come only from hand-added rows and connected
   // accounts; rows older builds stored have no source and are left out.
-  // excludedEmails are the user's own addresses and every address a stored
-  // event flags as a room or resource.
+  // excludedEmails includes the user's calendar accounts and organizer identities,
+  // plus every address a stored event flags as a room or resource.
   getContactLookupSources(meetingLimit = 1000) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -9610,7 +9646,7 @@ class DatabaseManager {
         .prepare(
           `SELECT start_time, is_all_day, organizer_email, attendees
              FROM calendar_events
-            WHERE (attendees IS NOT NULL OR organizer_email IS NOT NULL)
+            WHERE (attendees IS NOT NULL OR (organizer_email IS NOT NULL AND organizer_self = 0))
               AND status IN ('confirmed', 'tentative')
               AND self_response_status != 'declined'
               AND ${SELECTED_CALENDAR_EVENT_FILTER}
@@ -9655,19 +9691,22 @@ class DatabaseManager {
         )
         .all()
         .flatMap((row) => JSON.parse(row.own_addresses));
-      const resources = this.db
+      const excludedCalendarAddresses = this.db
         .prepare(
-          `SELECT DISTINCT attendee.value ->> '$.email' AS email
+          `SELECT attendee.value ->> '$.email' AS email
              FROM calendar_events, json_each(calendar_events.attendees) AS attendee
             WHERE json_valid(calendar_events.attendees)
-              AND attendee.value ->> '$.resource' = 1`
+              AND attendee.value ->> '$.resource' = 1
+            UNION
+           SELECT organizer_email AS email FROM calendar_events
+            WHERE organizer_self = 1 AND organizer_email IS NOT NULL`
         )
         .all()
         .map((row) => row.email);
       const excludedEmails = [
         ...accounts.map((row) => row.account_email),
         ...microsoftAliases,
-        ...resources,
+        ...excludedCalendarAddresses,
       ];
       return { meetings, contacts, excludedEmails };
     } catch (error) {
@@ -9831,6 +9870,7 @@ class DatabaseManager {
         this._removeContactSources("source LIKE ?", contactSource("google", "%"));
       });
       transaction();
+      this.onCalendarEventsUpdated?.();
       return { success: true };
     } catch (error) {
       debugLogger.error("Error clearing calendar data", { error: error.message }, "gcal");
@@ -9858,6 +9898,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       const placeholders = eventIds.map(() => "?").join(", ");
       this.db.prepare(`DELETE FROM calendar_events WHERE id IN (${placeholders})`).run(...eventIds);
+      this.onCalendarEventsUpdated?.();
       return { success: true };
     } catch (error) {
       debugLogger.error("Error removing calendar events", { error: error.message }, "gcal");
@@ -9875,17 +9916,29 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       const placeholders = freshEventIds.map(() => "?").join(", ");
       const freshFilter = freshEventIds.length > 0 ? `AND id NOT IN (${placeholders})` : "";
-      this.db
-        .prepare(
-          `DELETE FROM calendar_events
-           WHERE provider = ? AND calendar_id = ? ${freshFilter}
+      const stale = `provider = ? AND calendar_id = ? ${freshFilter}`;
+      const params = [provider, calendarId, ...freshEventIds];
+      this.db.transaction(() => {
+        this.db
+          .prepare(
+            `DELETE FROM calendar_events
+           WHERE ${stale}
              AND id NOT IN (
                SELECT calendar_event_id
                FROM notes
                WHERE calendar_event_id IS NOT NULL AND deleted_at IS NULL
              )`
-        )
-        .run(provider, calendarId, ...freshEventIds);
+          )
+          .run(...params);
+        // A note still needs the old event title, but the provider no longer
+        // vouches for its attendee list.
+        this.db
+          .prepare(
+            `UPDATE calendar_events SET attendees_omitted = 1 WHERE ${stale} AND attendees_omitted = 0`
+          )
+          .run(...params);
+      })();
+      this.onCalendarEventsUpdated?.();
       return { success: true };
     } catch (error) {
       debugLogger.error(
@@ -9907,6 +9960,7 @@ class DatabaseManager {
           `DELETE FROM calendar_events WHERE provider = ? AND calendar_id NOT IN (SELECT id FROM ${calendarsTable} WHERE is_selected = 1)`
         )
         .run(provider);
+      this.onCalendarEventsUpdated?.();
       return { success: true };
     } catch (error) {
       debugLogger.error(
@@ -10022,6 +10076,7 @@ class DatabaseManager {
         this._removeContactSources("source = ?", contactSource("microsoft", email));
       });
       transaction();
+      this.onCalendarEventsUpdated?.();
       return { success: true };
     } catch (error) {
       debugLogger.error("Error removing Microsoft account", { error: error.message }, "mcal");
@@ -10111,6 +10166,7 @@ class DatabaseManager {
         this._removeContactSources("source LIKE ?", contactSource("microsoft", "%"));
       });
       transaction();
+      this.onCalendarEventsUpdated?.();
       return { success: true };
     } catch (error) {
       debugLogger.error("Error clearing calendar data", { error: error.message }, "mcal");
@@ -10183,9 +10239,15 @@ class DatabaseManager {
                )`
           )
           .run();
+        this.db
+          .prepare(
+            "UPDATE calendar_events SET attendees_omitted = 1 WHERE provider = 'apple' AND attendees_omitted = 0"
+          )
+          .run();
         if (list.length > 0) this.upsertCalendarEvents(list);
       });
       transaction(events);
+      this.onCalendarEventsUpdated?.();
       return { success: true };
     } catch (error) {
       debugLogger.error("Error replacing Apple calendar events", { error: error.message }, "acal");
@@ -10202,6 +10264,7 @@ class DatabaseManager {
         this._removeContactSources("source = ?", contactSource("apple"));
       });
       transaction();
+      this.onCalendarEventsUpdated?.();
       return { success: true };
     } catch (error) {
       debugLogger.error("Error clearing Apple calendar data", { error: error.message }, "acal");
@@ -11274,9 +11337,11 @@ class DatabaseManager {
         accountId,
         versioned ? cloudNote.revision : null
       );
-      return this.db
+      const note = this.db
         .prepare("SELECT * FROM notes WHERE client_note_id = ?")
         .get(cloudNote.client_note_id);
+      this._notifyChangedMeetingInvite(existing, note);
+      return note;
     } catch (error) {
       debugLogger.error("Error upserting note from cloud", { error: error.message }, "database");
       throw error;

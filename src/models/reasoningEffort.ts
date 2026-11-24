@@ -1,3 +1,4 @@
+import { isGeminiOpenAIBase, normalizeBaseUrl } from "../config/constants";
 import { getCloudModel, modelRegistry, type ReasoningEffortCapability } from "./ModelRegistry";
 import { getModelFamilyConstraints } from "../services/ai/modelFamilyConstraints";
 import { matchesHost } from "../utils/urlUtils";
@@ -26,9 +27,17 @@ export function getReasoningEffortCapability(
   // so they offer the host's levels, else the family's, else the registry's,
   // else the OpenAI-style list. The server's default is unknown, so none is named.
   if (OPEN_ENDPOINT_PROVIDERS.has(provider)) {
+    // Google's OpenAI-compatible endpoint accepts two levels outside the native catalog.
+    if (
+      provider === "custom" &&
+      (model === "gemini-4-neon" || model === "gemini-4-hydrogen") &&
+      isGeminiOpenAIBase(normalizeBaseUrl(endpoint))
+    ) {
+      return { options: ["minimal", "low", "medium", "high", "xhigh"] };
+    }
     const hostOptions = HOST_OPTIONS.find(({ host }) => matchesHost(endpoint, host))?.options;
     if (hostOptions) return { options: hostOptions };
-    const family = getModelFamilyConstraints(model);
+    const family = getModelFamilyConstraints(model, provider === "custom" ? endpoint : undefined);
     if (family?.omitReasoningParams) return null;
     // A Custom turn streams through the AI SDK's Chat Completions options,
     // which take no "max"; OpenRouter's own reasoning object does.

@@ -1,5 +1,5 @@
 import { render } from '@testing-library/react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import NotesListScreen from '../NotesListScreen';
 
 let mockParams: Record<string, string> = {};
@@ -11,6 +11,7 @@ const mockState = {
   notes: [],
   spaces: [],
   activeFolderId: null,
+  activePrivateWorkspaceId: null as string | null,
   isInitialized: true,
   initialize: jest.fn(),
   setActiveFolderId: jest.fn(),
@@ -28,7 +29,7 @@ const mockState = {
 };
 
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn() },
+  router: { push: jest.fn(), dismissTo: jest.fn() },
   useFocusEffect: jest.fn(),
   useLocalSearchParams: () => mockParams,
 }));
@@ -81,7 +82,26 @@ const recordMeeting = (params: Record<string, string>): void => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockFabActionPress = null;
+  mockState.activePrivateWorkspaceId = null;
 });
+
+it.each(['folderId', 'spaceId'])(
+  'returns to Folders when Account switches workspaces while browsing by %s',
+  (param) => {
+    mockParams = { [param]: '5' };
+    render(<NotesListScreen />);
+    const [focus] = jest.mocked(useFocusEffect).mock.calls[0];
+    focus();
+    expect(router.dismissTo).not.toHaveBeenCalled();
+    jest.clearAllMocks();
+
+    mockState.activePrivateWorkspaceId = 'team';
+    focus();
+    expect(router.dismissTo).toHaveBeenCalledWith('/(tabs)/(notes)');
+    expect(mockState.setActiveFolderId).not.toHaveBeenCalled();
+    expect(mockState.setActiveSpaceId).not.toHaveBeenCalled();
+  },
+);
 
 describe('NotesListScreen Record meeting', () => {
   it('records into the folder being viewed', () => {

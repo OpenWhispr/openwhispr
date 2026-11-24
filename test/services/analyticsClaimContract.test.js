@@ -78,7 +78,8 @@ test("joining obtains explicit analytics consent first without rollback coupling
 test("the Privacy leaderboard toggle preserves the same consent ordering", () => {
   const settings = read("src/components/SettingsPage.tsx");
   const updateStart = settings.indexOf("const updateLeaderboardParticipation");
-  const update = settings.slice(updateStart, settings.indexOf("// Signed out", updateStart));
+  // Up to the end of its useCallback.
+  const update = settings.slice(updateStart, settings.indexOf("\n  );\n", updateStart));
 
   assert.ok(update.includes("enableInsightsSync({ confirmWhenEmpty: true })"));
   assert.ok(

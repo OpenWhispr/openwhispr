@@ -16,6 +16,7 @@ const BYOK_KEY_BRIDGES = [
   { base: "corti", get: "getCortiKey", save: "saveCortiKey" },
   { base: "deepgram", get: "getDeepgramKey", save: "saveDeepgramKey" },
   { base: "assemblyai", get: "getAssemblyAIKey", save: "saveAssemblyAIKey" },
+  { base: "elevenlabs", get: "getElevenlabsKey", save: "saveElevenlabsKey" },
   {
     base: "note-formatting-custom",
     get: "getNoteFormattingCustomKey",
@@ -745,10 +746,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveUiLanguage: (language) => ipcRenderer.invoke("save-ui-language", language),
   setUiLanguage: (language) => ipcRenderer.invoke("set-ui-language", language),
 
-  // xAI / Mistral transcription proxies (keys handled by the manifest bridge)
+  // xAI / AssemblyAI / Mistral transcription proxies (keys handled by the manifest bridge)
   proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
+  proxyAssemblyAiTranscription: (data) =>
+    ipcRenderer.invoke("proxy-assemblyai-transcription", data),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
   proxyGeminiTranscription: (data) => ipcRenderer.invoke("proxy-gemini-transcription", data),
+  proxyElevenlabsTranscription: (data) =>
+    ipcRenderer.invoke("proxy-elevenlabs-transcription", data),
 
   // Corti API
   getCortiClientId: () => ipcRenderer.invoke("get-corti-client-id"),
@@ -942,7 +947,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("cloud-streaming-usage", text, audioDurationSeconds, opts),
   cloudUsage: () => ipcRenderer.invoke("cloud-usage"),
   cloudCheckout: (opts, generation) => ipcRenderer.invoke("cloud-checkout", opts, generation),
-  cloudBillingPortal: () => ipcRenderer.invoke("cloud-billing-portal"),
+  cloudBillingPortal: (generation) => ipcRenderer.invoke("cloud-billing-portal", generation),
   cloudSwitchPlan: (opts) => ipcRenderer.invoke("cloud-switch-plan", opts),
   cloudPreviewSwitch: (opts) => ipcRenderer.invoke("cloud-preview-switch", opts),
   cloudApiRequest: (opts) => ipcRenderer.invoke("cloud-api-request", opts),
@@ -956,7 +961,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("affiliate-link", handler);
   },
   getSttConfig: () => ipcRenderer.invoke("get-stt-config"),
-  getEffectivePolicy: () => ipcRenderer.invoke("get-effective-policy"),
+  getEffectivePolicy: (options) => ipcRenderer.invoke("get-effective-policy", options),
   onEffectivePolicyChanged: registerListener(
     "effective-policy-changed",
     (callback) => (_event, snapshot) => callback(snapshot)
@@ -1076,12 +1081,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-transcription-prepare", options),
   meetingTranscriptionStart: (options) =>
     ipcRenderer.invoke("meeting-transcription-start", options),
+  checkMeetingRecordingStart: (options) =>
+    ipcRenderer.invoke("check-meeting-recording-start", options),
+  releaseMeetingRecordingStart: (sessionId) =>
+    ipcRenderer.send("release-meeting-recording-start", sessionId),
+  onMeetingRecordingAdmissionRevoked: registerListener(
+    "meeting-recording-admission-revoked",
+    (callback) => (_event, data) => callback(data)
+  ),
   isMeetingRecordingDisabled: () => ipcRenderer.invoke("is-meeting-recording-disabled"),
   meetingRecordingRefused: (details) => ipcRenderer.invoke("meeting-recording-refused", details),
   meetingTranscriptionSend: (buffer, source, capturedAt) =>
     ipcRenderer.send("meeting-transcription-send", buffer, source, capturedAt),
   meetingTranscriptionSetSystemAudioAvailable: (sessionId, available) =>
     ipcRenderer.invoke("meeting-transcription-set-system-audio-available", sessionId, available),
+  meetingTranscriptionSetMicMuted: (sessionId, muted) =>
+    ipcRenderer.invoke("meeting-transcription-set-mic-muted", sessionId, muted),
   meetingTranscriptionStop: (expectedSessionId, reason) =>
     ipcRenderer.invoke("meeting-transcription-stop", expectedSessionId, reason),
   meetingTranscriptionCancel: () => ipcRenderer.invoke("meeting-transcription-cancel"),
@@ -1766,7 +1781,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-notification-respond", detectionId, action, options),
   confirmMeetingNoteNavigation: (navigationId, status) =>
     ipcRenderer.invoke("confirm-meeting-note-navigation", navigationId, status),
-  joinCalendarMeeting: (eventId) => ipcRenderer.invoke("join-calendar-meeting", eventId),
+  joinCalendarMeeting: (eventId, notesOnly) =>
+    ipcRenderer.invoke("join-calendar-meeting", eventId, notesOnly),
   startManualMeeting: () => ipcRenderer.invoke("start-manual-meeting"),
   getPendingMeetingNoteNavigation: () => ipcRenderer.invoke("get-pending-meeting-note-navigation"),
   onMeetingNoteNavigationPending: registerListener(

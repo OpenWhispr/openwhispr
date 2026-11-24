@@ -640,6 +640,7 @@
       "failed": "Zugriff konnte nicht geprüft werden.",
       "microphone": "Aktiviere OpenWhispr unter Mikrofon.",
       "accessibility": "Ziehe OpenWhispr in Bedienungshilfen und aktiviere es.",
+      "selectApp": "Öffne in „Datenschutz & Sicherheit“ den Bereich „System & App Protection Override“ und wähle OpenWhispr aus.",
       "systemAudio": "Aktiviere OpenWhispr unter „Nur Systemaudioaufnahme“.",
       "screenContext": "Ziehe OpenWhispr in „Bildschirm- & Systemaudioaufnahme“ und aktiviere es.",
       "settings": "Einstellungen",
@@ -963,6 +964,7 @@
     "browsedCustomHint": "{{current}} wird weiterhin verwendet. Geben Sie einen Modellnamen ein, um zu Ihrem benutzerdefinierten Endpunkt zu wechseln.",
     "customInUseHint": "Ihr benutzerdefinierter Endpunkt wird weiterhin verwendet. Wählen Sie ein Modell, um zu {{provider}} zu wechseln.",
     "customProvider": "Benutzerdefiniert",
+    "providerUnavailable": "{{provider}} kann hier nicht verwendet werden. Wähle ein Modell, um den Anbieter zu wechseln.",
     "fallback": {
       "whisperModelDescription": "Modell",
       "parakeetModelDescription": "NVIDIA-Parakeet-Modell"
@@ -978,6 +980,9 @@
     "tinfoil": {
       "transportNote": "Tinfoil streamt mit Voxtral Mini 4B und verarbeitet Batches mit Voxtral Small 24B.",
       "docsLink": "Zur Dokumentation"
+    },
+    "elevenlabs": {
+      "keytermsNote": "OpenWhispr sendet geeignete Wörter aus deinem Wörterbuch an ElevenLabs. Wenn solche Wörter mitgesendet werden, berechnet ElevenLabs 20 % mehr."
     }
   },
   "hooks": {
@@ -1711,7 +1716,7 @@
         "label": "Profil"
       },
       "plansBilling": {
-        "description": "Tarife, Nutzung & Abrechnung",
+        "description": "Verwalte deinen Tarif, deine Nutzung und deine Abrechnung.",
         "label": "Tarif & Abrechnung"
       },
       "workspaceGeneral": {
@@ -2075,6 +2080,21 @@
         "nameHint": "Der Workspace-Name darf bis zu 65 Zeichen lang sein",
         "iconLabel": "Workspace-Icon",
         "iconHint": "Dieses Icon erscheint in Ihrer Seitenleiste und in Benachrichtigungen.",
+        "iconUpload": "Bild hochladen",
+        "iconChange": "Bild ändern",
+        "iconRemove": "Bild entfernen",
+        "iconUploading": "Wird hochgeladen…",
+        "iconUploaded": "Workspace-Icon aktualisiert",
+        "iconRemoved": "Workspace-Icon entfernt",
+        "iconUnsupported": "Wählen Sie ein Bild im Format PNG, JPEG, WebP oder GIF.",
+        "iconTooLarge": "Wählen Sie ein Bild unter 10 MB.",
+        "iconUnreadable": "Dieses Bild konnte nicht gelesen werden. Wählen Sie eine andere Datei.",
+        "iconFailed": "Das Workspace-Icon konnte nicht aktualisiert werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "iconUnavailable": "Workspace-Icons sind gerade nicht verfügbar. Versuchen Sie es später erneut.",
+        "iconRateLimited": "Zu viele Icon-Uploads in der letzten Stunde. Versuchen Sie es später erneut.",
+        "iconSignInChanged": "Das Workspace-Icon konnte nicht aktualisiert werden: Ihre Anmeldung ist abgelaufen oder hat sich geändert. Melden Sie sich erneut an und versuchen Sie es noch einmal.",
+        "iconNotAllowed": "Sie können das Icon von {{workspace}} nicht mehr ändern.",
+        "iconSsoRequired": "Melden Sie sich mit dem Single Sign-On (SSO) Ihres Unternehmens an, um das Icon von {{workspace}} zu ändern.",
         "roleLabel": "Ihre Rolle",
         "saved": "Workspace aktualisiert",
         "ownerTitle": "Workspace-Inhaber",
@@ -2292,26 +2312,12 @@
         "resentNoEmail": "Einladung aktualisiert, aber die E-Mail konnte nicht zugestellt werden."
       },
       "billing": {
-        "plan": "Plan",
-        "seats": "Plätze",
-        "ownerOnly": "Nur der Workspace-Inhaber kann das Abonnement verwalten.",
         "nextInvoice": "Nächste Rechnung",
-        "manageStripe": "In Stripe verwalten",
-        "startSubscription": "Abonnement starten",
-        "provisionedPlan": "Von OpenWhispr eingerichtet. Wenden Sie sich an den Vertrieb, um Tarif oder Plätze zu ändern.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
           "free": "Free",
           "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "Aktiv",
-          "trialing": "Testphase",
-          "past_due": "Überfällig",
-          "canceled": "Gekündigt",
-          "incomplete": "Unvollständig",
-          "unpaid": "Unbezahlt"
         }
       },
       "developer": {
@@ -2423,47 +2429,16 @@
       }
     },
     "unifiedBilling": {
-      "workspaceTitle": "Workspace-Abrechnung",
-      "workspaceDescription": "Jeder Workspace hat seinen eigenen Plan, eigene Plätze und einen Abrechnungsinhaber.",
-      "billableSeat": "Ihr Platz wird abgerechnet",
-      "nonBillableSeat": "Nur Admin-Zugriff · kein kostenpflichtiger Platz",
-      "managedBy": "Die Abrechnung wird von {{owner}} verwaltet.",
-      "addSeat": "Platz hinzufügen",
-      "seatUpdated_one": "Workspace-Kapazität auf {{count}} Platz aktualisiert",
-      "seatUpdated_other": "Workspace-Kapazität auf {{count}} Plätze aktualisiert",
-      "seatUpdateFailed": "Workspace-Plätze konnten nicht aktualisiert werden",
-      "businessWorkspaceOnly": "Für Workspaces verfügbar",
-      "personalPlanTitle": "Persönlicher Plan",
-      "providedBy": "Persönlicher Plan: Free · Bezahlter Zugriff bereitgestellt von {{workspaces}}",
-      "confirmSeats": {
-        "title": "Workspace-Platz hinzufügen?",
-        "description_one": "{{workspace}} auf {{count}} Platz erweitern. Stripe berechnet die Änderung anteilig.",
-        "description_other": "{{workspace}} auf {{count}} Plätze erweitern. Stripe berechnet die Änderung anteilig.",
-        "newCapacity": "Neue Kapazität",
-        "chargeToday": "Heute fällig",
-        "confirm": "Platz hinzufügen"
-      }
+      "seatUpdateFailed": "Workspace-Plätze konnten nicht aktualisiert werden"
     },
     "account": {
-      "badges": {
-        "free": "Kostenlos",
-        "limitReached": "Cloud-Limit erreicht",
-        "pastDue": "Überfällig",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "Testversion"
-      },
       "billing": {
         "couldNotOpenDescription": "Die Abrechnungsseite konnte nicht geöffnet werden. Bitte versuchen Sie es erneut.",
         "couldNotOpenTitle": "Abrechnung konnte nicht geöffnet werden",
-        "manageBilling": "Abrechnung verwalten",
-        "opening": "Wird geöffnet...",
-        "updatePaymentMethod": "Zahlungsmethode aktualisieren",
         "contactOwnerTitle": "Wenden Sie sich an den Workspace-Inhaber",
         "contactOwnerDescription": "Nur der Workspace-Inhaber kann die Abrechnung für diesen Workspace ändern.",
         "manageInAppStore": "Im App Store verwalten",
-        "manageInGooglePlay": "In Google Play verwalten",
-        "managedInMobileStore": "Abrechnung über den App-Store Ihres Smartphones. Verwalten Sie das Abo auf Ihrem Smartphone."
+        "manageInGooglePlay": "In Google Play verwalten"
       },
       "checkout": {
         "couldNotOpenDescription": "Die Checkout-Seite konnte nicht geöffnet werden. Bitte versuchen Sie es erneut.",
@@ -2482,20 +2457,6 @@
         "title": "Stand deiner letzten Anmeldung",
         "description": "Synchronisierung und Kontoänderungen sind pausiert, bis OpenWhispr seine Server erreicht."
       },
-      "pastDue": {
-        "description": "Sie sind vorerst im kostenlosen Tarif. Aktualisieren Sie Ihre Zahlungsmethode, um wieder Pro zu erhalten.",
-        "title": "Ihre Zahlung konnte nicht verarbeitet werden"
-      },
-      "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} Wörter in OpenWhispr Cloud diese Woche",
-        "byokUnlimited": "Eigene API-Schlüssel und lokale Modelle bleiben unbegrenzt nutzbar.",
-        "nextBilling": "Nächste Abrechnung: {{date}}",
-        "pastDue": "{{used}} / {{limit}} Wörter in OpenWhispr Cloud diese Woche – Zahlung aktualisieren, um Pro wiederherzustellen",
-        "trial": "Noch {{days}} Tage – unbegrenzte Transkriptionen",
-        "unlimited": "Unbegrenzt",
-        "accessUntil": "Zugang bis {{date}}",
-        "storePaymentIssue": "Ihr App-Store konnte dieses Abo nicht verlängern. Aktualisieren Sie dort Ihre Zahlungsmethode, um Ihren Tarif zu behalten."
-      },
       "planLabels": {
         "free": "Kostenlos",
         "pro": "Pro",
@@ -2505,81 +2466,24 @@
       "pricing": {
         "title": "Tarife",
         "billedYearly": "Jährliche Abrechnung",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "für immer",
-          "features": [
-            "## OpenWhispr Cloud",
-            "2.000 Wörter/Woche Transkription",
-            "5 Stunden Meeting-Aufnahmen/Monat",
-            "## Immer kostenlos",
-            "Unbegrenzte lokale KI-Modelle",
-            "Unbegrenzte Cloud-Transkription mit eigenen API-Schlüsseln",
-            "Über 100 Sprachen unterstützt",
-            "Benutzerdefiniertes Wörterbuch",
-            "Keine Datenspeicherung",
-            "Community-Support"
-          ]
-        },
         "pro": {
           "name": "Pro",
           "monthlyPrice": "$8",
-          "monthlyPeriod": "/Monat",
-          "annualPrice": "$80",
-          "annualPeriod": "/Jahr",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "Alle Free-Funktionen +",
-          "features": [
-            "Unbegrenzte Cloud-Transkription",
-            "20 Stunden Meeting-Aufnahmen/Monat",
-            "Geräteübergreifende Synchronisierung",
-            "Notizen per öffentlichem Link teilen",
-            "Persönlicher API-Zugang",
-            "MCP-Integration in all deinen Apps",
-            "Mobile App mit unbegrenzter Cloud",
-            "E-Mail-Support"
-          ],
-          "cta": "Jetzt starten",
-          "switchToAnnual": "Zum Jahresabo wechseln"
+          "annualEquivalent": "$6.67"
         },
         "business": {
           "name": "Business",
           "monthlyPrice": "$16",
-          "monthlyPeriod": "/Monat",
-          "annualPrice": "$160",
-          "annualPeriod": "/Jahr",
           "annualEquivalent": "$13.33",
-          "includesPrefix": "Alle Pro-Funktionen +",
-          "badge": "Beliebteste Wahl",
-          "features": [
-            "Unbegrenzte Meeting-Aufnahmen",
-            "Workspace-Rollen & Mitgliederverwaltung",
-            "Assistentenmodus",
-            "Chat über Ihre Daten",
-            "Prioritäts-Support"
-          ],
-          "cta": "Jetzt starten",
-          "switchToAnnual": "Zum Jahresabo wechseln"
+          "cta": "Jetzt starten"
         },
         "enterprise": {
           "name": "Enterprise",
           "price": "Individuell",
-          "subtitle": "Für erweiterte Sicherheit & Support",
-          "includesPrefix": "Alle Business-Funktionen +",
-          "features": [
-            "Verwaltete API-Guthaben",
-            "Cloud-Synchronisierung über Geräte hinweg",
-            "Team-Funktionen & Verwaltung",
-            "SSO & Compliance",
-            "Dedizierter Support"
-          ],
           "cta": "Vertrieb kontaktieren",
           "upgradeCta": "Auf Enterprise upgraden",
           "askOwner": "Bitte {{name}}, euren Workspace zu upgraden."
         },
-        "currentPlan": "Aktueller Tarif",
-        "yourPersonalPlan": "Ihr persönlicher Tarif",
         "yourWorkspacePlan": "Tarif Ihres Workspace",
         "manage": "Verwalten",
         "coveredByWorkspace": "In Ihrem Workspace-Tarif enthalten",
@@ -2601,7 +2505,6 @@
           "confirm": "Bestätigen"
         }
       },
-      "rollingWeeklyLimit": "Rollierendes Wochenlimit",
       "signOut": {
         "endMeetingDescription": "Beim Abmelden wird die laufende Meeting-Aufnahme beendet. Was bisher aufgenommen wurde, bleibt in der Notiz.",
         "endMeetingTitle": "Meeting-Aufnahme beenden?",
@@ -2622,11 +2525,7 @@
         "description": "Unbegrenzte Transkriptionen, bevorzugte Verarbeitung und mehr.",
         "title": "Pro 7 Tage kostenlos testen"
       },
-      "signedOutPlans": {
-        "button": "Kostenloses Konto erstellen"
-      },
       "user": "Benutzer",
-      "wordsRemaining": "{{remaining}} verbleibend",
       "deleteAccount": {
         "label": "Konto löschen",
         "labelDescription": "Konto und persönliche Cloud-Daten dauerhaft löschen. Andere lokale Benutzer und Arbeitsbereichsdaten bleiben erhalten.",
@@ -2677,10 +2576,6 @@
           "noPassword": "Für dieses Konto ist kein Passwort festgelegt.",
           "generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut."
         }
-      },
-      "planUnavailable": {
-        "title": "Tarif nicht verfügbar",
-        "description": "Ihr Tarif konnte gerade nicht geladen werden. Ihr Zugriff bleibt unverändert."
       }
     },
     "agentConfig": {
@@ -2708,6 +2603,19 @@
       "customSetup": "Benutzerdefinierte Einrichtung",
       "customSetupDescription": "Verwenden Sie Ihren eigenen Anbieter und API-Schlüssel.",
       "description": "Bereinigt Transkriptionen, verarbeitet Befehle und korrigiert Fehler unter Beibehaltung Ihres Stils.",
+      "assemblyAiCleanup": {
+        "pickerOn": "Die Standardbereinigung ist in AssemblyAI Dictation enthalten.",
+        "pickerOff": "Die Textbereinigung ist aus. OpenWhispr fügt den ursprünglichen Wortlaut ein.",
+        "description": "AssemblyAI liefert sowohl überarbeiteten Text als auch den ursprünglichen Wortlaut. Bei aktivierter Bereinigung wird der überarbeitete Text eingefügt, andernfalls der ursprüngliche Wortlaut.",
+        "standard": "Standardbereinigung für Diktate",
+        "included": "Im Diktiermodell enthalten. Ein separates Modell ist dafür nicht erforderlich.",
+        "advanced": "Erweiterte Bereinigung",
+        "summary": "Gespeicherter Anbieter für eigene Prompts und Ton & Stil",
+        "advancedHelp": "AssemblyAI übernimmt die Standardbereinigung. Wähle den Anbieter, den OpenWhispr für eigene Prompts oder Ton & Stil verwendet.",
+        "saved": "Gespeichert",
+        "modelNeeded": "Lokales Bereinigungsmodell erforderlich",
+        "modelHelp": "Wähle ein lokales Modell und lade es herunter, um deinen Ton oder eigenen Prompt anzuwenden. AssemblyAI übernimmt die Standardbereinigung."
+      },
       "enableTextCleanup": "Textbereinigung aktivieren",
       "enableTextCleanupDescription": "KI entfernt Füllwörter, korrigiert Grammatik und Zeichensetzung",
       "modes": {
@@ -3304,6 +3212,326 @@
       "upgradeCta": "Jetzt upgraden",
       "upgradedTitle": "Upgrade auf Enterprise abgeschlossen",
       "upgradedDescription": "{{workspace}} ist jetzt auf Enterprise."
+    },
+    "billing": {
+      "addSeats": {
+        "title": "Plätze hinzufügen",
+        "invoiceDate": "Nächste Rechnung · {{date}}",
+        "quantity": "Zusätzliche Plätze",
+        "decrease": "Plätze verringern",
+        "increase": "Plätze erhöhen",
+        "now": "Jetzt",
+        "after": "Danach",
+        "inUse": "Belegt",
+        "pending": "Ausstehende Plätze",
+        "available": "Verfügbar",
+        "total": "Plätze insgesamt",
+        "price": "Preis",
+        "perMonth": "{{price}} / Platz / Monat",
+        "proration": "Auf der nächsten Rechnung",
+        "confirm_one": "{{count}} Platz hinzufügen",
+        "confirm_other": "{{count}} Plätze hinzufügen",
+        "adding": "Wird hinzugefügt…",
+        "failure": "Die Änderung konnte nicht bestätigt werden. Die aktuelle Anzahl wird geprüft.",
+        "success": "{{workspace}} hat jetzt insgesamt {{count}} Plätze.",
+        "limitReached": "Der Arbeitsbereich hat sein Platzlimit erreicht.",
+        "occupancyMinimum": "Die Gesamtzahl muss mindestens {{minimum}} betragen, um alle belegten Plätze abzudecken.",
+        "previewFailed": "Die Preise konnten nicht geladen werden."
+      },
+      "free": {
+        "inviteTeammates": "Teammitglieder einladen",
+        "upgradeToBusiness": "Auf Business upgraden",
+        "proHint": "Nur Sie? Pro kostet {{price}} / Monat.",
+        "viewPersonal": "Persönlichen Plan ansehen",
+        "countFailed": "Konnte nicht prüfen, wer in diesem Workspace ist."
+      },
+      "errors": {
+        "noTeammates": "Laden Sie ein Teammitglied ein, bevor Sie Business starten."
+      },
+      "picker": {
+        "label": "Angezeigter Plan",
+        "personal": "Persönlich",
+        "workspaces": "Workspaces",
+        "loadFailed": "Workspaces konnten nicht geladen werden"
+      },
+      "workspaceUnavailable": {
+        "title": "Workspace-Plan nicht verfügbar",
+        "description": "Dein Zugriff bleibt unverändert."
+      },
+      "tiles": {
+        "upgradeWorkspace": "Workspace upgraden",
+        "createWorkspace": "Workspace erstellen"
+      },
+      "plans": {
+        "pricePerMonth": "{{price}} / Monat",
+        "pricePerMonthYearly": "{{price}} / Monat, jährliche Abrechnung",
+        "pricePerSeat": "{{price}} / Platz / Monat",
+        "pricePerSeatYearly": "{{price}} / Platz / Monat, jährliche Abrechnung",
+        "yourPlan": "Ihr Tarif",
+        "pro": {
+          "includes": "Alles aus Free, plus",
+          "features": {
+            "unlimitedCloud": "Unbegrenzte Cloud-Transkription",
+            "syncDevices": "Geräteübergreifende Synchronisierung",
+            "publicLinks": "Öffentliche Links für Notizen",
+            "apiMcp": "Persönlicher API- und MCP-Zugang",
+            "mobileApp": "Mobile App"
+          }
+        },
+        "business": {
+          "includes": "Alles aus Pro, plus",
+          "features": {
+            "workspaceRoles": "Workspace-Rollen und Mitglieder",
+            "assistantMode": "Assistentenmodus",
+            "chatOverData": "Chat über Ihre Daten",
+            "prioritySupport": "Prioritäts-Support"
+          }
+        },
+        "enterprise": {
+          "includes": "Alles aus Business, plus",
+          "features": {
+            "managedCredits": "Verwaltete API-Guthaben",
+            "ssoCompliance": "SSO und Compliance",
+            "adminControls": "Admin-Steuerung und Richtlinien",
+            "dedicatedSupport": "Dedizierter Support"
+          }
+        }
+      },
+      "personal": {
+        "blocks": {
+          "currentPlan": "Aktueller Plan",
+          "usage": "Nutzung",
+          "billingDetails": "Abrechnungsdetails"
+        },
+        "signedOut": {
+          "title": "Nicht angemeldet",
+          "body": "Melde dich an, um deinen Plan zu sehen."
+        },
+        "failed": {
+          "title": "Plan nicht verfügbar",
+          "body": "Dein Zugriff bleibt unverändert."
+        },
+        "actions": {
+          "cancelTrial": "Testphase kündigen",
+          "cancelBusiness": "Business kündigen",
+          "keepPlan": "{{plan}} behalten",
+          "subscribePro": "Pro abonnieren",
+          "manageBilling": "Abrechnung verwalten",
+          "updatePayment": "Zahlung aktualisieren",
+          "cancelPro": "Pro kündigen"
+        },
+        "usage": {
+          "cloudTranscription": "Cloud-Transkription",
+          "unlimited": "Unbegrenzt",
+          "wordsValue": "{{used}} / {{limit}} Wörter",
+          "wordsLeft": "Noch {{remaining}} Wörter in den letzten 7 Tagen",
+          "rolling": "Zählt die letzten 7 Tage. Lokale Modelle und eigene API-Schlüssel sind unbegrenzt.",
+          "limitReached": "Limit erreicht. Lokale Modelle und eigene API-Schlüssel funktionieren weiterhin."
+        },
+        "stores": {
+          "appStore": "App Store",
+          "playStore": "Google Play",
+          "unknown": "App-Store deines Telefons"
+        },
+        "badges": {
+          "stripeTrial": "Testphase",
+          "trial_one": "Testphase · noch {{count}} Tag",
+          "trial_other": "Testphase · noch {{count}} Tage",
+          "pastDue": "Überfällig",
+          "cancelled": "Gekündigt",
+          "yearly": "Jährlich",
+          "monthly": "Monatlich"
+        },
+        "price": {
+          "trialStarts": "Abrechnung ab {{date}}",
+          "trialYearlyStarts": "Jährliche Abrechnung ab {{date}}",
+          "free": "$0",
+          "billedYearly": "Jährliche Abrechnung"
+        },
+        "banners": {
+          "endingDated": {
+            "title": "{{plan}} endet am {{date}}",
+            "body": "Du kannst deinen Tarif im Abrechnungsportal behalten."
+          },
+          "ending": {
+            "title": "{{plan}} läuft aus",
+            "body": "Du kannst deinen Tarif im Abrechnungsportal behalten."
+          },
+          "paymentFailedRetry": {
+            "title": "Zahlung fehlgeschlagen",
+            "body": "Bis zur erfolgreichen Zahlung gelten die Limits des kostenlosen Tarifs. Nächster Versuch am {{date}}."
+          },
+          "coveredPastDue": {
+            "title": "{{workspace}} deckt dich bereits ab",
+            "body": "Prüfe die fehlgeschlagene Zahlung im Abrechnungsportal."
+          },
+          "coveredPastDueUnnamed": {
+            "title": "Ein Workspace deckt dich bereits ab",
+            "body": "Prüfe die fehlgeschlagene Zahlung im Abrechnungsportal."
+          },
+          "coveredStripeTrial": {
+            "title": "{{workspace}} deckt dich bereits ab",
+            "body": "Am Ende der Testphase wird Pro zu einem kostenpflichtigen Abo."
+          },
+          "coveredStripeTrialUnnamed": {
+            "title": "Ein Workspace deckt dich bereits ab",
+            "body": "Am Ende der Testphase wird Pro zu einem kostenpflichtigen Abo."
+          },
+          "coveredPaying": {
+            "title": "{{workspace}} deckt dich bereits ab",
+            "body": "Du zahlst weiterhin für {{plan}}."
+          },
+          "coveredPayingUnnamed": {
+            "title": "Ein Workspace deckt dich bereits ab",
+            "body": "Du zahlst weiterhin für {{plan}}."
+          },
+          "coveredStore": {
+            "title": "{{workspace}} deckt dich bereits ab",
+            "body": "Du kannst deinen {{plan}}-Kauf im App-Store deines Smartphones einsehen."
+          },
+          "coveredStoreUnnamed": {
+            "title": "Ein Workspace deckt dich bereits ab",
+            "body": "Du kannst deinen {{plan}}-Kauf im App-Store deines Smartphones einsehen."
+          },
+          "covered": {
+            "title": "{{workspace}} deckt dich ab",
+            "body": "Dein Workspace-Platz gibt dir auch hier unbegrenzte Nutzung."
+          },
+          "coveredUnnamed": {
+            "title": "Ein Workspace deckt dich ab",
+            "body": "Dein Workspace-Platz gibt dir auch hier unbegrenzte Nutzung."
+          },
+          "paymentFailed": {
+            "title": "Zahlung fehlgeschlagen",
+            "body": "Bis die Zahlung durchgeht, gelten die Free-Limits."
+          },
+          "storeRenewalFailed": {
+            "title": "Verlängerung fehlgeschlagen",
+            "body": "Der App-Store deines Telefons versucht es erneut. Aktualisiere dort deine Zahlung."
+          },
+          "weeklyLimit": {
+            "title": "Wochenlimit erreicht",
+            "body": "Cloud-Transkription ist wieder verfügbar, sobald Wörter älter als 7 Tage herausfallen. Lokale Modelle und eigene API-Schlüssel funktionieren weiterhin."
+          }
+        },
+        "details": {
+          "nextInvoice": "Nächste Rechnung",
+          "finalInvoice": "Schlussrechnung",
+          "firstInvoice": "Erste Rechnung",
+          "nextRetry": "Nächster Zahlungsversuch",
+          "amountDue": "Offener Betrag",
+          "ends": "Endet am",
+          "ended": "Beendet am",
+          "billingContact": "Rechnungskontakt",
+          "periodEnds": "Aktueller Zeitraum endet",
+          "billedThrough": "Abgerechnet über",
+          "accessUntil": "Zugriff bis"
+        }
+      },
+      "workspace": {
+        "managedAccount": "Verwaltetes Konto",
+        "billingDetails": "Abrechnungsdetails",
+        "workspaceDetails": "Workspace-Details",
+        "badges": {
+          "trial_one": "Testphase · noch {{count}} Tag",
+          "trial_other": "Testphase · noch {{count}} Tage",
+          "trialUndated": "Testphase",
+          "pastDue": "Überfällig",
+          "unpaid": "Unbezahlt",
+          "incomplete": "Unvollständig",
+          "cancelled": "Gekündigt",
+          "paused": "Pausiert"
+        },
+        "interval": {
+          "monthly": "Monatlich",
+          "annual": "Jährlich"
+        },
+        "planLine": {
+          "seatPrice": "{{price}} pro Platz und Monat",
+          "customPricing": "Individuelle Preise",
+          "free": "$0",
+          "invoicedByOpenWhispr": "Abgerechnet durch OpenWhispr",
+          "paidBy": "Bezahlt von {{workspace}}",
+          "personalApplies": "Dein persönlicher Plan gilt"
+        },
+        "actions": {
+          "manageBilling": "Abrechnung verwalten",
+          "updatePayment": "Zahlung aktualisieren",
+          "finishCheckout": "Bezahlvorgang abschließen",
+          "keepPlan": "{{plan}} behalten",
+          "resubscribe": "Erneut abonnieren",
+          "openConsole": "Konsole öffnen",
+          "upgradeEnterprise": "Auf Enterprise upgraden",
+          "viewPersonal": "Persönlichen Plan ansehen",
+          "copyEmail": "E-Mail kopieren"
+        },
+        "banners": {
+          "ends": {
+            "title": "{{plan}} endet am {{date}}",
+            "body": "Deine Mitglieder behalten {{plan}} bis dahin."
+          },
+          "endsUndated": {
+            "title": "{{plan}} wird beendet",
+            "body": "Deine Mitglieder behalten {{plan}} bis zum Ende des aktuellen Zeitraums."
+          },
+          "paymentFailed": {
+            "title": "Zahlung fehlgeschlagen",
+            "body": "Aktualisiere die Zahlungsmethode, damit deine Mitglieder {{plan}} wieder nutzen können."
+          },
+          "paused": {
+            "title": "{{plan}} ist pausiert",
+            "body": "Deine Mitglieder nutzen ihre persönlichen Pläne, bis die Zahlung durchgeht."
+          },
+          "checkoutIncomplete": {
+            "title": "Bezahlvorgang nicht abgeschlossen",
+            "body": "Schließe den Bezahlvorgang ab, um {{plan}} für deine Mitglieder zu starten."
+          },
+          "ended": {
+            "title": "{{plan}} endete am {{date}}",
+            "body": "Deine Mitglieder nutzen wieder ihre persönlichen Pläne."
+          },
+          "endedUndated": {
+            "title": "{{plan}} ist beendet",
+            "body": "Deine Mitglieder nutzen wieder ihre persönlichen Pläne."
+          },
+          "memberPaymentProblem": {
+            "title": "{{workspace}} hat ein Zahlungsproblem",
+            "body": "Dein persönlicher Plan gilt, bis die Zahlung für den Arbeitsbereich erfolgreich ist."
+          },
+          "memberPaused": {
+            "title": "Der Plan von {{workspace}} ist pausiert",
+            "body": "Dein persönlicher Plan gilt, bis er zurück ist."
+          }
+        },
+        "usage": {
+          "seats": "Plätze",
+          "members": "Mitglieder",
+          "noSeatsLeft": "Keine Plätze mehr frei",
+          "noSeatsLeftWithInvites_one": "Keine Plätze mehr frei · {{count}} offene Einladung",
+          "noSeatsLeftWithInvites_other": "Keine Plätze mehr frei · {{count}} offene Einladungen",
+          "pendingInvites_one": "{{count}} offene Einladung",
+          "pendingInvites_other": "{{count}} offene Einladungen"
+        },
+        "details": {
+          "nextInvoice": "Nächste Rechnung",
+          "nextRetry": "Nächster Zahlungsversuch",
+          "amountDue": "Offener Betrag",
+          "billingContact": "Rechnungskontakt",
+          "finalInvoice": "Schlussrechnung",
+          "firstInvoice": "Erste Rechnung",
+          "ends": "Endet",
+          "ended": "Endete",
+          "billing": "Abrechnung",
+          "periodEnds": "Aktueller Zeitraum endet",
+          "workspace": "Workspace",
+          "yourRole": "Deine Rolle",
+          "yourSeat": "Dein Platz",
+          "managedBy": "Verwaltet von",
+          "invoicedByOpenWhispr": "Abgerechnet durch OpenWhispr",
+          "paidSeat": "Bezahlter Platz",
+          "noPaidSeat": "Kein bezahlter Platz"
+        }
+      }
     }
   },
   "models": {
@@ -3346,6 +3574,9 @@
         "groq_whisper_large_v3_turbo": "216x Echtzeitgeschwindigkeit",
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
         "gemini_3_5_transcribe": "Googles Gemini-Spracherkennung",
+        "elevenlabs_scribe_v3": "Präziseste mehrsprachige Transkription",
+        "elevenlabs_scribe_v2": "Präzise mehrsprachige Transkription",
+        "elevenlabs_scribe_v3_live": "Live-Transkription für Notizaufnahmen",
         "gemini_3_5_transcribe_live": "Spracherkennung per Echtzeit-Streaming",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
         "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",
@@ -3353,6 +3584,7 @@
         "deepgram_nova_3": "Deepgrams genauestes Echtzeitmodell",
         "assemblyai_universal_streaming_english": "Unveränderliche Echtzeit-Transkripte, Englisch",
         "assemblyai_universal_streaming_multilingual": "Unveränderliche Echtzeit-Transkripte, mehrsprachig",
+        "assemblyai_dictation": "Transkription und Bereinigung in einem Aufruf, 32 Sprachen",
         "assemblyai_universal_3_5_pro": "Höchste Genauigkeit in Echtzeit, 18 Sprachen",
         "assemblyai_universal_3_6_pro": "Höchste Genauigkeit in Echtzeit, 32 Sprachen",
         "mistral_voxtral_mini_transcribe_3_0": "Schnelle Transkription in über 50 Sprachen (Vorschau)",
@@ -3416,6 +3648,7 @@
         "gemini_gemini_3_8_flash": "Leistungsstärkstes Flash-Modell",
         "gemini_gemini_4_argon": "Googles Spitzenmodell für Reasoning",
         "tinfoil_kimi_k3": "Privates Moonshot-Spitzenmodell mit nativem Reasoning und Bildverständnis, 256K Kontext",
+        "tinfoil_kimi_k3_1_pro": "Privates Moonshot-Spitzenmodell für langwierige Programmier- und Agentenaufgaben, 256K Kontext",
         "tinfoil_deepseek_v4_1_flash": "Privates schnelles DeepSeek-Modell mit optionalem Reasoning, 1M Kontext"
       },
       "enterprise": {
@@ -3469,6 +3702,9 @@
         "liquidai_lfm2_2_6b_q4_k_m": "Ausgewogenes LFM2 für hochwertigere Bereinigung",
         "liquidai_lfm2_5_350m_q8_0": "Ultraleichtes Modell für schnelle Diktatbereinigung",
         "liquidai_lfm2_5_230m_q8_0": "Winziges Modell, sofortige Bereinigung auf bescheidener Hardware",
+        "liquidai_lfm3_1_7b_qad_q4_0": "Das neueste kleine Modell von Liquid AI",
+        "liquidai_lfm3_vl_2b_qad_q4_0": "LFM3-Vision-Modell von Liquid AI, hier für Text genutzt",
+        "liquidai_lfm3_omni_2b_q4_0": "Multimodales LFM3-Modell von Liquid AI, hier für Text genutzt",
         "qwen_qwen3_5_0_8b_q4_k_m": "Winziges Qwen3.5 für die schnellste Bereinigung",
         "qwen_qwen3_8_27b_q4_k_m": "Leistungsstärkstes Qwen-Modell für Rechner mit 32 GB",
         "qwen_qwen3_6_35b_a3b_q4_k_m": "Schnelles Mixture-of-Experts-Modell, 3B aktive Parameter",
@@ -4390,7 +4626,10 @@
         "title": "Deine letzten Änderungen sind in einer neuen Notiz",
         "description": "„{{title}}“ wurde gelöscht, bevor sie gespeichert waren. Sie wurden deshalb in einer neuen Notiz in „Privat“ gespeichert.",
         "open": "Notiz öffnen"
-      }
+      },
+      "muteMic": "Mikrofon stummschalten",
+      "unmuteMic": "Mikrofon einschalten",
+      "micMuted": "Mikrofon stummgeschaltet"
     },
     "participants": {
       "attendee": "Teilnehmer",
@@ -4530,6 +4769,11 @@
         "title": "Meeting-Audio ist verstummt",
         "description": "Seit einigen Minuten war niemand zu hören. Falls das Gespräch noch läuft, prüfen Sie Ihr Audioausgabegerät."
       },
+      "externalAttendeesBlocked": "An diesem Meeting nehmen Personen außerhalb Ihrer Organisation teil. Ihre Organisation erlaubt dafür keine Transkription.",
+      "externalAttendeesUnverifiable": "OpenWhispr konnte nicht alle Personen auf der Einladung überprüfen. Ihre Organisation erlaubt nur die Transkription interner Meetings.",
+      "externalAttendeesStopped": "Die Aufnahme wurde beendet, weil eine Person außerhalb Ihrer Organisation eingeladen ist. Sie können weiter Notizen machen.",
+      "internalAttendeesQuestion": "Gehören alle Personen in diesem Meeting zu Ihrer Organisation?",
+      "internalAttendeesConfirm": "Ja, starten",
       "recordingDisabledByOrg": "Die Aufzeichnung von Besprechungen wurde von Ihrer Organisation deaktiviert.",
       "stoppedAccountChanged": "Die Aufnahme wurde beendet, weil Sie sich abgemeldet oder das Konto gewechselt haben.",
       "stoppedPolicyUnresolved": "Die Aufnahme wurde beendet, weil die Einstellungen Ihrer Organisation nicht geprüft werden konnten.",
@@ -4542,7 +4786,8 @@
     },
     "meetingPill": {
       "returnToNote": "Zurück zur Aufnahme",
-      "waitingForMicrophone": "Warte auf Mikrofon"
+      "waitingForMicrophone": "Warte auf Mikrofon",
+      "micMuted": "Mikrofon stummgeschaltet"
     },
     "empty": {
       "title": "Noch keine Notizen hier",
@@ -4858,6 +5103,7 @@
       "triggerPlaceholder": "z. B. mein Kalender",
       "replacementLabel": "Ersetzung",
       "replacementPlaceholder": "Text, der beim Sprechen des Auslösers eingefügt wird …",
+      "variablesLabel": "Einfügen",
       "create": "Snippet erstellen",
       "duplicate": "Ein Snippet mit diesem Auslöser existiert bereits",
       "emptyTitle": "Sag es nur",
@@ -5408,6 +5654,7 @@
     "waitingForAnswer": "Warte auf Antwort"
   },
   "integrations": {
+    "apiAccessDisabled": "Ihre Organisation hat den Zugriff auf die API und MCP deaktiviert.",
     "title": "Integrationen",
     "googleCalendar": {
       "title": "Google Calendar",

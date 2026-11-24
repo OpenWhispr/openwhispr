@@ -125,6 +125,10 @@ jobs:
         run: python3 openwhispr-mobile/plugins/keyboard-extension/tests/run-keyboard-touch-tests.py
       - name: Run keyboard capitalization tests
         run: sh openwhispr-mobile/scripts/test-keyboard-capitalization.sh
+      - name: Run keyboard typing-engine tests
+        run: sh openwhispr-mobile/scripts/test-keyboard-typing.sh test
+      - name: Run keyboard direct-dictation tests
+        run: sh openwhispr-mobile/scripts/test-keyboard-direct.sh
 
   mobile-status:
     name: Mobile CI

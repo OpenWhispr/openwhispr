@@ -1,10 +1,11 @@
+import { refreshEnterpriseIdentityForUse } from "../stores/enterpriseIdentityStore";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import AudioManager from "../helpers/audioManager";
 import logger from "../utils/logger";
 import { playStartCue, playStopCue } from "../utils/dictationCues";
 import { getSettings } from "../stores/settingsStore";
-import { expandSnippets } from "../utils/snippets";
+import { expandSnippets, snippetLocale } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { providerErrorActions } from "../utils/describeProviderError";
 import {
@@ -22,7 +23,10 @@ import {
   isTranscriptionContextAllowed,
   transcriptionChoiceRefusal,
 } from "../stores/policyRules";
-import { isManagedTranscriptionActive } from "../services/managedTranscription";
+import {
+  allowsPersonalDictationCleanup,
+  isManagedTranscriptionActive,
+} from "../services/managedTranscription";
 import { usePolicyStore } from "../stores/policyStore";
 import { getOnboardingDemoKind } from "../utils/onboardingDemo";
 import {
@@ -49,6 +53,18 @@ const WAYLAND_CLIPBOARD_REASON_KEYS = {
   "wl-copy-failed": "wlCopyFailed",
 };
 const DEMO_AUDIO_LEVEL_INTERVAL_MS = 80;
+
+function isDictationRecordingAllowed(policyState = usePolicyStore.getState()) {
+  return (
+    isManagedTranscriptionActive() ||
+    isTranscriptionContextAllowed(
+      policyState,
+      getSettings(),
+      "dictation",
+      allowsPersonalDictationCleanup
+    )
+  );
+}
 
 // Fetches the STT config for whoever is signed in now. An answer that arrives
 // after invalidateSttConfig (an auth change, or a FEATURE_NOT_ENABLED refusal)
@@ -215,11 +231,8 @@ export const useAudioRecording = (toast, options = {}) => {
       let attempt = null;
       try {
         if (!manager || agentRecordingRef.current) return false;
-        const policyState = usePolicyStore.getState();
-        if (
-          !isManagedTranscriptionActive() &&
-          !isTranscriptionContextAllowed(policyState, getSettings(), "dictation")
-        ) {
+        let policyState = usePolicyStore.getState();
+        if (!isDictationRecordingAllowed(policyState)) {
           const refusal = transcriptionChoiceRefusal(policyState, getSettings(), "dictation");
           toast({
             title: t(refusal?.messageKey ?? "common.managedByOrg"),
@@ -248,6 +261,17 @@ export const useAudioRecording = (toast, options = {}) => {
         // microphone; AudioManager confirms the same value once recording.
         setIsAssistantVoice(voiceAgentRequested);
         if (!(await attempt.admission) || !current()) return false;
+        const refresh = refreshEnterpriseIdentityForUse();
+        if (refresh) {
+          await refresh;
+          policyState = usePolicyStore.getState();
+          if (
+            !current() ||
+            !isDictationRecordingAllowed(policyState) ||
+            (voiceAgentRequested && !isAgentAllowed(policyState))
+          )
+            return false;
+        }
 
         // Both routes reuse the prepared mic. Batch dictation buffers pre-roll
         // once audio arrives, and streaming starts collecting PCM in its worklet.
@@ -788,7 +812,9 @@ export const useAudioRecording = (toast, options = {}) => {
           // expansion is a dictation convenience and can otherwise mutate a
           // legitimate replacement that happens to contain a snippet trigger.
           if (!result.selectionEdit?.sessionId && !outlivedAccount) {
-            result.text = expandSnippets(result.text, getSettings().snippets);
+            result.text = expandSnippets(result.text, getSettings().snippets, {
+              locale: snippetLocale(getSettings().uiLanguage),
+            });
           }
 
           setTranscript(result.text);
@@ -818,7 +844,9 @@ export const useAudioRecording = (toast, options = {}) => {
             window.electronAPI?.hideDictationPreview?.();
             const { screenContext, transcript, selectedContext } = result.assistantConversation;
             const command = {
-              text: expandSnippets(transcript, getSettings().snippets),
+              text: expandSnippets(transcript, getSettings().snippets, {
+                locale: snippetLocale(getSettings().uiLanguage),
+              }),
               attachment: screenContext
                 ? { image: screenContext.data, mediaType: screenContext.mediaType }
                 : null,
@@ -1266,6 +1294,7 @@ export const useAudioRecording = (toast, options = {}) => {
       )
         return;
       try {
+        if (!isDictationRecordingAllowed()) return;
         await manager.prepareMicCapture?.();
       } catch (error) {
         logger.warn("Mic preparation failed", { error: error?.message });

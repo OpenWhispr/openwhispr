@@ -158,7 +158,8 @@ test("rooms and resources are flagged in attendees and kept, with the user, out 
   ]);
 });
 
-test("_mapEvent drops the organizer address only when the user organized the event", () => {
+test("EventKit keeps an outside organizer for recording policy even on the user’s own calendar", () => {
+  const { meetingAttendeeVerdict } = require("../../src/helpers/meetingAttendeePolicy");
   const AppleCalendarManager = loadManager();
   const manager = new AppleCalendarManager({}, {});
   const event = {
@@ -172,8 +173,18 @@ test("_mapEvent drops the organizer address only when the user organized the eve
     attendees: [{ email: "ana@example.com", status: "accepted", self: false }],
   };
 
-  assert.equal(manager._mapEvent({ ...event, organizer_self: true }).organizer_email, null);
-  assert.equal(manager._mapEvent(event).organizer_email, "me@corp.test");
+  for (const organizer_self of [true, false]) {
+    const mapped = manager._mapEvent({ ...event, organizer_self });
+    assert.equal(mapped.organizer_email, "me@corp.test");
+    assert.equal(mapped.organizer_self, organizer_self);
+    assert.equal(
+      meetingAttendeeVerdict(mapped, {
+        externalAttendees: "blocked",
+        internalDomains: ["example.com"],
+      }),
+      "external"
+    );
+  }
 });
 
 test("Apple RSVP ignores another attendee's decline and follows current-user changes", () => {
@@ -226,4 +237,13 @@ test("the helper is launched with the stored lookback", () => {
       args: ["--lookback-seconds", "259200", "--request"],
     },
   ]);
+});
+
+test("EventKit can report invited people without exposing their roster", () => {
+  const AppleCalendarManager = loadManager();
+  const mapped = new AppleCalendarManager({}, {})._mapEvent({
+    attendees: [],
+    attendees_omitted: true,
+  });
+  assert.equal(mapped.attendees_omitted, true);
 });

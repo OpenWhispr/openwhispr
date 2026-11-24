@@ -402,6 +402,17 @@ const VolumeMark = glyph(
   </>
 );
 
+// The note recording's mute toggle: the vendored Nucleo microphone with a slash.
+const MicOffMark = glyph(
+  <>
+    <path d="M16 10V6a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4 4 4 0 0 0 4-4Z" />
+    <path d="M20 10a8 8 0 0 1-16 0" />
+    <path d="M12 18v4" />
+    <path d="M8 22h8" />
+    <path d="m3 3 18 18" />
+  </>
+);
+
 // The question card's submit arrow (Lucide's arrow-up).
 const ArrowUpMark = glyph(
   <>
@@ -479,6 +490,7 @@ export const MessageCircleQuestion = createIcon(
   "message-circle-question",
   MessageCircleQuestionMark
 );
+export const MicOff = createIcon("mic-off", MicOffMark);
 export const Minimize = createIcon("minimize", MinimizeMark);
 export const Office = createIcon("office", OfficeMark);
 export const Italic = createIcon("italic", ItalicMark);

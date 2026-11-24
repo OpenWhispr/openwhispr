@@ -48,6 +48,19 @@ function mergePolicies(policies) {
     ),
     // Any start other than automatic, known to this build or not, is manual.
     meetings: {
+      externalAttendees: policies.some(
+        (policy) => (policy.meetings?.externalAttendees ?? "allowed") !== "allowed"
+      )
+        ? "blocked"
+        : "allowed",
+      internalDomains: [
+        ...new Set(
+          policies
+            .flatMap((policy) => policy.meetings?.internalDomains ?? [])
+            .map((domain) => domain.trim().toLowerCase())
+            .filter(Boolean)
+        ),
+      ].sort(),
       transcriptionStart:
         policies
           .map((policy) => policy.meetings?.transcriptionStart ?? "automatic")

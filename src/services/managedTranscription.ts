@@ -1,9 +1,36 @@
 import { getSettings } from "../stores/settingsStore";
+import {
+  isAssemblyAiRewriteAllowedByPolicy,
+  isByokTranscriptionAllowed,
+} from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 import type { ManagedTranscriptionResolution } from "../helpers/transcriptionRoute";
 import {
   getManagedScopeResolution,
   useEnterpriseIdentityStore,
 } from "../stores/enterpriseIdentityStore";
+
+export function canUseAssemblyAiRewrite(): boolean {
+  return (
+    isAssemblyAiRewriteAllowedByPolicy(usePolicyStore.getState()) &&
+    getManagedScopeResolution("dictationCleanup", getSettings().enterpriseSetupMode).kind ===
+      "manual"
+  );
+}
+
+// Admission mirrors main: an optional managed cleanup can still process the verbatim transcript.
+export function allowsPersonalDictationCleanup(): boolean {
+  return getManagedScopeResolution("dictationCleanup", "manual").kind === "manual";
+}
+
+export function isByokTranscriptionModelAllowed(provider: string, model?: string): boolean {
+  return isByokTranscriptionAllowed(
+    usePolicyStore.getState(),
+    provider,
+    model,
+    allowsPersonalDictationCleanup
+  );
+}
 
 /**
  * True when managed STT resolves for this user. Dictation gates OR this with

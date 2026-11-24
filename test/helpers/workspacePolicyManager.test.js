@@ -338,6 +338,90 @@ test("refreshes a managed identity to authoritative unmanaged after five minutes
   assert.equal(context.broadcasts.length, 2);
 });
 
+test("reuses an unmanaged verdict for fifteen minutes; a managed one goes back to five", async (t) => {
+  let currentTime = 0;
+  let requestCount = 0;
+  const responses = [
+    response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } }),
+    response(200, validPolicy("2026-08-05T00:15:00.000Z")),
+    response(200, validPolicy("2026-08-05T00:20:00.000Z")),
+  ];
+  const context = setup(
+    async () => {
+      requestCount += 1;
+      return responses.shift();
+    },
+    { now: () => currentTime, successfulRefreshMs: 300_000 }
+  );
+  t.after(context.cleanup);
+  const request = { accountId: "account-a", expectedAuthGeneration: 1 };
+
+  assert.equal((await context.manager.getPolicy(request)).managed, false);
+  currentTime = 899_999;
+  assert.equal((await context.manager.getPolicy(request)).managed, false);
+  assert.equal(requestCount, 1);
+  currentTime = 900_000;
+  assert.equal((await context.manager.getPolicy(request)).managed, true);
+  currentTime = 1_199_999;
+  await context.manager.getPolicy(request);
+  assert.equal(requestCount, 2);
+  currentTime = 1_200_000;
+  await context.manager.getPolicy(request);
+  assert.equal(requestCount, 3);
+});
+
+test("a server refusal or a new sign-in reads past a fresh unmanaged verdict", async (t) => {
+  let currentTime = 0;
+  let requestCount = 0;
+  const context = setup(
+    async () => {
+      requestCount += 1;
+      return requestCount === 2
+        ? response(200, validPolicy())
+        : response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } });
+    },
+    { now: () => currentTime, successfulRefreshMs: 300_000 }
+  );
+  t.after(context.cleanup);
+  const request = { accountId: "account-a", expectedAuthGeneration: 1 };
+
+  await context.manager.getPolicy(request);
+  currentTime = 600_000;
+  await context.manager.getPolicy(request);
+  assert.equal(requestCount, 1);
+  assert.equal((await context.manager.getPolicy({ ...request, refresh: true })).managed, true);
+  assert.equal(requestCount, 2);
+
+  context.tokenState.token = "token-b";
+  context.tokenState.generation = 2;
+  const signedIn = await context.manager.getPolicy({
+    accountId: "account-b",
+    expectedAuthGeneration: 2,
+  });
+  assert.equal(signedIn.managed, false);
+  assert.equal(requestCount, 3);
+});
+
+test("a failed forced read preserves the offline verdict and retries before its unmanaged TTL", async (t) => {
+  let now = 0;
+  const replies = [
+    response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } }),
+    response(503, {}),
+    response(200, validPolicy()),
+  ];
+  const context = setup(async () => replies.shift(), {
+    now: () => now,
+    successfulRefreshMs: 300_000,
+  });
+  t.after(context.cleanup);
+  const request = { accountId: "account-a", expectedAuthGeneration: 1 };
+  assert.equal((await context.manager.getPolicy(request)).managed, false);
+  now = 60_000;
+  assert.equal((await context.manager.getPolicy({ ...request, refresh: true })).status, "cached");
+  now = 300_000;
+  assert.equal((await context.manager.getPolicy(request)).managed, true);
+});
+
 test("cached errors do not extend successful policy freshness", async (t) => {
   let currentTime = 0;
   let requestCount = 0;

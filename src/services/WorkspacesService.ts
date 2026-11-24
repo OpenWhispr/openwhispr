@@ -2,6 +2,7 @@ import {
   CloudApiError,
   cloudGet,
   cloudPost,
+  cloudPostForAuthGeneration,
   cloudPatch,
   cloudDelete,
   type DataWrap,
@@ -21,6 +22,13 @@ export interface SeatPreview {
   seats_used: number;
   amount_due: number;
   currency: string;
+  member_seats?: number;
+  pending_seats?: number;
+  unit_amount?: number | null;
+  interval?: "monthly" | "annual" | null;
+  proration_amount?: number;
+  next_invoice_amount?: number;
+  next_invoice_date?: string | null;
 }
 
 export interface EnterpriseUpgradePreview {
@@ -76,6 +84,24 @@ async function update(workspaceId: string, patch: { name?: string }): Promise<Wo
   return res.data;
 }
 
+async function uploadIcon(
+  workspaceId: string,
+  data: string,
+  authGeneration: number
+): Promise<Workspace> {
+  const res = await cloudPostForAuthGeneration<DataWrap<Workspace>>(
+    `/api/workspaces/${workspaceId}/icon`,
+    { data },
+    authGeneration
+  );
+  return res.data;
+}
+
+async function removeIcon(workspaceId: string): Promise<Workspace> {
+  const res = await cloudDelete<DataWrap<Workspace>>(`/api/workspaces/${workspaceId}/icon`);
+  return res.data;
+}
+
 async function remove(workspaceId: string): Promise<void> {
   await cloudDelete(`/api/workspaces/${workspaceId}`);
 }
@@ -124,6 +150,25 @@ async function removeMembers(
   return res.data;
 }
 
+interface WorkspacePeopleCounts {
+  seats?: number;
+  billable_members?: number;
+  member_count: number;
+  pending_invitations: number;
+}
+
+async function getPeopleCounts(workspaceId: string): Promise<WorkspacePeopleCounts> {
+  const res = await cloudGet<DataWrap<WorkspacePeopleCounts>>(
+    `/api/workspaces/${workspaceId}/stats`,
+    "no-store"
+  );
+  const counts = res.data;
+  if (!Number.isInteger(counts?.member_count) || !Number.isInteger(counts?.pending_invitations)) {
+    throw new Error("Workspace people counts are unavailable");
+  }
+  return counts;
+}
+
 async function billingCheckout(
   workspaceId: string,
   interval: "monthly" | "annual" = "monthly",
@@ -140,20 +185,31 @@ async function billingCheckout(
   return res.data.url;
 }
 
-async function billingPortal(workspaceId: string): Promise<string> {
-  const res = await cloudPost<DataWrap<{ url: string }>>(
-    `/api/workspaces/${workspaceId}/billing/portal`
-  );
+async function billingPortal(workspaceId: string, authGeneration?: number): Promise<string> {
+  const path = `/api/workspaces/${workspaceId}/billing/portal`;
+  const res =
+    authGeneration === undefined
+      ? await cloudPost<DataWrap<{ url: string }>>(path)
+      : await cloudPostForAuthGeneration<DataWrap<{ url: string }>>(
+          path,
+          undefined,
+          authGeneration
+        );
   return res.data.url;
 }
 
-async function previewSeats(workspaceId: string, additionalSeats: number): Promise<SeatPreview> {
-  const res = await cloudPost<DataWrap<SeatPreview>>(
-    `/api/workspaces/${workspaceId}/billing/preview-seats`,
-    {
-      additional_seats: additionalSeats,
-    }
-  );
+/** With an auth generation the quote is fenced to that sign-in. */
+async function previewSeats(
+  workspaceId: string,
+  additionalSeats: number,
+  authGeneration?: number
+): Promise<SeatPreview> {
+  const path = `/api/workspaces/${workspaceId}/billing/preview-seats`;
+  const body = { additional_seats: additionalSeats };
+  const res =
+    authGeneration === undefined
+      ? await cloudPost<DataWrap<SeatPreview>>(path, body)
+      : await cloudPostForAuthGeneration<DataWrap<SeatPreview>>(path, body, authGeneration);
   return res.data;
 }
 
@@ -168,14 +224,22 @@ async function upgradeToEnterprise(workspaceId: string): Promise<void> {
   await cloudPost<DataWrap<{ plan: string }>>(`/api/workspaces/${workspaceId}/billing/upgrade`);
 }
 
+/** With an auth generation the change is fenced to that sign-in. */
 async function updateSeats(
   workspaceId: string,
-  quantity: number
+  quantity: number,
+  authGeneration?: number
 ): Promise<{ quantity: number; seats_used: number }> {
-  const res = await cloudPost<DataWrap<{ quantity: number; seats_used: number }>>(
-    `/api/workspaces/${workspaceId}/billing/seats`,
-    { quantity }
-  );
+  const path = `/api/workspaces/${workspaceId}/billing/seats`;
+  const body = { quantity };
+  const res =
+    authGeneration === undefined
+      ? await cloudPost<DataWrap<{ quantity: number; seats_used: number }>>(path, body)
+      : await cloudPostForAuthGeneration<DataWrap<{ quantity: number; seats_used: number }>>(
+          path,
+          body,
+          authGeneration
+        );
   return res.data;
 }
 
@@ -224,12 +288,15 @@ export const WorkspacesService = {
   ensureDefault,
   isLost,
   update,
+  uploadIcon,
+  removeIcon,
   remove,
   listMembers,
   updateMemberRole,
   removeMember,
   previewMemberRemoval,
   removeMembers,
+  getPeopleCounts,
   billingCheckout,
   billingPortal,
   previewSeats,

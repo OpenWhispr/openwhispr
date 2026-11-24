@@ -69,6 +69,38 @@ test("batch dictation on a keyed realtime-only provider fails closed on the tran
   });
 });
 
+for (const savedKey of ["assemblyai-test", null]) {
+  test(`first AssemblyAI Dictation before key hydration ${savedKey ? "uses the saved key" : "reports a missing key"}`, async (t) => {
+    const { createManager, window } = await loadManager(t);
+    setSettings({
+      cloudTranscriptionProvider: "assemblyai",
+      cloudTranscriptionModel: "dictation",
+      assemblyaiApiKey: "",
+    });
+    const keyRead = t.mock.fn(async () => savedKey);
+    window.electronAPI.getAssemblyAIKey = keyRead;
+    const proxy = t.mock.fn(async () => ({ text: "First dictation." }));
+    window.electronAPI.proxyAssemblyAiTranscription = proxy;
+    const manager = createManager({
+      processTranscription: async (text) => text,
+      isReasoningAvailable: async () => false,
+    });
+
+    const result = manager.processWithOpenAIAPI(audioBlob());
+    if (savedKey) {
+      assert.equal((await result).text, "First dictation.");
+      assert.equal(proxy.mock.callCount(), 1);
+    } else {
+      await assert.rejects(result, {
+        code: "API_KEY_MISSING",
+        messageKey: "hooks.audioRecording.errorDescriptions.providerKeyMissing",
+      });
+      assert.equal(proxy.mock.callCount(), 0);
+    }
+    assert.equal(keyRead.mock.callCount(), 1);
+  });
+}
+
 for (const provider of ["openai", "groq"]) {
   for (const restriction of ["mode", "provider"]) {
     for (const stage of ["key loading", "request", "response body", "postprocessing"]) {
@@ -221,4 +253,83 @@ test("a verdict that is still loading doesn't stop a permitted BYOK transcriptio
   });
   assert.equal((await manager.processWithOpenAIAPI(audioBlob())).text, "permitted output");
   assert.equal(requestSignal.aborted, false);
+});
+
+for (const [localProvider, ipc] of [
+  ["whisper", "transcribeLocalWhisper"],
+  ["nvidia", "transcribeLocalParakeet"],
+]) {
+  test(`Escape during ${localProvider} prevents a later AssemblyAI cloud fallback`, async (t) => {
+    const { createManager, window } = await loadManager(t);
+    setSettings({
+      useLocalWhisper: true,
+      transcriptionMode: "local",
+      localTranscriptionProvider: localProvider,
+      whisperModel: "base",
+      allowOpenAIFallback: true,
+      cloudTranscriptionProvider: "assemblyai",
+      cloudTranscriptionModel: "dictation",
+      assemblyaiApiKey: "fixture",
+    });
+    const started = Promise.withResolvers();
+    const local = Promise.withResolvers();
+    window.electronAPI[ipc] = () => {
+      started.resolve();
+      return local.promise;
+    };
+    const proxy = t.mock.fn(async () => ({ text: "cloud result" }));
+    window.electronAPI.proxyAssemblyAiTranscription = proxy;
+    const manager = createManager({
+      isProcessing: true,
+      _streamingCancellationGeneration: 0,
+      onError: t.mock.fn(),
+      onTranscriptionComplete: t.mock.fn(),
+    });
+    const completed = manager.processAudio(audioBlob());
+    await Promise.race([
+      started.promise,
+      completed.then(() => assert.fail("Local transcription did not start")),
+    ]);
+    assert.equal(manager.cancelProcessing(), true);
+    local.resolve({ success: false, error: "worker failed" });
+    await completed;
+    assert.equal(proxy.mock.callCount(), 0);
+    assert.equal(manager.onTranscriptionComplete.mock.callCount(), 0);
+    assert.equal(manager.onError.mock.callCount(), 0);
+  });
+}
+
+test("revoking only the AssemblyAI LLM after the rewrite prevents result delivery", async (t) => {
+  const { createManager, usePolicyStore, window, vite } = await loadManager(t);
+  const { assemblyAiPolicy, loadAssemblyAiDictationCatalog } = require("./harness/policyFixtures");
+  await loadAssemblyAiDictationCatalog(vite);
+  setSettings({
+    cloudTranscriptionProvider: "assemblyai",
+    cloudTranscriptionModel: "dictation",
+    assemblyaiApiKey: "fixture",
+    useCleanupModel: true,
+    toneStyleEnabled: false,
+    customPrompts: { cleanup: "" },
+    snippets: [],
+  });
+  usePolicyStore.setState(assemblyAiPolicy(true, true));
+  const finalizing = Promise.withResolvers();
+  const finish = Promise.withResolvers();
+  window.electronAPI.proxyAssemblyAiTranscription = async () => ({
+    text: "uh hello",
+    cleanedText: "Hello.",
+  });
+  const manager = createManager({
+    isReasoningAvailable: async () => false,
+    finalizeChineseScript: async (text) => {
+      finalizing.resolve(text);
+      await finish.promise;
+      return text;
+    },
+  });
+  const result = manager.processWithOpenAIAPI(audioBlob());
+  assert.equal(await finalizing.promise, "Hello.");
+  usePolicyStore.setState(assemblyAiPolicy(true, false));
+  finish.resolve();
+  await assert.rejects(result, { name: "AbortError" });
 });

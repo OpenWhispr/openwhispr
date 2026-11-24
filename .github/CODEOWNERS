@@ -1,0 +1,25 @@
+# The model registry publishes to installed apps. A change to these paths needs an
+# approval from one of the owners listed for it (one owner's approval is enough).
+/model-registry/ @greatcoat @Chadpiha
+# Publishing, signing and the shared reader also need an engineering owner.
+/model-registry/lib/ @greatcoat @Chadpiha @gabrielste1n
+/model-registry/scripts/ @greatcoat @Chadpiha @gabrielste1n
+/model-registry/trusted-keys.json @greatcoat @gabrielste1n
+/model-registry/registry/trusted-publishers.json @greatcoat @gabrielste1n
+/.github/workflows/model-registry*.yml @greatcoat @Chadpiha @gabrielste1n
+/.github/CODEOWNERS @greatcoat @Chadpiha @gabrielste1n
+# Line endings decide the bytes the catalog and reader are hashed from.
+/.gitattributes @greatcoat @Chadpiha @gabrielste1n
+# What the app trusts: the keys and reader it bundles, the code that accepts a
+# publication or a download, and the script and workflows that produce and gate them.
+/src/models/registry* @greatcoat @Chadpiha @gabrielste1n
+/src/models/registryTrustedKeys.json @greatcoat @gabrielste1n
+/scripts/sync-model-registry.mjs @greatcoat @Chadpiha @gabrielste1n
+/src/helpers/registryLoader.js @greatcoat @Chadpiha @gabrielste1n
+/src/helpers/registryDownloadTrust.js @greatcoat @Chadpiha @gabrielste1n
+/.github/workflows/release.yml @greatcoat @Chadpiha @gabrielste1n
+/.github/workflows/ci-changes.yml @greatcoat @Chadpiha @gabrielste1n
+/.github/scripts/ci-scope.cjs @greatcoat @Chadpiha @gabrielste1n
+# Dependencies and the registry they install from, for the app and so for its reader.
+/package.json @greatcoat @Chadpiha @gabrielste1n
+/.npmrc @greatcoat @Chadpiha @gabrielste1n

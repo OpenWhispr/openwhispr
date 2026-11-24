@@ -41,7 +41,7 @@ const chevronClass =
 const MEMBER_COUNT_TTL_MS = 5 * 60_000;
 
 /** A quiet line about the list, with Retry; the menu stays open while it reloads. */
-function RetryMenuItem({
+export function RetryMenuItem({
   message,
   loading,
   onRetry,
@@ -259,7 +259,7 @@ export default function WorkspaceSwitcher({
           className={compact ? compactTriggerClass : triggerClass}
           aria-label={compact ? current.name : undefined}
         >
-          <MemberAvatar name={current.name} email={null} />
+          <MemberAvatar name={current.name} email={null} image={current.icon_url} />
           {!compact && (
             <>
               <span dir="auto" className={nameClass}>
@@ -277,7 +277,7 @@ export default function WorkspaceSwitcher({
           className="max-h-[var(--radix-dropdown-menu-content-available-height)] w-60 overflow-y-auto"
         >
           <div className="flex items-center gap-3 px-2 pt-1.5 pb-2.5">
-            <MemberAvatar name={current.name} email={null} />
+            <MemberAvatar name={current.name} email={null} image={current.icon_url} />
             <div className="min-w-0">
               <p dir="auto" className="truncate text-sm font-medium text-foreground">
                 {current.name}
@@ -313,7 +313,7 @@ export default function WorkspaceSwitcher({
               onSelect={() => setActive(workspace.id)}
               className={itemClass}
             >
-              <MemberAvatar name={workspace.name} email={null} />
+              <MemberAvatar name={workspace.name} email={null} image={workspace.icon_url} />
               <span dir="auto" className="flex-1 min-w-0 truncate">
                 {workspace.name}
               </span>

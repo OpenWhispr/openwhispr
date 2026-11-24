@@ -29,7 +29,7 @@ class AppDelegate: ExpoAppDelegate {
 }
 `);
 
-    expect(result).toBe(`import BackgroundUploader
+    expect(result).toBe(`internal import BackgroundUploader
 import Expo
 class AppDelegate: ExpoAppDelegate {
 ${callback}

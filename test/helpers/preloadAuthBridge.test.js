@@ -371,3 +371,13 @@ test("private-space workspace calls reach their channels", async () => {
     ["relocate-private-space", "w2", null, "account-a"],
   ]);
 });
+
+test("personal Stripe portal forwards the captured credential generation", async () => {
+  const { api, invocations } = loadPreloadApi();
+  await api.cloudBillingPortal(7);
+  await api.cloudBillingPortal();
+  assert.deepEqual(invocations, [
+    ["cloud-billing-portal", 7],
+    ["cloud-billing-portal", undefined],
+  ]);
+});

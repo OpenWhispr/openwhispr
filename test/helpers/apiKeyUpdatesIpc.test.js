@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
-const { once } = require("node:events");
+const { EventEmitter, once } = require("node:events");
 const { BYOK_API_KEYS } = require("../../src/config/secretKeys");
 const { deferred } = require("./harness/deferred");
 
@@ -28,7 +28,7 @@ const handlers = new Map();
 const eventHandlers = new Map();
 const keys = new Map();
 const notifications = [];
-const editor = { id: 1 };
+const editor = Object.assign(new EventEmitter(), { id: 1 });
 const windows = [1, 2, 3].map((id) => ({
   id,
   isDestroyed: () => id === 3,
@@ -494,6 +494,8 @@ test("local-only device policy refuses direct remote IPC despite saved keys and 
     "proxy-gemini-transcription",
     "proxy-xai-transcription",
     "proxy-mistral-transcription",
+    "proxy-assemblyai-transcription",
+    "proxy-elevenlabs-transcription",
   ]) {
     assert.equal((await invoke(channel, {})).code, "DEVICE_POLICY_BLOCKED", channel);
   }
@@ -1619,14 +1621,14 @@ test("valid inference restrictions retire active provider streams without disabl
   assert.equal(current.policy.features.webSearchEnabled, true);
   assert.equal(current.policy.features.connectorsEnabled, true);
   assert.equal(current.policy.dataRetention.cloudBackupAllowed, true);
-  for (const channel of [
-    "proxy-xai-transcription",
-    "proxy-mistral-transcription",
-    "proxy-corti-transcription",
-    "proxy-tinfoil-transcription",
-    "proxy-gemini-transcription",
-  ])
-    assert.equal((await invoke(channel, {})).code, "DEVICE_POLICY_BLOCKED");
+  // Read from the registered handlers, so a provider added without its policy rule fails here.
+  const proxyChannels = [...handlers.keys()].filter((channel) =>
+    /^proxy-.+-transcription$/.test(channel)
+  );
+  assert.ok(proxyChannels.includes("proxy-elevenlabs-transcription"));
+  assert.ok(proxyChannels.includes("proxy-assemblyai-transcription"));
+  for (const channel of proxyChannels)
+    assert.equal((await invoke(channel, {})).code, "DEVICE_POLICY_BLOCKED", channel);
   for (const path of [
     "/api/reason",
     "/api/transcribe",
@@ -1992,5 +1994,87 @@ test("a meeting start the policy blocks for its provider reaches the audit log",
   assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
   assert.deepEqual(audit, [
     ["refused", { noteId: 5, trigger: "hotkey", reason: "DEVICE_POLICY_BLOCKED" }],
+  ]);
+});
+
+test("a calendar guest revokes the admitted recording and the backend refuses a direct restart", async (t) => {
+  resetMeeting(t);
+  const invite = { attendees: '[{"email":"member@internal.test"}]', attendees_count: 1 };
+  const policy = defaultDevicePolicy();
+  policy.meetings = { externalAttendees: "blocked", internalDomains: ["internal.test"] };
+  setWorkspacePolicy({ success: true, managed: true, policy });
+  // Only note/event lookups are real inputs to this policy. Other meeting
+  // setup calls use the same stand-ins as the provider lifecycle tests.
+  target.databaseManager = new Proxy(
+    {
+      getNote: () => ({ calendar_event_id: "invite" }),
+      getCalendarEventById: () => invite,
+    },
+    { get: (value, property) => (property in value ? value[property] : anything()) }
+  );
+  const notices = [];
+  editor.send = (channel, payload) => notices.push([channel, payload]);
+  t.after(() => {
+    delete target.databaseManager;
+    delete editor.send;
+  });
+  invoke("save-deepgram-key", "A");
+  const options = {
+    provider: "deepgram-realtime",
+    mode: "byok",
+    sessionId: "guest-check",
+    noteId: 37,
+  };
+  assert.deepEqual(await invoke("check-meeting-recording-start", options), { success: true });
+  assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+  const streams = meetingStreams();
+  invite.attendees = '[{"email":"guest@other.test"}]';
+  target._meetingAdmission.recheck();
+  target._meetingAdmission.recheck();
+  assert.ok(streams.every((stream) => !stream.isConnected));
+  assert.deepEqual(
+    notices.filter(([channel]) => channel === "meeting-recording-admission-revoked"),
+    [
+      [
+        "meeting-recording-admission-revoked",
+        { sessionId: "guest-check", code: "POLICY_EXTERNAL_ATTENDEES" },
+      ],
+    ]
+  );
+  await invoke("meeting-transcription-stop", options.sessionId, "policy");
+  assert.equal(
+    (await invoke("check-meeting-recording-start", options)).code,
+    "POLICY_EXTERNAL_ATTENDEES"
+  );
+  assert.equal((await invoke("meeting-transcription-start", options)).success, false);
+});
+
+test("an in-person confirmation surfaces the control panel before asking", async (t) => {
+  const policy = defaultDevicePolicy();
+  policy.meetings = { externalAttendees: "blocked", internalDomains: ["internal.test"] };
+  setWorkspacePolicy({ success: true, managed: true, policy });
+  const calls = [];
+  target.databaseManager = { getNote: () => ({ calendar_event_id: null }) };
+  // The meeting hotkey leaves the panel behind the call it was pressed in.
+  target.windowManager = {
+    controlPanelWindow: windows[1],
+    showControlPanel: (options) => calls.push(["panel", options]),
+  };
+  electron.dialog.showMessageBox = async (parent) => {
+    calls.push(["sheet", parent.id]);
+    return { response: 1 };
+  };
+  t.after(() => {
+    delete target.databaseManager;
+    delete target.windowManager;
+    delete electron.dialog.showMessageBox;
+  });
+  assert.equal(
+    (await invoke("check-meeting-recording-start", { sessionId: "in-person", noteId: 41 })).code,
+    "AUDIO_OPERATION_CANCELLED"
+  );
+  assert.deepEqual(calls, [
+    ["panel", undefined],
+    ["sheet", 2],
   ]);
 });

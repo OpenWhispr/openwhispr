@@ -4,7 +4,10 @@
 
 // The overlay sits inside the System Settings window, this far above its bottom
 // edge; SCREEN_MARGIN is the gutter it keeps from the bottom of the screen when
-// it falls back or when the inset spot would land off screen.
+// it falls back or when the inset spot would land off screen. keepSettingsClear
+// prefers a spot beside the window instead, for steps where the user works
+// through the whole pane; with no room beside it, the inset spot still applies
+// so the instruction is never lost.
 const BOTTOM_INSET = 20;
 const SCREEN_MARGIN = 24;
 
@@ -12,7 +15,7 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), Math.max(min, max));
 }
 
-function computeGuideBounds({ settingsBounds, workArea, size }) {
+function computeGuideBounds({ settingsBounds, workArea, size, keepSettingsClear = false }) {
   const width = Math.min(size.width, workArea.width);
   const height = Math.min(size.height, workArea.height);
   const lowestTop = workArea.y + workArea.height - height - SCREEN_MARGIN;
@@ -23,6 +26,27 @@ function computeGuideBounds({ settingsBounds, workArea, size }) {
         y: settingsBounds.y + settingsBounds.height - height - BOTTOM_INSET,
       }
     : { x: workArea.x + (workArea.width - width) / 2, y: lowestTop };
+
+  if (keepSettingsClear && settingsBounds) {
+    const x = Math.round(clamp(anchor.x, workArea.x, workArea.x + workArea.width - width));
+    const y = Math.round(
+      clamp(settingsBounds.y, workArea.y, workArea.y + workArea.height - height)
+    );
+    const candidates = [
+      { x, y: Math.ceil(settingsBounds.y + settingsBounds.height) },
+      { x, y: Math.floor(settingsBounds.y - height) },
+      { x: Math.ceil(settingsBounds.x + settingsBounds.width), y },
+      { x: Math.floor(settingsBounds.x - width), y },
+    ];
+    const clear = candidates.find(
+      (candidate) =>
+        candidate.x >= workArea.x &&
+        candidate.y >= workArea.y &&
+        candidate.x + width <= workArea.x + workArea.width &&
+        candidate.y + height <= workArea.y + workArea.height
+    );
+    if (clear) return { ...clear, width, height };
+  }
 
   return {
     x: Math.round(clamp(anchor.x, workArea.x, workArea.x + workArea.width - width)),

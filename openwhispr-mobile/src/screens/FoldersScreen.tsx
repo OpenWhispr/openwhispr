@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, type ReactElement } from 'react';
 import { View, ScrollView, Alert, ActionSheetIOS, RefreshControl } from 'react-native';
 import { Text } from '@/components/ui/Text';
 
@@ -29,18 +29,18 @@ const FAB_ACTIONS: FabAction[] = [
   { id: 'folder', label: 'New Folder', icon: 'folder.badge.plus', mdIcon: 'FolderPlus' },
 ];
 
-export default function FoldersScreen() {
+function renderWorkspaceTitle(heading: ReactElement): ReactElement {
+  return <PrivateWorkspaceSwitcher heading={heading} />;
+}
+
+export default function FoldersScreen(): ReactElement {
   const {
     folders,
     folderCounts,
     spaces,
     privateWorkspaces,
     activePrivateWorkspaceId,
-    defaultPrivateWorkspaceId,
-    setActivePrivateWorkspace,
     getPrivateNoteFolderId,
-    initialize,
-    isInitialized,
     setActiveFolderId,
     setActiveSpaceId,
     setActiveNoteId,
@@ -65,10 +65,6 @@ export default function FoldersScreen() {
   }, [trimmedQuery, isSearching, folderCounts]);
 
   const buckets = useMemo(() => groupNotesByDate(searchResults), [searchResults]);
-
-  useEffect(() => {
-    if (!isInitialized) initialize();
-  }, [isInitialized, initialize]);
 
   // With a Private per workspace the screen shows one workspace at a time, as desktop does:
   // its Private above and its team spaces below. The unassigned Personal list belongs to no
@@ -198,6 +194,7 @@ export default function FoldersScreen() {
     <View className="flex-1 bg-systemBackground">
       <NotesTopBar
         title={isSearching ? 'Search' : 'Folders'}
+        wrapTitle={isSearching ? undefined : renderWorkspaceTitle}
         searchValue={searchValue}
         onSearchChange={setSearchValue}
       />
@@ -250,12 +247,6 @@ export default function FoldersScreen() {
           )
         ) : (
           <>
-            <PrivateWorkspaceSwitcher
-              workspaces={privateWorkspaces}
-              activeId={activePrivateWorkspaceId}
-              defaultId={defaultPrivateWorkspaceId}
-              onSelect={setActivePrivateWorkspace}
-            />
             <SectionHeader label="Private Space" />
             <GroupedList>
               {folders.map((folder) => (

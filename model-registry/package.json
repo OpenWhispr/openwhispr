@@ -1,0 +1,17 @@
+{
+  "name": "@openwhispr/model-registry",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reviewed, signed data for OpenWhispr's desktop model catalog",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.cjs",
+    "validate": "node scripts/validate.cjs"
+  },
+  "dependencies": {
+    "zod": "4.3.6"
+  }
+}

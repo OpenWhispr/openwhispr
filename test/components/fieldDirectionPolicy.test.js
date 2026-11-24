@@ -140,9 +140,12 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/onboarding/DemoStep.tsx": ["auto"],
   "src/components/onboarding/LanguageSelectionStep.tsx": ["auto"],
   "src/components/onboarding/UseCaseStep.tsx": ["auto"],
+  "src/components/settings/billing/AddSeatsDialog.tsx": ["inherit"],
   "src/components/settings/ChatAgentSettings.tsx": ["auto"],
   "src/components/settings/ProfileSection.tsx": ["inherit"],
   "src/components/settings/TeamSettingsDialog.tsx": ["auto"],
+  // The workspace icon file picker is hidden.
+  "src/components/settings/WorkspaceGeneralSection.tsx": ["inherit"],
   // Email addresses are Latin-script identifiers.
   "src/components/workspace/InvitePeopleView.tsx": ["ltr"],
   // A skill's description is prose; the file pickers are hidden.

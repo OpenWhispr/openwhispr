@@ -19,6 +19,10 @@ const ENDPOINTS = {
   deepgram: "https://api.deepgram.com/v1/auth/token",
   // AssemblyAI exposes no model list; listing transcripts is its 200-vs-401 probe.
   assemblyai: "https://api.assemblyai.com/v2/transcript?limit=1",
+  // ElevenLabs keys can be scoped so /v1/user or /v1/models refuse a key that transcribes.
+  // The transcription route checks the key before the body, so a request without audio is
+  // refused as unauthorised or as invalid, and transcribes nothing.
+  elevenlabs: "https://api.elevenlabs.io/v1/speech-to-text",
 };
 // Listing the key's projects proves the key too: used only if Deepgram retires the route above.
 const DEEPGRAM_PROJECTS_ENDPOINT = "https://api.deepgram.com/v1/projects";
@@ -174,8 +178,8 @@ function resolveProviderRequest(config) {
   const apiKey = typeof config?.apiKey === "string" ? config.apiKey.trim() : "";
   let endpoints = ENDPOINTS[provider] ? [ENDPOINTS[provider]] : [];
   // A hosted provider's fixed endpoint never redirects. Following one would carry
-  // x-api-key or x-goog-api-key to whichever host it names (fetch drops only
-  // Authorization across origins), so a redirect fails the check instead. Custom
+  // x-api-key, x-goog-api-key or xi-api-key to whichever host it names (fetch drops
+  // only Authorization across origins), so a redirect fails the check instead. Custom
   // servers may redirect within themselves, such as adding a trailing slash.
   let redirect = "error";
   let transcriptionEndpoint;
@@ -252,6 +256,8 @@ function resolveProviderRequest(config) {
       headers.Authorization = `Token ${apiKey}`;
     } else if (provider === "assemblyai") {
       headers.Authorization = apiKey;
+    } else if (provider === "elevenlabs") {
+      headers["xi-api-key"] = apiKey;
     } else {
       headers.Authorization = `Bearer ${apiKey}`;
     }
@@ -350,8 +356,8 @@ async function readJson(response) {
   }
 }
 
-// Gemini, xAI and Corti answer a made-up key with a 400, which on its own can also
-// mean a malformed request. Their error bodies say which it was.
+// Gemini, xAI and Corti answer a made-up key with a 400, which on its own
+// can also mean a malformed request. Their error bodies say which it was.
 const KEY_REJECTED_BY_BODY = {
   gemini: (_, body) =>
     Array.isArray(body?.error?.details) &&
@@ -461,6 +467,7 @@ async function testProviderConnection(
 
   const provider = String(config?.provider || "").toLowerCase();
   if (provider === "deepgram") return testDeepgramKey(request, fetchImpl);
+  if (provider === "elevenlabs") return testElevenLabsKey(request, fetchImpl);
 
   const model = String(config?.model || "").trim();
   let failure = null;
@@ -543,6 +550,56 @@ async function testDeepgramKey(request, fetchImpl) {
     return Array.isArray((await readJson(response))?.projects) ? null : {};
   });
   return fallback ? { success: false, ...fallback } : { success: true };
+}
+
+function isElevenLabsMissingFile(detail) {
+  if (Array.isArray(detail)) {
+    const [error] = detail;
+    return (
+      detail.length === 1 &&
+      ["missing", "value_error.missing"].includes(error?.type) &&
+      Array.isArray(error.loc) &&
+      error.loc.length === 2 &&
+      error.loc[0] === "body" &&
+      error.loc[1] === "file"
+    );
+  }
+  return (
+    detail?.code === "invalid_parameters" &&
+    detail.param === "file" &&
+    detail.message === "Must provide either file or a URL parameter."
+  );
+}
+
+// ElevenLabs is checked by key alone: a transcription request with a model and no audio is
+// refused as invalid (400 or 422) once the key is accepted. A key out of quota is still
+// the user's key, so it passes; transcription then reports the quota.
+async function testElevenLabsKey(request, fetchImpl) {
+  const body = new FormData();
+  body.append("model_id", "scribe_v3");
+  const failure = await probe(
+    request.endpoint,
+    request,
+    fetchImpl,
+    async (response) => {
+      // 402 is how ElevenLabs now reports a key with no credit left; 401 quota_exceeded
+      // below is the older form of the same answer.
+      if (response.ok || response.status === 402) return null;
+      const status = response.status;
+      const failure = describeStatusFailure(status, "elevenlabs");
+      if (![400, 401, 422].includes(status)) return failure;
+      const detail = (await readJson(response))?.detail;
+      if (detail?.status === "quota_exceeded") return null;
+      if (status === 401) return failure;
+      if (detail?.code === "invalid_api_key" || detail?.status === "invalid_api_key") {
+        return { ...describeStatusFailure(401, "elevenlabs"), status };
+      }
+      // Only the expected missing-file response confirms the key was accepted.
+      return isElevenLabsMissingFile(detail) ? null : { ...failure, unverified: true };
+    },
+    { method: "POST", body }
+  );
+  return failure ? { success: false, ...failure } : { success: true };
 }
 
 // Runs once Tinfoil's public model list has vouched for the model. A valid key pays for one

@@ -29,7 +29,10 @@ jest.mock('../TrackingPermissionStep', () => ({
   },
 }));
 
-jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+jest.mock('@/lib/sentry', () => ({
+  Sentry: { captureException: jest.fn(), addBreadcrumb: jest.fn() },
+}));
+import { Sentry } from '@/lib/sentry';
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: require('react-native').View,
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -47,12 +50,13 @@ jest.mock('@/store/useOnboardingStore', () => ({
 const mockRegister = jest.fn();
 type MockGate = {
   isConfigured: boolean;
+  requiresIdentity?: boolean;
   state: { status: string };
   register?: jest.Mock;
 };
-let mockGate: MockGate = { isConfigured: true, state: { status: 'idle' } };
+let mockGate: MockGate = { isConfigured: true, requiresIdentity: true, state: { status: 'idle' } };
 jest.mock('@/hooks/useSuperwallGate', () => ({
-  useSuperwallGate: () => ({ register: mockRegister, ...mockGate }),
+  useSuperwallGate: () => ({ register: mockRegister, requiresIdentity: true, ...mockGate }),
 }));
 
 type MockAuthState = { user: { id: string; isAnonymous: boolean } | null; sessionCookie?: string };
@@ -64,7 +68,7 @@ jest.mock('@/store/useAuthStore', () => ({
   ),
 }));
 
-type MockUsage = { isSubscribed: boolean };
+type MockUsage = { isSubscribed: boolean; billingUserId?: string };
 type MockUsageState = { usage: MockUsage | null; ownerKey: string | null };
 const OWNER = 'user-1:cookie';
 let mockUsageState: MockUsageState = { usage: null, ownerKey: null };
@@ -78,13 +82,15 @@ jest.mock('@/store/useUsageStore', () => ({
   getUsageOwnerKey: () => mockCurrentOwnerKey,
 }));
 
-const FREE: MockUsage = { isSubscribed: false };
-const SUBSCRIBED: MockUsage = { isSubscribed: true };
+const BILLING_ID = 'billing-1';
+const FREE: MockUsage = { isSubscribed: false, billingUserId: BILLING_ID };
+const SUBSCRIBED: MockUsage = { isSubscribed: true, billingUserId: BILLING_ID };
 const PRO_TITLE = 'Go further with OpenWhispr Pro.';
 const PRO_HIGHLIGHT = 'Sync notes across devices';
 
 import { PAYWALL_ESCAPE_MS, PAYWALL_READY_GRACE_MS, PaywallStep } from '../PaywallStep';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
+import { useSuperwallIdentityStore } from '@/store/useSuperwallIdentityStore';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -98,7 +104,8 @@ beforeEach(() => {
   mockAuthState = { user: { id: 'anon-user', isAnonymous: true } };
   mockUsageState = { usage: FREE, ownerKey: OWNER };
   mockCurrentOwnerKey = OWNER;
-  mockGate = { isConfigured: true, state: { status: 'idle' } };
+  mockGate = { isConfigured: true, requiresIdentity: true, state: { status: 'idle' } };
+  useSuperwallIdentityStore.setState({ identifiedBillingUserId: BILLING_ID });
 });
 
 it('keeps the usual order without an inbound creator link: no early tracking step, claim or allocation', async () => {
@@ -128,6 +135,66 @@ afterEach(() => {
 });
 
 describe('PaywallStep', () => {
+  it('onboarding paywall waits for the Superwall identity before presenting', async () => {
+    jest.useFakeTimers();
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+
+    render(<PaywallStep />);
+    await act(async () => {
+      jest.advanceTimersByTime(PAYWALL_READY_GRACE_MS - 100);
+    });
+    expect(mockRegister).not.toHaveBeenCalled();
+    expect(mockGoNext).not.toHaveBeenCalled();
+
+    await act(async () => {
+      useSuperwallIdentityStore.setState({ identifiedBillingUserId: BILLING_ID });
+    });
+    expect(mockRegister).toHaveBeenCalledTimes(1);
+  });
+
+  it("onboarding paywall does not present from another account's identity", async () => {
+    jest.useFakeTimers();
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: 'previous-account' });
+
+    render(<PaywallStep />);
+    await act(async () => {
+      jest.advanceTimersByTime(PAYWALL_READY_GRACE_MS);
+    });
+
+    expect(mockRegister).not.toHaveBeenCalled();
+  });
+
+  it('onboarding paywall advances without presenting when no identity arrives', async () => {
+    jest.useFakeTimers();
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+
+    render(<PaywallStep />);
+    await act(async () => {
+      jest.advanceTimersByTime(PAYWALL_READY_GRACE_MS);
+    });
+
+    expect(mockRegister).not.toHaveBeenCalled();
+    expect(mockGoNext).toHaveBeenCalledTimes(1);
+    expect(Sentry.addBreadcrumb).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: 'superwall',
+        message: 'onboarding paywall skipped: identity not ready',
+        level: 'warning',
+      }),
+    );
+  });
+
+  it('onboarding paywall advances immediately when Superwall is disabled', async () => {
+    jest.useFakeTimers();
+    mockGate = { isConfigured: true, requiresIdentity: false, state: { status: 'idle' } };
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+
+    render(<PaywallStep />);
+    await act(async () => {});
+
+    expect(mockGoNext).toHaveBeenCalledTimes(1);
+  });
+
   it('presents the onboarding placement on mount', async () => {
     render(<PaywallStep />);
 
