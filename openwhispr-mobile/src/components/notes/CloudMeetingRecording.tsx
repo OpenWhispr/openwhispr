@@ -78,6 +78,7 @@ export function CloudMeetingRecording({
         style={{ borderCurve: 'continuous' }}
       >
         <View
+          testID="meeting-status-dot"
           className={`h-2.5 w-2.5 rounded-full ${isCloudMeetingRecordingAudio(status, captureStarted) ? 'bg-systemRed' : 'bg-tertiaryLabel'}`}
         />
         <View>

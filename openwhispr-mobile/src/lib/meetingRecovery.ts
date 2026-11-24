@@ -1,7 +1,7 @@
 import 'expo-sqlite/localStorage/install';
 import { AppState, type AppStateStatus } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import type { Note } from '@/data';
+import type { Note, NotesRepository } from '@/data';
 import { notesRepository } from '@/data';
 import { isCaptureLeaseHeld } from '@/lib/captureLease';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
@@ -577,6 +577,107 @@ const reportRecoveryError = (error: unknown, noteId?: number): void => {
 const resumeOwedBackfill = (noteId: number): Promise<void> =>
   useNotesStore.getState().resumeMeetingBackfill(noteId, { shouldStop: isCaptureLeaseHeld });
 
+type RecoveryRepository = Pick<
+  NotesRepository,
+  'getAllNotes' | 'getNoteById' | 'getSegments' | 'getSpeakers' | 'restoreMeetingRecordingPath'
+>;
+
+/** The production wiring for `repairMeetingRecordings`. */
+export function createMeetingRecordingRepairDeps(
+  directory: string,
+  repository: RecoveryRepository,
+): MeetingRecordingRepairDeps {
+  return {
+    listRecordingFiles: () => FileSystem.readDirectoryAsync(directory),
+    getNote: (noteId) => repository.getNoteById(noteId),
+    recordingUri: meetingRecordingUri,
+    restorePath: (noteId, uri) => repository.restoreMeetingRecordingPath(noteId, uri),
+    deleteFile: (uri) => {
+      FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
+      // A note gone for good takes its pending-backfill sidecar with its recording.
+      const noteId = Number(/meeting-(\d+)\.wav$/.exec(uri)?.[1]);
+      if (noteId) clearPendingBackfill(noteId).catch(() => undefined);
+    },
+  };
+}
+
+/** The production wiring for `recoverOrphanedMeetings`, which decides what it deletes. */
+export function createMeetingRecoveryDeps(input: {
+  repository: RecoveryRepository;
+  directory: string | null;
+  runtimeStartedAtMs: number;
+  /** Notes this launch's repair pointed back at their recording. */
+  relinked: ReadonlySet<number>;
+}): MeetingRecoveryDeps {
+  const { repository, directory, runtimeStartedAtMs, relinked } = input;
+  return {
+    listNotes: () =>
+      repository.getAllNotes().filter((note) => createdBeforeRuntime(note, runtimeStartedAtMs)),
+    markFailed: (noteId) => useNotesStore.getState().transitionStatus(noteId, 'failed'),
+    reopenAsFailed: (noteId) => {
+      // done may only move to transcribing; a kill between the two leaves an orphan with
+      // a recording and no transcript, which the next launch marks failed and resumes.
+      useNotesStore.getState().transitionStatus(noteId, 'transcribing');
+      useNotesStore.getState().transitionStatus(noteId, 'failed');
+    },
+    waitUntilActive: () => waitForAppActive(AppState),
+    hasTranscript: (noteId) => repository.getSegments(noteId).length > 0,
+    keepTranscript: (noteId) => useNotesStore.getState().keepCloudMeetingTranscript(noteId),
+    finishNotes: (noteId) => useNotesStore.getState().finishRecoveredMeetingNotes(noteId),
+    resume: (noteId) => useNotesStore.getState().retryMeetingTranscription(noteId),
+    storage: localStorage,
+    reportError: reportRecoveryError,
+    repairRecording: (uri) => LivePCMStreaming.repairRecording(uri),
+    recordingUri: meetingRecordingUri,
+    linkRecording: (noteId, uri) => repository.restoreMeetingRecordingPath(noteId, uri),
+    labelSpeakers: (noteId) =>
+      useNotesStore
+        .getState()
+        .labelMeetingSpeakers(noteId, { utteranceTimed: true, exclusive: true }),
+    hasSpeakerLabels: (noteId) =>
+      repository.getSegments(noteId).some((segment) => !!segment.speakerLabel) &&
+      repository.getSpeakers(noteId).length > 0,
+    discardRecording: (noteId) => useNotesStore.getState().discardMeetingRecording(noteId),
+    recordingAgeMs: async (uri) => {
+      const info = await FileSystem.getInfoAsync(uri);
+      // modificationTime is in seconds.
+      return info.exists && typeof info.modificationTime === 'number'
+        ? Date.now() - info.modificationTime * 1000
+        : null;
+    },
+    listPendingBackfills: () => listPendingBackfillIds(directory),
+    getNote: (noteId) => repository.getNoteById(noteId),
+    // Unsure counts as there, so a sidecar is never dropped on a failed read.
+    recordingExists: (noteId) =>
+      FileSystem.getInfoAsync(meetingRecordingUri(noteId)).then(
+        (info) => info.exists,
+        () => true,
+      ),
+    deletePendingBackfill: clearPendingBackfill,
+    wasRelinked: (noteId) => relinked.has(noteId),
+    isOnline: isDeviceOnline,
+    resumeBackfill: resumeOwedBackfill,
+    listProcessedRecordings: () =>
+      repository
+        .getAllNotes()
+        .filter(
+          (note) =>
+            note.noteType === 'meeting' &&
+            note.transcriptionStatus === 'done' &&
+            createdBeforeRuntime(note, runtimeStartedAtMs) &&
+            isManagedMeetingAudioUri(note.id, note.sourceFile),
+        )
+        .map((note) => ({ noteId: note.id, uri: meetingRecordingUri(note.id) })),
+    owesBackfill: hasPendingBackfillFile,
+    readPendingBackfill,
+    recordingDurationMs,
+    getSegmentTimes: (noteId) =>
+      repository.getSegments(noteId).map(({ startMs, endMs }) => ({ startMs, endMs })),
+    savePendingBackfill,
+    isMeetingCapturing: isCaptureLeaseHeld,
+  };
+}
+
 /** Runs the sweep once per JS runtime. Call after the notes store is initialized. */
 export function startMeetingRecoveryOnce(): void {
   if (hasStarted) return;
@@ -596,94 +697,24 @@ export function startMeetingRecoveryOnce(): void {
   );
   // A recording found again can make its meeting resumable, so this runs first.
   const repaired: Promise<number[]> = directory
-    ? repairMeetingRecordings({
-        listRecordingFiles: () => FileSystem.readDirectoryAsync(directory),
-        getNote: (noteId) => notesRepository.getNoteById(noteId),
-        recordingUri: meetingRecordingUri,
-        restorePath: (noteId, uri) => notesRepository.restoreMeetingRecordingPath(noteId, uri),
-        deleteFile: (uri) => {
-          FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
-          // A note gone for good takes its pending-backfill sidecar with its recording.
-          const noteId = Number(/meeting-(\d+)\.wav$/.exec(uri)?.[1]);
-          if (noteId) clearPendingBackfill(noteId).catch(() => undefined);
+    ? repairMeetingRecordings(createMeetingRecordingRepairDeps(directory, notesRepository)).catch(
+        (error: unknown) => {
+          reportRecoveryError(error);
+          return [];
         },
-      }).catch((error: unknown) => {
-        reportRecoveryError(error);
-        return [];
-      })
+      )
     : Promise.resolve([]);
   repaired
-    .then((relinkedIds) => {
-      const relinked = new Set(relinkedIds);
-      return recoverOrphanedMeetings({
-        listNotes: () =>
-          notesRepository
-            .getAllNotes()
-            .filter((note) => createdBeforeRuntime(note, RUNTIME_STARTED_AT_MS)),
-        markFailed: (noteId) => useNotesStore.getState().transitionStatus(noteId, 'failed'),
-        reopenAsFailed: (noteId) => {
-          // done may only move to transcribing; a kill between the two leaves an orphan with
-          // a recording and no transcript, which the next launch marks failed and resumes.
-          useNotesStore.getState().transitionStatus(noteId, 'transcribing');
-          useNotesStore.getState().transitionStatus(noteId, 'failed');
-        },
-        waitUntilActive: () => waitForAppActive(AppState),
-        hasTranscript: (noteId) => notesRepository.getSegments(noteId).length > 0,
-        keepTranscript: (noteId) => useNotesStore.getState().keepCloudMeetingTranscript(noteId),
-        finishNotes: (noteId) => useNotesStore.getState().finishRecoveredMeetingNotes(noteId),
-        resume: (noteId) => useNotesStore.getState().retryMeetingTranscription(noteId),
-        storage: localStorage,
-        reportError: reportRecoveryError,
-        repairRecording: (uri) => LivePCMStreaming.repairRecording(uri),
-        recordingUri: meetingRecordingUri,
-        linkRecording: (noteId, uri) => notesRepository.restoreMeetingRecordingPath(noteId, uri),
-        labelSpeakers: (noteId) =>
-          useNotesStore
-            .getState()
-            .labelMeetingSpeakers(noteId, { utteranceTimed: true, exclusive: true }),
-        hasSpeakerLabels: (noteId) =>
-          notesRepository.getSegments(noteId).some((segment) => !!segment.speakerLabel) &&
-          notesRepository.getSpeakers(noteId).length > 0,
-        discardRecording: (noteId) => useNotesStore.getState().discardMeetingRecording(noteId),
-        recordingAgeMs: async (uri) => {
-          const info = await FileSystem.getInfoAsync(uri);
-          // modificationTime is in seconds.
-          return info.exists && typeof info.modificationTime === 'number'
-            ? Date.now() - info.modificationTime * 1000
-            : null;
-        },
-        listPendingBackfills: () => listPendingBackfillIds(directory),
-        getNote: (noteId) => notesRepository.getNoteById(noteId),
-        // Unsure counts as there, so a sidecar is never dropped on a failed read.
-        recordingExists: (noteId) =>
-          FileSystem.getInfoAsync(meetingRecordingUri(noteId)).then(
-            (info) => info.exists,
-            () => true,
-          ),
-        deletePendingBackfill: clearPendingBackfill,
-        wasRelinked: (noteId) => relinked.has(noteId),
-        isOnline: isDeviceOnline,
-        resumeBackfill: resumeOwedBackfill,
-        listProcessedRecordings: () =>
-          notesRepository
-            .getAllNotes()
-            .filter(
-              (note) =>
-                note.noteType === 'meeting' &&
-                note.transcriptionStatus === 'done' &&
-                createdBeforeRuntime(note, RUNTIME_STARTED_AT_MS) &&
-                isManagedMeetingAudioUri(note.id, note.sourceFile),
-            )
-            .map((note) => ({ noteId: note.id, uri: meetingRecordingUri(note.id) })),
-        owesBackfill: hasPendingBackfillFile,
-        readPendingBackfill,
-        recordingDurationMs,
-        getSegmentTimes: (noteId) =>
-          notesRepository.getSegments(noteId).map(({ startMs, endMs }) => ({ startMs, endMs })),
-        savePendingBackfill,
-        isMeetingCapturing: isCaptureLeaseHeld,
-      });
-    })
+    .then((relinkedIds) =>
+      recoverOrphanedMeetings(
+        createMeetingRecoveryDeps({
+          repository: notesRepository,
+          directory,
+          runtimeStartedAtMs: RUNTIME_STARTED_AT_MS,
+          relinked: new Set(relinkedIds),
+        }),
+      ),
+    )
     .catch((error: unknown) => {
       reportRecoveryError(error);
     });
