@@ -2076,6 +2076,8 @@ public class AppGroupStorageModule: Module {
     // The lease is already held, so this stops the engine but leaves the
     // session active for the meeting.
     shutdownAudioPipeline(reason: "captureLease")
+    // Stopping a clip re-arms the idle timer, so turn it off again.
+    stopWarmMicIdleTimer()
     setSharedRecordingState(active: false, ready: false, clearStopRequested: false, clearAudioLevel: true)
   }
 
