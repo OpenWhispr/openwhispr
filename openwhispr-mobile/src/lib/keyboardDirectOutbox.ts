@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { AppState } from 'react-native';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { captureDictationContext, recordDictationCompleted } from '@/lib/productEvents';
+import { translationFailureReason } from '@/lib/keyboardTranslation';
 import { countSpokenWords } from '@/lib/wordCount';
 import { useAuthStore } from '@/store/useAuthStore';
 import {
@@ -34,6 +35,12 @@ interface DirectDictationRecord {
   cleanupApplied?: boolean | null;
   /** "cloud", "parakeet-v2" or "parakeet-v3"; none on records from before Local existed. */
   engine?: string;
+  /** The keyboard's target when the dictation started. */
+  translationTarget?: string | null;
+  /** Set only when `text` is the translation. */
+  translatedTo?: string | null;
+  /** The take had a target and `text` was left untranslated (an unchanged reply doesn't count). */
+  translationFailed?: boolean | null;
 }
 
 export interface OutboxFiles {
@@ -154,6 +161,12 @@ export async function drainKeyboardDirectOutbox(
           provider,
           requestContext: 'keyboard',
           keyboardTone: (record.tone ?? 'default') as KeyboardTone,
+          translatedTo: record.translatedTo ?? undefined,
+          // The keyboard records no cleanup warning, so the translation's is the row's only one.
+          cleanupWarning:
+            record.translationFailed && record.translationTarget
+              ? translationFailureReason(record.translationTarget)
+              : undefined,
           duration: durationSeconds(record),
           createdAt: occurredAt,
         },
@@ -193,6 +206,11 @@ export async function drainKeyboardDirectOutbox(
         ...(provider === 'local' ? { localOnly: true } : {}),
         requestContext: 'keyboard',
         keyboardTone: (record.tone ?? 'default') as KeyboardTone,
+        // Nothing was translated yet: the target it was recorded with, so a retry translates it.
+        // A Local take never has one (translating is a network request), so even a record that
+        // claims a target retries on the device without it.
+        translationTarget:
+          provider === 'local' ? undefined : (record.translationTarget ?? undefined),
         errorMessage: FAILED_MESSAGE,
         createdAt: record.startedAtMs,
       },

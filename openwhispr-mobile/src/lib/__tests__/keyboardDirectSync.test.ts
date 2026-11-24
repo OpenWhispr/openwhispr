@@ -1,3 +1,4 @@
+import { DEFAULT_TRANSLATE_PROMPT } from '@/config/prompts/registry';
 import {
   buildKeyboardDirectConfig,
   startKeyboardDirectSync,
@@ -35,6 +36,7 @@ function inputs(overrides: Partial<KeyboardDirectInputs> = {}): KeyboardDirectIn
     snippets: [{ trigger: 'my email', replacement: 'a@b.co' }],
     localEngine: null,
     localLanguageHint: null,
+    translationApplies: false,
     ...overrides,
   };
 }
@@ -58,7 +60,38 @@ describe('buildKeyboardDirectConfig', () => {
         prompt: 'Kubernetes, Gizmo',
       },
       snippets: [{ trigger: 'my email', replacement: 'a@b.co' }],
+      translation: { enabled: false, prompt: '' },
     });
+  });
+
+  it('carries the prompt when translation applies', () => {
+    const config = buildKeyboardDirectConfig(inputs({ translationApplies: true }));
+    expect(config.translation).toEqual({ enabled: true, prompt: DEFAULT_TRANSLATE_PROMPT });
+  });
+
+  it('carries no prompt when the direct path is off or translation does not apply', () => {
+    expect(buildKeyboardDirectConfig(inputs({ translationApplies: false })).translation).toEqual({
+      enabled: false,
+      prompt: '',
+    });
+    expect(
+      buildKeyboardDirectConfig(inputs({ settingEnabled: false, translationApplies: true }))
+        .translation,
+    ).toEqual({ enabled: false, prompt: '' });
+  });
+
+  it('never translates on OpenWhispr Cloud for a route whose AI runs elsewhere', () => {
+    // Cleanup off keeps the path on whatever cleanup is routed to, but the keyboard can only
+    // translate through /api/reason.
+    const config = buildKeyboardDirectConfig(
+      inputs({
+        cleanupEnabled: false,
+        translationApplies: true,
+        route: { provider: 'cloud', cleanupMode: 'local', cleanupUnavailable: false },
+      }),
+    );
+    expect(config.enabled).toBe(true);
+    expect(config.translation).toEqual({ enabled: false, prompt: '' });
   });
 
   it.each<[string, Partial<KeyboardDirectInputs>]>([
@@ -176,6 +209,28 @@ describe('buildKeyboardDirectConfig in Local Mode', () => {
       inputs({ route: localRoute, localEngine: { engine: 'parakeet', version: 'v2' } }),
     );
     expect(config.cleanup).toEqual({ enabled: false, language: 'en', toneApplies: false });
+  });
+
+  it('never lets the keyboard translate a local take, even with Cloud cleanup', () => {
+    // Local Mode with Cloud cleanup: translation applies to the route and cleanup runs on
+    // OpenWhispr Cloud, but the keyboard sends nothing for a Local take. A selected target makes
+    // the keyboard stand down, and the app translates.
+    for (const route of [
+      { provider: 'local', cleanupMode: 'openwhispr', cleanupUnavailable: false },
+      localRoute,
+    ] satisfies KeyboardDirectInputs['route'][]) {
+      const config = buildKeyboardDirectConfig(
+        inputs({
+          route,
+          translationApplies: true,
+          localEngine: { engine: 'parakeet', version: 'v3' },
+          hasSessionCookie: true,
+        }),
+      );
+      expect(config.enabled).toBe(true);
+      expect(config.engine).toBe('local');
+      expect(config.translation).toEqual({ enabled: false, prompt: '' });
+    }
   });
 
   it('Local mode with Whisper keeps the handoff', () => {

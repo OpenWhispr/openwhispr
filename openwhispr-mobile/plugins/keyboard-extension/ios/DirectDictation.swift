@@ -58,6 +58,8 @@ struct DirectDependencies {
   /// The shared session's cookie, only when it belongs to this account.
   var readCookie: (_ userId: String) -> String?
   var readTone: () -> String
+  /// The keyboard's effective translation target and its English label; nil when Off.
+  var readTranslation: () -> (code: String, label: String)?
   /// `DirectAudioEncoder.encodeAAC` in production; a file copy in tests.
   var encode: (_ pcmURL: URL, _ m4aURL: URL, _ gain: Float) throws -> Void
   var makeJobId: () -> String
@@ -134,24 +136,35 @@ final class DirectDictation {
     deps.capture.onEnded = { [weak self] reason in self?.captureEnded(reason) }
   }
 
-  /// The snapshot decodes, the path hasn't been turned off since the snapshot last changed, and
-  /// either a cookie exists (Cloud) or the snapshot's Parakeet model is loaded (Local). Reading
-  /// it with a Local snapshot whose model isn't ready asks the transcriber to load it.
-  var isEligible: Bool { eligibleContext() != nil }
+  /// A new take may start: the snapshot decodes, the path hasn't been turned off since the
+  /// snapshot last changed, either a cookie exists (Cloud) or the snapshot's Parakeet model is
+  /// loaded (Local), and a language picked in the keyboard is one this take can translate into,
+  /// or exactly the dictation language. Reading it with a Local snapshot whose model isn't ready
+  /// asks the transcriber to load it.
+  var isEligible: Bool { newTakeContext() != nil }
+
+  /// As `isEligible` without the translation check, for preparing capture: picking Off later in
+  /// the same keyboard session must find the microphone ready.
+  var isEligibleIgnoringTranslation: Bool { eligibleContext() != nil }
 
   func start() {
     switch state {
     case .idle, .failed: break
     default: return
     }
-    guard job == nil, let documentID = readDocumentID?(), let (config, eligible) = eligibleContext() else { return }
+    // The target is the one the gate checked: one picked mid-take applies to the next dictation.
+    guard job == nil, let documentID = readDocumentID?(), let (config, eligible, translation) = newTakeContext()
+    else { return }
     let jobId = deps.makeJobId()
     let tone = deps.readTone()
     let engine: JobEngine
     let recordEngine: String
     switch eligible {
     case let .cloud(cookie):
-      engine = .cloud(DirectRequestContext(config: config, jobId: jobId, tone: tone, cookie: cookie))
+      engine = .cloud(DirectRequestContext(
+        config: config, jobId: jobId, tone: tone, cookie: cookie,
+        translationTarget: translation?.code, translationLabel: translation?.label
+      ))
       recordEngine = DirectDictationRecord.cloudEngine
     case let .local(model, languageHint):
       engine = .local(model: model, languageHint: languageHint)
@@ -160,7 +173,11 @@ final class DirectDictation {
     do {
       // The record first, so audio on disk always has an owner, and says which engine it is
       // for, so a Local take left behind is never resumed as an upload.
-      try deps.store.begin(jobId: jobId, userId: config.userId, documentID: documentID, tone: tone, engine: recordEngine)
+      try deps.store.begin(
+        jobId: jobId, userId: config.userId, documentID: documentID, tone: tone, engine: recordEngine,
+        // nil for a Local take: newTakeContext never gives one a target.
+        translationTarget: translation?.code, translationLabel: translation?.label
+      )
       let writer = try PcmFileWriter(url: deps.store.pcmURL(jobId: jobId))
       nextToken += 1
       job = Job(token: nextToken, jobId: jobId, config: config, engine: engine, documentID: documentID, writer: writer)
@@ -236,7 +253,11 @@ final class DirectDictation {
       token: nextToken,
       jobId: record.jobId,
       config: config,
-      engine: .cloud(DirectRequestContext(config: config, jobId: record.jobId, tone: record.tone, cookie: cookie)),
+      // The target the take started with, not today's.
+      engine: .cloud(DirectRequestContext(
+        config: config, jobId: record.jobId, tone: record.tone, cookie: cookie,
+        translationTarget: record.translationTarget, translationLabel: record.translationLabel
+      )),
       documentID: documentID,
       writer: nil,
       durationMs: record.durationMs
@@ -396,7 +417,8 @@ final class DirectDictation {
       switch result {
       // No words is a failed take (its PCM kept for a retry), never an empty insert.
       case let .success(text) where !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty:
-        self.finish(text: text, original: text, cleanupApplied: nil)
+        // Raw Parakeet text: snippets expand and, with no target on a Local job, nothing else.
+        self.translateThenFinish(text: text, original: text, cleanupApplied: nil, token: token)
       case .success, .failure:
         self.failJob(.tryAgain, turnOff: false)
       }
@@ -441,7 +463,7 @@ final class DirectDictation {
       if current.config.cleanup.enabled && applied != true {
         cleanUp(raw: text, original: original ?? text, token: token)
       } else {
-        finish(text: text, original: original ?? text, cleanupApplied: applied)
+        translateThenFinish(text: text, original: original ?? text, cleanupApplied: applied, token: token)
       }
     case .noSpeech:
       deps.store.cancel(jobId: current.jobId)
@@ -465,28 +487,66 @@ final class DirectDictation {
     guard let current = job, case let .cloud(context) = current.engine,
       let request = try? DirectDictationRequests.makeReasonRequest(context, rawText: raw)
     else {
-      finish(text: raw, original: original, cleanupApplied: false)
+      translateThenFinish(text: raw, original: original, cleanupApplied: false, token: token)
       return
     }
     inFlight = deps.transport.send(request) { [weak self] status, body in
       guard let self, self.job?.token == token else { return }
       self.inFlight = nil
       let cleaned = DirectDictationRequests.parseReason(status: status, body: body)
-      self.finish(text: cleaned ?? raw, original: original, cleanupApplied: cleaned != nil)
+      self.translateThenFinish(text: cleaned ?? raw, original: original, cleanupApplied: cleaned != nil, token: token)
     }
   }
 
-  private func finish(text: String, original: String, cleanupApplied: Bool?) {
-    guard let current = job else { return }
+  /// Snippets expand first, since their triggers are in the spoken language (as the app's
+  /// pipeline). Anything but a translation types the expanded text untranslated; the record says
+  /// so unless the reply came back unchanged, which the app and desktop read as already translated.
+  private func translateThenFinish(text: String, original: String, cleanupApplied: Bool?, token: Int) {
+    guard let current = job, current.token == token else { return }
     let expanded = SnippetExpander.expand(text, snippets: current.config.snippets)
+    // Only a Cloud job has a request context, and with it a target: a Local job never translates,
+    // whatever its snapshot says. No target, or one that is the dictation language itself:
+    // nothing to translate.
+    guard case let .cloud(context) = current.engine, let target = context.translationTarget,
+      !DirectDictationRequests.isSameLanguage(current.config.language, target)
+    else {
+      finish(text: expanded, original: original, cleanupApplied: cleanupApplied, translatedTo: nil,
+             translationFailed: false)
+      return
+    }
+    // A resumed take whose snapshot can no longer translate still had a target to honour.
+    guard let request = try? DirectDictationRequests.makeTranslateRequest(context, text: expanded) else {
+      finish(text: expanded, original: original, cleanupApplied: cleanupApplied, translatedTo: nil,
+             translationFailed: true)
+      return
+    }
+    inFlight = deps.transport.send(request) { [weak self] status, body in
+      guard let self, self.job?.token == token else { return }
+      self.inFlight = nil
+      let outcome = DirectDictationRequests.parseTranslation(status: status, body: body, input: expanded)
+      if case let .translated(translated) = outcome {
+        self.finish(text: translated, original: original, cleanupApplied: cleanupApplied, translatedTo: target,
+                    translationFailed: false)
+      } else {
+        self.finish(text: expanded, original: original, cleanupApplied: cleanupApplied, translatedTo: nil,
+                    translationFailed: outcome == .failed)
+      }
+    }
+  }
+
+  /// `text` is final: snippet-expanded, and translated when `translatedTo` is set.
+  private func finish(
+    text: String, original: String, cleanupApplied: Bool?, translatedTo: String?, translationFailed: Bool
+  ) {
+    guard let current = job else { return }
     try? deps.store.complete(
-      jobId: current.jobId, text: expanded, originalText: original, cleanupApplied: cleanupApplied,
-      durationMs: current.durationMs
+      jobId: current.jobId, text: text, originalText: original, cleanupApplied: cleanupApplied,
+      translatedTo: translatedTo, translationFailed: translationFailed, durationMs: current.durationMs
     )
     job = nil
     state = .idle
     let result = ResultForInsertion(
-      text: expanded, userId: current.config.userId, documentID: current.documentID, finishedAtMs: deps.store.now()
+      text: text, userId: current.config.userId, documentID: current.documentID, finishedAtMs: deps.store.now()
     )
     if keyboardVisible {
       _ = insertIfDestinationMatches(result)
@@ -552,6 +612,27 @@ final class DirectDictation {
     case .local:
       return config.userId
     }
+  }
+
+  /// Stands down while a language is picked that this take can't translate into, so the
+  /// keyboard's other route records and the app translates: a Cloud snapshot whose AI route isn't
+  /// OpenWhispr Cloud, and every Local take, which never sends anything (even when a stale or
+  /// hand-edited snapshot says `translation.enabled`). A target that is exactly the dictation
+  /// language wouldn't be translated there either, so it keeps app-closed dictation. Returns the
+  /// target it checked, so the take records only a target that passed this gate (none for a Local
+  /// take). Recovery and delivery use `eligibleContext()`: a take already started keeps its own target.
+  private func newTakeContext() -> (
+    config: DirectDictationConfig, engine: EligibleEngine, translation: (code: String, label: String)?
+  )? {
+    guard let (config, eligible) = eligibleContext() else { return nil }
+    guard let translation = deps.readTranslation() else { return (config, eligible, nil) }
+    let isLocal: Bool
+    if case .local = eligible { isLocal = true } else { isLocal = false }
+    if DirectDictationRequests.isSameLanguage(config.language, translation.code) {
+      return (config, eligible, isLocal ? nil : translation)
+    }
+    guard !isLocal, config.translation.enabled else { return nil }
+    return (config, eligible, translation)
   }
 
   private func turnPathOff() {

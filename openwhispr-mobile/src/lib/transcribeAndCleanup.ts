@@ -14,14 +14,16 @@ import { cleanupRunsOnDevice } from './aiWorkflows';
 import { cleanupTranscript } from './cleanupTranscript';
 import { isDictationContext } from './dictationHints';
 import { isToneApplicable } from './keyboardTone';
+import { shouldTranslate, withTranslationWarning } from './keyboardTranslation';
 import { getLocalReasoningReadiness } from './localReasoning';
 import { isNoSpeechError } from './permissions';
 import { withRetry, type RetryOptions } from './retry';
 import { expandSnippets } from './snippets';
+import { translateTranscript } from './translateTranscript';
 import { isUsageLimitError } from './usageLimitError';
 import type { KeyboardTone, TranscriptionRequest, TranscriptionResponse } from '@/types';
 
-type ProcessingStage = 'transcribing' | 'cleaning';
+type ProcessingStage = 'transcribing' | 'cleaning' | 'translating';
 
 export interface DictationProcessingLifecycle {
   onStage?: (stage: ProcessingStage, details?: { fusedCleanup?: boolean }) => void;
@@ -42,6 +44,7 @@ export interface DictationProcessingResult {
   transcription: TranscriptionResponse;
   cleanupApplied: boolean;
   fusedCleanup: boolean;
+  translatedTo?: string;
 }
 
 // The transcript before any cleanup pass: returned for local/private transcripts
@@ -368,12 +371,55 @@ async function processTranscriptionJob(
   };
 }
 
+// Keyboard dictation only: translates the final text (cleaned or raw, snippets expanded) with the
+// job's pinned cleanup route. originalText stays the raw transcript. A skipped or failed translation
+// keeps the untranslated text, and its reason joins any warning cleanup left.
+async function applyTranslation(
+  result: DictationProcessingResult,
+  request: TranscriptionRequest,
+  lifecycle: DictationProcessingLifecycle,
+): Promise<DictationProcessingResult> {
+  const target = request.translationTarget;
+  if (request.requestContext !== 'keyboard' || !target) return result;
+  if (!shouldTranslate(request.language, target)) return result;
+  if (lifecycle.shouldCancel?.() || !result.text.trim()) return result;
+
+  let skipReason: string | undefined;
+  lifecycle.onStage?.('translating');
+  const translation = await translateTranscript(result.text, {
+    target,
+    inferenceRoute: result.transcription.cleanupRoute,
+    cleanupUnavailable: result.transcription.cleanupUnavailable,
+    onSkipped: (reason): void => {
+      skipReason = reason;
+    },
+    shouldCancel: lifecycle.shouldCancel,
+  });
+  if (!translation.translated) {
+    if (!skipReason) return result;
+    return {
+      ...result,
+      transcription: {
+        ...result.transcription,
+        cleanupWarning: withTranslationWarning(result.transcription.cleanupWarning, skipReason),
+      },
+    };
+  }
+  return {
+    ...result,
+    text: translation.text,
+    translatedTo: target,
+    transcription: { ...result.transcription, text: translation.text, translatedTo: target },
+  };
+}
+
 export async function transcribeAndCleanup(
   request: TranscriptionRequest,
   lifecycle: DictationProcessingLifecycle = {},
 ): Promise<DictationProcessingResult> {
   return withActiveProviderJob(
     request.provider === 'byok' ? (request.jobId ?? request.clientTranscriptionId) : undefined,
-    () => processTranscriptionJob(request, lifecycle),
+    async () =>
+      applyTranslation(await processTranscriptionJob(request, lifecycle), request, lifecycle),
   );
 }

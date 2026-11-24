@@ -71,7 +71,7 @@ private extension KeyboardViewController {
     topBar.layoutIfNeeded()
     return recordButton.convert(recordButton.bounds, to: view)
   }
-  var uiTestToneFrame: CGRect { toneButton.convert(toneButton.bounds, to: view) }
+  var uiTestOptionsFrame: CGRect { optionsButton.convert(optionsButton.bounds, to: view) }
   var uiTestBarFrame: CGRect { suggestionBar.convert(suggestionBar.bounds, to: view) }
   var uiTestLetterRows: [[Character]] { letterRows }
   var uiTestEmojiKey: KeyButton? { emojiButton }
@@ -310,8 +310,8 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
     checks.check("dictation stays a 44pt-wide target beside the suggestions ", abs(pill.width - 44) < 0.5 && pill.width < restPill.width)
     let bar = keyboard.uiTestBarFrame
     checks.check(
-      "suggestions sit between tone and the mic button",
-      bar.minX >= keyboard.uiTestToneFrame.maxX && bar.maxX <= pill.minX
+      "suggestions sit between the options button and the mic button",
+      bar.minX >= keyboard.uiTestOptionsFrame.maxX && bar.maxX <= pill.minX
     )
     // The pill's target reaches 4pt below the strip: 44pt tall.
     let below = CGPoint(x: pill.midX, y: pill.maxY + 3)

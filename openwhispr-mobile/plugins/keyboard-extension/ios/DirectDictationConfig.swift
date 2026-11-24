@@ -30,6 +30,12 @@ struct DirectDictationConfig: Equatable {
     let replacement: String
   }
 
+  /// `prompt` carries `{{targetLanguage}}`. Off for snapshots written before translation.
+  struct Translation: Equatable {
+    let enabled: Bool
+    let prompt: String
+  }
+
   let userId: String
   let engine: Engine
   let appVersion: String?
@@ -37,6 +43,7 @@ struct DirectDictationConfig: Equatable {
   let cleanup: Cleanup
   let dictionary: Dictionary
   let snippets: [Snippet]
+  let translation: Translation
 
   /// nil unless the JSON parses, `version == 2`, `enabled == true` and `userId` is non-empty.
   /// A Cloud snapshot also needs `apiBaseUrl` to be https (or http on localhost / 127.0.0.1);
@@ -65,7 +72,11 @@ struct DirectDictationConfig: Equatable {
         shared: raw.dictionary?.shared ?? [],
         prompt: raw.dictionary?.prompt ?? ""
       ),
-      snippets: (raw.snippets ?? []).map { Snippet(trigger: $0.trigger, replacement: $0.replacement) }
+      snippets: (raw.snippets ?? []).map { Snippet(trigger: $0.trigger, replacement: $0.replacement) },
+      translation: Translation(
+        enabled: raw.translation?.enabled ?? false,
+        prompt: raw.translation?.prompt ?? ""
+      )
     )
   }
 
@@ -122,6 +133,11 @@ struct DirectDictationConfig: Equatable {
       let replacement: String
     }
 
+    struct RawTranslation: Decodable {
+      let enabled: Bool?
+      let prompt: String?
+    }
+
     let version: Int?
     let enabled: Bool?
     let engine: String?
@@ -133,5 +149,6 @@ struct DirectDictationConfig: Equatable {
     let cleanup: RawCleanup?
     let dictionary: RawDictionary?
     let snippets: [RawSnippet]?
+    let translation: RawTranslation?
   }
 }

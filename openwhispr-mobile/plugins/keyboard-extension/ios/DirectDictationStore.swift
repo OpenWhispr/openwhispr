@@ -19,6 +19,15 @@ struct DirectDictationRecord: Codable, Equatable {
   /// "cloud", or the Local model's raw value ("parakeet-v2", "parakeet-v3"). Records written
   /// before Local existed have none and are Cloud takes.
   var engine: String?
+  /// The keyboard's target when the dictation started, so a resumed take translates into it.
+  /// Only a Cloud take has one.
+  var translationTarget: String?
+  var translationLabel: String?
+  /// The language `text` was translated into; nil when it wasn't.
+  var translatedTo: String?
+  /// The take had a target and `text` was left untranslated for a reason other than an unchanged
+  /// reply, so History can say so. Optional: records written before it still decode.
+  var translationFailed: Bool?
 
   static let cloudEngine = "cloud"
 
@@ -55,12 +64,16 @@ final class DirectDictationStore {
   private func partialURL(jobId: String) -> URL { DirectAudioEncoder.partialURL(for: audioURL(jobId: jobId)) }
 
   /// Written before recording starts, so audio on disk always has an owner.
-  func begin(jobId: String, userId: String, documentID: UUID, tone: String, engine: String) throws {
+  func begin(
+    jobId: String, userId: String, documentID: UUID, tone: String, engine: String,
+    translationTarget: String?, translationLabel: String?
+  ) throws {
     try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
     try write(DirectDictationRecord(
       jobId: jobId, status: .pending, userId: userId, documentID: documentID, startedAtMs: now(), completedAtMs: nil,
       durationMs: 0, tone: tone, text: nil, originalText: nil, cleanupApplied: nil,
-      engine: engine
+      engine: engine, translationTarget: translationTarget, translationLabel: translationLabel,
+      translatedTo: nil, translationFailed: nil
     ))
   }
 
@@ -70,7 +83,10 @@ final class DirectDictationStore {
     try write(record)
   }
 
-  func complete(jobId: String, text: String, originalText: String?, cleanupApplied: Bool?, durationMs: Int) throws {
+  func complete(
+    jobId: String, text: String, originalText: String?, cleanupApplied: Bool?, translatedTo: String?,
+    translationFailed: Bool, durationMs: Int
+  ) throws {
     guard var record = record(jobId: jobId) else { return }
     record.status = .completed
     record.completedAtMs = now()
@@ -78,6 +94,8 @@ final class DirectDictationStore {
     record.text = text
     record.originalText = originalText
     record.cleanupApplied = cleanupApplied
+    record.translatedTo = translatedTo
+    record.translationFailed = translationFailed
     try write(record)
     remove([
       pcmURL(jobId: jobId), audioURL(jobId: jobId), bodyURL(jobId: jobId), partialURL(jobId: jobId),

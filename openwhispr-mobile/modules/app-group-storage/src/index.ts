@@ -296,6 +296,9 @@ export const APP_GROUP_KEYS = {
   KEYBOARD_PENDING_TRANSCRIPT_JOB_ID: 'keyboard_pending_transcript_job_id',
   KEYBOARD_ORPHANED_RAW_TRANSCRIPT: 'keyboard_orphaned_raw_transcript',
   KEYBOARD_ORPHANED_RAW_TRANSCRIPT_JOB_ID: 'keyboard_orphaned_raw_transcript_job_id',
+  // The orphan slot's job id when the native uploader kept text the server already cleaned (fused
+  // cleanup), so the app translates it without cleaning it again.
+  KEYBOARD_ORPHANED_TRANSCRIPT_CLEANED_JOB_ID: 'keyboard_orphaned_transcript_cleaned_job_id',
   KEYBOARD_RECORDING_JOB_ID: 'keyboard_recording_job_id',
   KEYBOARD_RECORDING_FORMAT: 'keyboard_recording_format',
   KEYBOARD_COMPRESSED_AUDIO_UNSUPPORTED: 'keyboard_compressed_audio_unsupported',
@@ -313,6 +316,14 @@ export const APP_GROUP_KEYS = {
   KEYBOARD_RECORDING_TONE: 'keyboard_recording_tone',
   KEYBOARD_RECORDING_TONE_JOB_ID: 'keyboard_recording_tone_job_id',
   KEYBOARD_TONE_APPLICABLE: 'keyboard_tone_applicable',
+  // Dictation translation: the chosen target (absent = Off), the languages the current route can
+  // translate into (JSON), whether translation applies at all, and the per-job frozen target.
+  KEYBOARD_TRANSLATION_TARGET: 'keyboard_translation_target',
+  KEYBOARD_TRANSLATION_LANGUAGES: 'keyboard_translation_languages',
+  KEYBOARD_TRANSLATION_APPLICABLE: 'keyboard_translation_applicable',
+  KEYBOARD_TRANSLATION_RECENTS: 'keyboard_translation_recents',
+  KEYBOARD_RECORDING_TRANSLATION: 'keyboard_recording_translation',
+  KEYBOARD_RECORDING_TRANSLATION_JOB_ID: 'keyboard_recording_translation_job_id',
   // The direct-dictation snapshot the keyboard reads (src/lib/keyboardDirectSync.ts).
   KEYBOARD_DIRECT_CONFIG: 'keyboard_direct_config',
   BACKGROUND_SESSION_READY: 'background_session_ready',

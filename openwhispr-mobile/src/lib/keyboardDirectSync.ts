@@ -1,5 +1,6 @@
 import { AppGroupStorage, APP_GROUP_KEYS } from '../../modules/app-group-storage/src';
 import type { LocalEngineChoice } from '@/services/transcription/localEngine';
+import { DEFAULT_TRANSLATE_PROMPT } from '@/config/prompts/registry';
 import {
   gatherKeyboardDirectInputs,
   subscribeKeyboardDirectInputs,
@@ -38,6 +39,8 @@ export interface KeyboardDirectConfig {
   cleanup: { enabled: boolean; language: string | null; toneApplies: boolean };
   dictionary: { personal: string[]; shared: string[]; prompt: string };
   snippets: { trigger: string; replacement: string }[];
+  /** `prompt` carries `{{targetLanguage}}`; the keyboard fills in the label of its target. */
+  translation: { enabled: boolean; prompt: string };
 }
 
 export interface KeyboardDirectInputs {
@@ -65,6 +68,8 @@ export interface KeyboardDirectInputs {
   localEngine: LocalEngineChoice | null;
   /** The single selected language for Parakeet's decoder hint; null for none or several. */
   localLanguageHint: string | null;
+  /** `isTranslationApplicable` for the dictation route, as the keyboard's Translate menu sees it. */
+  translationApplies: boolean;
 }
 
 // The keyboard sends one fused /api/transcribe request, so it may only take dictations the app
@@ -112,6 +117,13 @@ export function buildKeyboardDirectConfig(inputs: KeyboardDirectInputs): Keyboar
   const enabled = reason === null;
   const local = isLocal(inputs);
   const engine = inputs.localEngine;
+  // The keyboard translates through /api/reason only, so a route whose AI runs on the device or
+  // with the user's own provider (eligible here with cleanup off) never sends its text there. A
+  // Local snapshot never translates either, whatever the cleanup route: the keyboard sends nothing
+  // for a Local take (Local Mode with Cloud cleanup included), so a selected target hands the take
+  // to the app.
+  const translates =
+    enabled && !local && inputs.translationApplies && inputs.route?.cleanupMode === 'openwhispr';
   return {
     version: 2,
     enabled,
@@ -134,6 +146,7 @@ export function buildKeyboardDirectConfig(inputs: KeyboardDirectInputs): Keyboar
     },
     dictionary: enabled ? inputs.dictionary : { personal: [], shared: [], prompt: '' },
     snippets: enabled ? inputs.snippets : [],
+    translation: { enabled: translates, prompt: translates ? DEFAULT_TRANSLATE_PROMPT : '' },
   };
 }
 
