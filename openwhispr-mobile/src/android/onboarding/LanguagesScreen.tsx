@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, Modal, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
@@ -13,14 +13,15 @@ import {
   PillButton,
   Screen,
   SecondaryButton,
-  colors,
-  s,
+  onboardingColorsFor,
+  useOnboardingColors,
+  useOnboardingStyles,
 } from './kit';
 import { useOnboardingT } from './strings';
 import { useLaunchT } from '../launch/strings';
 import { useSettingsT } from '../settings/strings';
 import { SearchField } from '../controls';
-import { flat, theme } from '../theme';
+import { makeStyles, useTheme } from '../ThemeProvider';
 
 export function LanguagesScreen({
   onBack,
@@ -33,6 +34,9 @@ export function LanguagesScreen({
   onSeeHowItWorks?: () => void;
 }) {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
+  const colors = useOnboardingColors();
+  const l = useStyles();
   const launchT = useLaunchT();
   const config = useConfigStore((state) => state.config);
   const [codes, setCodes] = useState(() =>
@@ -110,6 +114,10 @@ function AddLanguageSheet({
   onAdd: (code: string) => void;
 }) {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
+  const colors = useOnboardingColors();
+  const l = useStyles();
+  const k = useTheme().tokens;
   const st = useSettingsT();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
@@ -160,7 +168,7 @@ function AddLanguageSheet({
                     setSearch('');
                     onAdd(item.code);
                   }}
-                  style={({ pressed }) => [l.option, pressed && { backgroundColor: theme.tile }]}
+                  style={({ pressed }) => [l.option, pressed && { backgroundColor: k.tile }]}
                 >
                   <Text style={{ fontSize: 18 }}>{item.flag}</Text>
                   <Text style={l.label}>{item.label}</Text>
@@ -175,43 +183,47 @@ function AddLanguageSheet({
   );
 }
 
-const l = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    ...flat,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    minHeight: 56,
-  },
-  label: { flex: 1, fontSize: 17, color: colors.ink },
-  scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.40)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: colors.canvas,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    height: '92%',
-    gap: 12,
-  },
-  grabber: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: theme.track,
-    alignSelf: 'center',
-  },
-  sheetTitle: { fontSize: 22, fontFamily: AppFont.bold, color: colors.ink },
-  cancel: { minHeight: 36, paddingHorizontal: 4, justifyContent: 'center' },
-  list: { ...flat, flex: 1, borderRadius: 16, overflow: 'hidden' },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 16,
-    minHeight: 54,
-  },
-  separator: { height: 1, backgroundColor: colors.divider, marginLeft: 56 },
+const useStyles = makeStyles((t) => {
+  const colors = onboardingColorsFor(t);
+  const flat = t.flat;
+  return {
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      ...flat,
+      borderRadius: 16,
+      paddingHorizontal: 16,
+      minHeight: 56,
+    },
+    label: { flex: 1, fontSize: 17, color: colors.ink },
+    scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.40)', justifyContent: 'flex-end' },
+    sheet: {
+      backgroundColor: colors.canvas,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      height: '92%',
+      gap: 12,
+    },
+    grabber: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: t.tokens.track,
+      alignSelf: 'center',
+    },
+    sheetTitle: { fontSize: 22, fontFamily: AppFont.bold, color: colors.ink },
+    cancel: { minHeight: 36, paddingHorizontal: 4, justifyContent: 'center' },
+    list: { ...flat, flex: 1, borderRadius: 16, overflow: 'hidden' },
+    option: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      paddingHorizontal: 16,
+      minHeight: 54,
+    },
+    separator: { height: 1, backgroundColor: colors.divider, marginLeft: 56 },
+  };
 });

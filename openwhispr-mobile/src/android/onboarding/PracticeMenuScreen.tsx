@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, AppState, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, AppState, Keyboard, Pressable, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { safeHaptics } from '@/lib/utils';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
-import { CircleButton, GlassButton, PillButton, colors, s } from './kit';
+import {
+  CircleButton,
+  GlassButton,
+  PillButton,
+  onboardingColorsFor,
+  useOnboardingColors,
+  useOnboardingStyles,
+} from './kit';
+import { makeStyles } from '../ThemeProvider';
 import { PracticeBubble, type BubbleState } from './PracticeBubble';
 import {
   AppCard,
@@ -13,7 +21,7 @@ import {
   Hint,
   PracticeMenu,
   SayCard,
-  fieldText,
+  useFieldText,
   useKeyboardAnchor,
 } from './practiceParts';
 import { diffWords, type DiffRun } from './practiceDiff';
@@ -81,6 +89,10 @@ export function PracticeMenuScreen({
   onNext: () => void;
 }) {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
+  const colors = useOnboardingColors();
+  const fieldText = useFieldText();
+  const pm = useStyles();
   const copy = COPY[kind];
   const language = useConfigStore(
     (state) => state.config?.androidTranslationTarget?.label ?? 'Spanish',
@@ -297,7 +309,7 @@ export function PracticeMenuScreen({
               </View>
             </AppCard>
             {error ? (
-              <Text accessibilityRole="alert" style={[s.body, { color: '#B42318' }]}>
+              <Text accessibilityRole="alert" style={[s.body, { color: colors.error }]}>
                 {error}
               </Text>
             ) : null}
@@ -365,9 +377,10 @@ export function PracticeMenuScreen({
   );
 }
 
-const pm = StyleSheet.create({
-  changed: { color: colors.brandMid, textDecorationLine: 'underline' },
+const useStyles = makeStyles((t) => ({
+  // The accent: #1555D4 in light, as before; the lighter link blue on a dark card.
+  changed: { color: onboardingColorsFor(t).accent, textDecorationLine: 'underline' },
   hiddenInput: { position: 'absolute', width: 1, height: 1, opacity: 0 },
   overlay: { position: 'absolute', left: 16, right: 16, gap: 10 },
   bubbleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64 },
-});
+}));

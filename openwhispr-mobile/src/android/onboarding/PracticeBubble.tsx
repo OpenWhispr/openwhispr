@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path } from 'react-native-svg';
 import Animated, {
@@ -16,12 +16,13 @@ import Animated, {
 } from 'react-native-reanimated';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { BubbleIcon, GLASS_GRADIENT, PulseRings, colors } from './kit';
-import { flat, theme } from '../theme';
-
-/** The listening halo: the glass's top blue at 16%. */
-const HALO = 'rgba(85,136,240,0.16)';
+import { BubbleIcon, GLASS_GRADIENT, PulseRings, useOnboardingColors } from './kit';
+import { makeStyles, themeFor } from '../ThemeProvider';
 import { useOnboardingT } from './strings';
+
+// The bubble itself (glass, badge, hold ring) keeps the real bubble's colours in both schemes
+// (K7); only its ✕ follows the theme, as the real one's does.
+const bubble = themeFor('light').tokens;
 
 export type BubbleState = 'idle' | 'pulsing' | 'listening' | 'processing' | 'pasted';
 
@@ -77,6 +78,8 @@ export function PracticeBubble({
   onHoldCancel?: () => void;
 }) {
   const t = useOnboardingT();
+  const b = useStyles();
+  const colors = useOnboardingColors();
   const reduced = useReducedMotion();
   const press = useSharedValue(1);
   const ring = useSharedValue(0);
@@ -104,7 +107,7 @@ export function PracticeBubble({
           end={{ x: 1, y: 1 }}
           style={b.glass}
         >
-          <SystemIcon name="checkmark" mdName="Check" size={24} color={theme.onGlass} />
+          <SystemIcon name="checkmark" mdName="Check" size={24} color={bubble.onGlass} />
         </LinearGradient>
       </Animated.View>
     );
@@ -199,7 +202,7 @@ export function PracticeBubble({
             cx={(SIZE + 12) / 2}
             cy={(SIZE + 12) / 2}
             r={(SIZE + 8) / 2}
-            stroke={theme.selFill}
+            stroke={bubble.selFill}
             strokeWidth={3}
             fill="none"
             animatedProps={trackProps}
@@ -252,12 +255,14 @@ function useLevel() {
 }
 
 function Halo() {
+  const b = useStyles();
   const { level } = useLevel();
   const style = useAnimatedStyle(() => ({ transform: [{ scale: 1 + 0.3 * level.value }] }));
   return <Animated.View pointerEvents="none" style={[b.halo, style]} />;
 }
 
 function Bars() {
+  const b = useStyles();
   const { level, phase } = useLevel();
   return (
     <View style={b.bars} accessible={false}>
@@ -279,6 +284,7 @@ function Bar({
   level: SharedValue<number>;
   phase: SharedValue<number>;
 }) {
+  const b = useStyles();
   const style = useAnimatedStyle(() => {
     const wobble = 0.75 + 0.25 * Math.sin(phase.value + index * 1.3);
     const value = Math.min(1, Math.max(0, level.value));
@@ -290,6 +296,7 @@ function Bar({
 
 // Three white dots that ripple, 900 ms a cycle, 120 ms apart.
 function Dots({ still }: { still: boolean }) {
+  const b = useStyles();
   const clock = useSharedValue(0);
   useFrameCallback((frame) => {
     if (!still) clock.value = frame.timeSinceFirstFrame;
@@ -304,6 +311,7 @@ function Dots({ still }: { still: boolean }) {
 }
 
 function Dot({ index, clock }: { index: number; clock: SharedValue<number> }) {
+  const b = useStyles();
   const style = useAnimatedStyle(() => {
     const t = (((clock.value - index * 120) % 900) + 900) % 900;
     const lift = Math.max(0, Math.sin((t / 900) * 2 * Math.PI));
@@ -312,7 +320,7 @@ function Dot({ index, clock }: { index: number; clock: SharedValue<number> }) {
   return <Animated.View style={[b.dot, style]} />;
 }
 
-const b = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   row: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   disc: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center' },
   glass: {
@@ -328,11 +336,12 @@ const b = StyleSheet.create({
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
-    backgroundColor: HALO,
+    // The listening halo: the glass's top blue at 16%.
+    backgroundColor: 'rgba(85,136,240,0.16)',
   },
   ring: { position: 'absolute' },
   cancel: {
-    ...flat,
+    ...t.flat,
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -346,13 +355,13 @@ const b = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: theme.surface,
+    backgroundColor: bubble.surface,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 2,
   },
   bars: { flexDirection: 'row', alignItems: 'center', gap: 3, height: BAR_MAX },
-  bar: { width: 3.4, borderRadius: 2, backgroundColor: theme.onGlass },
+  bar: { width: 3.4, borderRadius: 2, backgroundColor: bubble.onGlass },
   dots: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.onGlass },
-});
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: bubble.onGlass },
+}));

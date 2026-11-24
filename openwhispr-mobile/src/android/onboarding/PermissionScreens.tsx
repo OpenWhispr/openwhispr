@@ -19,12 +19,13 @@ import {
   Halo,
   PulseRings,
   Screen,
-  colors,
-  s,
+  onboardingColorsFor,
+  useOnboardingColors,
+  useOnboardingStyles,
 } from './kit';
 import { useOnboardingT } from './strings';
 import { appIcon } from './AppsScreen';
-import { flat as glassEdge, glass, inset, knob, theme } from '../theme';
+import { makeStyles } from '../ThemeProvider';
 
 const EMPTY: BubbleStatus = {
   overlay: false,
@@ -66,6 +67,7 @@ export function useDictationStatus(onReturn?: (status: BubbleStatus) => void): B
 }
 
 function Toggle({ on }: { on: boolean }) {
+  const p = useStyles();
   return (
     <View style={[p.toggle, on ? p.toggleOn : p.toggleOff]}>
       <View style={[p.knob, on ? { alignSelf: 'flex-end' } : null]} />
@@ -74,6 +76,8 @@ function Toggle({ on }: { on: boolean }) {
 }
 
 function SettingCard({ header, label, on }: { header?: string; label: string; on: boolean }) {
+  const p = useStyles();
+  const colors = useOnboardingColors();
   return (
     <View style={p.settingCard}>
       {header ? (
@@ -93,6 +97,7 @@ function SettingCard({ header, label, on }: { header?: string; label: string; on
 
 export function OverlayScreen({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
   const status = useDictationStatus((next) => {
     if (next.overlay) onNext();
   });
@@ -122,6 +127,9 @@ const ART = { width: 352, height: 274 };
 
 function OverlayArt() {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
+  const p = useStyles();
+  const colors = useOnboardingColors();
   const [width, setWidth] = useState(0);
   const scale = width / ART.width;
   return (
@@ -184,6 +192,9 @@ export function AccessibilityScreen({
   onNext: () => void;
 }) {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
+  const p = useStyles();
+  const colors = useOnboardingColors();
   const [notice, setNotice] = useState(false);
   const [opened, setOpened] = useState(false);
   const status = useDictationStatus((next) => {
@@ -314,6 +325,9 @@ export function AccessibilityScreen({
 
 export function BatteryScreen({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
+  const p = useStyles();
+  const colors = useOnboardingColors();
   const [opened, setOpened] = useState(false);
   const status = useDictationStatus(() => {
     if (opened) onNext();
@@ -376,6 +390,8 @@ export function NotificationsScreen({
   onSkip: () => void;
 }) {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
+  const p = useStyles();
   return (
     <Screen
       onBack={onBack}
@@ -414,103 +430,114 @@ export function NotificationsScreen({
   );
 }
 
-const p = StyleSheet.create({
-  // Toggle/Switch from the design system (4173:8).
-  toggle: { width: 52.5, height: 23, borderRadius: 12, padding: 1.6, justifyContent: 'center' },
-  toggleOn: glass,
-  toggleOff: inset,
-  knob: { ...knob, width: 32, height: 19.7, borderRadius: 10 },
-  settingCard: { ...glassEdge, borderRadius: 20, overflow: 'hidden' },
-  settingHeader: { backgroundColor: theme.surface2, paddingHorizontal: 18, paddingVertical: 14 },
-  settingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    gap: 12,
-  },
-  overlayBubble: {
-    position: 'absolute',
-    left: 176 - 58.8,
-    top: 0,
-    width: 117.6,
-    height: 117.6,
-  },
-  overlayCard: { position: 'absolute', left: 27.5, width: 297, top: 169 },
-  number: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.accentSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.40)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: colors.canvas,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    gap: 16,
-  },
-  disclosure: { ...glassEdge, borderRadius: 16, padding: 18, gap: 6 },
-  keyboardArt: {
-    ...glassEdge,
-    borderRadius: 24,
-    padding: 14,
-    gap: 12,
-    marginTop: 8,
-  },
-  fakeField: {
-    flex: 1,
-    backgroundColor: colors.fill,
-    borderRadius: 20,
-    minHeight: 40,
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-  },
-  dot: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: theme.warning,
-    borderWidth: 2,
-    borderColor: theme.surface,
-  },
-  keys: { backgroundColor: colors.fill, borderRadius: 14, padding: 8, gap: 6 },
-  key: { width: 24, height: 30, borderRadius: 5, backgroundColor: theme.surface },
-  warning: {
-    backgroundColor: colors.amberBg,
-    borderColor: colors.amberLine,
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 14,
-  },
-  notification: {
-    position: 'absolute',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: colors.surface,
-    borderRadius: 22,
-    padding: 14,
-  },
-  notificationBack: { left: 24, right: 24, top: 0, opacity: 0.5, backgroundColor: colors.surface2 },
-  notificationFront: {
-    left: 0,
-    right: 0,
-    top: 46,
-    shadowColor: '#000000',
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
-  },
-  notificationIcon: { width: 40, height: 40, borderRadius: 10 },
-  notificationMeta: { fontSize: 13, color: colors.tertiary },
-  notificationTitle: { fontSize: 17, color: colors.ink, fontFamily: AppFont.semibold },
-  notificationBody: { fontSize: 14, color: colors.secondary },
+const useStyles = makeStyles((t) => {
+  const colors = onboardingColorsFor(t);
+  const k = t.tokens;
+  const glassEdge = t.flat;
+  return {
+    // Toggle/Switch from the design system (4173:8).
+    toggle: { width: 52.5, height: 23, borderRadius: 12, padding: 1.6, justifyContent: 'center' },
+    toggleOn: t.glass,
+    toggleOff: t.inset,
+    knob: { ...t.knob, width: 32, height: 19.7, borderRadius: 10 },
+    settingCard: { ...glassEdge, borderRadius: 20, overflow: 'hidden' },
+    settingHeader: { backgroundColor: k.surface2, paddingHorizontal: 18, paddingVertical: 14 },
+    settingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 18,
+      paddingVertical: 16,
+      gap: 12,
+    },
+    overlayBubble: {
+      position: 'absolute',
+      left: 176 - 58.8,
+      top: 0,
+      width: 117.6,
+      height: 117.6,
+    },
+    overlayCard: { position: 'absolute', left: 27.5, width: 297, top: 169 },
+    number: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: colors.accentSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.40)', justifyContent: 'flex-end' },
+    sheet: {
+      backgroundColor: colors.canvas,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: 20,
+      gap: 16,
+    },
+    disclosure: { ...glassEdge, borderRadius: 16, padding: 18, gap: 6 },
+    keyboardArt: {
+      ...glassEdge,
+      borderRadius: 24,
+      padding: 14,
+      gap: 12,
+      marginTop: 8,
+    },
+    fakeField: {
+      flex: 1,
+      backgroundColor: colors.fill,
+      borderRadius: 20,
+      minHeight: 40,
+      justifyContent: 'center',
+      paddingHorizontal: 14,
+    },
+    dot: {
+      position: 'absolute',
+      top: -2,
+      right: -2,
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      backgroundColor: k.warning,
+      borderWidth: 2,
+      borderColor: k.surface,
+    },
+    keys: { backgroundColor: colors.fill, borderRadius: 14, padding: 8, gap: 6 },
+    key: { width: 24, height: 30, borderRadius: 5, backgroundColor: k.surface },
+    warning: {
+      backgroundColor: colors.amberBg,
+      borderColor: colors.amberLine,
+      borderWidth: 1,
+      borderRadius: 16,
+      padding: 14,
+    },
+    notification: {
+      position: 'absolute',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      backgroundColor: colors.surface,
+      borderRadius: 22,
+      padding: 14,
+    },
+    notificationBack: {
+      left: 24,
+      right: 24,
+      top: 0,
+      opacity: 0.5,
+      backgroundColor: colors.surface2,
+    },
+    notificationFront: {
+      left: 0,
+      right: 0,
+      top: 46,
+      shadowColor: '#000000',
+      shadowOpacity: t.scheme === 'dark' ? 0.4 : 0.12,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 6,
+    },
+    notificationIcon: { width: 40, height: 40, borderRadius: 10 },
+    notificationMeta: { fontSize: 13, color: colors.tertiary },
+    notificationTitle: { fontSize: 17, color: colors.ink, fontFamily: AppFont.semibold },
+    notificationBody: { fontSize: 14, color: colors.secondary },
+  };
 });

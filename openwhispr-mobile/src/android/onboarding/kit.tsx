@@ -25,36 +25,64 @@ import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useOnboardingT } from './strings';
-import { flat, raised, raisedPressed, theme } from '../theme';
+import { makeStyles, themeFor, useTheme, type AndroidTheme } from '../ThemeProvider';
+import type { Scheme } from '../theme';
 
-export const colors = {
-  canvas: theme.canvas,
-  surface: theme.surface,
-  surface2: theme.surface2,
-  fill: theme.track,
-  ink: theme.ink,
-  secondary: theme.secondary,
-  tertiary: theme.tertiary,
-  divider: theme.trackStrong,
-  accent: theme.accent,
-  accentSoft: theme.accentSoft,
-  brandTop: theme.brandTop,
-  /** The brand-blue screens' middle stop: the one accent blue (D3). */
-  brandMid: theme.accent,
-  brandDeep: theme.brandDeep,
-  green: theme.success,
-  amberBg: theme.amberBg,
-  amberLine: theme.amberLine,
-  amberInk: theme.amberInk,
-};
+// The brand-blue screens (splash, pitch, the practice's blue card) look the same in both schemes.
+const brand = themeFor('light').tokens;
 
-export const GLASS_GRADIENT = [theme.glassTop, theme.glassBottom] as const;
+function onboardingColors(theme: AndroidTheme) {
+  const k = theme.tokens;
+  return {
+    canvas: k.canvas,
+    surface: k.surface,
+    surface2: k.surface2,
+    fill: k.track,
+    ink: k.ink,
+    secondary: k.secondary,
+    tertiary: k.tertiary,
+    divider: k.trackStrong,
+    accent: k.accent,
+    accentSoft: k.accentSoft,
+    brandTop: k.brandTop,
+    /** The brand-blue screens' middle stop: the one accent blue (D3), the same in both schemes. */
+    brandMid: brand.accent,
+    brandDeep: k.brandDeep,
+    green: k.success,
+    amberBg: k.amberBg,
+    amberLine: k.amberLine,
+    amberInk: k.amberInk,
+    onGlass: k.onGlass,
+    /** An error line under a practice or a download (light keeps its deeper red). */
+    error: theme.scheme === 'dark' ? k.error : '#B42318',
+  };
+}
+
+export type OnboardingColors = ReturnType<typeof onboardingColors>;
+
+const palettes: Partial<Record<Scheme, OnboardingColors>> = {};
+
+/** Onboarding's palette for a theme, built once per scheme. */
+export function onboardingColorsFor(theme: AndroidTheme): OnboardingColors {
+  return (palettes[theme.scheme] ??= onboardingColors(theme));
+}
+
+/** Onboarding's palette for the scheme in use. Read it at render; a switch repaints in place. */
+export function useOnboardingColors(): OnboardingColors {
+  return onboardingColorsFor(useTheme());
+}
+
+/** @deprecated Light only, for the launch screens (account flows, segment 7): read `useOnboardingColors()`. */
+export const colors = onboardingColorsFor(themeFor('light'));
+
+// The brand glass is the same blue in both schemes (design §1).
+export const GLASS_GRADIENT = [brand.glassTop, brand.glassBottom] as const;
 
 // Words wrapped in [brackets] are drawn in the accent colour.
 export function AccentText({
   text,
   style,
-  accent = colors.accent,
+  accent,
   center,
 }: {
   text: string;
@@ -62,6 +90,8 @@ export function AccentText({
   accent?: string;
   center?: boolean;
 }) {
+  const s = useOnboardingStyles();
+  const c = useOnboardingColors();
   const parts = keepLastWordsTogether(text)
     .split(/(\[[^\]]+\])/g)
     .filter(Boolean);
@@ -73,7 +103,7 @@ export function AccentText({
     >
       {parts.map((part, index) =>
         part.startsWith('[') ? (
-          <Text key={index} style={{ color: accent }}>
+          <Text key={index} style={{ color: accent ?? c.accent }}>
             {part.slice(1, -1)}
           </Text>
         ) : (
@@ -104,6 +134,7 @@ type ButtonProps = {
 // The desktop's brand glass: a vertical blue gradient with a bright top rim. Flat: no drop shadow,
 // on any CTA (Josh, 19 Nov). Disabled is the same glass at 50 %.
 export function GlassButton({ label, onPress, disabled, busy, style }: ButtonProps) {
+  const s = useOnboardingStyles();
   return (
     <Pressable
       cssInterop={false}
@@ -121,7 +152,7 @@ export function GlassButton({ label, onPress, disabled, busy, style }: ButtonPro
       <LinearGradient colors={GLASS_GRADIENT} style={s.glass}>
         <View pointerEvents="none" style={s.glassRim} />
         {busy ? (
-          <ActivityIndicator color={theme.onGlass} />
+          <ActivityIndicator color={brand.onGlass} />
         ) : (
           <Text style={s.glassLabel} numberOfLines={1}>
             {label}
@@ -132,11 +163,10 @@ export function GlassButton({ label, onPress, disabled, busy, style }: ButtonPro
   );
 }
 
-const WHITE_GLASS = [theme.surface, '#E7ECF6'] as const;
-
 // White brand glass for the brand-blue screens: the approved sign-in recipe (white → #E7ECF6,
 // a white top highlight and rim, a faint navy bottom edge). No drop shadow. Ink label, never blue.
 export function WhiteButton({ label, onPress, disabled, busy, style }: ButtonProps) {
+  const s = useOnboardingStyles();
   return (
     <Pressable
       cssInterop={false}
@@ -152,19 +182,21 @@ export function WhiteButton({ label, onPress, disabled, busy, style }: ButtonPro
         style,
       ]}
     >
-      <LinearGradient colors={WHITE_GLASS} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={[brand.surface, '#E7ECF6']} style={StyleSheet.absoluteFill} />
       <View pointerEvents="none" style={s.whiteRim} />
       <View pointerEvents="none" style={s.whiteBottom} />
       {busy ? (
-        <ActivityIndicator color={colors.ink} />
+        <ActivityIndicator color={brand.ink} />
       ) : (
-        <Text style={[s.glassLabel, { color: colors.ink }]}>{label}</Text>
+        <Text style={[s.glassLabel, { color: brand.ink }]}>{label}</Text>
       )}
     </Pressable>
   );
 }
 
 export function SecondaryButton({ label, onPress, disabled, style }: ButtonProps) {
+  const s = useOnboardingStyles();
+  const { raisedPressed } = useTheme();
   return (
     <Pressable
       cssInterop={false}
@@ -188,6 +220,7 @@ export function LinkButton({
   onPress: () => void;
   light?: boolean;
 }) {
+  const s = useOnboardingStyles();
   return (
     <Pressable
       cssInterop={false}
@@ -197,7 +230,7 @@ export function LinkButton({
       hitSlop={8}
       style={({ pressed }) => [s.link, pressed && { opacity: 0.6 }]}
     >
-      <Text style={[s.linkLabel, light && { color: theme.onGlass }]}>{label}</Text>
+      <Text style={[s.linkLabel, light && { color: brand.onGlass }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -211,6 +244,9 @@ export function CircleButton({
   label: string;
   onPress: () => void;
 }) {
+  const s = useOnboardingStyles();
+  const c = useOnboardingColors();
+  const { raisedPressed } = useTheme();
   return (
     <Pressable
       cssInterop={false}
@@ -224,13 +260,15 @@ export function CircleButton({
         name={icon === 'back' ? 'chevron.left' : 'xmark'}
         mdName={icon === 'back' ? 'ChevronLeft' : 'X'}
         size={icon === 'back' ? 22 : 18}
-        color={colors.ink}
+        color={c.ink}
       />
     </Pressable>
   );
 }
 
 export function PillButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const s = useOnboardingStyles();
+  const { raisedPressed } = useTheme();
   return (
     <Pressable
       cssInterop={false}
@@ -262,6 +300,7 @@ export function Screen({
   contentStyle?: StyleProp<ViewStyle>;
 }) {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
   const body = scroll ? (
     <ScrollView
       contentContainerStyle={[s.content, contentStyle]}
@@ -286,6 +325,7 @@ export function Screen({
 }
 
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  const s = useOnboardingStyles();
   return <View style={[s.card, style]}>{children}</View>;
 }
 
@@ -293,6 +333,7 @@ const BUBBLE = require('./assets/bubble.png');
 
 // The bubble, drawn from the desktop's Liquid Glass dock icon.
 export function BubbleIcon({ size = 56 }: { size?: number }) {
+  const s = useOnboardingStyles();
   return (
     <View style={[s.bubble, { width: size, height: size, borderRadius: size / 2 }]}>
       <Image source={BUBBLE} style={{ width: size, height: size }} accessible={false} />
@@ -326,7 +367,10 @@ export function PulseRings({
 }) {
   const reduced = useReducedMotion();
   return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, s.center]}>
+    <View
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}
+    >
       {[0, 1].map((index) => (
         <Ring key={index} size={size} color={color} delay={index * 700} still={reduced} />
       ))}
@@ -368,93 +412,97 @@ function Ring({
   );
 }
 
-export const s = StyleSheet.create({
-  page: { flex: 1, backgroundColor: colors.canvas },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    minHeight: 52,
-  },
-  content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24, gap: 16 },
-  footer: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 8, gap: 4 },
-  title: {
-    fontSize: 32,
-    lineHeight: 38,
-    fontFamily: AppFont.bold,
-    color: colors.ink,
-    letterSpacing: -0.6,
-  },
-  body: { fontSize: 17, lineHeight: 24, color: colors.secondary },
-  caption: { fontSize: 14, lineHeight: 20, color: colors.tertiary },
-  center: { alignItems: 'center', justifyContent: 'center' },
-  glass: {
-    minHeight: 54,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    overflow: 'hidden',
-  },
-  glassRim: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    borderTopColor: 'rgba(255,255,255,0.6)',
-  },
-  glassLabel: { color: theme.onGlass, fontSize: 17, fontFamily: AppFont.medium },
-  whiteRim: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.7)',
-    borderTopColor: theme.surface,
-  },
-  whiteBottom: {
-    position: 'absolute',
-    left: 18,
-    right: 18,
-    bottom: 0,
-    height: 1,
-    backgroundColor: 'rgba(20,51,140,0.14)',
-  },
-  secondary: {
-    ...raised,
-    minHeight: 54,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  secondaryLabel: { color: colors.ink, fontSize: 17, fontFamily: AppFont.medium },
-  link: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  linkLabel: { color: colors.accent, fontSize: 17, fontFamily: AppFont.medium },
-  circle: {
-    ...raised,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pill: {
-    ...raised,
-    minHeight: 40,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pillLabel: { color: colors.ink, fontSize: 16, fontFamily: AppFont.medium },
-  card: { ...flat, borderRadius: 16, padding: 16 },
-  bubble: {
-    shadowColor: theme.brandDeep,
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-  },
+/** Onboarding's shared styles for the scheme in use: `const s = useOnboardingStyles()`. */
+export const useOnboardingStyles = makeStyles((t) => {
+  const c = onboardingColorsFor(t);
+  return {
+    page: { flex: 1, backgroundColor: c.canvas },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      minHeight: 52,
+    },
+    content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24, gap: 16 },
+    footer: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 8, gap: 4 },
+    title: {
+      fontSize: 32,
+      lineHeight: 38,
+      fontFamily: AppFont.bold,
+      color: c.ink,
+      letterSpacing: -0.6,
+    },
+    body: { fontSize: 17, lineHeight: 24, color: c.secondary },
+    caption: { fontSize: 14, lineHeight: 20, color: c.tertiary },
+    center: { alignItems: 'center', justifyContent: 'center' },
+    glass: {
+      minHeight: 54,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+      overflow: 'hidden',
+    },
+    glassRim: {
+      ...StyleSheet.absoluteFillObject,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.18)',
+      borderTopColor: 'rgba(255,255,255,0.6)',
+    },
+    glassLabel: { color: t.tokens.onGlass, fontSize: 17, fontFamily: AppFont.medium },
+    whiteRim: {
+      ...StyleSheet.absoluteFillObject,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.7)',
+      borderTopColor: brand.surface,
+    },
+    whiteBottom: {
+      position: 'absolute',
+      left: 18,
+      right: 18,
+      bottom: 0,
+      height: 1,
+      backgroundColor: 'rgba(20,51,140,0.14)',
+    },
+    secondary: {
+      ...t.raised,
+      minHeight: 54,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 8,
+    },
+    secondaryLabel: { color: c.ink, fontSize: 17, fontFamily: AppFont.medium },
+    link: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+    linkLabel: { color: c.accent, fontSize: 17, fontFamily: AppFont.medium },
+    circle: {
+      ...t.raised,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    pill: {
+      ...t.raised,
+      minHeight: 40,
+      paddingHorizontal: 14,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    pillLabel: { color: c.ink, fontSize: 16, fontFamily: AppFont.medium },
+    card: { ...t.flat, borderRadius: 16, padding: 16 },
+    bubble: {
+      shadowColor: brand.brandDeep,
+      shadowOpacity: 0.35,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 8,
+    },
+  };
 });
