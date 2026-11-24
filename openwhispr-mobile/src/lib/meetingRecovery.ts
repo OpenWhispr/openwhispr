@@ -33,6 +33,17 @@ const RUNTIME_STARTED_AT_MS = Date.now();
 // any of these states was orphaned when its previous process died.
 const ORPHANED_STATUSES: ReadonlySet<string> = new Set(['recording', 'transcribing', 'diarizing']);
 
+/**
+ * Notes launch recovery is still finishing. Their recovery labels speakers from the recording
+ * before it resumes the owed audio, which deletes the recording, so the foreground resume
+ * leaves them to it.
+ */
+const notesInLaunchRecovery = new Set<number>();
+
+export function isFinishingLaunchRecovery(noteId: number): boolean {
+  return notesInLaunchRecovery.has(noteId);
+}
+
 /** A recording this old is past any Retry worth keeping it for. */
 export const STALE_RECORDING_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -380,7 +391,13 @@ export async function recoverOrphanedMeetings(deps: MeetingRecoveryDeps): Promis
       ORPHANED_STATUSES.has(note.transcriptionStatus),
   );
   for (const note of orphans) {
-    await attempt(deps, note.id, () => recoverOrphan(note, pendingBackfills, deps));
+    // Before its wait for the app to be active, which a foreground resume can start in.
+    notesInLaunchRecovery.add(note.id);
+    try {
+      await attempt(deps, note.id, () => recoverOrphan(note, pendingBackfills, deps));
+    } finally {
+      notesInLaunchRecovery.delete(note.id);
+    }
   }
 
   // Last: each is a run of network requests, and nothing above should wait behind them.
@@ -405,6 +422,8 @@ export interface ForegroundBackfillDeps {
   reportError(error: unknown, noteId: number): void;
   /** True while a meeting records: owed audio then waits, off the live stream's network. */
   isMeetingCapturing(): boolean;
+  /** Notes launch recovery is still finishing; defaults to this launch's own recovery. */
+  isFinishingLaunchRecovery?(noteId: number): boolean;
 }
 
 /**
@@ -417,6 +436,7 @@ export function createForegroundBackfillResumer(
 ): (state: AppStateStatus) => void {
   let wasInBackground = false;
   let running = false;
+  const isRecovering = deps.isFinishingLaunchRecovery ?? isFinishingLaunchRecovery;
   const runPass = async (): Promise<void> => {
     try {
       if (deps.isMeetingCapturing()) return;
@@ -424,6 +444,8 @@ export function createForegroundBackfillResumer(
       if (noteIds.length === 0 || !(await deps.isOnline().catch(() => false))) return;
       for (const noteId of noteIds) {
         if (deps.isMeetingCapturing()) return;
+        // Recovery labels its speakers first, then resumes the owed audio itself.
+        if (isRecovering(noteId)) continue;
         await attempt(deps, noteId, () => deps.resumeBackfill(noteId));
       }
     } catch (error) {

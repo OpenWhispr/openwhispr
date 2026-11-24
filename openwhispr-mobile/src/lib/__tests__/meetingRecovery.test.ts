@@ -22,6 +22,7 @@ import {
   STALE_RECORDING_MS,
   createForegroundBackfillResumer,
   createdBeforeRuntime,
+  isFinishingLaunchRecovery,
   recoverOrphanedMeetings,
   repairMeetingRecordings,
   waitForAppActive,
@@ -1160,5 +1161,69 @@ describe('repairMeetingRecordings', () => {
 
     expect(deps.restorePath).not.toHaveBeenCalled();
     expect(deps.deleteFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('launch recovery and the foreground resume', () => {
+  const killedWithTranscript = (id: number): Harness => {
+    const harness = makeDeps([note({ id, transcriptionStatus: 'recording', sourceFile: null })]);
+    (harness.deps.repairRecording as jest.Mock).mockResolvedValue(true);
+    (harness.deps.hasTranscript as jest.Mock).mockReturnValue(true);
+    (harness.deps.getSegmentTimes as jest.Mock).mockReturnValue([{ startMs: 0, endMs: 10_000 }]);
+    (harness.deps.recordingDurationMs as jest.Mock).mockResolvedValue(60_000);
+    return harness;
+  };
+
+  it('does not resume a note launch recovery is still finishing', async () => {
+    const harness = killedWithTranscript(80);
+    let becomeActive: () => void = () => undefined;
+    (harness.deps.waitUntilActive as jest.Mock).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          becomeActive = resolve;
+        }),
+    );
+    const foreground = {
+      listPendingBackfills: jest.fn(async () => [80, 81]),
+      isOnline: jest.fn(async () => true),
+      resumeBackfill: jest.fn(async (id: number): Promise<void> => {
+        harness.calls.push(`foreground:${id}`);
+      }),
+      reportError: jest.fn(),
+      isMeetingCapturing: jest.fn(() => false),
+    };
+    const onChange = createForegroundBackfillResumer(foreground);
+
+    const recovery = recoverOrphanedMeetings(harness.deps);
+    await flushMicrotasks();
+    expect(isFinishingLaunchRecovery(80)).toBe(true);
+
+    // The return to the foreground arrives while recovery waits to label the speakers.
+    onChange('background');
+    onChange('active');
+    await flushMicrotasks();
+    expect(foreground.resumeBackfill.mock.calls).toEqual([[81]]);
+
+    becomeActive();
+    await recovery;
+
+    expect(isFinishingLaunchRecovery(80)).toBe(false);
+    expect(harness.calls.slice(harness.calls.indexOf('foreground:81') + 1)).toEqual([
+      'label:80',
+      'backfill:80',
+      'finish:80',
+    ]);
+  });
+
+  it('lets the foreground resume a note again once its recovery throws', async () => {
+    const harness = killedWithTranscript(82);
+    const failure = new Error('wait');
+    (harness.deps.waitUntilActive as jest.Mock).mockRejectedValue(failure);
+
+    await recoverOrphanedMeetings(harness.deps);
+
+    expect(harness.deps.reportError).toHaveBeenCalledWith(failure, 82);
+    expect(harness.deps.labelSpeakers).not.toHaveBeenCalled();
+    expect(isFinishingLaunchRecovery(82)).toBe(false);
   });
 });
