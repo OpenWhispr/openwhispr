@@ -124,4 +124,12 @@ class BubbleModesTest {
     assertFalse(BubbleMenuPolicy.keyboardClosesMenu(true, true, topChanged = false, fieldChanged = false, sinceThemeSwitchMs = null))
     assertTrue(BubbleMenuPolicy.keyboardClosesMenu(true, true, topChanged = true, fieldChanged = false, sinceThemeSwitchMs = BubbleMenuPolicy.THEME_SETTLE_MS))
   }
+
+  @Test fun `a keyboard gone right after a light-dark switch is checked again before the menu closes`() {
+    assertTrue(BubbleMenuPolicy.holdsKeyboardLoss(wasTyping = true, typing = false, sinceThemeSwitchMs = 900))
+    assertFalse(BubbleMenuPolicy.holdsKeyboardLoss(wasTyping = true, typing = false, sinceThemeSwitchMs = null))
+    assertFalse(BubbleMenuPolicy.holdsKeyboardLoss(wasTyping = true, typing = false, sinceThemeSwitchMs = BubbleMenuPolicy.THEME_SETTLE_MS))
+    assertFalse(BubbleMenuPolicy.holdsKeyboardLoss(wasTyping = true, typing = true, sinceThemeSwitchMs = 900))
+    assertFalse(BubbleMenuPolicy.holdsKeyboardLoss(wasTyping = false, typing = false, sinceThemeSwitchMs = 900))
+  }
 }

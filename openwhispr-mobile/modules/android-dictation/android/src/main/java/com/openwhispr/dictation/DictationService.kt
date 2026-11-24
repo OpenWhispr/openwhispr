@@ -177,6 +177,7 @@ class DictationService : Service() {
   private var shownConfig: Configuration? = null
   /** When the last light/dark switch landed (uptime), so the keyboard's redraw doesn't close the menu. */
   private var themeSwitchedAt: Long? = null
+  private val recheckKeyboard = Runnable { InsertionService.instance?.refreshTyping() ?: onTyping(false, null) }
   override fun onConfigurationChanged(newConfig: Configuration) {
     super.onConfigurationChanged(newConfig)
     val changes = shownConfig?.diff(newConfig) ?: -1
@@ -200,6 +201,14 @@ class DictationService : Service() {
     // never takes focus, so this is how Back reaches it.
     val changed = value != typing || top != keyboardTop || field != focusedField
     val sinceSwitch = themeSwitchedAt?.let { SystemClock.uptimeMillis() - it }
+    // The keyboard restarting after a light/dark switch reports itself gone for a moment: with the
+    // menu open (a finger may be on it), wait out the settle time and look again before acting.
+    if (menu != null && BubbleMenuPolicy.holdsKeyboardLoss(typing, value, sinceSwitch)) {
+      android.util.Log.i("OpenWhisprBubble", "Keyboard gone ${sinceSwitch} ms after a theme switch with the menu open: checking again")
+      handler.removeCallbacks(recheckKeyboard)
+      handler.postDelayed(recheckKeyboard, BubbleMenuPolicy.THEME_SETTLE_MS - (sinceSwitch ?: 0) + 50)
+      return
+    }
     // A light/dark switch redraws the keyboard and the app below; the menu (and the finger on it) stays.
     val keepMenu = menu != null && changed &&
       !BubbleMenuPolicy.keyboardClosesMenu(typing, value, top != keyboardTop, field != focusedField, sinceSwitch)
