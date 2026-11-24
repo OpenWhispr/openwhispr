@@ -125,24 +125,41 @@ export async function startRealtimeMeetingWs(
       const meta = eventLeg ? legMeta.get(eventLeg) : undefined;
       if (meta) {
         // endMs is already on the capture clock: the leg offset was applied before the reducer.
-        // Our own commit's turn has no VAD end; its text covers all the leg was sent before it.
-        const endMs = utterance.endMs ?? meta.commitSentUpToMs;
-        if (endMs !== null) meta.transcribedUpToMs = Math.max(meta.transcribedUpToMs, endMs);
+        if (utterance.endMs !== null) {
+          meta.transcribedUpToMs = Math.max(meta.transcribedUpToMs, utterance.endMs);
+        } else if (meta.commitSentUpToMs !== null) {
+          // Our own commit's turn has no VAD end; its text covers what the leg was sent first.
+          meta.commitTurnDone = true;
+        }
+        applyCommitCredit(meta);
       }
       callbacks.onUtterance?.(utterance);
     },
     onTranscriptionFailed: (failure) => {
       const meta = eventLeg ? legMeta.get(eventLeg) : undefined;
-      // A failed turn's audio never comes back as text. Without its timing, the best bound is
-      // everything the leg was sent past its last completed turn.
-      if (failure.startMs !== null && failure.endMs !== null) {
-        addLostWindow({ startMs: failure.startMs, endMs: failure.endMs });
+      // A failed turn's audio never comes back as text. From its start when known (to its end,
+      // else to what the leg was sent); otherwise everything past the last completed turn.
+      if (failure.startMs !== null) {
+        const endMs = failure.endMs ?? meta?.sentUpToMs ?? null;
+        if (endMs !== null) addLostWindow({ startMs: failure.startMs, endMs });
       } else if (meta) {
         addLostWindow({ startMs: meta.transcribedUpToMs, endMs: meta.sentUpToMs });
       }
+      if (meta) applyCommitCredit(meta);
       callbacks.onTranscriptionFailed?.(failure);
     },
   });
+
+  // The commit turn's credit never reaches past a turn of the leg still pending, so a VAD turn
+  // that never comes back keeps its audio uncredited.
+  const applyCommitCredit = (meta: LegMeta): void => {
+    if (!meta.commitTurnDone || meta.commitSentUpToMs === null) return;
+    let creditMs = meta.commitSentUpToMs;
+    for (const item of reducer.pendingItemTimings(legItemPrefix(meta.legIndex))) {
+      if (item.startMs !== null) creditMs = Math.min(creditMs, item.startMs);
+    }
+    meta.transcribedUpToMs = Math.max(meta.transcribedUpToMs, creditMs);
+  };
   const pcmRing = new PcmRingBuffer(pcmTailCapBytes(sampleRate), sampleRate);
   const bytesToMs = (bytes: number): number => Math.floor((bytes * 1000) / (sampleRate * 2));
   // Window ends round up, so a window never stops short of the audio it lost.
@@ -169,13 +186,15 @@ export async function startRealtimeMeetingWs(
   // their own leg's namespace/offset during a swap. `sentUpToMs` is the end of the last audio
   // handed to the socket, `transcribedUpToMs` the end of its latest completed turn (both on
   // the capture clock); `commitSentUpToMs` is `sentUpToMs` when our commit went out (null
-  // before); `ended` makes a leg's loss count once.
+  // before); `commitTurnDone` is set once that commit's turn came back; `ended` makes a leg's
+  // loss count once.
   interface LegMeta {
     legIndex: number;
     offsetMs: number;
     sentUpToMs: number;
     transcribedUpToMs: number;
     commitSentUpToMs: number | null;
+    commitTurnDone: boolean;
     ended: boolean;
   }
   const legMeta = new WeakMap<WebSocketLike, LegMeta>();
@@ -187,6 +206,11 @@ export async function startRealtimeMeetingWs(
     if (!meta || meta.ended) return;
     meta.ended = true;
     addLostWindow({ startMs: meta.transcribedUpToMs, endMs: meta.sentUpToMs });
+    // Its pending turns are about to be forgotten; keep the audio of those whose timing is known.
+    for (const item of reducer.pendingItemTimings(legItemPrefix(meta.legIndex))) {
+      if (item.startMs === null) continue;
+      addLostWindow({ startMs: item.startMs, endMs: item.endMs ?? meta.sentUpToMs });
+    }
   };
 
   // A clean drain means every turn the leg was sent came back, so it lost nothing.
@@ -434,7 +458,14 @@ export async function startRealtimeMeetingWs(
     } finally {
       eventLeg = null;
     }
-    if (evt.type === 'input_audio_buffer.committed') markDrainReply(ws);
+    // Only a commit VAD didn't start answers ours; a VAD turn landing just after our commit
+    // must not settle the leg before our own turn is transcribed.
+    if (
+      evt.type === 'input_audio_buffer.committed' &&
+      !(typeof rewritten.item_id === 'string' && reducer.isSpeechStarted(rewritten.item_id))
+    ) {
+      markDrainReply(ws);
+    }
     if (drains.size > 0) settleDrains();
   };
 
@@ -511,6 +542,7 @@ export async function startRealtimeMeetingWs(
       sentUpToMs: 0,
       transcribedUpToMs: 0,
       commitSentUpToMs: null,
+      commitTurnDone: false,
       ended: false,
     });
   };

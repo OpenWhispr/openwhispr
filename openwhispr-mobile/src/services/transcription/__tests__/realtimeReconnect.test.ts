@@ -220,6 +220,25 @@ describe('createRealtimeEventReducer failed turns and per-leg pending', () => {
     expect(reducer.utterances()).toEqual([]);
   });
 
+  it('lists pending items of one prefix with their timing and knows which VAD started', () => {
+    const reducer = createRealtimeEventReducer({});
+    reducer.handleEvent({
+      type: 'input_audio_buffer.speech_started',
+      item_id: 'L1:v',
+      audio_start_ms: 1000,
+    });
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: 'L1:v' });
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: 'L1:m' });
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: 'L2:n' });
+
+    expect(reducer.pendingItemTimings('L1:')).toEqual([
+      { itemId: 'L1:v', startMs: 1000, endMs: null },
+      { itemId: 'L1:m', startMs: null, endMs: null },
+    ]);
+    expect(reducer.isSpeechStarted('L1:v')).toBe(true);
+    expect(reducer.isSpeechStarted('L1:m')).toBe(false);
+  });
+
   it('reports a failed turn it has no timing for with null times', () => {
     const onTranscriptionFailed = jest.fn();
     const reducer = createRealtimeEventReducer({ onTranscriptionFailed });

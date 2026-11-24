@@ -1119,20 +1119,64 @@ describe('startRealtimeMeetingWs — audio a dead leg never transcribed', () => 
     expect(session.droppedWindows()).toEqual([]);
   });
 
-  it('credits a completed commit turn with everything the leg was sent before the commit', async () => {
+  it("keeps a pending VAD turn's audio when the commit turn completes and the drain times out", async () => {
     const { session, leg1 } = await boot({}, { sampleRate: 100 });
     await sendSeconds(2); // 0–2000 ms sent
     completeTurn(leg1, 'a', 0, 1000); // transcribed up to 1000 ms
-    leg1.emit(committed('v')); // a VAD turn that will never come back holds the drain open
+    leg1.emit(speechStarted('v', 1000));
+    leg1.emit(speechStopped('v', 1800));
+    leg1.emit(committed('v')); // a VAD turn (1000–1800 ms) that never comes back
 
     const stopped = session.stop(); // the commit is sent with the leg sent up to 2000 ms
     leg1.emit(committed('m'));
     leg1.emit(completed('m', 'last words')); // a commit turn carries no end time
-    await jest.advanceTimersByTimeAsync(STOP_FLUSH_TIMEOUT_MS);
+    await jest.advanceTimersByTimeAsync(STOP_FLUSH_TIMEOUT_MS); // v holds the drain: unclean
     await stopped;
 
-    // The commit turn's text arrived, so the leg is transcribed up to 2000 ms = sent: no window.
-    // (v's own audio sits inside that span; out-of-order completions are a separate change.)
+    // The commit credit stops at v's start (1000 ms), so the leg loses 1000–2000 ms, and v's
+    // own span (1000–1800 ms) is recorded before it is forgotten; together, 1000–2000 ms.
+    expect(session.droppedWindows()).toEqual([{ startMs: 1000, endMs: 2000 }]);
+  });
+
+  it('extends the commit credit once a pending VAD turn completes during the drain', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    await sendSeconds(2); // 0–2000 ms sent
+    completeTurn(leg1, 'a', 0, 1000);
+    leg1.emit(speechStarted('v', 1000));
+    leg1.emit(speechStopped('v', 1800));
+    leg1.emit(committed('v'));
+
+    const progress = track(session.stop());
+    leg1.emit(committed('m'));
+    leg1.emit(completed('m', 'last words')); // credit held at v's start, 1000 ms
+    await flushMicro();
+    expect(progress.done()).toBe(false); // v is still pending
+    leg1.emit(completed('v', 'vad words')); // v returns: credit extends to 2000 ms, drain clean
+    await flushMicro();
+
+    expect(progress.done()).toBe(true);
+    expect(session.droppedWindows()).toEqual([]);
+  });
+
+  it("waits for our commit's own reply, not a VAD turn that lands just after the commit", async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    await sendSeconds(2); // 0–2000 ms sent
+    leg1.emit(speechStarted('v', 1000));
+    leg1.emit(speechStopped('v', 1800));
+
+    const progress = track(session.stop()); // our commit is sent
+    leg1.emit(committed('v')); // VAD's commit of a turn it started: not our reply
+    leg1.emit(completed('v', 'vad words'));
+    await flushMicro();
+    expect(progress.done()).toBe(false);
+    expect(leg1.closed).toBe(false);
+
+    leg1.emit(committed('m')); // our commit's reply: no speech_started was seen for m
+    leg1.emit(completed('m', 'last words'));
+    await flushMicro();
+
+    expect(progress.done()).toBe(true);
+    expect(leg1.closed).toBe(true);
     expect(session.droppedWindows()).toEqual([]);
   });
 
@@ -1151,6 +1195,22 @@ describe('startRealtimeMeetingWs — audio a dead leg never transcribed', () => 
 
     // f's audio, 500–1500 ms (offset 0), never came back as text.
     expect(session.droppedWindows()).toEqual([{ startMs: 500, endMs: 1500 }]);
+  });
+
+  it('records a failed turn with only its start known from that start to what was sent', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    await sendSeconds(2); // 0–2000 ms sent
+    completeTurn(leg1, 'a', 0, 1000); // transcribed up to 1000 ms
+    leg1.emit(speechStarted('f', 1200)); // no speech_stopped: the end is unknown
+    leg1.emit(committed('f'));
+    leg1.emit({ type: 'conversation.item.input_audio_transcription.failed', item_id: 'f' });
+
+    const stopped = session.stop();
+    leg1.emit(commitEmpty);
+    await stopped;
+
+    // f's start (1200 ms) to sent (2000 ms), not the leg-level 1000–2000 ms.
+    expect(session.droppedWindows()).toEqual([{ startMs: 1200, endMs: 2000 }]);
   });
 
   it('records a failed turn without timing from the last completed turn to what was sent', async () => {
