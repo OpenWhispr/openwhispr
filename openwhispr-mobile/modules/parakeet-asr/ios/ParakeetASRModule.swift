@@ -96,6 +96,7 @@ public class ParakeetASRModule: Module {
           if FileManager.default.fileExists(atPath: staging.path) {
             try FileManager.default.removeItem(at: staging)
           }
+          SharedSpeechModels.removeLegacy(version: v)
           if self.loadedVersion == v { await self.releaseManager() }
           promise.resolve(nil)
         } catch {

@@ -64,6 +64,24 @@ enum SharedSpeechModels {
     moveIfNeeded(from: staging(of: legacy), to: staging(of: target))
   }
 
+  /// Removes the old FluidAudio-cache copy and its staging folder for `version`. `moveIfNeeded`
+  /// leaves them when the App Group holds the version too, so without this a deleted model's old
+  /// copy would be moved back in by the next `migrateLegacy`, and stay on disk meanwhile. A
+  /// failure is logged, never thrown: the delete itself already succeeded.
+  static func removeLegacy(version: AsrModelVersion) {
+    let fm = FileManager.default
+    let legacy = AsrModels.defaultCacheDirectory(for: version)
+    for url in [legacy, staging(of: legacy)] where fm.fileExists(atPath: url.path) {
+      do {
+        try fm.removeItem(at: url)
+      } catch {
+        NSLog(
+          "[ParakeetASR] Could not remove legacy %@: %@", url.lastPathComponent,
+          error.localizedDescription)
+      }
+    }
+  }
+
   // MARK: - Helpers
 
   private static func folderName(for version: AsrModelVersion) -> String {
