@@ -4051,7 +4051,17 @@
           "title": "目录",
           "empty": "添加标题以生成目录。"
         }
-      }
+      },
+      "muteMic": "静音麦克风",
+      "unmuteMic": "取消麦克风静音",
+      "micMuted": "麦克风已静音",
+      "recordSource": {
+        "menuLabel": "选择录制内容",
+        "both": "麦克风 + 系统音频",
+        "system": "仅系统音频",
+        "systemUnavailable": "此设备无法捕获系统音频"
+      },
+      "systemAudioOnly": "仅系统音频"
     },
     "participants": {
       "attendee": "位参会者",
@@ -4194,11 +4204,13 @@
       "recordingDisabledByOrg": "您的组织已禁用会议录音。",
       "stoppedAccountChanged": "由于您已退出登录或切换了账号，录音已停止。",
       "stoppedPolicyUnresolved": "由于无法检查您的组织设置，录音已停止。",
-      "stoppedWorkspaceChanged": "由于您切换了工作区，录音已停止。"
+      "stoppedWorkspaceChanged": "由于您切换了工作区，录音已停止。",
+      "systemAudioOnlyUnavailable": "无法捕获系统音频，因此仅系统音频的录制未能开始。请检查系统音频访问权限后重试。"
     },
     "meetingPill": {
       "returnToNote": "返回到录音",
-      "waitingForMicrophone": "等待麦克风"
+      "waitingForMicrophone": "等待麦克风",
+      "micMuted": "麦克风已静音"
     },
     "context": {
       "moveToFolder": "移动到文件夹",

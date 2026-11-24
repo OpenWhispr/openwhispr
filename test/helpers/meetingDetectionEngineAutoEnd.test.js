@@ -325,6 +325,51 @@ test("fallback silence immediately requests a scoped stop with its reason", asyn
   harness.engine.stop();
 });
 
+test("a muted mic keeps fallback silence from ending the recording", async () => {
+  const harness = createEngine();
+  const messages = [];
+  const ownerWebContents = harness.owner(messages);
+  harness.audioActivityDetector.externalMicState = {
+    reliable: true,
+    externalMicActive: false,
+  };
+
+  await harness.engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents,
+    systemAudioAvailable: true,
+  });
+  assert.equal(harness.engine.setRecordingMicMuted("meeting-1", true, ownerWebContents), true);
+  harness.clock.advance(SILENCE_WINDOW_MS * 2);
+  assert.deepEqual(messages, [], "a muted mic says nothing about the room");
+
+  harness.engine.setRecordingMicMuted("meeting-1", false, ownerWebContents);
+  harness.clock.advance(SILENCE_WINDOW_MS + 5 * TICK_MS);
+  assert.deepEqual(messages, [
+    {
+      channel: "meeting-auto-end-requested",
+      payload: { sessionId: "meeting-1", reason: "silence" },
+    },
+  ]);
+  harness.engine.stop();
+});
+
+test("mic mute from another session or window is refused", async () => {
+  const harness = createEngine();
+  const ownerWebContents = harness.owner([]);
+  await harness.engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents,
+    systemAudioAvailable: true,
+  });
+
+  assert.equal(harness.engine.setRecordingMicMuted("meeting-2", true, ownerWebContents), false);
+  assert.equal(harness.engine.setRecordingMicMuted("meeting-1", true, harness.owner([])), false);
+  harness.engine.stop();
+});
+
 test("only the last tracked meeting process exiting arms the fast stop", async () => {
   const harness = createEngine();
   const messages = [];

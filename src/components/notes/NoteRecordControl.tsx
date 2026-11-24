@@ -1,12 +1,22 @@
 import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Mic, Square } from "../icons";
+import { ChevronDown, Loader2, Mic, Square, Volume } from "../icons";
 import { cn } from "../lib/utils";
 import { LiveWaveform } from "../ui/LiveWaveform";
 import { GRADIENT_CIRCLE } from "../ui/gradientCircle";
 import { analyserRms } from "../../utils/audioLevel";
 import { formatMmSs } from "../../utils/formatDuration";
-import { getMicAnalyser, useMeetingRecordingStore } from "../../stores/meetingRecordingStore";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import {
+  getMicAnalyser,
+  useMeetingRecordingStore,
+  type MeetingAudioSource,
+} from "../../stores/meetingRecordingStore";
 
 // Module-level buffer: there is a single meeting mic analyser at a time.
 const micLevelBuf: { current: Float32Array<ArrayBuffer> | null } = { current: null };
@@ -42,7 +52,7 @@ interface NoteRecordControlProps {
   isProcessing: boolean;
   disabled?: boolean;
   disabledReason?: string;
-  onStart: () => void;
+  onStart: (audioSource?: MeetingAudioSource) => void;
   onStop: () => void;
 }
 
@@ -72,12 +82,23 @@ export default function NoteRecordControl({
   }, [isRecording]);
 
   const elapsed = isRecording && startedAt != null ? Math.floor((now - startedAt) / 1000) : 0;
+  const startDisabled = disabled || isProcessing;
+  // Unknown until the menu first opens; only a device that cannot capture
+  // system audio at all disables the system-only choice.
+  const [systemAudioSupported, setSystemAudioSupported] = useState<boolean | null>(null);
+  const checkSystemAudio = (open: boolean) => {
+    if (!open) return;
+    void window.electronAPI
+      ?.checkSystemAudioAccess?.()
+      .then((access) => setSystemAudioSupported(access?.mode !== "unsupported"))
+      .catch(() => setSystemAudioSupported(null));
+  };
 
   return (
     <div
       className={cn(
         "h-[30px] shrink-0 overflow-hidden transition-[width] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
-        isRecording ? "w-40" : "w-[30px]"
+        isRecording ? "w-40" : "w-[50px]"
       )}
     >
       {isRecording ? (
@@ -109,11 +130,11 @@ export default function NoteRecordControl({
           </span>
         </button>
       ) : (
-        <>
+        <div className="flex h-[30px] items-center">
           <button
             type="button"
-            onClick={onStart}
-            disabled={disabled || isProcessing}
+            onClick={() => onStart()}
+            disabled={startDisabled}
             aria-label={t("notes.editor.transcribe")}
             aria-describedby={reason ? reasonId : undefined}
             title={reason}
@@ -133,12 +154,51 @@ export default function NoteRecordControl({
               <Mic size={15} />
             )}
           </button>
+          <DropdownMenu onOpenChange={checkSystemAudio}>
+            <DropdownMenuTrigger asChild disabled={startDisabled}>
+              <button
+                type="button"
+                aria-label={t("notes.editor.recordSource.menuLabel")}
+                aria-describedby={reason ? reasonId : undefined}
+                title={reason ?? t("notes.editor.recordSource.menuLabel")}
+                className={cn(
+                  "flex h-[30px] w-5 items-center justify-center rounded-full text-foreground/55",
+                  "transition-colors duration-150 enabled:hover:text-foreground",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30",
+                  startDisabled && "cursor-not-allowed opacity-40"
+                )}
+              >
+                <ChevronDown size={12} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuItem onSelect={() => onStart("both")} className="gap-2">
+                <Mic size={14} className="shrink-0 text-foreground/60" />
+                {t("notes.editor.recordSource.both")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => onStart("system")}
+                disabled={systemAudioSupported === false}
+                className="items-start gap-2"
+              >
+                <Volume size={14} className="mt-0.5 shrink-0 text-foreground/60" />
+                <span className="flex flex-col">
+                  {t("notes.editor.recordSource.system")}
+                  {systemAudioSupported === false && (
+                    <span className="text-xs text-muted-foreground">
+                      {t("notes.editor.recordSource.systemUnavailable")}
+                    </span>
+                  )}
+                </span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {reason && (
             <span id={reasonId} hidden>
               {reason}
             </span>
           )}
-        </>
+        </div>
       )}
     </div>
   );

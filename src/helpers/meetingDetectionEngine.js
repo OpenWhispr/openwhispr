@@ -241,6 +241,7 @@ class MeetingDetectionEngine {
       "meeting"
     );
     this._audioActivityMonitor.reset();
+    this._audioActivityMonitor.setMicHeld(this._recordingSession?.micMuted === true);
     this._autoEndController.beginSession({
       sessionId,
       eligible: true,
@@ -306,6 +307,28 @@ class MeetingDetectionEngine {
 
     this._syncMeetingProcessDetector();
     this._syncAudioActivityDetector();
+    return true;
+  }
+
+  // The renderer zero-fills a muted mic, so auto-end would read the room as
+  // silent. Holding the mic channel keeps a muted recording from ending on
+  // silence; the meeting app releasing the mic still ends it.
+  setRecordingMicMuted(sessionId, muted, ownerWebContents) {
+    const session = this._recordingSession;
+    if (
+      !session ||
+      session.sessionId !== sessionId ||
+      (ownerWebContents && session.ownerWebContents !== ownerWebContents)
+    ) {
+      return false;
+    }
+    session.micMuted = muted === true;
+    if (this._autoEndActive) this._audioActivityMonitor.setMicHeld(session.micMuted);
+    debugLogger.debug(
+      "Recording mic mute changed",
+      { sessionId, muted: session.micMuted },
+      "meeting"
+    );
     return true;
   }
 

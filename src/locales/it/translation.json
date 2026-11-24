@@ -4052,7 +4052,17 @@
           "title": "Indice",
           "empty": "Aggiungi titoli per creare l'indice."
         }
-      }
+      },
+      "muteMic": "Disattiva microfono",
+      "unmuteMic": "Riattiva microfono",
+      "micMuted": "Microfono disattivato",
+      "recordSource": {
+        "menuLabel": "Scegli cosa registrare",
+        "both": "Microfono + audio di sistema",
+        "system": "Solo audio di sistema",
+        "systemUnavailable": "L’acquisizione dell’audio di sistema non è disponibile su questo dispositivo"
+      },
+      "systemAudioOnly": "Solo audio di sistema"
     },
     "participants": {
       "attendee": "partecipante",
@@ -4195,11 +4205,13 @@
       "recordingDisabledByOrg": "La registrazione delle riunioni è disattivata dalla tua organizzazione.",
       "stoppedAccountChanged": "La registrazione si è interrotta perché sei uscito dall'account o hai cambiato account.",
       "stoppedPolicyUnresolved": "La registrazione si è interrotta perché non è stato possibile verificare le impostazioni della tua organizzazione.",
-      "stoppedWorkspaceChanged": "La registrazione si è interrotta perché hai cambiato workspace."
+      "stoppedWorkspaceChanged": "La registrazione si è interrotta perché hai cambiato workspace.",
+      "systemAudioOnlyUnavailable": "Non è stato possibile acquisire l'audio di sistema, quindi la registrazione del solo audio di sistema non è partita. Controlla l'accesso all'audio di sistema e riprova."
     },
     "meetingPill": {
       "returnToNote": "Torna alla registrazione",
-      "waitingForMicrophone": "In attesa del microfono"
+      "waitingForMicrophone": "In attesa del microfono",
+      "micMuted": "Microfono disattivato"
     },
     "context": {
       "moveToFolder": "Sposta nella cartella",

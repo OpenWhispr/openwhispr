@@ -4617,7 +4617,17 @@
           "title": "Sommaire",
           "empty": "Ajoutez des titres pour créer la table des matières."
         }
-      }
+      },
+      "muteMic": "Couper le microphone",
+      "unmuteMic": "Réactiver le microphone",
+      "micMuted": "Microphone coupé",
+      "recordSource": {
+        "menuLabel": "Choisir ce qu’il faut enregistrer",
+        "both": "Microphone + audio système",
+        "system": "Audio système uniquement",
+        "systemUnavailable": "La capture de l’audio système n’est pas disponible sur cet appareil"
+      },
+      "systemAudioOnly": "Audio système uniquement"
     },
     "participants": {
       "attendee": "participant",
@@ -4760,11 +4770,13 @@
       "recordingDisabledByOrg": "L’enregistrement des réunions est désactivé par votre organisation.",
       "stoppedAccountChanged": "L’enregistrement s’est arrêté, car vous vous êtes déconnecté ou avez changé de compte.",
       "stoppedPolicyUnresolved": "L’enregistrement s’est arrêté, car les paramètres de votre organisation n’ont pas pu être vérifiés.",
-      "stoppedWorkspaceChanged": "L’enregistrement s’est arrêté, car vous avez changé d’espace de travail."
+      "stoppedWorkspaceChanged": "L’enregistrement s’est arrêté, car vous avez changé d’espace de travail.",
+      "systemAudioOnlyUnavailable": "L'audio système n'a pas pu être capturé, l'enregistrement de l'audio système seul n'a donc pas démarré. Vérifiez l'accès à l'audio système et réessayez."
     },
     "meetingPill": {
       "returnToNote": "Revenir à l'enregistrement",
-      "waitingForMicrophone": "En attente du microphone"
+      "waitingForMicrophone": "En attente du microphone",
+      "micMuted": "Microphone coupé"
     },
     "empty": {
       "title": "Aucune note ici pour l'instant",

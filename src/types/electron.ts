@@ -4008,6 +4008,10 @@ declare global {
         sessionId: string,
         available: boolean
       ) => Promise<{ success: boolean; reason?: "stale-session" }>;
+      meetingTranscriptionSetMicMuted?: (
+        sessionId: string,
+        muted: boolean
+      ) => Promise<{ success: boolean; reason?: "stale-session" }>;
       meetingTranscriptionStop?: (
         expectedSessionId?: string,
         reason?: MeetingStopReason

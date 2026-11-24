@@ -134,6 +134,10 @@ interface MeetingRecordingState {
   systemAudioInterruptedDeliveredNonce: number;
   currentMicLevel: number;
   micCaptureStatus: "inactive" | "active" | "reconnecting" | "unavailable";
+  /** The user muted the microphone for this recording; system audio keeps going. */
+  micMuted: boolean;
+  /** What the live recording captures; "system" never opens the microphone. */
+  recordingAudioSource: MeetingAudioSource;
   windowWidth: number;
 }
 
@@ -548,6 +552,8 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   systemAudioInterruptedDeliveredNonce: 0,
   currentMicLevel: 0,
   micCaptureStatus: "inactive",
+  micMuted: false,
+  recordingAudioSource: "both",
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
 }));
 
@@ -611,6 +617,33 @@ function reportMeetingError(error: string, extra: Partial<MeetingRecordingState>
 }
 
 export const getMicAnalyser = (): AnalyserNode | null => micAnalyser;
+
+// A disabled track keeps delivering silent frames on the same clock, so the
+// provider socket, the audio timeline and the mic gate all carry on as if the
+// user had simply stopped talking. The meeting app's own mic is untouched.
+const applyMicMuted = (stream: MediaStream | null, muted: boolean) => {
+  stream?.getAudioTracks().forEach((track) => {
+    track.enabled = !muted;
+  });
+};
+
+export function setMicMuted(muted: boolean): void {
+  if (!isRecordingFlag) return;
+  const { micMuted, recordingAudioSource } = useMeetingRecordingStore.getState();
+  if (recordingAudioSource === "system" || micMuted === muted) return;
+  applyMicMuted(micStream, muted);
+  useMeetingRecordingStore.setState(
+    muted ? { micMuted: true, micPartial: "", currentMicLevel: 0 } : { micMuted: false }
+  );
+  logger.debug("Meeting microphone mute changed", { muted }, "meeting");
+  // Main's auto-end can't hear the room through a muted mic. A start still
+  // connecting resends this once its session is live.
+  if (activeRecordingSessionId) {
+    void window.electronAPI
+      ?.meetingTranscriptionSetMicMuted?.(activeRecordingSessionId, muted)
+      .catch(() => undefined);
+  }
+}
 
 export const getActiveRecordingSessionId = (): string | null => activeRecordingSessionId;
 
@@ -921,7 +954,11 @@ export interface StartRecordingArgs {
   autoEndEligible: boolean;
   startSource?: MeetingStartSource;
   canAutoStart?: () => boolean;
+  /** "system" records system audio only and never opens the microphone. */
+  audioSource?: MeetingAudioSource;
 }
+
+export type MeetingAudioSource = "both" | "system";
 
 export type StartRecordingResult = boolean | "cancelled";
 
@@ -1025,7 +1062,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       Math.min(MAX_SPEAKER_COUNT, args.expectedCount ?? DEFAULT_EXPECTED_SPEAKER_COUNT)
     );
 
-    logger.info("Meeting transcription starting...", {}, "meeting");
+    const audioSource: MeetingAudioSource = args.audioSource ?? "both";
+    const systemAudioOnly = audioSource === "system";
+    logger.info("Meeting transcription starting...", { audioSource }, "meeting");
     const seed = args.seedSegments ?? [];
     const locks = new Map<string, string>();
     const keepSeedSelfLocks = !args.recorderName && !seed.some((segment) => segment.recorderName);
@@ -1080,6 +1119,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       systemAudioSilentWarning: false,
       systemAudioInterrupted: null,
       micCaptureStatus: "inactive",
+      micMuted: false,
+      recordingAudioSource: audioSource,
     });
 
     isRecordingFlag = true;
@@ -1119,6 +1160,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       setupSystemCaptureResult = { stream: null, error: null };
       isRecordingFlag = false;
       isStartingFlag = false;
+      useMeetingRecordingStore.setState({ micMuted: false, recordingAudioSource: "both" });
       await teardownFailedMeetingRecordingSetup({
         stopBarrier: meetingRecordingStopBarrier,
         cleanup,
@@ -1183,6 +1225,15 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         await teardownStart();
         return;
       }
+      if (systemAudioOnly && initialSystemAudioAccess.mode === "unsupported") {
+        logger.warn("System-audio-only recording is unsupported on this device", {}, "meeting");
+        reportMeetingError("systemAudioOnlyUnavailable", {
+          isRecording: false,
+          isTranscribing: false,
+        });
+        await teardownStart();
+        return;
+      }
       // Resolved before any capture starts: a selection that cannot transcribe must fail
       // here, not after the user has already shared a screen that would stay live.
       const meetingTranscriptionOptions = getMeetingTranscriptionOptions();
@@ -1196,7 +1247,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
 
       const micCapturePromise = getMeetingMicConstraints()
         .then(async (constraints) => {
-          if (!beginCapture()) return null;
+          // A system-audio-only recording never opens the mic, so no prompt or indicator.
+          if (systemAudioOnly || !beginCapture()) return null;
           try {
             return await navigator.mediaDevices.getUserMedia(constraints);
           } catch (err) {
@@ -1239,6 +1291,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
             return null;
           }
           micStream = micResult;
+          applyMicMuted(micResult, useMeetingRecordingStore.getState().micMuted);
           // A Stop while main is still connecting (up to its connect timeout)
           // turns the microphone off now; the rest is torn down once start settles.
           startOperation.onCancel(() => {
@@ -1254,8 +1307,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
           await createAudioPipeline({
             stream: micResult,
             context: ctx,
-            onChunk: (chunk) => {
+            onChunk: (captured) => {
               if (!isRecordingFlag || activeRecordingSessionId !== sessionId) return;
+              // Frames already in the worklet when mute lands, or from a replacement
+              // track not yet disabled, must not leave the renderer either.
+              const chunk = useMeetingRecordingStore.getState().micMuted
+                ? new ArrayBuffer(captured.byteLength)
+                : captured;
               if (socketReady) {
                 window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic");
                 return;
@@ -1354,6 +1412,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         reportMeetingError(describeMeetingSetupError(startResult), {
           isRecording: false,
           isTranscribing: false,
+          micMuted: false,
+          recordingAudioSource: "both",
         });
         releaseSession();
         stopMediaStream(setupSystemCaptureResult.stream);
@@ -1395,16 +1455,26 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       }
       const systemCaptureError = systemAudioHandledInMain ? null : systemCaptureResult.error;
 
-      if (!micResult && (systemAudioHandledInMain || systemCaptureResult.stream)) {
+      if (
+        !micResult &&
+        !systemAudioOnly &&
+        (systemAudioHandledInMain || systemCaptureResult.stream)
+      ) {
         reportMeetingError("Microphone capture failed. Continuing with system audio only.");
       }
 
       if (!micResult && !systemCaptureResult.stream && !systemAudioHandledInMain) {
-        logger.error("Meeting transcription has no available audio source", {}, "meeting");
+        logger.error(
+          "Meeting transcription has no available audio source",
+          { systemAudioOnly },
+          "meeting"
+        );
         reportMeetingError(
-          systemAudioMode === "unsupported"
-            ? "No microphone is available and system audio capture is unsupported on this device."
-            : systemCaptureError?.message ||
+          systemAudioOnly
+            ? systemCaptureError?.message || "systemAudioOnlyUnavailable"
+            : systemAudioMode === "unsupported"
+              ? "No microphone is available and system audio capture is unsupported on this device."
+              : systemCaptureError?.message ||
                 "No microphone is available and system audio capture could not be started.",
           { isRecording: false, isTranscribing: false }
         );
@@ -1651,6 +1721,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
             ) {
               throw new Error("Meeting recording is no longer active");
             }
+            applyMicMuted(replacement, useMeetingRecordingStore.getState().micMuted);
             const nextSource = micContext.createMediaStreamSource(replacement);
             nextSource.connect(micProcessor);
             if (micAnalyser) nextSource.connect(micAnalyser);
@@ -1808,12 +1879,24 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         return;
       }
 
+      if (useMeetingRecordingStore.getState().micMuted) {
+        void window.electronAPI
+          ?.meetingTranscriptionSetMicMuted?.(sessionId, true)
+          .catch(() => undefined);
+      }
+
       startOperation.markCommitted();
       isStartingFlag = false;
       socketReady = true;
 
+      // Speech held through the connect stays behind if the user muted meanwhile.
+      const mutedAtFlush = useMeetingRecordingStore.getState().micMuted;
       for (const { chunk, capturedAt } of pendingMicChunks) {
-        window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic", capturedAt);
+        window.electronAPI?.meetingTranscriptionSend?.(
+          mutedAtFlush ? new ArrayBuffer(chunk.byteLength) : chunk,
+          "mic",
+          capturedAt
+        );
       }
       for (const { chunk, capturedAt } of pendingSystemChunks) {
         window.electronAPI?.meetingTranscriptionSend?.(chunk, "system", capturedAt);
@@ -1916,6 +1999,8 @@ export async function stopRecording(
       systemAudioSilentWarning: false,
       systemAudioInterrupted: null,
       currentMicLevel: 0,
+      micMuted: false,
+      recordingAudioSource: "both",
       recordingStartedAt: null,
     });
     return { diarizationSessionId: null, stopped: false, cancelledStart: true };
@@ -2038,6 +2123,8 @@ export async function stopRecording(
       systemAudioSilentWarning: false,
       systemAudioInterrupted: null,
       currentMicLevel: 0,
+      micMuted: false,
+      recordingAudioSource: "both",
       recordingStartedAt: null,
     });
 

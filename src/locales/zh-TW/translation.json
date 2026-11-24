@@ -4051,7 +4051,17 @@
           "title": "目錄",
           "empty": "新增標題以產生目錄。"
         }
-      }
+      },
+      "muteMic": "將麥克風靜音",
+      "unmuteMic": "取消麥克風靜音",
+      "micMuted": "麥克風已靜音",
+      "recordSource": {
+        "menuLabel": "選擇錄製內容",
+        "both": "麥克風 + 系統音訊",
+        "system": "僅系統音訊",
+        "systemUnavailable": "此裝置無法擷取系統音訊"
+      },
+      "systemAudioOnly": "僅系統音訊"
     },
     "participants": {
       "attendee": "位與會者",
@@ -4194,11 +4204,13 @@
       "recordingDisabledByOrg": "您的組織已停用會議錄音。",
       "stoppedAccountChanged": "由於您已登出或切換了帳號，錄音已停止。",
       "stoppedPolicyUnresolved": "由於無法檢查您的組織設定，錄音已停止。",
-      "stoppedWorkspaceChanged": "由於您切換了工作區，錄音已停止。"
+      "stoppedWorkspaceChanged": "由於您切換了工作區，錄音已停止。",
+      "systemAudioOnlyUnavailable": "無法擷取系統音訊，因此僅系統音訊的錄製未能開始。請檢查系統音訊存取權限後再試一次。"
     },
     "meetingPill": {
       "returnToNote": "返回到錄音",
-      "waitingForMicrophone": "等待麥克風"
+      "waitingForMicrophone": "等待麥克風",
+      "micMuted": "麥克風已靜音"
     },
     "context": {
       "moveToFolder": "移動到資料夾",

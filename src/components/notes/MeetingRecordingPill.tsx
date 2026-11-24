@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { Square } from "../icons";
+import { MicOff, Square, Volume } from "../icons";
 import { stopRecording, useMeetingRecordingStore } from "../../stores/meetingRecordingStore";
 import { cn } from "../lib/utils";
 import { isControlPanelWindow } from "../../utils/windowContext";
@@ -38,7 +38,10 @@ export default function MeetingRecordingPill({
   const recordingNoteTitle = useMeetingRecordingStore((s) => s.recordingNoteTitle);
   const micLevel = useMeetingRecordingStore((s) => s.currentMicLevel);
   const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
-  const isWaitingForMic = micCaptureStatus === "reconnecting" || micCaptureStatus === "unavailable";
+  const micMuted = useMeetingRecordingStore((s) => s.micMuted);
+  const systemAudioOnly = useMeetingRecordingStore((s) => s.recordingAudioSource === "system");
+  const isWaitingForMic =
+    !micMuted && (micCaptureStatus === "reconnecting" || micCaptureStatus === "unavailable");
   const [isStopping, setIsStopping] = useState(false);
 
   const isViewingRecordingNote =
@@ -93,20 +96,34 @@ export default function MeetingRecordingPill({
             "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
           )}
         >
-          <div className="flex items-end gap-0.75 h-4">
-            {Array.from({ length: BAR_COUNT }, (_, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "w-0.75 rounded-full origin-bottom",
-                  isWaitingForMic ? "bg-amber-500" : "bg-primary/60 dark:bg-primary/70"
-                )}
-                style={{ height: computeBarHeight(micLevel, i) }}
-              />
-            ))}
-          </div>
+          {systemAudioOnly ? (
+            <Volume
+              size={14}
+              className="text-primary/70"
+              aria-label={t("notes.editor.systemAudioOnly")}
+            />
+          ) : micMuted ? (
+            <MicOff size={14} className="text-amber-600 dark:text-amber-400" />
+          ) : (
+            <div className="flex items-end gap-0.75 h-4">
+              {Array.from({ length: BAR_COUNT }, (_, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "w-0.75 rounded-full origin-bottom",
+                    isWaitingForMic ? "bg-amber-500" : "bg-primary/60 dark:bg-primary/70"
+                  )}
+                  style={{ height: computeBarHeight(micLevel, i) }}
+                />
+              ))}
+            </div>
+          )}
           <span className="text-xs font-medium text-foreground/80 truncate max-w-[12rem]">
-            {isWaitingForMic ? t("notes.meetingPill.waitingForMicrophone") : title}
+            {micMuted
+              ? t("notes.meetingPill.micMuted")
+              : isWaitingForMic
+                ? t("notes.meetingPill.waitingForMicrophone")
+                : title}
           </span>
         </button>
 

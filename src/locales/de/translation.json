@@ -4610,7 +4610,17 @@
           "title": "Inhalt",
           "empty": "Füge Überschriften hinzu, um das Inhaltsverzeichnis zu erstellen."
         }
-      }
+      },
+      "muteMic": "Mikrofon stummschalten",
+      "unmuteMic": "Mikrofon einschalten",
+      "micMuted": "Mikrofon stummgeschaltet",
+      "recordSource": {
+        "menuLabel": "Aufnahmequelle wählen",
+        "both": "Mikrofon + Systemaudio",
+        "system": "Nur Systemaudio",
+        "systemUnavailable": "Systemaudio kann auf diesem Gerät nicht aufgenommen werden"
+      },
+      "systemAudioOnly": "Nur Systemaudio"
     },
     "participants": {
       "attendee": "Teilnehmer",
@@ -4753,11 +4763,13 @@
       "recordingDisabledByOrg": "Die Aufzeichnung von Besprechungen wurde von Ihrer Organisation deaktiviert.",
       "stoppedAccountChanged": "Die Aufnahme wurde beendet, weil Sie sich abgemeldet oder das Konto gewechselt haben.",
       "stoppedPolicyUnresolved": "Die Aufnahme wurde beendet, weil die Einstellungen Ihrer Organisation nicht geprüft werden konnten.",
-      "stoppedWorkspaceChanged": "Die Aufnahme wurde beendet, weil Sie den Workspace gewechselt haben."
+      "stoppedWorkspaceChanged": "Die Aufnahme wurde beendet, weil Sie den Workspace gewechselt haben.",
+      "systemAudioOnlyUnavailable": "Systemaudio konnte nicht aufgenommen werden, daher wurde die reine Systemaudio-Aufnahme nicht gestartet. Prüfe den Zugriff auf Systemaudio und versuche es erneut."
     },
     "meetingPill": {
       "returnToNote": "Zurück zur Aufnahme",
-      "waitingForMicrophone": "Warte auf Mikrofon"
+      "waitingForMicrophone": "Warte auf Mikrofon",
+      "micMuted": "Mikrofon stummgeschaltet"
     },
     "empty": {
       "title": "Noch keine Notizen hier",
