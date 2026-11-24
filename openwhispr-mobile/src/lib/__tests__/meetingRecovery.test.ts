@@ -19,6 +19,7 @@ import type { Note } from '@/data';
 import {
   MEETING_RESUME_MARKER_PREFIX,
   STALE_RECORDING_MS,
+  createForegroundBackfillResumer,
   createdBeforeRuntime,
   recoverOrphanedMeetings,
   repairMeetingRecordings,
@@ -923,6 +924,107 @@ describe('createdBeforeRuntime', () => {
     expect(
       createdBeforeRuntime({ createdAt: '2026-09-25T09:59:59+00:00' }, runtimeStartedAtMs),
     ).toBe(true);
+  });
+});
+
+describe('createForegroundBackfillResumer', () => {
+  const makeResumer = (ids: number[] = [30]) => {
+    const deps = {
+      listPendingBackfills: jest.fn(async () => ids),
+      isOnline: jest.fn(async () => true),
+      resumeBackfill: jest.fn(async (_noteId: number): Promise<void> => undefined),
+      reportError: jest.fn(),
+    };
+    return { deps, onChange: createForegroundBackfillResumer(deps) };
+  };
+
+  it('resumes owed backfills when the app comes back to the foreground online', async () => {
+    const { deps, onChange } = makeResumer([30, 31]);
+
+    onChange('background');
+    onChange('active');
+    await flushMicrotasks();
+
+    expect((deps.resumeBackfill as jest.Mock).mock.calls).toEqual([[30], [31]]);
+  });
+
+  it('does nothing offline, or with nothing owed', async () => {
+    const offline = makeResumer();
+    offline.deps.isOnline.mockResolvedValue(false);
+    offline.onChange('background');
+    offline.onChange('active');
+    const nothingOwed = makeResumer([]);
+    nothingOwed.onChange('background');
+    nothingOwed.onChange('active');
+    await flushMicrotasks();
+
+    expect(offline.deps.resumeBackfill).not.toHaveBeenCalled();
+    expect(nothingOwed.deps.isOnline).not.toHaveBeenCalled();
+    expect(nothingOwed.deps.resumeBackfill).not.toHaveBeenCalled();
+  });
+
+  it('runs once per return from the background, not on every active state', async () => {
+    const { deps, onChange } = makeResumer();
+
+    onChange('active'); // never left: launch recovery covers a cold start
+    onChange('inactive'); // Control Centre, a system alert
+    onChange('active');
+    await flushMicrotasks();
+    expect(deps.resumeBackfill).not.toHaveBeenCalled();
+
+    onChange('background');
+    onChange('inactive');
+    onChange('active');
+    onChange('inactive');
+    onChange('active');
+    await flushMicrotasks();
+    expect(deps.resumeBackfill).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs one pass at a time', async () => {
+    const { deps, onChange } = makeResumer();
+    let release: () => void = () => undefined;
+    deps.resumeBackfill.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+
+    onChange('background');
+    onChange('active');
+    await flushMicrotasks();
+    onChange('background');
+    onChange('active');
+    await flushMicrotasks();
+    expect(deps.resumeBackfill).toHaveBeenCalledTimes(1);
+
+    release();
+    await flushMicrotasks();
+    onChange('background');
+    onChange('active');
+    await flushMicrotasks();
+    expect(deps.resumeBackfill).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports a failed resume and goes on', async () => {
+    const { deps, onChange } = makeResumer([30, 31]);
+    const failure = new Error('boom');
+    deps.resumeBackfill.mockRejectedValueOnce(failure);
+    deps.listPendingBackfills.mockResolvedValueOnce([30, 31]);
+
+    onChange('background');
+    onChange('active');
+    await flushMicrotasks();
+
+    expect(deps.reportError).toHaveBeenCalledWith(failure, 30);
+    expect(deps.resumeBackfill).toHaveBeenCalledWith(31);
+
+    deps.listPendingBackfills.mockRejectedValueOnce(new Error('readdir'));
+    onChange('background');
+    onChange('active');
+    await flushMicrotasks();
+    expect(deps.reportError).toHaveBeenCalledTimes(2);
   });
 });
 

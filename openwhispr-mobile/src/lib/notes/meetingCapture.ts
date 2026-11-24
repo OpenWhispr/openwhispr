@@ -139,3 +139,10 @@ const formatElapsedMinutes = (seconds: number): string =>
 export function partialCaptureMessage(coverage: CaptureCoverage): string {
   return `OpenWhispr recorded ${formatRecordedMinutes(coverage.recordedSeconds)} of this ${formatElapsedMinutes(coverage.elapsedSeconds)} meeting. The rest was missed while the microphone or the connection was interrupted.`;
 }
+
+export const OWED_CAPTURE_TITLE = "Part of this meeting isn't transcribed yet";
+
+/** For a meeting whose recording still holds audio the transcript is waiting for. */
+export function owedCaptureMessage(coverage: CaptureCoverage): string {
+  return `OpenWhispr has transcribed ${formatRecordedMinutes(coverage.recordedSeconds)} of this ${formatElapsedMinutes(coverage.elapsedSeconds)} meeting so far. Audio still saved on this device is transcribed the next time OpenWhispr is open with a connection.`;
+}

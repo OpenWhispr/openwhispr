@@ -391,6 +391,53 @@ export async function recoverOrphanedMeetings(deps: MeetingRecoveryDeps): Promis
   }
 }
 
+export interface ForegroundBackfillDeps {
+  /** Note ids with a pending-backfill sidecar on disk. */
+  listPendingBackfills(): Promise<number[]>;
+  isOnline(): Promise<boolean>;
+  /** Transcribes what a done meeting's sidecar still owes; skips notes it may not touch. */
+  resumeBackfill(noteId: number): Promise<void>;
+  reportError(error: unknown, noteId: number): void;
+}
+
+/**
+ * A done meeting that still owes audio would otherwise wait for the next cold launch, which on
+ * a phone can be days away. Returns an app-state listener that resumes every owed backfill when
+ * the app comes back from the background online: one pass per return, one pass at a time.
+ */
+export function createForegroundBackfillResumer(
+  deps: ForegroundBackfillDeps,
+): (state: AppStateStatus) => void {
+  let wasInBackground = false;
+  let running = false;
+  const runPass = async (): Promise<void> => {
+    try {
+      const noteIds = await deps.listPendingBackfills();
+      if (noteIds.length === 0 || !(await deps.isOnline().catch(() => false))) return;
+      for (const noteId of noteIds) {
+        await attempt(deps, noteId, () => deps.resumeBackfill(noteId));
+      }
+    } catch (error) {
+      deps.reportError(error, 0);
+    }
+  };
+  return (state) => {
+    if (state === 'background') {
+      wasInBackground = true;
+      return;
+    }
+    // 'inactive' → 'active' alone is Control Centre or a system alert, not a return.
+    if (state !== 'active' || !wasInBackground || running) return;
+    wasInBackground = false;
+    running = true;
+    runPass()
+      .catch(() => undefined)
+      .finally(() => {
+        running = false;
+      });
+  };
+}
+
 const MEETING_RECORDING_FILE = /^meeting-(\d+)\.wav$/;
 
 export interface MeetingRecordingRepairDeps {
@@ -500,6 +547,17 @@ export function startMeetingRecoveryOnce(): void {
   if (hasStarted) return;
   hasStarted = true;
   const directory = FileSystem.documentDirectory;
+  // For the app's lifetime. The store runs one backfill per note at a time, so a return to
+  // the foreground while the launch pass below is still uploading starts nothing twice.
+  AppState.addEventListener(
+    'change',
+    createForegroundBackfillResumer({
+      listPendingBackfills: () => listPendingBackfillIds(directory),
+      isOnline: isDeviceOnline,
+      resumeBackfill: (noteId) => useNotesStore.getState().resumeMeetingBackfill(noteId),
+      reportError: reportRecoveryError,
+    }),
+  );
   // A recording found again can make its meeting resumable, so this runs first.
   const repaired: Promise<number[]> = directory
     ? repairMeetingRecordings({
