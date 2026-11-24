@@ -11,10 +11,10 @@ import { Field } from './Field';
 import type { Snippet } from '@/lib/snippets';
 import { createSnippetCloseHandler } from '@/lib/snippetClose';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { type } from '../home/kit';
-import { theme } from '../theme';
+import { useHome } from '../home/kit';
+import { useNotesLook } from '../notes/look';
+import { useTheme } from '../ThemeProvider';
 import { BottomSheet } from '../settings/kit';
-import { edge, edgeCard, look } from '../settings/look';
 import { GlassButton } from '../processingFable/look';
 import { addWordsByHand, deleteSnippetWithUndo, deleteWordWithUndo } from './actions';
 import { learnedInfo, renameLearned, useAccountLearned, type LearnedInfo } from './learned';
@@ -23,9 +23,11 @@ import { splitWords } from './search';
 import { useDictionaryT, type DictionaryT } from './strings';
 
 function ErrorLine({ text }: { text: string | null }) {
+  const k = useTheme().tokens;
+  const ty = useHome().type;
   if (!text) return null;
   return (
-    <Text accessibilityLiveRegion="polite" style={[type.footnote, { color: look.error }]}>
+    <Text accessibilityLiveRegion="polite" style={[ty.footnote, { color: k.error }]}>
       {text}
     </Text>
   );
@@ -41,6 +43,9 @@ export function AddWordsSheet({
   onClose: () => void;
   initial?: string;
 }) {
+  const { type: ty, theme: th } = useHome();
+  const k = th.tokens;
+  const n = useNotesLook();
   const t = useDictionaryT();
   const [input, setInput] = useState('');
   const field = useRef<TextInput>(null);
@@ -87,7 +92,7 @@ export function AddWordsSheet({
               accessibilityLabel={t('removeChip', { word })}
               onPress={() => removeChip(word)}
               style={({ pressed }) => ({
-                ...edge,
+                ...n.edge,
                 minHeight: 34,
                 paddingHorizontal: 14,
                 borderRadius: 999,
@@ -95,14 +100,14 @@ export function AddWordsSheet({
                 opacity: pressed ? 0.6 : 1,
               })}
             >
-              <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: theme.ink }}>
+              <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: k.ink }}>
                 {word}
               </Text>
             </Pressable>
           ))}
         </View>
       )}
-      <Text style={[type.footnote, { fontSize: 14, lineHeight: 20 }]}>{t('addWordsHelp')}</Text>
+      <Text style={[ty.footnote, { fontSize: 14, lineHeight: 20 }]}>{t('addWordsHelp')}</Text>
       <GlassButton
         label={
           words.length > 1
@@ -141,6 +146,9 @@ function OriginCard({
   info: LearnedInfo | null;
   onOpen: () => void;
 }) {
+  const { type: ty, theme: th } = useHome();
+  const k = th.tokens;
+  const n = useNotesLook();
   const t = useDictionaryT();
   const language = useLanguage();
   if (entry.source !== 'learned') return null;
@@ -162,13 +170,13 @@ function OriginCard({
         router.push(`/(tabs)/(notes)/${noteId}`);
       }}
       style={({ pressed }) => [
-        edgeCard,
+        n.edgeCard,
         {
           flexDirection: 'row',
           alignItems: 'center',
           gap: 12,
           padding: 14,
-          backgroundColor: pressed ? theme.tile : theme.surface,
+          backgroundColor: pressed ? k.tile : k.surface,
         },
       ]}
     >
@@ -177,25 +185,25 @@ function OriginCard({
           width: 36,
           height: 36,
           borderRadius: 10,
-          backgroundColor: theme.selFill,
+          backgroundColor: k.selFill,
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <SystemIcon name="sparkles" mdName="Sparkles" size={18} color={theme.accent} />
+        <SystemIcon name="sparkles" mdName="Sparkles" size={18} color={k.accent} />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ fontSize: 16, lineHeight: 22, fontWeight: '500', color: theme.ink }}>
+        <Text style={{ fontSize: 16, lineHeight: 22, fontWeight: '500', color: k.ink }}>
           {title}
         </Text>
         {line ? (
-          <Text numberOfLines={1} style={type.footnote}>
+          <Text numberOfLines={1} style={ty.footnote}>
             {line}
           </Text>
         ) : null}
       </View>
       {noteId != null && (
-        <SystemIcon name="chevron.right" mdName="ChevronRight" size={18} color={theme.tertiary} />
+        <SystemIcon name="chevron.right" mdName="ChevronRight" size={18} color={k.tertiary} />
       )}
     </Pressable>
   );
@@ -287,6 +295,7 @@ export function EditWordSheet({
 }
 
 function DeleteLink({ label, onPress }: { label: string; onPress: () => void }) {
+  const k = useTheme().tokens;
   return (
     <Pressable
       cssInterop={false}
@@ -301,8 +310,8 @@ function DeleteLink({ label, onPress }: { label: string; onPress: () => void }) 
         opacity: pressed ? 0.6 : 1,
       })}
     >
-      <SystemIcon name="trash" mdName="Trash2" size={17} color={look.error} />
-      <Text style={{ color: look.error, fontSize: 16, lineHeight: 22, fontWeight: '500' }}>
+      <SystemIcon name="trash" mdName="Trash2" size={17} color={k.error} />
+      <Text style={{ color: k.error, fontSize: 16, lineHeight: 22, fontWeight: '500' }}>
         {label}
       </Text>
     </Pressable>
@@ -319,6 +328,7 @@ export function SnippetSheet({
   snippet: Snippet | null;
   onClose: () => void;
 }) {
+  const ty = useHome().type;
   const t = useDictionaryT();
   const [trigger, setTrigger] = useState('');
   const [text, setText] = useState('');
@@ -397,7 +407,7 @@ export function SnippetSheet({
         multiline
       />
       <ErrorLine text={error} />
-      <Text style={[type.footnote, { fontSize: 14, lineHeight: 20 }]}>{t('snippetHelp')}</Text>
+      <Text style={[ty.footnote, { fontSize: 14, lineHeight: 20 }]}>{t('snippetHelp')}</Text>
       <GlassButton label={editing ? t('save') : t('addSnippet')} onPress={save} disabled={!ready} />
       {editing && (
         <DeleteLink

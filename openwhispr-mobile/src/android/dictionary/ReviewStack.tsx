@@ -14,9 +14,8 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { safeHaptics } from '@/lib/utils';
 import type { DictionaryEntry } from '@/store/useDictionaryStore';
-import { PillButton, type } from '../home/kit';
+import { PillButton, useHome } from '../home/kit';
 import { showToast, useReduceMotion } from '../settings/kit';
-import { flat, theme } from '../theme';
 import { SectionLabel } from '../notes/look';
 import { UNDO_MS } from './learnedToast';
 import { keepLearned, restoreLearned, unlearn, type LearnedInfo } from './learned';
@@ -76,6 +75,8 @@ function TopCard({
   entering: boolean;
   onHeight: (height: number) => void;
 }) {
+  const { type: ty, theme: th } = useHome();
+  const k = th.tokens;
   const t = useDictionaryT();
   const { i18n } = useTranslation();
   const reduceMotion = useReduceMotion();
@@ -138,7 +139,7 @@ function TopCard({
           { name: 'remove', label: t('remove') },
         ]}
         onAccessibilityAction={(event) => fly(event.nativeEvent.actionName === 'keep')}
-        style={[flat, { borderRadius: CARD_RADIUS, padding: 14, gap: 14 }, style]}
+        style={[th.flat, { borderRadius: CARD_RADIUS, padding: 14, gap: 14 }, style]}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View
@@ -146,21 +147,21 @@ function TopCard({
               width: 36,
               height: 36,
               borderRadius: 10,
-              backgroundColor: theme.selFill,
+              backgroundColor: k.selFill,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <SystemIcon name="sparkles" mdName="Sparkles" size={18} color={theme.accent} />
+            <SystemIcon name="sparkles" mdName="Sparkles" size={18} color={k.accent} />
           </View>
           <View style={{ flex: 1, gap: 2 }}>
             <Text
               numberOfLines={1}
-              style={{ fontSize: 20, lineHeight: 26, fontWeight: '500', color: theme.ink }}
+              style={{ fontSize: 20, lineHeight: 26, fontWeight: '500', color: k.ink }}
             >
               {item.word}
             </Text>
-            <Text numberOfLines={2} style={type.footnote}>
+            <Text numberOfLines={2} style={ty.footnote}>
               {fixedLine(item, i18n.language)}
             </Text>
           </View>
@@ -180,6 +181,8 @@ function TopCard({
  * stack is fine: the words already work.
  */
 export function ReviewStack({ items }: { items: Item[] }) {
+  const { type: ty, theme: th } = useHome();
+  const k = th.tokens;
   const t = useDictionaryT();
   const [first, setFirst] = useState(items[0]?.word);
   const [cardHeight, setCardHeight] = useState(0);
@@ -202,7 +205,7 @@ export function ReviewStack({ items }: { items: Item[] }) {
               importantForAccessibility="no-hide-descendants"
               accessibilityElementsHidden
               style={[
-                flat,
+                th.flat,
                 {
                   position: 'absolute',
                   top: PEEK * depth,
@@ -217,7 +220,7 @@ export function ReviewStack({ items }: { items: Item[] }) {
         <TopCard key={top.word} item={top} entering={entering} onHeight={setCardHeight} />
       </View>
       {items.length > 1 && (
-        <Text style={[type.footnote, { fontSize: 12, color: theme.tertiary, textAlign: 'center' }]}>
+        <Text style={[ty.footnote, { fontSize: 12, color: k.tertiary, textAlign: 'center' }]}>
           {t('reviewPosition', { index: 1, count: items.length })}
         </Text>
       )}
