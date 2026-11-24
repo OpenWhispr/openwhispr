@@ -103,7 +103,11 @@ export function addCaptureStateListener(
   return NativeModuleEvents.addListener('capture-state', callback);
 }
 
-/** The recording file stopped (or never started); the stream is unaffected. Fires at most once per `start`. */
+/**
+ * The recording file stopped (or never started); the stream is unaffected.
+ * Fires at most once per `start`. Attach it before calling `start`: a file
+ * that can't be opened is reported before `start` resolves.
+ */
 export function addRecordingFailedListener(callback: () => void): EventSubscription | null {
   if (!NativeModuleEvents) return null;
   return NativeModuleEvents.addListener('recording-failed', callback);
