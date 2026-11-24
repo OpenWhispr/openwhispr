@@ -80,6 +80,8 @@ export const lightTheme = {
   glassBottom: '#3466E2',
   /** The tab bar: white in light (Josh, 18 Nov), one step above the page in dark (K2). */
   tabBar: '#FFFFFF',
+  /** The raised gradient's middle, for a ring drawn to match a raised surface (Style's picked tab). */
+  raisedFill: '#FFFFFF',
 } as const;
 
 export type ThemeTokens = { readonly [K in keyof typeof lightTheme]: string };
@@ -134,6 +136,7 @@ export const darkTheme = {
   glassTop: lightTheme.glassTop,
   glassBottom: lightTheme.glassBottom,
   tabBar: '#16171C',
+  raisedFill: '#27282F',
 } as const satisfies ThemeTokens;
 
 /** Files not on `useTheme()` yet read the light palette. */

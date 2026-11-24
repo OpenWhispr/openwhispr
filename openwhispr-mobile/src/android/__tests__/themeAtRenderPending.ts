@@ -4,10 +4,6 @@
  * it's clean; the guard fails on an entry that no longer needs to be here.
  */
 export const PENDING: string[] = [
-  // 4 · Style
-  'src/android/StyleScreen.tsx',
-  'src/android/style/ToneSetupScreen.tsx',
-  'src/android/style/kit.tsx',
   // 5 · Settings
   'src/android/LanguageSheet.tsx',
   'src/android/processingFable/AddKeySheet.tsx',

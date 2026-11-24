@@ -12,7 +12,7 @@ import { Image } from 'expo-image';
 import { SvgXml } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { flat, glass, glassPressed, inset, knob, raised, raisedPressed, theme } from '../theme';
+import { useTheme } from '../ThemeProvider';
 import { APP_LOGOS, type AppLogo } from './appLogos';
 import { useTranslation } from 'react-i18next';
 import { exampleResult, exampleSet, parseExample } from './examples';
@@ -20,27 +20,10 @@ import type { ExampleSet } from './examplesI18n';
 import { useStyleT, type StyleKey } from './strings';
 import type { DictationTone, ToneKind } from './toneStyle';
 
-/** Tone & Style's colours (Figma "Styles · Variant B"). */
-export const ink = {
-  canvas: theme.canvas,
-  segmentTrack: theme.track,
-  preview: theme.surface2,
-  theirBubble: theme.track,
-  yourBubble: theme.sentBubble,
-  dropped: theme.struck,
-  added: theme.glassBottom,
-  track: theme.track,
-  progressIdle: theme.trackStrong,
-  dotIdle: theme.dotIdle,
-  pickedRing: theme.pickedRing,
-};
-
-const LOGO_DISC = '#F4F4F2';
-
 /**
  * One app mark on a ring the colour of the surface behind it, so overlapping marks look cut out
  * of each other. A white-background logo keeps a contrasting disc: light grey on white, white on
- * grey.
+ * grey. In dark the marks keep their own colours (app logos stay as they are).
  */
 export function AppMark({
   logo,
@@ -53,8 +36,10 @@ export function AppMark({
   behind: string;
   overlap?: number;
 }) {
-  const onWhite = behind.toUpperCase() === theme.surface;
-  const xml = onWhite ? APP_LOGOS[logo] : APP_LOGOS[logo].replaceAll(LOGO_DISC, theme.surface);
+  // A white-background logo's light grey disc, made white on anything but a white surface.
+  const disc = '#F4F4F2';
+  const onWhite = behind.toUpperCase() === '#FFFFFF';
+  const xml = onWhite ? APP_LOGOS[logo] : APP_LOGOS[logo].replaceAll(disc, '#FFFFFF');
   return (
     <View
       style={{
@@ -136,19 +121,23 @@ export function useToneText() {
 
 /** A spoken line with the tone's edit shown: dropped words struck out, added words blue. */
 export function DiffText({ example, width }: { example: string; width?: number }) {
+  const th = useTheme();
+  const k = th.tokens;
+  // Added words: the glass blue in light, the lighter accent on dark bubbles.
+  const added = th.scheme === 'dark' ? k.accent : k.glassBottom;
   const parts = useMemo(() => parseExample(example), [example]);
   return (
-    <Text style={{ fontSize: 15, lineHeight: 22, color: theme.ink, width }}>
+    <Text style={{ fontSize: 15, lineHeight: 22, color: k.ink, width }}>
       {parts.map((part, index) =>
         part.change === 'drop' ? (
           <Text
             key={index}
-            style={{ color: ink.dropped, textDecorationLine: 'line-through', fontWeight: '400' }}
+            style={{ color: k.struck, textDecorationLine: 'line-through', fontWeight: '400' }}
           >
             {part.text}
           </Text>
         ) : part.change === 'add' ? (
-          <Text key={index} style={{ color: ink.added, fontWeight: '500' }}>
+          <Text key={index} style={{ color: added, fontWeight: '500' }}>
             {part.text}
           </Text>
         ) : (
@@ -162,12 +151,13 @@ export function DiffText({ example, width }: { example: string; width?: number }
 }
 
 function PersonalPreview({ example, set }: { example: string; set: ExampleSet }) {
+  const k = useTheme().tokens;
   return (
     <>
       <View
         style={{
           alignSelf: 'flex-start',
-          backgroundColor: ink.theirBubble,
+          backgroundColor: k.track,
           paddingHorizontal: 13,
           paddingVertical: 9,
           borderTopLeftRadius: 18,
@@ -176,13 +166,13 @@ function PersonalPreview({ example, set }: { example: string; set: ExampleSet })
           borderBottomLeftRadius: 6,
         }}
       >
-        <Text style={{ fontSize: 15, lineHeight: 20, color: theme.ink }}>{set.question}</Text>
+        <Text style={{ fontSize: 15, lineHeight: 20, color: k.ink }}>{set.question}</Text>
       </View>
       <View
         style={{
           alignSelf: 'flex-end',
           maxWidth: '88%',
-          backgroundColor: ink.yourBubble,
+          backgroundColor: k.sentBubble,
           paddingHorizontal: 13,
           paddingVertical: 10,
           borderTopLeftRadius: 18,
@@ -200,19 +190,20 @@ function PersonalPreview({ example, set }: { example: string; set: ExampleSet })
 const ALEX = require('../../../assets/android/style/alex-morgan.jpg');
 
 function WorkPreview({ example }: { example: string; set: ExampleSet }) {
+  const k = useTheme().tokens;
   return (
     <>
-      <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '500', color: theme.secondary }}>
+      <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '500', color: k.secondary }}>
         # launch-team
       </Text>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <Image source={ALEX} style={{ width: 30, height: 30, borderRadius: 8 }} />
         <View style={{ flex: 1, gap: 3 }}>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-            <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '700', color: theme.ink }}>
+            <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '700', color: k.ink }}>
               Alex Morgan
             </Text>
-            <Text style={{ fontSize: 12, lineHeight: 16, color: theme.secondary }}>6:20 PM</Text>
+            <Text style={{ fontSize: 12, lineHeight: 16, color: k.secondary }}>6:20 PM</Text>
           </View>
           <DiffText example={example} />
         </View>
@@ -222,42 +213,44 @@ function WorkPreview({ example }: { example: string; set: ExampleSet }) {
 }
 
 function EmailPreview({ example, set }: { example: string; set: ExampleSet }) {
+  const k = useTheme().tokens;
   return (
     <>
       <View style={{ gap: 4 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={{ fontSize: 13, lineHeight: 18, color: theme.secondary }}>{set.to}</Text>
+          <Text style={{ fontSize: 13, lineHeight: 18, color: k.secondary }}>{set.to}</Text>
           <View
             style={{
-              backgroundColor: theme.surface,
+              backgroundColor: k.surface,
               borderWidth: 1,
-              borderColor: theme.divider,
+              borderColor: k.divider,
               borderRadius: 999,
               paddingHorizontal: 10,
               paddingVertical: 3,
             }}
           >
-            <Text style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: theme.ink }}>
+            <Text style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: k.ink }}>
               Sarah Chen
             </Text>
           </View>
         </View>
-        <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: theme.ink }}>
+        <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: k.ink }}>
           {set.subject}
         </Text>
       </View>
-      <View style={{ height: 1, backgroundColor: theme.hairline }} />
+      <View style={{ height: 1, backgroundColor: k.hairline }} />
       <DiffText example={example} />
     </>
   );
 }
 
 function OtherPreview({ example, set }: { example: string; set: ExampleSet }) {
+  const k = useTheme().tokens;
   return (
     <>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <SvgXml xml={APP_LOGOS.notion} width={18} height={18} />
-        <Text style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: theme.secondary }}>
+        <Text style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: k.secondary }}>
           {set.notes}
         </Text>
       </View>
@@ -268,6 +261,7 @@ function OtherPreview({ example, set }: { example: string; set: ExampleSet }) {
 
 /** The example drawn as it lands in that kind of app, on the grey preview panel. */
 export function InAppPreview({ kind, tone }: { kind: ToneKind; tone: DictationTone }) {
+  const k = useTheme().tokens;
   const t = useStyleT();
   const set = useExamples();
   const example = set.examples[kind][tone] ?? '';
@@ -286,7 +280,7 @@ export function InAppPreview({ kind, tone }: { kind: ToneKind; tone: DictationTo
         kind: t(KIND_ROW[kind]),
         text: exampleResult(example),
       })}
-      style={{ backgroundColor: ink.preview, borderRadius: 14, padding: 12, gap: 8 }}
+      style={{ backgroundColor: k.surface2, borderRadius: 14, padding: 12, gap: 8 }}
     >
       <Preview example={example} set={set} />
     </View>
@@ -303,7 +297,8 @@ export function GlassCard({
   radius?: number;
   style?: StyleProp<ViewStyle>;
 }) {
-  return <View style={[flat, { borderRadius: radius }, style]}>{children}</View>;
+  const th = useTheme();
+  return <View style={[th.flat, { borderRadius: radius }, style]}>{children}</View>;
 }
 
 const KNOB = 28;
@@ -325,6 +320,8 @@ export function ToneSlider({
   disabled?: boolean;
   label: string;
 }) {
+  const th = useTheme();
+  const k = th.tokens;
   const tone = useToneText();
   const [width, setWidth] = useState(0);
   const [drag, setDrag] = useState<number | null>(null);
@@ -388,7 +385,7 @@ export function ToneSlider({
             top: 11,
             height: 6,
             borderRadius: 3,
-            ...inset,
+            ...th.inset,
           }}
         />
         {width > 0 &&
@@ -403,9 +400,9 @@ export function ToneSlider({
                 width: 8,
                 height: 8,
                 borderRadius: 4,
-                backgroundColor: theme.surface,
+                backgroundColor: k.surface,
                 borderWidth: 1,
-                borderColor: theme.divider,
+                borderColor: k.divider,
               }}
             />
           ))}
@@ -421,7 +418,7 @@ export function ToneSlider({
                 height: KNOB,
                 borderRadius: KNOB / 2,
               },
-              knob,
+              th.knob,
             ]}
           />
         )}
@@ -439,7 +436,7 @@ export function ToneSlider({
               fontSize: 13,
               lineHeight: 17,
               fontWeight: i === index ? '700' : '500',
-              color: i === index ? theme.ink : theme.secondary,
+              color: i === index ? k.ink : k.secondary,
             }}
           >
             {tone.name(option)}
@@ -452,6 +449,8 @@ export function ToneSlider({
 
 /** The 36 raised close circle at the top left of every setup step. */
 export function CloseButton({ onPress }: { onPress: () => void }) {
+  const th = useTheme();
+  const k = th.tokens;
   const t = useStyleT();
   return (
     <Pressable
@@ -461,7 +460,7 @@ export function CloseButton({ onPress }: { onPress: () => void }) {
       hitSlop={6}
       onPress={onPress}
       style={({ pressed }) => [
-        raised,
+        th.raised,
         {
           width: 36,
           height: 36,
@@ -469,10 +468,10 @@ export function CloseButton({ onPress }: { onPress: () => void }) {
           alignItems: 'center',
           justifyContent: 'center',
         },
-        pressed && raisedPressed,
+        pressed && th.raisedPressed,
       ]}
     >
-      <SystemIcon name="xmark" mdName="X" size={16} color={theme.ink} />
+      <SystemIcon name="xmark" mdName="X" size={16} color={k.ink} />
     </Pressable>
   );
 }
@@ -487,6 +486,8 @@ export function GlassCta({
   onPress: () => void;
   disabled?: boolean;
 }) {
+  const th = useTheme();
+  const k = th.tokens;
   return (
     <Pressable
       cssInterop={false}
@@ -503,11 +504,11 @@ export function GlassCta({
           justifyContent: 'center',
           opacity: disabled ? 0.5 : 1,
         },
-        glass,
-        pressed && !disabled && glassPressed,
+        th.glass,
+        pressed && !disabled && th.glassPressed,
       ]}
     >
-      <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '700', color: theme.onGlass }}>
+      <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '700', color: k.onGlass }}>
         {label}
       </Text>
     </Pressable>
@@ -516,6 +517,8 @@ export function GlassCta({
 
 /** The round blue check on the picked tone card. */
 export function PickedCheck() {
+  const th = useTheme();
+  const k = th.tokens;
   return (
     <View
       style={[
@@ -526,10 +529,10 @@ export function PickedCheck() {
           alignItems: 'center',
           justifyContent: 'center',
         },
-        glass,
+        th.glass,
       ]}
     >
-      <SystemIcon name="checkmark" mdName="Check" size={14} color={theme.onGlass} />
+      <SystemIcon name="checkmark" mdName="Check" size={14} color={k.onGlass} />
     </View>
   );
 }
