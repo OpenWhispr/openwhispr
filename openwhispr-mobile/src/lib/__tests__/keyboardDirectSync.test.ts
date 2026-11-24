@@ -33,6 +33,8 @@ function inputs(overrides: Partial<KeyboardDirectInputs> = {}): KeyboardDirectIn
       prompt: 'Kubernetes, Gizmo',
     },
     snippets: [{ trigger: 'my email', replacement: 'a@b.co' }],
+    localEngine: null,
+    localLanguageHint: null,
     ...overrides,
   };
 }
@@ -40,9 +42,11 @@ function inputs(overrides: Partial<KeyboardDirectInputs> = {}): KeyboardDirectIn
 describe('buildKeyboardDirectConfig', () => {
   it('enables the path when every condition holds', () => {
     expect(buildKeyboardDirectConfig(inputs())).toEqual({
-      version: 1,
+      version: 2,
       enabled: true,
       disabledReason: null,
+      engine: 'cloud',
+      local: null,
       userId: 'u1',
       apiBaseUrl: 'https://api.openwhispr.com',
       appVersion: '1.2.6',
@@ -65,10 +69,6 @@ describe('buildKeyboardDirectConfig', () => {
     [
       'not_cloud',
       { route: { provider: 'byok', cleanupMode: 'openwhispr', cleanupUnavailable: false } },
-    ],
-    [
-      'not_cloud',
-      { route: { provider: 'local', cleanupMode: 'local', cleanupUnavailable: false } },
     ],
     [
       'not_cloud',
@@ -133,6 +133,122 @@ describe('buildKeyboardDirectConfig', () => {
   });
 });
 
+describe('buildKeyboardDirectConfig in Local Mode', () => {
+  const localRoute: KeyboardDirectInputs['route'] = {
+    provider: 'local',
+    cleanupMode: 'local',
+    cleanupUnavailable: false,
+  };
+
+  it('local route with Parakeet v2 is enabled without a cookie', () => {
+    const config = buildKeyboardDirectConfig(
+      inputs({
+        route: localRoute,
+        localEngine: { engine: 'parakeet', version: 'v2' },
+        hasSessionCookie: false,
+      }),
+    );
+    expect(config).toMatchObject({
+      version: 2,
+      enabled: true,
+      disabledReason: null,
+      engine: 'local',
+      local: { model: 'parakeet-v2', languageHint: null },
+      userId: 'u1',
+      snippets: [{ trigger: 'my email', replacement: 'a@b.co' }],
+    });
+  });
+
+  it('model follows the language', () => {
+    const config = buildKeyboardDirectConfig(
+      inputs({
+        route: localRoute,
+        language: 'de',
+        localEngine: { engine: 'parakeet', version: 'v3' },
+        localLanguageHint: 'de',
+      }),
+    );
+    expect(config.local).toEqual({ model: 'parakeet-v3', languageHint: 'de' });
+  });
+
+  it('never asks the keyboard to clean up a local take', () => {
+    const config = buildKeyboardDirectConfig(
+      inputs({ route: localRoute, localEngine: { engine: 'parakeet', version: 'v2' } }),
+    );
+    expect(config.cleanup).toEqual({ enabled: false, language: 'en', toneApplies: false });
+  });
+
+  it('Local mode with Whisper keeps the handoff', () => {
+    const config = buildKeyboardDirectConfig(
+      inputs({ route: localRoute, localEngine: { engine: 'whisper' } }),
+    );
+    expect(config).toMatchObject({
+      enabled: false,
+      disabledReason: 'local_engine_unsupported',
+      engine: 'local',
+      local: null,
+      userId: null,
+      snippets: [],
+    });
+  });
+
+  it.each<[string, KeyboardDirectInputs['localEngine']]>([
+    ['nothing installed', { engine: 'none', preferred: 'parakeet-v2' }],
+    ['not resolved yet', null],
+  ])('Local mode with %s keeps the handoff', (_label, localEngine) => {
+    const config = buildKeyboardDirectConfig(inputs({ route: localRoute, localEngine }));
+    expect(config.enabled).toBe(false);
+    expect(config.disabledReason).toBe('local_model_missing');
+    expect(config.local).toBeNull();
+  });
+
+  it('a guest in Local mode keeps the handoff', () => {
+    const config = buildKeyboardDirectConfig(
+      inputs({
+        route: localRoute,
+        userId: null,
+        localEngine: { engine: 'parakeet', version: 'v2' },
+      }),
+    );
+    expect(config.disabledReason).toBe('signed_out');
+    expect(config.local).toBeNull();
+  });
+
+  it('the setting still comes first', () => {
+    const config = buildKeyboardDirectConfig(
+      inputs({
+        route: localRoute,
+        settingEnabled: false,
+        localEngine: { engine: 'parakeet', version: 'v2' },
+      }),
+    );
+    expect(config.disabledReason).toBe('setting_off');
+  });
+
+  it('local ignores custom prompts and word limits', () => {
+    const config = buildKeyboardDirectConfig(
+      inputs({
+        route: localRoute,
+        customCleanupPrompt: true,
+        overWordLimit: true,
+        cloudTranscriptionAllowed: false,
+        localEngine: { engine: 'parakeet', version: 'v2' },
+      }),
+    );
+    expect(config.enabled).toBe(true);
+  });
+
+  it('BYOK keeps the handoff', () => {
+    const config = buildKeyboardDirectConfig(
+      inputs({
+        route: { provider: 'byok', cleanupMode: 'providers', cleanupUnavailable: false },
+        localEngine: { engine: 'parakeet', version: 'v2' },
+      }),
+    );
+    expect(config).toMatchObject({ disabledReason: 'not_cloud', engine: 'cloud', local: null });
+  });
+});
+
 describe('startKeyboardDirectSync', () => {
   function harness(initial: KeyboardDirectInputs) {
     let current = initial;
@@ -162,7 +278,7 @@ describe('startKeyboardDirectSync', () => {
   it('writes the snapshot on start', () => {
     const sync = harness(inputs());
     expect(sync.written).toHaveLength(1);
-    expect(JSON.parse(sync.written[0])).toMatchObject({ version: 1, enabled: true, userId: 'u1' });
+    expect(JSON.parse(sync.written[0])).toMatchObject({ version: 2, enabled: true, userId: 'u1' });
     sync.stop();
   });
 

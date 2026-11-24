@@ -14,6 +14,14 @@ export interface ParakeetTranscribeServiceOptions {
   wordTimestamps?: boolean;
 }
 
+// The keyboard's snapshot says which model it can run, so it must hear when one lands or goes.
+// Required lazily: keyboardLocalEngine imports LocalTranscriptionService, which imports this file.
+function refreshKeyboardEngine(): void {
+  const { refreshKeyboardLocalEngine } =
+    require('@/lib/keyboardLocalEngine') as typeof import('@/lib/keyboardLocalEngine');
+  refreshKeyboardLocalEngine().catch(() => {});
+}
+
 /**
  * On-device Parakeet engine, mirroring LocalWhisperService's shape: a static singleton whose
  * native-touching operations are serialized on an operation chain so a release/delete can never
@@ -57,6 +65,7 @@ export class LocalParakeetService {
     onProgress?: (progress: number) => void,
   ): Promise<void> {
     await downloadParakeetModel(version, { onProgress });
+    refreshKeyboardEngine();
   }
 
   static async cancelModelDownload(version: ParakeetVersion): Promise<void> {
@@ -76,6 +85,7 @@ export class LocalParakeetService {
       }
       await ParakeetASR.deleteModel(version);
     });
+    refreshKeyboardEngine();
   }
 
   /**

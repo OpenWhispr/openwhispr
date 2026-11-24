@@ -4,6 +4,11 @@ import { requiresRealAccount } from '@/lib/accountAccess';
 import { getClientVersionHeader } from '@/lib/apiClient';
 import { buildDictationHintTiers, buildLlmDictionary } from '@/lib/dictationHints';
 import { snapshotTranscriptionJob } from '@/lib/inferenceRouting';
+import {
+  readKeyboardLocalEngine,
+  refreshKeyboardLocalEngine,
+  subscribeKeyboardLocalEngine,
+} from '@/lib/keyboardLocalEngine';
 import { isToneApplicable } from '@/lib/keyboardTone';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
 import { cloudDictationPrompt } from '@/lib/transcriptionPromptCap';
@@ -48,6 +53,7 @@ export function gatherKeyboardDirectInputs(): KeyboardDirectInputs {
   const cleanupEnabled = config?.cleanupEnabled ?? true;
   const snippetState = useSnippetsStore.getState();
   const llm = buildLlmDictionary(INCLUDE_SNIPPET_TRIGGERS);
+  const language = getPreferredTranscriptionLanguage() ?? null;
   return {
     settingEnabled: config?.keyboardDirectDictation === true,
     userId: requiresRealAccount(user) ? null : (user?.id ?? null),
@@ -61,7 +67,7 @@ export function gatherKeyboardDirectInputs(): KeyboardDirectInputs {
     overWordLimit: overWordLimit(),
     apiBaseUrl: API_ENDPOINTS.OPENWHISPR_API,
     appVersion: getClientVersionHeader()['x-openwhispr-version'] ?? null,
-    language: getPreferredTranscriptionLanguage() ?? null,
+    language,
     toneApplies: isToneApplicable(useProcessingModeStore.getState().activeMode, cleanupEnabled),
     dictionary: {
       personal: llm.personal,
@@ -71,13 +77,23 @@ export function gatherKeyboardDirectInputs(): KeyboardDirectInputs {
     snippets: snippetState.isLoaded
       ? snippetState.entries.map(({ trigger, replacement }) => ({ trigger, replacement }))
       : [],
+    localEngine: readKeyboardLocalEngine(),
+    // Parakeet takes the hint only for exactly one selected language, as the cloud API does.
+    localLanguageHint: language,
   };
 }
 
 /** Calls `listener` whenever anything the snapshot reads may have changed. */
 export function subscribeKeyboardDirectInputs(listener: () => void): () => void {
+  const refreshLocalEngine = (): void => {
+    refreshKeyboardLocalEngine().catch(() => {});
+  };
   const unsubscribers = [
     useConfigStore.subscribe(listener),
+    // The picked model and the languages live in the config; installed models only change on
+    // download or delete (LocalParakeetService refreshes then) or while the app was away.
+    useConfigStore.subscribe(refreshLocalEngine),
+    subscribeKeyboardLocalEngine(listener),
     useAuthStore.subscribe(listener),
     useProcessingModeStore.subscribe(listener),
     useSnippetsStore.subscribe(listener),
@@ -87,8 +103,11 @@ export function subscribeKeyboardDirectInputs(listener: () => void): () => void 
     useUsageStore.subscribe(listener),
   ];
   const appState = AppState.addEventListener('change', (state) => {
-    if (state === 'active') listener();
+    if (state !== 'active') return;
+    listener();
+    refreshLocalEngine();
   });
+  refreshLocalEngine();
   return () => {
     unsubscribers.forEach((unsubscribe) => unsubscribe());
     appState.remove();
