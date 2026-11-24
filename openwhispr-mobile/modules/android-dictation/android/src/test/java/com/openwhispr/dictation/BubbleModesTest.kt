@@ -110,4 +110,18 @@ class BubbleModesTest {
     assertEquals(1f, BubbleMenuPolicy.menuAlpha(1f), 0f)
     assertEquals(1f, BubbleMenuPolicy.menuAlpha(Float.NaN), 0f)
   }
+
+  @Test fun `the keyboard redrawing after a light-dark switch keeps the hold menu open`() {
+    // Any change closes it with no switch, as before.
+    assertTrue(BubbleMenuPolicy.keyboardClosesMenu(true, true, topChanged = true, fieldChanged = false, sinceThemeSwitchMs = null))
+    assertTrue(BubbleMenuPolicy.keyboardClosesMenu(true, true, topChanged = false, fieldChanged = true, sinceThemeSwitchMs = 5000))
+    // Within the settle window a moved top or a new field id while still typing keeps it.
+    assertFalse(BubbleMenuPolicy.keyboardClosesMenu(true, true, topChanged = true, fieldChanged = false, sinceThemeSwitchMs = 300))
+    assertFalse(BubbleMenuPolicy.keyboardClosesMenu(true, true, topChanged = true, fieldChanged = true, sinceThemeSwitchMs = 0))
+    // The keyboard going away always closes it.
+    assertTrue(BubbleMenuPolicy.keyboardClosesMenu(true, false, topChanged = true, fieldChanged = true, sinceThemeSwitchMs = 300))
+    // Nothing changed: nothing to close.
+    assertFalse(BubbleMenuPolicy.keyboardClosesMenu(true, true, topChanged = false, fieldChanged = false, sinceThemeSwitchMs = null))
+    assertTrue(BubbleMenuPolicy.keyboardClosesMenu(true, true, topChanged = true, fieldChanged = false, sinceThemeSwitchMs = BubbleMenuPolicy.THEME_SETTLE_MS))
+  }
 }

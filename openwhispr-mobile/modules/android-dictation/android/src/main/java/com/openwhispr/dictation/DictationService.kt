@@ -175,13 +175,15 @@ class DictationService : Service() {
   }
   /** The configuration the overlays were last laid out for. */
   private var shownConfig: Configuration? = null
+  /** When the last light/dark switch landed (uptime), so the keyboard's redraw doesn't close the menu. */
+  private var themeSwitchedAt: Long? = null
   override fun onConfigurationChanged(newConfig: Configuration) {
     super.onConfigurationChanged(newConfig)
     val changes = shownConfig?.diff(newConfig) ?: -1
     shownConfig = Configuration(newConfig)
     // Light ↔ dark (K7, §3b): repaint in place. The windows, the open menu, the tabs, the bubble's
     // place and state and the recording all stay as they are.
-    BubbleColors.follow(newConfig)
+    if (BubbleColors.follow(newConfig)) themeSwitchedAt = SystemClock.uptimeMillis()
     val layout = ActivityInfo.CONFIG_ORIENTATION or ActivityInfo.CONFIG_SCREEN_SIZE or ActivityInfo.CONFIG_SCREEN_LAYOUT or
       ActivityInfo.CONFIG_SMALLEST_SCREEN_SIZE or ActivityInfo.CONFIG_DENSITY or ActivityInfo.CONFIG_FONT_SCALE
     if (changes and layout == 0) return
@@ -196,9 +198,21 @@ class DictationService : Service() {
     val focused = value && (!typing || field != focusedField)
     // Back closes the keyboard (or leaves the field): the menu closes with it. The menu's window
     // never takes focus, so this is how Back reaches it.
-    if (menu != null && (value != typing || top != keyboardTop || field != focusedField)) closeMenu()
+    val changed = value != typing || top != keyboardTop || field != focusedField
+    val sinceSwitch = themeSwitchedAt?.let { SystemClock.uptimeMillis() - it }
+    // A light/dark switch redraws the keyboard and the app below; the menu (and the finger on it) stays.
+    val keepMenu = menu != null && changed &&
+      !BubbleMenuPolicy.keyboardClosesMenu(typing, value, top != keyboardTop, field != focusedField, sinceSwitch)
+    if (menu != null && changed) android.util.Log.i(
+      "OpenWhisprBubble",
+      "Keyboard changed with the menu open (typing $typing→$value, top $keyboardTop→$top, " +
+        "field ${if (field != focusedField) "changed" else "same"}, ${sinceSwitch ?: "-"} ms after a theme switch): " +
+        if (keepMenu) "kept" else "closed",
+    )
+    if (menu != null && changed && !keepMenu) closeMenu()
     typing = value; keyboardTop = top; focusedField = if (value) field else null; searchField = value && search
-    if (state == BubbleState.READY && !dragging) place()
+    // The menu kept open stays where the finger is; closing it places the bubble again.
+    if (state == BubbleState.READY && !dragging && !keepMenu) place()
     if (focused) wake() else updateShrink()
     updateVisibility()
     face?.warning = InsertionService.instance == null
