@@ -16,9 +16,15 @@ jest.mock('expo-file-system/legacy', () => ({
   }),
 }));
 
+const mockExcludeFromBackup = jest.fn(async (_uri: string): Promise<boolean> => true);
+jest.mock('../../../modules/live-pcm-streaming/src', () => ({
+  LivePCMStreaming: { excludeFromBackup: (uri: string) => mockExcludeFromBackup(uri) },
+}));
+
 import * as FileSystem from 'expo-file-system/legacy';
 import {
   clearPendingBackfill,
+  excludeMeetingFileFromBackup,
   hasPendingBackfillFile,
   isManagedMeetingAudioUri,
   meetingBackfillUri,
@@ -92,5 +98,37 @@ describe('pending backfill sidecar', () => {
   it('rejects when the sidecar cannot be saved', async () => {
     jest.mocked(FileSystem.writeAsStringAsync).mockRejectedValueOnce(new Error('full'));
     await expect(savePendingBackfill(7, [{ startMs: 0, endMs: 1 }])).rejects.toThrow('full');
+  });
+});
+
+describe('keeping meeting files out of backups', () => {
+  beforeEach(() => {
+    mockFiles.clear();
+    mockExcludeFromBackup.mockReset().mockResolvedValue(true);
+  });
+
+  it('excludes the sidecar every time it is written', async () => {
+    // Each write may replace the file, and a replaced file loses the mark.
+    await savePendingBackfill(7, [{ startMs: 0, endMs: 1000 }]);
+    await savePendingBackfill(7, []);
+
+    expect(mockExcludeFromBackup.mock.calls).toEqual([
+      [meetingBackfillUri(7)],
+      [meetingBackfillUri(7)],
+    ]);
+  });
+
+  it('still saves the sidecar when it cannot be excluded', async () => {
+    mockExcludeFromBackup.mockRejectedValue(new Error('no native module'));
+
+    await expect(savePendingBackfill(7, [{ startMs: 0, endMs: 1000 }])).resolves.toBeUndefined();
+    await expect(readPendingBackfill(7)).resolves.toEqual([{ startMs: 0, endMs: 1000 }]);
+  });
+
+  it('never throws for a file it cannot exclude', async () => {
+    mockExcludeFromBackup.mockRejectedValue(new Error('missing'));
+
+    await expect(excludeMeetingFileFromBackup(meetingRecordingUri(7))).resolves.toBeUndefined();
+    expect(mockExcludeFromBackup).toHaveBeenCalledWith(meetingRecordingUri(7));
   });
 });

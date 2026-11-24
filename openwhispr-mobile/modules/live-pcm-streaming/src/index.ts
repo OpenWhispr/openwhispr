@@ -41,6 +41,7 @@ interface NativeLivePCMStreaming {
   stop(): Promise<void>;
   isRecording(): boolean;
   repairRecording(uri: string): Promise<boolean>;
+  excludeFromBackup(uri: string): Promise<boolean>;
 }
 
 /** Matches the desktop realtime transport (24 kHz mono PCM16). */
@@ -88,6 +89,16 @@ export const LivePCMStreaming = {
   async repairRecording(uri: string): Promise<boolean> {
     if (!NativeModule) return false;
     return NativeModule.repairRecording(uri);
+  },
+
+  /**
+   * Leaves a file out of iCloud and device backups. The recording `start` writes is already
+   * excluded; this is for the meeting's other files in Documents. A file written again by
+   * replacing it needs it again. False when it could not be set.
+   */
+  async excludeFromBackup(uri: string): Promise<boolean> {
+    if (!NativeModule) return false;
+    return NativeModule.excludeFromBackup(uri);
   },
 };
 

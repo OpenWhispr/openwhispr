@@ -35,7 +35,7 @@ import { alertIfPartialCapture, useCapturePausedNotification } from '@/lib/meeti
 import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
 import { Sentry } from '@/lib/sentry';
-import { meetingRecordingUri } from '@/lib/transcriptAudio';
+import { excludeMeetingFileFromBackup, meetingRecordingUri } from '@/lib/transcriptAudio';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import type { TranscriptionStatus } from '@/types';
 
@@ -339,6 +339,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
         saveRawNotesNow();
         const stableUri = `${FileSystem.documentDirectory}meeting-${noteId}.wav`;
         await FileSystem.copyAsync({ from: uri, to: stableUri });
+        await excludeMeetingFileFromBackup(stableUri);
         // The recorder's own file is a second copy of the meeting that nothing else deletes.
         await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
         await runMeetingPipeline(noteId, stableUri, count);

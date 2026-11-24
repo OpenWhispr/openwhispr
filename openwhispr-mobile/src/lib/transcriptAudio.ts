@@ -49,15 +49,36 @@ export function meetingBackfillUri(noteId: number): string {
 
 const PENDING_BACKFILL_VERSION = 1;
 
-/** Rejects when it cannot be written, so the caller can choose not to keep the recording. */
+type LivePcmStreamingModule = typeof import('../../modules/live-pcm-streaming/src');
+
+/**
+ * A meeting's files sit in Documents so iOS never purges them mid-meeting, but like the retained
+ * audio above they are temporary and must never ride along in a backup. Best effort, never
+ * throws. The native module is loaded lazily: this file is imported where it isn't available.
+ */
+export async function excludeMeetingFileFromBackup(uri: string): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { LivePCMStreaming } =
+      require('../../modules/live-pcm-streaming/src') as LivePcmStreamingModule;
+    await LivePCMStreaming.excludeFromBackup(uri);
+  } catch {
+    // Nothing else to try; the file is still deleted once it has served.
+  }
+}
+
+/** Rejects when it cannot be written, so the caller knows nothing on disk names the owed audio. */
 export async function savePendingBackfill(noteId: number, windows: AudioWindow[]): Promise<void> {
+  const uri = meetingBackfillUri(noteId);
   await FileSystem.writeAsStringAsync(
-    meetingBackfillUri(noteId),
+    uri,
     JSON.stringify({
       version: PENDING_BACKFILL_VERSION,
       windows: windows.map(({ startMs, endMs }) => ({ startMs, endMs })),
     }),
   );
+  // After every write: a file replaced on disk loses the mark.
+  await excludeMeetingFileFromBackup(uri);
 }
 
 const isWindow = (value: unknown): value is AudioWindow => {
