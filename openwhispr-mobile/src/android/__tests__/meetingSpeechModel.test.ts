@@ -1,5 +1,6 @@
 const mockConfig: { androidSpeechModel?: string } = {};
 const mockReady = new Set<string>();
+const mockUnsupported = new Set<string>();
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ config: mockConfig }) },
 }));
@@ -11,7 +12,7 @@ jest.mock('../models', () => ({
     'parakeet-v3': { kind: 'speech', meetings: true },
     'parakeet-next': { kind: 'speech', meetings: true },
   },
-  modelSupported: () => true,
+  modelSupported: (id: string) => !mockUnsupported.has(id),
   modelReady: async (id: string) => mockReady.has(id),
 }));
 jest.mock('../speechCapabilities', () => ({
@@ -29,6 +30,7 @@ import {
 beforeEach(() => {
   delete mockConfig.androidSpeechModel;
   mockReady.clear();
+  mockUnsupported.clear();
 });
 
 it('lists only the speech models the catalog marks for meetings', () => {
@@ -41,6 +43,15 @@ it('keeps any catalog speech model as the dictation choice', () => {
   mockConfig.androidSpeechModel = 'parakeet-next';
   expect(selectedSpeechModel()).toBe('parakeet-next');
   mockConfig.androidSpeechModel = 'gone-model';
+  expect(selectedSpeechModel()).toBe('parakeet-v3');
+});
+
+it('dictates with Parakeet v3 when no speech model was picked, as Settings shows', () => {
+  expect(selectedSpeechModel()).toBe('parakeet-v3');
+});
+
+it('falls back to the first catalog model where Parakeet v3 cannot run', () => {
+  mockUnsupported.add('parakeet-v3');
   expect(selectedSpeechModel()).toBe('moonshine-tiny');
 });
 

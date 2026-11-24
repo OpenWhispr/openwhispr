@@ -22,11 +22,20 @@ export function canTranscribeMeetings(id: AndroidModelId): boolean {
 export const meetingSpeechModels = (): AndroidSpeechModelId[] =>
   speechModels().filter(canTranscribeMeetings);
 
-/** The speech model chosen for dictation and uploads; the catalog's first when none is set. */
+/** What dictation uses when no speech model was picked; the Settings screens show the same. */
+export const DEFAULT_SPEECH_MODEL: AndroidSpeechModelId = 'parakeet-v3';
+
+/**
+ * The speech model chosen for dictation and uploads. Unset or no longer in the catalog means
+ * Parakeet v3, as Settings shows it; the catalog's first only where this phone can't run Parakeet.
+ */
 export function selectedSpeechModel(): AndroidSpeechModelId {
   const selected = useConfigStore.getState().config?.androidSpeechModel;
   const models = speechModels();
-  return selected && models.includes(selected) ? selected : (models[0] ?? 'parakeet-v3');
+  if (selected && models.includes(selected)) return selected;
+  return models.includes(DEFAULT_SPEECH_MODEL)
+    ? DEFAULT_SPEECH_MODEL
+    : (models[0] ?? DEFAULT_SPEECH_MODEL);
 }
 
 /**
