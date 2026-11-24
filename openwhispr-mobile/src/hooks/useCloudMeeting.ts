@@ -4,6 +4,8 @@ import {
   type RealtimeSession,
   type RealtimeUtterance,
 } from '@/services/transcription/RealtimeMeetingWsService';
+import type { AudioWindow } from '@/services/transcription/realtimeReconnect';
+import { addRecordingFailedListener } from '../../modules/live-pcm-streaming/src';
 import {
   deriveCloudMeetingStatus,
   initialCloudMeetingSession,
@@ -13,6 +15,14 @@ import {
 import { reportCaptureInterrupted, reportSessionEnded } from '@/lib/meetingCaptureTelemetry';
 
 export type { CloudMeetingStatus } from '@/lib/notes/meetingCapture';
+
+export interface CloudMeetingResult {
+  utterances: RealtimeUtterance[];
+  /** Windows of audio the live stream never received; the recording may still hold them. */
+  droppedWindows: AudioWindow[];
+  /** The recording to trust; null when it failed, was never requested, or no session ran. */
+  recordingUri: string | null;
+}
 
 export interface CloudMeeting {
   status: CloudMeetingStatus;
@@ -33,7 +43,7 @@ export interface CloudMeeting {
    */
   liveSinceMs: number | null;
   /** Stops the session, waits for the last turn, and returns every finalized utterance. */
-  stop: () => Promise<RealtimeUtterance[]>;
+  stop: () => Promise<CloudMeetingResult>;
 }
 
 /**
@@ -47,10 +57,13 @@ export interface CloudMeeting {
 export function useCloudMeeting({
   enabled,
   language,
+  recordingUri,
   onUtterance,
 }: {
   enabled: boolean;
   language?: string;
+  /** Where the capture module also writes the meeting's audio; none means no recording. */
+  recordingUri?: string;
   onUtterance?: (utterance: RealtimeUtterance, index: number, capturedMs: number) => void;
 }): CloudMeeting {
   const [initial] = useState(() => initialCloudMeetingSession(Date.now()));
@@ -78,6 +91,10 @@ export function useCloudMeeting({
   const micCapturingRef = useRef(initial.capturing);
   // Native reason for the latest not-capturing event; null while the mic reports capturing.
   const captureLostReasonRef = useRef<string | null>(null);
+  // Set when the recording file stopped during the current session; cleared per session.
+  const recordingFailedRef = useRef(false);
+  // Captured when the session starts: `stop` is memoized and the option may only arrive then.
+  const recordingUriRef = useRef<string | undefined>(undefined);
   const onUtteranceRef = useRef(onUtterance);
   onUtteranceRef.current = onUtterance;
 
@@ -95,6 +112,13 @@ export function useCloudMeeting({
     clockRef.current = fresh.clock;
     micCapturingRef.current = fresh.capturing;
     captureLostReasonRef.current = null;
+    recordingFailedRef.current = false;
+    recordingUriRef.current = recordingUri;
+    // Attached before start: a file that can't be opened is reported before start resolves.
+    // The generation check keeps an earlier session's late event off this one.
+    const failedSubscription = addRecordingFailedListener(() => {
+      if (generationRef.current === generation) recordingFailedRef.current = true;
+    });
     let endReported = false;
     // Once per session: a close and a rejected start can both describe the same end.
     const reportEnded = (): void => {
@@ -123,7 +147,7 @@ export function useCloudMeeting({
     const isCurrent = (): boolean => generationRef.current === generation;
     const isLive = (): boolean => isCurrent() && !stoppedRef.current;
     startRealtimeMeetingWs(
-      { language },
+      { language, recordingUri },
       {
         onPartial: (text) => {
           if (isLive()) setPartialText(text);
@@ -191,6 +215,7 @@ export function useCloudMeeting({
     return () => {
       cancelled = true;
       stoppedRef.current = true;
+      failedSubscription?.remove();
       void sessionRef.current?.stop();
       sessionRef.current = null;
     };
@@ -233,13 +258,19 @@ export function useCloudMeeting({
     micCapturingRef.current = micCapturing;
   }, [started, micCapturing]);
 
-  const stop = useCallback(async (): Promise<RealtimeUtterance[]> => {
+  const stop = useCallback(async (): Promise<CloudMeetingResult> => {
     stoppedRef.current = true;
     const session = sessionRef.current;
     sessionRef.current = null;
-    if (!session) return [];
+    if (!session) return { utterances: [], droppedWindows: [], recordingUri: null };
     await session.stop();
-    return session.utterances();
+    // Read after the stop settles: the stop itself can add dropped windows or fail the file.
+    const uri = recordingUriRef.current;
+    return {
+      utterances: session.utterances(),
+      droppedWindows: session.droppedWindows(),
+      recordingUri: uri && !recordingFailedRef.current ? uri : null,
+    };
   }, []);
 
   const status = deriveCloudMeetingStatus({

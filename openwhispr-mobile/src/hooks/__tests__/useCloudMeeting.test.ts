@@ -6,11 +6,22 @@ import type {
   RealtimeUtterance,
 } from '@/services/transcription/RealtimeMeetingWsService';
 import { reportCaptureInterrupted } from '@/lib/meetingCaptureTelemetry';
+import type { CloudMeetingResult } from '@/hooks/useCloudMeeting';
 
 const mockStart = jest.fn();
 
 jest.mock('@/services/transcription/RealtimeMeetingWsService', () => ({
   startRealtimeMeetingWs: (...args: unknown[]) => mockStart(...args),
+}));
+
+const mockFailedListeners: Array<() => void> = [];
+const mockRemove = jest.fn();
+
+jest.mock('../../../modules/live-pcm-streaming/src', () => ({
+  addRecordingFailedListener: (callback: () => void) => {
+    mockFailedListeners.push(callback);
+    return { remove: mockRemove };
+  },
 }));
 
 jest.mock('@/lib/meetingCaptureTelemetry', () => ({
@@ -56,6 +67,8 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.setSystemTime(1_000_000);
   sessions = [];
+  mockFailedListeners.length = 0;
+  mockRemove.mockClear();
   (reportCaptureInterrupted as jest.Mock).mockClear();
   mockStart.mockReset().mockImplementation((_opts: unknown, callbacks: RealtimeCallbacks) => {
     const start = deferred<RealtimeSession>();
@@ -99,11 +112,14 @@ type Setup = RenderHookResult<CloudMeeting, Props> & {
   setEnabled: (enabled: boolean) => void;
 };
 
-function setup(enabled = true): Setup {
+function setup(enabled = true, recordingUri?: string): Setup {
   const onUtterance = jest.fn();
-  const hook = renderHook((p: Props) => useCloudMeeting({ enabled: p.enabled, onUtterance }), {
-    initialProps: { enabled },
-  });
+  const hook = renderHook(
+    (p: Props) => useCloudMeeting({ enabled: p.enabled, onUtterance, recordingUri }),
+    {
+      initialProps: { enabled },
+    },
+  );
   return {
     ...hook,
     onUtterance,
@@ -147,7 +163,7 @@ describe('useCloudMeeting', () => {
     });
     expect(result.current.utterances).toHaveLength(2);
 
-    let stopped: Promise<RealtimeUtterance[]> = Promise.resolve([]);
+    let stopped: Promise<unknown> = Promise.resolve([]);
     act(() => {
       stopped = result.current.stop();
     });
@@ -189,11 +205,11 @@ describe('useCloudMeeting', () => {
     const { result } = setup();
     const fake = latest();
 
-    let utterances: RealtimeUtterance[] | null = null;
+    let stopResult: CloudMeetingResult | null = null;
     await act(async () => {
-      utterances = await result.current.stop();
+      stopResult = await result.current.stop();
     });
-    expect(utterances).toEqual([]);
+    expect(stopResult).toEqual({ utterances: [], droppedWindows: [], recordingUri: null });
 
     await goLive(fake);
     expect(fake.session.stop).toHaveBeenCalledTimes(1);
@@ -209,7 +225,7 @@ describe('useCloudMeeting', () => {
     });
 
     let settled = false;
-    let stopped: Promise<RealtimeUtterance[]> = Promise.resolve([]);
+    let stopped: Promise<unknown> = Promise.resolve([]);
     act(() => {
       stopped = result.current.stop();
       void stopped.then(() => {
@@ -230,7 +246,7 @@ describe('useCloudMeeting', () => {
     let final: RealtimeUtterance[] = [];
     await act(async () => {
       fake.drain.resolve();
-      final = await stopped;
+      final = (await stopped).utterances;
     });
     expect(final.map((u) => u.text)).toEqual(['before stop', 'last words']);
   });
@@ -292,5 +308,99 @@ describe('useCloudMeeting', () => {
     expect(result.current.liveSinceMs).toBeNull();
     await goLive();
     expect(result.current.liveSinceMs).toBe(1_045_000);
+  });
+
+  it('returns the recording and the dropped windows at stop, read after the stop settled', async () => {
+    const { result } = setup(true, 'file:///docs/meeting-7.wav');
+    const fake = latest();
+    expect(mockStart.mock.calls[0][0]).toMatchObject({
+      recordingUri: 'file:///docs/meeting-7.wav',
+    });
+    await goLive(fake);
+    const windows = [{ startMs: 1_000, endMs: 2_000 }];
+    const droppedWindows = fake.session as { droppedWindows: () => typeof windows };
+    droppedWindows.droppedWindows = () => []; // nothing yet: the stop adds the window
+    let stopped: Promise<CloudMeetingResult> = Promise.resolve({
+      utterances: [],
+      droppedWindows: [],
+      recordingUri: null,
+    });
+    act(() => {
+      stopped = result.current.stop();
+    });
+    droppedWindows.droppedWindows = () => windows;
+    let value: CloudMeetingResult | null = null;
+    await act(async () => {
+      fake.drain.resolve();
+      value = await stopped;
+    });
+    expect(value).toEqual({
+      utterances: [],
+      droppedWindows: windows,
+      recordingUri: 'file:///docs/meeting-7.wav',
+    });
+  });
+
+  it('returns no recording after a recording-failed event, and not for a later session', async () => {
+    const { result, setEnabled } = setup(true, 'file:///docs/meeting-7.wav');
+    const first = latest();
+    expect(mockFailedListeners).toHaveLength(1);
+    await goLive(first);
+    act(() => {
+      mockFailedListeners[0]();
+    });
+    let stopped: Promise<CloudMeetingResult> = Promise.resolve({
+      utterances: [],
+      droppedWindows: [],
+      recordingUri: 'x',
+    });
+    act(() => {
+      stopped = result.current.stop();
+    });
+    let value: CloudMeetingResult | null = null;
+    await act(async () => {
+      first.drain.resolve();
+      value = await stopped;
+    });
+    expect((value as unknown as CloudMeetingResult).recordingUri).toBeNull();
+
+    setEnabled(false);
+    expect(mockRemove).toHaveBeenCalled();
+    setEnabled(true);
+    const second = latest();
+    await goLive(second);
+    // A late event from the first session's listener must not mark the second.
+    act(() => {
+      mockFailedListeners[0]();
+    });
+    act(() => {
+      stopped = result.current.stop();
+    });
+    await act(async () => {
+      second.drain.resolve();
+      value = await stopped;
+    });
+    expect((value as unknown as CloudMeetingResult).recordingUri).toBe(
+      'file:///docs/meeting-7.wav',
+    );
+  });
+
+  it('returns no recording when none was requested', async () => {
+    const { result } = setup();
+    await goLive();
+    let stopped: Promise<CloudMeetingResult> = Promise.resolve({
+      utterances: [],
+      droppedWindows: [],
+      recordingUri: 'x',
+    });
+    act(() => {
+      stopped = result.current.stop();
+    });
+    let value: CloudMeetingResult | null = null;
+    await act(async () => {
+      latest().drain.resolve();
+      value = await stopped;
+    });
+    expect((value as unknown as CloudMeetingResult).recordingUri).toBeNull();
   });
 });

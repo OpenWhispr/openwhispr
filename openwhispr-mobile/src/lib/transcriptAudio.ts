@@ -31,11 +31,14 @@ export function isManagedTranscriptAudioUri(uri?: string | null): boolean {
   return !!uri && !!FileSystem.cacheDirectory && uri.startsWith(TRANSCRIPT_AUDIO_DIR);
 }
 
+/** The one path a meeting's recording lives at while the meeting records. */
+export function meetingRecordingUri(noteId: number): string {
+  return `${FileSystem.documentDirectory ?? ''}meeting-${noteId}.wav`;
+}
+
 /** source_file is synced metadata, not authority to read or delete a local path. */
 export function isManagedMeetingAudioUri(noteId: number, uri?: string | null): boolean {
-  return (
-    !!FileSystem.documentDirectory && uri === `${FileSystem.documentDirectory}meeting-${noteId}.wav`
-  );
+  return !!FileSystem.documentDirectory && uri === meetingRecordingUri(noteId);
 }
 
 export function isWavAudioFile(input: {

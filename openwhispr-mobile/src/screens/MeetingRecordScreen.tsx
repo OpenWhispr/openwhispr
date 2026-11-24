@@ -11,6 +11,7 @@ import { ProcessingWaveform } from '@/components/features/WaveformVisualizer';
 import { CalendarEventPicker } from '@/components/notes/CalendarEventPicker';
 import { SpeakerCountPrompt } from '@/components/notes/SpeakerCountPrompt';
 import { BRAND, iosColor } from '@/config/colors';
+import { notesRepository } from '@/data';
 import { calendarRepository } from '@/data/calendarRepository';
 import type { Note } from '@/data/types';
 import type { GoogleCalendarEvent } from '@/data/calendarTypes';
@@ -34,6 +35,7 @@ import { alertIfPartialCapture, useCapturePausedNotification } from '@/lib/meeti
 import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
 import { Sentry } from '@/lib/sentry';
+import { meetingRecordingUri } from '@/lib/transcriptAudio';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import type { TranscriptionStatus } from '@/types';
 
@@ -96,6 +98,8 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   const cloudMeeting = useCloudMeeting({
     enabled: phase === 'cloud-recording',
     language: getPreferredTranscriptionLanguage(),
+    // The note exists before the session starts, so the recording has its own path from the start.
+    recordingUri: noteId != null ? meetingRecordingUri(noteId) : undefined,
     onUtterance: (utterance, index, capturedMs) => {
       const currentNoteId = noteIdRef.current;
       if (currentNoteId != null) {
@@ -406,12 +410,18 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
       const hadError = cloudMeeting.status === 'error';
       const { interruptions, reconnects, droppedSeconds } = cloudMeeting;
       setPhase('processing');
-      const utterances = await cloudMeeting.stop();
+      const result = await cloudMeeting.stop();
+      const { utterances } = result;
       if (noteId == null) {
         setPhase('prompt');
         return;
       }
       saveRawNotesNow();
+      // Linked before finalizing and before a failure: a failed note keeping its recording is
+      // what Retry needs later.
+      if (result.recordingUri) {
+        notesRepository.updateNoteMeta(noteId, { sourceFile: result.recordingUri });
+      }
       // A failed session with nothing transcribed shouldn't become a done, empty note.
       if (hadError && utterances.length === 0) {
         markNoteFailed(noteId);
