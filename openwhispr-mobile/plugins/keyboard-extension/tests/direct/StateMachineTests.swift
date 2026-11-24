@@ -397,7 +397,8 @@ extension DirectDictationTests {
   static func machineTranslationSameLanguage() {
     let h = translatedHarness()
     defer { h.cleanup() }
-    h.translation = (code: "en-US", label: "English (US)")
+    // The snapshot's dictation language is "en"; only an exact match skips.
+    h.translation = (code: "en", label: "English")
     h.record()
     h.dictation.confirm()
     h.transport.uploads.first?.complete(200, sentText)

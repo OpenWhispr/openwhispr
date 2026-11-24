@@ -178,12 +178,14 @@ extension DirectDictationTests {
            true, "translate: none without a prompt")
     expect(try! R.makeTranslateRequest(translationContext(language: "es", target: "es", label: "Spanish"), text: "Hola") == nil,
            true, "translate: none when dictating in the target language")
-    expect(try! R.makeTranslateRequest(translationContext(language: "en", target: "en-US", label: "English (US)"), text: "Hi") == nil,
-           true, "translate: same base language skips")
-    expect(try! R.makeTranslateRequest(translationContext(language: "ZH", target: "zh-TW", label: "Chinese"), text: "Hi") == nil,
-           true, "translate: base language compares case-insensitively")
-    expect(try! R.makeTranslateRequest(translationContext(language: "en-GB", target: "en-US", label: "English (US)"), text: "Hi") == nil,
-           true, "translate: regional variants of one language skip")
+    expect(try! R.makeTranslateRequest(translationContext(language: "en-GB", target: "en-GB", label: "English (UK)"), text: "Hi") == nil,
+           true, "translate: none for an exact regional match")
+    expect(try! R.makeTranslateRequest(translationContext(language: "en", target: "en-GB", label: "English (UK)"), text: "Hi") != nil,
+           true, "translate: a regional target of the dictation language runs")
+    expect(try! R.makeTranslateRequest(translationContext(language: "zh", target: "zh-TW", label: "Chinese (Traditional)"), text: "Hi") != nil,
+           true, "translate: Simplified to Traditional runs")
+    expect(try! R.makeTranslateRequest(translationContext(language: "en-GB", target: "en-US", label: "English (US)"), text: "Hi") != nil,
+           true, "translate: another regional variant runs")
     expect(try! R.makeTranslateRequest(translationContext(language: nil, target: "es", label: "Spanish"), text: "Hi") != nil,
            true, "translate: no dictation language still translates")
     expect(try! R.makeTranslateRequest(translationContext(language: "auto", target: "es", label: "Spanish"), text: "Hi") != nil,

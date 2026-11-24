@@ -25,6 +25,8 @@ const updateConfig = jest.fn(async () => {});
 const mockRoute = jest.fn();
 const mockGuest = jest.fn();
 const mockGetSupportedLanguages = jest.fn();
+const mockReadiness = jest.fn();
+const mockAppleEnabled = jest.fn();
 const appStateListeners: Array<(state: string) => void> = [];
 
 jest.mock('../../../modules/app-group-storage/src', () => ({
@@ -69,8 +71,13 @@ jest.mock('@/lib/accountAccess', () => ({
 jest.mock('@/lib/appleLLM', () => ({
   AppleLLM: { getSupportedLanguages: () => mockGetSupportedLanguages() },
 }));
+jest.mock('@/lib/localReasoning', () => ({
+  getLocalReasoningReadiness: () => mockReadiness(),
+  isAppleLocalIntelligenceEnabled: () => mockAppleEnabled(),
+}));
 
 const cloudRoute = { provider: 'cloud', cleanupMode: 'openwhispr', cleanupUnavailable: false };
+const localRoute = { provider: 'local', cleanupMode: 'local', cleanupUnavailable: false };
 
 function flush(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
@@ -84,6 +91,8 @@ beforeEach(() => {
   mockRoute.mockReturnValue(cloudRoute);
   mockGuest.mockReturnValue(false);
   mockGetSupportedLanguages.mockResolvedValue([]);
+  mockReadiness.mockResolvedValue({ status: 'ready', tokenCounting: true });
+  mockAppleEnabled.mockReturnValue(true);
   useConfigStore.setState({
     config: { keyboardTranslationTarget: null } as never,
     updateConfig: updateConfig as never,
@@ -151,11 +160,11 @@ describe('setKeyboardTranslationTarget', () => {
 });
 
 describe('reconcileKeyboardTranslationFromAppGroup', () => {
-  it('clears a target the current model cannot translate into', async () => {
+  it('keeps a target the current model cannot translate into', async () => {
     store[KEYS.KEYBOARD_TRANSLATION_TARGET] = 'xx';
     await reconcileKeyboardTranslationFromAppGroup();
-    expect(mockRemoveItemFn).toHaveBeenCalledWith(KEYS.KEYBOARD_TRANSLATION_TARGET);
-    expect(updateConfig).toHaveBeenCalledWith({ keyboardTranslationTarget: null });
+    expect(mockRemoveItemFn).not.toHaveBeenCalled();
+    expect(updateConfig).toHaveBeenCalledWith({ keyboardTranslationTarget: 'xx' });
   });
 
   it('pulls a keyboard-made choice into config', async () => {
@@ -206,7 +215,7 @@ describe('startKeyboardTranslationSync', () => {
   });
 
   it('narrows the list to On-Device languages once the fetch resolves', async () => {
-    mockRoute.mockReturnValue({ ...cloudRoute, provider: 'local', cleanupMode: 'local' });
+    mockRoute.mockReturnValue(localRoute);
     mockGetSupportedLanguages.mockResolvedValue(['es', 'fr']);
     const stop = startKeyboardTranslationSync();
     expect(JSON.parse(store[KEYS.KEYBOARD_TRANSLATION_LANGUAGES]).length).toBeGreaterThan(2);
@@ -219,13 +228,72 @@ describe('startKeyboardTranslationSync', () => {
   });
 
   it('writes nothing when the fetch resolves after stop', async () => {
-    mockRoute.mockReturnValue({ ...cloudRoute, provider: 'local', cleanupMode: 'local' });
+    mockRoute.mockReturnValue(localRoute);
     mockGetSupportedLanguages.mockResolvedValue(['es']);
     const stop = startKeyboardTranslationSync();
     const before = store[KEYS.KEYBOARD_TRANSLATION_LANGUAGES];
     stop();
     await flush();
     expect(store[KEYS.KEYBOARD_TRANSLATION_LANGUAGES]).toBe(before);
+  });
+
+  it('keeps a language the On-Device list lacks, so it is back when the route is', async () => {
+    // Local Mode with Cloud cleanup reads as On-Device until sign-in is restored.
+    mockRoute.mockReturnValue(localRoute);
+    mockGetSupportedLanguages.mockResolvedValue(['es', 'fr']);
+    store[KEYS.KEYBOARD_TRANSLATION_TARGET] = 'ru';
+    useConfigStore.setState({ config: { keyboardTranslationTarget: 'ru' } as never });
+    const stop = startKeyboardTranslationSync();
+    await flush();
+    expect(store[KEYS.KEYBOARD_TRANSLATION_TARGET]).toBe('ru');
+    expect(updateConfig).not.toHaveBeenCalled();
+    // Off for a job on this route, since the keyboard can't show the language here.
+    expect(snapshotKeyboardTranslation('job-1')).toBeNull();
+    mockRoute.mockReturnValue(cloudRoute);
+    useAuthStore.setState({ user: CACHED_ACCOUNT as never });
+    expect(store[KEYS.KEYBOARD_TRANSLATION_TARGET]).toBe('ru');
+    expect(snapshotKeyboardTranslation('job-2')).toBe('ru');
+    stop();
+  });
+
+  it('marks On-Device not applicable while Apple Intelligence cannot run', async () => {
+    mockRoute.mockReturnValue(localRoute);
+    mockReadiness.mockResolvedValue({ status: 'unsupportedDevice', tokenCounting: false });
+    const stop = startKeyboardTranslationSync();
+    // Unknown until the read finishes, which leaves translation available.
+    expect(store[KEYS.KEYBOARD_TRANSLATION_APPLICABLE]).toBe('1');
+    await flush();
+    expect(store[KEYS.KEYBOARD_TRANSLATION_APPLICABLE]).toBe('0');
+    store[KEYS.KEYBOARD_TRANSLATION_TARGET] = 'es';
+    expect(snapshotKeyboardTranslation('job-1')).toBeNull();
+    stop();
+  });
+
+  it('reads readiness again when Apple Intelligence is switched in AI Models', async () => {
+    mockRoute.mockReturnValue(localRoute);
+    const stop = startKeyboardTranslationSync();
+    await flush();
+    expect(store[KEYS.KEYBOARD_TRANSLATION_APPLICABLE]).toBe('1');
+    mockReadiness.mockResolvedValue({ status: 'disabled', tokenCounting: false });
+    mockAppleEnabled.mockReturnValue(false);
+    useConfigStore.setState({ config: { keyboardTranslationTarget: null } as never });
+    await flush();
+    expect(store[KEYS.KEYBOARD_TRANSLATION_APPLICABLE]).toBe('0');
+    stop();
+  });
+
+  it('ignores a readiness read that a newer one replaced', async () => {
+    mockRoute.mockReturnValue(localRoute);
+    let resolveFirst: (value: unknown) => void = () => {};
+    mockReadiness.mockReturnValueOnce(new Promise((resolve) => (resolveFirst = resolve)));
+    const stop = startKeyboardTranslationSync();
+    appStateListeners.forEach((listener) => listener('active'));
+    await flush();
+    expect(store[KEYS.KEYBOARD_TRANSLATION_APPLICABLE]).toBe('1');
+    resolveFirst({ status: 'unsupportedDevice', tokenCounting: false });
+    await flush();
+    expect(store[KEYS.KEYBOARD_TRANSLATION_APPLICABLE]).toBe('1');
+    stop();
   });
 
   it('keeps a keyboard-made target when an unrelated store changes', async () => {

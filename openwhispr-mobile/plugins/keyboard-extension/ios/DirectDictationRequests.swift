@@ -193,14 +193,12 @@ enum DirectDictationRequests {
     text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
   }
 
-  // "en-US" dictated as "en" is already in the target language. No language, or "auto", may be any.
+  // Only an exact match skips, as the app's shouldTranslate and desktop. The dictation language has
+  // no region ("en"), so a regional target (en-GB, zh-TW) still runs; an unchanged reply is typed as
+  // is. No language, or "auto", may be any.
   private static func isSameLanguage(_ source: String?, _ target: String) -> Bool {
     guard let source, source != "auto" else { return false }
-    return baseLanguage(source) == baseLanguage(target)
-  }
-
-  private static func baseLanguage(_ code: String) -> String {
-    String(code.split(separator: "-", maxSplits: 1).first ?? Substring(code)).lowercased()
+    return source == target
   }
 
   private static func baseRequest(_ context: DirectRequestContext, path: String, timeout: TimeInterval) -> URLRequest {

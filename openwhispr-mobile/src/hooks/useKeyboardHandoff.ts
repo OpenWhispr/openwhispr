@@ -27,6 +27,7 @@ import {
   readKeyboardTranslationSnapshot,
 } from '@/lib/keyboardTranslationSync';
 import { shouldTranslate } from '@/lib/keyboardTranslation';
+import { KEYBOARD_SETTINGS_ROUTE, markKeyboardSettingsLink } from '@/lib/keyboardSettingsLink';
 import { translateTranscript } from '@/lib/translateTranscript';
 import {
   snapshotKeyboardAgentRequest,
@@ -635,6 +636,11 @@ export function useKeyboardHandoff(
       // its mount effect could claim it.
       if (route === KEYBOARD_FULL_ACCESS_ROUTE) {
         useKeyboardRecoveryStore.getState().markRecoveryDeepLink();
+        return;
+      }
+      // Navigation is expo-router's too; the stamp keeps the warm resume from bouncing it to Home.
+      if (route === KEYBOARD_SETTINGS_ROUTE) {
+        markKeyboardSettingsLink();
         return;
       }
       if (route !== KEYBOARD_DICTATION_ROUTE) return;

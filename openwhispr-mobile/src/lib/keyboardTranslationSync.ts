@@ -9,6 +9,8 @@ import {
   translationLanguagesFor,
   type TranslationLanguage,
 } from '@/lib/keyboardTranslation';
+import { getLocalReasoningReadiness, isAppleLocalIntelligenceEnabled } from '@/lib/localReasoning';
+import type { LocalReasoningReadiness } from '@/types';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
@@ -55,12 +57,24 @@ export function readKeyboardTranslationSnapshot(jobId: string | null | undefined
   return null;
 }
 
-// Language codes the on-device model can translate into; null while unknown.
-let onDeviceCodes: string[] | null = null;
-
-function currentLanguages(): TranslationLanguage[] {
-  return translationLanguagesFor(dictationRoute()?.cleanupMode ?? null, onDeviceCodes);
+export interface OnDeviceTranslationSupport {
+  /** Language codes Apple Intelligence can translate into; null while unknown (all listed). */
+  codes: string[] | null;
+  readiness: LocalReasoningReadiness;
 }
+
+// Re-reads readiness rather than taking the cache, since Apple Intelligence can be turned on or
+// finish downloading in iOS Settings while the app is in the background.
+export async function readOnDeviceTranslationSupport(): Promise<OnDeviceTranslationSupport> {
+  const [codes, readiness] = await Promise.all([
+    AppleLLM.getSupportedLanguages(),
+    getLocalReasoningReadiness({ refresh: true }),
+  ]);
+  return { codes: codes.length > 0 ? codes : null, readiness };
+}
+
+// What the last read found; null while unknown, which lists every language and counts as ready.
+let onDeviceSupport: OnDeviceTranslationSupport | null = null;
 
 function configTarget(): string | null {
   return useConfigStore.getState().config?.keyboardTranslationTarget ?? null;
@@ -76,24 +90,12 @@ export function setKeyboardTranslationTarget(code: string | null): void {
     .catch(() => {});
 }
 
-// The App Group key is the single source of truth for the target; config only mirrors it for
-// the settings UI. The app writes the key only from the in-app setter and when clearing a
-// target the current model can't translate into.
-function clearUnsupportedTarget(): boolean {
-  const stored = readTarget();
-  if (stored === null || coerceTranslationTarget(stored, currentLanguages()) !== null) return false;
-  writeTarget(null);
-  useConfigStore
-    .getState()
-    .updateConfig({ keyboardTranslationTarget: null })
-    .catch(() => {});
-  return true;
-}
-
 // Pull a keyboard-made change back into config. A missing key is the keyboard's Off, so it
-// wins over a stale config value; the key itself is never written from config.
+// wins over a stale config value; the key itself is never written from config. The app writes
+// the key only from the in-app setter: a language the current route can't translate into is kept
+// and reads as Off (coerceTranslationTarget), since the route can read differently for a moment
+// (Local Mode before sign-in is restored) and the choice stays until the user turns it off.
 export async function reconcileKeyboardTranslationFromAppGroup(): Promise<void> {
-  if (clearUnsupportedTarget()) return;
   const stored = readTarget();
   if (stored !== configTarget()) {
     await useConfigStore.getState().updateConfig({ keyboardTranslationTarget: stored });
@@ -105,11 +107,15 @@ function translationState(user: AuthUser | null = useAuthStore.getState().user):
   applicable: boolean;
 } {
   const route = dictationRoute();
-  const languages = translationLanguagesFor(route?.cleanupMode ?? null, onDeviceCodes);
+  const languages = translationLanguagesFor(
+    route?.cleanupMode ?? null,
+    onDeviceSupport?.codes ?? null,
+  );
   const applicable = isTranslationApplicable({
     mode: route?.cleanupMode ?? null,
     cleanupUnavailable: route?.cleanupUnavailable ?? false,
     guest: requiresRealAccount(user),
+    onDeviceUnavailable: onDeviceSupport !== null && onDeviceSupport.readiness.status !== 'ready',
   });
   return { languages, applicable };
 }
@@ -120,36 +126,43 @@ function writeLanguagesAndApplicable(): void {
   AppGroupStorage.setItem(APP_GROUP_KEYS.KEYBOARD_TRANSLATION_APPLICABLE, applicable ? '1' : '0');
 }
 
-// Overlapping calls (start, foreground, post-fetch) are harmless: each re-reads the key and
-// only ever moves config toward it.
+// Overlapping calls (start, foreground) are harmless: each re-reads the key and only ever moves
+// config toward it.
 function reconcileQuietly(): void {
   reconcileKeyboardTranslationFromAppGroup().catch(() => {});
 }
 
 export function startKeyboardTranslationSync(): () => void {
   let stopped = false;
-  onDeviceCodes = null;
+  let readSequence = 0;
+  let appleIntelligenceEnabled = isAppleLocalIntelligenceEnabled();
+  onDeviceSupport = null;
 
-  const refreshOnDeviceCodes = (): void => {
-    AppleLLM.getSupportedLanguages()
-      .then((codes) => {
-        // A fetch that outlives the sync must not write over a later start's state.
-        if (stopped) return;
-        onDeviceCodes = codes.length > 0 ? codes : null;
+  const refreshOnDeviceSupport = (): void => {
+    const sequence = ++readSequence;
+    readOnDeviceTranslationSupport()
+      .then((support) => {
+        // A read that outlives the sync, or a newer read, must not write over later state.
+        if (stopped || sequence !== readSequence) return;
+        onDeviceSupport = support;
         writeLanguagesAndApplicable();
-        reconcileQuietly();
       })
       .catch(() => {});
   };
 
   const onStateChange = (): void => {
     writeLanguagesAndApplicable();
-    clearUnsupportedTarget();
+    // The AI Models switch for Apple Intelligence changes readiness without leaving the app.
+    const enabled = isAppleLocalIntelligenceEnabled();
+    if (enabled !== appleIntelligenceEnabled) {
+      appleIntelligenceEnabled = enabled;
+      refreshOnDeviceSupport();
+    }
   };
 
   writeLanguagesAndApplicable();
   reconcileQuietly();
-  refreshOnDeviceCodes();
+  refreshOnDeviceSupport();
 
   const unsubConfig = useConfigStore.subscribe(onStateChange);
   const unsubMode = useProcessingModeStore.subscribe(onStateChange);
@@ -157,7 +170,7 @@ export function startKeyboardTranslationSync(): () => void {
   const appStateSub = AppState.addEventListener('change', (state) => {
     if (state === 'active') {
       reconcileQuietly();
-      refreshOnDeviceCodes();
+      refreshOnDeviceSupport();
     }
   });
 

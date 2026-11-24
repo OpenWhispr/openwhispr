@@ -51,9 +51,28 @@ describe('keyboardTranslation', () => {
     ).toBe(true);
   });
 
-  it('skips when source equals target and translates on auto', () => {
+  it('is not applicable On-Device while Apple Intelligence cannot run', () => {
+    const local = { mode: 'local' as const, cleanupUnavailable: false, guest: true };
+    expect(isTranslationApplicable({ ...local, onDeviceUnavailable: true })).toBe(false);
+    expect(isTranslationApplicable({ ...local, onDeviceUnavailable: false })).toBe(true);
+    expect(isTranslationApplicable(local)).toBe(true);
+    // Only the On-Device route depends on Apple Intelligence.
+    expect(
+      isTranslationApplicable({
+        mode: 'openwhispr',
+        cleanupUnavailable: false,
+        guest: false,
+        onDeviceUnavailable: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('skips only when source is exactly the target and translates on auto', () => {
     expect(shouldTranslate('es', 'es')).toBe(false);
-    expect(shouldTranslate('en-US', 'en-GB')).toBe(false);
+    expect(shouldTranslate('en-GB', 'en-GB')).toBe(false);
+    // The dictation language has no region, so a regional variant of it still runs.
+    expect(shouldTranslate('en', 'en-GB')).toBe(true);
+    expect(shouldTranslate('zh', 'zh-TW')).toBe(true);
     expect(shouldTranslate('auto', 'es')).toBe(true);
     expect(shouldTranslate(undefined, 'es')).toBe(true);
     expect(shouldTranslate('en', null)).toBe(false);

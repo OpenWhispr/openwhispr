@@ -18,7 +18,11 @@ function HeaderBackButton() {
       hitSlop={12}
       onPress={() => {
         safeHaptics('selection');
-        router.back();
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/(account)');
+        }
       }}
       style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
     >
@@ -27,8 +31,10 @@ function HeaderBackButton() {
   );
 }
 
-function renderHeaderLeft({ canGoBack }: { canGoBack?: boolean }) {
-  return canGoBack ? <HeaderBackButton /> : null;
+// Every screen here gets Back, even with nothing beneath it: the keyboard's Keyboard Settings…
+// opens Preferences alone at a cold launch, and Back then goes to Account.
+function renderHeaderLeft() {
+  return <HeaderBackButton />;
 }
 
 export default function AccountLayout() {

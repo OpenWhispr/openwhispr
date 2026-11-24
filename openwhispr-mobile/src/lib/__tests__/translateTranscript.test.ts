@@ -23,6 +23,11 @@ jest.mock('@/store/useConfigStore', () => ({
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: 'cloud' }) },
 }));
+const mockCountTokens = jest.fn();
+jest.mock('@/lib/localReasoning', () => ({
+  ...jest.requireActual('@/lib/localReasoning'),
+  countLocalReasoningTokens: () => mockCountTokens(),
+}));
 let mockGuestSession = false;
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: {
@@ -58,8 +63,20 @@ describe('translateTranscript', () => {
     );
   });
 
-  it.each(['', '   ', 'Hello', ' Hello  ', 'Hello\n'])(
-    'keeps the input when the reply is %p',
+  it.each(['', '   '])('keeps the input and warns when the reply is %p', async (reply) => {
+    processText.mockResolvedValue({ text: reply, model: 'm' });
+    const onSkipped = jest.fn();
+    expect(await translateTranscript('Hello', { target: 'es', onSkipped })).toEqual({
+      text: 'Hello',
+      translated: false,
+    });
+    expect(onSkipped).toHaveBeenCalledWith(SKIPPED);
+    // An empty reply is an answer, not a failure to retry.
+    expect(processText).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['Hello', ' Hello  ', 'Hello\n'])(
+    'keeps the input without a warning when the reply is unchanged (%p)',
     async (reply) => {
       processText.mockResolvedValue({ text: reply, model: 'm' });
       const onSkipped = jest.fn();
@@ -67,11 +84,32 @@ describe('translateTranscript', () => {
         text: 'Hello',
         translated: false,
       });
-      expect(onSkipped).toHaveBeenCalledWith(SKIPPED);
-      // An empty or unchanged reply is an answer, not a failure to retry.
+      // Already in the target language: desktop treats it as done, not as a failure.
+      expect(onSkipped).not.toHaveBeenCalled();
       expect(processText).toHaveBeenCalledTimes(1);
     },
   );
+
+  it('gives an On-Device translation the on-device budget for its length', async () => {
+    mockCountTokens.mockResolvedValue(500);
+    processText.mockResolvedValue({ text: 'Hola', model: 'm' });
+    await translateTranscript('Hello', {
+      target: 'es',
+      inferenceRoute: { mode: 'local', scope: 'cleanup' },
+    });
+    // 5 s to start plus 500 tokens at 25 a second, as On-Device cleanup.
+    expect(processText).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: 25_000 }));
+  });
+
+  it('keeps 12 s On-Device for a short dictation', async () => {
+    mockCountTokens.mockResolvedValue(20);
+    processText.mockResolvedValue({ text: 'Hola', model: 'm' });
+    await translateTranscript('Hello', {
+      target: 'es',
+      inferenceRoute: { mode: 'local', scope: 'cleanup' },
+    });
+    expect(processText).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: 12_000 }));
+  });
 
   it('compares with collapsed whitespace', async () => {
     processText.mockResolvedValue({ text: 'Hello   big\nworld', model: 'm' });

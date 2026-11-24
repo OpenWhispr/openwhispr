@@ -32,6 +32,7 @@ const mockHandoffStoreState = {
 };
 const mockSubscription = { remove: jest.fn() };
 const mockMarkRecoveryDeepLink = jest.fn();
+const mockMarkKeyboardSettingsLink = jest.fn();
 const mockAddTranscript = jest.fn();
 const mockAddFailedTranscript = jest.fn();
 const mockCleanupTranscript = jest.fn();
@@ -91,6 +92,10 @@ jest.mock('@/store/useKeyboardRecoveryStore', () => ({
   useKeyboardRecoveryStore: {
     getState: () => ({ markRecoveryDeepLink: mockMarkRecoveryDeepLink }),
   },
+}));
+jest.mock('@/lib/keyboardSettingsLink', () => ({
+  KEYBOARD_SETTINGS_ROUTE: 'keyboard-settings',
+  markKeyboardSettingsLink: () => mockMarkKeyboardSettingsLink(),
 }));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: 'cloud' }) },
@@ -295,6 +300,21 @@ describe('useKeyboardHandoff — keyboard-full-access route', () => {
 
     await waitFor(() => expect(storage.startNativeRecording).toHaveBeenCalled());
     expect(storage.setKeyboardStatus).toHaveBeenCalledWith('recording', null);
+    expect(mockMarkRecoveryDeepLink).not.toHaveBeenCalled();
+    expect(mockMarkKeyboardSettingsLink).not.toHaveBeenCalled();
+  });
+});
+
+describe('useKeyboardHandoff — keyboard-settings route', () => {
+  // Keyboard Settings… opens Preferences through expo-router; the hook only stamps the link so a
+  // concurrent warm resume doesn't replace Preferences with Home.
+  it('stamps the link and starts no recording', async () => {
+    mountWithInitialUrl('openwhispr://keyboard-settings');
+
+    await waitFor(() => expect(mockMarkKeyboardSettingsLink).toHaveBeenCalled());
+    expect(storage.startNativeRecording).not.toHaveBeenCalled();
+    expect(storage.setKeyboardStatus).not.toHaveBeenCalled();
+    expect(mockHandoffStoreState.setActive).not.toHaveBeenCalled();
     expect(mockMarkRecoveryDeepLink).not.toHaveBeenCalled();
   });
 });

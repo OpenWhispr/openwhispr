@@ -64,7 +64,7 @@ export function createTimeoutSignal(timeoutMs: number): {
 const LOCAL_CLEANUP_TOKENS_PER_SECOND = 25;
 const LOCAL_CLEANUP_STARTUP_MS = 5_000;
 
-function localCleanupTimeoutMs(transcriptTokens: number): number {
+export function localCleanupTimeoutMs(transcriptTokens: number): number {
   return Math.max(
     CLEANUP_TIMEOUT_MS,
     LOCAL_CLEANUP_STARTUP_MS + (transcriptTokens / LOCAL_CLEANUP_TOKENS_PER_SECOND) * 1000,

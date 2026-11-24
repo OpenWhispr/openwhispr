@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 const mockSetTarget = jest.fn();
 const mockDictationRoute = jest.fn();
 const mockRequiresRealAccount = jest.fn();
-const mockGetSupportedLanguages = jest.fn();
+const mockReadSupport = jest.fn();
 let mockConfig: { keyboardTranslationTarget?: string | null } | null = null;
 
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
@@ -24,14 +24,18 @@ jest.mock('@/lib/keyboardDirectInputs', () => ({
 }));
 jest.mock('@/lib/keyboardTranslationSync', () => ({
   setKeyboardTranslationTarget: (code: string | null) => mockSetTarget(code),
+  readOnDeviceTranslationSupport: () => mockReadSupport(),
 }));
-jest.mock('@/lib/appleLLM', () => ({
-  AppleLLM: { getSupportedLanguages: () => mockGetSupportedLanguages() },
+jest.mock('@/lib/localReasoning', () => ({
+  getLocalReasoningUnavailableMessage: (readiness: { status: string }) =>
+    `Unavailable: ${readiness.status}`,
 }));
 
 import KeyboardTranslationScreen from '../KeyboardTranslationScreen';
 
 const cloudRoute = { provider: 'openwhispr', cleanupMode: 'openwhispr', cleanupUnavailable: false };
+const localRoute = { ...cloudRoute, cleanupMode: 'local' };
+const READY = { status: 'ready', tokenCounting: true };
 
 describe('KeyboardTranslationScreen', () => {
   beforeEach(() => {
@@ -39,7 +43,7 @@ describe('KeyboardTranslationScreen', () => {
     mockConfig = null;
     mockDictationRoute.mockReturnValue(cloudRoute);
     mockRequiresRealAccount.mockReturnValue(false);
-    mockGetSupportedLanguages.mockResolvedValue([]);
+    mockReadSupport.mockResolvedValue({ codes: null, readiness: READY });
   });
 
   it('selects a language and Off', () => {
@@ -78,11 +82,41 @@ describe('KeyboardTranslationScreen', () => {
   });
 
   it('limits On-Device languages to the ones the model supports', async () => {
-    mockDictationRoute.mockReturnValue({ ...cloudRoute, cleanupMode: 'local' });
-    mockGetSupportedLanguages.mockResolvedValue(['es-ES']);
+    mockDictationRoute.mockReturnValue(localRoute);
+    mockReadSupport.mockResolvedValue({ codes: ['es-es'], readiness: READY });
     render(<KeyboardTranslationScreen />);
     await act(async () => {});
     expect(screen.getByText('Spanish')).toBeTruthy();
     expect(screen.queryByText('French')).toBeNull();
+  });
+
+  it('says why On-Device can not translate and keeps only Off pressable', async () => {
+    mockDictationRoute.mockReturnValue(localRoute);
+    mockConfig = { keyboardTranslationTarget: 'es' };
+    mockReadSupport.mockResolvedValue({
+      codes: null,
+      readiness: { status: 'appleIntelligenceOff', tokenCounting: false },
+    });
+    render(<KeyboardTranslationScreen />);
+    await act(async () => {});
+    expect(screen.getByText('Unavailable: appleIntelligenceOff')).toBeTruthy();
+    fireEvent.press(screen.getByText('French'));
+    expect(mockSetTarget).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByText('Off'));
+    expect(mockSetTarget).toHaveBeenCalledWith(null);
+  });
+
+  it('explains a saved language the On-Device model can not translate into', async () => {
+    mockDictationRoute.mockReturnValue(localRoute);
+    mockConfig = { keyboardTranslationTarget: 'ru' };
+    mockReadSupport.mockResolvedValue({ codes: ['es', 'fr'], readiness: READY });
+    render(<KeyboardTranslationScreen />);
+    await act(async () => {});
+    expect(
+      screen.getByText(
+        "Apple Intelligence can't translate into Russian, so dictation isn't translated while cleanup runs On-Device. Your choice is saved.",
+      ),
+    ).toBeTruthy();
+    expect(mockSetTarget).not.toHaveBeenCalled();
   });
 });

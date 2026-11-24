@@ -45,18 +45,25 @@ export function isTranslationApplicable(input: {
   mode: CleanupRouteMode;
   cleanupUnavailable: boolean;
   guest: boolean;
+  /** Apple Intelligence can't run now (off, downloading, unsupported); only read for `local`. */
+  onDeviceUnavailable?: boolean;
 }): boolean {
   if (input.mode === null || input.cleanupUnavailable) return false;
   // Cloud translation needs an account; BYOK and On-Device do not.
   if (input.mode === 'openwhispr' && input.guest) return false;
+  if (input.mode === 'local' && input.onDeviceUnavailable) return false;
   return true;
 }
 
-/** False when target is null, or source is set, not "auto", and has the same base language. */
+/**
+ * False when target is null, or source is set, not "auto", and is exactly the target (as desktop's
+ * shouldRunTranslateStep). The dictation language comes without its region ("en"), so a regional
+ * target (en-GB, zh-TW) always runs: the model hands the text back unchanged when it already is.
+ */
 export function shouldTranslate(source: string | null | undefined, target: string | null): boolean {
   if (target === null) return false;
   if (!source || source === 'auto') return true;
-  return baseLanguage(source) !== baseLanguage(target);
+  return source !== target;
 }
 
 /** English label, falls back to the code. */
