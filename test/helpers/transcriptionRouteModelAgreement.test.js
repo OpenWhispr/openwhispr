@@ -7,8 +7,8 @@ const {
 } = require("../../src/models/appTranscriptionProviders.js");
 const load = () => import("../../src/helpers/transcriptionRoute.ts");
 
-// Every model the picker can write must survive a round trip through the resolver, or a user
-// who picks it has their choice replaced by the provider default at request time.
+// Every model the picker can write must resolve to itself, or a streaming one to its provider's
+// batch model; otherwise a user who picks it has their choice reset at request time.
 //
 // Tinfoil is excluded: its batch model comes from the registry directly
 // (getBatchTranscriptionModel) and the route sends none.
@@ -25,7 +25,7 @@ const PREFIX_VALIDATED_PROVIDERS = [
   "openrouter",
 ];
 
-test("every shipping registry model survives resolveByokModel", async () => {
+test("every shipping registry model resolves to itself or its provider's batch model", async () => {
   const { resolveByokModel } = await load();
 
   for (const providerId of PREFIX_VALIDATED_PROVIDERS) {
