@@ -131,9 +131,11 @@ class LearnedTab(
   private fun build(value: LearnedTabText): View {
     val row = TouchTrackingRow(context).apply {
       orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-      background = GradientDrawable().apply {
-        setColor(BubbleColors.surface); cornerRadius = pillHeight / 2f
-        setStroke(maxOf(1, dp(1f).toInt()), Color.argb(15, 0, 0, 0))
+      BubbleColors.themed(this) {
+        background = GradientDrawable().apply {
+          setColor(BubbleColors.surface); cornerRadius = pillHeight / 2f
+          setStroke(maxOf(1, dp(1f).toInt()), BubbleColors.hairline)
+        }
       }
       elevation = dp(6f)
       outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
@@ -148,14 +150,16 @@ class LearnedTab(
     }
     val book = PillGlyph(context)
     val message = TextView(context).apply {
-      text = value.message; typeface = font; setTextColor(BubbleColors.ink)
+      BubbleColors.themed(this) { setTextColor(BubbleColors.ink) }
+      text = value.message; typeface = font
       setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f); maxLines = 1; ellipsize = TextUtils.TruncateAt.END
       gravity = Gravity.CENTER_VERTICAL
       // Tapping the words opens the Dictionary.
       setOnClickListener { onOpen(); hide() }
     }
     val action = TextView(context).apply {
-      text = value.undo; typeface = Typeface.create(font, Typeface.BOLD); setTextColor(BubbleColors.accent)
+      BubbleColors.themed(this) { setTextColor(BubbleColors.accent) }
+      text = value.undo; typeface = Typeface.create(font, Typeface.BOLD)
       setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f); gravity = Gravity.CENTER_VERTICAL
       setPadding(dp(12f).toInt(), 0, 0, 0)
       contentDescription = "${value.undo}, ${value.message}"
@@ -273,10 +277,13 @@ class PillGlyph(context: Context) : View(context) {
   var kind = Kind.BOOK
     set(value) { if (field != value) { field = value; invalidate() } }
   private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    color = BubbleColors.accent; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
+    style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
   }
-  private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.accent; style = Paint.Style.FILL }
-  init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
+  private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+  init {
+    importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+    BubbleColors.themed(this) { stroke.color = BubbleColors.accent; fill.color = BubbleColors.accent }
+  }
   override fun onDraw(canvas: Canvas) {
     val w = width.toFloat(); val h = height.toFloat()
     stroke.strokeWidth = w / 10f

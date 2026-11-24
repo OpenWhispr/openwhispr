@@ -4,11 +4,9 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import type { GoogleCalendarEvent } from '@/data/calendarTypes';
 import { AppFont } from '@/lib/fonts';
-import { home } from '../home/kit';
 import { BottomSheet } from '../settings/kit';
-import { edgeField } from '../settings/look';
 import { GlassButton } from '../processingFable/look';
-import { Card, LinkButton, ListRow, NoteTile, notesLook } from './look';
+import { Card, LinkButton, ListRow, NoteTile, useNotesLook } from './look';
 import { eventIsNow, eventTimeRange, minutesUntil } from './calendar';
 import { timeOf } from './rows';
 import { useNotesT } from './strings';
@@ -30,6 +28,7 @@ function SheetRow({
   onPress: () => void;
   tint?: boolean;
 }) {
+  const n = useNotesLook();
   return (
     <Pressable
       cssInterop={false}
@@ -43,7 +42,7 @@ function SheetRow({
         paddingRight: 12,
         paddingVertical: 12,
         minHeight: 64,
-        backgroundColor: pressed ? 'rgba(0,0,0,0.04)' : 'transparent',
+        backgroundColor: pressed ? n.pressedRow : 'transparent',
       })}
     >
       {tint ? (
@@ -52,19 +51,19 @@ function SheetRow({
             width: 36,
             height: 36,
             borderRadius: 10,
-            backgroundColor: notesLook.selFill,
+            backgroundColor: n.selFill,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <SystemIcon name="circle" mdName={icon} size={20} color={home.accent} />
+          <SystemIcon name="circle" mdName={icon} size={20} color={n.accent} />
         </View>
       ) : (
         <NoteTile icon={icon} />
       )}
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={notesLook.rowTitle}>{title}</Text>
-        {subtitle ? <Text style={notesLook.rowSub}>{subtitle}</Text> : null}
+        <Text style={n.rowTitle}>{title}</Text>
+        {subtitle ? <Text style={n.rowSub}>{subtitle}</Text> : null}
       </View>
     </Pressable>
   );
@@ -189,6 +188,7 @@ export function TodaySheet({
   onRecord: (event: GoogleCalendarEvent) => void;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
   return (
     <BottomSheet visible={visible} onClose={onClose} title={t('todaySheet')}>
       <Card>
@@ -216,10 +216,10 @@ export function TodaySheet({
               }}
             >
               <View style={{ flex: 1, gap: 2 }}>
-                <Text numberOfLines={1} style={notesLook.rowTitle}>
+                <Text numberOfLines={1} style={n.rowTitle}>
                   {event.summary?.trim() || t('recordMeeting')}
                 </Text>
-                <Text style={notesLook.rowSub}>
+                <Text style={n.rowSub}>
                   {guests > 1 ? `${when} · ${t('people', { count: guests })}` : when}
                 </Text>
               </View>
@@ -235,7 +235,7 @@ export function TodaySheet({
                   opacity: pressed ? 0.6 : 1,
                 })}
               >
-                <Text style={{ color: home.accent, fontSize: 16, fontWeight: '500' }}>
+                <Text style={{ color: n.accent, fontSize: 16, fontWeight: '500' }}>
                   {t('record')}
                 </Text>
               </Pressable>
@@ -263,6 +263,7 @@ export function FolderNameSheet({
   submitLabel: string;
   onSubmit: (name: string) => void;
 }) {
+  const n = useNotesLook();
   const [name, setName] = useState(initialName ?? '');
   const input = useRef<TextInput>(null);
   useEffect(() => {
@@ -284,17 +285,17 @@ export function FolderNameSheet({
         value={name}
         onChangeText={setName}
         placeholder={title}
-        placeholderTextColor={home.tertiary}
+        placeholderTextColor={n.tertiary}
         returnKeyType="done"
         onSubmitEditing={submit}
         autoCapitalize="sentences"
         style={[
-          edgeField,
+          n.edgeField,
           {
             minHeight: 48,
             paddingHorizontal: 14,
             fontSize: 17,
-            color: home.text,
+            color: n.text,
             fontFamily: AppFont.regular,
           },
         ]}
@@ -339,6 +340,7 @@ export function StartSheet({
   onModelsChanged?: () => void;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
   const [picking, setPicking] = useState(false);
   const [choosingModel, setChoosingModel] = useState(false);
   useEffect(() => {
@@ -397,7 +399,7 @@ export function StartSheet({
           ))}
           <ListRow
             icon="CalendarX"
-            iconColor={home.secondary}
+            iconColor={n.secondary}
             title={t('noEvent')}
             subtitle={t('noEventBody')}
             chevron={false}
@@ -440,7 +442,7 @@ export function StartSheet({
               hitSlop={8}
               style={({ pressed }) => ({ paddingHorizontal: 4, opacity: pressed ? 0.6 : 1 })}
             >
-              <Text style={{ color: home.accent, fontSize: 16, fontWeight: '600' }}>
+              <Text style={{ color: n.accent, fontSize: 16, fontWeight: '600' }}>
                 {t('change')}
               </Text>
             </Pressable>
@@ -454,9 +456,7 @@ export function StartSheet({
           />
         ) : null}
       </Card>
-      <Text style={{ fontSize: 13, lineHeight: 18, color: home.secondary }}>
-        {t('startFooter')}
-      </Text>
+      <Text style={{ fontSize: 13, lineHeight: 18, color: n.secondary }}>{t('startFooter')}</Text>
       <GlassButton
         label={t('startRecording')}
         onPress={onStart}

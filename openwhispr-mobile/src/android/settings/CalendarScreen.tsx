@@ -5,9 +5,8 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
 import { safeHaptics } from '@/lib/utils';
-import { home } from '../home/kit';
-import { look } from './look';
-import { Group, ListRow, SettingsPage, settings, showToast } from './kit';
+import { useSettingsLook } from './look';
+import { Group, ListRow, SettingsPage, showToast, useSettings } from './kit';
 import { GlassButton, OutlineButton } from '../processingFable/look';
 import { needsReconnect } from '../calendar/connect';
 import { useConnectGoogle } from '../calendar/useConnectGoogle';
@@ -25,6 +24,8 @@ export function openCalendarAccount(accountId: number) {
  */
 export default function CalendarScreen() {
   const t = useSettingsT();
+  const settings = useSettings();
+  const { look } = useSettingsLook();
   const accounts = useGoogleCalendarStore((state) => state.accounts);
   const calendarsByAccountId = useGoogleCalendarStore((state) => state.calendarsByAccountId);
   const refreshing = useGoogleCalendarStore((state) => state.refreshingAccountIds);
@@ -101,11 +102,11 @@ export default function CalendarScreen() {
                 justifyContent: 'center',
               }}
             >
-              <SystemIcon name="plus" mdName="Plus" size={20} color={home.accent} />
+              <SystemIcon name="plus" mdName="Plus" size={20} color={settings.accent} />
             </View>
           }
           title={t(google.connecting ? 'waitingGoogle' : 'addGoogleAccount')}
-          titleColor={home.accent}
+          titleColor={settings.accent}
           trailing={null}
           onPress={() =>
             void google.connect({

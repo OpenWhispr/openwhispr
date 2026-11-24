@@ -250,7 +250,20 @@ jest.mock('@/android/ui', () => {
   };
 });
 
+const mockPrepareFade = jest.fn(async () => true);
+jest.mock('../../../modules/android-dictation/src/themeFade', () => ({
+  prepareThemeFade: () => mockPrepareFade(),
+  fadeTheme: jest.fn(),
+}));
+jest.mock('react-native/Libraries/Utilities/useColorScheme', () => ({
+  __esModule: true,
+  default: jest.fn(() => 'light'),
+}));
+
 import AndroidHome from '../HomeScreen.android';
+import { ScrollView, StyleSheet, useColorScheme } from 'react-native';
+import { ThemeProvider } from '@/android/ThemeProvider';
+import { darkTheme, lightTheme } from '@/android/theme';
 
 it('uses durable dictation statistics rather than retained transcripts and keeps failed audio retryable', () => {
   render(<AndroidHome />);
@@ -642,7 +655,6 @@ it('says Added to History once an upload is written up', async () => {
 describe('bubble card buttons by screen width', () => {
   // The container holding both buttons: the nearest ancestor of one that also holds the other.
   const pairDirection = () => {
-    const { StyleSheet } = require('react-native');
     const upload = screen.getByLabelText('uploadAudio');
     let node = screen.getByLabelText('dictate').parent;
     const contains = (root: any, target: any): boolean =>
@@ -667,4 +679,31 @@ describe('bubble card buttons by screen width', () => {
     render(<AndroidHome />);
     expect(pairDirection()).toBe('row');
   });
+});
+
+it('follows a light/dark switch in place: same scroll view, scroll kept, new canvas (§3b)', async () => {
+  const scheme = jest.mocked(useColorScheme);
+  scheme.mockReturnValue('light');
+  const home = () => (
+    <ThemeProvider>
+      <AndroidHome />
+    </ThemeProvider>
+  );
+  const view = render(home());
+  const scroll = view.UNSAFE_getByType(ScrollView);
+  // The page is Home's root view.
+  const canvas = () => StyleSheet.flatten(view.root.props.style).backgroundColor;
+  const scrollTo = jest.spyOn(scroll.instance, 'scrollTo');
+  expect(canvas()).toBe(lightTheme.canvas);
+
+  scheme.mockReturnValue('dark');
+  await act(async () => {
+    view.rerender(home());
+  });
+  expect(mockPrepareFade).toHaveBeenCalled();
+  expect(view.UNSAFE_getByType(ScrollView)).toBe(scroll);
+  expect(canvas()).toBe(darkTheme.canvas);
+  // Nothing scrolled the page back to the top on the way.
+  expect(scrollTo).not.toHaveBeenCalled();
+  scheme.mockReturnValue('light');
 });

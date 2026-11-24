@@ -4,19 +4,31 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Text } from '@/components/ui/Text';
-import { AccentText, BubbleIcon, GlassButton, Screen, WhiteButton, colors, plain, s } from './kit';
+import {
+  AccentText,
+  BubbleIcon,
+  GlassButton,
+  Screen,
+  WhiteButton,
+  onboardingColorsFor,
+  plain,
+  useOnboardingStyles,
+} from './kit';
+import { makeStyles, themeFor } from '../ThemeProvider';
 import { useOnboardingT } from './strings';
-import { theme } from '../theme';
 
 const APP_ICON = require('./assets/app-icon.png');
 const HOW_VIDEO = require('./assets/how-it-works-stage.mp4');
-const LIGHT_ACCENT = theme.brandHighlight;
+// The brand-blue screens (splash, the pitch card) look the same in both schemes (design §3.7).
+const brand = themeFor('light').tokens;
+const LIGHT_ACCENT = brand.brandHighlight;
 
 export function BrandBackground({ children }: { children: React.ReactNode }) {
+  const local = useStyles();
   return (
-    <View style={{ flex: 1, backgroundColor: colors.brandMid }}>
+    <View style={{ flex: 1, backgroundColor: brand.accent }}>
       <LinearGradient
-        colors={[colors.brandTop, colors.brandMid, colors.brandDeep]}
+        colors={[brand.brandTop, brand.accent, brand.brandDeep]}
         locations={[0, 0.55, 1]}
         style={StyleSheet.absoluteFill}
       />
@@ -36,12 +48,14 @@ const SPLASH_BG = require('./assets/splash-bg.jpg');
 // from it, and the icon and copy sit at the same fractions of the screen.
 export function SplashScreen({ onStart }: { onStart: () => void }) {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
+  const local = useStyles();
   const [size, setSize] = useState({ width: 0, height: 0 });
   const y = (value: number) => (size.height * value) / 852;
   const icon = (size.width * 112) / 393;
   return (
     <View
-      style={{ flex: 1, backgroundColor: colors.brandMid }}
+      style={{ flex: 1, backgroundColor: brand.accent }}
       onLayout={(event) => setSize(event.nativeEvent.layout)}
     >
       <StatusBar style="light" />
@@ -68,7 +82,7 @@ export function SplashScreen({ onStart }: { onStart: () => void }) {
               center
               text={t('splashTitle')}
               accent={LIGHT_ACCENT}
-              style={{ color: theme.onGlass, fontSize: 36, lineHeight: 42 }}
+              style={{ color: brand.onGlass, fontSize: 36, lineHeight: 42 }}
             />
             <Text
               textBreakStrategy="balanced"
@@ -95,6 +109,8 @@ const BARS = [18, 30, 22, 44, 34, 56, 40, 26, 48, 30, 20, 36, 24, 16];
 
 export function PitchScreen({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
+  const local = useStyles();
   return (
     <Screen
       onBack={onBack}
@@ -103,7 +119,7 @@ export function PitchScreen({ onBack, onNext }: { onBack: () => void; onNext: ()
     >
       <View style={local.pitch}>
         <LinearGradient
-          colors={[theme.brandLight, colors.brandMid, colors.brandDeep]}
+          colors={[brand.brandLight, brand.accent, brand.brandDeep]}
           locations={[0, 0.6, 1]}
           start={{ x: 0.8, y: 0 }}
           end={{ x: 0.2, y: 1 }}
@@ -112,7 +128,7 @@ export function PitchScreen({ onBack, onNext }: { onBack: () => void; onNext: ()
         <AccentText
           text={t('pitch')}
           accent={LIGHT_ACCENT}
-          style={{ color: theme.onGlass, fontSize: 36, lineHeight: 42 }}
+          style={{ color: brand.onGlass, fontSize: 36, lineHeight: 42 }}
         />
         <View style={{ flex: 1 }} />
         <View style={[s.center, { flexDirection: 'row', justifyContent: 'space-between' }]}>
@@ -186,6 +202,8 @@ function HowVideo({ video }: { video: ExpoVideo }) {
 
 export function HowItWorksScreen({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
+  const local = useStyles();
   const video = loadExpoVideo();
   return (
     <Screen onBack={onBack} footer={<GlassButton label={t('giveItATry')} onPress={onNext} />}>
@@ -210,18 +228,18 @@ export function HowItWorksScreen({ onBack, onNext }: { onBack: () => void; onNex
   );
 }
 
-const local = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   glow: {
     position: 'absolute',
     width: 420,
     height: 420,
     borderRadius: 210,
-    backgroundColor: theme.onGlass,
+    backgroundColor: brand.onGlass,
     opacity: 0.16,
   },
   splashIcon: {
     position: 'absolute',
-    shadowColor: theme.brandDeep,
+    shadowColor: brand.brandDeep,
     shadowOpacity: 0.45,
     shadowRadius: 30,
     shadowOffset: { width: 0, height: 16 },
@@ -238,6 +256,8 @@ const local = StyleSheet.create({
     aspectRatio: 1082 / 1260,
     borderRadius: 24,
     overflow: 'hidden',
-    backgroundColor: colors.surface,
+    backgroundColor: onboardingColorsFor(t).surface,
+    // The video is a light mock-up: in dark it sits inside a frame, like Home's tip posters (§3.6).
+    ...(t.scheme === 'dark' ? { borderWidth: 6, borderColor: t.tokens.surface2 } : null),
   },
-});
+}));

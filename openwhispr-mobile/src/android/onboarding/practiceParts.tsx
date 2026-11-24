@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  Appearance,
   Dimensions,
   Image,
   Keyboard,
@@ -15,8 +16,8 @@ import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { flat as glassEdge, theme } from '../theme';
-import { AccentText, GLASS_GRADIENT, colors } from './kit';
+import { makeStyles } from '../ThemeProvider';
+import { AccentText, GLASS_GRADIENT, onboardingColorsFor, useOnboardingColors } from './kit';
 import { placeCoachTag, type Frame, type TagPlacement } from './coachTag';
 import { Glyph, type GlyphName } from './PracticeBubble';
 import { useOnboardingT, type OnboardingKey } from './strings';
@@ -28,18 +29,11 @@ const ICONS = {
 
 /**
  * The text inside every practice card, typed or pasted: one padding for all three practices, with
- * room from the card's edges (Josh, 20 Nov), lined up with the header's icon.
+ * room from the card's edges (Josh, 20 Nov), lined up with the header's icon. Read at render.
  */
-export const fieldText = {
-  minHeight: 112,
-  paddingHorizontal: 20,
-  paddingTop: 18,
-  paddingBottom: 20,
-  fontSize: 17,
-  lineHeight: 25,
-  color: colors.ink,
-  textAlignVertical: 'top',
-} as const;
+export function useFieldText() {
+  return useStyles().field;
+}
 
 /** The app the practice pretends to be: a white glass-edge card with the app's header. */
 export function AppCard({
@@ -53,6 +47,8 @@ export function AppCard({
   children: ReactNode;
 }) {
   const t = useOnboardingT();
+  const p = useStyles();
+  const colors = useOnboardingColors();
   return (
     <View style={p.card}>
       <View style={p.cardHeader}>
@@ -82,6 +78,9 @@ function anchorTop(current: number | null): number {
   return Dimensions.get('screen').height * 0.58;
 }
 
+/** How long after a light/dark switch a keyboard closing may be the keyboard restarting. */
+export const KEYBOARD_RESTART_MS = 1500;
+
 /**
  * Keeps the practice's guidance and bubble just above the keyboard line. `onHide` runs when the
  * keyboard closes (the back gesture), which the practices treat as leaving the text box.
@@ -110,8 +109,26 @@ export function useKeyboardAnchor(onHide?: () => void) {
       setKeyboardTop(event.endCoordinates.screenY);
       place(event.endCoordinates.screenY);
     });
+    // A light/dark switch restarts some keyboards (Samsung's), which closes and reopens them: that
+    // isn't leaving the box, so a close soon after a switch is checked again before it counts.
+    let switchedAt = -Infinity;
+    let recheck: ReturnType<typeof setTimeout> | undefined;
+    const appearance = Appearance.addChangeListener(() => {
+      switchedAt = Date.now();
+    });
     const hide = Keyboard.addListener('keyboardDidHide', () => {
       setKeyboardTop(null);
+      const since = Date.now() - switchedAt;
+      if (since < KEYBOARD_RESTART_MS) {
+        clearTimeout(recheck);
+        recheck = setTimeout(
+          () => {
+            if (mounted.current && !Keyboard.isVisible()) hideRef.current?.();
+          },
+          KEYBOARD_RESTART_MS - since + 50,
+        );
+        return;
+      }
       hideRef.current?.();
     });
     // The keyboard can stay open from the previous practice, so no show event arrives.
@@ -125,6 +142,8 @@ export function useKeyboardAnchor(onHide?: () => void) {
       mounted.current = false;
       show.remove();
       hide.remove();
+      appearance.remove();
+      clearTimeout(recheck);
     };
   }, [place]);
 
@@ -144,6 +163,7 @@ export function useKeyboardAnchor(onHide?: () => void) {
 
 /** The line a practice ends on, centred under the card once the keyboard is down. */
 export function DoneLine({ text }: { text: string }) {
+  const p = useStyles();
   return (
     <Animated.View entering={FadeIn.duration(240)} style={{ paddingTop: 36, paddingHorizontal: 8 }}>
       <AccentText center text={text} style={p.done} />
@@ -153,12 +173,14 @@ export function DoneLine({ text }: { text: string }) {
 
 /** The right-aligned guidance beside the bubble ("Now hold the bubble"). */
 export function Hint({ text }: { text: string }) {
+  const p = useStyles();
   return <AccentText text={text} style={p.hint} />;
 }
 
 /** What to say, quoted, above the bubble while it listens (OB/Say card). */
 export function SayCard({ quote }: { quote: OnboardingKey }) {
   const t = useOnboardingT();
+  const p = useStyles();
   return (
     <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(140)} style={p.say}>
       <Text style={p.sayLabel}>{t('sayLabel').toUpperCase()}</Text>
@@ -199,6 +221,8 @@ export function PracticeMenu({
   onClose: () => void;
 }) {
   const t = useOnboardingT();
+  const p = useStyles();
+  const colors = useOnboardingColors();
   const [menu, setMenu] = useState<LayoutRectangle | null>(null);
   const [row, setRow] = useState<LayoutRectangle | null>(null);
   const [tag, setTag] = useState<{ width: number; height: number } | null>(null);
@@ -282,6 +306,7 @@ export function PracticeMenu({
 
 /** OB/Coach tag: brand glass, 12 bold white, "Pick ›" or "‹ Pick". */
 function CoachTag({ points, label }: { points: 'left' | 'right'; label: string }) {
+  const p = useStyles();
   return (
     <LinearGradient colors={GLASS_GRADIENT} style={p.tag}>
       <View pointerEvents="none" style={p.tagRim} />
@@ -290,71 +315,85 @@ function CoachTag({ points, label }: { points: 'left' | 'right'; label: string }
   );
 }
 
-const p = StyleSheet.create({
-  card: { ...glassEdge, borderRadius: 20, overflow: 'hidden' },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: colors.surface2,
-  },
-  appIcon: { width: 24, height: 24, borderRadius: 6 },
-  appName: { flex: 1, fontSize: 16, fontFamily: AppFont.semibold, color: colors.ink },
-  send: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.accentSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  hint: { fontSize: 17, lineHeight: 22, textAlign: 'right', fontFamily: AppFont.medium },
-  done: { fontSize: 22, lineHeight: 29, fontFamily: AppFont.bold, letterSpacing: -0.3 },
-  say: { ...glassEdge, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 14, gap: 6 },
-  sayLabel: {
-    fontSize: 11,
-    letterSpacing: 0.8,
-    color: colors.tertiary,
-    fontFamily: AppFont.medium,
-  },
-  sayQuote: { fontSize: 17, lineHeight: 24, color: colors.ink, fontFamily: AppFont.medium },
-  menuWrap: { alignSelf: 'flex-end', transformOrigin: 'bottom right' },
-  menu: {
-    ...glassEdge,
-    width: 208,
-    padding: 6,
-    gap: 2,
-    borderRadius: 20,
-  },
-  row: {
-    height: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingLeft: 8,
-    paddingRight: 10,
-    borderRadius: 14,
-  },
-  rowHighlight: { backgroundColor: theme.selFill },
-  tile: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
-    backgroundColor: theme.tile,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowTitle: { fontSize: 14, fontFamily: AppFont.medium, color: theme.ink },
-  rowBody: { fontSize: 12, color: theme.secondary },
-  tagWrap: { position: 'absolute' },
-  tag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, overflow: 'hidden' },
-  tagRim: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 6,
-    borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.6)',
-  },
-  tagLabel: { fontSize: 12, fontFamily: AppFont.bold, color: theme.onGlass },
+const useStyles = makeStyles((t) => {
+  const colors = onboardingColorsFor(t);
+  const glassEdge = t.flat;
+  return {
+    field: {
+      minHeight: 112,
+      paddingHorizontal: 20,
+      paddingTop: 18,
+      paddingBottom: 20,
+      fontSize: 17,
+      lineHeight: 25,
+      color: colors.ink,
+      textAlignVertical: 'top',
+    },
+    card: { ...glassEdge, borderRadius: 20, overflow: 'hidden' },
+    cardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      backgroundColor: colors.surface2,
+    },
+    appIcon: { width: 24, height: 24, borderRadius: 6 },
+    appName: { flex: 1, fontSize: 16, fontFamily: AppFont.semibold, color: colors.ink },
+    send: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colors.accentSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    hint: { fontSize: 17, lineHeight: 22, textAlign: 'right', fontFamily: AppFont.medium },
+    done: { fontSize: 22, lineHeight: 29, fontFamily: AppFont.bold, letterSpacing: -0.3 },
+    say: { ...glassEdge, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 14, gap: 6 },
+    sayLabel: {
+      fontSize: 11,
+      letterSpacing: 0.8,
+      color: colors.tertiary,
+      fontFamily: AppFont.medium,
+    },
+    sayQuote: { fontSize: 17, lineHeight: 24, color: colors.ink, fontFamily: AppFont.medium },
+    menuWrap: { alignSelf: 'flex-end', transformOrigin: 'bottom right' },
+    menu: {
+      ...glassEdge,
+      width: 208,
+      padding: 6,
+      gap: 2,
+      borderRadius: 20,
+    },
+    row: {
+      height: 44,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingLeft: 8,
+      paddingRight: 10,
+      borderRadius: 14,
+    },
+    rowHighlight: { backgroundColor: t.tokens.selFill },
+    tile: {
+      width: 28,
+      height: 28,
+      borderRadius: 9,
+      backgroundColor: t.tokens.tile,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rowTitle: { fontSize: 14, fontFamily: AppFont.medium, color: t.tokens.ink },
+    rowBody: { fontSize: 12, color: t.tokens.secondary },
+    tagWrap: { position: 'absolute' },
+    tag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, overflow: 'hidden' },
+    tagRim: {
+      ...StyleSheet.absoluteFillObject,
+      borderRadius: 6,
+      borderTopWidth: 1,
+      borderColor: 'rgba(255,255,255,0.6)',
+    },
+    tagLabel: { fontSize: 12, fontFamily: AppFont.bold, color: t.tokens.onGlass },
+  };
 });

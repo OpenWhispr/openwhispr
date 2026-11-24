@@ -14,6 +14,7 @@ import { formatRelativeTime, safeHaptics } from '@/lib/utils';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { describeConflictCount } from '@/lib/notes/conflictCount';
+import { useIosColor } from '@/config/colors.android';
 
 const RELATIVE_TICK_MS = 30_000;
 
@@ -63,6 +64,7 @@ function describe(
 export function createSyncStatusLabel(usePresentation: () => StatusPresentation = () => ({})) {
   return function SyncStatusLabel() {
     const presentation = usePresentation();
+    const color = useIosColor();
     const copy = presentation.copy ?? defaultCopy;
     const user = useAuthStore((s) => s.user);
     const isGuest = useAuthStore((s) => s.isGuest);
@@ -188,15 +190,15 @@ export function createSyncStatusLabel(usePresentation: () => StatusPresentation 
           {isGated && <SystemIcon name="lock.fill" mdName="Lock" size={12} color="tertiaryLabel" />}
           <Text
             numberOfLines={presentation.unlimitedLines ? undefined : 2}
-            className={'flex-1 text-[13px] ' + (isError ? 'text-systemRed' : 'text-tertiaryLabel')}
+            className="flex-1 text-[13px]"
+            style={{ color: color(isError ? 'systemRed' : 'tertiaryLabel') }}
           >
             {label}
           </Text>
           {conflictLabel && (
             <Text
-              className={
-                presentation.conflictClassName ?? 'text-[13px] font-medium text-systemOrange'
-              }
+              className={presentation.conflictClassName ?? 'text-[13px] font-medium'}
+              style={{ color: color('systemOrange') }}
             >
               {conflictLabel}
             </Text>

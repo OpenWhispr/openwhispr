@@ -5,7 +5,7 @@ import { createNoteShareInviteField } from './NoteShareInviteFieldCore.android';
 export const NoteShareInviteField = createNoteShareInviteField({
   useCopy: useAndroidCopy,
   useLabels: usePrincipalLabels,
-  inputClassName: 'min-h-[48px] py-1 text-[15px] text-label',
+  inputClassName: 'min-h-[48px] py-1 text-[15px]',
   numberOfLines: undefined,
   inviteText: (query, copy) => copy('noteAccess.invite', `Invite ${query}`, { email: query }),
 });

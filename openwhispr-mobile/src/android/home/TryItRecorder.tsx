@@ -6,9 +6,7 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { AndroidDictation, type Recording } from '../../../modules/android-dictation/src';
 import { useHomeT } from './strings';
-import { gloss, glossPressed, home, type } from './kit';
-import { look } from '../settings/look';
-import { raised } from '../theme';
+import { useHome } from './kit';
 
 const BARS = 48;
 const BAR_MAX = 48;
@@ -34,6 +32,7 @@ export function TryItRecorder({
   onDone: (recording: Recording) => void;
 }) {
   const t = useHomeT();
+  const { c, type, theme } = useHome();
   const { t: tAndroid } = useTranslation();
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -112,7 +111,7 @@ export function TryItRecorder({
   return (
     <Modal visible animationType="slide" statusBarTranslucent onRequestClose={discard}>
       <SafeAreaProvider>
-        <SafeAreaView style={{ flex: 1, backgroundColor: look.canvas }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: c.canvas }}>
           <View
             style={{
               flexDirection: 'row',
@@ -137,7 +136,7 @@ export function TryItRecorder({
             >
               <View
                 style={{
-                  ...raised,
+                  ...theme.raised,
                   width: 36,
                   height: 36,
                   borderRadius: 18,
@@ -145,7 +144,7 @@ export function TryItRecorder({
                   justifyContent: 'center',
                 }}
               >
-                <SystemIcon name="xmark" mdName="X" size={20} color={home.text} />
+                <SystemIcon name="xmark" mdName="X" size={20} color={c.text} />
               </View>
             </Pressable>
             <Text
@@ -177,7 +176,7 @@ export function TryItRecorder({
                     width: 3,
                     height: barHeight(level),
                     borderRadius: 999,
-                    backgroundColor: home.accent,
+                    backgroundColor: c.accent,
                   }}
                 />
               ))}
@@ -188,10 +187,10 @@ export function TryItRecorder({
                   width: 8,
                   height: 8,
                   borderRadius: 4,
-                  backgroundColor: recording ? home.error : home.tertiary,
+                  backgroundColor: recording ? c.error : c.tertiary,
                 }}
               />
-              <Text style={{ fontSize: 16, lineHeight: 21, color: home.secondary }}>
+              <Text style={{ fontSize: 16, lineHeight: 21, color: c.secondary }}>
                 {t('listening')}
               </Text>
             </View>
@@ -202,7 +201,7 @@ export function TryItRecorder({
                 lineHeight: 72,
                 fontWeight: '500',
                 letterSpacing: -0.96,
-                color: home.text,
+                color: c.text,
                 fontVariant: ['tabular-nums'],
               }}
             >
@@ -228,11 +227,11 @@ export function TryItRecorder({
                   justifyContent: 'center',
                   opacity: recording ? 1 : 0.5,
                 },
-                gloss,
-                pressed && glossPressed,
+                theme.glass,
+                pressed && theme.glassPressed,
               ]}
             >
-              <SystemIcon name="checkmark" mdName="Check" size={28} color="#FFFFFF" />
+              <SystemIcon name="checkmark" mdName="Check" size={28} color={c.onGlass} />
             </Pressable>
             <Text style={type.footnote}>{t('done')}</Text>
           </View>

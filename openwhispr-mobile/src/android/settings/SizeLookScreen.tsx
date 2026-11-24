@@ -2,20 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
-import { home } from '../home/kit';
-import { theme } from '../theme';
 import {
   Group,
   ListRow,
   SettingsPage,
   SettingsSlider,
-  cardStyle,
-  settings,
   showToast,
   useReduceMotion,
+  useSettings,
 } from './kit';
 import { useSettingsT } from './strings';
-import { bodyText, look } from './look';
+import { useSettingsLook } from './look';
 import {
   BUBBLE_SIZE,
   DEFAULT_LOOK,
@@ -48,6 +45,7 @@ function Preview({
   dot: boolean;
 }) {
   const t = useSettingsT();
+  const { edgeCard: cardStyle, look } = useSettingsLook();
   const reduceMotion = useReduceMotion();
   const shrink = useRef(new Animated.Value(0)).current;
   // The same sizes as the bubble itself: 56 dp at Medium, 34 dp shrunk, a 16 dp dot.
@@ -102,7 +100,8 @@ function Preview({
               width: full,
               height: full,
               borderRadius: full / 2,
-              backgroundColor: theme.accent,
+              // The real bubble's dot (`BubbleColors.dot`), the same in both schemes.
+              backgroundColor: '#1555D4',
               opacity: shrink,
             }}
           />
@@ -123,11 +122,13 @@ function SliderCard({
   ends: [string, string];
   children: React.ReactNode;
 }) {
+  const settings = useSettings();
+  const { edgeCard: cardStyle, bodyText } = useSettingsLook();
   return (
     <View style={[cardStyle, { paddingHorizontal: 16, paddingVertical: 14, gap: 12 }]}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Text style={bodyText}>{title}</Text>
-        <Text style={[bodyText, settings.tabular, { color: home.accent }]}>{value}</Text>
+        <Text style={[bodyText, settings.tabular, { color: settings.accent }]}>{value}</Text>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <Text style={[settings.subtitle, settings.tabular]}>{ends[0]}</Text>

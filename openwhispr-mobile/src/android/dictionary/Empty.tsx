@@ -10,17 +10,17 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { home } from '../home/kit';
-import { flat, glass, glassPressed, theme } from '../theme';
+import { useHome } from '../home/kit';
 import { useReduceMotion } from '../settings/kit';
 import { useDictionaryT } from './strings';
 
-/** The accent at 28%. */
-const RING = 'rgba(21,85,212,0.28)';
 const HERO_HEIGHT = 220;
 
 /** A dashed ring that turns very slowly (desktop's `DictionaryEmptyIllustration` rings). */
 function Ring({ size, seconds, reverse }: { size: number; seconds: number; reverse?: boolean }) {
+  const { theme: th } = useHome();
+  // The accent at 28%.
+  const ring = th.scheme === 'dark' ? 'rgba(110,155,255,0.28)' : 'rgba(21,85,212,0.28)';
   const reduceMotion = useReduceMotion();
   const turn = useSharedValue(0);
   useEffect(() => {
@@ -45,7 +45,7 @@ function Ring({ size, seconds, reverse }: { size: number; seconds: number; rever
           borderRadius: size / 2,
           borderWidth: 1.5,
           borderStyle: 'dashed',
-          borderColor: RING,
+          borderColor: ring,
         },
         style,
       ]}
@@ -63,6 +63,7 @@ function Floating({
   delay: number;
   style: object;
 }) {
+  const { c: hc, theme: th } = useHome();
   const reduceMotion = useReduceMotion();
   const lift = useSharedValue(0);
   useEffect(() => {
@@ -83,8 +84,8 @@ function Floating({
   return (
     <Animated.View
       style={[
-        flat,
-        { position: 'absolute', boxShadow: home.tipShadow, borderRadius: 18 },
+        th.flat,
+        { position: 'absolute', boxShadow: hc.tipShadow, borderRadius: 18 },
         style,
         animated,
       ]}
@@ -95,6 +96,7 @@ function Floating({
 }
 
 function FixChip({ wrong, right }: { wrong: string; right: string }) {
+  const k = useHome().c;
   return (
     <View
       style={{
@@ -109,13 +111,13 @@ function FixChip({ wrong, right }: { wrong: string; right: string }) {
         style={{
           fontSize: 14,
           lineHeight: 18,
-          color: theme.tertiary,
+          color: k.tertiary,
           textDecorationLine: 'line-through',
         }}
       >
         {wrong}
       </Text>
-      <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: theme.accent }}>
+      <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: k.accent }}>
         {right}
       </Text>
     </View>
@@ -123,12 +125,13 @@ function FixChip({ wrong, right }: { wrong: string; right: string }) {
 }
 
 function SnippetChip({ trigger, text }: { trigger: string; text: string }) {
+  const k = useHome().c;
   return (
     <View style={{ paddingHorizontal: 14, paddingVertical: 9, gap: 2 }}>
-      <Text style={{ fontSize: 13, lineHeight: 17, color: theme.secondary }}>“{trigger}”</Text>
+      <Text style={{ fontSize: 13, lineHeight: 17, color: k.secondary }}>“{trigger}”</Text>
       <Text
         numberOfLines={1}
-        style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: theme.accent }}
+        style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: k.accent }}
       >
         ↳ {text}
       </Text>
@@ -147,6 +150,8 @@ export function DictionaryEmpty({
   variant: 'words' | 'snippets';
   onAdd: () => void;
 }) {
+  const { theme: th } = useHome();
+  const k = th.tokens;
   const t = useDictionaryT();
   const words = variant === 'words';
   return (
@@ -172,13 +177,13 @@ export function DictionaryEmpty({
               alignItems: 'center',
               justifyContent: 'center',
             },
-            glass,
+            th.glass,
           ]}
         >
           {words ? (
-            <SystemIcon name="book" mdName="BookOpen" size={24} color="#FFFFFF" />
+            <SystemIcon name="book" mdName="BookOpen" size={24} color={k.onGlass} />
           ) : (
-            <Text style={{ color: theme.surface, fontSize: 20, lineHeight: 24, fontWeight: '500' }}>
+            <Text style={{ color: k.onGlass, fontSize: 20, lineHeight: 24, fontWeight: '500' }}>
               Aa
             </Text>
           )}
@@ -210,7 +215,7 @@ export function DictionaryEmpty({
           fontSize: 22,
           lineHeight: 30,
           fontWeight: '500',
-          color: theme.ink,
+          color: k.ink,
           textAlign: 'center',
         }}
       >
@@ -219,7 +224,7 @@ export function DictionaryEmpty({
         ) : (
           <>
             {t('snippetsEmptyTitle')}{' '}
-            <Text style={{ color: theme.accent }}>{t('snippetsEmptyAccent')}</Text>
+            <Text style={{ color: k.accent }}>{t('snippetsEmptyAccent')}</Text>
           </>
         )}
       </Text>
@@ -229,7 +234,7 @@ export function DictionaryEmpty({
           marginTop: 12,
           fontSize: 16,
           lineHeight: 23,
-          color: theme.secondary,
+          color: k.secondary,
           textAlign: 'center',
           paddingHorizontal: 12,
         }}
@@ -250,12 +255,12 @@ export function DictionaryEmpty({
             alignItems: 'center',
             gap: 8,
           },
-          glass,
-          pressed && glassPressed,
+          th.glass,
+          pressed && th.glassPressed,
         ]}
       >
-        <SystemIcon name="plus" mdName="Plus" size={20} color="#FFFFFF" />
-        <Text style={{ color: theme.surface, fontSize: 17, lineHeight: 24, fontWeight: '500' }}>
+        <SystemIcon name="plus" mdName="Plus" size={20} color={k.onGlass} />
+        <Text style={{ color: k.onGlass, fontSize: 17, lineHeight: 24, fontWeight: '500' }}>
           {words ? t('addFirstWord') : t('newSnippet')}
         </Text>
       </Pressable>

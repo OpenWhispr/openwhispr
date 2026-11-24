@@ -12,9 +12,12 @@ import android.widget.TextView
 
 /** A row's 28 dp tile with its filled 14 dp glyph. */
 private class MenuTile(context: Context, private val mode: BubbleMode) : View(context) {
-  private val tile = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.tile }
-  private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.ink }
-  init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
+  private val tile = Paint(Paint.ANTI_ALIAS_FLAG)
+  private val glyph = Paint(Paint.ANTI_ALIAS_FLAG)
+  init {
+    importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+    BubbleColors.themed(this) { tile.color = BubbleColors.tile; glyph.color = BubbleColors.ink }
+  }
   override fun onDraw(canvas: Canvas) {
     val radius = width * 9f / 28f
     canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), radius, radius, tile)
@@ -49,21 +52,29 @@ class HoldMenuView(
     set(value) {
       if (field == value) return
       field = value
-      rowViews.forEachIndexed { index, row ->
-        row.background = if (index == value) GradientDrawable().apply {
-          setColor(Color.argb(31, Color.red(BubbleColors.brand), Color.green(BubbleColors.brand), Color.blue(BubbleColors.brand)))
-          cornerRadius = dp(14f)
-        } else null
-      }
+      paintHighlight()
       if (value != null) performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
     }
   var onPick: ((Int) -> Unit)? = null
 
+  /** The row under the finger: the one blue at 12%. */
+  private fun paintHighlight() {
+    rowViews.forEachIndexed { index, row ->
+      row.background = if (index == highlighted) GradientDrawable().apply {
+        setColor(Color.argb(31, Color.red(BubbleColors.brand), Color.green(BubbleColors.brand), Color.blue(BubbleColors.brand)))
+        cornerRadius = dp(14f)
+      } else null
+    }
+  }
+
   init {
     orientation = VERTICAL
     val pad = padding.toInt(); setPadding(pad, pad, pad, pad)
-    background = GradientDrawable().apply {
-      setColor(Color.WHITE); cornerRadius = dp(20f); setStroke(dp(1f).toInt().coerceAtLeast(1), BubbleColors.hairline)
+    BubbleColors.themed(this) {
+      background = GradientDrawable().apply {
+        setColor(BubbleColors.surface); cornerRadius = dp(20f); setStroke(dp(1f).toInt().coerceAtLeast(1), BubbleColors.hairline)
+      }
+      paintHighlight()
     }
     elevation = dp(4f)
     rows.forEachIndexed { index, row ->
@@ -77,16 +88,17 @@ class HoldMenuView(
       }
       line.addView(MenuTile(context, row.mode), LayoutParams(dp(28f).toInt(), dp(28f).toInt()))
       val words = LinearLayout(context).apply { orientation = VERTICAL; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS }
-      words.addView(text(copy.title(row.mode), medium, 14f, BubbleColors.ink))
-      words.addView(text(if (row.enabled) copy.subtitle(row.mode) else copy.blockedReason, regular, 12f, BubbleColors.secondary))
+      words.addView(text(copy.title(row.mode), medium, 14f) { BubbleColors.ink })
+      words.addView(text(if (row.enabled) copy.subtitle(row.mode) else copy.blockedReason, regular, 12f) { BubbleColors.secondary })
       line.addView(words, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(10f).toInt() })
       addView(line, LayoutParams(dp(196f).toInt(), rowHeight.toInt()).apply { if (index > 0) topMargin = gap.toInt() })
       rowViews += line
     }
   }
 
-  private fun text(value: String, face: Typeface, size: Float, color: Int) = TextView(context).apply {
-    text = value; typeface = face; setTextColor(color); setTextSize(TypedValue.COMPLEX_UNIT_SP, size * scale)
+  private fun text(value: String, face: Typeface, size: Float, color: () -> Int) = TextView(context).apply {
+    BubbleColors.themed(this) { setTextColor(color()) }
+    text = value; typeface = face; setTextSize(TypedValue.COMPLEX_UNIT_SP, size * scale)
     maxLines = 1; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = false
   }
 

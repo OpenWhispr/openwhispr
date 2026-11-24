@@ -1,5 +1,6 @@
 import React, { Children, isValidElement, ReactNode } from 'react';
-import { View, Pressable, StyleSheet, type PressableProps } from 'react-native';
+import { View, Pressable, type PressableProps } from 'react-native';
+import { useTheme } from '@/android/ThemeProvider';
 import {
   NOTES_GROUP_RADIUS,
   NOTES_ROW_CONTENT_INSET,
@@ -50,6 +51,9 @@ export function createGroupedList(
     testID,
     children,
   }: GroupedListRowProps) {
+    const { scheme } = useTheme();
+    // A pressed row: notes' pressedRow wash.
+    const pressedFill = scheme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
     return (
       <Pressable
         // An accessible row hides nested controls from VoiceOver, so only pressable rows group.
@@ -62,11 +66,14 @@ export function createGroupedList(
         {...rowAccessibility({ accessibilityActions, onAccessibilityAction })}
         accessibilityState={disabled === undefined ? undefined : { disabled }}
         testID={testID}
-        className="flex-row items-center active:bg-tertiarySystemFill"
-        style={{
+        cssInterop={false}
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
           paddingHorizontal: NOTES_ROW_PADDING_X,
           paddingVertical: NOTES_ROW_PADDING_Y,
-        }}
+          backgroundColor: pressed ? pressedFill : 'transparent',
+        })}
       >
         {leadingIconSlot != null && (
           <View
@@ -87,26 +94,38 @@ export function createGroupedList(
     tinted = false,
     children,
   }: GroupedListProps) {
+    const { scheme, tokens } = useTheme();
+    const { surface, divider } = tokens;
+    const dark = scheme === 'dark';
     const rows = Children.toArray(children).filter(isValidElement);
-    const containerClass = tinted
-      ? 'overflow-hidden border border-separator'
-      : 'overflow-hidden bg-secondarySystemGroupedBackground';
-
-    const radiusStyle = { borderRadius: radius };
+    // Same border width in both looks: only its colour changes with `tinted`.
+    const corners = { borderRadius: radius, borderCurve: 'continuous' as const };
     return (
       <View
-        className="bg-secondarySystemGroupedBackground"
-        style={[styles.shadow, styles.continuous, radiusStyle]}
+        style={[
+          corners,
+          {
+            backgroundColor: surface,
+            boxShadow: dark ? '0px 2px 8px rgba(0, 0, 0, 0.35)' : '0px 2px 8px rgba(0, 0, 0, 0.10)',
+          },
+        ]}
       >
         <View
-          className={containerClass}
-          style={[!tinted && styles.opaqueBackground, styles.continuous, radiusStyle]}
+          style={[
+            corners,
+            {
+              overflow: 'hidden',
+              borderWidth: tinted ? 1 : 0,
+              borderColor: divider,
+              backgroundColor: tinted ? undefined : surface,
+            },
+          ]}
         >
           {rows.map((row, i) => (
             <React.Fragment key={i}>
               {row}
               {i < rows.length - 1 && (
-                <View className="h-px bg-separator" style={{ marginLeft: dividerInset }} />
+                <View style={{ height: 1, backgroundColor: divider, marginLeft: dividerInset }} />
               )}
             </React.Fragment>
           ))}
@@ -118,15 +137,3 @@ export function createGroupedList(
   GroupedList.Row = Row;
   return GroupedList;
 }
-
-const styles = StyleSheet.create({
-  opaqueBackground: {
-    backgroundColor: '#FFFFFF',
-  },
-  shadow: {
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.10)',
-  },
-  continuous: {
-    borderCurve: 'continuous',
-  },
-});

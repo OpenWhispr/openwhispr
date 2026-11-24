@@ -63,6 +63,7 @@ class AndroidDictationModule : Module() {
     }.start()
   }
   private val navigationBar = NavigationBar { sendEvent("onNavigationBarChange", it) }
+  private val themeFade = ThemeFade()
   override fun definition() = ModuleDefinition {
     Name("AndroidDictation")
     Events("onStart", "onRecording", "onRetry", "onDismiss", "onError", "onCancel", "onOpenResult", "onOpenPlans", "onOpenSignIn", "onOpenModels", "onStatusChange", "pcm-frame", "pcm-error", "pcm-stopped", "local-meeting-stopped", "local-meeting-error", "onNavigationBarChange", "onFieldEdited", "onLearnedUndo", "onLearnedRedo", "onOpenDictionary")
@@ -84,7 +85,7 @@ class AndroidDictationModule : Module() {
       DictationService.instance?.updateVisibility()
     }
     OnDestroy {
-      android.os.Handler(android.os.Looper.getMainLooper()).post { navigationBar.detach() }
+      android.os.Handler(android.os.Looper.getMainLooper()).post { navigationBar.detach(); themeFade.clear() }
       sampleDecodes.values.forEach { it.set(true) }
       sampleDecodes.clear()
       cloudAudioJobs.values.forEach { it.set(true) }
@@ -218,9 +219,16 @@ class AndroidDictationModule : Module() {
       navigationBar.attach(appContext.currentActivity)
       navigationBar.state()
     }.runOnQueue(Queues.MAIN)
-    AsyncFunction("setNavigationBarColor") { color: Int? ->
+    AsyncFunction("setNavigationBarColor") { color: Int?, darkIcons: Boolean? ->
       navigationBar.attach(appContext.currentActivity)
-      navigationBar.style(color)
+      navigationBar.style(color, darkIcons ?: true)
+    }.runOnQueue(Queues.MAIN)
+    // A light/dark switch (design §3b): freeze the frame, let React repaint under it, fade it out.
+    AsyncFunction("prepareThemeFade") { promise: Promise ->
+      themeFade.prepare(appContext.currentActivity) { promise.resolve(it) }
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("fadeTheme") { durationMs: Int ->
+      themeFade.fade(durationMs.toLong())
     }.runOnQueue(Queues.MAIN)
     Function("restoreBubble") { BubbleRestore.restore(context, fromApp = true) }
     AsyncFunction("setPractice") { visible: Boolean ->

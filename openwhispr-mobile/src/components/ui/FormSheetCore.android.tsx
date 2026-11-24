@@ -16,6 +16,8 @@ import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { useSheetDragToDismiss } from '@/hooks/useSheetDragToDismiss';
+import { makeStyles } from '@/android/ThemeProvider';
+import { useIosColor } from '@/config/colors.android';
 
 const SHEET_RADIUS = 28;
 // Gap below the safe-area inset, leaving a sliver of the dimmed screen above the
@@ -24,13 +26,16 @@ const SHEET_TOP_PEEK = 8;
 // Breathing room between the primary button and the keyboard's top edge.
 const BUTTON_KEYBOARD_GAP = 10;
 
-const SUBMIT_SHADOW: ViewStyle = {
-  shadowColor: '#2457D6',
-  shadowOpacity: 0.35,
-  shadowRadius: 14,
-  shadowOffset: { width: 0, height: 8 },
-  elevation: 4,
-};
+// The brand glass's blue glow under Submit: the same in both schemes (the glass doesn't change).
+const useStyles = makeStyles(() => ({
+  submitShadow: {
+    shadowColor: '#2457D6',
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+  },
+}));
 
 type FormSheetProps = {
   visible: boolean;
@@ -86,6 +91,8 @@ export function createFormSheet(usePresentation: () => FormSheetPresentation = (
     children,
   }: FormSheetProps) {
     const presentation = usePresentation();
+    const { submitShadow } = useStyles();
+    const color = useIosColor();
     const copy = presentation.copy ?? defaultCopy;
     const insets = useSafeAreaInsets();
     const keyboardHeight = useKeyboardHeight(visible);
@@ -100,32 +107,44 @@ export function createFormSheet(usePresentation: () => FormSheetPresentation = (
     const closeLabel = copy('close', 'Close');
     const submitButton: ButtonPresentation = presentation.submitButton?.(
       canSubmit,
-      SUBMIT_SHADOW,
+      submitShadow,
     ) ?? {
       style: ({ pressed }) => [
-        canSubmit ? SUBMIT_SHADOW : null,
+        canSubmit ? submitShadow : null,
         { borderCurve: 'continuous', opacity: pressed && canSubmit ? 0.9 : 1 },
       ],
-      className: `relative h-[52px] items-center justify-center rounded-full ${
-        canSubmit ? 'bg-link' : 'bg-quaternarySystemFill'
-      }`,
+      className: 'relative h-[52px] items-center justify-center rounded-full',
     };
     const destructiveButton: ButtonPresentation = presentation.destructiveButton ?? {
       style: ({ pressed }) => ({ opacity: pressed ? 0.6 : 1 }),
       className: 'mt-2.5 h-11 items-center justify-center',
     };
+    const submitFill = color(canSubmit ? 'link' : 'quaternarySystemFill');
+    const submitStyle: PressableProps['style'] = (state) => [
+      typeof submitButton.style === 'function' ? submitButton.style(state) : submitButton.style,
+      { backgroundColor: submitFill },
+    ];
     const content = (
       <View style={{ flex: 1, paddingBottom: bottomPad }} className="px-5 pt-3.5">
         <GestureDetector gesture={dragGesture}>
           <View>
-            <View className="mb-2 self-center h-1.5 w-9 rounded-full bg-quaternaryLabel" />
+            <View
+              className="mb-2 self-center h-1.5 w-9 rounded-full"
+              style={{ backgroundColor: color('quaternaryLabel') }}
+            />
             <View className="flex-row items-start justify-between">
               <View className="flex-1 pr-3">
-                <Text accessibilityRole="header" className="text-[19px] font-bold text-label">
+                <Text
+                  accessibilityRole="header"
+                  className="text-[19px] font-bold"
+                  style={{ color: color('label') }}
+                >
                   {title}
                 </Text>
                 {subtitle ? (
-                  <Text className="mt-1 text-[13px] text-secondaryLabel">{subtitle}</Text>
+                  <Text className="mt-1 text-[13px]" style={{ color: color('secondaryLabel') }}>
+                    {subtitle}
+                  </Text>
                 ) : null}
               </View>
               <GlassIconButton onPress={onClose} accessibilityLabel={closeLabel} size={30}>
@@ -143,12 +162,11 @@ export function createFormSheet(usePresentation: () => FormSheetPresentation = (
           {children}
         </ScrollView>
 
-        <Pressable onPress={onSubmit} disabled={!canSubmit} {...submitButton}>
+        <Pressable onPress={onSubmit} disabled={!canSubmit} {...submitButton} style={submitStyle}>
           {canSubmit ? <GradientGlassSurface /> : null}
           <Text
-            className={`text-[16px] font-semibold ${
-              canSubmit ? 'text-white' : 'text-tertiaryLabel'
-            }`}
+            className="text-[16px] font-semibold"
+            style={{ color: canSubmit ? '#FFFFFF' : color('tertiaryLabel') }}
           >
             {submitLabel}
           </Text>
@@ -156,7 +174,7 @@ export function createFormSheet(usePresentation: () => FormSheetPresentation = (
 
         {destructiveAction ? (
           <Pressable onPress={destructiveAction.onPress} {...destructiveButton}>
-            <Text className="text-[16px] font-semibold text-systemRed">
+            <Text className="text-[16px] font-semibold" style={{ color: color('systemRed') }}>
               {destructiveAction.label}
             </Text>
           </Pressable>
@@ -190,10 +208,10 @@ export function createFormSheet(usePresentation: () => FormSheetPresentation = (
                 borderTopLeftRadius: SHEET_RADIUS,
                 borderTopRightRadius: SHEET_RADIUS,
                 borderCurve: 'continuous',
+                backgroundColor: color('systemBackground'),
               },
               sheetStyle,
             ]}
-            className="bg-systemBackground"
           >
             {presentation.wrapContent
               ? presentation.wrapContent(content, {

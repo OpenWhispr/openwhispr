@@ -17,24 +17,40 @@ import { router } from 'expo-router';
 import { create } from 'zustand';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
-import { gloss, glossPressed, home, type } from '../home/kit';
-import { bodyText, edge, edgeCard, look, sectionLabel } from './look';
+import { homeLook, useHome } from '../home/kit';
+import { useSettingsLook } from './look';
 import { noOrphan, useSettingsT } from './strings';
-import { inset as insetTrack, knob, raised, raisedPressed, theme } from '../theme';
+import type { Scheme } from '../theme';
 import { useNavigationBar, useNavigationBarCanvas } from '../navigationBar';
+import { themeFor, useTheme, type AndroidTheme } from '../ThemeProvider';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { TAB_BAR_HEIGHT } from '../tabBar';
 
-/** Figma "Android · Settings" tokens on top of the shared Home tokens. */
-export const settings = {
-  ...home,
-  success: theme.success,
-  rowValue: { fontSize: 15, lineHeight: 24, color: home.tertiary },
-  title: { fontSize: 17, lineHeight: 22, fontWeight: '500' as const, color: home.text },
-  rowTitle: { fontSize: 16, lineHeight: 22, fontWeight: '500' as const, color: home.text },
-  subtitle: { fontSize: 13, lineHeight: 18, color: home.secondary },
-  tabular: { fontVariant: ['tabular-nums' as const] },
-};
+/** Figma "Android · Settings" tokens on top of the shared Home tokens, for a theme. */
+function buildSettings(theme: AndroidTheme) {
+  const home = homeLook(theme).c;
+  return {
+    ...home,
+    success: theme.tokens.success,
+    rowValue: { fontSize: 15, lineHeight: 24, color: home.tertiary },
+    title: { fontSize: 17, lineHeight: 22, fontWeight: '500' as const, color: home.text },
+    rowTitle: { fontSize: 16, lineHeight: 22, fontWeight: '500' as const, color: home.text },
+    subtitle: { fontSize: 13, lineHeight: 18, color: home.secondary },
+    tabular: { fontVariant: ['tabular-nums' as const] },
+  };
+}
+export type SettingsTokens = ReturnType<typeof buildSettings>;
+const settingsByScheme: Partial<Record<Scheme, SettingsTokens>> = {};
+/** Settings' tokens for a theme, built once per scheme. */
+export function settingsFor(theme: AndroidTheme): SettingsTokens {
+  return (settingsByScheme[theme.scheme] ??= buildSettings(theme));
+}
+/** Settings' tokens for the scheme in use. Read them at render; a switch re-renders in place. */
+export function useSettings(): SettingsTokens {
+  return settingsFor(useTheme());
+}
+/** @deprecated Light only, for files not moved yet: read `useSettings()`. */
+export const settings = settingsFor(themeFor('light'));
 
 /** Android's "Remove animations": every motion jumps to its end state while it is on. */
 export function useReduceMotion(): boolean {
@@ -69,10 +85,14 @@ export function SettingsPage({
   // Gestures: edge to edge, the list scrolls under the handle. Buttons: the bar is part of the
   // page (canvas colour) and nothing scrolls under it.
   const { buttons, inset } = useNavigationBar();
-  useNavigationBarCanvas(look.canvas);
+  const th = useTheme();
+  const settings = useSettings();
+  const { type } = useHome();
+  const ink = th.tokens.ink;
+  useNavigationBarCanvas(th.tokens.canvas);
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: look.canvas }}
+      style={{ flex: 1, backgroundColor: th.tokens.canvas }}
       edges={buttons ? ['top', 'left', 'right', 'bottom'] : ['top', 'left', 'right']}
     >
       <View
@@ -94,7 +114,7 @@ export function SettingsPage({
               router.canGoBack() ? router.back() : router.replace('/(tabs)/(record)')
             }
             style={({ pressed }) => [
-              raised,
+              th.raised,
               {
                 width: 36,
                 height: 36,
@@ -102,10 +122,10 @@ export function SettingsPage({
                 alignItems: 'center',
                 justifyContent: 'center',
               },
-              pressed && raisedPressed,
+              pressed && th.raisedPressed,
             ]}
           >
-            <SystemIcon name="chevron.left" mdName="ChevronLeft" size={22} color={home.text} />
+            <SystemIcon name="chevron.left" mdName="ChevronLeft" size={22} color={ink} />
           </Pressable>
         </View>
         <Text
@@ -115,7 +135,7 @@ export function SettingsPage({
           // long; a longer one is cut in the middle. Android ignores minimumFontScale.
           adjustsFontSizeToFit={title.length <= 24}
           ellipsizeMode="middle"
-          style={[settings.title, { flex: 1, textAlign: 'center', lineHeight: 24 }]}
+          style={[settings.title, { color: ink, flex: 1, textAlign: 'center', lineHeight: 24 }]}
         >
           {title}
         </Text>
@@ -127,17 +147,17 @@ export function SettingsPage({
               onPress={right.onPress}
               hitSlop={6}
               style={({ pressed }) => [
-                raised,
+                th.raised,
                 {
                   minHeight: 36,
                   paddingHorizontal: 16,
                   borderRadius: 18,
                   justifyContent: 'center',
                 },
-                pressed && raisedPressed,
+                pressed && th.raisedPressed,
               ]}
             >
-              <Text style={[type.subhead, { fontWeight: '500' }]}>{right.label}</Text>
+              <Text style={[type.subhead, { color: ink, fontWeight: '500' }]}>{right.label}</Text>
             </Pressable>
           )}
         </View>
@@ -161,7 +181,12 @@ export function SettingsPage({
   );
 }
 
-export const cardStyle: ViewStyle = edgeCard;
+/** @deprecated Light only: read `useSettingsLook().edgeCard`. */
+export const cardStyle: ViewStyle = {
+  ...themeFor('light').flat,
+  borderRadius: 16,
+  overflow: 'hidden',
+};
 
 /** Figma List/Card: an uppercase header, one card of rows split by inset dividers, a caption. */
 export function Group({
@@ -179,6 +204,8 @@ export function Group({
   style?: StyleProp<ViewStyle>;
 }) {
   const rows = React.Children.toArray(children).filter(Boolean);
+  const { look, edgeCard, sectionLabel } = useSettingsLook();
+  const settings = useSettings();
   return (
     <View style={[{ gap: 12 }, style]}>
       {title && (
@@ -186,7 +213,7 @@ export function Group({
           {title}
         </Text>
       )}
-      <View style={cardStyle}>
+      <View style={edgeCard}>
         {rows.map((row, index) => (
           <React.Fragment key={index}>
             {index > 0 && (
@@ -222,6 +249,8 @@ export function Badge({
   /** Grey, for a plain fact such as Changed. */
   neutral?: boolean;
 }) {
+  const { look, edge } = useSettingsLook();
+  const home = useSettings();
   return (
     <View
       style={[
@@ -260,6 +289,7 @@ export function Toggle({
   label: string;
 }) {
   const reduceMotion = useReduceMotion();
+  const th = useTheme();
   const position = useRef(new Animated.Value(value ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(position, {
@@ -286,7 +316,7 @@ export function Toggle({
           height: 28,
           borderRadius: 999,
           padding: 2,
-          ...insetTrack,
+          ...th.inset,
         }}
       >
         {/* On, the track is the brand glass; it fades in over the grey. */}
@@ -294,7 +324,7 @@ export function Toggle({
           pointerEvents="none"
           style={[
             { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderRadius: 999 },
-            gloss,
+            th.glass,
             { opacity: position },
           ]}
         />
@@ -303,7 +333,7 @@ export function Toggle({
             width: 39,
             height: 24,
             borderRadius: 999,
-            ...knob,
+            ...th.knob,
             transform: [
               { translateX: position.interpolate({ inputRange: [0, 1], outputRange: [0, 21] }) },
             ],
@@ -358,6 +388,9 @@ export function ListRow({
   accessibilityLabel?: string;
   subtitleStyle?: StyleProp<import('react-native').TextStyle>;
 }) {
+  const { look } = useSettingsLook();
+  const settings = useSettings();
+  const home = settings;
   const ink = destructive ? look.error : home.text;
   const titleInk = titleColor ?? ink;
   const body = (
@@ -485,7 +518,10 @@ export function PillAction({
   /** A spinner in place of the label while the action runs. */
   busy?: boolean;
 }) {
-  const color = primary ? theme.onGlass : destructive ? look.error : home.text;
+  const th = useTheme();
+  const { look } = useSettingsLook();
+  const { c: home, type } = useHome();
+  const color = primary ? th.tokens.onGlass : destructive ? look.error : home.text;
   const off = disabled || busy;
   return (
     <Pressable
@@ -506,9 +542,9 @@ export function PillAction({
           paddingHorizontal: 20,
           opacity: off ? 0.5 : 1,
         },
-        primary ? gloss : raised,
-        primary && pressed && !off && glossPressed,
-        !primary && pressed && !off && raisedPressed,
+        primary ? th.glass : th.raised,
+        primary && pressed && !off && th.glassPressed,
+        !primary && pressed && !off && th.raisedPressed,
       ]}
     >
       {busy ? (
@@ -552,6 +588,7 @@ export function SettingsSlider({
   onActiveChange?: (active: boolean) => void;
   label: string;
 }) {
+  const th = useTheme();
   const [width, setWidth] = useState(0);
   const box = useRef<View>(null);
   // The slider's left edge on screen: touches are measured against it, never against whichever
@@ -632,7 +669,7 @@ export function SettingsSlider({
           height: 6,
           marginHorizontal: KNOB / 2,
           borderRadius: 3,
-          ...insetTrack,
+          ...th.inset,
           overflow: 'hidden',
         }}
       >
@@ -641,7 +678,7 @@ export function SettingsSlider({
             width: `${ratio * 100}%`,
             height: 6,
             borderRadius: 3,
-            experimental_backgroundImage: gloss.experimental_backgroundImage,
+            experimental_backgroundImage: th.glass.experimental_backgroundImage,
           }}
         />
       </View>
@@ -653,7 +690,7 @@ export function SettingsSlider({
           width: KNOB,
           height: KNOB,
           borderRadius: KNOB / 2,
-          ...knob,
+          ...th.knob,
         }}
       />
     </View>
@@ -691,6 +728,7 @@ export function showToast(
 /** Mounted once at the root, so a toast survives the screen that raised it going away. */
 export function SettingsToastHost() {
   const { message, tone, id, action, options } = useSettingsToast();
+  const { tokens: theme, scheme, glass } = useTheme();
   const { inset } = useNavigationBar();
   // With the keyboard up (a note being typed in), the toast sits just above it, not behind it.
   // Android's keyboard height leaves out the navigation bar, as in BottomSheet.
@@ -759,7 +797,8 @@ export function SettingsToastHost() {
             borderTopWidth: 1,
             borderTopColor: theme.toastRim,
             // 12 blur, 4 down: the 16 dp margin holds the whole shadow.
-            boxShadow: '0px 4px 12px rgba(0,0,0,0.18)',
+            boxShadow:
+              scheme === 'dark' ? '0px 4px 12px rgba(0,0,0,0.45)' : '0px 4px 12px rgba(0,0,0,0.18)',
           },
           action && { alignSelf: 'stretch' },
         ]}
@@ -776,7 +815,7 @@ export function SettingsToastHost() {
                 tone === 'success'
                   ? 'linear-gradient(180deg, #4cc47f 0%, #1f9d55 100%)'
                   : tone === 'learned'
-                    ? gloss.experimental_backgroundImage
+                    ? glass.experimental_backgroundImage
                     : 'linear-gradient(180deg, #f2665c 0%, #d8352a 100%)',
               boxShadow: 'inset 0px 1px 0px rgba(255,255,255,0.5)',
             }}
@@ -869,6 +908,9 @@ export function BottomSheet({
   above?: React.ReactNode;
 }) {
   const t = useSettingsT();
+  const th = useTheme();
+  const settings = useSettings();
+  const { bodyText } = useSettingsLook();
   const reduceMotion = useReduceMotion();
   const keyboard = useKeyboardHeight(visible);
   // Android's keyboard height leaves out the navigation bar, and a SafeAreaView inside a Modal
@@ -915,7 +957,7 @@ export function BottomSheet({
       <View style={{ flex: 1, justifyContent: 'flex-end' }} pointerEvents="box-none">
         <Animated.View
           style={{
-            backgroundColor: look.canvas,
+            backgroundColor: th.tokens.canvas,
             // The safe-area view below can't round its own corners, so this view does.
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
@@ -936,7 +978,7 @@ export function BottomSheet({
                 width: 36,
                 height: 4,
                 borderRadius: 2,
-                backgroundColor: look.track,
+                backgroundColor: th.tokens.track,
               }}
             />
             <View style={{ gap: 6 }}>
@@ -956,7 +998,7 @@ export function BottomSheet({
                       name="chevron.left"
                       mdName="ChevronLeft"
                       size={22}
-                      color={home.text}
+                      color={th.tokens.ink}
                     />
                   </Pressable>
                 )}
@@ -964,7 +1006,7 @@ export function BottomSheet({
                   accessibilityRole="header"
                   style={[
                     settings.title,
-                    { fontSize: 20, lineHeight: 26, flexShrink: 1 },
+                    { color: th.tokens.ink, fontSize: 20, lineHeight: 26, flexShrink: 1 },
                     trailing ? { flex: 1 } : null,
                   ]}
                 >
@@ -973,7 +1015,7 @@ export function BottomSheet({
                 {trailing}
               </View>
               {body && (
-                <Text textBreakStrategy="balanced" style={bodyText}>
+                <Text textBreakStrategy="balanced" style={[bodyText, { color: th.tokens.ink }]}>
                   {noOrphan(body)}
                 </Text>
               )}
@@ -996,6 +1038,7 @@ export function TextAction({
   onPress: () => void;
   destructive?: boolean;
 }) {
+  const { tokens: k } = useTheme();
   return (
     <Pressable
       cssInterop={false}
@@ -1010,7 +1053,7 @@ export function TextAction({
     >
       <Text
         style={{
-          color: destructive ? look.error : home.accent,
+          color: destructive ? k.error : k.accent,
           fontSize: 17,
           lineHeight: 22,
           fontWeight: '500',

@@ -19,6 +19,12 @@ jest.mock('../MoveToFolderSheet', () => ({
   },
 }));
 
+// The Android files read their colours from the theme, whose fade lives in the native module.
+jest.mock('../../../../modules/android-dictation/src/themeFade', () => ({
+  prepareThemeFade: () => Promise.resolve(false),
+  fadeTheme: () => {},
+}));
+
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));

@@ -14,7 +14,7 @@ import { SvgXml } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { ProgressBar } from '../controls';
-import { flat, glass, theme } from '../theme';
+import { useTheme } from '../ThemeProvider';
 import { useNavigationBarCanvas } from '../navigationBar';
 import { showToast } from '../settings/kit';
 import { APP_LOGOS, type AppLogo } from './appLogos';
@@ -69,6 +69,7 @@ type Step = 'intro' | ToneKind | 'done';
  * saved until Done, which turns Tone & Style on; the X leaves without saving.
  */
 export default function ToneSetupScreen() {
+  const k = useTheme().tokens;
   const t = useStyleT();
   const saved = useToneStyle();
   const [step, setStep] = useState<Step>('intro');
@@ -76,7 +77,7 @@ export default function ToneSetupScreen() {
   // A row tapped on the summary opens its step, and "Sounds like me" goes back to the summary.
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  useNavigationBarCanvas(theme.canvas);
+  useNavigationBarCanvas(k.canvas);
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/(style)'));
   const back = () => {
@@ -113,7 +114,7 @@ export default function ToneSetupScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.canvas }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: k.canvas }}>
       {step === 'intro' ? (
         <Intro onStart={() => setStep('personal')} onClose={close} />
       ) : step === 'done' ? (
@@ -149,6 +150,8 @@ export default function ToneSetupScreen() {
 
 /** 2a: three tone cards fanned like the deck that follows, the pitch and the first step. */
 function Intro({ onStart, onClose }: { onStart: () => void; onClose: () => void }) {
+  const th = useTheme();
+  const k = th.tokens;
   const t = useStyleT();
   const tone = useToneText();
   const { intro } = useExamples();
@@ -173,7 +176,7 @@ function Intro({ onStart, onClose }: { onStart: () => void; onClose: () => void 
             <View
               key={card.tone}
               style={[
-                flat,
+                th.flat,
                 {
                   position: 'absolute',
                   width: 200,
@@ -186,21 +189,21 @@ function Intro({ onStart, onClose }: { onStart: () => void; onClose: () => void 
                     { rotate: card.rotate },
                   ],
                 },
-                front && { borderWidth: 1.5, borderColor: theme.pickedRing },
+                front && { borderWidth: 1.5, borderColor: k.pickedRing },
               ]}
             >
               <View style={{ gap: 2 }}>
-                <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '700', color: theme.ink }}>
+                <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '700', color: k.ink }}>
                   {tone.name(card.tone)}
                 </Text>
                 <Text
                   numberOfLines={1}
-                  style={{ fontSize: 12, lineHeight: 16, color: theme.secondary }}
+                  style={{ fontSize: 12, lineHeight: 16, color: k.secondary }}
                 >
                   {tone.description(card.tone)}
                 </Text>
               </View>
-              <View style={{ backgroundColor: theme.surface2, borderRadius: 10, padding: 10 }}>
+              <View style={{ backgroundColor: k.surface2, borderRadius: 10, padding: 10 }}>
                 <DiffText example={intro[card.tone]} />
               </View>
             </View>
@@ -210,17 +213,15 @@ function Intro({ onStart, onClose }: { onStart: () => void; onClose: () => void 
       <View style={{ paddingHorizontal: 24, paddingTop: 28, gap: 12 }}>
         <Text
           accessibilityRole="header"
-          style={{ fontSize: 32, lineHeight: 38, fontWeight: '700', color: theme.ink }}
+          style={{ fontSize: 32, lineHeight: 38, fontWeight: '700', color: k.ink }}
         >
           {t('introTitle')}
         </Text>
-        <Text style={{ fontSize: 16, lineHeight: 22, color: theme.secondary }}>
-          {t('introBody')}
-        </Text>
+        <Text style={{ fontSize: 16, lineHeight: 22, color: k.secondary }}>{t('introBody')}</Text>
         <AppMarks
           logos={['whatsapp', 'messages', 'slack', 'gmail', 'outlook', 'notion']}
           size={22}
-          behind={theme.canvas}
+          behind={k.canvas}
           overlap={4}
         />
       </View>
@@ -238,7 +239,7 @@ function Intro({ onStart, onClose }: { onStart: () => void; onClose: () => void 
             opacity: pressed ? 0.6 : 1,
           })}
         >
-          <Text style={{ fontSize: 15, lineHeight: 20, fontWeight: '500', color: theme.secondary }}>
+          <Text style={{ fontSize: 15, lineHeight: 20, fontWeight: '500', color: k.secondary }}>
             {t('notNow')}
           </Text>
         </Pressable>
@@ -249,6 +250,7 @@ function Intro({ onStart, onClose }: { onStart: () => void; onClose: () => void 
 
 /** The step counter and the shared progress bar, top right. */
 function Progress({ index }: { index: number }) {
+  const k = useTheme().tokens;
   const t = useStyleT();
   return (
     <View
@@ -256,7 +258,7 @@ function Progress({ index }: { index: number }) {
       accessibilityLabel={t('stepOf', { index: index + 1, count: TONE_KINDS.length })}
       style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}
     >
-      <Text style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: theme.secondary }}>
+      <Text style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: k.secondary }}>
         {t('stepOf', { index: index + 1, count: TONE_KINDS.length })}
       </Text>
       <ProgressBar value={(index + 1) / TONE_KINDS.length} style={{ width: 120 }} />
@@ -279,6 +281,8 @@ function KindStep({
   onClose: () => void;
   onPick: (tone: DictationTone) => void;
 }) {
+  const th = useTheme();
+  const k = th.tokens;
   const t = useStyleT();
   const tone = useToneText();
   // The cards keep the app's direction inside a deck that always runs left to right.
@@ -315,13 +319,13 @@ function KindStep({
       <View style={{ paddingTop: 28, paddingHorizontal: 24, gap: 12 }}>
         <Text
           accessibilityRole="header"
-          style={{ fontSize: 32, lineHeight: 38, fontWeight: '700', color: theme.ink }}
+          style={{ fontSize: 32, lineHeight: 38, fontWeight: '700', color: k.ink }}
         >
           {t(QUESTION[kind])}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <AppMarks logos={KIND_APPS[kind]} size={22} behind={theme.canvas} overlap={7} />
-          <Text style={{ flexShrink: 1, fontSize: 14, lineHeight: 18, color: theme.secondary }}>
+          <AppMarks logos={KIND_APPS[kind]} size={22} behind={k.canvas} overlap={7} />
+          <Text style={{ flexShrink: 1, fontSize: 14, lineHeight: 18, color: k.secondary }}>
             {t(APPS[kind])}
           </Text>
         </View>
@@ -357,7 +361,7 @@ function KindStep({
               accessibilityLabel={`${tone.name(option)}. ${tone.description(option)}`}
               onPress={() => show(i)}
               style={[
-                flat,
+                th.flat,
                 {
                   width: cardWidth,
                   alignSelf: 'flex-start',
@@ -369,17 +373,15 @@ function KindStep({
                   opacity: picked ? 1 : 0.55,
                   direction: cardDirection,
                 },
-                picked && { borderWidth: 2, borderColor: theme.pickedRing },
+                picked && { borderWidth: 2, borderColor: k.pickedRing },
               ]}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text
-                    style={{ fontSize: 22, lineHeight: 28, fontWeight: '700', color: theme.ink }}
-                  >
+                  <Text style={{ fontSize: 22, lineHeight: 28, fontWeight: '700', color: k.ink }}>
                     {tone.name(option)}
                   </Text>
-                  <Text style={{ fontSize: 13, lineHeight: 17, color: theme.secondary }}>
+                  <Text style={{ fontSize: 13, lineHeight: 17, color: k.secondary }}>
                     {tone.description(option)}
                   </Text>
                 </View>
@@ -405,7 +407,7 @@ function KindStep({
             key={option}
             style={[
               { height: 6, borderRadius: 3, width: i === index ? 20 : 6 },
-              i === index ? glass : { backgroundColor: theme.dotIdle },
+              i === index ? th.glass : { backgroundColor: k.dotIdle },
             ]}
           />
         ))}
@@ -413,7 +415,7 @@ function KindStep({
       <View style={{ flex: 1 }} />
       <View style={{ paddingHorizontal: 20, paddingBottom: 20, gap: 12, alignItems: 'center' }}>
         <GlassCta label={t('soundsLikeMe')} onPress={() => onPick(options[index])} />
-        <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: theme.secondary }}>
+        <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: k.secondary }}>
           {t('swipeToCompare')}
         </Text>
       </View>
@@ -435,6 +437,8 @@ function Summary({
   onEdit: (kind: ToneKind) => void;
   onDone: () => void;
 }) {
+  const th = useTheme();
+  const k = th.tokens;
   const t = useStyleT();
   const tone = useToneText();
   return (
@@ -445,24 +449,22 @@ function Summary({
       <View style={{ paddingTop: 28, paddingHorizontal: 24, gap: 12 }}>
         <Text
           accessibilityRole="header"
-          style={{ fontSize: 32, lineHeight: 38, fontWeight: '700', color: theme.ink }}
+          style={{ fontSize: 32, lineHeight: 38, fontWeight: '700', color: k.ink }}
         >
           {t('doneTitle')}
         </Text>
-        <Text style={{ fontSize: 16, lineHeight: 22, color: theme.secondary }}>
-          {t('doneBody')}
-        </Text>
+        <Text style={{ fontSize: 16, lineHeight: 22, color: k.secondary }}>{t('doneBody')}</Text>
       </View>
       <View
         style={[
-          flat,
+          th.flat,
           { marginTop: 20, marginHorizontal: 20, borderRadius: 16, overflow: 'hidden' },
         ]}
       >
         {TONE_KINDS.map((kind, i) => (
           <View key={kind}>
             {i > 0 ? (
-              <View style={{ height: 1, marginLeft: 62, backgroundColor: theme.hairline }} />
+              <View style={{ height: 1, marginLeft: 62, backgroundColor: k.hairline }} />
             ) : null}
             <Pressable
               cssInterop={false}
@@ -476,7 +478,7 @@ function Summary({
                 minHeight: 60,
                 paddingLeft: 14,
                 paddingRight: 12,
-                backgroundColor: pressed ? theme.tile : undefined,
+                backgroundColor: pressed ? k.tile : undefined,
               })}
             >
               <View
@@ -484,7 +486,7 @@ function Summary({
                   width: 36,
                   height: 36,
                   borderRadius: 10,
-                  backgroundColor: theme.tile,
+                  backgroundColor: k.tile,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
@@ -497,7 +499,7 @@ function Summary({
                   fontSize: 16,
                   lineHeight: 22,
                   fontWeight: '500',
-                  color: theme.ink,
+                  color: k.ink,
                 }}
               >
                 {t(KIND_ROW[kind])}
@@ -510,18 +512,13 @@ function Summary({
                   maxWidth: '40%',
                   fontSize: 15,
                   lineHeight: 20,
-                  color: theme.secondary,
+                  color: k.secondary,
                   textAlign: 'right',
                 }}
               >
                 {tone.name(tones[kind])}
               </Text>
-              <SystemIcon
-                name="chevron.right"
-                mdName="ChevronRight"
-                size={20}
-                color={theme.tertiary}
-              />
+              <SystemIcon name="chevron.right" mdName="ChevronRight" size={20} color={k.tertiary} />
             </Pressable>
           </View>
         ))}

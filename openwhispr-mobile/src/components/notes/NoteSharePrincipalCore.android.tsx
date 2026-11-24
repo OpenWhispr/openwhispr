@@ -1,5 +1,6 @@
 import { View } from 'react-native';
 import { Text } from '@/components/ui/Text';
+import { useIosColor } from '@/config/colors.android';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import type { NoteAccessPrincipalType } from '@/data/remote/noteSharingTypes';
 
@@ -31,12 +32,12 @@ interface RowIconProps {
 
 /** The leading icon of a row in the share sheet's cards. */
 export function RowIcon({ name, mdName, tone = 'neutral' }: RowIconProps) {
+  const color = useIosColor();
   const brand = tone === 'brand';
   return (
     <View
-      className={`h-8 w-8 items-center justify-center rounded-full ${
-        brand ? 'bg-brand/10' : 'bg-tertiarySystemFill'
-      }`}
+      className={`h-8 w-8 items-center justify-center rounded-full ${brand ? 'bg-brand/10' : ''}`}
+      style={brand ? undefined : { backgroundColor: color('tertiarySystemFill') }}
     >
       <SystemIcon
         name={name}

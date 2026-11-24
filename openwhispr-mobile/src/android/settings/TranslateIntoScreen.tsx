@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
-import { Group, ListRow, SettingsPage, settings } from './kit';
+import { Group, ListRow, SettingsPage, useSettings } from './kit';
 import { SearchField } from '../controls';
 import { useSettingsT } from './strings';
 import {
@@ -34,6 +34,7 @@ function phoneTags(): string[] {
  */
 export default function TranslateIntoScreen() {
   const t = useSettingsT();
+  const settings = useSettings();
   const [query, setQuery] = useState('');
   const current = currentTranslateTarget(useConfigStore((s) => s.config?.androidTranslationTarget));
   const phone = useMemo(() => phoneLanguages(phoneTags()), []);

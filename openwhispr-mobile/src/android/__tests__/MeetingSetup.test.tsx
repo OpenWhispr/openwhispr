@@ -14,7 +14,7 @@ jest.mock('../ui', () => {
   const { View, Pressable, Text } = require('react-native');
   return {
     Card: View,
-    styles: {},
+    useUiStyles: () => ({}),
     Button: ({ label, onPress, busy }: { label: string; onPress: () => void; busy: boolean }) =>
       require('react').createElement(
         Pressable,

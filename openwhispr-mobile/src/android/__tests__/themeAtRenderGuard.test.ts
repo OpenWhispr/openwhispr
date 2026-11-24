@@ -1,0 +1,170 @@
+import fs from 'fs';
+import path from 'path';
+
+/**
+ * Dark theme §3b: a screen half-drawn during a light/dark switch can't keep old colours, so every
+ * colour has to come from `useTheme()` / `makeStyles()` at render. A file fails when it
+ *  - imports a static palette or recipe (`theme`, `flat`, `raised`, … from `theme.ts`, or the
+ *    older token objects `home`, `look`, `notesLook`, `colors`, `ink`, `palette`, `authColors`),
+ *  - builds a `StyleSheet` at module level, or
+ *  - writes a colour (hex, rgb/rgba) into a module-level constant, or
+ *  - colours through a NativeWind class whose value is fixed light on Android (`text-label`,
+ *    `bg-systemBackground`, …: `tailwind.config.js` gives them one hex each); read
+ *    `useIosColor()` from `@/config/colors.android` at render instead. Classes that look the
+ *    same in both schemes (`bg-brand`, `text-white`, `bg-black/40` scrims) are fine.
+ * Every Android file is checked; the last ones moved in segment 7 (Account flows), so there is no
+ * pending list any more.
+ */
+const ROOT = path.resolve(__dirname, '../../..');
+
+/** The theme itself, and third-party marks, which keep their own colours. */
+const EXEMPT = new Set([
+  'src/android/theme.ts',
+  'src/android/ThemeProvider.tsx',
+  'src/android/processingFable/providerLogos.ts',
+  'src/android/style/appLogos.ts',
+]);
+
+const STATIC_THEME = new Set([
+  'theme',
+  'lightTheme',
+  'darkTheme',
+  'flat',
+  'raised',
+  'raisedPressed',
+  'knob',
+  'inset',
+  'glass',
+  'glassPressed',
+]);
+const LEGACY_TOKENS = new Set([
+  'home',
+  'look',
+  'notesLook',
+  'colors',
+  'ink',
+  'palette',
+  'authColors',
+  // home/kit's light-only exports, kept for files not moved yet (read `useHome()` instead).
+  'type',
+  'glassEdge',
+  'TILE_FILL',
+  // settings/look's static light surfaces and text.
+  'edge',
+  'edgeCard',
+  'edgeField',
+  'bodyText',
+  'sectionLabel',
+  'cardStyle',
+  // settings/kit's light-only tokens (read `useSettings()` instead).
+  'settings',
+]);
+const COLOUR = /#[0-9a-f]{3,8}\b|\brgba?\(/i;
+/** NativeWind colour classes that stay light on Android whatever the scheme. */
+const LIGHT_ONLY_CLASS =
+  /(?:^|[\s'"`:])(?:bg|text|border|divide|placeholder|ring|tint)-(?:label|secondaryLabel|tertiaryLabel|quaternaryLabel|systemBackground|secondarySystemBackground|secondarySystemGroupedBackground|tertiarySystemFill|quaternarySystemFill|separator|link|systemRed|systemGreen|systemBlue|systemOrange|border|input|background|foreground|primary|secondary|destructive|muted|accent|popover|card)(?:\/\d+)?(?=$|[\s'"`])/;
+
+export function screenFiles(): string[] {
+  const out: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = path.posix.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== '__tests__' && entry.name !== 'assets') walk(rel);
+      } else if (/\.tsx?$/.test(entry.name) && !/\.d\.ts$/.test(entry.name)) out.push(rel);
+    }
+  };
+  walk('src/android');
+  // Android overrides of shared components, anywhere under src/components.
+  const walkAndroid = (dir: string) => {
+    for (const entry of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = path.posix.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== '__tests__') walkAndroid(rel);
+      } else if (/\.android\.tsx?$/.test(entry.name)) out.push(rel);
+    }
+  };
+  walkAndroid('src/components');
+  for (const dir of ['src/screens', 'src/config'])
+    for (const name of fs.readdirSync(path.join(ROOT, dir)))
+      if (/\.android\.tsx?$/.test(name)) out.push(path.posix.join(dir, name));
+  for (const name of fs.readdirSync(path.join(ROOT, 'app')))
+    if (/^android-.*\.tsx?$/.test(name)) out.push(path.posix.join('app', name));
+  return out.filter((file) => !EXEMPT.has(file)).sort();
+}
+
+/** Every reason [file] reads a colour outside render, as `line: why`. */
+export function moduleLevelColours(file: string): string[] {
+  const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
+  const hits: string[] = [];
+  // Value imports (not `import type`) from a relative module or from `@/android/…`.
+  const imports = /import\s+(?!type\b)\{([^}]*)\}\s+from\s+'(\.[^']*|@\/android\/[^']*)'/g;
+  for (let match = imports.exec(source); match; match = imports.exec(source)) {
+    const names = match[1]
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part && !part.startsWith('type '))
+      .map((part) => part.split(/\s+as\s+/)[0].trim());
+    const fromTheme = /(^|\/)theme$/.test(match[2]);
+    for (const name of names)
+      if ((fromTheme && STATIC_THEME.has(name)) || LEGACY_TOKENS.has(name))
+        hits.push(`imports ${name} from ${match[2]}`);
+  }
+  // Module-level declarations: a line at column 0 opens one and it runs until its brackets close.
+  const lines = source.split('\n');
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!/^(export\s+)?(const|let|var)\s/.test(line)) continue;
+    let depth = 0;
+    let end = index;
+    for (; end < lines.length; end += 1) {
+      for (const char of lines[end].replace(/'[^']*'|"[^"]*"|`[^`]*`/g, '')) {
+        if ('({['.includes(char)) depth += 1;
+        else if (')}]'.includes(char)) depth -= 1;
+      }
+      if (depth <= 0) break;
+    }
+    const body = lines.slice(index, end + 1).join('\n');
+    const start = index + 1;
+    index = end;
+    // A function (component, hook, helper) reads its colours when it runs.
+    if (
+      /^[^=]*=\s*(async\s+)?(\([^)]*\)|\w+)\s*(:[^=]*)?=>/.test(line) ||
+      /=\s*function\b/.test(line)
+    )
+      continue;
+    if (/=\s*makeStyles\(/.test(line)) continue;
+    if (/StyleSheet\.create\(/.test(body)) hits.push(`${start}: module-level StyleSheet`);
+    else if (COLOUR.test(body)) hits.push(`${start}: colour in a module-level constant`);
+  }
+  lines.forEach((line, index) => {
+    const match = LIGHT_ONLY_CLASS.exec(line);
+    if (match)
+      hits.push(`${index + 1}: light-only class ${match[0].trim().replace(/^['"`:]/, '')}`);
+  });
+  return hits;
+}
+
+describe('theme at render guard (dark theme §3b)', () => {
+  const files = screenFiles();
+
+  it('finds Android screen files to check', () => {
+    expect(files.length).toBeGreaterThan(100);
+    expect(files).toContain('src/android/Root.tsx');
+  });
+
+  it('flags a light-only NativeWind colour class', () => {
+    expect(LIGHT_ONLY_CLASS.test('className="text-[15px] text-label"')).toBe(true);
+    expect(LIGHT_ONLY_CLASS.test("'active:bg-tertiarySystemFill'")).toBe(true);
+    expect(LIGHT_ONLY_CLASS.test('className="border-b border-separator/40"')).toBe(true);
+    expect(LIGHT_ONLY_CLASS.test('className="bg-brand text-white bg-black/40"')).toBe(false);
+    expect(LIGHT_ONLY_CLASS.test("color('label')")).toBe(false);
+  });
+
+  it('reads colours at render in every Android file', () => {
+    const offenders = files.flatMap((file) =>
+      moduleLevelColours(file).map((hit) => `${file}: ${hit}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+});

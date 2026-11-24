@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
-import { bodyText } from './look';
+import { useSettingsLook } from './look';
 import {
   BottomSheet,
   Group,
@@ -21,6 +21,7 @@ import { PERMISSION_ROWS, requestRuntime, usePermissions, type PermissionKey } f
  */
 export default function SettingsPermissionsScreen() {
   const t = useSettingsT();
+  const { bodyText } = useSettingsLook();
   const { granted, refresh } = usePermissions();
   const [explainInsertion, setExplainInsertion] = useState(false);
   // Says so at the bottom when something comes back on from Android's settings.

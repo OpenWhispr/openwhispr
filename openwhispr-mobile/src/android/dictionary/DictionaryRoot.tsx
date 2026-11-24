@@ -12,13 +12,20 @@ import type { Snippet } from '@/lib/snippets';
 import { useDictionaryStore, type DictionaryEntry } from '@/store/useDictionaryStore';
 import { useSharedDictionaryStore } from '@/store/useSharedDictionaryStore';
 import { useSnippetsStore } from '@/store/useSnippetsStore';
-import { type } from '../home/kit';
+import { useHome } from '../home/kit';
 import { SearchField } from '../controls';
-import { theme } from '../theme';
+import { useTheme } from '../ThemeProvider';
 import { useNavigationBarCanvas } from '../navigationBar';
-import { tabColors } from '../tabBar';
+import { useTabColors } from '../tabBar';
 import { useSettingsToast } from '../settings/kit';
-import { Card, IconButton, NewButton, NotesHeader, SectionLabel, notesLook } from '../notes/look';
+import {
+  Card,
+  IconButton,
+  NewButton,
+  NotesHeader,
+  SectionLabel,
+  useNotesLook,
+} from '../notes/look';
 import { SwipeRow } from '../notes/rows';
 import {
   addWordsByHand,
@@ -37,21 +44,22 @@ import { useDictionaryT, type DictionaryT } from './strings';
 type Mode = 'words' | 'snippets';
 
 function Tile({ learned }: { learned: boolean }) {
+  const k = useTheme().tokens;
   return (
     <View
       style={{
         width: 36,
         height: 36,
         borderRadius: 10,
-        backgroundColor: theme.tile,
+        backgroundColor: k.tile,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
       {learned ? (
-        <SystemIcon name="sparkles" mdName="Sparkles" size={17} color={theme.secondary} />
+        <SystemIcon name="sparkles" mdName="Sparkles" size={17} color={k.secondary} />
       ) : (
-        <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: theme.secondary }}>
+        <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: k.secondary }}>
           Aa
         </Text>
       )}
@@ -77,6 +85,8 @@ function wordLine(
 
 /** A word in the list: tap to edit (C3), swipe left to delete with Undo (C4). */
 function WordRow({ entry, onEdit }: { entry: DictionaryEntry; onEdit: () => void }) {
+  const n = useNotesLook();
+  const k = n.theme.tokens;
   const t = useDictionaryT();
   const { i18n } = useTranslation();
   const learned = useAccountLearned();
@@ -101,15 +111,15 @@ function WordRow({ entry, onEdit }: { entry: DictionaryEntry; onEdit: () => void
           paddingHorizontal: 14,
           paddingVertical: 12,
           minHeight: 64,
-          backgroundColor: pressed ? theme.tile : theme.surface,
+          backgroundColor: pressed ? k.tile : k.surface,
         })}
       >
         <Tile learned={entry.source === 'learned'} />
         <View style={{ flex: 1, gap: 2 }}>
-          <Text numberOfLines={1} style={notesLook.rowTitle}>
+          <Text numberOfLines={1} style={n.rowTitle}>
             {entry.word}
           </Text>
-          <Text numberOfLines={1} style={notesLook.rowSub}>
+          <Text numberOfLines={1} style={n.rowSub}>
             {sub}
           </Text>
         </View>
@@ -119,6 +129,8 @@ function WordRow({ entry, onEdit }: { entry: DictionaryEntry; onEdit: () => void
 }
 
 function SnippetRow({ snippet, onEdit }: { snippet: Snippet; onEdit: () => void }) {
+  const n = useNotesLook();
+  const k = n.theme.tokens;
   const restored = useRef(consumeRestoredRow(`snippet:${snippet.trigger}`)).current;
   return (
     <SwipeRow onDelete={() => deleteSnippetWithUndo(snippet)} restored={restored}>
@@ -134,7 +146,7 @@ function SnippetRow({ snippet, onEdit }: { snippet: Snippet; onEdit: () => void 
           paddingHorizontal: 14,
           paddingVertical: 12,
           minHeight: 64,
-          backgroundColor: pressed ? theme.tile : theme.surface,
+          backgroundColor: pressed ? k.tile : k.surface,
         })}
       >
         <View
@@ -142,23 +154,18 @@ function SnippetRow({ snippet, onEdit }: { snippet: Snippet; onEdit: () => void 
             width: 36,
             height: 36,
             borderRadius: 10,
-            backgroundColor: theme.tile,
+            backgroundColor: k.tile,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <SystemIcon
-            name="text.bubble"
-            mdName="MessagesSquare"
-            size={18}
-            color={theme.secondary}
-          />
+          <SystemIcon name="text.bubble" mdName="MessagesSquare" size={18} color={k.secondary} />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text numberOfLines={1} style={notesLook.rowTitle}>
+          <Text numberOfLines={1} style={n.rowTitle}>
             {snippet.trigger}
           </Text>
-          <Text numberOfLines={1} style={notesLook.rowSub}>
+          <Text numberOfLines={1} style={n.rowSub}>
             {snippet.replacement.replace(/\s+/g, ' ')}
           </Text>
         </View>
@@ -169,6 +176,8 @@ function SnippetRow({ snippet, onEdit }: { snippet: Snippet; onEdit: () => void 
 
 /** Words that apply from a shared list; managed on desktop, so the row only says so. */
 function TeamWordsRow({ moved }: { moved: string[] }) {
+  const n = useNotesLook();
+  const k = n.theme.tokens;
   const t = useDictionaryT();
   const summary = useSharedDictionaryStore((s) => s.summary);
   if (!summary || summary.count === 0) return null;
@@ -194,16 +203,16 @@ function TeamWordsRow({ moved }: { moved: string[] }) {
             width: 36,
             height: 36,
             borderRadius: 10,
-            backgroundColor: theme.tile,
+            backgroundColor: k.tile,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <SystemIcon name="person.2" mdName="Users" size={18} color={theme.secondary} />
+          <SystemIcon name="person.2" mdName="Users" size={18} color={k.secondary} />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={notesLook.rowTitle}>{title}</Text>
-          <Text style={notesLook.rowSub}>
+          <Text style={n.rowTitle}>{title}</Text>
+          <Text style={n.rowSub}>
             {t('teamWordsBody')}
             {movedLine}
           </Text>
@@ -225,6 +234,7 @@ function SearchBar({
   onCancel: () => void;
   placeholder: string;
 }) {
+  const k = useTheme().tokens;
   const t = useDictionaryT();
   const input = useRef<TextInput>(null);
   return (
@@ -250,7 +260,7 @@ function SearchBar({
           opacity: pressed ? 0.6 : 1,
         })}
       >
-        <Text style={{ color: theme.accent, fontSize: 16, lineHeight: 22, fontWeight: '500' }}>
+        <Text style={{ color: k.accent, fontSize: 16, lineHeight: 22, fontWeight: '500' }}>
           {t('cancel')}
         </Text>
       </Pressable>
@@ -260,6 +270,8 @@ function SearchBar({
 
 /** C5's "Add “Synty”" row: adds exactly what was typed. */
 function AddQueryRow({ query }: { query: string }) {
+  const n = useNotesLook();
+  const k = n.theme.tokens;
   const t = useDictionaryT();
   return (
     <Card>
@@ -276,7 +288,7 @@ function AddQueryRow({ query }: { query: string }) {
           gap: 12,
           padding: 14,
           minHeight: 64,
-          backgroundColor: pressed ? theme.tile : theme.surface,
+          backgroundColor: pressed ? k.tile : k.surface,
         })}
       >
         <View
@@ -284,18 +296,18 @@ function AddQueryRow({ query }: { query: string }) {
             width: 36,
             height: 36,
             borderRadius: 10,
-            backgroundColor: theme.selFill,
+            backgroundColor: k.selFill,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <SystemIcon name="plus" mdName="Plus" size={18} color={theme.accent} />
+          <SystemIcon name="plus" mdName="Plus" size={18} color={k.accent} />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text numberOfLines={1} style={[notesLook.rowTitle, { color: theme.accent }]}>
+          <Text numberOfLines={1} style={[n.rowTitle, { color: k.accent }]}>
             {t('addQuery', { query: query.trim() })}
           </Text>
-          <Text style={notesLook.rowSub}>{t('toYourWords')}</Text>
+          <Text style={n.rowSub}>{t('toYourWords')}</Text>
         </View>
       </Pressable>
     </Card>
@@ -308,10 +320,12 @@ function AddQueryRow({ query }: { query: string }) {
  * states and C13 snippets. The sheets (C2, C3 and the snippet sheet) live in ./sheets.
  */
 export default function DictionaryRoot() {
+  const k = useTheme().tokens;
+  const ty = useHome().type;
   const t = useDictionaryT();
   const scroll = useRef<ScrollView>(null);
   useScrollToTop(scroll);
-  useNavigationBarCanvas(tabColors.bar);
+  useNavigationBarCanvas(useTabColors().bar);
 
   const allEntries = useDictionaryStore((s) => s.entries);
   const wordsLoaded = useDictionaryStore((s) => s.isLoaded);
@@ -394,10 +408,7 @@ export default function DictionaryRoot() {
   const showEmpty = !searching && (mode === 'words' ? wordsEmpty : snippetsEmpty);
 
   return (
-    <SafeAreaView
-      edges={['top', 'left', 'right']}
-      style={{ flex: 1, backgroundColor: theme.canvas }}
-    >
+    <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: k.canvas }}>
       <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 16 }}>
         {searching ? (
           <SearchBar
@@ -490,7 +501,7 @@ export default function DictionaryRoot() {
               ))}
             </Card>
           ) : query.trim() ? (
-            <Text style={[type.footnote, { textAlign: 'center', paddingTop: 48 }]}>
+            <Text style={[ty.footnote, { textAlign: 'center', paddingTop: 48 }]}>
               {t('noSnippetCalled', { query: query.trim() })}
             </Text>
           ) : null

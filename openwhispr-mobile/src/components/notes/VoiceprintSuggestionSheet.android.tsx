@@ -1,7 +1,8 @@
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
+import { useIosColor } from '@/config/colors.android';
 
 interface VoiceprintSuggestionSheetProps {
   visible: boolean;
@@ -23,15 +24,20 @@ export function VoiceprintSuggestionSheet({
   onCancel,
 }: VoiceprintSuggestionSheetProps) {
   const { copy } = useAndroidCopy();
+  const color = useIosColor();
   const android = Platform.OS === 'android';
   const buttonClass = android ? 'h-auto min-h-12' : undefined;
   const content = (
     <>
       <View className="gap-1">
-        <Text accessibilityRole="header" className="text-lg font-semibold text-label">
+        <Text
+          accessibilityRole="header"
+          className="text-lg font-semibold"
+          style={{ color: color('label') }}
+        >
           {speakerName}
         </Text>
-        <Text className="text-[14px] leading-5 text-secondaryLabel">
+        <Text className="text-[14px] leading-5" style={{ color: color('secondaryLabel') }}>
           {copy(
             'editorFeedback.suggestionBody',
             'Confirm this suggestion to lock the speaker label on this transcript.',
@@ -70,10 +76,13 @@ export function VoiceprintSuggestionSheet({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <Pressable className="flex-1 justify-end bg-black/30" onPress={onCancel}>
         <Pressable
-          className="gap-4 rounded-t-[24px] bg-systemBackground px-5 pb-8 pt-5"
+          className="gap-4 rounded-t-[24px] px-5 pb-8 pt-5"
           onPress={(event) => event.stopPropagation()}
           testID="voiceprint-suggestion-sheet"
-          style={android ? styles.androidSheet : undefined}
+          style={[
+            android ? styles.androidSheet : undefined,
+            { backgroundColor: color('systemBackground') },
+          ]}
         >
           {android ? (
             <ScrollView bounces={false} contentContainerClassName="gap-4">
@@ -88,4 +97,4 @@ export function VoiceprintSuggestionSheet({
   );
 }
 
-const styles = StyleSheet.create({ androidSheet: { maxHeight: '90%' } });
+const styles = { androidSheet: { maxHeight: '90%' } } as const;

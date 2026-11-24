@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
-import { home, type } from '../home/kit';
-import { BottomSheet, TextAction, settings, showToast } from '../settings/kit';
+import { useHome } from '../home/kit';
+import { BottomSheet, TextAction, showToast, useSettings } from '../settings/kit';
 import { useKeyCheck, type KeyCheckResult, type KeyProviderId } from '../settings/keyCheck';
 import { KEY_PROVIDERS, maskKey, type SheetTask } from '../settings/ownKey';
 import { isLiveProvider } from '../providers/liveMeeting';
@@ -119,6 +119,8 @@ function ProviderList({
  */
 export function AddKeySheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const t = useFableT();
+  const settings = useSettings();
+  const { c: home, type } = useHome();
   const [page, setPage] = useState<'main' | 'providers'>('main');
   const [source, setSource] = useState<Source>('openai');
   const [draft, setDraft] = useState('');

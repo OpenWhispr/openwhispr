@@ -6,54 +6,132 @@ import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { useAuthStore } from '@/store/useAuthStore';
 import { getAccountDisplay } from '@/lib/accountDisplay';
 import { useHomeT } from './strings';
-import { flat, glass, glassPressed, raised, raisedPressed, theme } from '../theme';
+import { themeFor, useTheme, type AndroidTheme } from '../ThemeProvider';
+import type { Scheme } from '../theme';
 
-/**
- * The flat surface: a hairline, an inner top highlight and a soft lift, on white. Settings'
- * `edge` (../settings/look) is this value. The tokens live in `../theme`.
- */
-export const glassEdge = flat;
+/** Home's colours, for one scheme (`useHome().c`). */
+export interface HomeColors {
+  canvas: string;
+  surface: string;
+  accent: string;
+  text: string;
+  secondary: string;
+  tertiary: string;
+  borderSubtle: string;
+  borderDefault: string;
+  divider: string;
+  hairline: string;
+  fill: string;
+  tint: string;
+  tile: string;
+  error: string;
+  /** A warning glyph (History couldn't load). */
+  warning: string;
+  disabled: string;
+  onGlass: string;
+  /** A new History row's highlight, from clear to its peak. */
+  arrivalFrom: string;
+  arrivalTo: string;
+  /** The frame round a tip's light screenshot in dark (design §3.6); none in light. */
+  posterFrame: string | undefined;
+  cardShadow: string;
+  tipShadow: string;
+  floatingShadow: string;
+}
 
-/** Home's tokens, from the one theme (`../theme`). */
-export const home = {
-  canvas: theme.canvas,
-  surface: theme.surface,
-  accent: theme.accent,
-  text: theme.ink,
-  secondary: theme.secondary,
-  tertiary: theme.tertiary,
-  borderSubtle: theme.track,
-  borderDefault: theme.trackStrong,
-  divider: theme.divider,
-  fill: theme.track,
-  tint: theme.selFill,
-  error: '#E5372B',
-  disabled: theme.disabled,
-  cardShadow: '0px 8px 12px rgba(0,0,0,0.06), 0px 1px 1px rgba(0,0,0,0.04)',
-  tipShadow: '0px 8px 24px rgba(0,0,0,0.06), 0px 1px 2px rgba(0,0,0,0.04)',
-  floatingShadow: '0px 12px 32px rgba(0,0,0,0.10), 0px 4px 12px rgba(0,0,0,0.08)',
-} as const;
-
-/** The brand glass every primary button uses (`../theme` `glass`). */
-export const gloss = glass;
-
-/** Pressed glass: a touch darker and smaller. */
-export const glossPressed = glassPressed;
-
-export const type = {
-  headline: { fontSize: 17, lineHeight: 22, fontWeight: '500' as const, color: home.text },
-  subhead: { fontSize: 15, lineHeight: 20, color: home.text },
-  footnote: { fontSize: 13, lineHeight: 18, color: home.secondary },
+const textStyles = (c: HomeColors) => ({
+  headline: { fontSize: 17, lineHeight: 22, fontWeight: '500' as const, color: c.text },
+  subhead: { fontSize: 15, lineHeight: 20, color: c.text },
+  /** A row's or a card's title. */
+  rowTitle: { fontSize: 16, lineHeight: 22, fontWeight: '500' as const, color: c.text },
+  footnote: { fontSize: 13, lineHeight: 18, color: c.secondary },
   // Section labels: uppercase Medium 11 at 6% tracking (Settings' `sectionLabel`).
   section: {
     fontSize: 11,
     lineHeight: 16,
     fontWeight: '500' as const,
-    color: home.tertiary,
+    color: c.tertiary,
     letterSpacing: 0.66,
     textTransform: 'uppercase' as const,
   },
-};
+});
+
+/** Everything Home draws with, for the scheme in use. */
+export interface HomeLook {
+  c: HomeColors;
+  type: ReturnType<typeof textStyles>;
+  /** A flat card: the glass edge, corners 16. */
+  card: ViewStyle;
+  theme: AndroidTheme;
+}
+
+function buildHomeLook(theme: AndroidTheme): HomeLook {
+  const k = theme.tokens;
+  const dark = theme.scheme === 'dark';
+  const c: HomeColors = {
+    canvas: k.canvas,
+    surface: k.surface,
+    accent: k.accent,
+    text: k.ink,
+    secondary: k.secondary,
+    tertiary: k.tertiary,
+    borderSubtle: k.track,
+    borderDefault: k.trackStrong,
+    divider: k.divider,
+    hairline: k.hairline,
+    fill: k.track,
+    tint: k.selFill,
+    tile: k.tile,
+    error: k.errorVivid,
+    warning: dark ? k.amber : '#C27A00',
+    disabled: k.disabled,
+    onGlass: k.onGlass,
+    arrivalFrom: dark ? 'rgba(110,155,255,0)' : 'rgba(21,85,212,0)',
+    arrivalTo: dark ? 'rgba(110,155,255,0.16)' : 'rgba(21,85,212,0.10)',
+    posterFrame: dark ? k.surface2 : undefined,
+    cardShadow: dark
+      ? '0px 8px 12px rgba(0,0,0,0.35), 0px 1px 1px rgba(0,0,0,0.25)'
+      : '0px 8px 12px rgba(0,0,0,0.06), 0px 1px 1px rgba(0,0,0,0.04)',
+    tipShadow: dark
+      ? '0px 8px 24px rgba(0,0,0,0.35), 0px 1px 2px rgba(0,0,0,0.25)'
+      : '0px 8px 24px rgba(0,0,0,0.06), 0px 1px 2px rgba(0,0,0,0.04)',
+    floatingShadow: dark
+      ? '0px 12px 32px rgba(0,0,0,0.50), 0px 4px 12px rgba(0,0,0,0.40)'
+      : '0px 12px 32px rgba(0,0,0,0.10), 0px 4px 12px rgba(0,0,0,0.08)',
+  };
+  return {
+    c,
+    type: textStyles(c),
+    card: { ...theme.flat, borderRadius: 16, overflow: 'hidden' },
+    theme,
+  };
+}
+
+const looks: Partial<Record<Scheme, HomeLook>> = {};
+
+/** Home's look for a theme, built once per scheme so styles and memo inputs stay stable. */
+export function homeLook(theme: AndroidTheme): HomeLook {
+  return (looks[theme.scheme] ??= buildHomeLook(theme));
+}
+
+/** Home's look for the scheme in use; a light/dark switch re-renders in place. */
+export function useHome(): HomeLook {
+  return homeLook(useTheme());
+}
+
+// Light only. The theme-at-render guard keeps every Android file off these, so they can go once
+// no test reads them either.
+const lightLook = homeLook(themeFor('light'));
+/** @deprecated Light only: read `useHome().c`. */
+export const home = lightLook.c;
+/** @deprecated Light only: read `useHome().type`. */
+export const type = lightLook.type;
+/** @deprecated Light only: read `useTheme().flat`. */
+export const glassEdge = lightLook.theme.flat;
+/** The brand glass every primary button uses; the same in both schemes. */
+export const gloss = lightLook.theme.glass;
+/** Pressed glass: a touch darker and smaller. */
+export const glossPressed = lightLook.theme.glassPressed;
 
 /** An uppercase section label; an optional text action (Tips' Hide) sits on its right. */
 export function SectionHeader({
@@ -63,9 +141,10 @@ export function SectionHeader({
   title: string;
   action?: { label: string; onPress: () => void };
 }) {
+  const { c, type: text } = useHome();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 16 }}>
-      <Text accessibilityRole="header" style={[type.section, { flex: 1 }]}>
+      <Text accessibilityRole="header" style={[text.section, { flex: 1 }]}>
         {title}
       </Text>
       {action ? (
@@ -77,7 +156,7 @@ export function SectionHeader({
             fontSize: 13,
             lineHeight: 16,
             fontWeight: '500',
-            color: home.accent,
+            color: c.accent,
             paddingVertical: 12,
             marginVertical: -12,
             paddingLeft: 16,
@@ -93,8 +172,8 @@ export function SectionHeader({
 /** Horizontal room a compact PillButton with an icon needs besides its label (padding, icon slot, gap, border); two share a row on a narrow phone. */
 export const PILL_ICON_CHROME_COMPACT = 8 * 2 + 28 + 4 + 2;
 
-/** The grey of an icon tile (Settings' idle fill). */
-export const TILE_FILL = theme.tile;
+/** @deprecated Light only: read `useHome().c.tile`. */
+export const TILE_FILL = lightLook.c.tile;
 
 /**
  * A button inside a card: a raised white pill, 44 tall, with an ink label. `primary` is the one
@@ -120,7 +199,8 @@ export function PillButton({
   compact?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
-  const color = primary ? '#FFFFFF' : home.text;
+  const { c, type: text, theme } = useHome();
+  const color = primary ? c.onGlass : c.text;
   return (
     <Pressable
       cssInterop={false}
@@ -146,9 +226,9 @@ export function PillButton({
         // Primary keeps an explicit zero border: a gradient view whose border goes from unset to
         // 1 as it re-renders crashed Android's gradient drawing (LinearGradient
         // IllegalArgumentException).
-        primary ? [gloss, { borderWidth: 0 }] : raised,
-        !primary && pressed && !disabled && raisedPressed,
-        primary && pressed && !disabled && glossPressed,
+        primary ? [theme.glass, { borderWidth: 0 }] : theme.raised,
+        !primary && pressed && !disabled && theme.raisedPressed,
+        primary && pressed && !disabled && theme.glassPressed,
         style,
       ]}
     >
@@ -159,7 +239,7 @@ export function PillButton({
       ) : null}
       <Text
         style={[
-          type.subhead,
+          text.subhead,
           { color, flexShrink: 1, textAlign: 'center', fontWeight: primary ? '600' : '500' },
         ]}
       >
@@ -172,27 +252,31 @@ export function PillButton({
 /** An icon in a 36 grey tile, corners 10 (Settings' list rows). */
 export function IconTile({
   icon,
-  color = home.text,
+  color,
   children,
 }: {
   icon?: LucideIconName;
+  /** The glyph's colour; ink by default. */
   color?: string;
   children?: React.ReactNode;
 }) {
+  const { c } = useHome();
   return (
     <View
       style={{
         width: 36,
         height: 36,
         borderRadius: 10,
-        backgroundColor: TILE_FILL,
+        backgroundColor: c.tile,
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
       }}
     >
       {children ??
-        (icon ? <SystemIcon name="circle" mdName={icon} size={18} color={color} /> : null)}
+        (icon ? (
+          <SystemIcon name="circle" mdName={icon} size={18} color={color ?? c.text} />
+        ) : null)}
     </View>
   );
 }
@@ -211,6 +295,7 @@ export function TileButton({
   disabled?: boolean;
   accent?: boolean;
 }) {
+  const { c } = useHome();
   return (
     <Pressable
       cssInterop={false}
@@ -224,13 +309,13 @@ export function TileButton({
         width: 36,
         height: 36,
         borderRadius: 10,
-        backgroundColor: pressed ? home.borderSubtle : TILE_FILL,
+        backgroundColor: pressed ? c.borderSubtle : c.tile,
         alignItems: 'center',
         justifyContent: 'center',
         opacity: disabled ? 0.4 : 1,
       })}
     >
-      <SystemIcon name="circle" mdName={icon} size={18} color={accent ? home.accent : home.text} />
+      <SystemIcon name="circle" mdName={icon} size={18} color={accent ? c.accent : c.text} />
     </Pressable>
   );
 }
@@ -245,6 +330,7 @@ export function AccountAvatar() {
   const isGuest = useAuthStore((s) => s.isGuest);
   const signedIn = Boolean(user && !user.isAnonymous);
   const { initials } = getAccountDisplay(user, isGuest);
+  const { c, theme } = useHome();
   return (
     <Pressable
       cssInterop={false}
@@ -269,7 +355,7 @@ export function AccountAvatar() {
             alignItems: 'center',
             justifyContent: 'center',
           },
-          signedIn ? gloss : glassEdge,
+          signedIn ? theme.glass : theme.flat,
         ]}
       >
         {signedIn ? (
@@ -278,14 +364,14 @@ export function AccountAvatar() {
               fontSize: 13,
               lineHeight: 18,
               fontWeight: '500',
-              color: '#FFFFFF',
+              color: c.onGlass,
               textAlign: 'center',
             }}
           >
             {initials}
           </Text>
         ) : (
-          <SystemIcon name="person" mdName="UserRound" size={18} color={home.text} />
+          <SystemIcon name="person" mdName="UserRound" size={18} color={c.text} />
         )}
       </View>
     </Pressable>

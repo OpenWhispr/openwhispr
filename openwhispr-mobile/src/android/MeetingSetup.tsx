@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { meetingOnDevice } from './meetingRouting';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { Text } from '@/components/ui/Text';
-import { Button, Card, styles } from './ui';
+import { Button, Card, useUiStyles } from './ui';
 
 /** How long a start from the Notes Start sheet waits for its calendar event to load. */
 const AUTOSTART_WAIT_MS = 1500;
@@ -24,6 +24,7 @@ export function MeetingSetup({
   /** Whatever the start needs has loaded (the picked calendar event); waits at most 1.5 s. */
   ready?: boolean;
 }) {
+  const styles = useUiStyles();
   const { t } = useTranslation('android');
   const user = useAuthStore((state) => state.user);
   // Meetings set to run on the phone record locally; the others connect live.

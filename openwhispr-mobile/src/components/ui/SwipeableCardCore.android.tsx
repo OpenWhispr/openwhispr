@@ -18,7 +18,8 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { Trash2, FolderInput } from 'lucide-react-native';
-import { iosColor } from '@/config/colors';
+import { useIosColor } from '@/config/colors.android';
+import { makeStyles } from '@/android/ThemeProvider';
 
 /** Slides the row back to rest; call it when the user backs out of a delete. */
 export type RestoreRow = () => void;
@@ -61,6 +62,8 @@ export function createSwipeableCard(usePresentation: () => SwipeableCardPresenta
     cardBackground,
   }: SwipeableCardProps) {
     const presentation = usePresentation();
+    const styles = useStyles();
+    const iosColor = useIosColor();
     const revealWidth = onMove ? ACTION_WIDTH * 2 : ACTION_WIDTH;
     const snapThreshold = -revealWidth * 0.5;
 
@@ -243,7 +246,7 @@ export function createSwipeableCard(usePresentation: () => SwipeableCardPresenta
   };
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   container: {
     position: 'relative',
     marginBottom: 4,
@@ -267,4 +270,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-});
+}));

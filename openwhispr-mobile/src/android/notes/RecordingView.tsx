@@ -4,10 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useNavigation } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
-import { gloss, glossPressed, home } from '../home/kit';
-import { edge, edgeCard, look } from '../settings/look';
 import { useNavigationBarCanvas } from '../navigationBar';
-import { IconButton, notesLook } from './look';
+import { IconButton, useNotesLook } from './look';
 import { MetaChip, NoteTabs, type NoteTab } from './noteParts';
 import { useNotesT } from './strings';
 import { useReduceMotion } from '../settings/kit';
@@ -37,6 +35,7 @@ export const smoothLevel = (previous: number, level: number) => previous * 0.45 
 function MeetingWaveform({ live }: { live: boolean }) {
   const [width, setWidth] = useState(0);
   const [levels, setLevels] = useState<number[]>(() => Array(MAX_BARS).fill(0));
+  const n = useNotesLook();
   const reduceMotion = useReduceMotion();
   const offset = useRef(new Animated.Value(0)).current;
   const readLevel = AndroidDictation?.getMeetingLevel;
@@ -92,7 +91,7 @@ function MeetingWaveform({ live }: { live: boolean }) {
               width: BAR_WIDTH,
               height: live ? barHeight(level) : 3,
               borderRadius: 999,
-              backgroundColor: live ? home.accent : home.tertiary,
+              backgroundColor: live ? n.accent : n.tertiary,
             }}
           />
         ))}
@@ -141,8 +140,10 @@ export function RecordingView({
   keyboardHeight: number;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
+  const dark = n.theme.scheme === 'dark';
   const insets = useSafeAreaInsets();
-  useNavigationBarCanvas(notesLook.canvas);
+  useNavigationBarCanvas(n.canvas);
   // The recorder's own header gives way to this layout while it records.
   const navigation = useNavigation();
   useEffect(() => {
@@ -151,6 +152,15 @@ export function RecordingView({
   }, [navigation]);
   const [tab, setTab] = useState<NoteTab>(transcript ? 'transcript' : 'notes');
   const amber = status === 'reconnecting' || status === 'connecting';
+  // The recording red and amber keep their light values; dark lifts them one step.
+  const dot =
+    status === 'error'
+      ? n.tertiary
+      : amber
+        ? dark
+          ? n.theme.tokens.warning
+          : '#F59E0B'
+        : n.theme.tokens.errorVivid;
   const pill = t(status === 'reconnecting' ? 'reconnecting' : 'recording', {
     time: clock(elapsedSeconds),
   });
@@ -158,7 +168,7 @@ export function RecordingView({
     <View
       style={{
         flex: 1,
-        backgroundColor: notesLook.canvas,
+        backgroundColor: n.canvas,
         paddingTop: insets.top + 8,
         paddingLeft: insets.left,
         paddingRight: insets.right,
@@ -174,7 +184,7 @@ export function RecordingView({
           accessibilityRole="timer"
           accessibilityLiveRegion="polite"
           style={[
-            edge,
+            n.edge,
             {
               flex: 1,
               minHeight: 36,
@@ -191,7 +201,7 @@ export function RecordingView({
               width: 8,
               height: 8,
               borderRadius: 4,
-              backgroundColor: status === 'error' ? home.tertiary : amber ? '#F59E0B' : '#E5372B',
+              backgroundColor: dot,
             }}
           />
           <Text
@@ -199,7 +209,7 @@ export function RecordingView({
               fontSize: 15,
               lineHeight: 20,
               fontWeight: '600',
-              color: home.text,
+              color: n.text,
               fontVariant: ['tabular-nums'],
             }}
           >
@@ -209,7 +219,7 @@ export function RecordingView({
         </View>
       </View>
       <View style={{ flex: 1, padding: 16, gap: 12 }}>
-        <Text style={notesLook.title} numberOfLines={2}>
+        <Text style={n.title} numberOfLines={2}>
           {title}
         </Text>
         {meta ?? (
@@ -220,7 +230,7 @@ export function RecordingView({
           </View>
         )}
         {status === 'error' && error ? (
-          <Text style={{ fontSize: 13, lineHeight: 18, color: look.error }}>{error}</Text>
+          <Text style={{ fontSize: 13, lineHeight: 18, color: n.error }}>{error}</Text>
         ) : null}
         {transcript ? (
           <NoteTabs
@@ -234,15 +244,15 @@ export function RecordingView({
           />
         ) : null}
         {tab === 'transcript' && transcript ? (
-          <View style={[edgeCard, { flex: 1, padding: 16 }]}>{transcript}</View>
+          <View style={[n.edgeCard, { flex: 1, padding: 16 }]}>{transcript}</View>
         ) : (
-          <View style={[edgeCard, { flex: 1, padding: 16 }]}>
+          <View style={[n.edgeCard, { flex: 1, padding: 16 }]}>
             <TextInput
               testID="meeting-raw-notes"
               value={rawNotes}
               onChangeText={onChangeRawNotes}
               placeholder={t('notesWhileRecording')}
-              placeholderTextColor={home.tertiary}
+              placeholderTextColor={n.tertiary}
               multiline
               textAlignVertical="top"
               style={{
@@ -250,7 +260,7 @@ export function RecordingView({
                 fontFamily: AppFont.regular,
                 fontSize: 16,
                 lineHeight: 24,
-                color: home.text,
+                color: n.text,
                 padding: 0,
               }}
             />
@@ -278,12 +288,12 @@ export function RecordingView({
               justifyContent: 'center',
               gap: 10,
             },
-            gloss,
-            pressed && glossPressed,
+            n.gloss,
+            pressed && n.glossPressed,
           ]}
         >
-          <View style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: '#FFFFFF' }} />
-          <Text style={{ color: '#FFFFFF', fontSize: 17, lineHeight: 22, fontWeight: '600' }}>
+          <View style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: n.onGlass }} />
+          <Text style={{ color: n.onGlass, fontSize: 17, lineHeight: 22, fontWeight: '600' }}>
             {stopLabel ?? t('stopAndSave')}
           </Text>
         </Pressable>

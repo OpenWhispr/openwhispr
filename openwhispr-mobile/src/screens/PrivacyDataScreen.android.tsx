@@ -7,13 +7,14 @@ import { useConfigStore } from '@/store/useConfigStore';
 import { useSyncStore } from '@/sync/useSyncStore';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { setInsightsSyncConsent, useInsights } from '@/android/insights';
-import { bodyText } from '@/android/settings/look';
+import { useSettingsLook } from '@/android/settings/look';
 import { Group, ListRow, SettingsPage, showToast } from '@/android/settings/kit';
 import { noOrphan, useSettingsT } from '@/android/settings/strings';
 
 /** Settings → Privacy → Analytics: two switches and what is never collected. */
 export default function AnalyticsScreen() {
   const t = useSettingsT();
+  const { bodyText } = useSettingsLook();
   const config = useConfigStore((state) => state.config);
   const signedIn = useAuthStore((state) => !requiresRealAccount(state.user));
   const policyBlocked = useSyncStore((state) => state.policyBlocked);

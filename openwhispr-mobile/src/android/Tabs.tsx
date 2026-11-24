@@ -8,11 +8,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { useHomeT } from './home/strings';
-import { home } from './home/kit';
+import { useTheme } from './ThemeProvider';
 import { useNavigationBarCanvas } from './navigationBar';
 import {
   shouldShowTabBar,
-  tabColors,
+  tabColorsFor,
   tabLabelProps,
   TAB_BAR_HEIGHT,
   type TabRoute,
@@ -43,14 +43,16 @@ export function AndroidTabBar({ state, descriptors, navigation }: BottomTabBarPr
   const h = useHomeT();
   const insets = useSafeAreaInsets();
   const keyboardShown = useKeyboardShown();
+  const theme = useTheme();
+  const tabColors = tabColorsFor(theme);
   const focused = state.routes[state.index];
   const hiddenByOptions =
     (StyleSheet.flatten(descriptors[focused.key]?.options.tabBarStyle) as ViewStyle | undefined)
       ?.display === 'none';
   const visible = shouldShowTabBar({ route: focused as TabRoute, keyboardShown, hiddenByOptions });
-  // The system bar takes the colour of the surface it touches: white under the bar, the page
-  // colour on pushed screens and with the keyboard up.
-  useNavigationBarCanvas(visible ? tabColors.bar : home.canvas);
+  // The system bar takes the colour of the surface it touches: the bar's under the bar, the page
+  // colour on pushed screens and with the keyboard up, in either scheme.
+  useNavigationBarCanvas(visible ? tabColors.bar : theme.tokens.canvas);
   if (!visible) return null;
 
   const tabs = state.routes.filter((route) => ICONS[route.name]);
@@ -74,7 +76,7 @@ export function AndroidTabBar({ state, descriptors, navigation }: BottomTabBarPr
         const { options } = descriptors[route.key];
         const label = String(options.title ?? route.name);
         const icon = ICONS[route.name];
-        const text = tabLabelProps(selected);
+        const text = tabLabelProps(selected, theme);
         const onPress = () => {
           // Native stacks pop to their first screen on this event, and a first screen that
           // registered useScrollToTop scrolls up.

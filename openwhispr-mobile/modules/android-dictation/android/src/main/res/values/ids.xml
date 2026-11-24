@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- A bubble view's "apply the current colours" action (BubbleColors.themed). -->
+  <item name="ow_bubble_theme" type="id" />
+</resources>

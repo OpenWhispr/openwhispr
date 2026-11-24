@@ -1,8 +1,9 @@
-import { StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { makeStyles } from '@/android/ThemeProvider';
 import type { SpeakerRenameLayout } from './speakerRenameLayout';
 
-const styles = StyleSheet.create({
+// The scrim is a colour, so the sheet's styles are built per scheme (dark theme §3b).
+const useStyles = makeStyles(() => ({
   keyboardContainer: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -11,10 +12,11 @@ const styles = StyleSheet.create({
   sheet: { maxHeight: '100%', flexShrink: 1 },
   form: { flexShrink: 1 },
   content: { gap: 16 },
-});
+}));
 
 export function useSpeakerRenameLayout(): SpeakerRenameLayout {
   const insets = useSafeAreaInsets();
+  const styles = useStyles();
   return {
     keyboardStyle: [styles.keyboardContainer, { paddingTop: insets.top + 8 }],
     sheetStyle: styles.sheet,

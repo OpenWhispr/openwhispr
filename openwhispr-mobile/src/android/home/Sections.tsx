@@ -13,9 +13,7 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import type { Transcript } from '@/types';
 import { useHomeT, type HomeKey } from './strings';
-import { home, IconTile, SectionHeader, TileButton, type } from './kit';
-import { edgeCard, look } from '../settings/look';
-import { raised, raisedPressed } from '../theme';
+import { IconTile, SectionHeader, TileButton, useHome } from './kit';
 import { BottomSheet, PillAction } from '../settings/kit';
 import { tipsVisible, useTips, type TipId } from './tipsState';
 import { relativeDate, wordSafeLines, type HomeStats } from './model';
@@ -78,18 +76,30 @@ function useForeground() {
 
 /** Inset hairline between rows of a card (black 6%, inset 14). */
 function RowDivider() {
+  const { c } = useHome();
   return (
     <View style={{ paddingLeft: 14 }}>
-      <View style={{ height: 1, backgroundColor: look.hairline }} />
+      <View style={{ height: 1, backgroundColor: c.hairline }} />
     </View>
   );
 }
 
-/** A tip's poster in a 36 grey tile, with a small play mark: tapping the row plays the video. */
+/**
+ * A tip's poster in a 36 grey tile, with a small play mark: tapping the row plays the video. In
+ * dark the light screenshot sits inside a dark frame (design §3.6), so it never glares.
+ */
 function TipThumbnail({ poster }: { poster: number }) {
+  const { c } = useHome();
+  const frame = c.posterFrame;
   return (
     <IconTile>
-      <Image source={poster} style={{ width: 36, height: 36 }} />
+      {frame ? (
+        <View style={{ width: 36, height: 36, padding: 3, backgroundColor: frame }}>
+          <Image source={poster} style={{ width: 30, height: 30, borderRadius: 7 }} />
+        </View>
+      ) : (
+        <Image source={poster} style={{ width: 36, height: 36 }} />
+      )}
       <View
         style={{
           position: 'absolute',
@@ -101,7 +111,7 @@ function TipThumbnail({ poster }: { poster: number }) {
           justifyContent: 'center',
         }}
       >
-        <SystemIcon name="play.fill" mdName="Play" size={10} color="#FFFFFF" />
+        <SystemIcon name="play.fill" mdName="Play" size={10} color={c.onGlass} />
       </View>
     </IconTile>
   );
@@ -118,6 +128,7 @@ function TipSheet({
   onClose: () => void;
 }) {
   const t = useHomeT();
+  const { c, type, theme } = useHome();
   const foreground = useForeground();
   const { width, height } = useWindowDimensions();
   const size = Math.min(width - 32, 360, height * 0.45);
@@ -149,7 +160,7 @@ function TipSheet({
           onPress={onClose}
           hitSlop={6}
           style={({ pressed }) => [
-            raised,
+            theme.raised,
             {
               width: 36,
               height: 36,
@@ -157,22 +168,27 @@ function TipSheet({
               alignItems: 'center',
               justifyContent: 'center',
             },
-            pressed && raisedPressed,
+            pressed && theme.raisedPressed,
           ]}
         >
-          <SystemIcon name="xmark" mdName="X" size={18} color={home.text} />
+          <SystemIcon name="xmark" mdName="X" size={18} color={c.text} />
         </Pressable>
       }
     >
       <View
-        style={{
-          alignSelf: 'center',
-          width: size,
-          height: size,
-          borderRadius: 16,
-          overflow: 'hidden',
-          backgroundColor: look.idleFill,
-        }}
+        style={[
+          {
+            alignSelf: 'center',
+            width: size,
+            height: size,
+            borderRadius: 16,
+            overflow: 'hidden',
+            backgroundColor: c.tile,
+          },
+          // Dark: the light video sits in a #202128 frame (design §3.6). Always set, so the
+          // view's border never goes from unset to a width as the scheme changes.
+          { borderWidth: c.posterFrame ? 6 : 0, borderColor: c.posterFrame ?? 'transparent' },
+        ]}
       >
         <VideoView
           player={player}
@@ -181,10 +197,13 @@ function TipSheet({
           surfaceType="textureView"
           allowsPictureInPicture={false}
           onFirstFrameRender={() => setReady(true)}
-          style={{ width: size, height: size }}
+          style={{ flex: 1 }}
         />
         {!ready && (
-          <Image source={tip.poster} style={{ position: 'absolute', width: size, height: size }} />
+          <Image
+            source={tip.poster}
+            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+          />
         )}
       </View>
       <Text style={type.footnote}>{t(tip.body)}</Text>
@@ -199,6 +218,7 @@ function TipSheet({
  */
 export function Tips() {
   const t = useHomeT();
+  const { c, type, card } = useHome();
   const tips = useTips();
   const [open, setOpen] = useState<number | null>(null);
   // The sheet keeps its tip while it slides away.
@@ -216,7 +236,7 @@ export function Tips() {
   return (
     <View style={{ gap: 8 }}>
       <SectionHeader title={t('tips')} action={{ label: t('hide'), onPress: tips.hide }} />
-      <View style={edgeCard}>
+      <View style={card}>
         {TIPS.map((tip, index) => (
           <View key={tip.title}>
             <Pressable
@@ -227,19 +247,14 @@ export function Tips() {
                 setShown(index);
                 setOpen(index);
               }}
-              style={({ pressed }) => [ROW, pressed && { backgroundColor: look.idleFill }]}
+              style={({ pressed }) => [ROW, pressed && { backgroundColor: c.tile }]}
             >
               <TipThumbnail poster={tip.poster} />
               <View style={{ flex: 1, gap: 2 }}>
-                <Text style={ROW_TITLE}>{t(tip.title)}</Text>
+                <Text style={type.rowTitle}>{t(tip.title)}</Text>
                 <Text style={type.footnote}>{t(tip.body)}</Text>
               </View>
-              <SystemIcon
-                name="chevron.right"
-                mdName="ChevronRight"
-                size={20}
-                color={home.tertiary}
-              />
+              <SystemIcon name="chevron.right" mdName="ChevronRight" size={20} color={c.tertiary} />
             </Pressable>
             {index < TIPS.length - 1 && <RowDivider />}
           </View>
@@ -259,9 +274,9 @@ const ROW = {
   paddingVertical: 12,
   minHeight: 60,
 };
-const ROW_TITLE = { fontSize: 16, lineHeight: 22, fontWeight: '500' as const, color: home.text };
 
 function StatColumn({ value, label }: { value: string; label: string }) {
+  const { c } = useHome();
   return (
     <View
       accessible
@@ -276,7 +291,7 @@ function StatColumn({ value, label }: { value: string; label: string }) {
           lineHeight: 28,
           fontWeight: '700',
           letterSpacing: -0.11,
-          color: home.text,
+          color: c.text,
           textAlign: 'center',
         }}
       >
@@ -290,7 +305,7 @@ function StatColumn({ value, label }: { value: string; label: string }) {
           fontSize: 12,
           lineHeight: 16,
           letterSpacing: 0.06,
-          color: home.secondary,
+          color: c.secondary,
           textAlign: 'center',
         }}
       >
@@ -301,18 +316,20 @@ function StatColumn({ value, label }: { value: string; label: string }) {
 }
 
 function StatDivider() {
-  return <View style={{ width: 1, height: 36, backgroundColor: look.hairline }} />;
+  const { c } = useHome();
+  return <View style={{ width: 1, height: 36, backgroundColor: c.hairline }} />;
 }
 
 /** One strip: words spoken, words per minute, streak, with thin dividers between. */
 export function Stats({ stats, feedback }: { stats: HomeStats; feedback?: ReactNode }) {
   const t = useHomeT();
+  const { card } = useHome();
   const dash = '—';
   const days = stats.streakDays;
   return (
     <View style={{ gap: 8 }}>
       <SectionHeader title={t('yourStats')} />
-      <View style={[edgeCard, { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }]}>
+      <View style={[card, { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }]}>
         <StatColumn
           value={stats.words === undefined ? dash : stats.words.toLocaleString()}
           label={t('wordsSpoken')}
@@ -338,6 +355,7 @@ export function Stats({ stats, feedback }: { stats: HomeStats; feedback?: ReactN
  * view a soft accent highlight eases in, holds briefly and fades away.
  */
 function useArrival(arriving: boolean) {
+  const { c } = useHome();
   const tint = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!arriving) return;
@@ -363,16 +381,15 @@ function useArrival(arriving: boolean) {
   return {
     backgroundColor: tint.interpolate({
       inputRange: [0, 1],
-      outputRange: ['rgba(21,85,212,0)', 'rgba(21,85,212,0.10)'],
+      outputRange: [c.arrivalFrom, c.arrivalTo],
     }),
   };
 }
 
 /** Where a row's text came from: a dictation (mic) or an uploaded audio file. */
 function SourceTile({ item }: { item: Transcript }) {
-  return (
-    <IconTile icon={item.requestContext === 'file' ? 'FileUp' : 'Mic'} color={home.secondary} />
-  );
+  const { c } = useHome();
+  return <IconTile icon={item.requestContext === 'file' ? 'FileUp' : 'Mic'} color={c.secondary} />;
 }
 
 export function HistoryRow({
@@ -396,6 +413,7 @@ export function HistoryRow({
   onRetry: (id: string) => void;
 }) {
   const t = useHomeT();
+  const { type } = useHome();
   const failed = item.status === 'failed';
   const text = failed ? item.errorMessage || '' : item.text;
   const when = meta ?? relativeDate(item.createdAt, t);
@@ -418,7 +436,7 @@ export function HistoryRow({
         >
           <SourceTile item={item} />
           <View style={{ flex: 1, gap: 2 }}>
-            <Text numberOfLines={1} style={ROW_TITLE}>
+            <Text numberOfLines={1} style={type.rowTitle}>
               {text}
             </Text>
             {item.cleanupWarning ? (
@@ -467,8 +485,9 @@ export function HistoryCard({
   onSeeAll?: () => void;
 }) {
   const t = useHomeT();
+  const { c, type, card } = useHome();
   return (
-    <View style={edgeCard}>
+    <View style={card}>
       {items.map((item, index) => (
         <HistoryRow
           key={item.id}
@@ -488,11 +507,11 @@ export function HistoryCard({
           onPress={onSeeAll}
           style={({ pressed }) => [
             { ...ROW, minHeight: 52 },
-            pressed && { backgroundColor: look.idleFill },
+            pressed && { backgroundColor: c.tile },
           ]}
         >
-          <Text style={[ROW_TITLE, { flex: 1, color: home.accent }]}>{t('seeAllHistory')}</Text>
-          <SystemIcon name="chevron.right" mdName="ChevronRight" size={20} color={home.tertiary} />
+          <Text style={[type.rowTitle, { flex: 1, color: c.accent }]}>{t('seeAllHistory')}</Text>
+          <SystemIcon name="chevron.right" mdName="ChevronRight" size={20} color={c.tertiary} />
         </Pressable>
       ) : null}
     </View>

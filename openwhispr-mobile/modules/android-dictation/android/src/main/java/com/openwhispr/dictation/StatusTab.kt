@@ -38,8 +38,11 @@ internal fun WindowManager.LayoutParams.withoutMoveAnimation() = apply {
 
 /** The three brand-blue bars at the start of the status tab. */
 private class TabGlyph(context: Context) : View(context) {
-  private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.brand }
-  init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
+  private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+  init {
+    importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+    BubbleColors.themed(this) { paint.color = BubbleColors.brand }
+  }
   override fun onDraw(canvas: Canvas) {
     val u = width / 14f
     val r = 1.1f * u
@@ -150,8 +153,10 @@ class StatusTab(private val context: Context, private val windows: WindowManager
     val holder = FrameLayout(context).apply { setPadding(room, room, room, room); clipToPadding = false; clipChildren = false; alpha = opacity }
     val content = LinearLayout(context).apply {
       orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-      background = GradientDrawable().apply {
-        setColor(Color.WHITE); cornerRadius = dp(20f); setStroke(dp(1f).toInt().coerceAtLeast(1), BubbleColors.hairline)
+      BubbleColors.themed(this) {
+        background = GradientDrawable().apply {
+          setColor(BubbleColors.surface); cornerRadius = dp(20f); setStroke(dp(1f).toInt().coerceAtLeast(1), BubbleColors.hairline)
+        }
       }
       elevation = dp(3f)
       setPadding(dp(12f).toInt(), 0, dp(14f).toInt(), 0)
@@ -165,9 +170,9 @@ class StatusTab(private val context: Context, private val windows: WindowManager
       }
     }
     content.addView(TabGlyph(context), LinearLayout.LayoutParams(dp(14f).toInt(), dp(14f).toInt()))
-    val words = text(BubbleColors.ink)
+    val words = text { if (message?.muted == true) BubbleColors.secondary else BubbleColors.ink }
     content.addView(words, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT).apply { marginStart = dp(8f).toInt() })
-    val button = text(BubbleColors.brand)
+    val button = text { BubbleColors.brand }
     content.addView(button, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT).apply { marginStart = dp(8f).toInt() })
     holder.addView(content, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, dp(40f).toInt()))
     window = holder; pill = content; label = words; action = button
@@ -177,8 +182,9 @@ class StatusTab(private val context: Context, private val windows: WindowManager
     }
   }
 
-  private fun text(color: Int) = TextView(context).apply {
-    typeface = font; setTextColor(color); setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+  private fun text(color: () -> Int) = TextView(context).apply {
+    BubbleColors.themed(this) { setTextColor(color()) }
+    typeface = font; setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
     maxLines = 1; ellipsize = TextUtils.TruncateAt.END; gravity = Gravity.CENTER_VERTICAL
     maxWidth = dp(200f).toInt()
   }
@@ -258,7 +264,7 @@ class BottomToast(private val context: Context, private val windows: WindowManag
     val holder = FrameLayout(context).apply { setPadding(room, room, room, room); clipToPadding = false }
     val pill = LinearLayout(context).apply {
       orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-      background = GradientDrawable().apply { setColor(BubbleColors.toast); cornerRadius = dp(20f) }
+      BubbleColors.themed(this) { background = GradientDrawable().apply { setColor(BubbleColors.toast); cornerRadius = dp(20f) } }
       elevation = dp(6f)
       setPadding(dp(16f).toInt(), 0, dp(10f).toInt(), 0)
     }

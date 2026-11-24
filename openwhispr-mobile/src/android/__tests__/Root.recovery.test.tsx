@@ -121,8 +121,8 @@ jest.mock('@/android/ui', () => ({
       { onPress },
       require('react').createElement(require('react-native').Text, null, label),
     ),
-  styles: {},
-  palette: {},
+  useUiStyles: () => ({}),
+  useUiPalette: () => ({}),
 }));
 jest.mock('@/hooks/useRevenueCatIdentity', () => ({ useRevenueCatIdentity: () => {} }));
 jest.mock('../settings/kit', () => ({ SettingsToastHost: () => null }));

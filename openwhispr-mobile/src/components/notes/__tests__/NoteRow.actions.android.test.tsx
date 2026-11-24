@@ -28,6 +28,11 @@ jest.mock('../GroupedList', () => {
   return { GroupedList };
 });
 
+// GroupedList reads the Android theme, whose provider loads the native fade module.
+jest.mock('../../../../modules/android-dictation/src/themeFade', () => ({
+  prepareThemeFade: async () => false,
+  fadeTheme: () => undefined,
+}));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/SwipeableCard', () => ({

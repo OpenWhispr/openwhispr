@@ -8,9 +8,9 @@ import { AppFont } from '@/lib/fonts';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { ANDROID_MODELS, useModelDownloads, type AndroidModelId } from '../models';
 import { DownloadRing } from '../settings/DownloadRing';
-import { edgeCard, sectionLabel } from '../settings/look';
+import { useSettingsLook } from '../settings/look';
 import { useReduceMotion } from '../settings/kit';
-import { theme } from '../theme';
+import { makeStyles, useTheme } from '../ThemeProvider';
 import {
   modelFor,
   retryDeviceDownloads,
@@ -20,7 +20,16 @@ import {
   type DeviceExtra,
 } from './deviceSetup';
 import { applyPrivateConfig } from './setup';
-import { AccentText, GLASS_GRADIENT, GlassButton, LinkButton, Screen, colors, s } from './kit';
+import {
+  AccentText,
+  GLASS_GRADIENT,
+  GlassButton,
+  LinkButton,
+  Screen,
+  onboardingColorsFor,
+  useOnboardingColors,
+  useOnboardingStyles,
+} from './kit';
 import { Glyph } from './PracticeBubble';
 import { useOnboardingT, type OnboardingKey } from './strings';
 
@@ -64,6 +73,8 @@ export function DeviceSetupScreen({
   onUseCloud: () => void;
 }) {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
+  const colors = useOnboardingColors();
   const choices = useDeviceSetup((current) => current.choices);
   const error = useDeviceSetup((current) => current.error);
   const speech = useModelState(modelFor('speech'));
@@ -110,7 +121,7 @@ export function DeviceSetupScreen({
         ))}
       </Section>
       {error ? (
-        <Text accessibilityRole="alert" style={[s.body, { color: '#B42318' }]}>
+        <Text accessibilityRole="alert" style={[s.body, { color: colors.error }]}>
           {error}
         </Text>
       ) : null}
@@ -119,6 +130,8 @@ export function DeviceSetupScreen({
 }
 
 function Section({ label, children }: { label: string; children: ReactNode }) {
+  const { edgeCard, sectionLabel } = useSettingsLook();
+  const d = useStyles();
   return (
     <View style={{ gap: 8 }}>
       <Text style={[sectionLabel, d.section]}>{label.toUpperCase()}</Text>
@@ -128,8 +141,11 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function Tile({ item, glass, muted }: { item: Item; glass?: boolean; muted?: boolean }) {
+  const d = useStyles();
+  const colors = useOnboardingColors();
+  const k = useTheme().tokens;
   const icon = ROWS[item].icon;
-  const color = glass ? theme.onGlass : muted ? colors.tertiary : colors.ink;
+  const color = glass ? colors.onGlass : muted ? colors.tertiary : colors.ink;
   const glyph =
     icon === 'sparkle' ? (
       <Glyph name="sparkle" size={14} color={color} />
@@ -141,12 +157,14 @@ function Tile({ item, glass, muted }: { item: Item; glass?: boolean; muted?: boo
       {glyph}
     </LinearGradient>
   ) : (
-    <View style={[d.tile, { backgroundColor: theme.tile }]}>{glyph}</View>
+    <View style={[d.tile, { backgroundColor: k.tile }]}>{glyph}</View>
   );
 }
 
 function SetupRow({ item, divider, added }: { item: Item; divider?: boolean; added?: boolean }) {
   const t = useOnboardingT();
+  const d = useStyles();
+  const colors = useOnboardingColors();
   const reduceMotion = useReduceMotion();
   const choices = useDeviceSetup((current) => current.choices);
   const id = modelFor(item);
@@ -224,7 +242,7 @@ function SetupRow({ item, divider, added }: { item: Item; divider?: boolean; add
               name="exclamationmark.circle"
               mdName="CircleAlert"
               size={24}
-              color="#B42318"
+              color={colors.error}
             />
           ) : (
             <DownloadRing
@@ -252,13 +270,14 @@ function SetupRow({ item, divider, added }: { item: Item; divider?: boolean; add
 
 // Waiting its turn: a dashed ring the size of the V1 download ring.
 function QueuedRing() {
+  const k = useTheme().tokens;
   return (
     <Svg width={28} height={28}>
       <Circle
         cx={14}
         cy={14}
         r={11}
-        stroke={theme.dotIdle}
+        stroke={k.dotIdle}
         strokeWidth={2}
         strokeDasharray="3 3"
         fill="none"
@@ -279,6 +298,9 @@ function joinNames(names: string[], t: ReturnType<typeof useOnboardingT>): strin
  */
 export function DeviceReadyScreen({ onNext }: { onNext: () => void }) {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
+  const d = useStyles();
+  const colors = useOnboardingColors();
   const choices = useDeviceSetup((current) => current.choices);
   const onPhone: Item[] = ['speech', ...EXTRAS.filter((item) => choices[item])];
   const skipped = EXTRAS.filter((item) => !choices[item]);
@@ -346,6 +368,8 @@ export function DeviceReadyScreen({ onNext }: { onNext: () => void }) {
 
 function ReadyRow({ item, divider }: { item: Item; divider: boolean }) {
   const t = useOnboardingT();
+  const d = useStyles();
+  const colors = useOnboardingColors();
   const reduceMotion = useReduceMotion();
   const id = modelFor(item);
   const { state, progress } = useModelState(id);
@@ -372,41 +396,45 @@ function ReadyRow({ item, divider }: { item: Item; divider: boolean }) {
   );
 }
 
-const d = StyleSheet.create({
-  section: { paddingHorizontal: 4, color: colors.tertiary },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    minHeight: 72,
-  },
-  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.divider },
-  tile: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  name: { fontSize: 17, fontFamily: AppFont.medium, color: colors.ink },
-  body: { fontSize: 14, lineHeight: 19, color: colors.secondary },
-  pill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: colors.accentSoft,
-  },
-  pillLabel: { fontSize: 12, fontFamily: AppFont.medium, color: colors.accent },
-  add: { fontSize: 16, fontFamily: AppFont.semibold, color: colors.accent },
-  toastSlot: { minHeight: 52, alignItems: 'center', justifyContent: 'center' },
-  toast: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 22,
-    backgroundColor: theme.toast,
-  },
-  toastLabel: { fontSize: 14, fontFamily: AppFont.medium, color: theme.onToast },
+const useStyles = makeStyles((t) => {
+  const colors = onboardingColorsFor(t);
+  const k = t.tokens;
+  return {
+    section: { paddingHorizontal: 4, color: colors.tertiary },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+      minHeight: 72,
+    },
+    divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: k.divider },
+    tile: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    name: { fontSize: 17, fontFamily: AppFont.medium, color: colors.ink },
+    body: { fontSize: 14, lineHeight: 19, color: colors.secondary },
+    pill: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+      backgroundColor: colors.accentSoft,
+    },
+    pillLabel: { fontSize: 12, fontFamily: AppFont.medium, color: colors.accent },
+    add: { fontSize: 16, fontFamily: AppFont.semibold, color: colors.accent },
+    toastSlot: { minHeight: 52, alignItems: 'center', justifyContent: 'center' },
+    toast: {
+      paddingHorizontal: 18,
+      paddingVertical: 12,
+      borderRadius: 22,
+      backgroundColor: k.toast,
+    },
+    toastLabel: { fontSize: 14, fontFamily: AppFont.medium, color: k.onToast },
+  };
 });

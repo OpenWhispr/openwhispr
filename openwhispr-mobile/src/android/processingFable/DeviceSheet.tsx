@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { ANDROID_MODELS, type AndroidModelId } from '../models';
-import { BottomSheet, TextAction, settings } from '../settings/kit';
+import { BottomSheet, TextAction, useSettings } from '../settings/kit';
 import { MODEL_ROWS, formatSize, modelName } from '../settings/modelCatalog';
 import { useFableT } from './strings';
 import { GlassButton, Tile } from './look';
@@ -26,6 +26,7 @@ export function DeviceSheet({
   onCheckFirst: () => void;
 }) {
   const t = useFableT();
+  const settings = useSettings();
   // The sheet keeps its list while it slides away.
   const [needs, setNeeds] = useState<AndroidModelId[]>(requested ?? []);
   useEffect(() => {

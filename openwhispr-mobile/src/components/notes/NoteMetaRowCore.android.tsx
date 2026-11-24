@@ -3,6 +3,7 @@ import type React from 'react';
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
+import { useIosColor } from '@/config/colors.android';
 
 interface NoteMetaRowProps {
   dateLabel: string;
@@ -13,7 +14,7 @@ interface NoteMetaRowProps {
   onPressFolder?: () => void;
 }
 
-const CHIP = 'h-9 max-w-full flex-row items-center gap-1.5 rounded-full bg-tertiarySystemFill px-3';
+const CHIP = 'h-9 max-w-full flex-row items-center gap-1.5 rounded-full px-3';
 
 /** The row under a note's title: when it was taken, who attended, and where it lives. */
 type MetadataPresentation = {
@@ -32,14 +33,21 @@ export function createNoteMetaRow(usePresentation: () => MetadataPresentation = 
     onPressFolder,
   }: NoteMetaRowProps): React.JSX.Element {
     const presentation = usePresentation();
+    const color = useIosColor();
     const copy = presentation.copy ?? defaultCopy;
     const chip = presentation.chipClassName ?? CHIP;
+    const chipStyle = {
+      borderCurve: 'continuous',
+      backgroundColor: color('tertiarySystemFill'),
+    } as const;
     return (
       <View className="mb-4 flex-row flex-wrap items-center gap-2">
         {dateLabel || attendeeLabel ? (
-          <View className={chip} style={{ borderCurve: 'continuous' }}>
+          <View className={chip} style={chipStyle}>
             {dateLabel ? (
-              <Text className="text-[14px] font-medium text-secondaryLabel">{dateLabel}</Text>
+              <Text className="text-[14px] font-medium" style={{ color: color('secondaryLabel') }}>
+                {dateLabel}
+              </Text>
             ) : null}
             {attendeeLabel ? (
               <Pressable
@@ -54,13 +62,18 @@ export function createNoteMetaRow(usePresentation: () => MetadataPresentation = 
                 onPress={onPressAttendees}
                 className="shrink flex-row items-center gap-1.5"
               >
-                {dateLabel ? <Text className="text-[14px] text-tertiaryLabel">·</Text> : null}
+                {dateLabel ? (
+                  <Text className="text-[14px]" style={{ color: color('tertiaryLabel') }}>
+                    ·
+                  </Text>
+                ) : null}
                 <SystemIcon name="person.2" mdName="Users" size={14} color="secondaryLabel" />
                 <Text
                   numberOfLines={1}
                   // A long name gives way in the middle, so the "+3" count stays visible.
                   ellipsizeMode="middle"
-                  className="shrink text-[14px] font-medium text-secondaryLabel"
+                  className="shrink text-[14px] font-medium"
+                  style={{ color: color('secondaryLabel') }}
                 >
                   {attendeeLabel}
                 </Text>
@@ -81,7 +94,7 @@ export function createNoteMetaRow(usePresentation: () => MetadataPresentation = 
             }
             onPress={onPressFolder}
             className={chip}
-            style={{ borderCurve: 'continuous' }}
+            style={chipStyle}
           >
             <SystemIcon
               name={folderLabel ? 'folder' : 'folder.badge.plus'}
@@ -89,7 +102,11 @@ export function createNoteMetaRow(usePresentation: () => MetadataPresentation = 
               size={14}
               color="secondaryLabel"
             />
-            <Text numberOfLines={1} className="shrink text-[14px] font-medium text-secondaryLabel">
+            <Text
+              numberOfLines={1}
+              className="shrink text-[14px] font-medium"
+              style={{ color: color('secondaryLabel') }}
+            >
               {folderLabel ?? copy('noteDetails.addToFolder', 'Add to folder')}
             </Text>
           </Pressable>

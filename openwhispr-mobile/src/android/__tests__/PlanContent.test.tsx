@@ -46,7 +46,7 @@ jest.mock('../billing', () => ({
   restoreAndroidPurchases: jest.fn(async () => 'payment-pending'),
   refreshAndroidBillingAccess: jest.fn(),
 }));
-jest.mock('../settings/look', () => ({ bodyText: {} }));
+jest.mock('../settings/look', () => ({ bodyText: {}, useSettingsLook: () => ({ bodyText: {} }) }));
 jest.mock('../settings/kit', () => {
   const { Pressable, Text, View } = require('react-native');
   const PillAction = ({
@@ -80,6 +80,7 @@ jest.mock('../settings/kit', () => {
     PillAction,
     cardStyle: {},
     settings: {},
+    useSettings: () => ({}),
   };
 });
 beforeEach(() => {

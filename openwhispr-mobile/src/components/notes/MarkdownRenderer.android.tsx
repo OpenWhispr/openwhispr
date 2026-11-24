@@ -3,16 +3,13 @@ import { View, ScrollView, StyleSheet, type StyleProp, type TextStyle } from 're
 import { Text } from '@/components/ui/Text';
 import { parseMarkdownBlocks, type MarkdownBlock } from './markdownBlocks';
 import { NOTES_GROUP_RADIUS } from './tokens';
-import { iosColor } from '@/config/colors';
+import { iosColor as iosColorFor, useIosColor } from '@/config/colors.android';
+import { makeStyles } from '@/android/ThemeProvider';
 
 interface MarkdownRendererProps {
   content: string;
   selectable?: boolean;
 }
-
-const labelColor = iosColor('label');
-const secondaryColor = iosColor('secondaryLabel');
-const tertiaryBg = iosColor('tertiarySystemBackground');
 
 type InlineSegment = { text: string; bold?: boolean; italic?: boolean; code?: boolean };
 
@@ -53,6 +50,9 @@ function InlineText({
   selectable?: boolean;
   style?: StyleProp<TextStyle>;
 }) {
+  const iosColor = useIosColor();
+  const labelColor = iosColor('label');
+  const tertiaryBg = iosColor('tertiarySystemBackground');
   return (
     <Text
       selectable={selectable}
@@ -109,6 +109,7 @@ function columnWidths(table: TableBlock): number[] {
 }
 
 function MarkdownTable({ table, selectable }: { table: TableBlock; selectable: boolean }) {
+  const styles = useStyles();
   const widths = columnWidths(table);
   const allRows = [table.header, ...table.rows];
 
@@ -119,14 +120,14 @@ function MarkdownTable({ table, selectable }: { table: TableBlock; selectable: b
       showsHorizontalScrollIndicator={false}
       style={styles.tableScroller}
     >
-      <View className="overflow-hidden border-separator" style={styles.table}>
+      <View className="overflow-hidden" style={styles.table}>
         {allRows.map((row, rowIndex) => {
           const isHeader = rowIndex === 0;
           return (
             <View
               key={rowIndex}
-              className={`flex-row border-separator ${isHeader ? 'bg-secondarySystemBackground' : ''}`}
-              style={!isHeader && styles.rowDivider}
+              className="flex-row"
+              style={isHeader ? styles.headerRow : styles.rowDivider}
             >
               {row.map((cell, column) => {
                 const width = widths[column];
@@ -134,7 +135,7 @@ function MarkdownTable({ table, selectable }: { table: TableBlock; selectable: b
                 return (
                   <View
                     key={column}
-                    className="border-separator px-2.5 py-1.5"
+                    className="px-2.5 py-1.5"
                     style={[{ width }, column > 0 && styles.cellDivider]}
                   >
                     <InlineText
@@ -155,6 +156,10 @@ function MarkdownTable({ table, selectable }: { table: TableBlock; selectable: b
 
 export function MarkdownRenderer({ content, selectable = false }: MarkdownRendererProps) {
   const elements = useMemo(() => parseMarkdownBlocks(content), [content]);
+  const iosColor = useIosColor();
+  const labelColor = iosColor('label');
+  const secondaryColor = iosColor('secondaryLabel');
+  const styles = useStyles();
 
   return (
     <View style={{ gap: 2 }}>
@@ -164,14 +169,7 @@ export function MarkdownRenderer({ content, selectable = false }: MarkdownRender
         }
 
         if (el.type === 'rule') {
-          return (
-            <View
-              key={i}
-              testID="markdown-rule"
-              className="my-2.5 bg-separator"
-              style={styles.rule}
-            />
-          );
+          return <View key={i} testID="markdown-rule" className="my-2.5" style={styles.rule} />;
         }
 
         if (el.type === 'table') {
@@ -279,7 +277,8 @@ export function MarkdownRenderer({ content, selectable = false }: MarkdownRender
   );
 }
 
-const styles = StyleSheet.create({
+// The lines and the header row take the system colours of the scheme in use.
+const useStyles = makeStyles((t) => ({
   // A horizontal ScrollView defaults to flexGrow: 1 and would stretch to any
   // free height in its column, like the note chat sheet's.
   tableScroller: { flexGrow: 0, marginVertical: 6 },
@@ -287,10 +286,21 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: NOTES_GROUP_RADIUS,
     borderCurve: 'continuous',
+    borderColor: iosColorFor('separator', t.scheme),
   },
-  rowDivider: { borderTopWidth: StyleSheet.hairlineWidth },
-  cellDivider: { borderLeftWidth: StyleSheet.hairlineWidth },
+  headerRow: { backgroundColor: iosColorFor('secondarySystemBackground', t.scheme) },
+  rowDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: iosColorFor('separator', t.scheme),
+  },
+  cellDivider: {
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderColor: iosColorFor('separator', t.scheme),
+  },
   cellText: { fontSize: 15, lineHeight: 20 },
   headerCellText: { fontWeight: '600' },
-  rule: { height: StyleSheet.hairlineWidth },
-});
+  rule: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: iosColorFor('separator', t.scheme),
+  },
+}));

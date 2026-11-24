@@ -50,7 +50,6 @@ import { buildNoteShareContent, exportNote } from '@/lib/noteExport';
 import { AppFont } from '@/lib/fonts';
 import { makeContentHash, safeHaptics } from '@/lib/utils';
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
-import { BRAND } from '@/config/colors';
 import {
   handleAccountRequiredError,
   requiresRealAccount,
@@ -113,10 +112,8 @@ import { notesT } from '@/android/notes/strings';
 import { NoteChips } from '@/android/notes/noteChips';
 import { initialsOf } from '@/android/notes/initials';
 import { CloudFinishCard, useCloudFinishJob } from '@/android/notes/cloudFinish';
-import { BackButton, notesLook } from '@/android/notes/look';
-import { edgeCard } from '@/android/settings/look';
+import { BackButton, useNotesLook } from '@/android/notes/look';
 import { showToast } from '@/android/settings/kit';
-import { home as homeTokens } from '@/android/home/kit';
 import { useNavigationBarCanvas } from '@/android/navigationBar';
 
 /**
@@ -188,13 +185,16 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
     stack?: NoteEditorStack;
   }): React.JSX.Element {
     const { copy, copyRef, language, incompleteTranscript } = usePresentation();
+    // Colours are read at render, so a light/dark switch repaints the note in place: the
+    // editor's inputs keep their text, caret, selection and keyboard.
+    const n = useNotesLook();
     const {
       id,
       tab: requestedTab,
       fresh,
     } = useLocalSearchParams<{ id: string; tab?: string; fresh?: string }>();
     const noteId = parseInt(id ?? '', 10);
-    useNavigationBarCanvas(notesLook.canvas);
+    useNavigationBarCanvas(n.canvas);
     const router = useRouter();
 
     const { notes, updateNote, deleteNote, getNoteById } = useNotesStore();
@@ -1200,7 +1200,7 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
     // header and the tab bar here, so the back button is the only way out.
     if (!note && !isNaN(noteId)) {
       return (
-        <View style={{ flex: 1, backgroundColor: notesLook.canvas }}>
+        <View style={{ flex: 1, backgroundColor: n.canvas }}>
           <TabScreenHeader
             title=""
             left={
@@ -1210,7 +1210,7 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
             }
           />
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ color: notesLook.tertiary }}>
+            <Text style={{ color: n.tertiary }}>
               {copy('editorFeedback.noteNotFound', 'Note not found')}
             </Text>
           </View>
@@ -1363,7 +1363,7 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
 
     return (
       <Root
-        style={{ flex: 1, backgroundColor: notesLook.canvas }}
+        style={{ flex: 1, backgroundColor: n.canvas }}
         behavior="padding"
         // Android's hidden keyboard height includes system bars.
         enabled={keyboardHeight > 0}
@@ -1413,13 +1413,16 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
               value={title.trim().toLowerCase() === 'untitled' ? '' : title}
               onChangeText={handleTitleChange}
               placeholder={notesT('titlePlaceholder')}
-              placeholderTextColor={homeTokens.tertiary}
+              placeholderTextColor={n.tertiary}
+              selectionColor={n.selFill}
+              selectionHandleColor={n.accent}
+              cursorColor={n.accent}
               multiline
               style={{
                 fontFamily: AppFont.medium,
                 fontSize: 28,
                 lineHeight: 36,
-                color: homeTokens.text,
+                color: n.text,
                 padding: 0,
               }}
             />
@@ -1474,14 +1477,14 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
                   onRetry={cloudFinish.retry}
                 />
               ) : isEnhancing ? (
-                <View style={[edgeCard, { padding: 16, gap: 12 }]}>
+                <View style={[n.edgeCard, { padding: 16, gap: 12 }]}>
                   <View style={{ flexDirection: 'row' }}>
                     <SoftChip label={notesT('writing')} icon="Sparkles" />
                   </View>
                   <Shimmer />
                 </View>
               ) : hasEnhanced || enhancedEditing ? (
-                <View style={[edgeCard, { padding: 16, gap: 12, overflow: 'visible' }]}>
+                <View style={[n.edgeCard, { padding: 16, gap: 12, overflow: 'visible' }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <SoftChip
                       testID="template-chip"
@@ -1498,12 +1501,7 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
                       onPress={copySummary}
                       style={({ pressed }) => ({ padding: 4, opacity: pressed ? 0.5 : 1 })}
                     >
-                      <SystemIcon
-                        name="doc.on.doc"
-                        mdName="Copy"
-                        size={18}
-                        color={homeTokens.secondary}
-                      />
+                      <SystemIcon name="doc.on.doc" mdName="Copy" size={18} color={n.secondary} />
                     </Pressable>
                   </View>
                   <SummaryEditor
@@ -1538,9 +1536,9 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
                 />
               )
             ) : shownTab === 'notes' ? (
-              <View style={[edgeCard, { paddingHorizontal: 16, paddingVertical: 12 }]}>
+              <View style={[n.edgeCard, { paddingHorizontal: 16, paddingVertical: 12 }]}>
                 {transcriptStatus === 'recording' ? (
-                  <Text style={{ fontSize: 13, lineHeight: 18, color: homeTokens.secondary }}>
+                  <Text style={{ fontSize: 13, lineHeight: 18, color: n.secondary }}>
                     {copy(
                       'editor.recordingNotes',
                       'You can edit these notes once the recording stops.',
@@ -1571,7 +1569,10 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
                       setNotesEditing(false);
                     }}
                     placeholder={notesT('notesPlaceholder')}
-                    placeholderTextColor={homeTokens.tertiary}
+                    placeholderTextColor={n.tertiary}
+                    selectionColor={n.selFill}
+                    selectionHandleColor={n.accent}
+                    cursorColor={n.accent}
                     multiline
                     // The recording screen still writes these notes until the recording stops.
                     editable={!isEnhancing && transcriptStatus !== 'recording'}
@@ -1581,7 +1582,7 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
                       fontFamily: AppFont.regular,
                       fontSize: 16,
                       lineHeight: 26,
-                      color: homeTokens.text,
+                      color: n.text,
                       padding: 0,
                     }}
                   >
@@ -1593,12 +1594,12 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
             ) : shouldShowTranscriptStatus ? (
               <View
                 style={[
-                  edgeCard,
+                  n.edgeCard,
                   { padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
                 ]}
               >
-                <ActivityIndicator size="small" color={BRAND} />
-                <Text style={{ fontSize: 15, color: homeTokens.secondary }}>
+                <ActivityIndicator size="small" color={n.accent} />
+                <Text style={{ fontSize: 15, color: n.secondary }}>
                   {copy(
                     `editor.${transcriptStatus === 'recording' ? 'recording' : transcriptStatus === 'transcribing' ? 'transcribing' : transcriptStatus === 'diarizing' ? 'diarizing' : 'preparing'}`,
                     transcriptStatusText(transcriptStatus),
@@ -1607,13 +1608,13 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
               </View>
             ) : shouldShowTranscriptFailed ? (
               <View style={{ gap: 12 }}>
-                <View style={[edgeCard, { padding: 16, gap: 8 }]}>
-                  <Text style={[notesLook.rowTitle]}>
+                <View style={[n.edgeCard, { padding: 16, gap: 8 }]}>
+                  <Text style={[n.rowTitle]}>
                     {hasTranscriptSegments
                       ? incompleteTranscript()
                       : copy('editor.transcriptFailed', 'Transcript failed')}
                   </Text>
-                  <Text style={{ fontSize: 14, lineHeight: 20, color: homeTokens.secondary }}>
+                  <Text style={{ fontSize: 14, lineHeight: 20, color: n.secondary }}>
                     {copy(
                       'editor.processingUnfinished',
                       'Audio processing did not finish for this note.',
@@ -1632,15 +1633,15 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
                       })}
                     >
                       {isRetryingTranscript ? (
-                        <ActivityIndicator size="small" color={BRAND} />
+                        <ActivityIndicator size="small" color={n.accent} />
                       ) : (
-                        <Text style={{ color: homeTokens.accent, fontSize: 16, fontWeight: '600' }}>
+                        <Text style={{ color: n.accent, fontSize: 16, fontWeight: '600' }}>
                           {copy('editor.retryTranscript', 'Retry transcription')}
                         </Text>
                       )}
                     </Pressable>
                   ) : (
-                    <Text style={{ fontSize: 13, lineHeight: 18, color: homeTokens.tertiary }}>
+                    <Text style={{ fontSize: 13, lineHeight: 18, color: n.tertiary }}>
                       {copy(
                         'editor.audioUnavailable',
                         'The original audio is no longer available, so this transcript cannot be retried.',

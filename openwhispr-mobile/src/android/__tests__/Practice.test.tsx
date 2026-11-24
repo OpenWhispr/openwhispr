@@ -13,8 +13,8 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockTranslate })
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('../ui', () => ({
   Card: ({ children }: { children: React.ReactNode }) => children,
-  styles: {},
-  palette: {},
+  useUiStyles: () => ({}),
+  useUiPalette: () => ({}),
 }));
 jest.mock('../PermissionsScreen', () => ({
   PermissionsContent: () =>

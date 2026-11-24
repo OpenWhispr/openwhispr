@@ -4,8 +4,8 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { ANDROID_MODELS, cancelAndroidDownload, modelReady } from '../models';
-import { home } from '../home/kit';
-import { Badge, settings } from './kit';
+import { useTheme } from '../ThemeProvider';
+import { Badge, useSettings } from './kit';
 import { DownloadRing } from './DownloadRing';
 import { useTimeLeft } from './ModelRow';
 import { formatSize, modelName, type MODEL_ROWS } from './modelCatalog';
@@ -74,6 +74,7 @@ function Swap({
 
 /** A Material radio. Choosing springs the dot in (0 → 1.15 → 1, 150 ms); un-choosing shrinks it. */
 export function Radio({ on, reduceMotion }: { on: boolean; reduceMotion: boolean }) {
+  const c = useSettings();
   const dot = useRef(new Animated.Value(on ? 1 : 0)).current;
   useEffect(() => {
     if (reduceMotion) {
@@ -96,7 +97,7 @@ export function Radio({ on, reduceMotion }: { on: boolean; reduceMotion: boolean
         height: 22,
         borderRadius: 11,
         borderWidth: 2,
-        borderColor: on ? home.accent : home.tertiary,
+        borderColor: on ? c.accent : c.tertiary,
         alignItems: 'center',
         justifyContent: 'center',
       }}
@@ -106,7 +107,7 @@ export function Radio({ on, reduceMotion }: { on: boolean; reduceMotion: boolean
           width: 11,
           height: 11,
           borderRadius: 6,
-          backgroundColor: home.accent,
+          backgroundColor: c.accent,
           transform: [{ scale: dot }],
         }}
       />
@@ -142,6 +143,8 @@ export function ModelListRow({
   onSettled: (ready: boolean) => void;
 }) {
   const t = useSettingsT();
+  const settings = useSettings();
+  const dark = useTheme().scheme === 'dark';
   const name = modelName(row.id);
   const total = ANDROID_MODELS[row.id].bytes;
   const timeLeft = useTimeLeft(progress);
@@ -183,7 +186,12 @@ export function ModelListRow({
 
   const leading =
     shown === 'absent' ? (
-      <SystemIcon name="arrow.down.circle" mdName="CircleArrowDown" size={24} color={home.accent} />
+      <SystemIcon
+        name="arrow.down.circle"
+        mdName="CircleArrowDown"
+        size={24}
+        color={settings.accent}
+      />
     ) : shown === 'downloading' ? (
       <Pressable
         cssInterop={false}
@@ -247,7 +255,7 @@ export function ModelListRow({
           name="trash"
           mdName="Trash2"
           size={20}
-          color={shown === 'inUse' ? home.tertiary : home.secondary}
+          color={shown === 'inUse' ? settings.tertiary : settings.secondary}
         />
       </Pressable>
     );
@@ -285,7 +293,7 @@ export function ModelListRow({
             opacity: dimmed ? 0.45 : pressed ? 0.7 : 1,
             backgroundColor: tint.interpolate({
               inputRange: [0, 1],
-              outputRange: ['rgba(21,85,212,0)', home.tint],
+              outputRange: [dark ? 'rgba(110,155,255,0)' : 'rgba(21,85,212,0)', settings.tint],
             }),
           }}
         >

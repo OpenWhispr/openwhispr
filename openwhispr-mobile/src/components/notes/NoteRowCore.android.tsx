@@ -4,7 +4,7 @@ import { CloudOff } from 'lucide-react-native';
 import { GroupedList } from './GroupedList';
 import { SwipeableCard, type RestoreRow } from '@/components/ui/SwipeableCard';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { iosColor, BRAND } from '@/config/colors';
+import { BRAND, useIosColor } from '@/config/colors.android';
 import { formatNoteRowTime } from '@/lib/formatNoteRowTime';
 import type { DateBucketKey } from '@/lib/groupNotesByDate';
 import type { Note } from '@/data';
@@ -43,6 +43,7 @@ export function createNoteRow(
     tinted = false,
   }: NoteRowProps) {
     const presentation = usePresentation({ onDelete, onMove });
+    const iosColor = useIosColor();
     const copy = presentation.copy ?? defaultCopy;
     const title = note.title || copy('library.untitled', 'Untitled');
     const preview = (note.content || copy('library.noAdditionalText', 'No additional text'))
@@ -79,7 +80,11 @@ export function createNoteRow(
                     color="secondaryLabel"
                   />
                 )}
-                <Text className="flex-1 text-[16px] font-semibold text-label" numberOfLines={1}>
+                <Text
+                  className="flex-1 text-[16px] font-semibold"
+                  style={{ color: iosColor('label') }}
+                  numberOfLines={1}
+                >
                   {title}
                 </Text>
               </View>
@@ -89,8 +94,14 @@ export function createNoteRow(
                 </View>
               )}
             </View>
-            <Text className="text-[13px] text-secondaryLabel" numberOfLines={1}>
-              <Text className="font-semibold text-secondaryLabel">{timeLabel}</Text>
+            <Text
+              className="text-[13px]"
+              style={{ color: iosColor('secondaryLabel') }}
+              numberOfLines={1}
+            >
+              <Text className="font-semibold" style={{ color: iosColor('secondaryLabel') }}>
+                {timeLabel}
+              </Text>
               {timeLabel ? '  ' : ''}
               {preview}
             </Text>

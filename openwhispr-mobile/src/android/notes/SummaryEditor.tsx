@@ -1,7 +1,7 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { AppFont } from '@/lib/fonts';
-import { home } from '../home/kit';
+import { useTheme } from '../ThemeProvider';
 import { applyFormat } from './formatText';
 import { LiveMarkdown, NotesReadView } from './liveMarkdown';
 import { toggleCheck } from './liveMarkdownSpans';
@@ -27,6 +27,7 @@ export const SummaryEditor = forwardRef<
     onFocusChange: (focused: boolean) => void;
   }
 >(function SummaryEditor({ content, editable, onChange, onEditingChange, onFocusChange }, ref) {
+  const k = useTheme().tokens;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(content);
   const [selection, setSelection] = useState({ start: content.length, end: content.length });
@@ -113,7 +114,10 @@ export const SummaryEditor = forwardRef<
         setEditingState(false);
       }}
       placeholder={notesT('summaryPlaceholder')}
-      placeholderTextColor={home.tertiary}
+      placeholderTextColor={k.tertiary}
+      selectionColor={k.selFill}
+      selectionHandleColor={k.accent}
+      cursorColor={k.accent}
       multiline
       editable={editable}
       textAlignVertical="top"
@@ -122,7 +126,7 @@ export const SummaryEditor = forwardRef<
         fontFamily: AppFont.regular,
         fontSize: 16,
         lineHeight: 26,
-        color: home.text,
+        color: k.ink,
         padding: 0,
       }}
     >

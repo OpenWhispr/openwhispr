@@ -7,23 +7,21 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useSheetDragToDismiss } from '@/hooks/useSheetDragToDismiss';
 import type { Transcript } from '@/types';
 import { useHomeT } from './strings';
-import { home, IconTile, TileButton, type } from './kit';
-import { edgeCard, look } from '../settings/look';
-import { raised, raisedPressed } from '../theme';
+import { IconTile, TileButton, useHome } from './kit';
 
 const SHEET_TOP_PEEK = 8;
-const TITLE = { fontSize: 16, lineHeight: 22, fontWeight: '500' as const, color: home.text };
 
 /** Home's entry to recordings saved before accounts: shown signed out, when there are some. */
 export function OlderRecordingsRow({ count, onPress }: { count: number; onPress: () => void }) {
   const t = useHomeT();
+  const { c, type, card } = useHome();
   return (
     <Pressable
       cssInterop={false}
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
-        edgeCard,
+        card,
         {
           flexDirection: 'row',
           alignItems: 'center',
@@ -32,15 +30,15 @@ export function OlderRecordingsRow({ count, onPress }: { count: number; onPress:
           paddingRight: 12,
           paddingVertical: 12,
         },
-        pressed && { backgroundColor: look.idleFill },
+        pressed && { backgroundColor: c.tile },
       ]}
     >
-      <IconTile icon="Archive" color={home.secondary} />
+      <IconTile icon="Archive" color={c.secondary} />
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={TITLE}>{t('olderRecordings')}</Text>
+        <Text style={type.rowTitle}>{t('olderRecordings')}</Text>
         <Text style={type.footnote}>{t('savedBeforeAccountsCount', { count })}</Text>
       </View>
-      <SystemIcon name="chevron.right" mdName="ChevronRight" size={20} color={home.tertiary} />
+      <SystemIcon name="chevron.right" mdName="ChevronRight" size={20} color={c.tertiary} />
     </Pressable>
   );
 }
@@ -62,6 +60,7 @@ function OlderRow({
   onCopy: (text: string) => void;
 }) {
   const t = useHomeT();
+  const { c, type } = useHome();
   const text = item.text || item.errorMessage || '';
   const audioOnly = !text;
   return (
@@ -77,14 +76,14 @@ function OlderRow({
         }}
       >
         <View style={{ flex: 1, gap: 2 }}>
-          <Text selectable={!audioOnly} numberOfLines={2} style={TITLE}>
+          <Text selectable={!audioOnly} numberOfLines={2} style={type.rowTitle}>
             {audioOnly ? t('audioOnly') : text}
           </Text>
           <Text style={type.footnote}>{longDate(item.createdAt)}</Text>
         </View>
         {audioOnly ? (
           <View accessible={false}>
-            <IconTile icon="AudioLines" color={home.secondary} />
+            <IconTile icon="AudioLines" color={c.secondary} />
           </View>
         ) : (
           <TileButton icon="Copy" label={t('copy')} onPress={() => onCopy(text)} />
@@ -92,7 +91,7 @@ function OlderRow({
       </View>
       {!last && (
         <View style={{ paddingLeft: 14 }}>
-          <View style={{ height: 1, backgroundColor: look.hairline }} />
+          <View style={{ height: 1, backgroundColor: c.hairline }} />
         </View>
       )}
     </View>
@@ -115,6 +114,7 @@ export function OlderRecordingsSheet({
   onCopy: (text: string) => void;
 }) {
   const t = useHomeT();
+  const { c, type, card, theme } = useHome();
   const insets = useSafeAreaInsets();
   const { dragGesture, sheetStyle } = useSheetDragToDismiss(visible, onClose);
   return (
@@ -143,7 +143,7 @@ export function OlderRecordingsSheet({
               top: insets.top + SHEET_TOP_PEEK,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
-              backgroundColor: look.canvas,
+              backgroundColor: c.canvas,
               overflow: 'hidden',
             },
             sheetStyle,
@@ -157,7 +157,7 @@ export function OlderRecordingsSheet({
                   width: 36,
                   height: 4,
                   borderRadius: 2,
-                  backgroundColor: look.track,
+                  backgroundColor: c.fill,
                   marginBottom: 14,
                 }}
               />
@@ -169,7 +169,7 @@ export function OlderRecordingsSheet({
                     fontSize: 22,
                     lineHeight: 28,
                     fontWeight: '500',
-                    color: home.text,
+                    color: c.text,
                   }}
                 >
                   {t('olderRecordings')}
@@ -181,7 +181,7 @@ export function OlderRecordingsSheet({
                   onPress={onClose}
                   hitSlop={6}
                   style={({ pressed }) => [
-                    raised,
+                    theme.raised,
                     {
                       width: 36,
                       height: 36,
@@ -189,10 +189,10 @@ export function OlderRecordingsSheet({
                       alignItems: 'center',
                       justifyContent: 'center',
                     },
-                    pressed && raisedPressed,
+                    pressed && theme.raisedPressed,
                   ]}
                 >
-                  <SystemIcon name="xmark" mdName="X" size={18} color={home.text} />
+                  <SystemIcon name="xmark" mdName="X" size={18} color={c.text} />
                 </Pressable>
               </View>
             </View>
@@ -204,14 +204,14 @@ export function OlderRecordingsSheet({
               gap: 16,
             }}
           >
-            <View style={[edgeCard, { padding: 14, gap: 6 }]}>
-              <Text style={TITLE}>{t('savedBeforeAccounts')}</Text>
+            <View style={[card, { padding: 14, gap: 6 }]}>
+              <Text style={type.rowTitle}>{t('savedBeforeAccounts')}</Text>
               <Text style={[type.footnote, { fontSize: 15, lineHeight: 21 }]}>
                 {t('savedBeforeAccountsBody')}
               </Text>
             </View>
             {items.length ? (
-              <View style={edgeCard}>
+              <View style={card}>
                 {items.map((item, index) => (
                   <OlderRow
                     key={item.id}

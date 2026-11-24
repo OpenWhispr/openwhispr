@@ -10,10 +10,9 @@ import {
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { safeHaptics } from '@/lib/utils';
-import { home, type } from '../home/kit';
-import { glass, glassPressed, theme } from '../theme';
+import { useHome } from '../home/kit';
 import { showToast, useReduceMotion } from '../settings/kit';
-import { edgeCard } from '../settings/look';
+import { useNotesLook } from '../notes/look';
 import { Field } from './Field';
 import { learnCorrections } from './learned';
 import { showLearnedToast } from './learnedToast';
@@ -64,6 +63,9 @@ export function FixWordCard({
   onClose: () => void;
   onSave: (from: string, to: string) => void;
 }) {
+  const { c: hc, type: ty, theme: th } = useHome();
+  const n = useNotesLook();
+  const k = th.tokens;
   const t = useDictionaryT();
   const reduceMotion = useReduceMotion();
   const { width, height } = useWindowDimensions();
@@ -111,7 +113,7 @@ export function FixWordCard({
       />
       <Animated.View
         style={[
-          edgeCard,
+          n.edgeCard,
           {
             position: 'absolute',
             top,
@@ -119,13 +121,13 @@ export function FixWordCard({
             width: cardWidth,
             padding: 14,
             gap: 12,
-            boxShadow: home.floatingShadow,
+            boxShadow: hc.floatingShadow,
             opacity: grow,
             transform: [{ scale: grow.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }],
           },
         ]}
       >
-        <Text style={[type.footnote, { fontWeight: '500' }]}>
+        <Text style={[ty.footnote, { fontWeight: '500' }]}>
           {t('fixWordTitle', { word: shown.word })}
         </Text>
         <Field
@@ -139,7 +141,7 @@ export function FixWordCard({
           onSubmitEditing={save}
         />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <Text style={[type.footnote, { flex: 1 }]}>
+          <Text style={[ty.footnote, { flex: 1 }]}>
             {shown.count > 1 ? t('fixAllAdd', { count: shown.count }) : t('fixOneAdd')}
           </Text>
           <Pressable
@@ -157,11 +159,11 @@ export function FixWordCard({
                 justifyContent: 'center',
                 opacity: ready ? 1 : 0.5,
               },
-              glass,
-              pressed && ready && glassPressed,
+              th.glass,
+              pressed && ready && th.glassPressed,
             ]}
           >
-            <Text style={{ color: theme.surface, fontSize: 15, lineHeight: 20, fontWeight: '500' }}>
+            <Text style={{ color: k.onGlass, fontSize: 15, lineHeight: 20, fontWeight: '500' }}>
               {t('save')}
             </Text>
           </Pressable>

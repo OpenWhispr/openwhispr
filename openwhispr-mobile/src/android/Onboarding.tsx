@@ -36,6 +36,8 @@ import { ModeScreen, ReadyScreen } from './onboarding/EndScreens';
 import { DeviceReadyScreen, DeviceSetupScreen } from './onboarding/DeviceSetupScreens';
 import { applyCloudConfig } from './onboarding/setup';
 import { useOnboardingT } from './onboarding/strings';
+import { useOnboardingColors } from './onboarding/kit';
+import { useNavigationBarCanvas } from './navigationBar';
 import { finishedOnboardingOnAndroid } from './onboarding/accountOnboarding';
 
 export { PlanContent as ProContent } from './PlanContent';
@@ -165,81 +167,104 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
     }
   }, [go, offering, register]);
 
-  switch (step) {
-    case 'splash':
-      return (
-        <SplashScreen
-          onStart={() => {
-            if (user && !user.isAnonymous && !needsEmailVerification(user)) void startAfterSignIn();
-            else go('signin');
-          }}
-        />
-      );
-    case 'signin':
-      return (
-        <>
-          <StatusBar style="light" />
-          <AuthScreen
-            variant="onboarding"
-            onClose={() => go('splash')}
-            onGuestContinue={() => go('pitch', mode, false)}
+  // The page's own canvas under the system bar on every step but the blue ones (splash, sign in),
+  // which keep theirs. One element for all steps, so stepping never hands the bar back in between.
+  return (
+    <>
+      {BEFORE_SESSION.includes(step) ? null : <OnboardingBars />}
+      {page()}
+    </>
+  );
+
+  function page() {
+    switch (step) {
+      case 'splash':
+        return (
+          <SplashScreen
+            onStart={() => {
+              if (user && !user.isAnonymous && !needsEmailVerification(user))
+                void startAfterSignIn();
+              else go('signin');
+            }}
           />
-        </>
-      );
-    case 'pitch':
-      return <PitchScreen onBack={back} onNext={advance} />;
-    case 'how':
-      return <HowItWorksScreen onBack={back} onNext={advance} />;
-    case 'practiceDictate':
-      return <PracticeScreen onBack={back} onNext={advance} />;
-    case 'practiceAssistant':
-      return <PracticeMenuScreen key="assistant" kind="assistant" onBack={back} onNext={advance} />;
-    case 'practiceEdit':
-      return <PracticeMenuScreen key="edit" kind="edit" onBack={back} onNext={advance} />;
-    case 'languages':
-      return (
-        <LanguagesScreen
-          onBack={back}
-          onNext={advance}
-          // The tour it skipped is one tap away; from there it carries on as for anyone new.
-          onSeeHowItWorks={returning ? () => go('how', mode, false) : undefined}
-        />
-      );
-    case 'apps':
-      return <AppsScreen onBack={back} onNext={advance} />;
-    case 'overlay':
-      return <OverlayScreen onBack={back} onNext={advance} />;
-    case 'accessibility':
-      return <AccessibilityScreen onBack={back} onNext={advance} />;
-    case 'battery':
-      return <BatteryScreen onBack={back} onNext={advance} />;
-    case 'notifications':
-      return (
-        <NotificationsScreen
-          onBack={back}
-          onAllow={() => void enableBubble(true).finally(advance)}
-          onSkip={() => void enableBubble(false).finally(advance)}
-        />
-      );
-    case 'mode':
-      return (
-        <ModeScreen
-          mode={mode}
-          onBack={back}
-          busy={offering}
-          onChoose={(chosen) => {
-            if (chosen === 'cloud') void chooseCloud();
-            else go('privateSetup', 'private');
-          }}
-        />
-      );
-    case 'privateSetup':
-      return (
-        <DeviceSetupScreen onBack={back} onReady={advance} onUseCloud={() => void chooseCloud()} />
-      );
-    case 'privateReady':
-      return <DeviceReadyScreen onNext={advance} />;
-    case 'ready':
-      return <ReadyScreen onDone={finish} onDevice={mode === 'private'} />;
+        );
+      case 'signin':
+        return (
+          <>
+            <StatusBar style="light" />
+            <AuthScreen
+              variant="onboarding"
+              onClose={() => go('splash')}
+              onGuestContinue={() => go('pitch', mode, false)}
+            />
+          </>
+        );
+      case 'pitch':
+        return <PitchScreen onBack={back} onNext={advance} />;
+      case 'how':
+        return <HowItWorksScreen onBack={back} onNext={advance} />;
+      case 'practiceDictate':
+        return <PracticeScreen onBack={back} onNext={advance} />;
+      case 'practiceAssistant':
+        return (
+          <PracticeMenuScreen key="assistant" kind="assistant" onBack={back} onNext={advance} />
+        );
+      case 'practiceEdit':
+        return <PracticeMenuScreen key="edit" kind="edit" onBack={back} onNext={advance} />;
+      case 'languages':
+        return (
+          <LanguagesScreen
+            onBack={back}
+            onNext={advance}
+            // The tour it skipped is one tap away; from there it carries on as for anyone new.
+            onSeeHowItWorks={returning ? () => go('how', mode, false) : undefined}
+          />
+        );
+      case 'apps':
+        return <AppsScreen onBack={back} onNext={advance} />;
+      case 'overlay':
+        return <OverlayScreen onBack={back} onNext={advance} />;
+      case 'accessibility':
+        return <AccessibilityScreen onBack={back} onNext={advance} />;
+      case 'battery':
+        return <BatteryScreen onBack={back} onNext={advance} />;
+      case 'notifications':
+        return (
+          <NotificationsScreen
+            onBack={back}
+            onAllow={() => void enableBubble(true).finally(advance)}
+            onSkip={() => void enableBubble(false).finally(advance)}
+          />
+        );
+      case 'mode':
+        return (
+          <ModeScreen
+            mode={mode}
+            onBack={back}
+            busy={offering}
+            onChoose={(chosen) => {
+              if (chosen === 'cloud') void chooseCloud();
+              else go('privateSetup', 'private');
+            }}
+          />
+        );
+      case 'privateSetup':
+        return (
+          <DeviceSetupScreen
+            onBack={back}
+            onReady={advance}
+            onUseCloud={() => void chooseCloud()}
+          />
+        );
+      case 'privateReady':
+        return <DeviceReadyScreen onNext={advance} />;
+      case 'ready':
+        return <ReadyScreen onDone={finish} onDevice={mode === 'private'} />;
+    }
   }
+}
+
+function OnboardingBars() {
+  useNavigationBarCanvas(useOnboardingColors().canvas);
+  return null;
 }

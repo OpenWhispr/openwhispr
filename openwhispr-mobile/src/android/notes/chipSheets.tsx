@@ -4,12 +4,10 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import type { CalendarParticipant, GoogleCalendarEvent } from '@/data/calendarTypes';
 import { AppFont } from '@/lib/fonts';
-import { home } from '../home/kit';
 import { BottomSheet } from '../settings/kit';
-import { edge, edgeField } from '../settings/look';
 import { GlassButton } from '../processingFable/look';
 import { SearchField } from '../controls';
-import { Card, ListRow, NoteTile, SectionLabel, notesLook, sheetList } from './look';
+import { Card, ListRow, NoteTile, SectionLabel, sheetList, useNotesLook } from './look';
 import { eventTimeRange } from './calendar';
 import { initialsOf } from './initials';
 import {
@@ -24,10 +22,11 @@ import {
 import { useNotesT } from './strings';
 
 function Avatar({ text, size = 36 }: { text: string; size?: number }) {
+  const n = useNotesLook();
   return (
     <View
       style={[
-        edge,
+        n.edge,
         {
           width: size,
           height: size,
@@ -37,9 +36,7 @@ function Avatar({ text, size = 36 }: { text: string; size?: number }) {
         },
       ]}
     >
-      <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '600', color: home.text }}>
-        {text}
-      </Text>
+      <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '600', color: n.text }}>{text}</Text>
     </View>
   );
 }
@@ -59,6 +56,7 @@ function PersonRow({
   onPress?: () => void;
   label?: string;
 }) {
+  const n = useNotesLook();
   return (
     <Pressable
       cssInterop={false}
@@ -74,16 +72,16 @@ function PersonRow({
         paddingRight: trailing ? 4 : 14,
         paddingVertical: 10,
         minHeight: 64,
-        backgroundColor: pressed && onPress ? 'rgba(0,0,0,0.04)' : 'transparent',
+        backgroundColor: pressed && onPress ? n.pressedRow : 'transparent',
       })}
     >
       <Avatar text={initials} />
       <View style={{ flex: 1, gap: 2 }}>
-        <Text numberOfLines={1} style={notesLook.rowTitle}>
+        <Text numberOfLines={1} style={n.rowTitle}>
           {title}
         </Text>
         {subtitle ? (
-          <Text numberOfLines={1} style={notesLook.rowSub}>
+          <Text numberOfLines={1} style={n.rowSub}>
             {subtitle}
           </Text>
         ) : null}
@@ -107,7 +105,7 @@ function PersonRow({
             name="circle"
             mdName={trailing.icon}
             size={trailing.accent ? 20 : 18}
-            color={trailing.accent ? home.accent : home.secondary}
+            color={trailing.accent ? n.accent : n.secondary}
           />
         </Pressable>
       ) : null}
@@ -152,6 +150,7 @@ export function PeopleSheet({
   startAdding?: boolean;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
   const { height } = useWindowDimensions();
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
@@ -198,26 +197,26 @@ export function PeopleSheet({
       >
         <View
           style={[
-            edgeField,
+            n.edgeField,
             {
               minHeight: 48,
               paddingHorizontal: 14,
               flexDirection: 'row',
               alignItems: 'center',
               gap: 10,
-              borderColor: home.accent,
+              borderColor: n.accent,
               borderWidth: 1.5,
             },
           ]}
         >
-          <SystemIcon name="circle" mdName="Users" size={18} color={home.secondary} />
+          <SystemIcon name="circle" mdName="Users" size={18} color={n.secondary} />
           <TextInput
             ref={input}
             value={query}
             onChangeText={search}
             accessibilityLabel={t('nameOrEmail')}
             placeholder={t('nameOrEmail')}
-            placeholderTextColor={home.tertiary}
+            placeholderTextColor={n.tertiary}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
@@ -228,7 +227,7 @@ export function PeopleSheet({
             style={{
               flex: 1,
               fontSize: 17,
-              color: home.text,
+              color: n.text,
               fontFamily: AppFont.regular,
               paddingVertical: 10,
             }}
@@ -367,10 +366,11 @@ function SheetAction({
   trailing?: LucideIconName;
   destructive?: boolean;
 }) {
+  const n = useNotesLook();
   return (
     <ListRow
       icon={icon}
-      iconColor={destructive ? undefined : home.text}
+      iconColor={destructive ? undefined : n.text}
       title={title}
       subtitle={subtitle}
       chevron={false}
@@ -378,7 +378,7 @@ function SheetAction({
       onPress={onPress}
       right={
         trailing ? (
-          <SystemIcon name="circle" mdName={trailing} size={18} color={home.secondary} />
+          <SystemIcon name="circle" mdName={trailing} size={18} color={n.secondary} />
         ) : undefined
       }
     />
@@ -420,6 +420,7 @@ export function EventSheet({
   onUnlink: () => void;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
   const { height } = useWindowDimensions();
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState('');
@@ -457,7 +458,7 @@ export function EventSheet({
           keyboardShouldPersistTaps="handled"
         >
           {shownDays.length === 0 ? (
-            <Text style={notesLook.rowSub}>
+            <Text style={n.rowSub}>
               {needle ? t('nothingMatches', { query: query.trim() }) : t('noEventsThatDay')}
             </Text>
           ) : (
@@ -471,7 +472,7 @@ export function EventSheet({
                       <ListRow
                         key={value.id}
                         icon="Calendar"
-                        iconColor={home.text}
+                        iconColor={n.text}
                         title={titleOf(value, t('untitledEvent'))}
                         subtitle={
                           guests > 0
@@ -489,7 +490,7 @@ export function EventSheet({
             ))
           )}
         </ScrollView>
-        <Text style={notesLook.rowSub}>{t('eventsHint')}</Text>
+        <Text style={n.rowSub}>{t('eventsHint')}</Text>
       </BottomSheet>
     );
   }
@@ -509,7 +510,7 @@ export function EventSheet({
           <Card>
             <ListRow
               icon="Calendar"
-              iconColor={home.text}
+              iconColor={n.text}
               title={titleOf(event, t('untitledEvent'))}
               subtitle={when}
               chevron={false}
@@ -517,11 +518,11 @@ export function EventSheet({
             {guests.length > 0 ? (
               <ListRow
                 icon="Users"
-                iconColor={home.text}
+                iconColor={n.text}
                 title={t('people', { count: guests.length })}
                 chevron={false}
                 right={
-                  <Text numberOfLines={1} style={[notesLook.rowSub, { maxWidth: 140 }]}>
+                  <Text numberOfLines={1} style={[n.rowSub, { maxWidth: 140 }]}>
                     {guests.length > 2
                       ? `${guestNames.join(', ')} +${guests.length - 2}`
                       : guestNames.join(', ')}
@@ -553,8 +554,8 @@ export function EventSheet({
         </>
       ) : (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <NoteTile icon="CalendarX" color={home.secondary} />
-          <Text style={[notesLook.rowSub, { flex: 1 }]}>{t('eventNotOnPhone')}</Text>
+          <NoteTile icon="CalendarX" color={n.secondary} />
+          <Text style={[n.rowSub, { flex: 1 }]}>{t('eventNotOnPhone')}</Text>
         </View>
       )}
       <Card>

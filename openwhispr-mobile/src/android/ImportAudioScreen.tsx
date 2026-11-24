@@ -6,11 +6,10 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation, usePreventRemove, type NavigationAction } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from '@/components/ui/Text';
-import { home } from './home/kit';
-import { look } from './settings/look';
+import { useHome } from './home/kit';
 import { GlassButton } from './processingFable/look';
 import { ProgressBar } from './controls';
-import { BackButton, LinkButton, edgeCard, notesLook } from './notes/look';
+import { BackButton, LinkButton } from './notes/look';
 import { MetaChip } from './notes/noteParts';
 import { notesT } from './notes/strings';
 import { useFileUpload } from '@/hooks/useFileUpload.android';
@@ -53,6 +52,7 @@ export default function ImportAudioScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { c, type, card } = useHome();
   const mode = useProcessingModeStore((state) => state.activeMode);
   // Refresh the preview when workflow configuration changes; the job takes its
   // own snapshot before the paywall or picker opens.
@@ -218,14 +218,17 @@ export default function ImportAudioScreen() {
         ? t('importByok')
         : t('importCloud');
   return (
-    <View style={{ flex: 1, backgroundColor: notesLook.canvas, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: c.canvas, paddingTop: insets.top }}>
       <View
         style={{ paddingHorizontal: 16, paddingTop: 8, minHeight: 52, justifyContent: 'center' }}
       >
         <BackButton />
       </View>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-        <Text accessibilityRole="header" style={notesLook.title}>
+        <Text
+          accessibilityRole="header"
+          style={{ fontSize: 28, lineHeight: 39, fontWeight: '500', color: c.text }}
+        >
           {notesT('uploadAudio')}
         </Text>
         {(isProcessing ? destination.current : preview.target) ? (
@@ -239,23 +242,23 @@ export default function ImportAudioScreen() {
           </View>
         ) : null}
         {isProcessing ? (
-          <View style={[edgeCard, { padding: 16, gap: 12 }]}>
-            <Text style={notesLook.rowTitle} accessibilityLiveRegion="polite">
+          <View style={[card, { padding: 16, gap: 12 }]}>
+            <Text style={type.rowTitle} accessibilityLiveRegion="polite">
               {stage === 'cleaning' ? notesT('cleaningUp') : notesT('transcribing')}
             </Text>
             {/* The pipeline reports no %, so the bar sweeps. */}
             <ProgressBar />
-            <Text style={{ fontSize: 13, lineHeight: 18, color: home.secondary }}>
+            <Text style={{ fontSize: 13, lineHeight: 18, color: c.secondary }}>
               {disclosure} {notesT('stayOnScreen')}
             </Text>
             <LinkButton destructive label={notesT('cancelUpload')} onPress={cancel} />
           </View>
         ) : error || preview.error ? (
-          <View style={[edgeCard, { padding: 16, gap: 8 }]}>
-            <Text style={notesLook.rowTitle} accessibilityRole="alert">
+          <View style={[card, { padding: 16, gap: 8 }]}>
+            <Text style={type.rowTitle} accessibilityRole="alert">
               {notesT('uploadFailed')}
             </Text>
-            <Text style={{ fontSize: 14, lineHeight: 20, color: home.secondary }}>
+            <Text style={{ fontSize: 14, lineHeight: 20, color: c.secondary }}>
               {error || preview.error}
             </Text>
             <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
@@ -279,13 +282,11 @@ export default function ImportAudioScreen() {
             </View>
           </View>
         ) : (
-          <View style={[edgeCard, { padding: 16, gap: 12 }]}>
-            <Text style={{ fontSize: 15, lineHeight: 21, color: home.secondary }}>
+          <View style={[card, { padding: 16, gap: 12 }]}>
+            <Text style={{ fontSize: 15, lineHeight: 21, color: c.secondary }}>
               {t('importFormats')}
             </Text>
-            <Text style={{ fontSize: 15, lineHeight: 21, color: home.secondary }}>
-              {disclosure}
-            </Text>
+            <Text style={{ fontSize: 15, lineHeight: 21, color: c.secondary }}>{disclosure}</Text>
             <GlassButton
               label={t('importChoose')}
               disabled={gating || accountChanged.current || !!preview.error}
@@ -296,8 +297,8 @@ export default function ImportAudioScreen() {
           </View>
         )}
         {isProcessing && currentText ? (
-          <View style={[edgeCard, { padding: 16 }]}>
-            <Text selectable style={{ fontSize: 16, lineHeight: 23, color: home.text }}>
+          <View style={[card, { padding: 16 }]}>
+            <Text selectable style={{ fontSize: 16, lineHeight: 23, color: c.text }}>
               {currentText}
             </Text>
           </View>

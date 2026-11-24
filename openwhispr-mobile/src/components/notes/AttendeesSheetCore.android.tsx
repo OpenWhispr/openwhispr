@@ -8,6 +8,7 @@ import { GlassIconButton } from '@/components/ui/GlassIconButton';
 import type { CalendarParticipant } from '@/data/calendarTypes';
 import { attendeeName, sortAttendees } from '@/lib/notes/noteMeta';
 import { GroupedList } from './GroupedList';
+import { useIosColor } from '@/config/colors.android';
 
 interface AttendeesSheetProps {
   visible: boolean;
@@ -32,6 +33,7 @@ export function createAttendeesSheet(usePresentation: () => AttendeesPresentatio
     onClose,
   }: AttendeesSheetProps): React.JSX.Element {
     const insets = useSafeAreaInsets();
+    const color = useIosColor();
     const presentation = usePresentation();
     const copy = presentation.copy ?? defaultCopy;
     const people = sortAttendees(participants);
@@ -43,14 +45,15 @@ export function createAttendeesSheet(usePresentation: () => AttendeesPresentatio
         presentationStyle="pageSheet"
         onRequestClose={onClose}
       >
-        <View className="flex-1 bg-systemBackground">
+        <View className="flex-1" style={{ backgroundColor: color('systemBackground') }}>
           <View
             className="flex-row items-center justify-between px-6 pb-4 pt-8"
             style={presentation.headerStyle?.(insets.top)}
           >
             <Text
               accessibilityRole="header"
-              className={presentation.headerClassName ?? 'text-[22px] font-bold text-label'}
+              className={presentation.headerClassName ?? 'text-[22px] font-bold'}
+              style={{ color: color('label') }}
             >
               {copy('noteDetails.attendees', 'Attendees')}
             </Text>
@@ -75,15 +78,22 @@ export function createAttendeesSheet(usePresentation: () => AttendeesPresentatio
                       <View
                         className={presentation.personClassName ?? 'flex-row items-center gap-2'}
                       >
-                        <Text className="text-[17px] text-label">{name}</Text>
+                        <Text className="text-[17px]" style={{ color: color('label') }}>
+                          {name}
+                        </Text>
                         {participant.organizer ? (
-                          <Text className="text-[12px] font-medium text-secondaryLabel">
+                          <Text
+                            className="text-[12px] font-medium"
+                            style={{ color: color('secondaryLabel') }}
+                          >
                             {copy('noteDetails.organizer', 'Organizer')}
                           </Text>
                         ) : null}
                       </View>
                       {showEmail ? (
-                        <Text className="text-[13px] text-secondaryLabel">{participant.email}</Text>
+                        <Text className="text-[13px]" style={{ color: color('secondaryLabel') }}>
+                          {participant.email}
+                        </Text>
                       ) : null}
                     </View>
                   </GroupedList.Row>

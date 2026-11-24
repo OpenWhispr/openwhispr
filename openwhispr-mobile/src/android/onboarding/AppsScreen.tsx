@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, View } from 'react-native';
+import { makeStyles } from '../ThemeProvider';
 import { AccentText, GlassButton, PulseRings, Screen } from './kit';
 import { useOnboardingT } from './strings';
 
@@ -51,6 +52,7 @@ const BUBBLE_CENTER = { x: 172.5, y: 202 };
 
 export function AppsScreen({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const t = useOnboardingT();
+  const o = useStyles();
   const [width, setWidth] = useState(0);
   const scale = width / CARD.width;
   return (
@@ -93,7 +95,7 @@ export function AppsScreen({ onBack, onNext }: { onBack: () => void; onNext: () 
   );
 }
 
-const o = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   // Not clipped: the export carries the card's own blue shadow below it.
   card: { width: '100%', aspectRatio: CARD.width / CARD.height, marginBottom: 42 },
-});
+}));

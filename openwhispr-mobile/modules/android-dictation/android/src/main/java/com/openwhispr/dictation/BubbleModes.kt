@@ -85,6 +85,40 @@ object BubbleMenuPolicy {
     return index
   }
 
+  /**
+   * After a light/dark switch the keyboard and the app below redraw in their new colours: for a
+   * moment the keyboard can report itself gone (Samsung's restarts), and its top or the focused
+   * field's identity can read as changed. The hold menu stays open through that ([THEME_SETTLE_MS]).
+   */
+  const val THEME_SETTLE_MS = 1500L
+
+  private fun settling(sinceThemeSwitchMs: Long?) =
+    sinceThemeSwitchMs != null && sinceThemeSwitchMs in 0 until THEME_SETTLE_MS
+
+  /**
+   * With the menu open, a report that the keyboard has gone within [THEME_SETTLE_MS] of a switch is
+   * held back and checked again once that time is up: it is usually the keyboard restarting.
+   */
+  fun holdsKeyboardLoss(wasTyping: Boolean, typing: Boolean, sinceThemeSwitchMs: Long?) =
+    wasTyping && !typing && settling(sinceThemeSwitchMs)
+
+  /**
+   * Whether a keyboard report closes the open hold menu: any change does ([wasTyping] → [typing],
+   * a new keyboard top or a new field), except a moved top or a new field id while still typing,
+   * within [THEME_SETTLE_MS] of a light/dark switch ([sinceThemeSwitchMs], null when none).
+   */
+  fun keyboardClosesMenu(
+    wasTyping: Boolean,
+    typing: Boolean,
+    topChanged: Boolean,
+    fieldChanged: Boolean,
+    sinceThemeSwitchMs: Long?,
+  ): Boolean {
+    if (wasTyping != typing) return true
+    if (!topChanged && !fieldChanged) return false
+    return !(settling(sinceThemeSwitchMs) && typing)
+  }
+
   /** How long a press on the bubble with the Assistant off waits before it starts hold-to-talk. */
   const val TALK_HOLD_MS = 300L
 

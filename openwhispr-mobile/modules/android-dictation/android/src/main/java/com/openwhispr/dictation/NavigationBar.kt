@@ -19,7 +19,16 @@ internal class NavigationBar(private val emit: (Map<String, Any>) -> Unit) {
   private var activity: Activity? = null
   private var lastBottom = -1
   private var saved: Look? = null
-  private val layout = ViewTreeObserver.OnGlobalLayoutListener { publish() }
+  /** The page's bar as last asked for (colour, dark icons); null while the window's own is back. */
+  private var page: Pair<Int, Boolean>? = null
+  private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+  private val repaintModals = Runnable { paintModals() }
+  private val layout = ViewTreeObserver.OnGlobalLayoutListener {
+    publish()
+    // A <Modal> that just opened has a window of its own with the system's light bar: give it the
+    // page's. Coalesced into one pass per frame.
+    if (page != null) { handler.removeCallbacks(repaintModals); handler.post(repaintModals) }
+  }
 
   /** Main thread. */
   fun attach(activity: Activity?) {
@@ -31,6 +40,7 @@ internal class NavigationBar(private val emit: (Map<String, Any>) -> Unit) {
 
   /** Main thread. */
   fun detach() {
+    handler.removeCallbacks(repaintModals)
     activity?.window?.decorView?.viewTreeObserver?.removeOnGlobalLayoutListener(layout)
     activity = null
     lastBottom = -1
@@ -59,13 +69,15 @@ internal class NavigationBar(private val emit: (Map<String, Any>) -> Unit) {
   }
 
   /**
-   * Main thread. A colour paints the bar as part of the page (no contrast scrim, dark icons); null
-   * puts back what the window had before.
+   * Main thread. A colour paints the bar as part of the page (no contrast scrim), with dark icons
+   * on a light page and light icons on a dark one ([darkIcons]); null puts back what the window
+   * had before.
    */
-  fun style(color: Int?) {
+  fun style(color: Int?, darkIcons: Boolean = true) {
     val window = activity?.window ?: return
     val controller = WindowCompat.getInsetsController(window, window.decorView)
     if (color == null) {
+      page = null
       val look = saved ?: return
       saved = null
       @Suppress("DEPRECATION")
@@ -86,6 +98,23 @@ internal class NavigationBar(private val emit: (Map<String, Any>) -> Unit) {
     @Suppress("DEPRECATION")
     window.navigationBarColor = color
     if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
-    controller.isAppearanceLightNavigationBars = true
+    controller.isAppearanceLightNavigationBars = darkIcons
+    page = color to darkIcons
+    paintModals()
+  }
+
+  /**
+   * Main thread. Open sheets and dialogs (React Native `<Modal>`s, each a window of its own) get
+   * the page's bar too, so a sheet over a dark page never shows a light bar, and a light/dark switch
+   * with one open repaints it with the page.
+   */
+  fun paintModals() {
+    val (color, darkIcons) = page ?: return
+    for (window in ModalWindows.of(activity, showing = false)) {
+      @Suppress("DEPRECATION")
+      window.navigationBarColor = color
+      if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
+      WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightNavigationBars = darkIcons
+    }
   }
 }

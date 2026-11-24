@@ -12,7 +12,7 @@ import { useHeaderHeight } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Text } from '@/components/ui/Text';
-import { theme } from './theme';
+import { useTheme } from './ThemeProvider';
 import { GlassButton, OutlineButton } from './processingFable/look';
 import { ProcessingWaveform } from '@/components/features/WaveformVisualizer';
 import { notesRepository } from '@/data';
@@ -60,6 +60,8 @@ type LocalCapture = {
 };
 export const MeetingRecordScreen = (): React.JSX.Element => {
   const { t } = useTranslation('android');
+  // Colours read at render, so a light/dark switch repaints in place (no remount).
+  const k = useTheme().tokens;
   const [cloudSaveError, setCloudSaveError] = useState<string | null>(null);
   const [exitToNote, setExitToNote] = useState<number | null>(null);
   const finishingRef = useRef(false);
@@ -686,16 +688,16 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
           gap: 16,
           paddingHorizontal: 24,
           paddingTop: headerHeight,
-          backgroundColor: theme.canvas,
+          backgroundColor: k.canvas,
         }}
       >
         <Text
           accessibilityRole="header"
-          style={{ fontSize: 24, lineHeight: 32, fontWeight: '700', color: theme.ink }}
+          style={{ fontSize: 24, lineHeight: 32, fontWeight: '700', color: k.ink }}
         >
           Not available on this device
         </Text>
-        <Text style={{ fontSize: 16, lineHeight: 24, color: theme.secondary }}>
+        <Text style={{ fontSize: 16, lineHeight: 24, color: k.secondary }}>
           {t('meetingPrivateBody')}
         </Text>
         <OutlineButton label="Go back" onPress={() => router.back()} />
@@ -710,16 +712,16 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
           gap: 16,
           paddingHorizontal: 24,
           paddingTop: headerHeight,
-          backgroundColor: theme.canvas,
+          backgroundColor: k.canvas,
         }}
       >
         <Text
           accessibilityRole="header"
-          style={{ fontSize: 24, lineHeight: 32, fontWeight: '700', color: theme.ink }}
+          style={{ fontSize: 24, lineHeight: 32, fontWeight: '700', color: k.ink }}
         >
           {t('meetingSpeakerModels')}
         </Text>
-        <Text style={{ fontSize: 16, lineHeight: 24, color: theme.secondary }}>
+        <Text style={{ fontSize: 16, lineHeight: 24, color: k.secondary }}>
           {t('meetingDownloadBody')}
         </Text>
         <GlassButton
@@ -786,12 +788,12 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
         justifyContent: 'center',
         gap: 28,
         paddingHorizontal: 24,
-        backgroundColor: theme.canvas,
+        backgroundColor: k.canvas,
       }}
     >
-      <ProcessingWaveform color={theme.accent} size={48} />
+      <ProcessingWaveform color={k.accent} size={48} />
       <View style={{ alignItems: 'center', gap: 6 }}>
-        <Text style={{ fontSize: 18, lineHeight: 28, fontWeight: '600', color: theme.ink }}>
+        <Text style={{ fontSize: 18, lineHeight: 28, fontWeight: '600', color: k.ink }}>
           {phase === 'cancelling'
             ? t('meetingSaveForLater')
             : phase === 'cloud-finalizing'
@@ -801,7 +803,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
                 : 'Preparing meeting notes…'}
         </Text>
         {phase !== 'cancelling' && (
-          <Text style={{ fontSize: 13, lineHeight: 18, color: theme.tertiary }}>
+          <Text style={{ fontSize: 13, lineHeight: 18, color: k.tertiary }}>
             {phase === 'cloud-finalizing'
               ? t('meetingFinishingBody')
               : phase === 'downloading'

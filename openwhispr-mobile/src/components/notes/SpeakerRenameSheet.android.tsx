@@ -12,7 +12,7 @@ import {
 import { useSpeakerRenameLayout } from './speakerRenameLayout';
 import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
-import { iosColor } from '@/config/colors';
+import { useIosColor } from '@/config/colors.android';
 
 export interface SpeakerRenameSuggestion {
   label: string;
@@ -36,6 +36,7 @@ export function SpeakerRenameSheet({
 }: SpeakerRenameSheetProps) {
   const { copy } = useAndroidCopy();
   const layout = useSpeakerRenameLayout();
+  const iosColor = useIosColor();
   const isAndroid = Platform.OS === 'android';
   const [name, setName] = useState(initialName);
   const trimmed = name.trim();
@@ -46,7 +47,11 @@ export function SpeakerRenameSheet({
 
   const formContent = (
     <>
-      <Text accessibilityRole="header" className="text-lg font-semibold text-label">
+      <Text
+        accessibilityRole="header"
+        className="text-lg font-semibold"
+        style={{ color: iosColor('label') }}
+      >
         {copy('speakerControls.renameTitle', 'Rename speaker')}
       </Text>
       {suggestions.length > 0 ? (
@@ -55,15 +60,22 @@ export function SpeakerRenameSheet({
             <Pressable
               key={`${suggestion.email ?? suggestion.label}-${index}`}
               onPress={() => onSave(suggestion.label)}
-              className="max-w-[180px] rounded-full bg-tertiarySystemFill px-3 py-1.5"
+              className="max-w-[180px] rounded-full px-3 py-1.5"
               accessibilityRole="button"
               accessibilityLabel={copy('speakerControls.useName', `Use ${suggestion.label}`, {
                 name: suggestion.label,
               })}
               testID={`speaker-rename-suggestion-${index}`}
-              style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+              style={({ pressed }) => ({
+                backgroundColor: iosColor('tertiarySystemFill'),
+                opacity: pressed ? 0.75 : 1,
+              })}
             >
-              <Text numberOfLines={1} className="text-[13px] font-medium text-label">
+              <Text
+                numberOfLines={1}
+                className="text-[13px] font-medium"
+                style={{ color: iosColor('label') }}
+              >
                 {suggestion.label}
               </Text>
             </Pressable>
@@ -79,10 +91,15 @@ export function SpeakerRenameSheet({
         placeholderTextColor={iosColor('tertiaryLabel')}
         className={
           Platform.OS === 'android'
-            ? 'min-h-12 rounded-lg border border-separator bg-secondarySystemBackground px-3 py-2 text-base text-label'
-            : 'h-12 rounded-lg border border-separator bg-secondarySystemBackground px-3 text-base text-label'
+            ? 'min-h-12 rounded-lg border px-3 py-2 text-base'
+            : 'h-12 rounded-lg border px-3 text-base'
         }
-        style={{ fontFamily: AppFont.regular }}
+        style={{
+          fontFamily: AppFont.regular,
+          color: iosColor('label'),
+          backgroundColor: iosColor('secondarySystemBackground'),
+          borderColor: iosColor('separator'),
+        }}
         testID="speaker-rename-input"
       />
     </>
@@ -102,8 +119,8 @@ export function SpeakerRenameSheet({
         behavior="padding"
       >
         <View
-          className="gap-4 rounded-t-[24px] bg-systemBackground px-5 pb-8 pt-5"
-          style={layout.sheetStyle}
+          className="gap-4 rounded-t-[24px] px-5 pb-8 pt-5"
+          style={[layout.sheetStyle, { backgroundColor: iosColor('systemBackground') }]}
           testID="speaker-rename-sheet"
         >
           {isAndroid ? (
@@ -122,14 +139,17 @@ export function SpeakerRenameSheet({
               onPress={onCancel}
               className={
                 Platform.OS === 'android'
-                  ? 'min-h-12 flex-1 items-center justify-center rounded-lg bg-tertiarySystemFill px-3 py-3'
-                  : 'h-11 flex-1 items-center justify-center rounded-lg bg-tertiarySystemFill'
+                  ? 'min-h-12 flex-1 items-center justify-center rounded-lg px-3 py-3'
+                  : 'h-11 flex-1 items-center justify-center rounded-lg'
               }
               accessibilityRole="button"
               accessibilityLabel={copy('speakerControls.cancelRename', 'Cancel rename')}
               testID="speaker-rename-cancel"
+              style={{ backgroundColor: iosColor('tertiarySystemFill') }}
             >
-              <Text className="text-[15px] font-medium text-label">{copy('cancel', 'Cancel')}</Text>
+              <Text className="text-[15px] font-medium" style={{ color: iosColor('label') }}>
+                {copy('cancel', 'Cancel')}
+              </Text>
             </Pressable>
             <Pressable
               onPress={() => onSave(trimmed)}

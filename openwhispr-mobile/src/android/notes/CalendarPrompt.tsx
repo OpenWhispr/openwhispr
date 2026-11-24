@@ -5,7 +5,7 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { requiresRealAccount } from '@/lib/accountAccess';
-import { gloss, glossPressed, home } from '../home/kit';
+import { useTheme } from '../ThemeProvider';
 import { showToast } from '../settings/kit';
 import {
   dismissCalendarPrompt,
@@ -13,7 +13,7 @@ import {
   useCalendarPromptDismissed,
 } from '../calendar/connect';
 import { useConnectGoogle } from '../calendar/useConnectGoogle';
-import { NoteTile, edgeCard, notesLook } from './look';
+import { NoteTile, useNotesLook } from './look';
 import { useNotesT } from './strings';
 
 /**
@@ -22,6 +22,8 @@ import { useNotesT } from './strings';
  */
 export function CalendarPrompt() {
   const t = useNotesT();
+  const n = useNotesLook();
+  const { glass, glassPressed } = useTheme();
   const accounts = useGoogleCalendarStore((state) => state.accounts);
   const user = useAuthStore((state) => state.user);
   const dismissed = useCalendarPromptDismissed((state) => state.dismissed);
@@ -38,14 +40,12 @@ export function CalendarPrompt() {
   if (!loaded || dismissed !== false || accounts.length > 0 || !user || requiresRealAccount(user))
     return null;
   return (
-    <View style={[edgeCard, { padding: 14, gap: 12 }]}>
+    <View style={[n.edgeCard, { padding: 14, gap: 12 }]}>
       <View style={{ flexDirection: 'row', gap: 12 }}>
-        <NoteTile icon="Calendar" color={home.text} />
+        <NoteTile icon="Calendar" color={n.text} />
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={notesLook.rowTitle}>
-            {t(connecting ? 'connectingGoogle' : 'connectCalendar')}
-          </Text>
-          <Text style={notesLook.rowSub}>
+          <Text style={n.rowTitle}>{t(connecting ? 'connectingGoogle' : 'connectCalendar')}</Text>
+          <Text style={n.rowSub}>
             {t(connecting ? 'connectingGoogleBody' : 'connectCalendarBody')}
           </Text>
         </View>
@@ -61,7 +61,7 @@ export function CalendarPrompt() {
             }}
             style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
           >
-            <SystemIcon name="xmark" mdName="X" size={16} color={home.text} />
+            <SystemIcon name="xmark" mdName="X" size={16} color={n.text} />
           </Pressable>
         )}
       </View>
@@ -81,11 +81,11 @@ export function CalendarPrompt() {
               justifyContent: 'center',
               opacity: connecting ? 0.5 : 1,
             },
-            gloss,
-            pressed && !connecting && glossPressed,
+            glass,
+            pressed && !connecting && glassPressed,
           ]}
         >
-          <Text style={{ color: '#FFFFFF', fontSize: 15, lineHeight: 20, fontWeight: '600' }}>
+          <Text style={{ color: n.onGlass, fontSize: 15, lineHeight: 20, fontWeight: '600' }}>
             {t(connecting ? 'waitingGoogle' : 'connectGoogle')}
           </Text>
         </Pressable>
@@ -97,9 +97,7 @@ export function CalendarPrompt() {
             hitSlop={8}
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
           >
-            <Text style={{ color: home.accent, fontSize: 16, fontWeight: '500' }}>
-              {t('cancel')}
-            </Text>
+            <Text style={{ color: n.accent, fontSize: 16, fontWeight: '500' }}>{t('cancel')}</Text>
           </Pressable>
         ) : null}
       </View>

@@ -1,46 +1,109 @@
 import React from 'react';
-import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
-import { gloss, glossPressed, home } from '../home/kit';
-import { edge, edgeCard, look, sectionLabel } from '../settings/look';
 import { useNotesT } from './strings';
-import { raised, raisedPressed } from '../theme';
+import { themeFor, useTheme, type AndroidTheme } from '../ThemeProvider';
+import type { Scheme } from '../theme';
 
 /**
  * Notes in OpenWhispr's design language (Figma "section · R · Fable reskin of Notes"): the
- * Settings reskin's glass edge, grey 36 tiles and section labels, on the canvas colour.
+ * Settings reskin's glass edge, grey 36 tiles and section labels, on the canvas colour. One per
+ * scheme (`useNotesLook()`), so a light/dark switch repaints a note in place.
  */
-export const notesLook = {
-  ...look,
-  canvas: look.canvas,
-  text: home.text,
-  secondary: home.secondary,
-  tertiary: home.tertiary,
-  accent: home.accent,
-  title: { fontSize: 28, lineHeight: 39, fontWeight: '500' as const, color: home.text },
-  rowTitle: { fontSize: 17, lineHeight: 24, fontWeight: '500' as const, color: home.text },
-  rowSub: { fontSize: 13, lineHeight: 18, color: home.secondary },
-  rowMeta: { fontSize: 12, lineHeight: 16, color: home.tertiary },
-  count: { fontSize: 15, lineHeight: 21, color: home.secondary },
-  selectedRow: 'rgba(21,85,212,0.08)',
-};
+function buildNotesLook(theme: AndroidTheme) {
+  const k = theme.tokens;
+  const dark = theme.scheme === 'dark';
+  const edge: ViewStyle = theme.flat;
+  return {
+    theme,
+    canvas: k.canvas,
+    surface: k.surface,
+    surface2: k.surface2,
+    selFill: k.selFill,
+    idleFill: k.tile,
+    track: k.track,
+    trackStrong: k.trackStrong,
+    error: k.error,
+    hairline: k.hairline,
+    divider: k.divider,
+    fieldHairline: k.fieldHairline,
+    disabled: k.disabled,
+    onGlass: k.onGlass,
+    amber: k.amber,
+    success: k.success,
+    text: k.ink,
+    secondary: k.secondary,
+    tertiary: k.tertiary,
+    accent: k.accent,
+    /** A row being pressed, and the scrim behind a sheet. */
+    pressedRow: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+    selectedRow: dark ? 'rgba(110,155,255,0.14)' : 'rgba(21,85,212,0.08)',
+    title: { fontSize: 28, lineHeight: 39, fontWeight: '500' as const, color: k.ink },
+    rowTitle: { fontSize: 17, lineHeight: 24, fontWeight: '500' as const, color: k.ink },
+    rowSub: { fontSize: 13, lineHeight: 18, color: k.secondary },
+    rowMeta: { fontSize: 12, lineHeight: 16, color: k.tertiary },
+    count: { fontSize: 15, lineHeight: 21, color: k.secondary },
+    body: { fontSize: 16, lineHeight: 21, color: k.ink },
+    /** Uppercase Medium 11 at 6% tracking. */
+    sectionLabel: {
+      fontSize: 11,
+      lineHeight: 16,
+      fontWeight: '500' as const,
+      color: k.tertiary,
+      letterSpacing: 0.66,
+      textTransform: 'uppercase' as const,
+    } satisfies TextStyle,
+    /** The glass edge on a surface: hairline, inner top highlight, soft lift. */
+    edge,
+    /** A flat card, corners 16. */
+    edgeCard: { ...edge, borderRadius: 16, overflow: 'hidden' } satisfies ViewStyle,
+    /** A text field: corners 12 and a slightly darker hairline. */
+    edgeField: { ...edge, borderRadius: 12, borderColor: k.fieldHairline } satisfies ViewStyle,
+    raised: theme.raised,
+    raisedPressed: theme.raisedPressed,
+    gloss: theme.glass,
+    glossPressed: theme.glassPressed,
+  };
+}
 
-export { edge, edgeCard, sectionLabel };
+export type NotesLook = ReturnType<typeof buildNotesLook>;
+
+const looks: Partial<Record<Scheme, NotesLook>> = {};
+
+/** Notes' look for a theme, built once per scheme so styles and memo inputs stay stable. */
+export function notesLookFor(theme: AndroidTheme): NotesLook {
+  return (looks[theme.scheme] ??= buildNotesLook(theme));
+}
+
+/** Notes' look for the scheme in use. Read it at render; a switch re-renders in place. */
+export function useNotesLook(): NotesLook {
+  return notesLookFor(useTheme());
+}
+
+/** @deprecated Light only, for files outside Notes not moved yet: read `useNotesLook()`. */
+export const notesLook = notesLookFor(themeFor('light'));
+/** @deprecated Light only: read `useNotesLook()`. */
+export const edge = notesLook.edge;
+/** @deprecated Light only: read `useNotesLook()`. */
+export const edgeCard = notesLook.edgeCard;
+/** @deprecated Light only: read `useNotesLook()`. */
+export const sectionLabel = notesLook.sectionLabel;
 
 /** A round 36 raised button: back, search, share, ⋯. */
 export function IconButton({
   icon,
   label,
   onPress,
-  color = home.text,
+  color,
 }: {
   icon: LucideIconName;
   label: string;
   onPress: () => void;
   color?: string;
 }) {
+  const n = useNotesLook();
   return (
     <Pressable
       cssInterop={false}
@@ -49,7 +112,7 @@ export function IconButton({
       hitSlop={6}
       onPress={onPress}
       style={({ pressed }) => [
-        raised,
+        n.raised,
         {
           width: 36,
           height: 36,
@@ -57,10 +120,10 @@ export function IconButton({
           alignItems: 'center',
           justifyContent: 'center',
         },
-        pressed && raisedPressed,
+        pressed && n.raisedPressed,
       ]}
     >
-      <SystemIcon name="circle" mdName={icon} size={20} color={color} />
+      <SystemIcon name="circle" mdName={icon} size={20} color={color ?? n.text} />
     </Pressable>
   );
 }
@@ -73,44 +136,39 @@ export function goBack() {
 
 export function BackButton({ onPress }: { onPress?: () => void }) {
   const t = useNotesT();
-  return (
-    <IconButton
-      icon="ChevronLeft"
-      label={t('back')}
-      onPress={onPress ?? goBack}
-      color={home.text}
-    />
-  );
+  return <IconButton icon="ChevronLeft" label={t('back')} onPress={onPress ?? goBack} />;
 }
 
 /** A grey 36 tile with an icon in its own colour. */
 export function NoteTile({
   icon,
-  color = home.accent,
+  color,
   size = 36,
 }: {
   icon: LucideIconName;
   color?: string;
   size?: number;
 }) {
+  const n = useNotesLook();
   return (
     <View
       style={{
         width: size,
         height: size,
         borderRadius: 10,
-        backgroundColor: look.idleFill,
+        backgroundColor: n.idleFill,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      <SystemIcon name="circle" mdName={icon} size={20} color={color} />
+      <SystemIcon name="circle" mdName={icon} size={20} color={color ?? n.accent} />
     </View>
   );
 }
 
 /** A teamspace's tile: its emoji, or the people icon when it has none (Figma W1, N2b). */
 export function SpaceTile({ emoji }: { emoji?: string | null }) {
+  const n = useNotesLook();
   if (!emoji) return <NoteTile icon="Users" />;
   return (
     <View
@@ -118,7 +176,7 @@ export function SpaceTile({ emoji }: { emoji?: string | null }) {
         width: 36,
         height: 36,
         borderRadius: 10,
-        backgroundColor: look.idleFill,
+        backgroundColor: n.idleFill,
         alignItems: 'center',
         justifyContent: 'center',
       }}
@@ -142,17 +200,14 @@ export function NotesHeader({
   titleHint?: string;
   right?: React.ReactNode;
 }) {
+  const n = useNotesLook();
   const heading = (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 }}>
-      <Text
-        accessibilityRole="header"
-        numberOfLines={1}
-        style={[notesLook.title, { flexShrink: 1 }]}
-      >
+      <Text accessibilityRole="header" numberOfLines={1} style={[n.title, { flexShrink: 1 }]}>
         {title}
       </Text>
       {onTitlePress && (
-        <SystemIcon name="chevron.down" mdName="ChevronDown" size={20} color={home.secondary} />
+        <SystemIcon name="chevron.down" mdName="ChevronDown" size={20} color={n.secondary} />
       )}
     </View>
   );
@@ -186,8 +241,9 @@ export function NotesHeader({
 }
 
 export function SectionLabel({ label }: { label: string }) {
+  const n = useNotesLook();
   return (
-    <Text accessibilityRole="header" style={[sectionLabel, { lineHeight: 17 }]}>
+    <Text accessibilityRole="header" style={[n.sectionLabel, { lineHeight: 17 }]}>
       {label.toUpperCase()}
     </Text>
   );
@@ -201,9 +257,10 @@ export function Card({
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
+  const n = useNotesLook();
   const rows = React.Children.toArray(children).filter(Boolean);
   return (
-    <View style={[edgeCard, style]}>
+    <View style={[n.edgeCard, style]}>
       {rows.map((row, index) => (
         <React.Fragment key={index}>
           {index > 0 && <Divider />}
@@ -215,7 +272,8 @@ export function Card({
 }
 
 export function Divider({ inset = 14 }: { inset?: number }) {
-  return <View style={{ height: 1, marginLeft: inset, backgroundColor: look.hairline }} />;
+  const n = useNotesLook();
+  return <View style={{ height: 1, marginLeft: inset, backgroundColor: n.hairline }} />;
 }
 
 /** A tappable card row: tile, title (and subtitle), an optional value and a chevron. */
@@ -256,6 +314,7 @@ export function ListRow({
   selected?: boolean;
   destructive?: boolean;
 }) {
+  const n = useNotesLook();
   return (
     <Pressable
       cssInterop={false}
@@ -272,41 +331,31 @@ export function ListRow({
         paddingRight: 12,
         paddingVertical: 12,
         minHeight: 60,
-        backgroundColor: selected
-          ? notesLook.selectedRow
-          : pressed
-            ? 'rgba(0,0,0,0.04)'
-            : 'transparent',
+        backgroundColor: selected ? n.selectedRow : pressed ? n.pressedRow : 'transparent',
       })}
     >
       {tile ??
-        (icon && (
-          <NoteTile icon={icon} color={destructive ? look.error : (iconColor ?? home.accent)} />
-        ))}
+        (icon && <NoteTile icon={icon} color={destructive ? n.error : (iconColor ?? n.accent)} />)}
       <View style={{ flex: 1, gap: 2 }}>
         <Text
           numberOfLines={1}
-          style={[
-            notesLook.rowTitle,
-            accent && { color: home.accent },
-            destructive && { color: look.error },
-          ]}
+          style={[n.rowTitle, accent && { color: n.accent }, destructive && { color: n.error }]}
         >
           {title}
         </Text>
         {subtitle ? (
-          <Text numberOfLines={subtitleLines} style={notesLook.rowSub}>
+          <Text numberOfLines={subtitleLines} style={n.rowSub}>
             {subtitle}
           </Text>
         ) : null}
       </View>
-      {value != null && <Text style={notesLook.count}>{value}</Text>}
+      {value != null && <Text style={n.count}>{value}</Text>}
       {right}
       {(selected || checked) && (
-        <SystemIcon name="checkmark" mdName="Check" size={20} color={home.accent} />
+        <SystemIcon name="checkmark" mdName="Check" size={20} color={n.accent} />
       )}
       {chevron && !selected && !checked && (
-        <SystemIcon name="chevron.right" mdName="ChevronRight" size={18} color={home.tertiary} />
+        <SystemIcon name="chevron.right" mdName="ChevronRight" size={18} color={n.tertiary} />
       )}
     </Pressable>
   );
@@ -324,6 +373,7 @@ export function Chip({
   onPress?: () => void;
   icon?: LucideIconName;
 }) {
+  const n = useNotesLook();
   return (
     <Pressable
       cssInterop={false}
@@ -341,7 +391,7 @@ export function Chip({
           gap: 6,
           opacity: pressed ? 0.8 : 1,
         },
-        selected ? gloss : edge,
+        selected ? n.gloss : n.edge,
       ]}
     >
       {icon && (
@@ -349,7 +399,7 @@ export function Chip({
           name="circle"
           mdName={icon}
           size={14}
-          color={selected ? '#FFFFFF' : home.secondary}
+          color={selected ? n.onGlass : n.secondary}
         />
       )}
       <Text
@@ -357,7 +407,7 @@ export function Chip({
           fontSize: 14,
           lineHeight: 18,
           fontWeight: '500',
-          color: selected ? '#FFFFFF' : home.text,
+          color: selected ? n.onGlass : n.text,
         }}
       >
         {label}
@@ -378,6 +428,7 @@ export function NewButton({
   label?: string;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
   const text = label ?? t('new');
   return (
     <Pressable
@@ -397,12 +448,12 @@ export function NewButton({
           alignItems: 'center',
           gap: 8,
         },
-        gloss,
-        pressed && glossPressed,
+        n.gloss,
+        pressed && n.glossPressed,
       ]}
     >
-      <SystemIcon name="plus" mdName="Plus" size={22} color="#FFFFFF" />
-      <Text style={{ color: '#FFFFFF', fontSize: 17, lineHeight: 24, fontWeight: '700' }}>
+      <SystemIcon name="plus" mdName="Plus" size={22} color={n.onGlass} />
+      <Text style={{ color: n.onGlass, fontSize: 17, lineHeight: 24, fontWeight: '700' }}>
         {text}
       </Text>
     </Pressable>
@@ -421,7 +472,8 @@ export function LinkButton({
   icon?: LucideIconName;
   destructive?: boolean;
 }) {
-  const color = destructive ? look.error : home.accent;
+  const n = useNotesLook();
+  const color = destructive ? n.error : n.accent;
   return (
     <Pressable
       cssInterop={false}

@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { Keyboard, StyleSheet } from 'react-native';
 import { AndroidTabBar } from '../Tabs';
 import { useNavigationBarCanvas } from '../navigationBar';
+import { ThemeProvider } from '../ThemeProvider';
 
 jest.mock('expo-router', () => ({ Tabs: () => null }));
 jest.mock('@react-navigation/native', () => ({
@@ -17,16 +18,9 @@ jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('../home/strings', () => ({
   useHomeT: () => (_key: string, o: { index: number; count: number }) => `${o.index} of ${o.count}`,
 }));
-jest.mock('../home/kit', () => ({
-  home: {
-    canvas: 'canvas',
-    surface: 'surface',
-    divider: 'divider',
-    text: 'primary',
-    secondary: 'secondary',
-    tint: 'tint',
-    accent: 'accent',
-  },
+jest.mock('../../../modules/android-dictation/src/themeFade', () => ({
+  prepareThemeFade: jest.fn(async () => false),
+  fadeTheme: jest.fn(),
 }));
 jest.mock('../navigationBar', () => ({ useNavigationBarCanvas: jest.fn() }));
 
@@ -71,9 +65,9 @@ it('is white with a hairline on top, 80 dp above the system inset', () => {
   render(<AndroidTabBar {...props(1)} />);
   const bar = screen.getByTestId('tab-bar');
   expect(bar.props.style).toMatchObject({
-    backgroundColor: 'surface',
+    backgroundColor: '#FFFFFF',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'divider',
+    borderTopColor: 'rgba(0,0,0,0.08)',
     minHeight: 104,
     paddingBottom: 24,
   });
@@ -83,9 +77,9 @@ it('is white with a hairline on top, 80 dp above the system inset', () => {
 
 it('paints the system bar white under the bar and the page colour where the bar hides', () => {
   render(<AndroidTabBar {...props(1)} />);
-  expect(useNavigationBarCanvas).toHaveBeenLastCalledWith('surface');
+  expect(useNavigationBarCanvas).toHaveBeenLastCalledWith('#FFFFFF');
   render(<AndroidTabBar {...props(1, ['index', '[id]'])} />);
-  expect(useNavigationBarCanvas).toHaveBeenLastCalledWith('canvas');
+  expect(useNavigationBarCanvas).toHaveBeenLastCalledWith('#EFF0F2');
 });
 
 it('hides on a pushed screen', () => {
@@ -126,4 +120,22 @@ it('tapping another tab switches to it', () => {
   render(<AndroidTabBar {...p} />);
   fireEvent.press(screen.getByTestId('tab-(dictionary)'));
   expect(p.navigation.dispatch).toHaveBeenCalledWith(expect.objectContaining({ target: 'tabs' }));
+});
+
+describe('in dark (K2)', () => {
+  const wrap = (ui: React.ReactElement) => <ThemeProvider override="dark">{ui}</ThemeProvider>;
+
+  it('is one step above the page, its hairline light, and the system bar follows', () => {
+    render(wrap(<AndroidTabBar {...props(1)} />));
+    expect(screen.getByTestId('tab-bar').props.style).toMatchObject({
+      backgroundColor: '#16171C',
+      borderTopColor: 'rgba(255,255,255,0.09)',
+    });
+    expect(screen.getByTestId('tab-pill').props.style.backgroundColor).toBe(
+      'rgba(110,155,255,0.18)',
+    );
+    expect(useNavigationBarCanvas).toHaveBeenLastCalledWith('#16171C');
+    render(wrap(<AndroidTabBar {...props(1, ['index', '[id]'])} />));
+    expect(useNavigationBarCanvas).toHaveBeenLastCalledWith('#0E0F13');
+  });
 });

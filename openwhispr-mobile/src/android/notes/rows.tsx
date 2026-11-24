@@ -15,14 +15,11 @@ import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { safeHaptics } from '@/lib/utils';
 import type { Note } from '@/data';
 import { parseNoteTimestamp } from '@/lib/parseNoteTimestamp';
-import { home } from '../home/kit';
-import { look } from '../settings/look';
 import { useReduceMotion } from '../settings/kit';
 import { plainNoteText } from './liveMarkdownSpans';
-import { NoteTile, notesLook } from './look';
+import { NoteTile, useNotesLook, type NotesLook } from './look';
 import { consumeRestored } from './pendingDeletes';
 import { useNotesT, type NotesT } from './strings';
-import { theme } from '../theme';
 
 export type NoteKind = 'meeting' | 'upload' | 'note';
 
@@ -32,10 +29,13 @@ export function noteKind(note: Pick<Note, 'noteType' | 'diarizationEnabled'>): N
   return 'note';
 }
 
-export function kindIcon(kind: NoteKind): { icon: LucideIconName; color: string } {
+export function kindIcon(
+  kind: NoteKind,
+  n: Pick<NotesLook, 'secondary' | 'accent'>,
+): { icon: LucideIconName; color: string } {
   return kind === 'note'
-    ? { icon: 'FileText', color: home.secondary }
-    : { icon: 'AudioLines', color: home.accent };
+    ? { icon: 'FileText', color: n.secondary }
+    : { icon: 'AudioLines', color: n.accent };
 }
 
 /** Markdown to one readable line: no headings, bullets, checkboxes or emphasis marks. */
@@ -117,8 +117,9 @@ export function NoteRow({
   meta,
 }: RowProps) {
   const t = useNotesT();
+  const n = useNotesLook();
   const kind = noteKind(note);
-  const { icon, color } = kindIcon(kind);
+  const { icon, color } = kindIcon(kind, n);
   const title = note.title?.trim() || t('untitled');
   const preview = notePreview(note);
   const metaLine = meta ?? noteMeta(note, t);
@@ -138,23 +139,23 @@ export function NoteRow({
         paddingLeft: 14,
         paddingRight: 12,
         paddingVertical: 12,
-        backgroundColor: selected ? notesLook.selectedRow : pressed ? theme.surface2 : home.surface,
+        backgroundColor: selected ? n.selectedRow : pressed ? n.surface2 : n.surface,
       })}
     >
       {selectMode && <SelectCircle selected={Boolean(selected)} />}
       <NoteTile icon={icon} color={color} />
       <View style={{ flex: 1, gap: 2 }}>
-        <Text numberOfLines={1} style={notesLook.rowTitle}>
+        <Text numberOfLines={1} style={n.rowTitle}>
           {title}
         </Text>
         {detail ??
           (preview ? (
-            <Text numberOfLines={1} style={notesLook.rowSub}>
+            <Text numberOfLines={1} style={n.rowSub}>
               {preview}
             </Text>
           ) : null)}
         {metaLine ? (
-          <Text numberOfLines={1} style={notesLook.rowMeta}>
+          <Text numberOfLines={1} style={n.rowMeta}>
             {metaLine}
           </Text>
         ) : null}
@@ -164,6 +165,8 @@ export function NoteRow({
 }
 
 function SelectCircle({ selected }: { selected: boolean }) {
+  const n = useNotesLook();
+  const dark = n.theme.scheme === 'dark';
   return (
     <View
       style={{
@@ -173,11 +176,11 @@ function SelectCircle({ selected }: { selected: boolean }) {
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: selected ? 0 : 1.5,
-        borderColor: 'rgba(0,0,0,0.25)',
-        backgroundColor: selected ? home.accent : 'transparent',
+        borderColor: dark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.25)',
+        backgroundColor: selected ? n.accent : 'transparent',
       }}
     >
-      {selected && <SystemIcon name="checkmark" mdName="Check" size={15} color="#FFFFFF" />}
+      {selected && <SystemIcon name="checkmark" mdName="Check" size={15} color={n.onGlass} />}
     </View>
   );
 }
@@ -209,6 +212,9 @@ export function SwipeRow({
   enabled?: boolean;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
+  // Delete's fill stays this red in both schemes: white on it reads in light and dark.
+  const swipeRed = '#C9352B';
   const OPEN_OFFSET = onMove ? ACTION_WIDTH * 2 : ACTION_WIDTH;
   const reduceMotion = useReduceMotion();
   const { width: screenWidth } = useWindowDimensions();
@@ -369,7 +375,7 @@ export function SwipeRow({
               top: 0,
               bottom: 0,
               right: 0,
-              backgroundColor: '#C9352B',
+              backgroundColor: swipeRed,
               overflow: 'hidden',
             },
             redStyle,
@@ -390,9 +396,9 @@ export function SwipeRow({
             }}
           >
             <Animated.View style={trashStyle}>
-              <SystemIcon name="trash" mdName="Trash2" size={20} color="#FFFFFF" />
+              <SystemIcon name="trash" mdName="Trash2" size={20} color={n.onGlass} />
             </Animated.View>
-            <Text style={{ fontSize: 13, lineHeight: 16, fontWeight: '600', color: '#FFFFFF' }}>
+            <Text style={{ fontSize: 13, lineHeight: 16, fontWeight: '600', color: n.onGlass }}>
               {t('delete')}
             </Text>
           </Pressable>
@@ -406,7 +412,7 @@ export function SwipeRow({
                 bottom: 0,
                 right: ACTION_WIDTH,
                 width: ACTION_WIDTH,
-                backgroundColor: theme.track,
+                backgroundColor: n.track,
               },
               moveStyle,
             ]}
@@ -422,8 +428,8 @@ export function SwipeRow({
               }}
               style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 }}
             >
-              <SystemIcon name="folder" mdName="Folder" size={20} color={home.text} />
-              <Text style={{ fontSize: 13, lineHeight: 16, fontWeight: '500', color: home.text }}>
+              <SystemIcon name="folder" mdName="Folder" size={20} color={n.text} />
+              <Text style={{ fontSize: 13, lineHeight: 16, fontWeight: '500', color: n.text }}>
                 {t('move')}
               </Text>
             </Pressable>
@@ -431,7 +437,7 @@ export function SwipeRow({
         )}
       </View>
       <GestureDetector gesture={pan}>
-        <Animated.View style={[{ backgroundColor: home.surface }, rowStyle]}>
+        <Animated.View style={[{ backgroundColor: n.surface }, rowStyle]}>
           {open ? (
             // Tap anywhere on an open row closes it instead of opening the note.
             <Pressable cssInterop={false} onPress={close}>
@@ -445,5 +451,3 @@ export function SwipeRow({
     </Animated.View>
   );
 }
-
-export const swipeColors = { red: '#C9352B', grey: look.track };

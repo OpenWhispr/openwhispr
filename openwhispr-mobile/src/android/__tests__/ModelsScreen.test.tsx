@@ -61,7 +61,7 @@ jest.mock('../ui', () => {
         props,
         require('react').createElement(Text, null, label),
       ),
-    styles: {},
+    useUiStyles: () => ({}),
   };
 });
 

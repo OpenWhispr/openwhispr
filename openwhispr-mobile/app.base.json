@@ -35,6 +35,7 @@
       "appleTeamId": "T832773L2J"
     },
     "android": {
+      "userInterfaceStyle": "automatic",
       "adaptiveIcon": {
         "foregroundImage": "./assets/android/adaptive-icon-foreground.png",
         "backgroundImage": "./assets/android/adaptive-icon-background.png",

@@ -3,9 +3,16 @@ import { Alert, AppState, Keyboard, Pressable, StyleSheet, TextInput, View } fro
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
-import { CircleButton, GlassButton, PillButton, colors, s } from './kit';
+import {
+  CircleButton,
+  GlassButton,
+  PillButton,
+  useOnboardingColors,
+  useOnboardingStyles,
+} from './kit';
 import { PracticeBubble, type BubbleState } from './PracticeBubble';
-import { AppCard, DoneLine, Hint, fieldText, useKeyboardAnchor } from './practiceParts';
+import { AppCard, DoneLine, Hint, useFieldText, useKeyboardAnchor } from './practiceParts';
+import { makeStyles } from '../ThemeProvider';
 import { PracticeRecorder, practiceFailure, requestMicrophone } from './practiceRecorder';
 import { useOnboardingT } from './strings';
 
@@ -18,6 +25,10 @@ type Phase = 'blank' | 'focused' | 'listening' | 'processing' | 'pasted' | 'done
  */
 export function PracticeScreen({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
+  const colors = useOnboardingColors();
+  const fieldText = useFieldText();
+  const pr = useStyles();
   const input = useRef<TextInput>(null);
   const recorder = useRef(new PracticeRecorder());
   const mounted = useRef(true);
@@ -170,7 +181,7 @@ export function PracticeScreen({ onBack, onNext }: { onBack: () => void; onNext:
               </View>
             </AppCard>
             {error ? (
-              <Text accessibilityRole="alert" style={[s.body, { color: '#B42318' }]}>
+              <Text accessibilityRole="alert" style={[s.body, { color: colors.error }]}>
                 {error}
               </Text>
             ) : null}
@@ -204,7 +215,8 @@ export function PracticeScreen({ onBack, onNext }: { onBack: () => void; onNext:
   );
 }
 
-const pr = StyleSheet.create({
+// Layout only; a makeStyles sheet so nothing here is built at module level.
+const useStyles = makeStyles(() => ({
   overlay: { position: 'absolute', left: 16, right: 16 },
   bubbleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64 },
-});
+}));

@@ -22,18 +22,17 @@ import {
 import { safeHaptics, isValidEmail } from '@/lib/utils';
 import { handleAccountRequiredError, requiresRealAccount } from '@/lib/accountAccess';
 import { router } from 'expo-router';
-import { home } from '@/android/home/kit';
 import {
   Group,
   ListRow,
   PillAction,
   SettingsPage,
-  settings,
   showToast,
+  useSettings,
 } from '@/android/settings/kit';
-import { bodyText, edgeField, look } from '@/android/settings/look';
+import { useSettingsLook } from '@/android/settings/look';
 import { settingsT } from '@/android/settings/strings';
-import { theme } from '@/android/theme';
+import { useTheme } from '@/android/ThemeProvider';
 
 const TITLE = 'Referral';
 
@@ -45,6 +44,10 @@ const STEPS = [
 
 /** The invite's state as a square tag, coloured by what it means. */
 function InviteStatusBadge({ status }: { status: ReferralInvite['status'] }) {
+  const theme = useTheme().tokens;
+  const settings = useSettings();
+  const { look } = useSettingsLook();
+  const home = settings;
   const config: Record<ReferralInvite['status'], { bg: string; text: string; label: string }> = {
     converted: { bg: theme.successFill, text: settings.success, label: 'Joined' },
     opened: { bg: look.selFill, text: home.accent, label: 'Opened' },
@@ -87,6 +90,8 @@ function HowItWorks() {
 
 /** "Months banked": white, corners 20, a label, the count in the accent and a line under it. */
 function MonthsBanked({ months, children }: { months: number; children: React.ReactNode }) {
+  const settings = useSettings();
+  const home = settings;
   return (
     <View
       style={{
@@ -121,13 +126,14 @@ function MonthsBanked({ months, children }: { months: number; children: React.Re
   );
 }
 
-const statLine = { ...bodyText, opacity: 0.7 };
-
 // Guests have no session, so the referral API can never load. Instead of the
 // generic error state, sell the reward and open sign-in. Android has no root auth
 // gate, so signing a guest out would leave them here; an anonymous session must
 // never be signed out either (it carries a purchase and notes).
 function GuestReferralEmptyState() {
+  const home = useSettings();
+  const { bodyText } = useSettingsLook();
+  const statLine = { ...bodyText, opacity: 0.7 };
   const anonymous = useAuthStore((s) => s.user !== null);
 
   const handleSignIn = useCallback(() => {
@@ -165,6 +171,11 @@ function GuestReferralEmptyState() {
 
 export default function ReferralScreen() {
   const isAndroid = Platform.OS === 'android';
+  const theme = useTheme().tokens;
+  const settings = useSettings();
+  const home = settings;
+  const { bodyText, edgeField } = useSettingsLook();
+  const statLine = { ...bodyText, opacity: 0.7 };
   const { user, sessionCookie } = useAuthStore();
   const [stats, setStats] = useState<ReferralStats | null>(null);
   const [invites, setInvites] = useState<ReferralInvite[]>([]);

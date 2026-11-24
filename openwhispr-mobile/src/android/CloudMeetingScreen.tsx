@@ -9,7 +9,7 @@ import { createCloudMeetingContext } from './cloudMeetingContext';
 import { useCloudMeeting, CloudMeetingFinishError } from './useCloudMeeting';
 import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording.android';
 import { Text } from '@/components/ui/Text';
-import { theme } from './theme';
+import { useTheme } from './ThemeProvider';
 import { ProcessingWaveform } from '@/components/features/WaveformVisualizer';
 import { notesRepository } from '@/data';
 import { useNotesStore } from '@/store/useNotesStore';
@@ -38,6 +38,8 @@ type Capture = {
 /** Android Cloud lifecycle only; the default screen continues to own Local and iOS. */
 export function CloudMeetingScreen(): React.JSX.Element {
   const { t } = useTranslation('android');
+  // Colours read at render, so a light/dark switch repaints in place (no remount).
+  const k = useTheme().tokens;
   const params = useLocalSearchParams<{
     folderId?: string;
     spaceId?: string;
@@ -460,11 +462,11 @@ export function CloudMeetingScreen(): React.JSX.Element {
         justifyContent: 'center',
         gap: 28,
         paddingHorizontal: 24,
-        backgroundColor: theme.canvas,
+        backgroundColor: k.canvas,
       }}
     >
-      <ProcessingWaveform color={theme.accent} size={48} />
-      <Text style={{ color: theme.ink }}>{t('meetingSaveForLater')}</Text>
+      <ProcessingWaveform color={k.accent} size={48} />
+      <Text style={{ color: k.ink }}>{t('meetingSaveForLater')}</Text>
     </View>
   );
 }

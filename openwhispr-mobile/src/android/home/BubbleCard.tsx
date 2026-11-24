@@ -18,9 +18,8 @@ import {
   type BubbleStatus,
 } from '../../../modules/android-dictation/src';
 import { useHomeT } from './strings';
-import { home, IconTile, PILL_ICON_CHROME_COMPACT, PillButton, type } from './kit';
-import { edgeCard } from '../settings/look';
-import { settings, Toggle } from '../settings/kit';
+import { IconTile, PILL_ICON_CHROME_COMPACT, PillButton, useHome } from './kit';
+import { Toggle } from '../settings/kit';
 import { missingPermissions, PERMISSION_ICON, PERMISSION_LABEL, type Permission } from './model';
 
 const GLOSSY_ICON = require('./assets/glossy-icon.png');
@@ -76,6 +75,7 @@ export function BubbleCard({
 }) {
   const t = useHomeT();
   const { t: tAndroid } = useTranslation();
+  const { c, type, card } = useHome();
   const { status, refresh } = useBubbleStatus();
   const bubbleSize = useConfigStore((s) => s.config?.androidBubbleSize ?? 64);
   const [switching, setSwitching] = useState(false);
@@ -126,7 +126,7 @@ export function BubbleCard({
       : t('bubbleOffBody');
 
   return (
-    <View style={[edgeCard, { padding: 14, gap: 14 }]}>
+    <View style={[card, { padding: 14, gap: 14 }]}>
       <View
         pointerEvents="none"
         importantForAccessibility="no-hide-descendants"
@@ -149,13 +149,13 @@ export function BubbleCard({
             accessible={false}
           />
         ) : (
-          <IconTile icon="AudioLines" color={home.secondary} />
+          <IconTile icon="AudioLines" color={c.secondary} />
         )}
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={settings.rowTitle}>{title}</Text>
+          <Text style={type.rowTitle}>{title}</Text>
           <Text
             accessibilityLiveRegion="polite"
-            style={[type.footnote, needsPermission && { color: home.accent }]}
+            style={[type.footnote, needsPermission && { color: c.accent }]}
           >
             {subtitle}
           </Text>

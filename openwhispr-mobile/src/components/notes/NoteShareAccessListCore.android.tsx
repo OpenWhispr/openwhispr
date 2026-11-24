@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { MenuView, type MenuAction } from '@react-native-menu/menu';
 import { Text } from '@/components/ui/Text';
+import { useIosColor } from '@/config/colors.android';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { confirmDestructive } from '@/lib/alerts';
 import type {
@@ -102,8 +103,13 @@ export function createNoteShareAccessList(options: AccessPresentation = {}) {
   /** The trailing role label, which opens the row's actions when there are any. */
   function RoleMenu({ role, accessibilityLabel, actions, busy, onAction }: RoleMenuProps) {
     const { copy } = useCopy();
+    const color = useIosColor();
     if (actions.length === 0) {
-      return <Text className="text-[13px] text-secondaryLabel">{roleLabel(role, copy)}</Text>;
+      return (
+        <Text className="text-[13px]" style={{ color: color('secondaryLabel') }}>
+          {roleLabel(role, copy)}
+        </Text>
+      );
     }
     return (
       <MenuView
@@ -118,7 +124,7 @@ export function createNoteShareAccessList(options: AccessPresentation = {}) {
           accessibilityState={{ disabled: busy }}
           className={presentation.roleButtonClassName}
         >
-          <Text className={busy ? 'text-[13px] text-tertiaryLabel' : 'text-[13px] text-link'}>
+          <Text className="text-[13px]" style={{ color: color(busy ? 'tertiaryLabel' : 'link') }}>
             {roleLabel(role, copy)}
           </Text>
           <SystemIcon
@@ -140,20 +146,23 @@ export function createNoteShareAccessList(options: AccessPresentation = {}) {
   }
 
   function PersonRow({ avatar, name, detail, trailing }: PersonRowProps) {
+    const color = useIosColor();
     return (
       <GroupedList.Row leadingIconSlot={avatar}>
         <View className={presentation.personRowClassName}>
           <View className={presentation.personNameClassName}>
             <Text
               numberOfLines={presentation.numberOfLines}
-              className="text-[15px] font-medium text-label"
+              className="text-[15px] font-medium"
+              style={{ color: color('label') }}
             >
               {name}
             </Text>
             {detail ? (
               <Text
                 numberOfLines={presentation.numberOfLines}
-                className="text-[12px] text-secondaryLabel"
+                className="text-[12px]"
+                style={{ color: color('secondaryLabel') }}
               >
                 {detail}
               </Text>
@@ -195,6 +204,7 @@ export function createNoteShareAccessList(options: AccessPresentation = {}) {
   }: NoteShareAccessListProps) {
     const { copy } = useCopy();
     const labels = useLabels();
+    const color = useIosColor();
     const pending = invitations.filter((invite) => !invite.revoked_at && !invite.accepted_at);
     const invitationEmails = new Set(pending.map((invite) => invite.email.toLowerCase()));
     const grants = access.grants.filter(
@@ -357,7 +367,10 @@ export function createNoteShareAccessList(options: AccessPresentation = {}) {
 
     return (
       <View className="gap-2">
-        <Text className="px-1 text-[13px] uppercase tracking-wider text-secondaryLabel">
+        <Text
+          className="px-1 text-[13px] uppercase tracking-wider"
+          style={{ color: color('secondaryLabel') }}
+        >
           {copy('noteAccess.people', 'People with access')}
         </Text>
         <GroupedList>
@@ -369,7 +382,7 @@ export function createNoteShareAccessList(options: AccessPresentation = {}) {
             name={access.owner.name || access.owner.email || copy('noteAccess.owner', 'Owner')}
             detail={access.owner.name ? access.owner.email : null}
             trailing={
-              <Text className="text-[13px] text-secondaryLabel">
+              <Text className="text-[13px]" style={{ color: color('secondaryLabel') }}>
                 {copy('noteAccess.owner', 'Owner')}
               </Text>
             }
@@ -378,7 +391,7 @@ export function createNoteShareAccessList(options: AccessPresentation = {}) {
           {pending.map(invitationRow)}
         </GroupedList>
         {paused && (
-          <Text className="px-4 text-[12px] text-secondaryLabel">
+          <Text className="px-4 text-[12px]" style={{ color: color('secondaryLabel') }}>
             {copy(
               'noteAccess.pausedBody',
               'People you added and invitations are paused until you share this note again.',

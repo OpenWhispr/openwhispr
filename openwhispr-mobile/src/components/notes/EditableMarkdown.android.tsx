@@ -4,6 +4,7 @@ import type React from 'react';
 import { Platform, Pressable, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
+import { useIosColor } from '@/config/colors.android';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface EditableMarkdownProps {
@@ -24,6 +25,7 @@ export function EditableMarkdown({
   showEditButton = true,
 }: EditableMarkdownProps): React.JSX.Element {
   const { copy } = useAndroidCopy();
+  const color = useIosColor();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(content);
   const editingRef = useRef(editing);
@@ -71,7 +73,9 @@ export function EditableMarkdown({
             hitSlop={12}
             onPress={() => setEditingState(false)}
           >
-            <Text className="text-[15px] font-semibold text-link">{copy('done', 'Done')}</Text>
+            <Text className="text-[15px] font-semibold" style={{ color: color('link') }}>
+              {copy('done', 'Done')}
+            </Text>
           </Pressable>
         </View>
         <TextInput
@@ -86,8 +90,8 @@ export function EditableMarkdown({
           multiline
           autoFocus
           textAlignVertical="top"
-          className="min-h-[300px] text-base leading-6 text-label"
-          style={{ fontFamily: AppFont.regular }}
+          className="min-h-[300px] text-base leading-6"
+          style={{ fontFamily: AppFont.regular, color: color('label') }}
         />
       </View>
     );
@@ -104,7 +108,9 @@ export function EditableMarkdown({
             hitSlop={12}
             onPress={() => setEditingState(true)}
           >
-            <Text className="text-[15px] font-semibold text-link">{copy('edit', 'Edit')}</Text>
+            <Text className="text-[15px] font-semibold" style={{ color: color('link') }}>
+              {copy('edit', 'Edit')}
+            </Text>
           </Pressable>
         </View>
       ) : null}

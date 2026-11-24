@@ -7,7 +7,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
-import { home, type } from '../home/kit';
+import { useHome } from '../home/kit';
 import { waitForForeground } from '../DeviceCheckScreen';
 import {
   readDeviceProfile,
@@ -17,7 +17,7 @@ import {
   type BenchmarkStage,
   type LocalBenchmark,
 } from '../deviceCheck';
-import { Group, ListRow, PillAction, SettingsPage, cardStyle, settings } from '../settings/kit';
+import { Group, ListRow, PillAction, SettingsPage, useSettings } from '../settings/kit';
 import { ResultTimes } from '../settings/ResultTimes';
 import { modelName } from '../settings/modelCatalog';
 import { useFableT } from './strings';
@@ -27,6 +27,8 @@ const STAGES: BenchmarkStage[] = ['preparingSample', 'processing', 'cleanup'];
 
 /** A card of plain text, as the result's words show. */
 function TextCard({ title, text }: { title: string; text: string }) {
+  const settings = useSettings();
+  const { type, card: cardStyle } = useHome();
   return (
     <View style={{ gap: 12 }}>
       <Text accessibilityRole="header" style={type.section}>
@@ -48,6 +50,8 @@ function TextCard({ title, text }: { title: string; text: string }) {
  */
 export default function CheckPhoneScreen() {
   const t = useFableT();
+  const settings = useSettings();
+  const { c: home, type, card: cardStyle } = useHome();
   const { t: shared } = useTranslation();
   const config = useConfigStore((state) => state.config);
   const speechModel = config?.androidSpeechModel ?? 'parakeet-v3';

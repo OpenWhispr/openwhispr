@@ -6,7 +6,19 @@ import { AndroidDictation, dictationEvents } from '../../modules/android-dictati
 import { PermissionsContent } from './PermissionsScreen';
 import { usePracticeSession } from './practiceSession';
 import { useBubbleResult } from './bubbleResult';
-import { Card, styles, palette } from './ui';
+import { makeStyles } from './ThemeProvider';
+
+const useStyles = makeStyles((t) => ({
+  body: { fontSize: 16, lineHeight: 24, color: t.tokens.secondary },
+  card: { ...t.flat, padding: 20, borderRadius: 20, gap: 12 },
+  field: {
+    minHeight: 140,
+    fontSize: 18,
+    lineHeight: 27,
+    color: t.tokens.ink,
+    textAlignVertical: 'top',
+  },
+}));
 
 /** Practice with the real bubble in a field inside the app. The bubble dictates only. */
 export function Practice({
@@ -17,6 +29,7 @@ export function Practice({
   visible?: boolean;
 }) {
   const { t } = useTranslation();
+  const styles = useStyles();
   const [text, setText] = useState('');
   const [ready, setReady] = useState(false);
   const [passed, setPassed] = useState(false);
@@ -65,22 +78,16 @@ export function Practice({
   return (
     <View style={{ gap: 20 }}>
       <Text style={styles.body}>{t('dictateExample')}</Text>
-      <Card>
+      <View style={styles.card}>
         <TextInput
           multiline
           accessibilityLabel={t('messagePlaceholder')}
           placeholder={t('messagePlaceholder')}
           value={text}
           onChangeText={setText}
-          style={{
-            minHeight: 140,
-            fontSize: 18,
-            lineHeight: 27,
-            color: palette.ink,
-            textAlignVertical: 'top',
-          }}
+          style={styles.field}
         />
-      </Card>
+      </View>
       <Text accessibilityLiveRegion="polite" style={styles.body}>
         {t(passed ? 'success' : 'realBubblePractice')}
       </Text>

@@ -1,15 +1,15 @@
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Text } from './Text';
-import { inset, raised, theme } from '@/android/theme';
+import { useTheme } from '@/android/ThemeProvider';
 
 /**
  * Android's one tab style (Dictionary's Words | Snippets): an inset, fully round grey track, the
  * picked tab a raised white pill with an ink label, 16 Medium labels, and an optional grey count.
  * Notes, the recorder, Style and Dictionary all use this, so every screen's tabs look the same.
  * Options with an `icon` (Style's kinds of app) stack it above a 13 label in a taller tab.
+ * Colours come from the theme at render, so a light/dark switch repaints the tabs in place.
  */
-const PICKED = raised;
 
 export type SegmentedOption<T extends string> = {
   value: T;
@@ -38,6 +38,7 @@ export function SegmentedControl<T extends string>({
   scrollable?: boolean;
   disabled?: boolean;
 }) {
+  const { tokens, inset, raised } = useTheme();
   const stacked = options.some((option) => option.icon);
   const segments = (
     <View
@@ -72,7 +73,7 @@ export function SegmentedControl<T extends string>({
                 gap: stacked ? 4 : 6,
                 opacity: pressed ? 0.7 : 1,
               },
-              selected && PICKED,
+              selected && raised,
             ]}
           >
             {option.icon?.(selected)}
@@ -82,18 +83,21 @@ export function SegmentedControl<T extends string>({
                 fontSize: stacked ? 13 : 16,
                 lineHeight: stacked ? 17 : 21,
                 fontWeight: '500',
-                color: selected ? theme.ink : theme.secondary,
+                color: selected ? tokens.ink : tokens.secondary,
               }}
             >
               {option.label}
             </Text>
             {option.count != null ? (
-              <Text style={{ fontSize: 16, lineHeight: 21, color: theme.tertiary }}>
+              <Text style={{ fontSize: 16, lineHeight: 21, color: tokens.tertiary }}>
                 {option.count}
               </Text>
             ) : null}
             {option.dot ? (
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF9500' }} />
+              // A status dot (out of date), so the theme's warning orange.
+              <View
+                style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: tokens.warning }}
+              />
             ) : null}
           </Pressable>
         );

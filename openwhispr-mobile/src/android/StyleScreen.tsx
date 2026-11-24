@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { SegmentedControl } from '@/components/ui/SegmentedControl.android';
-import { theme } from './theme';
+import { useTheme } from './ThemeProvider';
 import { Toggle, showToast } from './settings/kit';
 import { KIND_APPS } from './style/examples';
 import {
@@ -35,6 +35,7 @@ import {
  */
 export default function StyleScreen() {
   const t = useStyleT();
+  const k = useTheme().tokens;
   const tone = useToneText();
   const style = useToneStyle();
   const ready = useConfigStore((s) => Boolean(s.config));
@@ -69,10 +70,7 @@ export default function StyleScreen() {
   const picked = style.tones[kind];
   const faded = !style.enabled;
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: theme.canvas }}
-      edges={['top', 'left', 'right']}
-    >
+    <SafeAreaView style={{ flex: 1, backgroundColor: k.canvas }} edges={['top', 'left', 'right']}>
       <ScrollView
         ref={scroll}
         contentContainerStyle={{
@@ -89,11 +87,11 @@ export default function StyleScreen() {
           <View style={{ flex: 1, gap: 2 }}>
             <Text
               accessibilityRole="header"
-              style={{ fontSize: 30, lineHeight: 38, fontWeight: '700', color: theme.ink }}
+              style={{ fontSize: 30, lineHeight: 38, fontWeight: '700', color: k.ink }}
             >
               {t('tabTitle')}
             </Text>
-            <Text style={{ fontSize: 14, lineHeight: 18, color: theme.secondary }}>
+            <Text style={{ fontSize: 14, lineHeight: 18, color: k.secondary }}>
               {style.enabled ? t('subtitleOn') : t('subtitleOff')}
             </Text>
           </View>
@@ -118,7 +116,7 @@ export default function StyleScreen() {
                 gap: 12,
               }}
             >
-              <Text style={{ fontSize: 18, lineHeight: 23, fontWeight: '700', color: theme.ink }}>
+              <Text style={{ fontSize: 18, lineHeight: 23, fontWeight: '700', color: k.ink }}>
                 {tone.name(picked)}
               </Text>
               <Text
@@ -126,7 +124,7 @@ export default function StyleScreen() {
                   flexShrink: 1,
                   fontSize: 13,
                   lineHeight: 17,
-                  color: theme.secondary,
+                  color: k.secondary,
                   textAlign: 'right',
                 }}
               >
@@ -153,6 +151,7 @@ export default function StyleScreen() {
  */
 function KindPicker({ value, onChange }: { value: ToneKind; onChange: (kind: ToneKind) => void }) {
   const t = useStyleT();
+  const k = useTheme().tokens;
   return (
     <SegmentedControl
       value={value}
@@ -165,7 +164,7 @@ function KindPicker({ value, onChange }: { value: ToneKind; onChange: (kind: Ton
           <AppMarks
             logos={KIND_APPS[kind]}
             size={20}
-            behind={selected ? theme.surface : theme.track}
+            behind={selected ? k.raisedFill : k.track}
             overlap={6}
           />
         ),

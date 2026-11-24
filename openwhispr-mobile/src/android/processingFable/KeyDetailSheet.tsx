@@ -5,7 +5,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
-import { BottomSheet, TextAction, settings, showToast } from '../settings/kit';
+import { BottomSheet, TextAction, showToast, useSettings } from '../settings/kit';
 import { useKeyCheck, type KeyProviderId } from '../settings/keyCheck';
 import { maskKey } from '../settings/ownKey';
 import { noOrphan } from '../settings/strings';
@@ -40,6 +40,7 @@ export function KeyDetailSheet({
   onClose: () => void;
 }) {
   const t = useFableT();
+  const settings = useSettings();
   const config = useConfigStore((s) => s.config);
   const activeMode = useProcessingModeStore((s) => s.activeMode);
   const cloudAccess = cloudAccessFor(useAuthStore((s) => s.user));

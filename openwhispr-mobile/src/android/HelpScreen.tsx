@@ -3,10 +3,11 @@ import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { openExternal, openMail } from '@/lib/openExternal';
-import { Group, ListRow, SettingsPage, settings } from './settings/kit';
+import { Group, ListRow, SettingsPage, useSettings } from './settings/kit';
 
 export default function HelpScreen() {
   const { t } = useTranslation();
+  const settings = useSettings();
   return (
     <SettingsPage title={t('helpAbout')}>
       <Group title={t('support')} inset={14}>

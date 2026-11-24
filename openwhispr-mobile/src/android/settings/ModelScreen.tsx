@@ -2,7 +2,7 @@ import { ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { create } from 'zustand';
 import { useConfigStore } from '@/store/useConfigStore';
-import { home } from '../home/kit';
+import { useHome } from '../home/kit';
 import { ANDROID_MODELS, removeAndroidModel, type AndroidModelId } from '../models';
 import { canTranscribeMeetings, type AndroidSpeechModelId } from '../speechSelection';
 import { modelSupported } from '../models';
@@ -57,6 +57,7 @@ export function removeWithUndo(id: AndroidModelId, refresh: () => Promise<void>)
 export default function ModelScreen() {
   const t = useSettingsT();
   const reduceMotion = useReduceMotion();
+  const { c } = useHome();
   const params = useLocalSearchParams<{ kind?: string }>();
   const kind: ScreenKind =
     params.kind === 'text' || params.kind === 'diarization' || params.kind === 'meeting'
@@ -126,7 +127,7 @@ export default function ModelScreen() {
   return (
     <SettingsPage title={t(TITLE[kind])}>
       {!checked ? (
-        <ActivityIndicator color={home.accent} style={{ marginTop: 24 }} />
+        <ActivityIndicator color={c.accent} style={{ marginTop: 24 }} />
       ) : (
         <Group
           inset={56}

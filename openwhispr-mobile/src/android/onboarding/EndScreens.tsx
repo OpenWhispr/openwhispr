@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { makeStyles } from '../ThemeProvider';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
@@ -13,8 +14,14 @@ import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { privateSupported } from './setup';
-import { AccentText, GlassButton, Screen, colors, s } from './kit';
-import { flat, theme } from '../theme';
+import {
+  AccentText,
+  GlassButton,
+  Screen,
+  onboardingColorsFor,
+  useOnboardingColors,
+  useOnboardingStyles,
+} from './kit';
 import { appIcon } from './AppsScreen';
 import type { OnboardingMode } from './flow';
 import { useOnboardingT } from './strings';
@@ -31,6 +38,7 @@ export function ModeScreen({
   onChoose: (mode: OnboardingMode) => void;
 }) {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
   const [selected, setSelected] = useState<OnboardingMode>(mode);
   const canRunPrivate = privateSupported();
   const option = (value: OnboardingMode) => ({
@@ -88,6 +96,9 @@ function ModeCard({
   caution?: string;
   footnote?: string;
 }) {
+  const s = useOnboardingStyles();
+  const colors = useOnboardingColors();
+  const e = useStyles();
   return (
     <Pressable
       cssInterop={false}
@@ -105,7 +116,7 @@ function ModeCard({
         </Text>
         <View style={[e.radio, selected && e.radioOn]}>
           {selected ? (
-            <SystemIcon name="checkmark" mdName="Check" size={14} color={theme.onGlass} />
+            <SystemIcon name="checkmark" mdName="Check" size={14} color={colors.onGlass} />
           ) : null}
         </View>
       </View>
@@ -141,6 +152,7 @@ const TILE = 72;
 const GAP = 24;
 
 function Marquee({ apps, reverse }: { apps: string[]; reverse?: boolean }) {
+  const e = useStyles();
   const reduced = useReducedMotion();
   const offset = useSharedValue(0);
   const span = apps.length * (TILE + GAP);
@@ -173,6 +185,7 @@ function Marquee({ apps, reverse }: { apps: string[]; reverse?: boolean }) {
 
 export function ReadyScreen({ onDone, onDevice }: { onDone: () => void; onDevice?: boolean }) {
   const t = useOnboardingT();
+  const s = useOnboardingStyles();
   return (
     <SafeAreaView style={s.page} edges={['top', 'bottom']}>
       <View style={{ flex: 1, justifyContent: 'center', gap: 28 }}>
@@ -192,41 +205,46 @@ export function ReadyScreen({ onDone, onDevice }: { onDone: () => void; onDevice
   );
 }
 
-const e = StyleSheet.create({
-  mode: {
-    backgroundColor: colors.surface,
-    boxShadow: flat.boxShadow,
-    borderRadius: 16,
-    padding: 16,
-    gap: 10,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  modeSelected: { borderColor: colors.accent },
-  radio: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 1.5,
-    borderColor: theme.dotIdle,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioOn: { backgroundColor: colors.accent, borderColor: colors.accent },
-  point: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  pointText: { fontSize: 15, color: colors.secondary },
-  tile: {
-    width: TILE,
-    height: TILE,
-    borderRadius: 17,
-    backgroundColor: theme.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.fieldHairline,
-    shadowColor: '#000000',
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 5,
-  },
-  tileImage: { width: TILE, height: TILE, borderRadius: 17 },
+const useStyles = makeStyles((t) => {
+  const colors = onboardingColorsFor(t);
+  const dark = t.scheme === 'dark';
+  return {
+    mode: {
+      backgroundColor: colors.surface,
+      boxShadow: t.flat.boxShadow,
+      borderRadius: 16,
+      padding: 16,
+      gap: 10,
+      borderWidth: 2,
+      borderColor: 'transparent',
+    },
+    modeSelected: { borderColor: colors.accent },
+    radio: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      borderWidth: 1.5,
+      borderColor: t.tokens.dotIdle,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    radioOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+    point: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    pointText: { fontSize: 15, color: colors.secondary },
+    tile: {
+      width: TILE,
+      height: TILE,
+      borderRadius: 17,
+      backgroundColor: t.tokens.surface,
+      // In dark a light rim keeps the dark tiles (X) apart from the page.
+      borderWidth: dark ? 1 : StyleSheet.hairlineWidth,
+      borderColor: dark ? 'rgba(255,255,255,0.14)' : t.tokens.fieldHairline,
+      shadowColor: '#000000',
+      shadowOpacity: dark ? 0.4 : 0.08,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 5,
+    },
+    tileImage: { width: TILE, height: TILE, borderRadius: 17 },
+  };
 });

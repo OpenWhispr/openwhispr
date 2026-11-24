@@ -8,12 +8,10 @@ import { canMoveBetweenSpaces } from '@/lib/spacePermissions';
 import { AppFont } from '@/lib/fonts';
 import { safeHaptics } from '@/lib/utils';
 import { useNotesStore } from '@/store/useNotesStore';
-import { home } from '../home/kit';
 import { BottomSheet, showToast, TextAction } from '../settings/kit';
-import { edgeField } from '../settings/look';
 import { GlassButton } from '../processingFable/look';
 import { SearchField } from '../controls';
-import { Card, ListRow, SectionLabel, SpaceTile, notesLook, sheetList } from './look';
+import { Card, ListRow, SectionLabel, SpaceTile, sheetList, useNotesLook } from './look';
 import { workspacesOf } from './library';
 import { notesT, useNotesT } from './strings';
 
@@ -102,6 +100,7 @@ export function MoveToFolderSheet({
   onClose: () => void;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
   const { height } = useWindowDimensions();
   const { current, reachable, foldersOf, folderCounts } = useMovePlaces(note);
   const createFolder = useNotesStore((s) => s.createFolder);
@@ -150,7 +149,7 @@ export function MoveToFolderSheet({
       <View key={folder.id} style={inset ? { paddingLeft: 34 } : undefined}>
         <ListRow
           icon="Folder"
-          iconColor={home.secondary}
+          iconColor={n.secondary}
           title={folder.name}
           subtitle={
             space.kind === 'team' ? t('seenBy', { notes: count, space: space.name }) : count
@@ -166,7 +165,7 @@ export function MoveToFolderSheet({
     <View key={`root-${space.id}`} style={inset ? { paddingLeft: 34 } : undefined}>
       <ListRow
         icon="Inbox"
-        iconColor={home.secondary}
+        iconColor={n.secondary}
         title={t('intoSpace', { space: space.name })}
         subtitle={t('noFolderInSpace')}
         chevron={false}
@@ -194,24 +193,24 @@ export function MoveToFolderSheet({
             onChangeText={setName}
             accessibilityLabel={t('folderName')}
             placeholder={t('folderName')}
-            placeholderTextColor={home.tertiary}
+            placeholderTextColor={n.tertiary}
             returnKeyType="done"
             onSubmitEditing={submit}
             autoCapitalize="sentences"
             style={[
-              edgeField,
+              n.edgeField,
               {
                 minHeight: 48,
                 paddingHorizontal: 14,
                 fontSize: 17,
-                color: home.text,
+                color: n.text,
                 fontFamily: AppFont.regular,
-                borderColor: home.accent,
+                borderColor: n.accent,
                 borderWidth: 1.5,
               },
             ]}
           />
-          <Text style={notesLook.rowSub}>{t('newFolderIn', { place })}</Text>
+          <Text style={n.rowSub}>{t('newFolderIn', { place })}</Text>
         </View>
         <GlassButton label={t('createAndMove')} onPress={submit} disabled={!trimmed} />
         <TextAction label={t('backToFolders')} onPress={() => setCreating(false)} />
@@ -252,15 +251,15 @@ export function MoveToFolderSheet({
               paddingRight: 14,
               paddingVertical: 12,
               minHeight: 60,
-              backgroundColor: pressed ? 'rgba(0,0,0,0.04)' : 'transparent',
+              backgroundColor: pressed ? n.pressedRow : 'transparent',
             })}
           >
             <SpaceTile emoji={space.emoji} />
             <View style={{ flex: 1, gap: 2 }}>
-              <Text numberOfLines={1} style={notesLook.rowTitle}>
+              <Text numberOfLines={1} style={n.rowTitle}>
                 {space.name}
               </Text>
-              <Text numberOfLines={1} style={notesLook.rowSub}>
+              <Text numberOfLines={1} style={n.rowSub}>
                 {[
                   space.memberCount ? t('membersCount', { count: space.memberCount }) : null,
                   t('foldersCount', { count: folders.length }),
@@ -273,7 +272,7 @@ export function MoveToFolderSheet({
               name="circle"
               mdName={expanded ? 'ChevronUp' : 'ChevronDown'}
               size={20}
-              color={home.secondary}
+              color={n.secondary}
             />
           </Pressable>
           {expanded
@@ -342,7 +341,7 @@ export function MoveToFolderSheet({
         </Card>
         {sections}
         {needle && sections.length === 0 ? (
-          <Text style={[notesLook.rowSub, { textAlign: 'center' }]}>
+          <Text style={[n.rowSub, { textAlign: 'center' }]}>
             {t('nothingMatches', { query: query.trim() })}
           </Text>
         ) : null}
