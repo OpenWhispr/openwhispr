@@ -208,16 +208,20 @@ describe('useAudioRecording capture lease', () => {
     );
     const { result, unmount } = renderRecording(true);
 
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
     let started: Promise<void> = Promise.resolve();
     await act(async () => {
-      started = result.current.startRecording().catch(() => undefined);
+      started = result.current.startRecording();
+      started.catch(() => undefined);
       await Promise.resolve();
     });
     unmount();
     await act(async () => {
       grant();
-      await started;
+      await started.catch(() => undefined);
     });
+
+    await expect(started).rejects.toThrow('Recording was abandoned before it started');
 
     expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
     expect(mockAudioModule.setAudioModeAsync).not.toHaveBeenCalled();

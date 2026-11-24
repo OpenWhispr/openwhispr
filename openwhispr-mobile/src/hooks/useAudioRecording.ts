@@ -188,7 +188,8 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         acquiredHere = true;
         if (!mountedRef.current) {
           releaseLease();
-          return;
+          // Reject so the caller doesn't create a meeting note for a recording that never began.
+          throw new Error('Recording was abandoned before it started');
         }
       }
 
