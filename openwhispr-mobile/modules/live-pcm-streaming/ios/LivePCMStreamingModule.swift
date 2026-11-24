@@ -38,8 +38,15 @@ public class LivePCMStreamingModule: Module {
   private var emittedFrames = 0
   private var outputSampleRate: Double = 24000
   private var health = CaptureHealthPolicy(startedAtMs: 0)
-  // Reported with the "capturing" event, so JS knows what brought audio back.
-  private var lastRestartReason = "watchdog"
+  // Each engine's tap carries the generation it was installed under; any
+  // change of engine (or an interruption, which leaves the old engine's late
+  // buffers in flight) bumps it, so stale buffers never reach the converter,
+  // the counters or the policy.
+  private var engineGeneration = 0
+  // The restart that built the current generation's engine, reported with
+  // "capturing". nil for the first start's engine and for a generation with no
+  // engine yet.
+  private var generationReason: String?
 
   // Every engine and session change (start, restart, teardown) runs on this
   // serial queue, so a restart can never overlap another restart or a stop.
@@ -114,18 +121,17 @@ public class LivePCMStreamingModule: Module {
     frameNumber = 0
     emittedFrames = 0
     health = CaptureHealthPolicy(startedAtMs: Self.nowMs())
-    lastRestartReason = "watchdog"
     isStreaming = true
     stateLock.unlock()
 
-    try startEngine(sampleRate: sampleRate)
+    try startEngine(sampleRate: sampleRate, reason: nil)
     startObserving()
   }
 
   // Runs on captureQueue. Builds a fresh engine, converter and tap; a restart
   // needs a new converter because the input format may have changed with the
   // route. Leaves `isStreaming` alone and never deactivates the session.
-  private func startEngine(sampleRate: Double) throws {
+  private func startEngine(sampleRate: Double, reason: String?) throws {
     let session = AVAudioSession.sharedInstance()
     // .record without Bluetooth options keeps input on the built-in mic even
     // when AirPods are connected — an HFP headset mic only hears its wearer.
@@ -161,10 +167,13 @@ public class LivePCMStreamingModule: Module {
     audioEngine = engine
     converter = audioConverter
     outputFormat = targetFormat
+    engineGeneration += 1
+    generationReason = reason
+    let generation = engineGeneration
     stateLock.unlock()
 
     inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
-      self?.handleTap(buffer)
+      self?.handleTap(buffer, generation: generation)
     }
 
     engine.prepare()
@@ -176,6 +185,7 @@ public class LivePCMStreamingModule: Module {
       if audioEngine === engine {
         audioEngine = nil
         converter = nil
+        generationReason = nil
       }
       stateLock.unlock()
       throw error
@@ -191,11 +201,11 @@ public class LivePCMStreamingModule: Module {
       return
     }
     health.restartAttempted(atMs: Self.nowMs())
-    lastRestartReason = reason
     let oldEngine = audioEngine
     let sampleRate = outputSampleRate
-    // Cleared before the old engine stops so a late buffer from it is dropped
-    // rather than fed to the new converter.
+    // Retired before the old engine stops, so a late buffer from it is dropped.
+    engineGeneration += 1
+    generationReason = nil
     audioEngine = nil
     converter = nil
     stateLock.unlock()
@@ -204,7 +214,7 @@ public class LivePCMStreamingModule: Module {
     oldEngine?.stop()
 
     do {
-      try startEngine(sampleRate: sampleRate)
+      try startEngine(sampleRate: sampleRate, reason: reason)
     } catch {
       // Expected while a phone call holds the session: the watchdog retries.
       NSLog("[LivePCMStreaming] restart (\(reason)) failed: \(error.localizedDescription)")
@@ -228,9 +238,7 @@ public class LivePCMStreamingModule: Module {
         if type == .began {
           self.markInterrupted()
         } else if type == .ended {
-          // Restart whether or not iOS sets .shouldResume: a meeting recording
-          // is always worth resuming, and the watchdog would retry anyway.
-          self.restartCapture(reason: "interruptionEnded")
+          self.resumeAfterInterruption()
         }
       }
     })
@@ -291,11 +299,28 @@ public class LivePCMStreamingModule: Module {
       return
     }
     let changed = health.interrupted(atMs: Self.nowMs())
+    // iOS has stopped this engine, but buffers it already rendered can still
+    // reach the tap; they must not read as audio coming back.
+    engineGeneration += 1
+    generationReason = nil
     let capturedMs = currentCapturedMs()
     stateLock.unlock()
 
     if changed {
       sendCaptureState(.interrupted, reason: "interruption", capturedMs: capturedMs)
+    }
+  }
+
+  // Runs on captureQueue. Restarts whether or not iOS sets .shouldResume (a
+  // meeting recording is always worth resuming), but only while still
+  // interrupted: a watchdog retry may already have brought audio back.
+  private func resumeAfterInterruption() {
+    stateLock.lock()
+    let action: CaptureHealthAction = isStreaming ? health.interruptionEnded() : .none
+    stateLock.unlock()
+
+    if action == .restart {
+      restartCapture(reason: "interruptionEnded")
     }
   }
 
@@ -336,18 +361,24 @@ public class LivePCMStreamingModule: Module {
     return Int64(DispatchTime.now().uptimeNanoseconds / 1_000_000)
   }
 
+  // Caller holds stateLock. A buffer counts only from the current generation's
+  // engine, and only ends an interruption when that engine came from a restart,
+  // so "capturing" always names a restart that really happened.
+  private func acceptsBuffer(from generation: Int) -> Bool {
+    return isStreaming
+      && generation == engineGeneration
+      && (health.state == .capturing || generationReason != nil)
+  }
+
   // Runs on the audio render thread: keep it cheap.
-  private func handleTap(_ inputBuffer: AVAudioPCMBuffer) {
+  private func handleTap(_ inputBuffer: AVAudioPCMBuffer, generation: Int) {
     stateLock.lock()
-    let streaming = isStreaming
+    let accepted = acceptsBuffer(from: generation)
     let activeConverter = converter
     let activeFormat = outputFormat
     stateLock.unlock()
 
-    guard streaming, let activeConverter, let activeFormat else { return }
-    // A buffer still in flight from an engine a restart replaced may carry the
-    // old route's format; feeding it to the new converter would corrupt audio.
-    guard inputBuffer.format == activeConverter.inputFormat else { return }
+    guard accepted, let activeConverter, let activeFormat else { return }
 
     let ratio = activeFormat.sampleRate / inputBuffer.format.sampleRate
     let capacity = AVAudioFrameCount(Double(inputBuffer.frameLength) * ratio + 64)
@@ -387,7 +418,7 @@ public class LivePCMStreamingModule: Module {
     let base64 = pcm.base64EncodedString()
 
     stateLock.lock()
-    guard isStreaming else {
+    guard acceptsBuffer(from: generation) else {
       stateLock.unlock()
       return
     }
@@ -396,7 +427,7 @@ public class LivePCMStreamingModule: Module {
     frameNumber += 1
     emittedFrames += frames
     let resumed = health.frameArrived(atMs: Self.nowMs())
-    let resumeReason = lastRestartReason
+    let resumeReason = generationReason
     let capturedMs = currentCapturedMs()
     stateLock.unlock()
 
@@ -405,7 +436,7 @@ public class LivePCMStreamingModule: Module {
       "frameNumber": number,
       "timestampMs": timestampMs,
     ])
-    if resumed {
+    if resumed, let resumeReason {
       sendCaptureState(.capturing, reason: resumeReason, capturedMs: capturedMs)
     }
   }

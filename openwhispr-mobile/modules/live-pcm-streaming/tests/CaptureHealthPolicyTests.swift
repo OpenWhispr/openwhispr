@@ -5,6 +5,10 @@ struct CaptureHealthPolicyTests {
   static func main() {
     silenceAfterStartIsAStall()
     interruptionRetriesUntilAudioReturns()
+    restartWhileCapturingGetsAFreshGrace()
+    interruptionDuringAStallIsReportedOnce()
+    resumingClearsTheRetryTime()
+    interruptionEndedRestartsOnlyWhileInterrupted()
     print("CaptureHealthPolicyTests: all passed")
   }
 
@@ -33,5 +37,41 @@ struct CaptureHealthPolicyTests {
     expect(q.frameArrived(atMs: 10_400) == true, "first frame ends the interruption")
     expect(q.state == .capturing, "capturing again")
     expect(q.tick(atMs: 12_000) == .none, "healthy again")
+  }
+
+  static func restartWhileCapturingGetsAFreshGrace() {
+    var p = CaptureHealthPolicy(startedAtMs: 0)
+    expect(p.frameArrived(atMs: 1_000) == false, "healthy frame")
+    p.restartAttempted(atMs: 3_500)
+    expect(p.tick(atMs: 5_000) == .none, "grace counts from the restart")
+    expect(p.state == .capturing, "still capturing inside the grace")
+    expect(p.tick(atMs: 6_500) == .restart, "3 s after the restart is a stall")
+  }
+
+  static func interruptionDuringAStallIsReportedOnce() {
+    var p = CaptureHealthPolicy(startedAtMs: 0)
+    expect(p.tick(atMs: 3_000) == .restart, "stall")
+    expect(p.interrupted(atMs: 3_100) == false, "already interrupted by the stall")
+    expect(p.state == .interrupted, "still interrupted")
+  }
+
+  static func resumingClearsTheRetryTime() {
+    var p = CaptureHealthPolicy(startedAtMs: 0)
+    expect(p.interrupted(atMs: 1_000) == true, "first interruption")
+    expect(p.tick(atMs: 1_500) == .restart, "first retry")
+    p.restartAttempted(atMs: 1_500)
+    expect(p.frameArrived(atMs: 2_000) == true, "audio back")
+    expect(p.interrupted(atMs: 2_500) == true, "second interruption")
+    expect(p.tick(atMs: 3_000) == .restart, "second interruption retries on its first tick")
+  }
+
+  static func interruptionEndedRestartsOnlyWhileInterrupted() {
+    var p = CaptureHealthPolicy(startedAtMs: 0)
+    expect(p.interruptionEnded() == .none, "capturing: nothing to resume")
+    expect(p.interrupted(atMs: 1_000) == true, "interrupted")
+    expect(p.interruptionEnded() == .restart, "interrupted: resume")
+    p.restartAttempted(atMs: 1_100)
+    expect(p.frameArrived(atMs: 1_400) == true, "a watchdog retry brought audio back")
+    expect(p.interruptionEnded() == .none, "a late .ended restarts nothing")
   }
 }

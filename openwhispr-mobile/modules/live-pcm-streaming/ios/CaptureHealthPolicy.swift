@@ -62,7 +62,20 @@ public struct CaptureHealthPolicy {
     }
   }
 
+  /// The system ended an interruption. `.restart` only while still
+  /// interrupted: when a watchdog retry already brought audio back, another
+  /// restart would only cut a gap into the recording.
+  public func interruptionEnded() -> CaptureHealthAction {
+    return state == .interrupted ? .restart : .none
+  }
+
   public mutating func restartAttempted(atMs: Int64) {
     lastRestartAtMs = atMs
+    // A restart while capturing (route change, media reset) gets the full
+    // stall grace from the restart, not from the last buffer before it: a
+    // Bluetooth route can take seconds before its notification arrives.
+    if state == .capturing {
+      lastFrameAtMs = max(lastFrameAtMs, atMs)
+    }
   }
 }
