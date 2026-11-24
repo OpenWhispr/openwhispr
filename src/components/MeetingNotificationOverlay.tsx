@@ -290,7 +290,16 @@ export default function MeetingNotificationOverlay(): ReactElement {
         );
         // A dismiss that fails leaves nothing to choose, so it never opens the picker.
         if (result?.success === true || action === "dismiss") setIsVisible(false);
-        else {
+        else if (
+          current.joinUrl &&
+          (result?.code === "POLICY_EXTERNAL_ATTENDEES" ||
+            result?.code === "POLICY_ATTENDEES_UNVERIFIABLE")
+        ) {
+          const updated = { ...current, recordingRefusal: result.code };
+          dataRef.current = updated;
+          setData(updated);
+          changeMode("closed", false);
+        } else {
           if (result?.context) setContext(result.context);
           changeMode("list");
           setError(result?.code ?? "START_FAILED");

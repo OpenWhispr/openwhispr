@@ -17,6 +17,20 @@ const SILENCE_MARKER = "[pause]";
 // ElevenLabs lists Filipino rather than Tagalog, so the app's "tl" goes out as "fil".
 const LANGUAGE_CODES = { tl: "fil" };
 
+function isKeytermRefusal(errorText) {
+  let detail;
+  try {
+    detail = JSON.parse(errorText)?.detail;
+  } catch {
+    return false;
+  }
+  const isKeytermField = (field) => field === "keywords" || field === "keyterms";
+  if (Array.isArray(detail)) {
+    return detail.some((error) => error?.loc?.[0] === "body" && isKeytermField(error.loc[1]));
+  }
+  return isKeytermField(detail?.param);
+}
+
 async function transcribeWithElevenLabs(
   { audioBuffer, model, fileName, contentType, language, keyterms, apiKey, signal },
   fetchImpl
@@ -60,6 +74,10 @@ async function transcribeWithElevenLabs(
       method: "POST",
       headers: { "xi-api-key": apiKey },
       body: formData,
+      // ElevenLabs' fixed endpoint never redirects. Following one would carry xi-api-key,
+      // and on a 307 or 308 the recording, to whichever host it names (fetch drops only
+      // Authorization across origins), so a redirect fails the request instead.
+      redirect: "error",
       ...(signal ? { signal } : {}),
     });
     if (response.ok) return { response, errorText: "" };
@@ -74,15 +92,26 @@ async function transcribeWithElevenLabs(
 
   let { response, errorText } = await send(terms);
   // ElevenLabs counts a keyterm's words after its own normalisation, which the filter
-  // above can't reproduce. The dictation matters more than the hint, so a request
-  // refused over its keyterms goes again without them.
-  if (terms.length > 0 && [400, 422].includes(response.status) && /keyterm/i.test(errorText)) {
+  // above can't reproduce. Retry without hints only when the provider identifies their field.
+  if (terms.length > 0 && [400, 422].includes(response.status) && isKeytermRefusal(errorText)) {
     debugLogger.warn("ElevenLabs refused the keyterms; retrying without them", {
       status: response.status,
       body: redactProviderBody(errorText),
     });
     terms = [];
     ({ response, errorText } = await send(terms));
+  }
+
+  // ElevenLabs refuses audio under 100 ms, which a tap of the hotkey records, instead of
+  // answering it with an empty text. It holds no speech, so it ends as silence does. The
+  // whole request was refused, so none of its keyterms was accepted.
+  if (response.status === 400 && /audio_too_short/.test(errorText)) {
+    debugLogger.debug(
+      "ElevenLabs refused the recording as too short",
+      { status: response.status, audioBytes: buffer.byteLength },
+      "transcription"
+    );
+    return { text: "", model: resolvedModel, acceptedKeyterms: [] };
   }
 
   if (!response.ok) {
@@ -120,4 +149,4 @@ async function transcribeWithElevenLabs(
   };
 }
 
-module.exports = { transcribeWithElevenLabs, sanitizeKeyterms, ELEVENLABS_STT_URL, SILENCE_MARKER };
+module.exports = { transcribeWithElevenLabs, sanitizeKeyterms, SILENCE_MARKER };

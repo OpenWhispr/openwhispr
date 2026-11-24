@@ -71,6 +71,17 @@ function checkClient(client, catalog) {
   for (const { key, model } of entries(catalog))
     if (!kept.has(key) && isModelSupported(model, client.appVersion))
       problems.push(`cannot read ${key}; give it a minAppVersion above ${client.appVersion}`);
+  // The app takes a bundled model's transport from the catalog. A provider the app bundled
+  // before the catalog listed it has no published transport to compare against.
+  for (const section of PROVIDER_SECTIONS)
+    for (const shipped of client.floor[section] || [])
+      for (const model of shipped.models) {
+        const read = accepted[section]
+          .find((provider) => provider.id === shipped.id)
+          ?.models.find((item) => item.id === model.id);
+        if (read && Boolean(read.streaming) !== Boolean(model.streaming))
+          problems.push(`changes the transport of bundled model ${section}/${shipped.id}/${model.id}`);
+      }
   for (const section of PROVIDER_SECTIONS)
     for (const provider of accepted[section] || []) {
       const active = provider.models.filter(isActive);

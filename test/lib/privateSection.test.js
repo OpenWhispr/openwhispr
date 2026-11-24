@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  folderRowTree,
   privateSectionDropTarget,
   privateSectionFolders,
   privateSectionSpaces,
@@ -55,6 +56,81 @@ test("privateSectionFolders: two folders of one name in the same Private stay tw
     groups.map((g) => g.members.map((m) => m.id)),
     [[10], [12]]
   );
+});
+
+const subfolder = (id, spaceId, name, parentId) => ({
+  ...folder(id, spaceId, name),
+  parent_folder_id: parentId,
+});
+
+test("privateSectionFolders: subfolders are one row per parent row and name, after their parent", () => {
+  const folders = [
+    folder(10, 1, "Work"),
+    folder(90, 9, "Work"),
+    subfolder(91, 9, "Q1", 90),
+    folder(12, 1, "Q1"),
+    subfolder(11, 1, "Q1", 10),
+    subfolder(92, 9, "Q2", 90),
+  ];
+  const groups = privateSectionFolders([own, pending], folders);
+  assert.deepEqual(
+    groups.map((g) => [g.folder.id, g.members.map((m) => m.id), g.parent?.folder.id ?? null]),
+    [
+      [10, [10, 90], null],
+      [11, [11, 91], 10],
+      [92, [92], 10],
+      // A top-level "Q1" is its own row, apart from the "Work / Q1" subfolders.
+      [12, [12], null],
+    ]
+  );
+  assert.deepEqual(
+    folderRowTree(groups).map(({ group, subfolders }) => [
+      group.folder.id,
+      subfolders.map((s) => s.folder.id),
+    ]),
+    [
+      [10, [11, 92]],
+      [12, []],
+    ]
+  );
+});
+
+test("privateSectionFolders: a pending subfolder doesn't merge with a same-named top-level folder", () => {
+  const groups = privateSectionFolders(
+    [own, pending],
+    [folder(12, 1, "Q1"), folder(90, 9, "Work"), subfolder(91, 9, "Q1", 90)]
+  );
+  assert.deepEqual(
+    groups.map((g) => g.members.map((m) => m.id)),
+    [[12], [90], [91]]
+  );
+});
+
+test("privateSectionFolders: a subfolder whose parent isn't listed is a top-level row", () => {
+  const groups = privateSectionFolders([own], [subfolder(11, 1, "Q1", 404)]);
+  assert.deepEqual(
+    groups.map((g) => [g.folder.id, g.parent]),
+    [[11, null]]
+  );
+});
+
+test("privateSectionTarget: a pending note moved to a merged subfolder row lands in its own", () => {
+  const folders = [
+    folder(10, 1, "Work"),
+    folder(90, 9, "Work"),
+    subfolder(11, 1, "Q1", 10),
+    subfolder(91, 9, "Q1", 90),
+    folder(12, 1, "Q1"),
+  ];
+  assert.deepEqual(privateSectionTarget([own, pending], folders, 9, { spaceId: 1, folderId: 11 }), {
+    spaceId: 9,
+    folderId: 91,
+  });
+  // The top-level "Q1" row is not the pending "Work / Q1".
+  assert.deepEqual(privateSectionTarget([own, pending], folders, 9, { spaceId: 1, folderId: 12 }), {
+    spaceId: 1,
+    folderId: 12,
+  });
 });
 
 // The section's rows: "Plans" (10 in the workspace's own Private, 90 in the pending one), "Ideas"

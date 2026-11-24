@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useSuperwall, useSuperwallEvents, useUser } from 'expo-superwall';
+import { useSuperwall, useSuperwallEvents, useSuperwallStore, useUser } from 'expo-superwall';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore';
+import { useSuperwallIdentityStore } from '@/store/useSuperwallIdentityStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import {
   buildSuperwallAttributes,
@@ -10,6 +11,11 @@ import {
 } from '@/lib/superwall';
 import { Sentry } from '@/lib/sentry';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';
+import { getBillingIdentity, isBillingIdentityCurrent } from '@/lib/billingIdentity';
+
+function publishIdentity(billingUserId: string | null): void {
+  useSuperwallIdentityStore.getState().setIdentifiedBillingUserId(billingUserId);
+}
 
 const INACTIVE_SUBSCRIPTION_STATUS = { status: 'INACTIVE' } as const;
 
@@ -98,6 +104,12 @@ export function SuperwallEntitlementBridge() {
   }, [authUser, isGuest, refreshUsage, reportError, usage?.billingUserId]);
 
   useEffect(() => {
+    // Independent of SDK configuration: a signed-out device must never keep an
+    // identity published as ready for the next account.
+    if (isInitialized && (!authUser || isGuest)) publishIdentity(null);
+  }, [authUser, isGuest, isInitialized]);
+
+  useEffect(() => {
     if (!isInitialized || !isConfigured || configurationError) return;
 
     let cancelled = false;
@@ -112,18 +124,33 @@ export function SuperwallEntitlementBridge() {
           debugLog('waiting for billingUserId from /api/usage before identifying');
           return;
         }
+        // Never leave another account's identity published as ready.
+        const published = useSuperwallIdentityStore.getState().identifiedBillingUserId;
+        if (published !== null && published !== billingUserId) publishIdentity(null);
         if (
           superwallUser?.appUserId === billingUserId ||
           identifiedUserIdRef.current === billingUserId
         ) {
+          publishIdentity(billingUserId);
           return;
         }
+        const identity = getBillingIdentity();
         await identify(billingUserId, { restorePaywallAssignments: true });
         debugLog('identified with Superwall', { billingUserId });
+        // A superseded run may only publish while the same user is still
+        // signed in with this billing id and the SDK holds it; otherwise a
+        // later re-sign-in would read ready before it is re-identified.
+        if (
+          identity &&
+          isBillingIdentityCurrent(identity) &&
+          useSuperwallStore.getState().user?.appUserId === billingUserId
+        )
+          publishIdentity(billingUserId);
         if (!cancelled) identifiedUserIdRef.current = billingUserId;
         return;
       }
 
+      publishIdentity(null);
       if (superwallUser?.appUserId || identifiedUserIdRef.current) {
         debugLog('signing out Superwall identity (app user signed out)');
         await signOut();

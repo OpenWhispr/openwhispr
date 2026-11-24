@@ -499,8 +499,8 @@ test("list_folders lists the folders in scope only", async () => {
   const { createListFoldersTool } = await import("../../src/services/tools/listFoldersTool.ts");
   const result = await createListFoldersTool({ spaceIds: SCOPE }).execute({});
   assert.deepEqual(result.data, [
-    { id: 101, name: "Plans", space: "Personal" },
-    { id: 102, name: "Roadmaps", space: "Alpha" },
+    { id: 101, name: "Plans", parent: null, space: "Personal" },
+    { id: 102, name: "Roadmaps", parent: null, space: "Alpha" },
   ]);
   assert.doesNotMatch(result.displayText, /Other plans|Beta/);
 });

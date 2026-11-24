@@ -158,6 +158,25 @@ test("managed OpenWhispr Cloud still respects its batch configuration", async (t
   assert.equal(manager.shouldUseStreaming(), false);
 });
 
+test("after Cloud onboarding, dictation follows the server's streaming configuration", async (t) => {
+  const manager = await loadManager(t);
+  setSettings({
+    transcriptionMode: "openwhispr",
+    cloudTranscriptionMode: "openwhispr",
+    cloudTranscriptionProvider: "openwhispr",
+    cloudTranscriptionModel: "gpt-4o-mini-transcribe",
+  });
+
+  for (const streamingProvider of ["deepgram", "openai-realtime"]) {
+    manager.sttConfig = { dictation: { mode: "streaming" }, streamingProvider };
+    assert.equal(manager.shouldUseStreaming(), true, streamingProvider);
+    assert.equal(manager.getStreamingProviderName(), streamingProvider);
+  }
+
+  manager.sttConfig = { dictation: { mode: "batch" }, streamingProvider: "deepgram" };
+  assert.equal(manager.shouldUseStreaming(), false);
+});
+
 test("new BYOK streaming models never override managed cloud routing", async (t) => {
   const { createManager, vite } = await loadAudioManager(t, {
     cachePrefix: "registry-streaming-boundary-",

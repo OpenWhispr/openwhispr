@@ -2,6 +2,7 @@ import ExpoModulesCore
 import UIKit
 import AVFoundation
 import GameController
+import Security
 
 public class AppGroupStorageModule: Module {
   private var appBundleId: String {
@@ -165,6 +166,20 @@ public class AppGroupStorageModule: Module {
         DispatchQueue.main.async { [weak self] in self?.recordingStartupGate.reset() }
       }
       return defaults.object(forKey: key) == nil
+    }
+
+    Function("setKeyboardSessionCredential") { (cookie: String?) -> Bool in
+      self.writeKeyboardSessionCredential(cookie)
+    }
+
+    // Where the keyboard leaves the dictations it handled itself (direct-dictations/).
+    Function("getAppGroupContainerPath") { () -> String? in
+      FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: self.appGroupId)?.path
+    }
+
+    // A take the keyboard was killed before encoding is raw 16 kHz mono 16-bit PCM.
+    Function("wrapPcmAsWav") { (pcmPath: String, wavPath: String) -> Bool in
+      Self.wrapPcmAsWav(pcmPath: pcmPath, wavPath: wavPath)
     }
 
     Function("setKeyboardStatus") { (status: String, detail: String?) -> Void in
@@ -2192,5 +2207,76 @@ public class AppGroupStorageModule: Module {
       UIApplication.shared.endBackgroundTask(backgroundTaskId)
       backgroundTaskId = .invalid
     }
+  }
+}
+
+// MARK: - Keyboard session credential
+
+extension AppGroupStorageModule {
+  // Must match KeyboardCredentialStore in plugins/keyboard-extension/ios (a Jest test compares them).
+  static let keyboardSessionService = "com.openwhispr.keyboard-session"
+  static let keyboardSessionAccount = "cookie"
+
+  /// Streams the raw take into a WAV file with a 44-byte header, never loading it whole.
+  static func wrapPcmAsWav(pcmPath: String, wavPath: String) -> Bool {
+    let fileManager = FileManager.default
+    guard let size = (try? fileManager.attributesOfItem(atPath: pcmPath)[.size] as? NSNumber)?.intValue,
+      size > 0, let input = FileHandle(forReadingAtPath: pcmPath)
+    else { return false }
+    defer { try? input.close() }
+    fileManager.createFile(atPath: wavPath, contents: nil)
+    guard let output = FileHandle(forWritingAtPath: wavPath) else { return false }
+    defer { try? output.close() }
+    let rate: UInt32 = 16_000
+    var header = Data()
+    func append<T: FixedWidthInteger>(_ value: T) {
+      withUnsafeBytes(of: value.littleEndian) { header.append(contentsOf: $0) }
+    }
+    header.append(contentsOf: Array("RIFF".utf8))
+    append(UInt32(36 + size))
+    header.append(contentsOf: Array("WAVEfmt ".utf8))
+    append(UInt32(16))
+    append(UInt16(1))
+    append(UInt16(1))
+    append(rate)
+    append(rate * 2)
+    append(UInt16(2))
+    append(UInt16(16))
+    header.append(contentsOf: Array("data".utf8))
+    append(UInt32(size))
+    do {
+      try output.write(contentsOf: header)
+      while let chunk = try input.read(upToCount: 64 * 1024), !chunk.isEmpty {
+        try output.write(contentsOf: chunk)
+      }
+      return true
+    } catch {
+      try? fileManager.removeItem(atPath: wavPath)
+      return false
+    }
+  }
+
+  /// One Keychain item in the App Group's access group, so the keyboard can read the session
+  /// without a new entitlement and the app's other items stay out of its reach. A nil or empty
+  /// cookie deletes it.
+  func writeKeyboardSessionCredential(_ cookie: String?) -> Bool {
+    let item: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: Self.keyboardSessionService,
+      kSecAttrAccount as String: Self.keyboardSessionAccount,
+      kSecAttrAccessGroup as String: appGroupId,
+    ]
+    guard let cookie, !cookie.isEmpty else {
+      let status = SecItemDelete(item as CFDictionary)
+      return status == errSecSuccess || status == errSecItemNotFound
+    }
+    let value: [String: Any] = [
+      kSecValueData as String: Data(cookie.utf8),
+      kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+    ]
+    let updated = SecItemUpdate(item as CFDictionary, value as CFDictionary)
+    if updated == errSecSuccess { return true }
+    guard updated == errSecItemNotFound else { return false }
+    return SecItemAdd(item.merging(value) { _, new in new } as CFDictionary, nil) == errSecSuccess
   }
 }

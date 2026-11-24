@@ -71,6 +71,8 @@ export interface CloudModelDefinition {
   reasoningEffort?: ReasoningEffortCapability;
   /** Lowest thinking setting the model accepts; the registry's data form of the table in gemini.ts. */
   thinkingFloor?: { level: "minimal" | "low" } | { budget: number };
+  /** Anthropic's `thinking` value that turns thinking off, for a model that thinks unasked. */
+  thinkingOff?: { type: "disabled" | "between_tools" };
   legacy?: boolean;
 }
 

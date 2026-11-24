@@ -402,6 +402,64 @@ test("note and folder sync receipts cannot mutate rows under a replaced sign-in"
   assert.equal((await invoke("db-hard-delete-folder", folder.id, generation)).success, true);
 });
 
+test("a pulled delete leaves a note saved since the pull read it, and announces nothing", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const generation = tokenState.generation;
+  await invoke("set-active-account-scope", "account-a", generation);
+  const note = db.saveNote("Synced", "pushed text", "personal").note;
+  db.markNoteSynced(note.id, "cloud-note");
+  const read = db.getNote(note.id);
+  assert.equal(db.updateNote(note.id, { content: "typed since" }).success, true);
+  broadcasts.length = 0;
+
+  const refused = await invoke("db-hard-delete-note", note.id, generation, { expected: read });
+  await new Promise(setImmediate);
+  assert.deepEqual(refused, { success: false, id: note.id, code: "note_changed" });
+  assert.equal(db.getNote(note.id).content, "typed since");
+  assert.deepEqual(
+    broadcasts.filter(([channel]) => channel.startsWith("note-")),
+    []
+  );
+
+  const current = db.getNote(note.id);
+  const deleted = await invoke("db-hard-delete-note", note.id, generation, { expected: current });
+  await new Promise(setImmediate);
+  assert.equal(deleted.success, true);
+  assert.equal(db.getNote(note.id), null);
+  assert.deepEqual(
+    broadcasts.filter(([channel]) => channel === "note-deleted"),
+    [["note-deleted", { id: note.id }]]
+  );
+});
+
+test("a denied delete announces a note it brings back pending, and leaves a synced one to its pull", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
+  const kept = db.saveNote("Recording", "", "meeting").note;
+  db.markNoteSynced(kept.id, "cloud-kept");
+  const untouched = db.saveNote("Untouched", "body", "personal").note;
+  db.markNoteSynced(untouched.id, "cloud-untouched");
+  for (const note of [kept, untouched]) assert.equal(db.deleteNote(note.id).success, true);
+  assert.equal(db.keepTranscriptOnDeletedNote(kept.id, "said after the delete").success, true);
+  const noteEvents = () => broadcasts.filter(([channel]) => channel.startsWith("note-"));
+  broadcasts.length = 0;
+
+  const synced = await invoke("db-restore-note-after-denied-delete", untouched.id);
+  await new Promise(setImmediate);
+  assert.equal(synced.success, true);
+  assert.equal(synced.pending, undefined);
+  assert.deepEqual(noteEvents(), [], "its snapshot pull announces it");
+
+  const pending = await invoke("db-restore-note-after-denied-delete", kept.id);
+  await new Promise(setImmediate);
+  assert.equal(pending.pending, true);
+  const restored = db.getNote(kept.id);
+  assert.equal(restored.transcript, "said after the delete");
+  assert.deepEqual(noteEvents(), [["note-synced", restored]]);
+});
+
 test("placement backfill and tombstone recovery reject stale sign-ins before changing rows", async (t) => {
   const db = setup(t);
   if (!db) return;
