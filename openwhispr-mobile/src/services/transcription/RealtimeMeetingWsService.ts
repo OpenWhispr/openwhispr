@@ -634,7 +634,10 @@ export async function startRealtimeMeetingWs(
     runReconnect();
   };
 
-  const runReconnect = (): void => {
+  // `first` is the session's first connect (a recorded meeting starts capture before any
+  // socket): it only becomes an outage, for the callbacks, once an attempt has failed.
+  const runReconnect = (first = false): void => {
+    let announced = !first;
     withRetry(
       async () => {
         // Bail once stopped so a stop() mid-backoff can't keep opening sockets / fetching
@@ -651,6 +654,11 @@ export async function startRealtimeMeetingWs(
         initialDelay: RECONNECT_INITIAL_DELAY_MS,
         maxDelay: RECONNECT_MAX_DELAY_MS,
         shouldRetry: shouldRetryReconnect,
+        onRetry: () => {
+          if (announced || terminated) return;
+          announced = true;
+          callbacks.onReconnecting?.();
+        },
       },
     )
       .then((ws) => {
@@ -660,7 +668,7 @@ export async function startRealtimeMeetingWs(
           return;
         }
         swapCurrentLeg(ws);
-        callbacks.onReconnected?.();
+        if (announced) callbacks.onReconnected?.();
       })
       .catch((error) => {
         reconnecting = false;
@@ -750,47 +758,60 @@ export async function startRealtimeMeetingWs(
     return stopPromise;
   };
 
-  const firstSecret = await fetchClientSecret();
-
-  // Start capture before opening the socket so speech during connect is buffered and
-  // flushed on open. If the mic fails, abort before any socket exists.
-  frameSub = addPcmFrameListener((frame: PcmFrame) => {
-    enqueuePcm(Buffer.from(frame.audio, 'base64'));
-  });
-  captureSub = addCaptureStateListener((event) => {
-    callbacks.onCaptureState?.({ capturing: event.state === 'capturing', reason: event.reason });
-  });
-  await acquireCaptureLease('meeting-cloud');
-  leaseHeld = true;
-  try {
-    // Only pass options when recording, so the plain start stays exactly as it was.
-    if (opts.recordingUri) {
-      await LivePCMStreaming.start(sampleRate, { recordingUri: opts.recordingUri });
-    } else {
-      await LivePCMStreaming.start(sampleRate);
+  const startCapture = async (): Promise<void> => {
+    frameSub = addPcmFrameListener((frame: PcmFrame) => {
+      enqueuePcm(Buffer.from(frame.audio, 'base64'));
+    });
+    captureSub = addCaptureStateListener((event) => {
+      callbacks.onCaptureState?.({ capturing: event.state === 'capturing', reason: event.reason });
+    });
+    await acquireCaptureLease('meeting-cloud');
+    leaseHeld = true;
+    try {
+      // Only pass options when recording, so the plain start stays exactly as it was.
+      if (opts.recordingUri) {
+        await LivePCMStreaming.start(sampleRate, { recordingUri: opts.recordingUri });
+      } else {
+        await LivePCMStreaming.start(sampleRate);
+      }
+    } catch (error) {
+      frameSub?.remove();
+      frameSub = null;
+      captureSub?.remove();
+      captureSub = null;
+      releaseLease();
+      throw error;
     }
-  } catch (error) {
-    frameSub?.remove();
-    frameSub = null;
-    captureSub?.remove();
-    captureSub = null;
-    releaseLease();
-    throw error;
+    sessionStartedAt = Date.now();
+    flushTimer = setInterval(flush, FLUSH_INTERVAL_MS);
+  };
+
+  if (opts.recordingUri) {
+    // A recorded meeting must not depend on the network to start: the file takes the audio
+    // from the first frame, and a token or socket that can't be had yet is the first outage.
+    // The session is returned at once so a Stop before any socket still finds it; whatever
+    // was captured by then is a dropped window the recording covers.
+    await startCapture();
+    reconnecting = true;
+    runReconnect(true);
+  } else {
+    const firstSecret = await fetchClientSecret();
+
+    // Start capture before opening the socket so speech during connect is buffered and
+    // flushed on open. If the mic fails, abort before any socket exists.
+    await startCapture();
+
+    try {
+      currentWs = await openLeg(firstSecret);
+    } catch (error) {
+      teardownCapture();
+      throw error;
+    }
+
+    legStartedAt = Date.now();
+    flush(); // drain the cold-start buffer
+    scheduleRotation();
   }
-
-  sessionStartedAt = Date.now();
-  flushTimer = setInterval(flush, FLUSH_INTERVAL_MS);
-
-  try {
-    currentWs = await openLeg(firstSecret);
-  } catch (error) {
-    teardownCapture();
-    throw error;
-  }
-
-  legStartedAt = Date.now();
-  flush(); // drain the cold-start buffer
-  scheduleRotation();
 
   return {
     stop,

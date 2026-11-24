@@ -1406,3 +1406,152 @@ describe('startRealtimeMeetingWs — word limit on reconnect', () => {
     expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('startRealtimeMeetingWs — a meeting that starts offline', () => {
+  // sampleRate 100 → 200 bytes a second, so a 200-byte frame is 1000 ms of capture;
+  // the outage buffer holds 4000 bytes (20 s).
+  const SECOND = new Array(200).fill(6);
+  const recordingUri = 'file:///documents/meeting-7.wav';
+
+  it('records to the file and reports the whole capture as dropped when it never connects', async () => {
+    (api.post as jest.Mock).mockRejectedValue(new Error('Network request failed'));
+    const callbacks = { onReconnecting: jest.fn(), onError: jest.fn(), onClose: jest.fn() };
+
+    const session = await startRealtimeMeetingWs({ sampleRate: 100, recordingUri }, callbacks, {
+      wsFactory,
+    });
+    await flushMicro();
+
+    expect(LivePCMStreaming.start).toHaveBeenCalledWith(100, { recordingUri });
+    expect(FakeWebSocket.instances).toHaveLength(0);
+    expect(callbacks.onReconnecting).toHaveBeenCalledTimes(1);
+
+    for (let i = 0; i < 30; i++) emitFrame(SECOND); // 30 s with no socket
+    await jest.advanceTimersByTimeAsync(40_000); // the loop keeps trying; nothing ends the session
+    expect(LivePCMStreaming.stop).not.toHaveBeenCalled();
+    expect(callbacks.onClose).not.toHaveBeenCalled();
+
+    await session.stop();
+
+    expect(session.capturedMs()).toBe(30_000);
+    expect(session.droppedWindows()).toEqual([{ startMs: 0, endMs: 30_000 }]);
+    expect(session.utterances()).toEqual([]);
+    expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
+    expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for the network before asking for a token', async () => {
+    (Network.getNetworkStateAsync as jest.Mock).mockResolvedValue({ isConnected: false });
+
+    const session = await startRealtimeMeetingWs({ recordingUri }, {}, { wsFactory });
+    await jest.advanceTimersByTimeAsync(20_000);
+
+    expect(LivePCMStreaming.start).toHaveBeenCalledTimes(1);
+    expect(api.post).not.toHaveBeenCalled();
+    await session.stop();
+  });
+
+  it('treats a first leg that never opens as the first outage', async () => {
+    const callbacks = { onReconnecting: jest.fn(), onReconnected: jest.fn(), onClose: jest.fn() };
+    const session = await startRealtimeMeetingWs({ recordingUri }, callbacks, { wsFactory });
+    await flushMicro();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    await jest.advanceTimersByTimeAsync(CONNECT_TIMEOUT_MS + 1);
+    expect(callbacks.onReconnecting).toHaveBeenCalledTimes(1);
+    expect(LivePCMStreaming.stop).not.toHaveBeenCalled();
+
+    await jest.advanceTimersByTimeAsync(2000); // the retry's backoff
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    lastLeg().open();
+    await flushMicro();
+
+    expect(callbacks.onReconnected).toHaveBeenCalledTimes(1);
+    expect(callbacks.onClose).not.toHaveBeenCalled();
+    const stopped = session.stop();
+    lastLeg().emit(commitEmpty);
+    await stopped;
+  });
+
+  it('still ends the session when the first token is refused', async () => {
+    (api.post as jest.Mock).mockRejectedValue(
+      Object.assign(new Error('Forbidden'), { status: 403 }),
+    );
+    const callbacks = { onError: jest.fn(), onClose: jest.fn(), onReconnecting: jest.fn() };
+
+    await startRealtimeMeetingWs({ recordingUri }, callbacks, { wsFactory });
+    await flushMicro();
+    await jest.advanceTimersByTimeAsync(60_000);
+    await flushMicro();
+
+    // A 4xx is deterministic: it is not retried and it is not an outage.
+    expect(api.post as jest.Mock).toHaveBeenCalledTimes(1);
+    expect(callbacks.onReconnecting).not.toHaveBeenCalled();
+    expect(callbacks.onError).toHaveBeenCalledTimes(1);
+    expect(callbacks.onClose).toHaveBeenCalledTimes(1);
+    expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
+    expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
+    expect(FakeWebSocket.instances).toHaveLength(0);
+  });
+
+  it('connects later with the leg on the capture clock', async () => {
+    (api.post as jest.Mock).mockRejectedValueOnce(new Error('Network request failed'));
+    const callbacks = { onReconnecting: jest.fn(), onReconnected: jest.fn() };
+    const session = await startRealtimeMeetingWs({ sampleRate: 100, recordingUri }, callbacks, {
+      wsFactory,
+    });
+    await flushMicro();
+    for (let i = 0; i < 25; i++) emitFrame(SECOND); // 25 s before any socket: 5 s fall off the buffer
+
+    await jest.advanceTimersByTimeAsync(1000); // the first retry asks for a token again
+    await flushMicro();
+    const leg = lastLeg();
+    leg.open();
+    await flushMicro();
+
+    expect(callbacks.onReconnected).toHaveBeenCalledTimes(1);
+    // The 20 s still buffered (5000–25000 ms) reach the leg, whose clock therefore starts at 5 s.
+    expect(leg.appendedBytes()).toBe(4000);
+    leg.emit({
+      type: 'input_audio_buffer.speech_started',
+      item_id: 'a',
+      audio_start_ms: 1_000,
+    });
+    leg.emit(completed('a', 'hello'));
+    expect(session.utterances().map((u) => u.startMs)).toEqual([6_000]);
+    expect(session.droppedWindows()).toEqual([{ startMs: 0, endMs: 5_000 }]);
+
+    // From here it is an ordinary session: new audio goes straight to the leg.
+    emitFrame(SECOND);
+    await jest.advanceTimersByTimeAsync(FLUSH_MS + 10);
+    expect(leg.appendedBytes()).toBe(4200);
+    const stopped = session.stop();
+    leg.emit(commitEmpty);
+    await stopped;
+  });
+
+  it('opens the first leg without reporting a reconnect when the network is fine', async () => {
+    const callbacks = { onReconnecting: jest.fn(), onReconnected: jest.fn() };
+    const { session, leg1 } = await boot(callbacks, { recordingUri });
+    await flushMicro();
+
+    emitFrame([1, 2, 3, 4]);
+    await jest.advanceTimersByTimeAsync(FLUSH_MS + 10);
+
+    expect(leg1.appendedBytes()).toBe(4);
+    expect(callbacks.onReconnecting).not.toHaveBeenCalled();
+    expect(callbacks.onReconnected).not.toHaveBeenCalled();
+    const stopped = session.stop();
+    leg1.emit(commitEmpty);
+    await stopped;
+  });
+
+  it('keeps the token-first start when there is no recording file', async () => {
+    (api.post as jest.Mock).mockRejectedValue(new Error('Network request failed'));
+
+    await expect(startRealtimeMeetingWs({}, {}, { wsFactory })).rejects.toThrow(
+      'Network request failed',
+    );
+    expect(LivePCMStreaming.start).not.toHaveBeenCalled();
+  });
+});
