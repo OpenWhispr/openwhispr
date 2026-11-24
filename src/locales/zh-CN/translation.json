@@ -640,6 +640,7 @@
       "failed": "无法检查访问权限。",
       "microphone": "在“麦克风”中打开 OpenWhispr。",
       "accessibility": "将 OpenWhispr 拖入“辅助功能”，然后打开开关。",
+      "selectApp": "在“隐私与安全性”中打开“System & App Protection Override”，然后选择 OpenWhispr。",
       "systemAudio": "在“仅系统音频录制”中打开 OpenWhispr。",
       "screenContext": "将 OpenWhispr 拖入“屏幕与系统音频录制”，然后打开开关。",
       "settings": "打开设置",

@@ -146,3 +146,15 @@ test("post-event preflight is quiet and only accepts an explicit grant from the 
   const olderHelper = load({ execFile: report({ settings: null }) });
   assert.equal(await olderHelper.queryPostEventAccess(false), false);
 });
+
+test("a post-event helper that cannot answer reports unknown, not denied", async () => {
+  const timedOut = load({
+    execFile: (callback) => callback(new Error("timed out"), "POST_EVENT_ALLOWED\n", ""),
+  });
+  assert.equal(await timedOut.queryPostEventAccess(false), null);
+  assert.ok(timedOut.calls[0].options.timeout < 1000);
+
+  const missing = load({ binary: null, execFile: succeed("POST_EVENT_ALLOWED\n") });
+  assert.equal(await missing.queryPostEventAccess(true), null);
+  assert.equal(missing.calls.length, 0);
+});

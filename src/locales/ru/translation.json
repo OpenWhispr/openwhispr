@@ -640,6 +640,7 @@
       "failed": "Не удалось проверить доступ.",
       "microphone": "Включите OpenWhispr в разделе «Микрофон».",
       "accessibility": "Перетащите OpenWhispr в «Универсальный доступ» и включите его.",
+      "selectApp": "В разделе «Конфиденциальность и безопасность» откройте System & App Protection Override и выберите OpenWhispr.",
       "systemAudio": "Включите OpenWhispr в разделе «Только запись системного аудио».",
       "screenContext": "Перетащите OpenWhispr в «Запись экрана и системного аудио» и включите его.",
       "settings": "Настройки",

@@ -4,7 +4,10 @@
 
 // The overlay sits inside the System Settings window, this far above its bottom
 // edge; SCREEN_MARGIN is the gutter it keeps from the bottom of the screen when
-// it falls back or when the inset spot would land off screen.
+// it falls back or when the inset spot would land off screen. keepSettingsClear
+// prefers a spot beside the window instead, for steps where the user works
+// through the whole pane; with no room beside it, the inset spot still applies
+// so the instruction is never lost.
 const BOTTOM_INSET = 20;
 const SCREEN_MARGIN = 24;
 
@@ -24,8 +27,7 @@ function computeGuideBounds({ settingsBounds, workArea, size, keepSettingsClear 
       }
     : { x: workArea.x + (workArea.width - width) / 2, y: lowestTop };
 
-  if (keepSettingsClear) {
-    if (!settingsBounds) return null;
+  if (keepSettingsClear && settingsBounds) {
     const x = Math.round(clamp(anchor.x, workArea.x, workArea.x + workArea.width - width));
     const y = Math.round(
       clamp(settingsBounds.y, workArea.y, workArea.y + workArea.height - height)
@@ -43,7 +45,7 @@ function computeGuideBounds({ settingsBounds, workArea, size, keepSettingsClear 
         candidate.x + width <= workArea.x + workArea.width &&
         candidate.y + height <= workArea.y + workArea.height
     );
-    return clear ? { ...clear, width, height } : null;
+    if (clear) return { ...clear, width, height };
   }
 
   return {

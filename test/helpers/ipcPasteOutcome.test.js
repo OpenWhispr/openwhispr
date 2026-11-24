@@ -313,6 +313,13 @@ test("macOS 27.3 opens Privacy & Security and requests input-posting access", as
     "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension",
     "request",
   ]);
+
+  // Only the app-control grant moved to the picker; other panes keep their links.
+  actions.length = 0;
+  assert.deepEqual(await handlers.get("open-microphone-settings")(), { success: true });
+  assert.deepEqual(actions, [
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
+  ]);
 });
 
 test("paste-text identifies a missing-Accessibility fallback without turning it into an error", async () => {

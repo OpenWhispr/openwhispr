@@ -474,7 +474,18 @@ test("development guides disable dragging and owner teardown closes the helper",
   assert.equal(setup.owner.listenerCount("closed"), 0);
 });
 
-test("macOS 27.3 directs app-control grants to the picker without covering Settings", async () => {
+test("before macOS 27.3 a dragged guide still returns to the Settings window", async () => {
+  const setup = fixture({ settingsState: () => ({ settings: anchored, authPrompt: false }) });
+  const guide = await openGuide(setup);
+  const placed = guide.getBounds();
+
+  guide.setBounds({ ...placed, x: 40, y: 40 });
+  await setup.manager.poll();
+
+  assert.deepEqual(guide.getBounds(), placed);
+});
+
+test("macOS 27.3 directs app-control grants to the picker and keeps Settings clear when it can", async () => {
   let settings = { x: 300, y: 200, width: 750, height: 500 };
   const setup = fixture({
     systemVersion: "27.3",
@@ -487,13 +498,22 @@ test("macOS 27.3 directs app-control grants to the picker without covering Setti
   assert.equal(guide.dragged, undefined);
   assert.ok(guide.boundsAtShow.y >= settings.y + settings.height);
 
+  // With no room beside a Settings window that fills the display, the guide
+  // stays up in its usual spot: hiding it would leave no instruction at all.
   settings = { x: 0, y: 0, width: 1440, height: 900 };
   await setup.manager.poll();
-  assert.equal(guide.hidden, true);
+  assert.equal(guide.isVisible(), true);
+  assert.ok(guide.getBounds().y + guide.getBounds().height <= settings.height);
 
   settings = { x: 300, y: 200, width: 750, height: 500 };
   await setup.manager.poll();
-  assert.equal(guide.hidden, false);
+  assert.ok(guide.getBounds().y >= settings.y + settings.height);
+
+  // Dragged off whatever it covered, the picker guide stays where it was put.
+  const dragged = { ...guide.getBounds(), x: 40, y: 40 };
+  guide.setBounds(dragged);
+  await setup.manager.poll();
+  assert.deepEqual(guide.getBounds(), dragged);
 
   await setup.manager.open(setup.event(setup.owner), { ...state, permission: "screen-context" });
   assert.equal(setup.manager.snapshot().selectApp, false);

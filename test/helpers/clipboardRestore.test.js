@@ -80,6 +80,7 @@ function loadClipboardManager({
   spawnSync,
   cosmicAppId,
   accessibility = true,
+  postEventAccess,
   realModifierWait = false,
   realUinputAccess = false,
 } = {}) {
@@ -93,6 +94,9 @@ function loadClipboardManager({
           isTrustedAccessibilityClient: () => accessibility,
         },
       };
+    }
+    if (request === "./settingsWindowState" && postEventAccess) {
+      return { queryPostEventAccess: postEventAccess };
     }
     if (request === "./cosmicToplevel" && cosmicAppId !== undefined) {
       return { getCosmicActiveAppId: async () => cosmicAppId };
@@ -2634,6 +2638,94 @@ for (const [label, codes, commands] of [
     assert.equal(fakeClipboard.text, "dictated text");
   });
 }
+
+function onMacOS(t, systemVersion) {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  const version = process.getSystemVersion;
+  Object.defineProperty(process, "platform", { value: "darwin" });
+  process.getSystemVersion = () => systemVersion;
+  t.after(() => {
+    Object.defineProperty(process, "platform", platform);
+    if (version) process.getSystemVersion = version;
+    else delete process.getSystemVersion;
+  });
+}
+
+test("macOS 27.3 accepts input-posting access for pasting and keeps the last verdict when the helper cannot answer", async (t) => {
+  onMacOS(t, "27.3");
+  const answers = [true, null, false];
+  const requests = [];
+  const TestClipboardManager = loadClipboardManager({
+    accessibility: false,
+    postEventAccess: async (request) => {
+      requests.push(request);
+      return answers.shift();
+    },
+  });
+  const manager = new TestClipboardManager();
+
+  assert.equal(await manager.checkAccessibilityPermissions(true), true);
+  assert.equal(await manager.checkAccessibilityPermissions(true), true);
+  assert.equal(await manager.checkAccessibilityPermissions(true), false);
+  assert.deepEqual(requests, [false, false, false]);
+});
+
+test("the first input-posting check after launch is retried once when the helper cannot answer", async (t) => {
+  onMacOS(t, "27.3");
+  const answers = [null, true, null, null];
+  let requests = 0;
+  const TestClipboardManager = loadClipboardManager({
+    accessibility: false,
+    postEventAccess: async () => {
+      requests += 1;
+      return answers.shift();
+    },
+  });
+  const manager = new TestClipboardManager();
+
+  assert.equal(await manager.checkAccessibilityPermissions(true), true);
+  assert.equal(requests, 2);
+  // With a verdict on record a silent helper costs one spawn, not two.
+  assert.equal(await manager.checkAccessibilityPermissions(true), true);
+  assert.equal(requests, 3);
+
+  const unanswered = new TestClipboardManager();
+  assert.equal(await unanswered.checkAccessibilityPermissions(true), false);
+});
+
+test("before macOS 27.3 the paste permission is assistive access alone, with no helper spawned", async (t) => {
+  onMacOS(t, "27.2");
+  let queried = false;
+  const TestClipboardManager = loadClipboardManager({
+    accessibility: false,
+    postEventAccess: async () => (queried = true),
+  });
+
+  assert.equal(await new TestClipboardManager().checkAccessibilityPermissions(true), false);
+  assert.equal(queried, false);
+});
+
+test("a failed paste under a macOS 27.3 picker grant is not handed to osascript, which that grant does not cover", async (t) => {
+  onMacOS(t, "27.3");
+  resetClipboard({ text: "previous clipboard" });
+  const calls = [];
+  const TestClipboardManager = loadClipboardManager({
+    accessibility: false,
+    spawn: createReadReportingSpawn(calls, { codes: [1] }),
+  });
+  const manager = new TestClipboardManager();
+  manager.resolveFastPasteBinary = () => FAST_PASTE;
+  manager.fastPastePath = FAST_PASTE;
+
+  await assert.rejects(manager.pasteMacOS(ORIGINAL, { expectedClipboardText: "dictated text" }));
+
+  assert.deepEqual(
+    calls.map((call) => call.command),
+    [FAST_PASTE]
+  );
+  assert.equal(manager.fastPastePath, FAST_PASTE);
+  assert.equal(fakeClipboard.text, "dictated text");
+});
 
 test("a binary that never reports ⌘V is not retried, since its report may be unread", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });

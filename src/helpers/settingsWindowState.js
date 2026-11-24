@@ -1,6 +1,9 @@
 const { execFile } = require("child_process");
 const { resolveBundledBinary } = require("./binaryResolver");
 
+// Reads the System Settings window state and, on macOS 27.3 and later, the
+// app's input-posting access: both come from the one bundled, signed helper.
+//
 // The guide polls this while the overlay is open, so a hung helper must never
 // hold it up: the query is cheap enough that a short timeout is plenty.
 const TIMEOUT_MS = 400;
@@ -23,16 +26,19 @@ function isSettingsWindowStateAvailable() {
   return helperBinary() !== null;
 }
 
+// true or false as the helper reports it, or null when it could not answer
+// (missing, timed out, failed). null means unknown, never "denied": the paste
+// path asks before every paste, and one slow spawn must not cost a grant.
 function queryPostEventAccess(request) {
   const binary = helperBinary();
-  if (!binary) return Promise.resolve(false);
+  if (!binary) return Promise.resolve(null);
 
   const flag = request ? "--request-post-event-access" : "--check-post-event-access";
   const timeout = request ? PERMISSION_REQUEST_TIMEOUT_MS : TIMEOUT_MS;
   return new Promise((resolve) => {
     execFile(binary, [flag], { timeout }, (error, stdout) => {
       // Older copies of the helper respond with window state, even for unknown flags.
-      resolve(!error && stdout.trim() === "POST_EVENT_ALLOWED");
+      resolve(error ? null : stdout.trim() === "POST_EVENT_ALLOWED");
     });
   });
 }

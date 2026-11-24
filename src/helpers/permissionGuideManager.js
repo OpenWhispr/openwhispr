@@ -43,6 +43,7 @@ class PermissionGuideManager {
     this.wait = wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.sawSettings = false;
     this.steppedAside = false;
+    this.placedAt = null;
     this.pollTimer = null;
     // The onboarding document that owns this guide is gone: closed, crashed, or
     // navigated away (log out reloads it, the OAuth refresh loads a new URL).
@@ -143,8 +144,9 @@ class PermissionGuideManager {
     return screen.getDisplayMatching(rect).workArea;
   }
 
-  // The app picker needs the whole Settings window, so its guide only shows
-  // when there is room outside it.
+  // Anchored inside the System Settings window, falling back to the bottom of
+  // the display while that window has not appeared. The app picker needs the
+  // whole Settings window, so its guide moves beside it when there is room.
   applyBounds(window, settings) {
     // Keyed off the dialog, not the onboarding window: System Settings can open
     // on a different display, and clamping to the onboarding window's screen
@@ -155,10 +157,14 @@ class PermissionGuideManager {
       size: GUIDE_SIZE,
       keepSettingsClear: this.usesAppPicker(),
     });
-    if (!bounds) return false;
     const current = window.getBounds();
+    // With no room beside Settings the picker guide overlaps the pane, so once
+    // the user drags it off whatever it covers, it stays where they put it.
+    const moved = this.placedAt && (current.x !== this.placedAt.x || current.y !== this.placedAt.y);
+    if (moved && this.usesAppPicker()) return;
     if (current.x !== bounds.x || current.y !== bounds.y) window.setBounds(bounds);
-    return true;
+    // Read back, not assumed: macOS may adjust the spot it was asked for.
+    this.placedAt = window.getBounds();
   }
 
   async waitForSettings(window) {
@@ -182,16 +188,15 @@ class PermissionGuideManager {
     // overlay over a transient hiccup.
     if (!state || this.window !== window || window.isDestroyed()) return;
 
-    let fits = !this.usesAppPicker();
     if (state.settings) {
       this.sawSettings = true;
-      fits = this.applyBounds(window, state.settings);
+      this.applyBounds(window, state.settings);
     } else if (this.sawSettings && !state.settingsRunning) {
       this.close(true, true);
       return;
     }
 
-    const aside = !fits || this.shouldStepAside(state);
+    const aside = this.shouldStepAside(state);
     if (aside === this.steppedAside) return;
     this.steppedAside = aside;
     if (aside) window.hide();
@@ -304,7 +309,7 @@ class PermissionGuideManager {
       const settingsState = await this.waitForSettings(window);
       if (this.window !== window || window.isDestroyed()) return false;
       if (settingsState?.settings) this.sawSettings = true;
-      const fits = this.applyBounds(window, settingsState?.settings ?? null);
+      this.applyBounds(window, settingsState?.settings ?? null);
 
       if (app.isPackaged) {
         this.bundlePath = path.resolve(app.getPath("exe"), "../../..");
@@ -322,7 +327,7 @@ class PermissionGuideManager {
       }
       if (this.window !== window || window.isDestroyed()) return false;
       window.webContents.send("permission-guide-state-changed", this.snapshot());
-      this.steppedAside = !fits || Boolean(settingsState && this.shouldStepAside(settingsState));
+      this.steppedAside = Boolean(settingsState && this.shouldStepAside(settingsState));
       if (!this.steppedAside) window.showInactive();
       this.startPolling();
       return true;
@@ -347,6 +352,7 @@ class PermissionGuideManager {
     this.icon = null;
     this.sawSettings = false;
     this.steppedAside = false;
+    this.placedAt = null;
     if (owner) owner.removeListener("closed", this.ownerGone);
     if (ownerContents) {
       ownerContents.removeListener("render-process-gone", this.ownerGone);

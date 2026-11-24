@@ -4421,6 +4421,7 @@
       "failed": "تعذر التحقق من الوصول.",
       "microphone": "فعّل OpenWhispr ضمن الميكروفون.",
       "accessibility": "اسحب OpenWhispr إلى تسهيلات الاستخدام، ثم فعّله.",
+      "selectApp": "في «الخصوصية والأمن»، افتح System & App Protection Override واختر OpenWhispr.",
       "systemAudio": "فعّل OpenWhispr ضمن تسجيل صوت النظام فقط.",
       "screenContext": "اسحب OpenWhispr إلى تسجيل الشاشة وصوت النظام، ثم فعّله.",
       "settings": "فتح الإعدادات",

@@ -640,6 +640,7 @@
       "failed": "無法檢查存取權限。",
       "microphone": "在「麥克風」中開啟 OpenWhispr。",
       "accessibility": "將 OpenWhispr 拖入「輔助使用」，然後開啟開關。",
+      "selectApp": "在「隱私權與安全性」中打開「System & App Protection Override」，然後選擇 OpenWhispr。",
       "systemAudio": "在「僅系統音訊錄製」中開啟 OpenWhispr。",
       "screenContext": "將 OpenWhispr 拖入「螢幕與系統音訊錄製」，然後開啟開關。",
       "settings": "開啟設定",

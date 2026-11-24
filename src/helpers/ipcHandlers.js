@@ -8770,7 +8770,7 @@ class IPCHandlers {
         classifySnapshot: (snapshot) => remoteHelpPolicyState(snapshot, app.getVersion()),
         fallbackOnUnavailable: true,
       }),
-      getBasics: () => ({
+      getBasics: async () => ({
         // checkAccess reads the cached permission verdict; it never requests access.
         systemAudioPermission:
           process.platform === "darwin"
@@ -8784,7 +8784,7 @@ class IPCHandlers {
             : systemPreferences.getMediaAccessStatus("microphone"),
         accessibilityPermission:
           process.platform === "darwin"
-            ? systemPreferences.isTrustedAccessibilityClient(false)
+            ? (await this.clipboardManager.checkAccessibilityPermissions(true))
               ? "granted"
               : "not-granted"
             : "not-applicable",

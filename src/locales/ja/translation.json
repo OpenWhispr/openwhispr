@@ -640,6 +640,7 @@
       "failed": "アクセスを確認できませんでした。",
       "microphone": "「マイク」でOpenWhisprをオンにしてください。",
       "accessibility": "OpenWhisprを「アクセシビリティ」にドラッグしてオンにしてください。",
+      "selectApp": "「プライバシーとセキュリティ」で「System & App Protection Override」を開き、OpenWhisprを選択してください。",
       "systemAudio": "「システムオーディオの録音のみ」でOpenWhisprをオンにしてください。",
       "screenContext": "OpenWhisprを「画面収録とシステムオーディオ録音」にドラッグしてオンにしてください。",
       "settings": "設定を開く",
