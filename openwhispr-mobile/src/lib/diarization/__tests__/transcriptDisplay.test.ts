@@ -5,6 +5,7 @@ import {
   getSpeakerDisplayColor,
   getSpeakerDisplayName,
   groupTranscriptSegments,
+  UNLABELED_BLOCK_MAX_MS,
 } from '../transcriptDisplay';
 
 const speaker = (overrides: Partial<Speaker>): Speaker =>
@@ -204,5 +205,71 @@ describe('transcriptDisplay', () => {
         '[0:02] Alice: I will review it.\n\n' +
         '[0:04] Speaker 2: I will publish it.',
     );
+  });
+});
+
+describe('groupTranscriptSegments unlabeled blocks', () => {
+  it('starts a new unlabeled block after a 2 s pause', () => {
+    const blocks = groupTranscriptSegments(
+      [
+        segment({ id: 1, startMs: 0, endMs: 3_000, text: 'one' }),
+        segment({ id: 2, startMs: 3_500, endMs: 6_000, text: 'two' }),
+        segment({ id: 3, startMs: 8_000, endMs: 9_000, text: 'three' }),
+      ],
+      [],
+    );
+    expect(blocks.map((block) => block.timestamp)).toEqual(['0:00', '0:08']);
+    expect(blocks[0].text).toBe('one two');
+  });
+
+  it('starts a new unlabeled block once one has run for a minute', () => {
+    const segments = Array.from({ length: 13 }, (_, index) =>
+      segment({
+        id: index + 1,
+        startMs: index * 10_000,
+        endMs: (index + 1) * 10_000,
+        text: `s${index}`,
+      }),
+    );
+    const blocks = groupTranscriptSegments(segments, []);
+    expect(blocks.map((block) => block.timestamp)).toEqual(['0:00', '1:00', '2:00']);
+    expect(UNLABELED_BLOCK_MAX_MS).toBe(60_000);
+  });
+
+  it('still merges consecutive segments of a labeled speaker', () => {
+    const segments = Array.from({ length: 13 }, (_, index) =>
+      segment({
+        id: index + 1,
+        startMs: index * 20_000,
+        endMs: index * 20_000 + 1_000,
+        text: `s${index}`,
+        speakerLabel: 'SPEAKER_00',
+      }),
+    );
+    const blocks = groupTranscriptSegments(segments, [speaker({})]);
+    expect(blocks).toHaveLength(1);
+  });
+
+  it('keeps unlabeled segments with identical fallback timings in one block', () => {
+    const blocks = groupTranscriptSegments(
+      [
+        segment({ id: 1, startMs: 0, endMs: 0, text: 'one' }),
+        segment({ id: 2, startMs: 0, endMs: 0, text: 'two' }),
+        segment({ id: 3, startMs: 0, endMs: 0, text: 'three' }),
+      ],
+      [],
+    );
+    expect(blocks).toHaveLength(1);
+  });
+
+  it('keeps an overlapping unlabeled segment in the same block', () => {
+    const blocks = groupTranscriptSegments(
+      [
+        segment({ id: 1, startMs: 0, endMs: 5_000, text: 'one' }),
+        segment({ id: 2, startMs: 4_000, endMs: 6_000, text: 'two' }),
+      ],
+      [],
+    );
+    expect(blocks).toHaveLength(1);
   });
 });

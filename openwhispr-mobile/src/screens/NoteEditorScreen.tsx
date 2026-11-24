@@ -1527,6 +1527,7 @@ export default function NoteEditorScreen({
             ) : (
               <SpeakerTranscript
                 blocks={transcriptBlocks}
+                showSpeakerNames={speakers.length > 0}
                 selectedSpeakerId={activeSpeakerId}
                 selectable
                 onSpeakerPress={handleSpeakerPress}
@@ -1643,6 +1644,7 @@ export default function NoteEditorScreen({
       <TranscriptSheet
         visible={transcriptSheetVisible}
         blocks={transcriptBlocks}
+        showSpeakerNames={speakers.length > 0}
         selectedSpeakerId={activeSpeakerId}
         shareText={transcriptText}
         onSpeakerPress={handleSpeakerPress}

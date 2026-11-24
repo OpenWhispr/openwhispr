@@ -12,6 +12,12 @@ export interface BuildActionSystemPromptInput {
   sharedDictionary?: string[];
 }
 
+// Without an explicit rule the English prompt pulls non-English notes into English.
+export const MEETING_OUTPUT_LANGUAGE_RULE =
+  '- Write the notes in the language the meeting was held in, including the section headings: translate the heading names above into that language. Never translate the content into English.';
+export const NOTE_OUTPUT_LANGUAGE_RULE =
+  '- Write in the language the notes are written in. Never translate them into English.';
+
 const BASE_SYSTEM_PROMPT = `You are a note enhancement assistant. The user will provide raw notes - possibly voice-transcribed, rough, or unstructured. Your job is to clean them up according to the instructions below while preserving all original meaning and information. Output clean markdown.
 
 FORMAT RULES (strict):
@@ -19,6 +25,7 @@ FORMAT RULES (strict):
 - Do NOT use tables, horizontal rules, or block quotes.
 - Do NOT list or guess participant names/roles.
 - Keep the tone professional and concise. Bias toward brevity.
+${NOTE_OUTPUT_LANGUAGE_RULE}
 
 Instructions: `;
 
@@ -34,6 +41,7 @@ FORMAT RULES (strict):
 - Use clear section headings: ## Key Discussion Points, ## Decisions Made, ## Action Items, ## Follow-ups.
 - Omit any section that has no content.
 - Under Action Items, use checkboxes (\`- [ ]\`). Attribute an item only when a visible speaker name or distinct speaker label clearly owns it. Keep clear actions from unlabeled lines, but do not assign them an owner.
+${MEETING_OUTPUT_LANGUAGE_RULE}
 
 CONTENT RULES:
 - Preserve important quotes or specific commitments verbatim when they carry meaning.

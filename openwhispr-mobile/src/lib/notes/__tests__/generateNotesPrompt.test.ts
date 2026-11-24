@@ -1,4 +1,8 @@
-import { buildActionSystemPrompt } from '@/lib/notes/generateNotesPrompt';
+import {
+  buildActionSystemPrompt,
+  MEETING_OUTPUT_LANGUAGE_RULE,
+  NOTE_OUTPUT_LANGUAGE_RULE,
+} from '@/lib/notes/generateNotesPrompt';
 
 describe('buildActionSystemPrompt', () => {
   it('keeps calendar participants context-only for default meeting notes generation', () => {
@@ -38,5 +42,31 @@ describe('buildActionSystemPrompt shared dictionary', () => {
     );
     expect(personalOnly).not.toContain('Shared team dictionary');
     expect(buildActionSystemPrompt({ ...input, sharedDictionary: [] })).toBe(personalOnly);
+  });
+});
+
+describe('buildActionSystemPrompt output language', () => {
+  it('tells the meeting prompt to keep the meeting language', () => {
+    const prompt = buildActionSystemPrompt({
+      actionPrompt: 'x',
+      inputKind: 'meeting-transcript',
+      isDefaultGenerateNotesAction: true,
+    });
+    expect(prompt).toContain(MEETING_OUTPUT_LANGUAGE_RULE);
+    expect(prompt.indexOf(MEETING_OUTPUT_LANGUAGE_RULE)).toBeLessThan(
+      prompt.indexOf('CONTENT RULES:'),
+    );
+  });
+
+  it('tells the plain-note prompt to keep the note language', () => {
+    const prompt = buildActionSystemPrompt({
+      actionPrompt: 'x',
+      inputKind: 'plain-note',
+      isDefaultGenerateNotesAction: false,
+    });
+    expect(prompt).toContain(NOTE_OUTPUT_LANGUAGE_RULE);
+    expect(prompt.indexOf(NOTE_OUTPUT_LANGUAGE_RULE)).toBeLessThan(
+      prompt.indexOf('Instructions: '),
+    );
   });
 });
