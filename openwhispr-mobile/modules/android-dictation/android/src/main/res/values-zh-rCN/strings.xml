@@ -26,8 +26,8 @@
   <string name="ow_status_no_speech">没听清</string>
   <string name="ow_status_offline">没有网络</string>
   <string name="ow_status_retry">重试</string>
-  <string name="ow_status_out_of_words">字数已用完</string>
-  <string name="ow_status_see_plans">查看方案</string>
+  <string name="ow_status_out_of_words">本周云端字数已用完</string>
+  <string name="ow_status_see_plans">升级到 Pro</string>
   <string name="ow_status_mic_off">麦克风已关闭</string>
   <string name="ow_status_allow">允许</string>
   <string name="ow_status_copied">已复制</string>

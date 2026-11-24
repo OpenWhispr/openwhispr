@@ -120,8 +120,8 @@ describe.each([
   it('draws the plan title, body and note from the palette', () => {
     useAuthStore.setState({ user: null, sessionCookie: null } as never);
     inTheme(scheme, () => <PlanContent />);
-    expect(textColour('proTitle')).toBe(tokens.ink);
-    expect(textColour('proNote')).toBe(tokens.secondary);
+    expect(textColour('signInTitle')).toBe(tokens.ink);
+    expect(textColour('signInBody')).toBe(tokens.secondary);
   });
 
   it('draws the licence rows on the page canvas', () => {

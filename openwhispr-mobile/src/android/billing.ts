@@ -10,7 +10,7 @@ import { withRevenueCatUser } from '@/lib/revenuecat.android';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';
 import { Sentry } from '@/lib/sentry';
 
-type BillingStatus = 'checking' | 'payment-pending' | 'access-pending' | 'idle';
+export type BillingStatus = 'checking' | 'payment-pending' | 'access-pending' | 'idle';
 const STATUS_KEY = 'android-billing-status-v1';
 function savedStatus(): Record<string, BillingStatus> {
   try {
@@ -25,12 +25,28 @@ function savedStatus(): Record<string, BillingStatus> {
     return {};
   }
 }
-export const useAndroidBillingStatus = create<{ accounts: Record<string, BillingStatus> }>(() => ({
+/**
+ * `since`: when an account's purchase started waiting for access in this run of the app (Plan &
+ * billing's "Unlocking Pro" turns into "Pro is on its way" after ~30 s). A wait restored from
+ * storage has none, so it reads as the longer wait at once.
+ */
+export const useAndroidBillingStatus = create<{
+  accounts: Record<string, BillingStatus>;
+  since: Record<string, number>;
+}>(() => ({
   accounts: savedStatus(),
+  since: {},
 }));
+const WAITING: BillingStatus[] = ['checking', 'access-pending'];
 function setStatus(billingId: string, status: BillingStatus): void {
-  const accounts = { ...useAndroidBillingStatus.getState().accounts, [billingId]: status };
-  useAndroidBillingStatus.setState({ accounts });
+  const state = useAndroidBillingStatus.getState();
+  const accounts = { ...state.accounts, [billingId]: status };
+  const since = { ...state.since };
+  if (!WAITING.includes(status)) delete since[billingId];
+  // A purchase that just went through starts the clock; a recheck of an older wait keeps its own.
+  else if (state.accounts[billingId] === 'idle' || state.accounts[billingId] === undefined)
+    since[billingId] = Date.now();
+  useAndroidBillingStatus.setState({ accounts, since });
   // Only public billing UUIDs and state are persisted, never auth tokens or purchase receipts.
   try {
     const persisted = savedStatus();

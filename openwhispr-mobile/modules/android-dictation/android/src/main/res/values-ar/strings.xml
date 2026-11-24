@@ -26,8 +26,8 @@
   <string name="ow_status_no_speech">لم أسمعك</string>
   <string name="ow_status_offline">لا يوجد اتصال</string>
   <string name="ow_status_retry">أعد المحاولة</string>
-  <string name="ow_status_out_of_words">نفدت الكلمات</string>
-  <string name="ow_status_see_plans">عرض الخطط</string>
+  <string name="ow_status_out_of_words">نفدت كلمات السحابة هذا الأسبوع</string>
+  <string name="ow_status_see_plans">انتقل إلى Pro</string>
   <string name="ow_status_mic_off">الميكروفون متوقف</string>
   <string name="ow_status_allow">سماح</string>
   <string name="ow_status_copied">تم النسخ</string>

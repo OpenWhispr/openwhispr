@@ -26,8 +26,8 @@
   <string name="ow_status_no_speech">聞き取れませんでした</string>
   <string name="ow_status_offline">接続なし</string>
   <string name="ow_status_retry">再試行</string>
-  <string name="ow_status_out_of_words">文字数の上限</string>
-  <string name="ow_status_see_plans">プランを見る</string>
+  <string name="ow_status_out_of_words">今週のクラウド単語数を使い切りました</string>
+  <string name="ow_status_see_plans">Pro にする</string>
   <string name="ow_status_mic_off">マイクがオフ</string>
   <string name="ow_status_allow">許可</string>
   <string name="ow_status_copied">コピーしました</string>

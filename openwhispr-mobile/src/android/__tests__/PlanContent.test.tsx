@@ -1,27 +1,36 @@
+import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert, Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import { router } from 'expo-router';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useUsageStore } from '@/store/useUsageStore.android';
-import { restoreAndroidPurchases, useAndroidBillingStatus } from '../billing';
-import { PlanContent } from '../PlanContent';
+import type { UsageInfo } from '@/data/remote/usageApi';
 
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
-jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
-jest.mock('@/lib/superwall', () => ({ SUPERWALL_PLACEMENTS: { accountBillingOpen: 'billing' } }));
+jest.mock('../../../modules/android-dictation/src/themeFade', () => ({
+  prepareThemeFade: async () => true,
+  fadeTheme: jest.fn(),
+}));
+jest.mock('@/android/navigationBar', () => ({
+  useNavigationBar: () => ({ buttons: true, inset: 0 }),
+  useNavigationBarCanvas: () => undefined,
+}));
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn(), back: jest.fn(), canGoBack: () => true },
+}));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, values?: Record<string, string>) => {
-      const english = require('../../locales/en/translation.json').android;
-      if (key === 'cloudAllowance' || key === 'cloudUnlimited') {
-        return (english[key] ?? key).replace(
-          /{{(\w+)}}/g,
-          (_: string, name: string) => values?.[name] ?? '',
-        );
-      }
-      return key;
-    },
+    t: (key: string, values?: Record<string, string>) =>
+      values && Object.keys(values).length ? `${key}:${JSON.stringify(values)}` : key,
+    i18n: { language: 'en', dir: () => 'ltr' },
   }),
+}));
+jest.mock('@/android/strings', () => ({
+  __esModule: true,
+  default: { addResourceBundle: jest.fn(), t: (key: string) => key },
+}));
+jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
+jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
+jest.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: require('react-native').View,
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: require('zustand').create(() => ({
@@ -37,239 +46,334 @@ jest.mock('@/store/useUsageStore.android', () => ({
     load: jest.fn(async () => ({ status: 'loaded' })),
   })),
 }));
+const mockRegister = jest.fn(async () => undefined);
 jest.mock('@/hooks/useSuperwallGate', () => ({
-  useSuperwallGate: () => ({ register: jest.fn() }),
+  useSuperwallGate: () => ({ register: mockRegister }),
 }));
-jest.mock('@/data/remote/billingApi', () => ({ createStripeBillingPortalSession: jest.fn() }));
+jest.mock('@/lib/superwall', () => ({
+  SUPERWALL_PLACEMENTS: { accountBillingOpen: 'billing', cloudUsageLimitReached: 'limit' },
+  buildUsageGateParams: () => ({ wordsRemaining: 0 }),
+}));
+jest.mock('@/data/remote/billingApi', () => ({
+  createStripeBillingPortalSession: jest.fn(async () => 'https://billing.example/portal'),
+}));
 jest.mock('../billing', () => ({
-  useAndroidBillingStatus: require('zustand').create(() => ({ accounts: {} })),
-  restoreAndroidPurchases: jest.fn(async () => 'payment-pending'),
-  refreshAndroidBillingAccess: jest.fn(),
+  useAndroidBillingStatus: require('zustand').create(() => ({ accounts: {}, since: {} })),
+  restoreAndroidPurchases: jest.fn(async () => 'none'),
+  refreshAndroidBillingAccess: jest.fn(async () => undefined),
 }));
-jest.mock('../settings/look', () => ({ bodyText: {}, useSettingsLook: () => ({ bodyText: {} }) }));
-jest.mock('../settings/kit', () => {
-  const { Pressable, Text, View } = require('react-native');
-  const PillAction = ({
-    label,
-    onPress,
-    disabled,
-    busy,
-  }: {
-    label: string;
-    onPress: () => void;
-    disabled?: boolean;
-    busy?: boolean;
-  }) =>
-    require('react').createElement(
-      Pressable,
-      {
-        onPress,
-        disabled: disabled || busy,
-        accessibilityRole: 'button',
-        accessibilityLabel: label,
-      },
-      require('react').createElement(Text, null, label),
-    );
+const mockPrices = {
+  prices: { annual: '$80.00', annualPerMonth: '$6.58', monthly: '$8.00' } as Record<
+    string,
+    string
+  > | null,
+  unavailable: false,
+  loading: false,
+  retry: jest.fn(),
+};
+jest.mock('../plan/prices', () => ({ usePlayPrices: () => mockPrices }));
+
+import { useAuthStore } from '@/store/useAuthStore';
+import { useUsageStore } from '@/store/useUsageStore.android';
+import { ThemeProvider } from '../ThemeProvider';
+import { useSettingsToast } from '../settings/kit';
+import {
+  refreshAndroidBillingAccess,
+  restoreAndroidPurchases,
+  useAndroidBillingStatus,
+} from '../billing';
+import { PlanContent } from '../PlanContent';
+
+function usage(change: Partial<UsageInfo> = {}): UsageInfo {
   return {
-    Group: ({ children }: { children: React.ReactNode }) =>
-      require('react').createElement(View, null, children),
-    ListRow: ({ title, onPress }: { title: string; onPress?: () => void }) =>
-      onPress
-        ? require('react').createElement(PillAction, { label: title, onPress })
-        : require('react').createElement(Text, null, title),
-    PillAction,
-    cardStyle: {},
-    settings: {},
-    useSettings: () => ({}),
+    billingUserId: 'billing-a',
+    isSubscribed: false,
+    wordsRemaining: 1927,
+    limit: 2000,
+    wordsUsed: 73,
+    plan: 'free',
+    status: 'active',
+    isTrial: false,
+    trialDaysLeft: null,
+    currentPeriodEnd: null,
+    billingInterval: null,
+    resetAt: 'rolling',
+    entitlementSources: { provider: false, personal: false, workspaceIds: [] },
+    ...change,
   };
-});
+}
+const playPro = (change: Partial<UsageInfo> = {}) =>
+  usage({
+    isSubscribed: true,
+    plan: 'pro',
+    limit: -1,
+    wordsRemaining: -1,
+    currentPeriodEnd: '2027-11-24T10:00:00Z',
+    billingInterval: 'annual',
+    entitlementSources: {
+      provider: true,
+      personal: false,
+      providerStore: 'play_store',
+      workspaceIds: [],
+    },
+    ...change,
+  });
+
+const show = (props: React.ComponentProps<typeof PlanContent> = {}) =>
+  render(
+    <ThemeProvider>
+      <PlanContent {...props} />
+    </ThemeProvider>,
+  );
+const state = () =>
+  screen.UNSAFE_root.findAll((n: { props: { testID?: string } }) =>
+    /^plan-/.test(n.props.testID ?? ''),
+  )[0];
+const kind = () => state().props.testID.replace('plan-', '');
+
+const originalPlatform = Platform.OS;
 beforeEach(() => {
   jest.clearAllMocks();
+  Platform.OS = 'android';
   useAuthStore.setState({
-    user: { id: 'a', isAnonymous: false } as NonNullable<
-      ReturnType<typeof useAuthStore.getState>['user']
-    >,
+    user: { id: 'a', isAnonymous: false },
     sessionCookie: 'session-a',
-  });
-  (restoreAndroidPurchases as jest.Mock).mockResolvedValue('payment-pending');
+  } as never);
+  useUsageStore.setState({ isLoading: false, sessionRejected: false, usage: usage() });
   (useUsageStore.getState().load as jest.Mock).mockResolvedValue({ status: 'loaded' });
-  jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  useAndroidBillingStatus.setState({ accounts: {}, since: {} });
+  useSettingsToast.setState({ message: '', id: 0 });
+  mockPrices.prices = { annual: '$80.00', annualPerMonth: '$6.58', monthly: '$8.00' };
+  mockPrices.unavailable = false;
   jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
-  useUsageStore.setState({
-    isLoading: false,
-    sessionRejected: false,
-    usage: {
-      billingUserId: 'billing-a',
-      isSubscribed: false,
-      wordsRemaining: 2000,
-      limit: 2000,
-      wordsUsed: 0,
-      plan: 'free',
-      status: 'active',
-      isTrial: false,
-      trialDaysLeft: null,
-      currentPeriodEnd: null,
-      billingInterval: null,
-      resetAt: '2026-11-01T00:00:00Z',
-      entitlementSources: { provider: false, personal: false, workspaceIds: [] },
-    },
-  });
-  useAndroidBillingStatus.setState({ accounts: { 'billing-a': 'payment-pending' } });
 });
-it('offers sign-in instead of cached allowance or billing actions after session rejection', () => {
-  useUsageStore.setState({ sessionRejected: true });
-  render(<PlanContent />);
+afterEach(() => {
+  Platform.OS = originalPlatform;
+});
 
-  expect(screen.getByText('planSignInRequired')).toBeTruthy();
-  expect(screen.queryByText('2,000 of 2,000 words available')).toBeNull();
-  expect(screen.queryByRole('button', { name: 'upgrade' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'restorePurchases' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'refreshAccess' })).toBeNull();
+it('A · free: the plan, the meter, what Pro adds and the price from Play', () => {
+  show();
+  expect(kind()).toBe('free');
+  expect(screen.getByText('chipYourPlan')).toBeTruthy();
+  expect(screen.getByText('73 / 2,000')).toBeTruthy();
+  expect(screen.getByText('addDevices')).toBeTruthy();
+  expect(screen.getByText('fromPrice:{"price":"$6.58"}')).toBeTruthy();
+  // The API's window is rolling: no made-up reset day, and never "N left".
+  expect(screen.queryByText(/^resets/)).toBeNull();
+  fireEvent.press(screen.getByRole('button', { name: 'seeProPlans' }));
+  expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ placement: 'billing' }));
+});
+
+it('A · shows the reset day once the API sends a real time', () => {
+  useUsageStore.setState({ usage: usage({ resetAt: '2026-11-30T00:00:00Z' }) });
+  show();
+  expect(screen.getByText(/^resets:/)).toBeTruthy();
+});
+
+it('B · out of words opens the out-of-words paywall', () => {
+  useUsageStore.setState({ usage: usage({ wordsUsed: 2000, wordsRemaining: 0 }) });
+  show();
+  expect(kind()).toBe('free-out');
+  expect(screen.getByText('freeOutBody')).toBeTruthy();
+  expect(screen.queryByText('addDevices')).toBeNull();
+  fireEvent.press(screen.getByRole('button', { name: 'goUnlimited' }));
+  expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ placement: 'limit' }));
+});
+
+it('the bubble’s Go Pro opens the out-of-words paywall over the screen once', () => {
+  useUsageStore.setState({ usage: usage({ wordsUsed: 2000, wordsRemaining: 0 }) });
+  const view = show({ openPaywall: 'limit' });
+  view.rerender(
+    <ThemeProvider>
+      <PlanContent openPaywall="limit" />
+    </ThemeProvider>,
+  );
+  expect(mockRegister).toHaveBeenCalledTimes(1);
+  expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ placement: 'limit' }));
+});
+
+it('L · Restore that finds nothing says so at the bottom', async () => {
+  show();
+  fireEvent.press(screen.getByRole('button', { name: 'restorePurchases' }));
+  await waitFor(() => expect(restoreAndroidPurchases).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(useSettingsToast.getState().message).toBe('noPurchase'));
+});
+
+it('K · Google Play unavailable offers Try again and no checkout', () => {
+  mockPrices.prices = null;
+  mockPrices.unavailable = true;
+  show();
+  expect(screen.getByText('storeUnavailable')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'seeProPlans' })).toBeNull();
+  fireEvent.press(screen.getByRole('button', { name: 'tryAgain' }));
+  expect(mockPrices.retry).toHaveBeenCalled();
+});
+
+it('J · signed out asks to sign in first', () => {
+  useAuthStore.setState({ user: null, sessionCookie: null } as never);
+  show();
+  expect(kind()).toBe('signed-out');
+  expect(screen.queryByText('73 / 2,000')).toBeNull();
   fireEvent.press(screen.getByRole('button', { name: 'signIn' }));
   expect(router.push).toHaveBeenCalledWith('/auth?reason=plan');
 });
-it('keeps unknown access out of checkout and offers a retry after loading fails', async () => {
+
+it('hides a cached plan after the session is rejected', () => {
+  useUsageStore.setState({ sessionRejected: true });
+  show();
+  expect(screen.queryByText('73 / 2,000')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'seeProPlans' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'signIn' })).toBeTruthy();
+});
+
+it('keeps unknown access out of checkout and retries after loading fails', async () => {
   useUsageStore.setState({ usage: null });
   const load = useUsageStore.getState().load as jest.Mock;
   load.mockResolvedValueOnce({ status: 'failed', error: new Error('offline') });
-  render(<PlanContent />);
-  expect(screen.getByText('planChecking')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'upgrade' })).toBeNull();
-  expect(screen.queryByText('proBody')).toBeNull();
+  show();
+  expect(screen.getByText('checkingPlan')).toBeTruthy();
   await waitFor(() => expect(screen.getByText('planUnavailable')).toBeTruthy());
-  fireEvent.press(screen.getByRole('button', { name: 'refreshAccess' }));
+  expect(screen.queryByRole('button', { name: 'seeProPlans' })).toBeNull();
+  fireEvent.press(screen.getByRole('button', { name: 'tryAgain' }));
   await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
-  act(() => {
-    useUsageStore.setState({
-      usage: {
-        isSubscribed: true,
-        plan: 'business',
-      } as NonNullable<ReturnType<typeof useUsageStore.getState>['usage']>,
-    });
-  });
-  expect(screen.getByText('OpenWhispr Business')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'upgrade' })).toBeNull();
-});
-it.each(['payment-pending', 'access-pending', 'checking'] as const)(
-  'offers Play and help while %s without launching another checkout',
-  async (status) => {
-    useAndroidBillingStatus.setState({ accounts: { 'billing-a': status } });
-    render(<PlanContent />);
-    expect(screen.queryByRole('button', { name: 'upgrade' })).toBeNull();
-    fireEvent.press(screen.getByRole('button', { name: 'managePlay' }));
-    await waitFor(() =>
-      expect(Linking.openURL).toHaveBeenCalledWith(
-        'https://play.google.com/store/account/subscriptions',
-      ),
-    );
-    fireEvent.press(screen.getByRole('button', { name: 'support' }));
-    expect(router.push).toHaveBeenCalledWith('/(account)/help');
-  },
-);
-it('explains the unresolved payment after an empty restore', async () => {
-  render(<PlanContent />);
-  fireEvent.press(screen.getByRole('button', { name: 'restorePurchases' }));
-  await waitFor(() => expect(restoreAndroidPurchases).toHaveBeenCalledTimes(1));
-  await waitFor(() =>
-    expect(Alert.alert).toHaveBeenCalledWith('restorePurchases', 'billingPaymentPending'),
-  );
-});
-it.each(['account switch', 'new session', 'unmount'] as const)(
-  'discards a late Restore error after %s',
-  async (change) => {
-    let rejectRestore!: (error: Error) => void;
-    (restoreAndroidPurchases as jest.Mock).mockImplementationOnce(
-      () => new Promise((_, reject) => (rejectRestore = reject)),
-    );
-    const view = render(<PlanContent />);
-    fireEvent.press(screen.getByRole('button', { name: 'restorePurchases' }));
-    act(() => {
-      if (change === 'unmount') view.unmount();
-      else if (change === 'new session') useAuthStore.setState({ sessionCookie: 'session-a-new' });
-      else useAuthStore.setState({ user: { ...useAuthStore.getState().user!, id: 'b' } });
-    });
-    await act(async () => {
-      rejectRestore(new Error('Billing account changed'));
-    });
-    expect(Alert.alert).not.toHaveBeenCalled();
-  },
-);
-it.each(['account switch', 'unmount'] as const)(
-  'discards a late Restore success after %s',
-  async (change) => {
-    let finishRestore!: (result: string) => void;
-    (restoreAndroidPurchases as jest.Mock).mockImplementationOnce(
-      () => new Promise((resolve) => (finishRestore = resolve)),
-    );
-    const view = render(<PlanContent />);
-    fireEvent.press(screen.getByRole('button', { name: 'restorePurchases' }));
-    act(() => {
-      if (change === 'unmount') view.unmount();
-      else useAuthStore.setState({ user: { ...useAuthStore.getState().user!, id: 'b' } });
-    });
-    await act(async () => {
-      finishRestore('restored');
-    });
-    expect(Alert.alert).not.toHaveBeenCalled();
-  },
-);
-it('still displays a Restore failure for the current account', async () => {
-  (restoreAndroidPurchases as jest.Mock).mockRejectedValueOnce(new Error('Store unavailable'));
-  render(<PlanContent />);
-  fireEvent.press(screen.getByRole('button', { name: 'restorePurchases' }));
-  await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('errorTitle', 'Store unavailable'));
-});
-it('keeps the new account busy until its own Restore finishes', async () => {
-  let rejectOldRestore!: (error: Error) => void;
-  let finishNewRestore!: (result: string) => void;
-  (restoreAndroidPurchases as jest.Mock)
-    .mockImplementationOnce(() => new Promise((_, reject) => (rejectOldRestore = reject)))
-    .mockImplementationOnce(() => new Promise((resolve) => (finishNewRestore = resolve)));
-  render(<PlanContent />);
-  fireEvent.press(screen.getByRole('button', { name: 'restorePurchases' }));
-  await act(async () => {
-    useAuthStore.setState({ user: { ...useAuthStore.getState().user!, id: 'b' } });
-  });
-  fireEvent.press(screen.getByRole('button', { name: 'restorePurchases' }));
-  expect(restoreAndroidPurchases).toHaveBeenCalledTimes(2);
-  await act(async () => rejectOldRestore(new Error('Billing account changed')));
-  expect(Alert.alert).not.toHaveBeenCalled();
-  fireEvent.press(screen.getByRole('button', { name: 'restorePurchases' }));
-  expect(restoreAndroidPurchases).toHaveBeenCalledTimes(2);
-  await act(async () => finishNewRestore('restored'));
-  expect(Alert.alert).toHaveBeenCalledWith('restorePurchases', 'purchaseRestored');
-});
-it('does not show Play management for a free account without a pending payment', () => {
-  useAndroidBillingStatus.setState({ accounts: {} });
-  render(<PlanContent />);
-  expect(screen.queryByRole('button', { name: 'managePlay' })).toBeNull();
-  expect(screen.getByRole('button', { name: 'upgrade' })).toBeTruthy();
 });
 
-it('shows unlimited cloud words for the subscribed API sentinel', () => {
+describe('confirming a purchase', () => {
+  beforeEach(() => jest.useFakeTimers({ now: 1_000_000 }));
+  afterEach(() => jest.useRealTimers());
+
+  it('B3 → B3b: Unlocking Pro becomes "Pro is on its way" after 30 s', () => {
+    useAndroidBillingStatus.setState({
+      accounts: { 'billing-a': 'access-pending' },
+      since: { 'billing-a': Date.now() },
+    });
+    show();
+    expect(kind()).toBe('confirming');
+    expect(screen.getByText('unlockingTitle')).toBeTruthy();
+    // Only Get help while it runs: no Restore, no second checkout.
+    expect(screen.queryByRole('button', { name: 'restorePurchases' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'seeProPlans' })).toBeNull();
+    act(() => jest.advanceTimersByTime(30_100));
+    expect(kind()).toBe('on-its-way');
+    fireEvent.press(screen.getByRole('button', { name: 'checkAgain' }));
+    expect(refreshAndroidBillingAccess).toHaveBeenCalled();
+  });
+
+  it('a wait restored from an earlier run reads as the longer one at once', () => {
+    useAndroidBillingStatus.setState({ accounts: { 'billing-a': 'access-pending' }, since: {} });
+    show();
+    expect(kind()).toBe('on-its-way');
+  });
+
+  it('B4 · payment pending offers Google Play and help', () => {
+    useAndroidBillingStatus.setState({ accounts: { 'billing-a': 'payment-pending' } });
+    show();
+    expect(kind()).toBe('payment-pending');
+    fireEvent.press(screen.getByRole('button', { name: 'openGooglePlay' }));
+    expect(Linking.openURL).toHaveBeenCalledWith(
+      'https://play.google.com/store/account/subscriptions',
+    );
+    fireEvent.press(screen.getByRole('button', { name: 'getHelp' }));
+    expect(router.push).toHaveBeenCalledWith('/(account)/help');
+  });
+
+  it('B5 · unlocking says so in a bottom toast', () => {
+    useAndroidBillingStatus.setState({
+      accounts: { 'billing-a': 'access-pending' },
+      since: { 'billing-a': Date.now() },
+    });
+    show();
+    act(() => {
+      useAndroidBillingStatus.setState({ accounts: { 'billing-a': 'idle' }, since: {} });
+      useUsageStore.setState({ usage: playPro() });
+    });
+    expect(kind()).toBe('pro-play');
+    expect(useSettingsToast.getState().message).toBe('proToast');
+  });
+});
+
+it('C · Pro on Google Play: renewal date, Play price and management', () => {
+  useUsageStore.setState({ usage: playPro() });
+  show();
+  expect(kind()).toBe('pro-play');
+  expect(screen.getByText(/^renewsPrice:.*"price":"priceYear:/)).toBeTruthy();
+  expect(screen.getByText('unlimited')).toBeTruthy();
+  fireEvent.press(screen.getByRole('button', { name: 'manageSubscription' }));
+  expect(Linking.openURL).toHaveBeenCalled();
+  expect(useSettingsToast.getState().message).toBe('');
+});
+
+it('D · cancelled in Play keeps Pro until the period ends', () => {
+  useUsageStore.setState({ usage: playPro({ status: 'canceled' }) });
+  show();
+  expect(kind()).toBe('pro-play-cancelled');
+  expect(screen.getByText(/^cancelledTitle:/)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'keepPro' })).toBeTruthy();
+});
+
+it('E · a payment problem asks to fix it in Play', () => {
+  useUsageStore.setState({ usage: playPro({ status: 'past_due' }) });
+  show();
+  expect(kind()).toBe('pro-play-problem');
+  fireEvent.press(screen.getByRole('button', { name: 'fixPayment' }));
+  expect(Linking.openURL).toHaveBeenCalled();
+});
+
+it('G · billed on the web opens the billing portal', async () => {
   useUsageStore.setState({
-    usage: {
-      ...useUsageStore.getState().usage!,
-      isSubscribed: true,
+    usage: playPro({
+      currentPeriodEnd: '2027-02-03T00:00:00Z',
+      entitlementSources: { provider: false, personal: true, workspaceIds: [] },
+    }),
+  });
+  show();
+  expect(kind()).toBe('pro-web');
+  fireEvent.press(screen.getByRole('button', { name: 'manageWeb' }));
+  await waitFor(() =>
+    expect(Linking.openURL).toHaveBeenCalledWith('https://billing.example/portal'),
+  );
+});
+
+it('H and I · workspace and App Store plans have nothing to buy', () => {
+  useUsageStore.setState({
+    usage: playPro({
       plan: 'business',
-      limit: -1,
-      wordsRemaining: -1,
-    },
+      entitlementSources: { provider: false, personal: false, workspaceIds: ['w1'] },
+    }),
   });
-  render(<PlanContent />);
-  expect(screen.getByText('Unlimited words')).toBeTruthy();
-  expect(screen.getByText('OpenWhispr Business')).toBeTruthy();
-  expect(screen.queryByText('proBody')).toBeNull();
-  expect(screen.queryByText('proNote')).toBeNull();
-  expect(screen.queryByText(/-1/)).toBeNull();
-});
-it.each([2000, 0])('keeps the finite free allowance when %s words remain', (wordsRemaining) => {
+  const view = show();
+  expect(kind()).toBe('business-workspace');
+  expect(screen.queryByRole('button', { name: 'seeProPlans' })).toBeNull();
+  view.unmount();
   useUsageStore.setState({
-    usage: { ...useUsageStore.getState().usage!, wordsRemaining },
+    usage: playPro({
+      entitlementSources: {
+        provider: true,
+        personal: false,
+        providerStore: 'app_store',
+        workspaceIds: [],
+      },
+    }),
   });
-  render(<PlanContent />);
-  expect(
-    screen.getByText(`${wordsRemaining.toLocaleString()} of 2,000 words available`),
-  ).toBeTruthy();
-  expect(screen.queryByText('Unlimited words')).toBeNull();
+  show();
+  expect(kind()).toBe('pro-app-store');
+  expect(screen.getByText('billedByApple')).toBeTruthy();
 });
+
+it.each(['account switch', 'unmount'] as const)(
+  'discards a late Restore result after %s',
+  async (change) => {
+    let finish!: (result: string) => void;
+    (restoreAndroidPurchases as jest.Mock).mockImplementationOnce(
+      () => new Promise((resolve) => (finish = resolve)),
+    );
+    const view = show();
+    fireEvent.press(screen.getByRole('button', { name: 'restorePurchases' }));
+    act(() => {
+      if (change === 'unmount') view.unmount();
+      else useAuthStore.setState({ user: { id: 'b', isAnonymous: false } } as never);
+    });
+    await act(async () => finish('restored'));
+    expect(useSettingsToast.getState().message).toBe('');
+  },
+);

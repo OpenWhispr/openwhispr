@@ -72,7 +72,7 @@ beforeEach(() => {
     personal: false,
     workspaceIds: [],
   };
-  useAndroidBillingStatus.setState({ accounts: {} });
+  useAndroidBillingStatus.setState({ accounts: {}, since: {} });
   mockLoad.mockImplementation(async () => ({ status: 'loaded', usage: mockUsage }));
   jest
     .mocked(Purchases.getProducts)
@@ -456,4 +456,15 @@ it('checks a newly signed-in account after the previous account’s pending chec
   } finally {
     stop();
   }
+});
+
+it('starts the Unlocking Pro clock when a purchase goes through, and keeps it on a recheck', async () => {
+  jest.mocked(reconcileStoreBilling).mockImplementation(() => new Promise(() => undefined));
+  const before = Date.now();
+  await androidPurchaseController.onPurchase(params);
+  const since = useAndroidBillingStatus.getState().since['billing-a'];
+  expect(since).toBeGreaterThanOrEqual(before);
+  await Promise.resolve();
+  // access-pending → checking is the same wait: the clock doesn't restart.
+  expect(useAndroidBillingStatus.getState().since['billing-a']).toBe(since);
 });

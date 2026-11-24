@@ -26,8 +26,8 @@
   <string name="ow_status_no_speech">Didn’t hear you</string>
   <string name="ow_status_offline">No connection</string>
   <string name="ow_status_retry">Retry</string>
-  <string name="ow_status_out_of_words">Out of words</string>
-  <string name="ow_status_see_plans">See plans</string>
+  <string name="ow_status_out_of_words">Out of cloud words this week</string>
+  <string name="ow_status_see_plans">Go Pro</string>
   <string name="ow_status_mic_off">Mic is off</string>
   <string name="ow_status_allow">Allow</string>
   <string name="ow_status_copied">Copied</string>

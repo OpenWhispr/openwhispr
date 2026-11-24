@@ -26,8 +26,8 @@
   <string name="ow_status_no_speech">Не расслышал</string>
   <string name="ow_status_offline">Нет соединения</string>
   <string name="ow_status_retry">Повторить</string>
-  <string name="ow_status_out_of_words">Слова закончились</string>
-  <string name="ow_status_see_plans">Тарифы</string>
+  <string name="ow_status_out_of_words">Облачные слова на этой неделе закончились</string>
+  <string name="ow_status_see_plans">Перейти на Pro</string>
   <string name="ow_status_mic_off">Микрофон выключен</string>
   <string name="ow_status_allow">Разрешить</string>
   <string name="ow_status_copied">Скопировано</string>

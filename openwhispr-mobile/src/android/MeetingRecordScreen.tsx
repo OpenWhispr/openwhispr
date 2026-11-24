@@ -334,6 +334,8 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
         placement: SUPERWALL_PLACEMENTS.meetingRecordStart,
         params: {
           expectedSpeakerCount: expected ?? 0,
+          // Superwall's out-of-words audience gates only meetings that spend cloud words.
+          cloud,
         },
         requiresAccount: false,
         feature: () => {

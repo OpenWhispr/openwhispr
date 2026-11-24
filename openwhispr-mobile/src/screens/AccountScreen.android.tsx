@@ -19,7 +19,10 @@ import { safeHaptics } from '@/lib/utils';
 import { AndroidDictation } from '../../modules/android-dictation/src';
 import { useHome } from '@/android/home/kit';
 import { useSettingsLook } from '@/android/settings/look';
-import { ProgressBar } from '@/android/controls';
+import { LinkText, WordsMeter } from '@/android/plan/parts';
+import { usePlanT } from '@/android/plan/strings';
+import { useSuperwallGate } from '@/hooks/useSuperwallGate';
+import { SUPERWALL_PLACEMENTS, buildUsageGateParams } from '@/lib/superwall';
 import {
   Badge,
   Group,
@@ -50,6 +53,8 @@ const HISTORY_LABEL: Record<number, SettingsKey> = {
 
 export default function SettingsScreen() {
   const t = useSettingsT();
+  const planT = usePlanT();
+  const { register } = useSuperwallGate();
   const { type, theme: th } = useHome();
   const theme = th.tokens;
   const settings = useSettings();
@@ -209,31 +214,25 @@ export default function SettingsScreen() {
           cssInterop={false}
           accessibilityRole="button"
           onPress={() => router.push('/android-pro')}
-          style={({ pressed }) => [
-            cardStyle,
-            {
-              padding: 16,
-              gap: 8,
-              opacity: pressed ? 0.8 : 1,
-            },
-          ]}
+          style={({ pressed }) => [cardStyle, { padding: 16, opacity: pressed ? 0.8 : 1 }]}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Text style={[settings.title, { flex: 1 }]}>{t('wordsThisWeek')}</Text>
-            {!usage.isSubscribed && (
-              <Text style={[settings.title, settings.tabular]}>
-                {`${usage.wordsUsed.toLocaleString()} / ${usage.limit.toLocaleString()}`}
-              </Text>
-            )}
-          </View>
-          {!usage.isSubscribed && (
-            <ProgressBar value={Math.max(0.02, usage.wordsUsed / Math.max(1, usage.limit))} />
-          )}
-          <Text style={[type.footnote, settings.tabular]}>
-            {usage.isSubscribed
-              ? t('unlimitedWords')
-              : t('wordsLeft', { words: Math.max(usage.wordsRemaining, 0).toLocaleString() })}
-          </Text>
+          <WordsMeter
+            usage={usage}
+            action={
+              !usage.isSubscribed ? (
+                <LinkText
+                  small
+                  label={planT('goUnlimited')}
+                  onPress={() => {
+                    void register({
+                      placement: SUPERWALL_PLACEMENTS.accountBillingOpen,
+                      params: buildUsageGateParams(usage),
+                    });
+                  }}
+                />
+              ) : undefined
+            }
+          />
         </Pressable>
       )}
 
@@ -372,7 +371,20 @@ export default function SettingsScreen() {
         <ListRow
           icon="CreditCard"
           title={t('plan')}
-          value={planLabel}
+          subtitle={usage && !usage.isSubscribed ? planT('settingsPlanBody') : undefined}
+          trailing={
+            planLabel ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Badge label={planLabel} neutral={!usage?.isSubscribed} />
+                <SystemIcon
+                  name="chevron.right"
+                  mdName="ChevronRight"
+                  size={20}
+                  color={theme.tertiary}
+                />
+              </View>
+            ) : undefined
+          }
           onPress={() => router.push('/android-pro')}
         />
         <ListRow

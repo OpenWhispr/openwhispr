@@ -26,8 +26,8 @@
   <string name="ow_status_no_speech">Rien entendu</string>
   <string name="ow_status_offline">Pas de connexion</string>
   <string name="ow_status_retry">Réessayer</string>
-  <string name="ow_status_out_of_words">Plus de mots</string>
-  <string name="ow_status_see_plans">Voir les offres</string>
+  <string name="ow_status_out_of_words">Plus de mots cloud cette semaine</string>
+  <string name="ow_status_see_plans">Passer à Pro</string>
   <string name="ow_status_mic_off">Micro désactivé</string>
   <string name="ow_status_allow">Autoriser</string>
   <string name="ow_status_copied">Copié</string>

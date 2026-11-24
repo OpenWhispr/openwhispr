@@ -110,17 +110,21 @@ it('never shows an unknown plan as Free', () => {
   render(<SettingsScreen />);
   expect(useUsageStore.getState().load).toHaveBeenCalledTimes(1);
   expect(screen.queryByText('free')).toBeNull();
-  expect(screen.queryByText('wordsThisWeek')).toBeNull();
+  expect(screen.queryByText('cloudWordsThisWeek')).toBeNull();
   act(() => useUsageStore.setState({ usage: usage({ isSubscribed: true }) }));
   expect(screen.getAllByText('pro').length).toBeGreaterThan(0);
-  expect(screen.getByText('unlimitedWords')).toBeTruthy();
+  expect(screen.getByText('unlimited')).toBeTruthy();
+  expect(screen.queryByText('goUnlimited')).toBeNull();
 });
 
 it('shows this week’s words for a free plan', () => {
   useUsageStore.setState({ usage: usage({}) });
   render(<SettingsScreen />);
   expect(screen.getByText('1 / 2,000')).toBeTruthy();
-  expect(screen.getByText('wordsLeft')).toBeTruthy();
+  // The meter never says how many are left; it offers Pro and the plan row says what Pro adds.
+  expect(screen.queryByText('wordsLeft')).toBeNull();
+  expect(screen.getByText('goUnlimited')).toBeTruthy();
+  expect(screen.getByText('settingsPlanBody')).toBeTruthy();
 });
 
 it('says how many permissions are still off', () => {

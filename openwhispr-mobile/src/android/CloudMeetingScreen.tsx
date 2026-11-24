@@ -209,7 +209,8 @@ export function CloudMeetingScreen(): React.JSX.Element {
       }
       await register({
         placement: SUPERWALL_PLACEMENTS.meetingRecordStart,
-        params: { expectedSpeakerCount: 0 },
+        // `cloud`: Superwall's out-of-words audience gates only meetings that spend cloud words.
+        params: { expectedSpeakerCount: 0, cloud: true },
         requiresAccount: false,
         feature: () => {
           if (!current() || launched) return;

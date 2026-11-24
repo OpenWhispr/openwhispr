@@ -188,10 +188,15 @@ jest.mock('@/lib/inferenceRouting', () => ({
 }));
 jest.mock('@/lib/accountAccess', () => ({ accountRequiredForCloud: () => false }));
 jest.mock('@/lib/superwall', () => ({
-  SUPERWALL_PLACEMENTS: { audioUploadStart: 'audio-upload-start' },
+  SUPERWALL_PLACEMENTS: {
+    audioUploadStart: 'audio-upload-start',
+    cloudUsageWarningTapped: 'cloud-usage-warning-tapped',
+  },
+  buildUsageGateParams: () => ({}),
 }));
 jest.mock('@/store/useAuthStore', () => ({ useAuthStore: () => mockUser }));
-jest.mock('@/store/useUsageStore', () => ({ useUsageStore: () => null }));
+let mockUsage: Record<string, unknown> | null = null;
+jest.mock('@/store/useUsageStore', () => ({ useUsageStore: () => mockUsage }));
 jest.mock('@/store/useTranscriptStore', () => ({
   createTranscriptId: () => 'initial-upload',
   useTranscriptStore: Object.assign(
@@ -706,4 +711,28 @@ it('follows a light/dark switch in place: same scroll view, scroll kept, new can
   // Nothing scrolled the page back to the top on the way.
   expect(scrollTo).not.toHaveBeenCalled();
   scheme.mockReturnValue('light');
+});
+
+it('E1: puts the words meter on Home under 10% left, with Go unlimited to the paywall', () => {
+  mockUser = { id: 'a' };
+  mockUsage = {
+    isSubscribed: false,
+    wordsUsed: 1842,
+    wordsRemaining: 158,
+    limit: 2000,
+    resetAt: 'rolling',
+  };
+  mockRegister.mockReset().mockResolvedValue(undefined);
+  render(<AndroidHome />);
+  expect(screen.getByText('1,842 / 2,000')).toBeTruthy();
+  fireEvent.press(screen.getByRole('button', { name: 'goUnlimited' }));
+  expect(mockRegister).toHaveBeenCalledWith(
+    expect.objectContaining({ placement: 'cloud-usage-warning-tapped' }),
+  );
+  mockUsage = { ...mockUsage, wordsUsed: 1000, wordsRemaining: 1000 };
+  screen.unmount();
+  render(<AndroidHome />);
+  expect(screen.queryByRole('button', { name: 'goUnlimited' })).toBeNull();
+  mockUsage = null;
+  mockUser = null;
 });
