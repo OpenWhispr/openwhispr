@@ -1,4 +1,4 @@
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { AppleLLM } from '@/lib/appleLLM';
 import type { AuthUser } from '@/lib/authClient';
@@ -15,6 +15,13 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { AppGroupStorage, APP_GROUP_KEYS } from '../../modules/app-group-storage/src';
+
+// The keyboard's Translate menu ships in the same binary as Apple Intelligence's language list. An
+// over-the-air update running on an older build has a keyboard that can neither show a picked
+// language nor turn it off, so translation stays off there.
+export function keyboardCanTranslate(): boolean {
+  return Platform.OS === 'ios' && AppleLLM.hasSupportedLanguages();
+}
 
 // Off is the absence of the target key; an empty string is only ever a per-job snapshot of Off.
 function readTarget(): string | null {
@@ -111,12 +118,14 @@ function translationState(user: AuthUser | null = useAuthStore.getState().user):
     route?.cleanupMode ?? null,
     onDeviceSupport?.codes ?? null,
   );
-  const applicable = isTranslationApplicable({
-    mode: route?.cleanupMode ?? null,
-    cleanupUnavailable: route?.cleanupUnavailable ?? false,
-    guest: requiresRealAccount(user),
-    onDeviceUnavailable: onDeviceSupport !== null && onDeviceSupport.readiness.status !== 'ready',
-  });
+  const applicable =
+    keyboardCanTranslate() &&
+    isTranslationApplicable({
+      mode: route?.cleanupMode ?? null,
+      cleanupUnavailable: route?.cleanupUnavailable ?? false,
+      guest: requiresRealAccount(user),
+      onDeviceUnavailable: onDeviceSupport !== null && onDeviceSupport.readiness.status !== 'ready',
+    });
   return { languages, applicable };
 }
 

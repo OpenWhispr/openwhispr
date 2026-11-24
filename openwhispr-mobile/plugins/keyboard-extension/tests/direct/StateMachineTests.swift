@@ -115,6 +115,9 @@ final class Harness {
   var documentID: UUID? = UUID()
   /// The keyboard's effective translation target, as `readTranslation` reports it.
   var translation: (code: String, label: String)?
+  var translationReads = 0
+  /// Runs after each `readTranslation`, to change the target between two reads.
+  var afterTranslationRead: (() -> Void)?
   var encodeError: Error?
   var encodeGains: [Float] = []
   var texts: [String] = []
@@ -138,7 +141,11 @@ final class Harness {
       readConfigJSON: { [unowned self] in self.configJSON },
       readCookie: { [unowned self] userId in userId == self.cookieUser ? self.cookie : nil },
       readTone: { "default" },
-      readTranslation: { [unowned self] in self.translation },
+      readTranslation: { [unowned self] in
+        self.translationReads += 1
+        defer { self.afterTranslationRead?() }
+        return self.translation
+      },
       encode: { [unowned self] pcm, m4a, gain in
         self.encodeGains.append(gain)
         if let error = self.encodeError { throw error }
@@ -244,6 +251,8 @@ extension DirectDictationTests {
     machineResumeKeepsTranslationTarget()
     machineTranslationWhileHidden()
     machineStandsDownWhenSnapshotCannotTranslate()
+    machineStartReadsTargetOnce()
+    machineResumedTakeCannotTranslate()
   }
 
   static func machineStandsDownWhenSnapshotCannotTranslate() {
@@ -263,10 +272,27 @@ extension DirectDictationTests {
     blocked.translation = nil
     expect(blocked.dictation.isEligible, true, "Off picked later: eligible again")
 
+    // Exactly the dictation language ("en"): the app wouldn't translate it either, so standing
+    // down would only cost app-closed dictation.
     let sameLanguage = Harness()
     defer { sameLanguage.cleanup() }
-    sameLanguage.translation = (code: "en-US", label: "English (US)")
-    expect(sameLanguage.dictation.isEligible, false, "no same-language exception")
+    sameLanguage.translation = (code: "en", label: "English")
+    expect(sameLanguage.dictation.isEligible, true, "exact dictation language: eligible without snapshot translation")
+    sameLanguage.record()
+    sameLanguage.dictation.confirm()
+    sameLanguage.transport.uploads.first?.complete(200, sentText)
+    expect(sameLanguage.transport.sends.count, 0, "exact dictation language: no translate request")
+    expect(sameLanguage.texts, ["send it to a@b.co"], "exact dictation language: typed as dictated")
+    let sameRecord = sameLanguage.store.record(jobId: "job-1")
+    expect(sameRecord?.translationTarget, "en", "exact dictation language: target recorded")
+    expect(sameRecord?.translationFailed, false, "exact dictation language: not a failed translation")
+
+    let regional = Harness()
+    defer { regional.cleanup() }
+    regional.translation = (code: "en-US", label: "English (US)")
+    expect(regional.dictation.isEligible, false, "a regional target of the dictation language still stands down")
+    regional.dictation.start()
+    expect(regional.capture.startCount, 0, "regional target without snapshot translation: nothing starts")
 
     let translating = translatedHarness()
     defer { translating.cleanup() }
@@ -290,6 +316,36 @@ extension DirectDictationTests {
     expect(resumed.transport.uploads.count, 1, "recovery is not gated")
     resumed.transport.uploads.first?.complete(200, sentText)
     expect(resumed.texts, ["send it to a@b.co"], "recovery: delivered untranslated, as it started")
+    expect(resumed.store.record(jobId: "job-1")?.translationFailed, false, "recovery: started without a target, so no warning")
+  }
+
+  static func machineStartReadsTargetOnce() {
+    // A target picked right after the gate looked must not reach the take ungated.
+    let h = Harness()
+    defer { h.cleanup() }
+    h.afterTranslationRead = { [unowned h] in h.translation = (code: "es", label: "Spanish") }
+    h.dictation.start()
+    expect(h.translationReads, 1, "start reads the target once")
+    expect(h.capture.startCount, 1, "start: the gate passed with no target")
+    expect(h.store.record(jobId: "job-1")?.translationTarget == nil, true, "start: records the target the gate checked")
+  }
+
+  static func machineResumedTakeCannotTranslate() {
+    // Started translating, resumed under a snapshot that no longer can: typed untranslated, and
+    // History is told.
+    let h = translatedHarness()
+    defer { h.cleanup() }
+    h.record(seconds: 2)
+    h.dictation.keyboardWillDisappear()
+    h.configJSON = validConfig
+    h.dictation.keyboardDidAppear()
+    h.transport.uploads.first?.complete(200, sentText)
+    expect(h.transport.sends.count, 0, "resumed, can't translate: no translate request")
+    expect(h.texts, ["send it to a@b.co"], "resumed, can't translate: typed untranslated")
+    let record = h.store.record(jobId: "job-1")
+    expect(record?.translationFailed, true, "resumed, can't translate: recorded as not translated")
+    expect(record?.translatedTo == nil, true, "resumed, can't translate: no translatedTo")
+    expect(record?.translationTarget, "es", "resumed, can't translate: target kept for History")
   }
 
   static func translatedHarness() -> Harness {
@@ -326,12 +382,16 @@ extension DirectDictationTests {
     expect(record?.translatedTo, "es", "translate: record says translated to es")
     expect(record?.originalText, "send it to my email", "translate: originalText stays the raw transcript")
     expect(record?.translationTarget, "es", "translate: target recorded at start")
+    expect(record?.translationFailed, false, "translate: not a failed translation")
   }
 
   static func machineTranslationFails() {
-    for (status, body, name) in [(500, "", "500"), (0, "", "transport error"),
-                                 (200, #"{"text":"send it to a@b.co"}"#, "unchanged reply"),
-                                 (200, #"{"text":""}"#, "empty reply")] {
+    // An unchanged reply is already in the target language, as the app and desktop read it: no warning.
+    for (status, body, name, failed) in [(500, "", "500", true), (0, "", "transport error", true),
+                                         (403, #"{"text":"Hola"}"#, "refused", true),
+                                         (200, #"{"text":""}"#, "empty reply", true),
+                                         (200, "<html>", "unreadable reply", true),
+                                         (200, #"{"text":"send it to a@b.co"}"#, "unchanged reply", false)] {
       let h = translatedHarness()
       h.record()
       h.dictation.confirm()
@@ -341,6 +401,7 @@ extension DirectDictationTests {
       expect(h.texts, ["send it to a@b.co"], "translate \(name): the untranslated, expanded text is typed")
       expect(h.store.record(jobId: "job-1")?.translatedTo == nil, true, "translate \(name): record not translated")
       expect(h.store.record(jobId: "job-1")?.status, .completed, "translate \(name): record completed")
+      expect(h.store.record(jobId: "job-1")?.translationFailed, failed, "translate \(name): translationFailed")
       h.cleanup()
     }
   }
@@ -392,6 +453,7 @@ extension DirectDictationTests {
     none.transport.uploads.first?.complete(200, sentText)
     expect(none.transport.sends.count, 0, "translation off in the keyboard: no translate request")
     expect(none.texts, ["send it to a@b.co"], "translation off in the keyboard: text typed")
+    expect(none.store.record(jobId: "job-1")?.translationFailed, false, "translation off in the keyboard: no warning")
   }
 
   static func machineTranslationSameLanguage() {
@@ -404,6 +466,7 @@ extension DirectDictationTests {
     h.transport.uploads.first?.complete(200, sentText)
     expect(h.transport.sends.count, 0, "same language: no translate request")
     expect(h.texts, ["send it to a@b.co"], "same language: text typed")
+    expect(h.store.record(jobId: "job-1")?.translationFailed, false, "same language: not a failed translation")
   }
 
   static func machineTranslatesAfterCleanupRetry() {

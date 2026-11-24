@@ -14,7 +14,7 @@ import { cleanupRunsOnDevice } from './aiWorkflows';
 import { cleanupTranscript } from './cleanupTranscript';
 import { isDictationContext } from './dictationHints';
 import { isToneApplicable } from './keyboardTone';
-import { shouldTranslate } from './keyboardTranslation';
+import { shouldTranslate, withTranslationWarning } from './keyboardTranslation';
 import { getLocalReasoningReadiness } from './localReasoning';
 import { isNoSpeechError } from './permissions';
 import { withRetry, type RetryOptions } from './retry';
@@ -373,7 +373,7 @@ async function processTranscriptionJob(
 
 // Keyboard dictation only: translates the final text (cleaned or raw, snippets expanded) with the
 // job's pinned cleanup route. originalText stays the raw transcript. A skipped or failed translation
-// keeps the untranslated text, and its reason is shown unless cleanup already left a warning.
+// keeps the untranslated text, and its reason joins any warning cleanup left.
 async function applyTranslation(
   result: DictationProcessingResult,
   request: TranscriptionRequest,
@@ -393,12 +393,16 @@ async function applyTranslation(
     onSkipped: (reason): void => {
       skipReason = reason;
     },
+    shouldCancel: lifecycle.shouldCancel,
   });
   if (!translation.translated) {
-    if (!skipReason || result.transcription.cleanupWarning) return result;
+    if (!skipReason) return result;
     return {
       ...result,
-      transcription: { ...result.transcription, cleanupWarning: skipReason },
+      transcription: {
+        ...result.transcription,
+        cleanupWarning: withTranslationWarning(result.transcription.cleanupWarning, skipReason),
+      },
     };
   }
   return {

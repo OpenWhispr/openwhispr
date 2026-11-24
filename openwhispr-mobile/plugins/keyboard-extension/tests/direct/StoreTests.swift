@@ -32,7 +32,8 @@ extension DirectDictationTests {
       try! Data([0]).write(to: url)
     }
     clock.advance(seconds: 5)
-    try! store.complete(jobId: "j1", text: "Hello.", originalText: "hello", cleanupApplied: true, translatedTo: nil, durationMs: 4_000)
+    try! store.complete(jobId: "j1", text: "Hello.", originalText: "hello", cleanupApplied: true, translatedTo: nil,
+                        translationFailed: false, durationMs: 4_000)
     let done = store.record(jobId: "j1")
     expect(done?.status, .completed, "complete sets the status")
     expect(done?.text, "Hello.", "complete keeps the text")
@@ -53,12 +54,24 @@ extension DirectDictationTests {
     expect(store.record(jobId: "t1")?.translationLabel, "Spanish", "begin keeps the translation label")
     expect(store.record(jobId: "t1")?.translatedTo == nil, true, "nothing translated yet")
     try! store.complete(jobId: "t1", text: "Hola.", originalText: "hello", cleanupApplied: true, translatedTo: "es",
-                        durationMs: 1_000)
+                        translationFailed: false, durationMs: 1_000)
     expect(store.record(jobId: "t1")?.translatedTo, "es", "complete keeps translatedTo")
     let translatedKeys = (try? JSONSerialization.jsonObject(with: Data(contentsOf: folder.appendingPathComponent("t1.json")))) as? [String: Any]
     expect(translatedKeys?["translatedTo"] as? String, "es", "translatedTo on disk, the key the app reads")
     expect(translatedKeys?["translationTarget"] as? String, "es", "translationTarget on disk")
     expect(keys?["translatedTo"] == nil, true, "an untranslated record writes no translatedTo")
+    expect(translatedKeys?["translationFailed"] as? Bool, false, "a translated record didn't fail")
+
+    // A take with a target left untranslated: the app's History warns from this key.
+    try! store.begin(jobId: "t2", userId: "u1", documentID: documentID, tone: "default", translationTarget: "es",
+                     translationLabel: "Spanish")
+    expect(store.record(jobId: "t2")?.translationFailed == nil, true, "a pending record says nothing about translation")
+    try! store.complete(jobId: "t2", text: "Hello.", originalText: "hello", cleanupApplied: true, translatedTo: nil,
+                        translationFailed: true, durationMs: 1_000)
+    expect(store.record(jobId: "t2")?.translationFailed, true, "complete keeps translationFailed")
+    let failedKeys = (try? JSONSerialization.jsonObject(with: Data(contentsOf: folder.appendingPathComponent("t2.json")))) as? [String: Any]
+    expect(failedKeys?["translationFailed"] as? Bool, true, "translationFailed on disk, the key the app reads")
+    expect(failedKeys?["translatedTo"] == nil, true, "an untranslated take writes no translatedTo")
 
     // fail keeps the encoded audio only.
     try! store.begin(jobId: "j2", userId: "u1", documentID: documentID, tone: "default", translationTarget: nil, translationLabel: nil)
@@ -95,7 +108,8 @@ extension DirectDictationTests {
     expect(resumeStore.resumable(userId: "u1", documentID: documentID)?.jobId, "r2", "a .pcm alone is resumable: it can still be encoded")
     try! Data([0]).write(to: resumeStore.audioURL(jobId: "r2"))
     expect(resumeStore.resumable(userId: "u1", documentID: documentID)?.jobId, "r2", "resumable once encoded")
-    try! resumeStore.complete(jobId: "r2", text: "t", originalText: nil, cleanupApplied: nil, translatedTo: nil, durationMs: 1)
+    try! resumeStore.complete(jobId: "r2", text: "t", originalText: nil, cleanupApplied: nil, translatedTo: nil,
+                              translationFailed: false, durationMs: 1)
     expect(resumeStore.resumable(userId: "u1", documentID: documentID) == nil, true, "not a completed record")
 
     // Older records omit the document ID. History can import them, but automatic insertion
@@ -107,6 +121,7 @@ extension DirectDictationTests {
     expect(resumeStore.record(jobId: "legacy")?.status, .pending, "legacy records remain readable")
     expect(resumeStore.record(jobId: "legacy")?.translationTarget == nil, true, "legacy records have no translation target")
     expect(resumeStore.record(jobId: "legacy")?.translatedTo == nil, true, "legacy records have no translatedTo")
+    expect(resumeStore.record(jobId: "legacy")?.translationFailed == nil, true, "legacy records have no translationFailed")
     expect(resumeStore.resumable(userId: "u1", documentID: documentID) == nil, true, "legacy takes cannot auto-resume")
 
     // A corrupt record is skipped, not fatal.
@@ -122,7 +137,8 @@ extension DirectDictationTests {
     for index in 0..<502 {
       let id = String(format: "p%03d", index)
       try! pruneStore.begin(jobId: id, userId: "u1", documentID: documentID, tone: "default", translationTarget: nil, translationLabel: nil)
-      try! pruneStore.complete(jobId: id, text: "t", originalText: nil, cleanupApplied: nil, translatedTo: nil, durationMs: 1)
+      try! pruneStore.complete(jobId: id, text: "t", originalText: nil, cleanupApplied: nil, translatedTo: nil,
+                               translationFailed: false, durationMs: 1)
       pruneClock.advance(seconds: 1)
     }
     pruneStore.prune()

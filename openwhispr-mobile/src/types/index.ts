@@ -105,9 +105,11 @@ export interface Transcript extends CleanupInferenceSnapshot {
   errorMessage?: string;
   requestContext?: 'keyboard' | 'recording' | 'file';
   keyboardTone?: KeyboardTone;
-  // The language the text was translated into. On a failed keyboard row it is the target the
-  // dictation was recorded with, so a retry from History translates it the same way.
+  // The language the text was translated into; unset when it wasn't.
   translatedTo?: string;
+  // On a failed keyboard row, the target the dictation was recorded with, so a retry from History
+  // translates it the same way.
+  translationTarget?: string;
   jobId?: string;
   retryCount?: number;
 }

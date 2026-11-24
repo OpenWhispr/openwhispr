@@ -60,10 +60,12 @@ export default function KeyboardTranslationScreen(): React.JSX.Element {
     selected !== null &&
     !languages.some((language) => language.code === selected);
 
-  // Only the reasons a user can act on get a note; others just dim the rows.
+  // Say why the languages are locked, or why a saved one isn't used.
   let note: string | null = null;
-  if (mode === 'openwhispr' && guest) {
-    note = 'Sign in to translate dictation.';
+  if (route === null || route.cleanupUnavailable) {
+    note = 'Translation runs on your cleanup model. Finish setting it up in AI Models.';
+  } else if (mode === 'openwhispr' && guest) {
+    note = `${user?.isAnonymous ? 'Create an account' : 'Sign in'} to translate dictation.`;
   } else if (onDeviceUnavailable && onDevice) {
     note = getLocalReasoningUnavailableMessage(onDevice.readiness);
   } else if (selectedUnlisted) {

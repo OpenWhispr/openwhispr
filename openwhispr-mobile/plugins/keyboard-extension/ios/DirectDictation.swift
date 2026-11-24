@@ -121,7 +121,7 @@ final class DirectDictation {
 
   /// A new take may start: the snapshot decodes, a cookie exists, the path hasn't been turned
   /// off since the snapshot last changed, and a language picked in the keyboard is one the
-  /// snapshot can translate into.
+  /// snapshot can translate into, or exactly the dictation language.
   var isEligible: Bool { newTakeContext() != nil }
 
   /// As `isEligible` without the translation check, for preparing capture: picking Off later in
@@ -133,10 +133,10 @@ final class DirectDictation {
     case .idle, .failed: break
     default: return
     }
-    guard job == nil, let documentID = readDocumentID?(), let (config, cookie) = newTakeContext() else { return }
+    // The target is the one the gate checked: one picked mid-take applies to the next dictation.
+    guard job == nil, let documentID = readDocumentID?(), let (config, cookie, translation) = newTakeContext()
+    else { return }
     let jobId = deps.makeJobId()
-    // Read once: a target picked mid-take applies to the next dictation.
-    let translation = deps.readTranslation()
     let context = DirectRequestContext(
       config: config, jobId: jobId, tone: deps.readTone(), cookie: cookie,
       translationTarget: translation?.code, translationLabel: translation?.label
@@ -404,33 +404,47 @@ final class DirectDictation {
   }
 
   /// Snippets expand first, since their triggers are in the spoken language (as the app's
-  /// pipeline). A failed, empty or unchanged translation types the expanded text untranslated.
+  /// pipeline). Anything but a translation types the expanded text untranslated; the record says
+  /// so unless the reply came back unchanged, which the app and desktop read as already translated.
   private func translateThenFinish(text: String, original: String, cleanupApplied: Bool?, token: Int) {
     guard let current = job, current.token == token else { return }
     let expanded = SnippetExpander.expand(text, snippets: current.context.config.snippets)
-    guard let request = try? DirectDictationRequests.makeTranslateRequest(current.context, text: expanded),
-      let target = current.context.translationTarget
+    // No target, or one that is the dictation language itself: nothing to translate.
+    guard let target = current.context.translationTarget,
+      !DirectDictationRequests.isSameLanguage(current.context.config.language, target)
     else {
-      finish(text: expanded, original: original, cleanupApplied: cleanupApplied, translatedTo: nil)
+      finish(text: expanded, original: original, cleanupApplied: cleanupApplied, translatedTo: nil,
+             translationFailed: false)
+      return
+    }
+    // A resumed take whose snapshot can no longer translate still had a target to honour.
+    guard let request = try? DirectDictationRequests.makeTranslateRequest(current.context, text: expanded) else {
+      finish(text: expanded, original: original, cleanupApplied: cleanupApplied, translatedTo: nil,
+             translationFailed: true)
       return
     }
     inFlight = deps.transport.send(request) { [weak self] status, body in
       guard let self, self.job?.token == token else { return }
       self.inFlight = nil
-      if let translated = DirectDictationRequests.parseTranslation(status: status, body: body, input: expanded) {
-        self.finish(text: translated, original: original, cleanupApplied: cleanupApplied, translatedTo: target)
+      let outcome = DirectDictationRequests.parseTranslation(status: status, body: body, input: expanded)
+      if case let .translated(translated) = outcome {
+        self.finish(text: translated, original: original, cleanupApplied: cleanupApplied, translatedTo: target,
+                    translationFailed: false)
       } else {
-        self.finish(text: expanded, original: original, cleanupApplied: cleanupApplied, translatedTo: nil)
+        self.finish(text: expanded, original: original, cleanupApplied: cleanupApplied, translatedTo: nil,
+                    translationFailed: outcome == .failed)
       }
     }
   }
 
   /// `text` is final: snippet-expanded, and translated when `translatedTo` is set.
-  private func finish(text: String, original: String, cleanupApplied: Bool?, translatedTo: String?) {
+  private func finish(
+    text: String, original: String, cleanupApplied: Bool?, translatedTo: String?, translationFailed: Bool
+  ) {
     guard let current = job else { return }
     try? deps.store.complete(
       jobId: current.jobId, text: text, originalText: original, cleanupApplied: cleanupApplied,
-      translatedTo: translatedTo, durationMs: current.durationMs
+      translatedTo: translatedTo, translationFailed: translationFailed, durationMs: current.durationMs
     )
     job = nil
     state = .idle
@@ -473,11 +487,20 @@ final class DirectDictation {
 
   /// Stands down while a language is picked that this snapshot can't translate into (its AI
   /// route isn't OpenWhispr Cloud), so the keyboard's other route records and the app translates.
-  /// Recovery and delivery use `eligibleContext()`: a take already started keeps its own target.
-  private func newTakeContext() -> (DirectDictationConfig, String)? {
-    guard let eligible = eligibleContext() else { return nil }
-    if deps.readTranslation() != nil && !eligible.0.translation.enabled { return nil }
-    return eligible
+  /// A target that is exactly the dictation language wouldn't be translated there either, so it
+  /// keeps app-closed dictation. Returns the target it checked, so the take records only a target
+  /// that passed this gate. Recovery and delivery use `eligibleContext()`: a take already started
+  /// keeps its own target.
+  private func newTakeContext() -> (
+    config: DirectDictationConfig, cookie: String, translation: (code: String, label: String)?
+  )? {
+    guard let (config, cookie) = eligibleContext() else { return nil }
+    let translation = deps.readTranslation()
+    if let translation, !config.translation.enabled,
+      !DirectDictationRequests.isSameLanguage(config.language, translation.code) {
+      return nil
+    }
+    return (config, cookie, translation)
   }
 
   private func turnPathOff() {

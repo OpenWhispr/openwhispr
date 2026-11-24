@@ -59,6 +59,12 @@ export const AppleLLM = {
     return NativeModule.getAvailability();
   },
 
+  // Whether this binary has getSupportedLanguages, as opposed to an over-the-air update running on
+  // a build from before it.
+  hasSupportedLanguages(): boolean {
+    return Boolean(NativeModule?.getSupportedLanguages);
+  },
+
   // An empty array means unknown (no module, old binary, model or OS unavailable), not "none".
   async getSupportedLanguages(): Promise<string[]> {
     if (!NativeModule?.getSupportedLanguages) return [];

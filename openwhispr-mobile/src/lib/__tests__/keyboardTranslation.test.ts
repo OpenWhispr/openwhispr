@@ -4,8 +4,10 @@ import {
   coerceTranslationTarget,
   isTranslationApplicable,
   shouldTranslate,
+  translationFailureReason,
   translationLabel,
   translationLanguagesFor,
+  withTranslationWarning,
 } from '@/lib/keyboardTranslation';
 
 describe('keyboardTranslation', () => {
@@ -88,5 +90,31 @@ describe('keyboardTranslation', () => {
     const prompt = buildTranslatePrompt('es');
     expect(prompt).toContain('into Spanish.');
     expect(prompt).not.toContain('{{targetLanguage}}');
+  });
+});
+
+describe('translationFailureReason', () => {
+  it('names the target by its label', () => {
+    expect(translationFailureReason('es')).toBe(
+      "Couldn't translate to Spanish. The text was left untranslated.",
+    );
+  });
+});
+
+const SKIPPED = translationFailureReason('es');
+
+describe('withTranslationWarning', () => {
+  it('is the translation reason alone when cleanup left no warning', () => {
+    expect(withTranslationWarning(undefined, SKIPPED)).toBe(SKIPPED);
+  });
+
+  it('keeps a cleanup warning and adds the translation reason after it', () => {
+    expect(withTranslationWarning('Cleanup failed.', SKIPPED)).toBe(`Cleanup failed. ${SKIPPED}`);
+  });
+
+  it('says a reason both steps share once', () => {
+    expect(withTranslationWarning('Cleanup is unavailable.', 'Cleanup is unavailable.')).toBe(
+      'Cleanup is unavailable.',
+    );
   });
 });

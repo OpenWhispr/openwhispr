@@ -13,8 +13,9 @@ jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: (selector: (state: unknown) => unknown) => selector({ config: mockConfig }),
 }));
+let mockUser: { id: string; isAnonymous: boolean } | null = null;
 jest.mock('@/store/useAuthStore', () => ({
-  useAuthStore: (selector: (state: unknown) => unknown) => selector({ user: null }),
+  useAuthStore: (selector: (state: unknown) => unknown) => selector({ user: mockUser }),
 }));
 jest.mock('@/lib/accountAccess', () => ({
   requiresRealAccount: (...args: unknown[]) => mockRequiresRealAccount(...args),
@@ -41,6 +42,7 @@ describe('KeyboardTranslationScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockConfig = null;
+    mockUser = null;
     mockDictationRoute.mockReturnValue(cloudRoute);
     mockRequiresRealAccount.mockReturnValue(false);
     mockReadSupport.mockResolvedValue({ codes: null, readiness: READY });
@@ -73,12 +75,34 @@ describe('KeyboardTranslationScreen', () => {
     expect(mockSetTarget).toHaveBeenCalledWith(null);
   });
 
-  it('disables rows without the sign-in note when there is no text model route', () => {
+  it('asks an anonymous session to create an account', () => {
+    mockRequiresRealAccount.mockReturnValue(true);
+    mockUser = { id: 'anon', isAnonymous: true };
+    render(<KeyboardTranslationScreen />);
+    expect(screen.getByText('Create an account to translate dictation.')).toBeTruthy();
+  });
+
+  it('points to AI Models and locks the rows when there is no text model route', () => {
     mockDictationRoute.mockReturnValue(null);
     render(<KeyboardTranslationScreen />);
+    expect(
+      screen.getByText(
+        'Translation runs on your cleanup model. Finish setting it up in AI Models.',
+      ),
+    ).toBeTruthy();
     expect(screen.queryByText('Sign in to translate dictation.')).toBeNull();
     fireEvent.press(screen.getByText('Spanish'));
     expect(mockSetTarget).not.toHaveBeenCalled();
+  });
+
+  it('points to AI Models when the cleanup route is unavailable', () => {
+    mockDictationRoute.mockReturnValue({ ...cloudRoute, cleanupUnavailable: true });
+    render(<KeyboardTranslationScreen />);
+    expect(
+      screen.getByText(
+        'Translation runs on your cleanup model. Finish setting it up in AI Models.',
+      ),
+    ).toBeTruthy();
   });
 
   it('limits On-Device languages to the ones the model supports', async () => {

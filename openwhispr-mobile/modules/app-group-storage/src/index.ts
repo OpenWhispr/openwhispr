@@ -296,6 +296,9 @@ export const APP_GROUP_KEYS = {
   KEYBOARD_PENDING_TRANSCRIPT_JOB_ID: 'keyboard_pending_transcript_job_id',
   KEYBOARD_ORPHANED_RAW_TRANSCRIPT: 'keyboard_orphaned_raw_transcript',
   KEYBOARD_ORPHANED_RAW_TRANSCRIPT_JOB_ID: 'keyboard_orphaned_raw_transcript_job_id',
+  // The orphan slot's job id when the native uploader kept text the server already cleaned (fused
+  // cleanup), so the app translates it without cleaning it again.
+  KEYBOARD_ORPHANED_TRANSCRIPT_CLEANED_JOB_ID: 'keyboard_orphaned_transcript_cleaned_job_id',
   KEYBOARD_RECORDING_JOB_ID: 'keyboard_recording_job_id',
   KEYBOARD_RECORDING_FORMAT: 'keyboard_recording_format',
   KEYBOARD_COMPRESSED_AUDIO_UNSUPPORTED: 'keyboard_compressed_audio_unsupported',

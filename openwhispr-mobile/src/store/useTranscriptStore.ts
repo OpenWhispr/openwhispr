@@ -43,7 +43,7 @@ export type FailedTranscriptInput = {
   requestContext?: Transcript['requestContext'];
   keyboardTone?: KeyboardTone;
   // The translation target the dictation was recorded with, so a retry translates it too.
-  translatedTo?: string;
+  translationTarget?: string;
   jobId?: string;
   errorMessage: string;
   createdAt?: number;
@@ -82,6 +82,22 @@ const normalizeTranscript = (transcript: Transcript): Transcript => ({
 });
 
 const RETRY_JOB_ID = /^(.+)-retry-\d+$/;
+
+// The target a keyboard job was recorded with. Lazy: keyboardTranslationSync reaches back into the
+// stores this one is loaded beside.
+function keyboardTranslationTargetFor(jobId: string): string | undefined {
+  const { readKeyboardTranslationSnapshot } =
+    require('@/lib/keyboardTranslationSync') as typeof import('@/lib/keyboardTranslationSync');
+  return readKeyboardTranslationSnapshot(jobId) ?? undefined;
+}
+
+// A raw transcript recovered after an interruption skips the steps that ran after it, translation
+// included, so the row says the text wasn't translated either.
+function recoveredRawWarning(translationTarget: string | undefined): string {
+  return translationTarget
+    ? 'Recovered the raw transcript after an interruption. Cleanup and translation were not repeated.'
+    : 'Recovered the raw transcript after an interruption. Cleanup was not repeated.';
+}
 
 // Shared so a write that has to wait for history and the app's own startup load
 // read storage once.
@@ -135,14 +151,16 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
               updatedAt: now,
               status: 'completed',
               audioUrl: undefined,
-              cleanupWarning:
-                'Recovered the raw transcript after an interruption. Cleanup was not repeated.',
+              cleanupWarning: recoveredRawWarning(retried.translationTarget),
               errorMessage: undefined,
+              translationTarget: undefined,
               retryCount: (retried.retryCount ?? 0) + 1,
             };
           }
         } else if (!loaded.some((row) => row.id === job.jobId || row.jobId === job.jobId)) {
           if (!job.result && !job.audioUri) continue;
+          const translationTarget =
+            job.requestContext === 'keyboard' ? keyboardTranslationTargetFor(job.jobId) : undefined;
           loaded.push({
             ...job.route,
             id: job.jobId,
@@ -154,9 +172,9 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
             requestContext: job.requestContext,
             status: job.result ? 'completed' : 'failed',
             audioUrl: job.result ? undefined : job.audioUri,
-            cleanupWarning: job.result
-              ? 'Recovered the raw transcript after an interruption. Cleanup was not repeated.'
-              : undefined,
+            cleanupWarning: job.result ? recoveredRawWarning(translationTarget) : undefined,
+            // Only a failed row is retried, and its retry translates as the dictation would have.
+            translationTarget: job.result ? undefined : translationTarget,
             errorMessage: job.result
               ? undefined
               : 'The provider upload was interrupted. Retry uses the original provider.',
@@ -313,7 +331,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           errorMessage: transcript.errorMessage,
           requestContext: transcript.requestContext,
           keyboardTone: transcript.keyboardTone,
-          translatedTo: transcript.translatedTo,
+          translationTarget: transcript.translationTarget,
           jobId: transcript.jobId,
           retryCount: 0,
         };
@@ -414,7 +432,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           purpose: scope,
           keyboardTone: current.requestContext === 'keyboard' ? current.keyboardTone : undefined,
           translationTarget:
-            current.requestContext === 'keyboard' ? current.translatedTo : undefined,
+            current.requestContext === 'keyboard' ? current.translationTarget : undefined,
         });
 
         const updated: Transcript = {
@@ -427,9 +445,9 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           cleanupRoute: processed.transcription.cleanupRoute,
           cleanupUnavailable: processed.transcription.cleanupUnavailable,
           cleanupWarning: processed.transcription.cleanupWarning,
-          // Only what this attempt actually translated, never the target it was asked for.
           translatedTo: processed.translatedTo,
           // Retry succeeded: the row is completed and no longer retryable.
+          translationTarget: undefined,
           audioUrl: undefined,
           status: 'completed',
           errorMessage: undefined,

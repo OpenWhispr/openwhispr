@@ -21,6 +21,9 @@ struct DirectDictationRecord: Codable, Equatable {
   var translationLabel: String?
   /// The language `text` was translated into; nil when it wasn't.
   var translatedTo: String?
+  /// The take had a target and `text` was left untranslated for a reason other than an unchanged
+  /// reply, so History can say so. Optional: records written before it still decode.
+  var translationFailed: Bool?
 }
 
 /// Per-dictation files in the App Group container: `<jobId>.json` (the record), `<jobId>.pcm`
@@ -57,7 +60,8 @@ final class DirectDictationStore {
     try write(DirectDictationRecord(
       jobId: jobId, status: .pending, userId: userId, documentID: documentID, startedAtMs: now(), completedAtMs: nil,
       durationMs: 0, tone: tone, text: nil, originalText: nil, cleanupApplied: nil,
-      translationTarget: translationTarget, translationLabel: translationLabel, translatedTo: nil
+      translationTarget: translationTarget, translationLabel: translationLabel, translatedTo: nil,
+      translationFailed: nil
     ))
   }
 
@@ -68,7 +72,8 @@ final class DirectDictationStore {
   }
 
   func complete(
-    jobId: String, text: String, originalText: String?, cleanupApplied: Bool?, translatedTo: String?, durationMs: Int
+    jobId: String, text: String, originalText: String?, cleanupApplied: Bool?, translatedTo: String?,
+    translationFailed: Bool, durationMs: Int
   ) throws {
     guard var record = record(jobId: jobId) else { return }
     record.status = .completed
@@ -78,6 +83,7 @@ final class DirectDictationStore {
     record.originalText = originalText
     record.cleanupApplied = cleanupApplied
     record.translatedTo = translatedTo
+    record.translationFailed = translationFailed
     try write(record)
     remove([pcmURL(jobId: jobId), audioURL(jobId: jobId), bodyURL(jobId: jobId), partialURL(jobId: jobId)])
   }

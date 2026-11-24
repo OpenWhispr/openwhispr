@@ -198,7 +198,7 @@ describe('transcribeAndCleanup translation', () => {
     expect(out.transcription.cleanupWarning).toBe('reason');
   });
 
-  it('keeps the cleanup warning when translation is also skipped', async () => {
+  it('keeps the cleanup warning and adds the translation one when both are skipped', async () => {
     mockCleanupTranscript.mockImplementation(
       async (text: string, options: { onSkipped?: (reason: string) => void }) => {
         options.onSkipped?.('cleanup reason');
@@ -214,7 +214,8 @@ describe('transcribeAndCleanup translation', () => {
 
     const out = await transcribeAndCleanup({ ...keyboardRequest, translationTarget: 'es' });
 
-    expect(out.transcription.cleanupWarning).toBe('cleanup reason');
+    // History has one warning line: neither failure may hide the other.
+    expect(out.transcription.cleanupWarning).toBe('cleanup reason translate reason');
   });
 
   it('does not translate when the dictation language is the target', async () => {

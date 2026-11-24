@@ -25,6 +25,7 @@ const updateConfig = jest.fn(async () => {});
 const mockRoute = jest.fn();
 const mockGuest = jest.fn();
 const mockGetSupportedLanguages = jest.fn();
+const mockHasSupportedLanguages = jest.fn(() => true);
 const mockReadiness = jest.fn();
 const mockAppleEnabled = jest.fn();
 const appStateListeners: Array<(state: string) => void> = [];
@@ -48,6 +49,7 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
 }));
 
 jest.mock('react-native', () => ({
+  Platform: { OS: 'ios' },
   AppState: {
     addEventListener: (_: string, listener: (state: string) => void) => {
       appStateListeners.push(listener);
@@ -69,7 +71,10 @@ jest.mock('@/lib/accountAccess', () => ({
   requiresRealAccount: (user: unknown) => mockGuest(user),
 }));
 jest.mock('@/lib/appleLLM', () => ({
-  AppleLLM: { getSupportedLanguages: () => mockGetSupportedLanguages() },
+  AppleLLM: {
+    getSupportedLanguages: () => mockGetSupportedLanguages(),
+    hasSupportedLanguages: () => mockHasSupportedLanguages(),
+  },
 }));
 jest.mock('@/lib/localReasoning', () => ({
   getLocalReasoningReadiness: () => mockReadiness(),
@@ -91,6 +96,7 @@ beforeEach(() => {
   mockRoute.mockReturnValue(cloudRoute);
   mockGuest.mockReturnValue(false);
   mockGetSupportedLanguages.mockResolvedValue([]);
+  mockHasSupportedLanguages.mockReturnValue(true);
   mockReadiness.mockResolvedValue({ status: 'ready', tokenCounting: true });
   mockAppleEnabled.mockReturnValue(true);
   useConfigStore.setState({
@@ -136,6 +142,13 @@ describe('keyboardTranslationSync snapshot', () => {
     expect(snapshotKeyboardTranslation('job-1')).toBeNull();
     expect(snapshotKeyboardTranslation('job-2', CACHED_ACCOUNT)).toBe('es');
     expect(readKeyboardTranslationSnapshot('job-2')).toBe('es');
+  });
+
+  it('snapshots Off on a build whose keyboard predates translation (an over-the-air update)', () => {
+    mockHasSupportedLanguages.mockReturnValue(false);
+    store[KEYS.KEYBOARD_TRANSLATION_TARGET] = 'es';
+    expect(snapshotKeyboardTranslation('job-1')).toBeNull();
+    expect(readKeyboardTranslationSnapshot('job-1')).toBeNull();
   });
 
   it('snapshots Off when the stored code is not in the current language list', () => {
@@ -201,6 +214,13 @@ describe('reconcileKeyboardTranslationFromAppGroup', () => {
 describe('startKeyboardTranslationSync', () => {
   it('marks translation not applicable for a guest on Cloud', () => {
     mockGuest.mockReturnValue(true);
+    const stop = startKeyboardTranslationSync();
+    expect(store[KEYS.KEYBOARD_TRANSLATION_APPLICABLE]).toBe('0');
+    stop();
+  });
+
+  it('marks translation not applicable on a build whose keyboard predates translation', () => {
+    mockHasSupportedLanguages.mockReturnValue(false);
     const stop = startKeyboardTranslationSync();
     expect(store[KEYS.KEYBOARD_TRANSLATION_APPLICABLE]).toBe('0');
     stop();

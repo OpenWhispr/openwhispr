@@ -359,7 +359,7 @@ private final class KeyButton: UIButton {
 
   // Same luminous-rim treatment as PillBackgroundView: a white top-lit gradient
   // masked to the border stroke, so the button reads as glass-edged. Opt-in —
-  // only the toolbar's tone and agent buttons use it.
+  // only the toolbar's options and agent buttons use it.
   var showsGlassRim = false {
     didSet {
       guard showsGlassRim != oldValue else { return }
@@ -935,7 +935,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     var stripTop: CGFloat
     var stripHeight: CGFloat
     var stripGapBelow: CGFloat
-    /// The toolbar's side inset, from the keyboard's edge: tone and agent sit this far in, plus
+    /// The toolbar's side inset, from the keyboard's edge: options and agent sit this far in, plus
     /// their own 8pt. The bar itself starts at sideMargin, so the strip reaches past it.
     var stripSideInset: CGFloat
     let sideMargin: CGFloat
@@ -1554,7 +1554,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     suggestionRestTimer?.invalidate()
     fieldSyncTimer?.invalidate()
     issueResetTimer?.invalidate()
+    // Read as "an issue owns the pill" (isRecordButtonAtRest); the invalidated timer will never
+    // reset the pill, and the review card's early return in viewDidAppear skips the refresh that
+    // would otherwise clear it.
+    issueResetTimer = nil
     waitForTranscriptTimer?.invalidate()
+    // Read as "a transcript is still on its way" (isRecordButtonAtRest, the Darwin status
+    // handler), so a reused controller must not keep a dead one. viewDidAppear starts a new
+    // wait when the app is still transcribing.
+    waitForTranscriptTimer = nil
     waitForAgentResultTimer?.invalidate()
     agentReviewNoteResetTimer?.invalidate()
     stopRecordingPoll()
@@ -2581,7 +2589,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     setupSuggestionBar()
   }
 
-  /// The round tone and agent buttons: a grey disc with a glass rim.
+  /// The round options and agent buttons: a grey disc with a glass rim.
   private func configureToolbarButton(_ button: KeyButton, image: UIImage?, accessibilityLabel: String) {
     button.translatesAutoresizingMaskIntoConstraints = false
     button.tintColor = .label
@@ -3074,8 +3082,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func refreshOptionsButton() {
     // isToneApplicable() fails open on a dead App Group — `guard let defaults`
     // then `!= "0"` reads a live-but-empty suite as applicable — so the
-    // options gate needs its own check. Dim and lock rather than isEnabled = false,
-    // which applies UIButton.Configuration's own foreground transform on top.
+    // options gate needs its own check. Dim and lock rather than isEnabled = false:
+    // a system-type button greys its own title and image when disabled, on top of the alpha.
     guard hasFullAccess else {
       optionsButton.menu = nil
       optionsButton.isUserInteractionEnabled = false
@@ -3083,16 +3091,30 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       showOptionsBadge(for: nil, languages: [])
       return
     }
-    let provider = KeyboardHandoffProvider.shared
-    let translation = provider.translationSection()
-    let settings = UIAction(title: "Keyboard Settings…") { [weak self] _ in
-      self?.openKeyboardSettings()
-    }
-    optionsButton.menu = UIMenu(children: [makeToneMenu(provider), makeTranslateMenu(translation), settings])
+    // Built each time it opens: the app (or this keyboard in another app) can change the
+    // languages, what's applicable or the target in the App Group while this one stays up.
+    optionsButton.menu = UIMenu(children: [
+      UIDeferredMenuElement.uncached { [weak self] completion in
+        completion(self?.makeOptionsMenuElements() ?? [])
+      },
+    ])
     optionsButton.isUserInteractionEnabled = true
     // Keyboard Settings and Default/Off are always usable, so the button never dims here.
     optionsButton.alpha = 1.0
+    let translation = KeyboardHandoffProvider.shared.translationSection()
     showOptionsBadge(for: translation.selected, languages: translation.all)
+  }
+
+  /// The options menu's rows, read from the App Group as the menu opens. The badge follows
+  /// what they read, so the button never contradicts the menu it opens.
+  private func makeOptionsMenuElements() -> [UIMenuElement] {
+    let provider = KeyboardHandoffProvider.shared
+    let translation = provider.translationSection()
+    showOptionsBadge(for: translation.selected, languages: translation.all)
+    let settings = UIAction(title: "Keyboard Settings…") { [weak self] _ in
+      self?.openKeyboardSettings()
+    }
+    return [makeToneMenu(provider), makeTranslateMenu(translation), settings]
   }
 
   private func makeToneMenu(_ provider: KeyboardHandoffProvider) -> UIMenu {
@@ -3141,7 +3163,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     if !section.recents.isEmpty {
       children.append(UIMenu(options: .displayInline, children: section.recents.map(languageAction)))
     }
-    children.append(UIMenu(title: "All languages", children: section.all.map(languageAction)))
+    // No list until the app has run since the update; an empty submenu would open onto nothing.
+    if !section.all.isEmpty {
+      children.append(UIMenu(title: "All languages", children: section.all.map(languageAction)))
+    }
     return UIMenu(
       title: section.locked ? "Set up translation in OpenWhispr" : "Translate to", children: children
     )
@@ -3181,9 +3206,21 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     guard let url = URL(string: "\(Self.appUrlScheme)://keyboard-settings") else { return }
     guard let openURLAction else {
       logRecordMarker("openKeyboardSettings.noOpener")
+      showOpenAppToChangeSettings()
       return
     }
-    openURLAction(url)
+    openURLAction(url) { [weak self] accepted in
+      guard !accepted, let self else { return }
+      self.logRecordMarker("openKeyboardSettings.refused")
+      self.showOpenAppToChangeSettings()
+    }
+  }
+
+  /// The menu row did nothing, so the pill says where to go instead. Only at rest: a take, a
+  /// processing pill or another issue owns the pill, and the issue's reset would tear it down.
+  private func showOpenAppToChangeSettings() {
+    guard isRecordButtonAtRest else { return }
+    showIssueState(title: "Open OpenWhispr")
   }
 
   /// The dictation deep link the agent button hands off with when the background
@@ -6450,7 +6487,7 @@ private struct KeyboardHandoffProvider {
 
   /// Applicable = the voice assistant can run: an account for Cloud, or its own
   /// provider. Not applicable ⇒ the entry button is dimmed and points the user at
-  /// the app, mirroring tone.
+  /// the app.
   func isAgentApplicable() -> Bool {
     UserDefaults(suiteName: appGroupId)?.string(forKey: agentApplicableKey) == "1"
   }

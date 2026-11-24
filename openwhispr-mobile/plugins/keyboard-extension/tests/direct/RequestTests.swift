@@ -160,6 +160,9 @@ extension DirectDictationTests {
     expect(request?.timeoutInterval, 12, "translate timeout")
     expect(request?.value(forHTTPHeaderField: "Content-Type"), "application/json", "translate content type")
     expect(request?.value(forHTTPHeaderField: "Cookie"), "session=1", "translate cookie")
+    // As the app's /api/reason calls: the server sizes its model fallback budget from it.
+    expect(request?.value(forHTTPHeaderField: "x-openwhispr-client-timeout-ms"), "12000",
+           "translate client timeout matches the request's own")
     let body = (try? JSONSerialization.jsonObject(with: request?.httpBody ?? Data())) as? [String: Any] ?? [:]
     expect(body["text"] as? String, "Hello", "translate text")
     expect(body["purpose"] as? String, "translation", "translate purpose")
@@ -193,13 +196,18 @@ extension DirectDictationTests {
     expect(try! R.makeTranslateRequest(translationContext(language: "zh-CN", target: "en", label: "English"), text: "Hi") != nil,
            true, "translate: different base languages translate")
 
-    expect(R.parseTranslation(status: 200, body: json(#"{"text":"Hola"}"#), input: "Hello"), "Hola", "translation 200")
-    expect(R.parseTranslation(status: 200, body: json(#"{"text":" Hello "}"#), input: "Hello") == nil, true,
+    expect(R.parseTranslation(status: 200, body: json(#"{"text":"Hola"}"#), input: "Hello"), .translated("Hola"),
+           "translation 200")
+    expect(R.parseTranslation(status: 200, body: json(#"{"text":" Hello "}"#), input: "Hello"), .unchanged,
            "translation unchanged after trimming")
-    expect(R.parseTranslation(status: 200, body: json(#"{"text":"Hello\n  there"}"#), input: "Hello there") == nil, true,
+    expect(R.parseTranslation(status: 200, body: json(#"{"text":"Hello\n  there"}"#), input: "Hello there"), .unchanged,
            "translation unchanged after collapsing whitespace")
-    expect(R.parseTranslation(status: 200, body: json(#"{"text":"  "}"#), input: "Hello") == nil, true, "translation blank")
-    expect(R.parseTranslation(status: 500, body: Data(), input: "Hello") == nil, true, "translation 500")
-    expect(R.parseTranslation(status: 403, body: json(#"{"text":"Hola"}"#), input: "Hello") == nil, true, "translation refused")
+    expect(R.parseTranslation(status: 200, body: json(#"{"text":"  "}"#), input: "Hello"), .failed, "translation blank")
+    expect(R.parseTranslation(status: 200, body: json("<html>"), input: "Hello"), .failed, "translation unreadable body")
+    expect(R.parseTranslation(status: 200, body: json(#"{"result":"Hola"}"#), input: "Hello"), .failed,
+           "translation without text")
+    expect(R.parseTranslation(status: 500, body: Data(), input: "Hello"), .failed, "translation 500")
+    expect(R.parseTranslation(status: 0, body: Data(), input: "Hello"), .failed, "translation transport error")
+    expect(R.parseTranslation(status: 403, body: json(#"{"text":"Hola"}"#), input: "Hello"), .failed, "translation refused")
   }
 }

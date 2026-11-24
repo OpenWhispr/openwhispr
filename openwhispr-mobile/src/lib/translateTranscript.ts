@@ -9,8 +9,12 @@ import {
   createTimeoutSignal,
   localCleanupTimeoutMs,
 } from './cleanupTranscript';
-import { buildTranslatePrompt, translationLabel } from './keyboardTranslation';
-import { countLocalReasoningTokens, estimateLocalTokens } from './localReasoning';
+import { buildTranslatePrompt, translationFailureReason } from './keyboardTranslation';
+import {
+  LOCAL_OUTPUT_TOKEN_RESERVE,
+  countLocalReasoningTokens,
+  estimateLocalTokens,
+} from './localReasoning';
 import type { InferenceRoute } from './mobileProviders';
 import { createApiRetryStrategy, withRetry } from './retry';
 
@@ -21,6 +25,8 @@ export interface TranslateOptions {
   inferenceRoute?: InferenceRoute;
   cleanupUnavailable?: string;
   onSkipped?: (reason: string) => void;
+  /** Polled while the request runs; true ends it and skips any retry. */
+  shouldCancel?: () => boolean;
 }
 
 export interface TranslateResult {
@@ -28,7 +34,9 @@ export interface TranslateResult {
   translated: boolean;
 }
 
-const GUEST_SKIP_REASON = 'Sign in to translate dictation. Your text was typed untranslated.';
+// Apple Intelligence stops at LOCAL_OUTPUT_TOKEN_RESERVE without an error. A counted reply within
+// this many tokens of it was cut off; the count can be a few tokens off the model's own.
+const LOCAL_CUT_OFF_MARGIN_TOKENS = 16;
 
 // Whitespace and line breaks don't make a reply a translation (as desktop's translationChain.js).
 function collapse(text: string): string {
@@ -41,9 +49,9 @@ function isAbortError(error: unknown): boolean {
 
 // Same hints cleanup gives the service: a chosen provider is sent there even in On-Device mode,
 // and an on-device route follows the privacy mode.
-function routingFor(route: InferenceRoute | undefined): ReasoningRequest['routing'] {
-  if (route?.mode === 'providers') return { sendToChosenProvider: true };
-  if (route?.mode === 'local') {
+function routingFor(route: InferenceRoute): ReasoningRequest['routing'] {
+  if (route.mode === 'providers') return { sendToChosenProvider: true };
+  if (route.mode === 'local') {
     return { isPrivateNote: useProcessingModeStore.getState().activeMode === 'private' };
   }
   return undefined;
@@ -51,10 +59,18 @@ function routingFor(route: InferenceRoute | undefined): ReasoningRequest['routin
 
 // Apple Intelligence writes a translation about as fast as a cleaned copy, so a long dictation
 // gets cleanup's on-device budget rather than Cloud's 12 s.
-async function timeoutFor(text: string, route: InferenceRoute | undefined): Promise<number> {
-  if (route?.mode !== 'local') return TRANSLATE_TIMEOUT_MS;
+async function timeoutFor(text: string, route: InferenceRoute): Promise<number> {
+  if (route.mode !== 'local') return TRANSLATE_TIMEOUT_MS;
   const tokens = (await countLocalReasoningTokens({ prompt: text })) ?? estimateLocalTokens(text);
   return localCleanupTimeoutMs(tokens);
+}
+
+// Only a counted reply can tell: iOS counts tokens from 26.4, and an estimate from length is too
+// rough to tell a long translation from a cut-off one.
+async function isCutOff(reply: string, route: InferenceRoute): Promise<boolean> {
+  if (route.mode !== 'local') return false;
+  const tokens = await countLocalReasoningTokens({ prompt: reply });
+  return tokens !== null && tokens >= LOCAL_OUTPUT_TOKEN_RESERVE - LOCAL_CUT_OFF_MARGIN_TOKENS;
 }
 
 /**
@@ -67,7 +83,8 @@ export async function translateTranscript(
   options: TranslateOptions,
 ): Promise<TranslateResult> {
   const untranslated: TranslateResult = { text, translated: false };
-  const { target, inferenceRoute, onSkipped } = options;
+  const { target, inferenceRoute, onSkipped, shouldCancel } = options;
+  const failureReason = translationFailureReason(target);
 
   // Sending empty text invites the model to answer with its own instructions.
   if (!text.trim()) return untranslated;
@@ -76,15 +93,20 @@ export async function translateTranscript(
     onSkipped?.(options.cleanupUnavailable);
     return untranslated;
   }
-  if (
-    (!inferenceRoute || inferenceRoute.mode === 'openwhispr') &&
-    requiresRealAccount(useAuthStore.getState().user)
-  ) {
-    onSkipped?.(GUEST_SKIP_REASON);
+  // Every job pins its cleanup route or says why it has none, so a missing one leaves no route
+  // this text may be sent on.
+  if (!inferenceRoute) {
+    onSkipped?.(failureReason);
+    return untranslated;
+  }
+  const { user } = useAuthStore.getState();
+  if (inferenceRoute.mode === 'openwhispr' && requiresRealAccount(user)) {
+    // An anonymous onboarding session has a session but no account.
+    const action = user?.isAnonymous ? 'Create an account' : 'Sign in';
+    onSkipped?.(`${action} to translate dictation. The text was left untranslated.`);
     return untranslated;
   }
 
-  const failureReason = `Couldn't translate to ${translationLabel(target)}. Your text was typed untranslated.`;
   const routing = routingFor(inferenceRoute);
 
   try {
@@ -92,13 +114,13 @@ export async function translateTranscript(
     const retryStrategy = createApiRetryStrategy();
     const result = await withRetry(
       async () => {
-        const { signal, cancel } = createTimeoutSignal(timeoutMs);
+        const { signal, cancel } = createTimeoutSignal(timeoutMs, shouldCancel);
         try {
           return await ReasoningService.processText({
             text,
             systemPrompt: buildTranslatePrompt(target),
             inferenceScope: 'cleanup',
-            ...(inferenceRoute ? { inferenceRoute } : {}),
+            inferenceRoute,
             ...(routing ? { routing } : {}),
             purpose: 'translation',
             timeoutMs,
@@ -113,13 +135,14 @@ export async function translateTranscript(
         maxRetries: CLEANUP_MAX_RETRIES,
         initialDelay: CLEANUP_INITIAL_RETRY_DELAY_MS,
         // A request the timeout or a cancel aborted already used its time; another try would
-        // double the wait for a dictation that is about to be typed untranslated.
+        // double the wait for a dictation that is about to be typed untranslated. A cancelled
+        // dictation is thrown away, so it never pays for a second request.
         shouldRetry: (error) =>
-          !isAbortError(error) && (retryStrategy.shouldRetry?.(error) ?? true),
+          !isAbortError(error) && !shouldCancel?.() && (retryStrategy.shouldRetry?.(error) ?? true),
       },
     );
     const reply = collapse(result.text);
-    if (!reply) {
+    if (!reply || (await isCutOff(result.text, inferenceRoute))) {
       onSkipped?.(failureReason);
       return untranslated;
     }

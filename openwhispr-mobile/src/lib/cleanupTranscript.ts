@@ -45,15 +45,30 @@ export const CLEANUP_TIMEOUT_MS = 12_000;
 export const CLEANUP_MAX_RETRIES = 1;
 export const CLEANUP_INITIAL_RETRY_DELAY_MS = 750;
 
-export function createTimeoutSignal(timeoutMs: number): {
+const CANCEL_POLL_MS = 250;
+
+// Aborts after `timeoutMs`, or once `shouldCancel` reports the dictation was cancelled (the
+// keyboard's cancel is a flag the app polls, not an event).
+export function createTimeoutSignal(
+  timeoutMs: number,
+  shouldCancel?: () => boolean,
+): {
   signal: AbortSignal;
   cancel: () => void;
 } {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const poll = shouldCancel
+    ? setInterval(() => {
+        if (shouldCancel()) controller.abort();
+      }, CANCEL_POLL_MS)
+    : undefined;
   return {
     signal: controller.signal,
-    cancel: () => clearTimeout(timeout),
+    cancel: () => {
+      clearTimeout(timeout);
+      if (poll) clearInterval(poll);
+    },
   };
 }
 

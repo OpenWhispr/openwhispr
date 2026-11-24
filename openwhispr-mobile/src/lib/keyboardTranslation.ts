@@ -71,6 +71,19 @@ export function translationLabel(code: string): string {
   return registry.languages.find((language) => language.code === code)?.label ?? code;
 }
 
+/** The warning a translation that didn't happen leaves in History. */
+export function translationFailureReason(target: string): string {
+  return `Couldn't translate to ${translationLabel(target)}. The text was left untranslated.`;
+}
+
+// History has one warning line, and a cleanup failure must not hide that the text wasn't
+// translated. With cleanup unavailable, both steps skip for the same reason; say it once.
+export function withTranslationWarning(cleanupWarning: string | undefined, reason: string): string {
+  if (!cleanupWarning) return reason;
+  if (cleanupWarning.includes(reason)) return cleanupWarning;
+  return `${cleanupWarning} ${reason}`;
+}
+
 export function buildTranslatePrompt(targetCode: string): string {
   return DEFAULT_TRANSLATE_PROMPT.split(TARGET_LANGUAGE_PLACEHOLDER).join(
     translationLabel(targetCode),

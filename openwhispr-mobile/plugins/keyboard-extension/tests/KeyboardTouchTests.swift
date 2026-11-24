@@ -236,11 +236,19 @@ private extension KeyboardViewController {
   func touchTestDirectWillDisappear() { directKeyboardWillDisappear() }
   var touchTestOptionsButton: KeyButton { optionsButton }
   func touchTestRefreshOptions() { refreshOptionsButton() }
+  /// What the options menu's deferred element hands UIKit each time the menu opens.
+  func touchTestOptionsMenuElements() -> [UIMenuElement] { makeOptionsMenuElements() }
   /// What the Translate menu's Off and language actions run.
   func touchTestSelectTranslation(_ code: String?) {
     KeyboardHandoffProvider.shared.setTranslationTarget(code)
     translationTargetDidChange()
   }
+  /// The opener the dictation Link hands over; nil before its view has appeared.
+  func touchTestSetOpener(_ opener: OpenURLAction?) { openURLAction = opener }
+  /// What the menu's Keyboard Settings… row runs.
+  func touchTestOpenKeyboardSettings() { openKeyboardSettings() }
+  /// The poll that runs while the app transcribes a handed-off recording.
+  func touchTestWaitForTranscript() { waitForTranscript() }
 }
 
 private struct TouchChecks {
@@ -315,6 +323,7 @@ private enum KeyboardTouchTests {
     checkDirectDictation(&checks)
     checkOptionsButton(&checks)
     checkTranslationSelectionRefreshesPill(&checks)
+    checkKeyboardSettingsRefused(&checks)
     checkTypingHelp(&checks)
 
     print("Keyboard touch routing: \(checks.count - checks.failures.count)/\(checks.count) passed")
@@ -817,7 +826,10 @@ private func checkOptionsButton(_ checks: inout TouchChecks) {
     checks.check("options button: the App Group suite opens", false)
     return
   }
-  let keys = ["keyboard_translation_target", "keyboard_translation_languages", "keyboard_translation_applicable"]
+  let keys = [
+    "keyboard_translation_target", "keyboard_translation_languages",
+    "keyboard_translation_applicable", "keyboard_translation_recents",
+  ]
   let saved = keys.map { defaults.object(forKey: $0) }
   defer {
     for (key, value) in zip(keys, saved) {
@@ -827,6 +839,7 @@ private func checkOptionsButton(_ checks: inout TouchChecks) {
   defaults.set(#"[{"code":"es","label":"Spanish"},{"code":"fr","label":"French"}]"#, forKey: keys[1])
   defaults.set("1", forKey: keys[2])
   defaults.set("es", forKey: keys[0])
+  defaults.removeObject(forKey: keys[3])
 
   let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
   let button = keyboard.touchTestOptionsButton
@@ -837,6 +850,46 @@ private func checkOptionsButton(_ checks: inout TouchChecks) {
   checks.check("options button with a target: no icon", button.image(for: .normal) == nil)
   checks.check("options button with a target: says so", button.accessibilityValue == "Translating to Spanish")
 
+  // The menu is built each time it opens, from what the App Group says then.
+  checks.check(
+    "options menu: one element, built as it opens",
+    button.menu?.children.count == 1 && button.menu?.children.first is UIDeferredMenuElement
+  )
+  let elements = keyboard.touchTestOptionsMenuElements()
+  checks.check(
+    "options menu: Tone, Translate to, Keyboard Settings… (got \(elements.map(\.title)))",
+    elements.count == 3 && elements[0] is UIMenu
+      && (elements[1] as? UIMenu)?.title == "Translate to"
+      && (elements[2] as? UIAction)?.title == "Keyboard Settings…"
+  )
+  func translateRows() -> [UIMenuElement] {
+    let opened = keyboard.touchTestOptionsMenuElements()
+    return opened.count > 1 ? (opened[1] as? UIMenu)?.children ?? [] : []
+  }
+  func checkedTitles(_ rows: [UIMenuElement]) -> [String] {
+    rows.flatMap { ($0 as? UIMenu)?.children ?? [$0] }
+      .compactMap { $0 as? UIAction }.filter { $0.state == .on }.map(\.title)
+  }
+
+  // Another keyboard (or the app) picks French while this one shows: opening the menu shows
+  // it ticked, and the badge follows.
+  defaults.set("fr", forKey: keys[0])
+  let picked = translateRows()
+  checks.check("options menu: Off and All languages (got \(picked.map(\.title)))", picked.map(\.title) == ["Off", "All languages"])
+  checks.check("options menu: a pick made elsewhere is ticked (got \(checkedTitles(picked)))", checkedTitles(picked) == ["French"])
+  checks.check(
+    "options menu: opening it syncs the badge (got \(button.title(for: .normal) ?? "nil"))",
+    button.title(for: .normal) == "FR" && button.accessibilityValue == "Translating to French"
+  )
+
+  // No list yet (the app hasn't run since the update): no empty All languages submenu.
+  defaults.removeObject(forKey: keys[1])
+  let unlisted = translateRows()
+  checks.check("options menu without languages: Off only (got \(unlisted.map(\.title)))", unlisted.map(\.title) == ["Off"])
+  checks.check("options menu without languages: Off is ticked", checkedTitles(unlisted) == ["Off"])
+  checks.check("options menu without languages: the badge goes back to the icon", button.image(for: .normal) != nil)
+  defaults.set(#"[{"code":"es","label":"Spanish"},{"code":"fr","label":"French"}]"#, forKey: keys[1])
+
   defaults.removeObject(forKey: keys[0])
   keyboard.touchTestRefreshOptions()
   checks.check("options button with translation off: an icon", button.image(for: .normal) != nil)
@@ -845,6 +898,14 @@ private func checkOptionsButton(_ checks: inout TouchChecks) {
     (button.title(for: .normal) ?? "").isEmpty
   )
   checks.check("options button with translation off: no value", button.accessibilityValue == nil)
+
+  // Without Full Access nothing can reach the App Group: no menu, dimmed.
+  TestEnvironment.fullAccess = false
+  keyboard.touchTestRefreshOptions()
+  checks.check(
+    "options button without Full Access: no menu, dimmed and locked",
+    button.menu == nil && button.alpha < 1 && !button.isUserInteractionEnabled
+  )
 }
 
 /// Picking a language or Off can change whether the direct path takes the dictation, so the
@@ -899,7 +960,85 @@ private func checkTranslationSelectionRefreshesPill(_ checks: inout TouchChecks)
     "translate pick: an issue state stays (got \(keyboard.touchTestPillTitle ?? "nil"))",
     keyboard.touchTestPillTitle == "No speech"
   )
+  // Going away ends the issue's timer, so the same controller shown again follows a pick.
+  keyboard.viewWillDisappear(false)
+  keyboard.touchTestSelectTranslation("es")
+  checks.check(
+    "translate pick: after the keyboard went away mid-issue the pill follows again (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    keyboard.touchTestPillTitle == "Tap to speak"
+  )
   keyboard.touchTestRefreshPill()
+
+  // So does a handed-off recording the app is still transcribing.
+  direct.canRecordHere = false
+  keyboard.touchTestRefreshPill()
+  keyboard.touchTestWaitForTranscript()
+  direct.canRecordHere = true
+  keyboard.touchTestSelectTranslation("es")
+  checks.check(
+    "translate pick: a transcript on its way keeps the pill (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    keyboard.touchTestPillTitle == "Activate"
+  )
+  // Going away ends that wait, so the same controller shown again is back at rest.
+  keyboard.viewWillDisappear(false)
+  keyboard.touchTestSelectTranslation("es")
+  checks.check(
+    "translate pick: after the keyboard went away the pill follows again (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    keyboard.touchTestPillTitle == "Tap to speak"
+  )
+}
+
+/// Keyboard Settings… opens the app through the dictation Link's opener. When iOS refuses it,
+/// or there's no opener yet, the pill says to open OpenWhispr, but never over a take.
+@MainActor
+private func checkKeyboardSettingsRefused(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let direct = FakeDirectDictation()
+  keyboard.touchTestUseDirect(direct)
+  keyboard.touchTestRefreshPill()
+  let restTitle = keyboard.touchTestPillTitle
+
+  if #available(iOS 16.0, *) {
+    final class Opened { var urls = [URL]() }
+    let opened = Opened()
+    keyboard.touchTestSetOpener(OpenURLAction { url in
+      opened.urls.append(url)
+      return .handled
+    })
+    keyboard.touchTestOpenKeyboardSettings()
+    checks.check(
+      "keyboard settings: opens the app's settings link (got \(opened.urls))",
+      opened.urls.map(\.host) == ["keyboard-settings"]
+    )
+    checks.check("keyboard settings: an accepted open leaves the pill", keyboard.touchTestPillTitle == restTitle)
+
+    keyboard.touchTestSetOpener(OpenURLAction { _ in .discarded })
+    keyboard.touchTestOpenKeyboardSettings()
+    checks.check(
+      "keyboard settings refused: the pill says to open OpenWhispr (got \(keyboard.touchTestPillTitle ?? "nil"))",
+      keyboard.touchTestPillTitle == "Open OpenWhispr"
+    )
+    keyboard.touchTestRefreshPill()
+  }
+
+  keyboard.touchTestSetOpener(nil)
+  keyboard.touchTestOpenKeyboardSettings()
+  checks.check(
+    "keyboard settings without an opener: the pill says the same (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    keyboard.touchTestPillTitle == "Open OpenWhispr"
+  )
+  keyboard.touchTestRefreshPill()
+
+  // A take owns the pill: the failure is only logged.
+  direct.push(.recording)
+  keyboard.touchTestOpenKeyboardSettings()
+  checks.check(
+    "keyboard settings during a take: the take keeps the pill",
+    keyboard.touchTestCanvasShown && keyboard.touchTestPillTitle != "Open OpenWhispr"
+  )
+  direct.push(.idle)
 }
 
 /// The pill and the recording canvas when the keyboard records and transcribes itself.

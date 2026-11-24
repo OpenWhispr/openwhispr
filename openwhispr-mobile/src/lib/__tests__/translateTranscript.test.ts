@@ -1,5 +1,6 @@
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { buildTranslatePrompt } from '@/lib/keyboardTranslation';
+import { LOCAL_OUTPUT_TOKEN_RESERVE } from '@/lib/localReasoning';
 import { translateTranscript } from '@/lib/translateTranscript';
 
 // accountAccess pulls in the router for its sign-in alert; stub it here.
@@ -29,28 +30,34 @@ jest.mock('@/lib/localReasoning', () => ({
   countLocalReasoningTokens: () => mockCountTokens(),
 }));
 let mockGuestSession = false;
+let mockSignedOut = false;
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: {
     getState: () => ({
-      user: mockGuestSession
-        ? { id: 'anon', isAnonymous: true }
-        : { id: 'real', isAnonymous: false },
+      user: mockSignedOut
+        ? null
+        : mockGuestSession
+          ? { id: 'anon', isAnonymous: true }
+          : { id: 'real', isAnonymous: false },
     }),
   },
 }));
 
 const processText = ReasoningService.processText as jest.Mock;
-const SKIPPED = "Couldn't translate to Spanish. Your text was typed untranslated.";
+const SKIPPED = "Couldn't translate to Spanish. The text was left untranslated.";
+const CLOUD = { mode: 'openwhispr', scope: 'cleanup' } as const;
+const LOCAL = { mode: 'local', scope: 'cleanup' } as const;
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockGuestSession = false;
+  mockSignedOut = false;
 });
 
 describe('translateTranscript', () => {
   it('returns the translation and sends purpose "translation" with the prompt', async () => {
     processText.mockResolvedValue({ text: 'Hola', model: 'm' });
-    const out = await translateTranscript('Hello', { target: 'es' });
+    const out = await translateTranscript('Hello', { target: 'es', inferenceRoute: CLOUD });
     expect(out).toEqual({ text: 'Hola', translated: true });
     expect(processText).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -66,7 +73,9 @@ describe('translateTranscript', () => {
   it.each(['', '   '])('keeps the input and warns when the reply is %p', async (reply) => {
     processText.mockResolvedValue({ text: reply, model: 'm' });
     const onSkipped = jest.fn();
-    expect(await translateTranscript('Hello', { target: 'es', onSkipped })).toEqual({
+    expect(
+      await translateTranscript('Hello', { target: 'es', inferenceRoute: CLOUD, onSkipped }),
+    ).toEqual({
       text: 'Hello',
       translated: false,
     });
@@ -80,7 +89,9 @@ describe('translateTranscript', () => {
     async (reply) => {
       processText.mockResolvedValue({ text: reply, model: 'm' });
       const onSkipped = jest.fn();
-      expect(await translateTranscript('Hello', { target: 'es', onSkipped })).toEqual({
+      expect(
+        await translateTranscript('Hello', { target: 'es', inferenceRoute: CLOUD, onSkipped }),
+      ).toEqual({
         text: 'Hello',
         translated: false,
       });
@@ -113,14 +124,19 @@ describe('translateTranscript', () => {
 
   it('compares with collapsed whitespace', async () => {
     processText.mockResolvedValue({ text: 'Hello   big\nworld', model: 'm' });
-    const out = await translateTranscript('Hello big world', { target: 'es' });
+    const out = await translateTranscript('Hello big world', {
+      target: 'es',
+      inferenceRoute: CLOUD,
+    });
     expect(out).toEqual({ text: 'Hello big world', translated: false });
   });
 
   it('keeps the input when the model throws', async () => {
     processText.mockRejectedValue(Object.assign(new Error('boom'), { status: 400 }));
     const onSkipped = jest.fn();
-    expect(await translateTranscript('Hello', { target: 'es', onSkipped })).toEqual({
+    expect(
+      await translateTranscript('Hello', { target: 'es', inferenceRoute: CLOUD, onSkipped }),
+    ).toEqual({
       text: 'Hello',
       translated: false,
     });
@@ -131,7 +147,7 @@ describe('translateTranscript', () => {
     processText
       .mockRejectedValueOnce(Object.assign(new Error('down'), { status: 503 }))
       .mockResolvedValueOnce({ text: 'Hola', model: 'm' });
-    expect(await translateTranscript('Hello', { target: 'es' })).toEqual({
+    expect(await translateTranscript('Hello', { target: 'es', inferenceRoute: CLOUD })).toEqual({
       text: 'Hola',
       translated: true,
     });
@@ -140,7 +156,7 @@ describe('translateTranscript', () => {
 
   it('does not retry a request the timeout or a cancel aborted', async () => {
     processText.mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }));
-    expect(await translateTranscript('Hello', { target: 'es' })).toEqual({
+    expect(await translateTranscript('Hello', { target: 'es', inferenceRoute: CLOUD })).toEqual({
       text: 'Hello',
       translated: false,
     });
@@ -158,8 +174,77 @@ describe('translateTranscript', () => {
     expect(out).toEqual({ text: 'Hello', translated: false });
     expect(processText).not.toHaveBeenCalled();
     expect(onSkipped).toHaveBeenCalledWith(
-      'Sign in to translate dictation. Your text was typed untranslated.',
+      'Create an account to translate dictation. The text was left untranslated.',
     );
+  });
+
+  it('asks a signed-out user to sign in', async () => {
+    mockSignedOut = true;
+    const onSkipped = jest.fn();
+    await translateTranscript('Hello', { target: 'es', inferenceRoute: CLOUD, onSkipped });
+    expect(processText).not.toHaveBeenCalled();
+    expect(onSkipped).toHaveBeenCalledWith(
+      'Sign in to translate dictation. The text was left untranslated.',
+    );
+  });
+
+  it('does not send the text anywhere when the job has no cleanup route', async () => {
+    const onSkipped = jest.fn();
+    expect(await translateTranscript('Hello', { target: 'es', onSkipped })).toEqual({
+      text: 'Hello',
+      translated: false,
+    });
+    expect(processText).not.toHaveBeenCalled();
+    expect(onSkipped).toHaveBeenCalledWith(SKIPPED);
+  });
+
+  it('ends the request once the dictation is cancelled, without retrying', async () => {
+    processText.mockImplementation(
+      ({ signal }: { signal: AbortSignal }) =>
+        new Promise((_, reject) => {
+          signal.addEventListener('abort', () =>
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+          );
+        }),
+    );
+    let cancelled = false;
+    const pending = translateTranscript('Hello', {
+      target: 'es',
+      inferenceRoute: CLOUD,
+      shouldCancel: () => cancelled,
+    });
+    cancelled = true;
+    expect(await pending).toEqual({ text: 'Hello', translated: false });
+    expect(processText).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry a server error once the dictation is cancelled', async () => {
+    processText.mockRejectedValue(Object.assign(new Error('down'), { status: 503 }));
+    await translateTranscript('Hello', {
+      target: 'es',
+      inferenceRoute: CLOUD,
+      shouldCancel: () => true,
+    });
+    expect(processText).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats an On-Device reply that reached the output limit as cut off', async () => {
+    mockCountTokens.mockResolvedValueOnce(20).mockResolvedValueOnce(LOCAL_OUTPUT_TOKEN_RESERVE);
+    processText.mockResolvedValue({ text: 'Hola, ¿qué tal', model: 'm' });
+    const onSkipped = jest.fn();
+    expect(
+      await translateTranscript('Hello', { target: 'es', inferenceRoute: LOCAL, onSkipped }),
+    ).toEqual({ text: 'Hello', translated: false });
+    expect(onSkipped).toHaveBeenCalledWith(SKIPPED);
+  });
+
+  it('keeps an On-Device reply when iOS cannot count its tokens', async () => {
+    mockCountTokens.mockResolvedValue(null);
+    processText.mockResolvedValue({ text: 'Hola', model: 'm' });
+    expect(await translateTranscript('Hello', { target: 'es', inferenceRoute: LOCAL })).toEqual({
+      text: 'Hola',
+      translated: true,
+    });
   });
 
   it('does not call the model when cleanup is unavailable', async () => {
@@ -175,7 +260,7 @@ describe('translateTranscript', () => {
   });
 
   it('does not call the model for empty text', async () => {
-    expect(await translateTranscript('  ', { target: 'es' })).toEqual({
+    expect(await translateTranscript('  ', { target: 'es', inferenceRoute: CLOUD })).toEqual({
       text: '  ',
       translated: false,
     });

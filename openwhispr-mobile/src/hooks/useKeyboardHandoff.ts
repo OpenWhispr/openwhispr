@@ -26,7 +26,11 @@ import {
   snapshotKeyboardTranslation,
   readKeyboardTranslationSnapshot,
 } from '@/lib/keyboardTranslationSync';
-import { shouldTranslate } from '@/lib/keyboardTranslation';
+import {
+  shouldTranslate,
+  translationFailureReason,
+  withTranslationWarning,
+} from '@/lib/keyboardTranslation';
 import { KEYBOARD_SETTINGS_ROUTE, markKeyboardSettingsLink } from '@/lib/keyboardSettingsLink';
 import { translateTranscript } from '@/lib/translateTranscript';
 import {
@@ -430,7 +434,7 @@ export function useKeyboardHandoff(
                 requestContext: 'keyboard',
                 jobId: providerJobId,
                 keyboardTone: readKeyboardToneSnapshot(providerJobId),
-                translatedTo: readKeyboardTranslationSnapshot(providerJobId) ?? undefined,
+                translationTarget: readKeyboardTranslationSnapshot(providerJobId) ?? undefined,
                 errorMessage:
                   'The provider upload was interrupted. Retry uses the original provider.',
               });
@@ -481,11 +485,23 @@ export function useKeyboardHandoff(
         } catch {
           recoveredRoute = undefined;
         }
-        if (!recoveredRoute)
-          cleanupWarning =
-            'The original cleanup route is unavailable. Your raw transcript is saved.';
+        const translationTarget = readKeyboardTranslationSnapshot(rawJobId);
+        // The server already cleaned this text (fused cleanup); the native uploader kept it in the
+        // orphan slot only so its translation runs here.
+        const alreadyCleaned =
+          !providerResult &&
+          AppGroupStorage.getItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_TRANSCRIPT_CLEANED_JOB_ID) ===
+            rawJobId;
+        if (!recoveredRoute) {
+          if (!alreadyCleaned) {
+            cleanupWarning =
+              'The original cleanup route is unavailable. Your raw transcript is saved.';
+          } else if (translationTarget) {
+            cleanupWarning = translationFailureReason(translationTarget);
+          }
+        }
         const cleaned =
-          !recoveredRoute || recoveredRoute.provider === 'local'
+          alreadyCleaned || !recoveredRoute || recoveredRoute.provider === 'local'
             ? rawText
             : await cleanupTranscript(rawText, {
                 inferenceRoute: recoveredRoute.cleanupRoute,
@@ -504,7 +520,6 @@ export function useKeyboardHandoff(
         // Same translation step transcribeAndCleanup applies, on the same route as cleanup above.
         let finalText = expanded;
         let translatedTo: string | undefined;
-        const translationTarget = readKeyboardTranslationSnapshot(rawJobId);
         if (
           recoveredRoute &&
           recoveredRoute.provider !== 'local' &&
@@ -519,8 +534,9 @@ export function useKeyboardHandoff(
             inferenceRoute: recoveredRoute.cleanupRoute,
             cleanupUnavailable: recoveredRoute.cleanupUnavailable,
             onSkipped: (reason): void => {
-              cleanupWarning ??= reason;
+              cleanupWarning = withTranslationWarning(cleanupWarning, reason);
             },
+            shouldCancel: isCancelRequested,
           });
           if (translation.translated) {
             finalText = translation.text;
@@ -597,6 +613,7 @@ export function useKeyboardHandoff(
         if (recoverySaved && (!orphanSlotJobId || orphanSlotJobId === rawJobId)) {
           AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT);
           AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_RAW_TRANSCRIPT_JOB_ID);
+          AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_ORPHANED_TRANSCRIPT_CLEANED_JOB_ID);
         }
         orphanCleanupInFlightRef.current = false;
         cleanup({ resetStatus: false });
@@ -988,7 +1005,7 @@ export function useKeyboardHandoff(
               cleanupUnavailable: jobRoute.cleanupUnavailable,
               requestContext: 'keyboard',
               keyboardTone,
-              translatedTo: translationTarget,
+              translationTarget,
               jobId,
               errorMessage: toFriendlyTranscriptionErrorMessage(error),
             });
