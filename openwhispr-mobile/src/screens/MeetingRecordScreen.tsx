@@ -29,6 +29,7 @@ import { useCloudMeeting } from '@/hooks/useCloudMeeting';
 import { useMeetingLiveActivity, type MeetingActivityPhase } from '@/hooks/useMeetingLiveActivity';
 import { useMeetingRecorderHealth } from '@/hooks/useMeetingRecorderHealth';
 import { captureCoverage, isCloudMeetingCapturing } from '@/lib/notes/meetingCapture';
+import { reportCaptureInterrupted, reportMeetingFinished } from '@/lib/meetingCaptureTelemetry';
 import { alertIfPartialCapture, useCapturePausedNotification } from '@/lib/meetingCaptureAlerts';
 import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
@@ -118,6 +119,27 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     meetingPath === 'cloud'
       ? cloudMeeting.capturedSeconds
       : Math.floor(recorderHealth.capturedMs / 1000);
+
+  // On-device interruptions this meeting, for the finish report. The cloud hook counts its own.
+  const localInterruptionsRef = useRef(0);
+  const wasLocalCapturingRef = useRef(false);
+  useEffect(() => {
+    if (phase !== 'recording') {
+      wasLocalCapturingRef.current = false;
+      return;
+    }
+    if (wasLocalCapturingRef.current && !capturing) {
+      localInterruptionsRef.current += 1;
+      reportCaptureInterrupted({
+        path: 'local',
+        reason: 'recorder_stopped',
+        capturedSeconds,
+      });
+    }
+    wasLocalCapturingRef.current = capturing;
+    // Only the capturing edge matters; capturedSeconds is read at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, capturing]);
 
   const accountsById = useMemo(
     () => new Map(googleCalendarAccounts.map((account) => [account.id, account])),
@@ -237,6 +259,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     setNoteId(note.id);
     setMeetingStartedAt(Date.now());
     setMeetingPath('local');
+    localInterruptionsRef.current = 0;
     setPhase('recording');
   };
 
@@ -308,6 +331,13 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
       await FileSystem.copyAsync({ from: uri, to: stableUri });
       await runMeetingPipeline(noteId, stableUri, count);
       router.replace(`/(tabs)/(notes)/${noteId}`);
+      reportMeetingFinished({
+        path: 'local',
+        coverage,
+        interruptions: localInterruptionsRef.current,
+        reconnects: 0,
+        droppedSeconds: 0,
+      });
       alertIfPartialCapture(coverage);
     } catch (error) {
       if (noteId != null) markNoteFailed(noteId);
@@ -360,6 +390,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
       meetingStartedAt == null ? 0 : Date.now() - meetingStartedAt,
     );
     const hadError = cloudMeeting.status === 'error';
+    const { interruptions, reconnects, droppedSeconds } = cloudMeeting;
     setPhase('processing');
     const utterances = await cloudMeeting.stop();
     if (noteId == null) {
@@ -376,6 +407,13 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     try {
       await finalizeCloudMeeting(noteId, utterances, captured);
       router.replace(`/(tabs)/(notes)/${noteId}`);
+      reportMeetingFinished({
+        path: 'cloud',
+        coverage,
+        interruptions,
+        reconnects,
+        droppedSeconds,
+      });
       alertIfPartialCapture(coverage);
     } catch (error) {
       markNoteFailed(noteId);

@@ -10,6 +10,7 @@ import {
   trackCaptureGrowth,
   type CloudMeetingStatus,
 } from '@/lib/notes/meetingCapture';
+import { reportCaptureInterrupted, reportSessionEnded } from '@/lib/meetingCaptureTelemetry';
 
 export type { CloudMeetingStatus } from '@/lib/notes/meetingCapture';
 
@@ -70,6 +71,8 @@ export function useCloudMeeting({
   const utteranceCountRef = useRef(initial.utteranceCount);
   const clockRef = useRef(initial.clock);
   const micCapturingRef = useRef(initial.capturing);
+  // Native reason for the latest not-capturing event; null while the mic reports capturing.
+  const captureLostReasonRef = useRef<string | null>(null);
   const onUtteranceRef = useRef(onUtterance);
   onUtteranceRef.current = onUtterance;
 
@@ -87,6 +90,19 @@ export function useCloudMeeting({
     utteranceCountRef.current = fresh.utteranceCount;
     clockRef.current = fresh.clock;
     micCapturingRef.current = fresh.capturing;
+    captureLostReasonRef.current = null;
+    let endReported = false;
+    // Once per session: a close and a rejected start can both describe the same end.
+    const reportEnded = (): void => {
+      if (endReported) return;
+      endReported = true;
+      // The service gives no reason for a refused token apart from other failures.
+      reportSessionEnded({
+        path: 'cloud',
+        reason: 'error',
+        capturedSeconds: Math.floor((liveSession?.capturedMs() ?? 0) / 1000),
+      });
+    };
     setStarted(fresh.started);
     setFailed(fresh.failed);
     setCapturing(fresh.capturing);
@@ -125,7 +141,9 @@ export function useCloudMeeting({
         },
         onClose: () => {
           // A close we didn't initiate means the session ended.
-          if (isLive()) setFailed(true);
+          if (!isLive()) return;
+          setFailed(true);
+          reportEnded();
         },
         onReconnecting: () => {
           if (!isLive()) return;
@@ -136,8 +154,10 @@ export function useCloudMeeting({
         onReconnected: () => {
           if (isLive()) setReconnecting(false);
         },
-        onCaptureState: ({ capturing: next }) => {
-          if (isLive()) setCapturing(next);
+        onCaptureState: ({ capturing: next, reason }) => {
+          if (!isLive()) return;
+          captureLostReasonRef.current = next ? null : reason || 'unknown';
+          setCapturing(next);
         },
       },
     )
@@ -158,6 +178,7 @@ export function useCloudMeeting({
         if (cancelled) return;
         setError(e instanceof Error ? e.message : String(e));
         setFailed(true);
+        reportEnded();
       });
 
     return () => {
@@ -196,6 +217,12 @@ export function useCloudMeeting({
   useEffect(() => {
     if (started && micCapturingRef.current && !micCapturing) {
       setInterruptions((n) => n + 1);
+      reportCaptureInterrupted({
+        path: 'cloud',
+        // No native loss on record means the mic is reporting audio but none is arriving.
+        reason: captureLostReasonRef.current ?? 'stalled',
+        capturedSeconds: Math.floor((sessionRef.current?.capturedMs() ?? 0) / 1000),
+      });
     }
     micCapturingRef.current = micCapturing;
   }, [started, micCapturing]);
