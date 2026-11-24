@@ -196,7 +196,8 @@ test("an unload during a stop neither duplicates nor overwrites its final write"
   await stopping;
 });
 
-test("a note deleted mid-recording is not written back from its tombstone", async (t) => {
+// A note deleted elsewhere goes on in a copy (meetingRecordingStoreVanishedNote.test.js).
+test("a note the user deletes mid-recording is not written back from its tombstone", async (t) => {
   const { api, listeners, writes } = createElectronAPI();
   const { store, unload } = await loadStore(t, api);
   assert.equal(await store.startRecording(START_ARGS), true);
@@ -207,6 +208,7 @@ test("a note deleted mid-recording is not written back from its tombstone", asyn
   unload();
   assert.equal(transcriptWrites(writes).length, 1, "another note's delete changes nothing");
 
+  store.markRecordingNoteDeletedByUser(NOTE_ID);
   deleteNote(listeners, NOTE_ID);
   writes.length = 0;
   unload();
@@ -229,6 +231,7 @@ test("a recording note restored after a denied delete is saved again", async (t)
   const { store, unload } = await loadStore(t, api);
   assert.equal(await store.startRecording(START_ARGS), true);
   listeners.segment(final("said before the delete"));
+  store.markRecordingNoteDeletedByUser(NOTE_ID);
   deleteNote(listeners, NOTE_ID);
 
   // A pull racing the delete re-syncs the row with its tombstone intact.
@@ -251,9 +254,7 @@ test("a recording note restored after a denied delete is saved again", async (t)
 test("a resumed recording's unload keeps the transcript it resumed from", async (t) => {
   const { api, listeners, writes } = createElectronAPI();
   const { store, unload } = await loadStore(t, api);
-  const seedSegments = [
-    { id: "seed-1", text: "from the first half", source: "mic", timestamp: 1 },
-  ];
+  const seedSegments = [{ id: "seed-1", text: "from the first half", source: "mic", timestamp: 1 }];
   assert.equal(await store.startRecording({ ...START_ARGS, seedSegments }), true);
   listeners.segment(final("from the second half"));
   writes.length = 0;

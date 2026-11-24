@@ -228,6 +228,8 @@ async function mountTree(
         };
         export const useDeviceNotesStore = Object.assign((selector) => selector(state), { getState: () => state });
       `,
+      // Nothing records here (folder deletes during a recording: spacesTreeSubfolders).
+      "/stores/meetingRecordingStore": "export const recordingNoteInFolders = () => null;",
       "/stores/settingsStore": `
         export const useSettingsStore = (selector) => selector({ noteFilesEnabled: false });
       `,

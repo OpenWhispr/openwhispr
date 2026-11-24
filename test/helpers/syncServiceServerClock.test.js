@@ -18,7 +18,7 @@ const {
   window: windowStub,
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
-const { createFakeCloud, createAccountCloud } = require("./harness/fakeCloud.js");
+const { createFakeCloud, createAccountCloud, deltaSince } = require("./harness/fakeCloud.js");
 const { joinTeamSpace } = require("./harness/teamSpace.js");
 const { createSyncDevice } = require("./harness/syncDevice.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
@@ -174,7 +174,7 @@ test("a device on time keeps the cursors it already has", async (t) => {
   await service.syncAll(true);
 
   const firstList = cloud.logFor("/api/notes/list")[0];
-  assert.equal(new URL(firstList.path, "https://x").searchParams.get("since"), kept);
+  assert.equal(new URL(firstList.path, "https://x").searchParams.get("since"), deltaSince(kept));
 });
 
 test("restoring another account's old cursors still recovers rows missed by a fast clock", async (t) => {

@@ -1595,6 +1595,73 @@ test("upsertFolderFromCloud converges on a same-space name collision", (t) => {
   assert.equal(forked.sync_status, "pending");
 });
 
+test("upsertFolderFromCloud un-nests a folder the pull moves to another space", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const parent = db.createFolder("Client A", team.id).folder;
+  const child = db.createFolder("Q1", team.id, parent.id).folder;
+  db.markFolderSynced(child.id, "cloud-q1");
+
+  const moved = db.upsertFolderFromCloud(
+    {
+      client_folder_id: child.client_folder_id,
+      id: "cloud-q1",
+      name: "Q1",
+      sort_order: 1,
+      created_at: "2026-07-01T00:00:00.000Z",
+      updated_at: "2026-07-02T00:00:00.000Z",
+    },
+    privateId
+  );
+  assert.equal(moved.space_id, privateId);
+  assert.equal(moved.parent_folder_id, null);
+  assert.deepEqual(db.deleteFolder(parent.id).folderIds, [parent.id]);
+});
+
+test("upsertFolderFromCloud keeps a subfolder's parent when both moved to the same space", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const parent = db.createFolder("Client A", team.id).folder;
+  const child = db.createFolder("Q1", team.id, parent.id).folder;
+  const stray = db.createFolder("Q2", team.id, parent.id).folder;
+  const videos = db.createFolder("Videos", team.id, parent.id).folder;
+  db.markFolderSynced(parent.id, "cloud-client-a");
+  db.markFolderSynced(child.id, "cloud-q1");
+  db.markFolderSynced(stray.id, "cloud-q2");
+  db.markFolderSynced(videos.id, "cloud-videos");
+  const pulled = (folder, name) => ({
+    client_folder_id: folder.client_folder_id,
+    id: `cloud-${name.toLowerCase().replace(" ", "-")}`,
+    name,
+    sort_order: 1,
+    parent_folder_id: "cloud-client-a",
+    created_at: "2026-07-01T00:00:00.000Z",
+    updated_at: "2026-07-02T00:00:00.000Z",
+  });
+
+  // The parent hasn't moved yet: the child can't keep it across spaces.
+  const early = db.upsertFolderFromCloud(pulled(stray, "Q2"), privateId);
+  assert.equal(early.space_id, privateId);
+  assert.equal(early.parent_folder_id, null);
+
+  db.upsertFolderFromCloud(
+    { ...pulled(parent, "Client A"), parent_folder_id: null, id: "cloud-client-a" },
+    privateId
+  );
+  const moved = db.upsertFolderFromCloud(pulled(child, "Q1"), privateId);
+  assert.equal(moved.space_id, privateId);
+  assert.equal(moved.parent_folder_id, parent.id, "it moved with its parent");
+  assert.equal(
+    db.upsertFolderFromCloud(pulled(videos, "Videos"), privateId).parent_folder_id,
+    null,
+    "a default's name stays top-level in Private"
+  );
+});
+
 test("upsertFolderFromCloud never takes over a namesake that is another cloud folder", (t) => {
   const db = createFreshDeviceDb(t);
   if (!db) return;
@@ -3068,6 +3135,520 @@ test("a deferred create receipt retains team retraction while personal backup is
   assert.ok(db.getPendingNotes("team").some((candidate) => candidate.id === note.id));
 });
 
+test("createFolder nests one level deep in the parent's space", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const client = db.createFolder("Client A").folder;
+  const quarter = db.createFolder("Q1", null, client.id);
+  assert.ok(quarter.success);
+  assert.equal(quarter.folder.parent_folder_id, client.id);
+  assert.equal(quarter.folder.space_id, client.space_id);
+
+  assert.equal(
+    db.createFolder("Week 1", null, quarter.folder.id).error,
+    "Subfolders cannot contain folders"
+  );
+  assert.equal(db.createFolder("Elsewhere", team.id, client.id).error, "Parent folder not found");
+  assert.equal(db.createFolder("Ghost", null, 999999).error, "Parent folder not found");
+  assert.equal(
+    db.createFolder("Client A", null, client.id).success,
+    false,
+    "names stay unique per space across both levels"
+  );
+  assert.ok(db.createFolder("Notes", null, db.getMeetingsFolder().id).success);
+});
+
+test("setFolderParent nests and un-nests, refusing defaults and parents", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const client = db.createFolder("Client A").folder;
+  const quarter = db.createFolder("Q1").folder;
+  db.markFolderSynced(quarter.id, "cloud-q1");
+
+  const nested = db.setFolderParent(quarter.id, client.id);
+  assert.ok(nested.success);
+  assert.equal(nested.folder.parent_folder_id, client.id);
+  assert.equal(nested.folder.sync_status, "pending");
+
+  assert.equal(
+    db.setFolderParent(client.id, db.createFolder("Other").folder.id).error,
+    "Folders that contain subfolders cannot be nested"
+  );
+  assert.equal(
+    db.setFolderParent(db.getMeetingsFolder().id, client.id).error,
+    "Cannot nest default folders"
+  );
+  const teamFolder = db.createFolder("Roadmap", team.id).folder;
+  assert.equal(db.setFolderParent(teamFolder.id, client.id).error, "Parent folder not found");
+
+  const unnested = db.setFolderParent(quarter.id, null);
+  assert.ok(unnested.success);
+  assert.equal(unnested.folder.parent_folder_id, null);
+});
+
+// What a refusal of a default folder's name for a subfolder in Private says.
+function reservedNameOf(result) {
+  return result.success === false && result.code === "reserved_folder_name"
+    ? result.reservedName
+    : null;
+}
+
+test("a subfolder in Private can't take a default folder's name; a teamspace's can", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const client = db.createFolder("Client A").folder;
+  const teamClient = db.createFolder("Client B", team.id).folder;
+
+  for (const name of ["Personal", "Meetings", "Videos"]) {
+    assert.equal(reservedNameOf(db.createFolder(name, null, client.id)), name);
+  }
+  assert.ok(db.createFolder("meetings", null, client.id).success, "names compare exactly");
+  const videos = db.createFolder("Videos").folder;
+  assert.ok(videos, "a top-level folder may take a default's name");
+  const quarter = db.createFolder("Q1", null, client.id).folder;
+  assert.equal(reservedNameOf(db.renameFolder(quarter.id, "Personal")), "Personal");
+  assert.equal(reservedNameOf(db.setFolderParent(videos.id, client.id)), "Videos");
+  const folder = (id) => db.getFolders().find((f) => f.id === id);
+  assert.equal(folder(quarter.id).name, "Q1");
+  assert.equal(folder(videos.id).parent_folder_id, null);
+
+  assert.ok(db.createFolder("Meetings", team.id, teamClient.id).success);
+  const teamQuarter = db.createFolder("Q1", team.id, teamClient.id).folder;
+  assert.ok(db.renameFolder(teamQuarter.id, "Personal").success);
+  const teamVideos = db.createFolder("Videos", team.id).folder;
+  assert.ok(db.setFolderParent(teamVideos.id, teamClient.id).success);
+
+  // A teamspace folder whose subfolder holds a default's name can't bring it into Private.
+  const moving = db.moveFolderToSpace(teamClient.id, privateId);
+  assert.ok(["Meetings", "Personal"].includes(reservedNameOf(moving)));
+  assert.equal(folder(teamClient.id).space_id, team.id, "it stays in its teamspace");
+});
+
+test("a Private's defaults are found at the top level only, so a subfolder never takes their notes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "ws-other", defaultWorkspaceId: "ws-default" });
+  const spaceId = db.getPrivateSpaceId("ws-other");
+  const projects = db.createFolder("Projects", spaceId).folder;
+  assert.equal(reservedNameOf(db.createFolder("Meetings", spaceId, projects.id)), "Meetings");
+  const standup = db.saveNote("Standup", "x", "meeting", null, null, null, spaceId).note;
+  const meetings = db.getFolders(spaceId).find((f) => f.id === standup.folder_id);
+  assert.equal(meetings.name, "Meetings");
+  assert.equal(meetings.is_default, 1);
+  assert.equal(meetings.parent_folder_id, null);
+
+  // A subfolder an older build left holding a default's name keeps that name from a
+  // default (names are unique per space across both levels), and takes none of its notes.
+  const legacyId = db.getPrivateSpaceId("ws-legacy");
+  const archive = db.createFolder("Archive", legacyId).folder;
+  const leftover = Number(
+    db.db
+      .prepare(
+        `INSERT INTO folders (name, sort_order, space_id, parent_folder_id, client_folder_id, account_id, sync_status)
+         VALUES ('Meetings', 9, ?, ?, ?, 'test-account', 'synced')`
+      )
+      .run(legacyId, archive.id, randomUUID()).lastInsertRowid
+  );
+  const retro = db.saveNote("Retro", "x", "meeting", null, null, null, legacyId).note;
+  assert.equal(retro.folder_id, null, "filed at the root, not in Archive / Meetings");
+  assert.equal(db.getMeetingsFolder(legacyId), null);
+  assert.equal(db.copyNoteToSpace(standup.id, legacyId).folder_id, null);
+  assert.ok(db.getFolders(legacyId).some((f) => f.id === leftover && f.parent_folder_id));
+});
+
+test("imports go to a top-level Imported folder, never a subfolder of that name", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const archive = db.createFolder("Archive").folder;
+  const nested = db.createFolder("Imported", null, archive.id).folder;
+  const imported = db.importNotes([
+    {
+      clientNoteId: "granola-nested",
+      title: "Imported",
+      content: "",
+      sourceFile: null,
+      transcript: null,
+      participants: null,
+      createdAt: null,
+    },
+  ]);
+  assert.equal(imported.imported, 1);
+  assert.notEqual(imported.folderId, nested.id);
+  assert.equal(db.getNote(imported.noteIds[0]).folder_id, imported.folderId);
+});
+
+test("a pulled Private folder with a default's name stays top-level; a teamspace's nests", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const projects = db.createFolder("Projects").folder;
+  const meetings = db.createFolder("Meetings").folder;
+  const quarter = db.createFolder("Q1", null, projects.id).folder;
+  const roadmap = db.createFolder("Roadmap", team.id).folder;
+  const teamMeetings = db.createFolder("Meetings", team.id).folder;
+  for (const [folder, cloudId] of [
+    [projects, "c-projects"],
+    [meetings, "c-meetings"],
+    [quarter, "c-quarter"],
+    [roadmap, "c-roadmap"],
+    [teamMeetings, "c-team-meetings"],
+  ]) {
+    db.markFolderSynced(folder.id, cloudId);
+  }
+  // Another device renamed Q1 to a default's name.
+  db.upsertFolderFromCloud({
+    client_folder_id: quarter.client_folder_id,
+    id: "c-quarter",
+    name: "Personal",
+    sort_order: 1,
+    parent_folder_id: "c-projects",
+    created_at: "2026-07-01T00:00:00.000Z",
+    updated_at: "2026-07-02T00:00:00.000Z",
+  });
+
+  const link = (folder, cloudId, parentCloudId) => ({
+    cloudId,
+    parentCloudId,
+    snapshot: db.getFolderByClientId(folder.client_folder_id),
+  });
+  const changed = db.applyCloudFolderParents([
+    link(meetings, "c-meetings", "c-projects"),
+    link(quarter, "c-quarter", "c-projects"),
+    link(teamMeetings, "c-team-meetings", "c-roadmap"),
+  ]);
+  const parentOf = (id) => db.getFolderByCloudId(id).parent_folder_id;
+  assert.equal(parentOf("c-meetings"), null);
+  assert.equal(parentOf("c-quarter"), null, "a subfolder renamed to a default's name moves up");
+  assert.equal(parentOf("c-team-meetings"), roadmap.id);
+  assert.deepEqual(
+    changed.map((f) => f.id).sort((a, b) => a - b),
+    [quarter.id, teamMeetings.id].sort((a, b) => a - b)
+  );
+});
+
+test("a pulled Private subfolder with a default's name becomes the unsent local default", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const spaceId = db.getPrivateSpaceId();
+  const localDefault = db.getMeetingsFolder(spaceId);
+  const cloudRow = (fields) => ({
+    client_folder_id: randomUUID(),
+    sort_order: 1,
+    created_at: "2026-07-01T00:00:00.000Z",
+    updated_at: "2026-07-02T00:00:00.000Z",
+    ...fields,
+  });
+  db.upsertFolderFromCloud(cloudRow({ id: "c-projects", name: "Projects" }), spaceId);
+  const pulled = db.upsertFolderFromCloud(
+    cloudRow({ id: "c-meetings", name: "Meetings", parent_folder_id: "c-projects" }),
+    spaceId
+  );
+  assert.equal(pulled.id, localDefault.id, "the cloud folder holds the name, so the default is it");
+  assert.equal(pulled.name, "Meetings");
+  assert.equal(pulled.cloud_id, "c-meetings");
+  assert.equal(pulled.parent_folder_id, null);
+  assert.deepEqual(
+    db
+      .getFolders(spaceId)
+      .filter((f) => f.name.startsWith("Meetings"))
+      .map((f) => f.id),
+    [localDefault.id]
+  );
+});
+
+test("deleteFolder takes its subfolders and their notes along, each with its own journal", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const localParent = db.createFolder("Drafts").folder;
+  const localChild = db.createFolder("Old", null, localParent.id).folder;
+  const localNote = db.saveNote("Draft", "body", "personal", null, null, localChild.id).note;
+  const localDelete = db.deleteFolder(localParent.id);
+  assert.deepEqual(localDelete.folderIds, [localChild.id, localParent.id]);
+  assert.deepEqual(localDelete.noteIds, [localNote.id]);
+  assert.equal(db.db.prepare("SELECT 1 FROM folders WHERE id = ?").get(localChild.id), undefined);
+  assert.equal(db.getNote(localNote.id), null);
+
+  const parent = db.createFolder("Client A").folder;
+  const child = db.createFolder("Q1", null, parent.id).folder;
+  db.markFolderSynced(parent.id, "cloud-parent");
+  db.markFolderSynced(child.id, "cloud-child");
+  const filed = db.saveNote("Plan", "body", "personal", null, null, child.id).note;
+
+  const result = db.deleteFolder(parent.id);
+  assert.ok(result.success);
+  assert.deepEqual(result.folderIds, [child.id, parent.id]);
+  assert.deepEqual(result.noteIds, [filed.id]);
+  const journaled = db.db
+    .prepare(
+      "SELECT DISTINCT folder_id FROM optimistic_folder_delete_rows WHERE entity_type = 'folder' ORDER BY folder_id"
+    )
+    .all()
+    .map((row) => row.folder_id);
+  assert.deepEqual(
+    journaled,
+    [parent.id, child.id].sort((a, b) => a - b)
+  );
+  assert.deepEqual(
+    db.getPendingFolderDeletes().map((f) => f.id),
+    [child.id, parent.id],
+    "subfolders push their DELETE before the parent's"
+  );
+
+  assert.ok(db.restoreFolderAfterDeniedDelete(child.id).success);
+  assert.equal(db.getFolders().find((f) => f.id === child.id)?.parent_folder_id, parent.id);
+});
+
+test("moveFolderToSpace moves a parent with its subfolders; a subfolder alone goes top-level", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "test-workspace",
+    defaultWorkspaceId: "test-workspace",
+  });
+  db.bindDefaultPrivateSpace("test-workspace");
+  const privateId = db.getPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const parent = db.createFolder("Client A").folder;
+  const child = db.createFolder("Q1", null, parent.id).folder;
+  const filed = db.saveNote("Plan", "body", "personal", null, null, child.id).note;
+
+  const moved = db.moveFolderToSpace(parent.id, team.id);
+  assert.ok(moved.success);
+  assert.deepEqual(
+    moved.notes.map((n) => n.id),
+    [filed.id]
+  );
+  const movedChild = db.getFolders(team.id).find((f) => f.id === child.id);
+  assert.equal(movedChild.space_id, team.id);
+  assert.equal(movedChild.parent_folder_id, parent.id);
+  assert.equal(movedChild.sync_status, "pending");
+  assert.equal(db.getNote(filed.id).space_id, team.id);
+
+  const privateParent = db.createFolder("Inbox").folder;
+  const taken = db.createFolder("Roadmap", null, privateParent.id).folder;
+  db.createFolder("Roadmap", team.id);
+  assert.equal(
+    db.moveFolderToSpace(privateParent.id, team.id).success,
+    false,
+    "a subfolder's name taken in the target space blocks the move"
+  );
+
+  const alone = db.moveFolderToSpace(child.id, db.getPrivateSpaceId());
+  assert.ok(alone.success);
+  assert.equal(alone.folder.parent_folder_id, null);
+
+  // A synced subfolder, or a synced note in one, keeps the whole folder in its
+  // teamspace (D31).
+  const sibling = db.createFolder("Q2", team.id, parent.id).folder;
+  db.markFolderSynced(sibling.id, "cloud-q2");
+  const folderRefused = db.moveFolderToSpace(parent.id, privateId);
+  assert.equal(folderRefused.success, false);
+  assert.equal(folderRefused.code, "team_row_synced");
+  assert.equal(db.getFolders(team.id).find((f) => f.id === sibling.id).space_id, team.id);
+
+  const clientB = db.createFolder("Client B", team.id).folder;
+  const clientBChild = db.createFolder("Q3", team.id, clientB.id).folder;
+  const budget = db.saveNote("Budget", "body", "personal", null, null, clientBChild.id).note;
+  db.markNoteSynced(budget.id, "cloud-budget");
+  const noteRefused = db.moveFolderToSpace(clientB.id, privateId);
+  assert.equal(noteRefused.success, false);
+  assert.equal(noteRefused.code, "team_row_synced");
+  assert.equal(db.getNote(budget.id).space_id, team.id);
+
+  // Nothing of it in the cloud yet: the folder, its subfolders and their notes
+  // move, still nested.
+  const clientC = db.createFolder("Client C", team.id).folder;
+  const clientCChild = db.createFolder("Q4", team.id, clientC.id).folder;
+  const sketch = db.saveNote("Sketch", "body", "personal", null, null, clientCChild.id).note;
+  const leaving = db.moveFolderToSpace(clientC.id, privateId);
+  assert.ok(leaving.success);
+  assert.deepEqual(
+    leaving.notes.map((n) => n.id),
+    [sketch.id]
+  );
+  const carried = db.getFolders(privateId).find((f) => f.id === clientCChild.id);
+  assert.equal(carried.parent_folder_id, clientC.id, "leaving a team, subfolders stay nested");
+  assert.equal(carried.left_team, 0);
+  assert.equal(db.getNote(sketch.id).space_id, privateId);
+  assert.ok(taken);
+});
+
+test("scoped note search includes a folder's subfolders", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const parent = db.createFolder("Client A").folder;
+  const child = db.createFolder("Q1", null, parent.id).folder;
+  const own = db.saveNote("Kickoff budget", "budget", "personal", null, null, parent.id).note;
+  const nested = db.saveNote("Q1 budget", "budget", "personal", null, null, child.id).note;
+  db.saveNote("Unrelated budget", "budget");
+
+  assert.deepEqual(
+    db.getNoteIdsInScope(null, parent.id).sort((a, b) => a - b),
+    [own.id, nested.id].sort((a, b) => a - b)
+  );
+  assert.deepEqual(db.getNoteIdsInScope(null, child.id), [nested.id]);
+  assert.deepEqual(
+    db
+      .searchNotes("budget", 10, null, parent.id)
+      .map((n) => n.id)
+      .sort((a, b) => a - b),
+    [own.id, nested.id].sort((a, b) => a - b)
+  );
+  assert.deepEqual(
+    db.getNotes(null, 100, parent.id).map((n) => n.id),
+    [own.id],
+    "a folder's own list stays direct"
+  );
+});
+
+test("applyCloudFolderParents links pulled subfolders and keeps invalid ones top-level", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const parent = db.createFolder("Client A").folder;
+  const child = db.createFolder("Q1").folder;
+  const grandchild = db.createFolder("Week 1").folder;
+  const teamFolder = db.createFolder("Roadmap", team.id).folder;
+  const pending = db.createFolder("Drafts").folder;
+  for (const [folder, cloudId] of [
+    [parent, "c-parent"],
+    [child, "c-child"],
+    [grandchild, "c-grandchild"],
+    [teamFolder, "c-team"],
+  ]) {
+    db.markFolderSynced(folder.id, cloudId);
+  }
+  db.db.prepare("UPDATE folders SET cloud_id = 'c-pending' WHERE id = ?").run(pending.id);
+
+  const changed = db.applyCloudFolderParents([
+    {
+      cloudId: "c-grandchild",
+      parentCloudId: "c-child",
+      snapshot: db.getFolderByClientId(grandchild.client_folder_id),
+    },
+    {
+      cloudId: "c-child",
+      parentCloudId: "c-parent",
+      snapshot: db.getFolderByClientId(child.client_folder_id),
+    },
+    {
+      cloudId: "c-team",
+      parentCloudId: "c-parent",
+      snapshot: db.getFolderByClientId(teamFolder.client_folder_id),
+    },
+    {
+      cloudId: "c-pending",
+      parentCloudId: "c-parent",
+      snapshot: db.getFolderByClientId(pending.client_folder_id),
+    },
+  ]);
+  const parentOf = (id) => db.getFolders().find((f) => f.id === id).parent_folder_id;
+  assert.equal(parentOf(child.id), parent.id);
+  assert.equal(parentOf(grandchild.id), null, "a subfolder can't become a parent");
+  assert.equal(parentOf(teamFolder.id), null, "a parent in another space is refused");
+  assert.equal(parentOf(pending.id), null, "an unpushed local row keeps its own parent");
+  assert.deepEqual(
+    changed.map((f) => f.id).sort((a, b) => a - b),
+    [child.id, grandchild.id].sort((a, b) => a - b)
+  );
+  assert.equal(changed.find((f) => f.id === grandchild.id).parent_folder_id, null);
+
+  db.applyCloudFolderParents([
+    {
+      cloudId: "c-child",
+      parentCloudId: null,
+      snapshot: db.getFolderByClientId(child.client_folder_id),
+    },
+  ]);
+  assert.equal(parentOf(child.id), null);
+
+  db.applyCloudFolderParents([
+    {
+      cloudId: "c-grandchild",
+      parentCloudId: "c-parent",
+      snapshot: db.getFolderByClientId(grandchild.client_folder_id),
+    },
+  ]);
+  db.applyCloudFolderParents([
+    {
+      cloudId: "c-child",
+      parentCloudId: "c-grandchild",
+      snapshot: db.getFolderByClientId(child.client_folder_id),
+    },
+    {
+      cloudId: "c-grandchild",
+      parentCloudId: null,
+      snapshot: db.getFolderByClientId(grandchild.client_folder_id),
+    },
+  ]);
+  assert.equal(
+    parentOf(child.id),
+    grandchild.id,
+    "a link to a parent un-nested later in the same pull still lands"
+  );
+  assert.equal(parentOf(grandchild.id), null);
+});
+
+test("applyCloudFolderParents un-nests the pending end of a too-deep chain", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const client = db.createFolder("Client A").folder;
+  const quarter = db.createFolder("Q1").folder;
+  const archive = db.createFolder("Archive").folder;
+  db.markFolderSynced(client.id, "c-client");
+  db.markFolderSynced(quarter.id, "c-quarter");
+  db.markFolderSynced(archive.id, "c-archive");
+  db.setFolderParent(client.id, archive.id);
+
+  db.applyCloudFolderParents([
+    {
+      cloudId: "c-quarter",
+      parentCloudId: "c-client",
+      snapshot: db.getFolderByClientId(quarter.client_folder_id),
+    },
+  ]);
+  const folder = (id) => db.getFolders().find((f) => f.id === id);
+  assert.equal(folder(quarter.id).parent_folder_id, client.id, "the server's nesting stands");
+  assert.equal(folder(client.id).parent_folder_id, null);
+  assert.equal(folder(client.id).sync_status, "pending", "the un-nest pushes");
+});
+
+test("a parent's hard delete frees its children", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const parent = db.createFolder("Client A").folder;
+  const other = db.createFolder("Q2", null, parent.id).folder;
+  assert.ok(db.hardDeleteFolder(parent.id).success);
+  assert.equal(db.getFolders().find((f) => f.id === other.id)?.parent_folder_id, null);
+});
+
+test("relocateRevokedFolder leaves subfolders top-level in the team", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const parent = db.createFolder("Client A", team.id).folder;
+  const child = db.createFolder("Q1", team.id, parent.id).folder;
+  const sibling = db.createFolder("Q2", team.id, parent.id).folder;
+  for (const folder of [parent, child, sibling]) {
+    db.markFolderSynced(folder.id, `cloud-${folder.id}`);
+    db.db.prepare("UPDATE folders SET sync_status = 'pending' WHERE id = ?").run(folder.id);
+  }
+
+  const first = db.relocateRevokedFolder(child.id, privateId, true);
+  assert.equal(first.folder.space_id, privateId);
+  assert.equal(first.folder.parent_folder_id, null, "its parent is still in the team space");
+
+  db.relocateRevokedFolder(parent.id, privateId, true);
+  const left = db.db.prepare("SELECT * FROM folders WHERE id = ?").get(sibling.id);
+  assert.equal(left.space_id, team.id);
+  assert.equal(left.parent_folder_id, null);
+});
+
 const noteRows = (db, id) =>
   db.db.prepare("SELECT COUNT(*) AS n FROM notes WHERE id = ?").get(id).n;
 
@@ -3121,6 +3702,844 @@ test("a note that loses its cloud link but keeps its identity stays a tombstone 
 
   assert.deepEqual(db.deleteNote(note.id), { success: true, id: note.id });
   assert.ok(db.getNote(note.id).deleted_at);
+});
+
+const rawNote = (db, id) => db.db.prepare("SELECT * FROM notes WHERE id = ?").get(id) ?? null;
+
+// A cloud-backed note as the sync layer leaves it, in the given state.
+function syncedNote(db, title, folderId, overrides = {}) {
+  const note = db.saveNote(title, `${title} body`, "personal", null, null, folderId).note;
+  const columns = {
+    cloud_id: `cloud-${title}`,
+    cloud_updated_at: "2026-01-01T00:00:00.000Z",
+    sync_status: "synced",
+    ...overrides,
+  };
+  db.db
+    .prepare(
+      `UPDATE notes SET ${Object.keys(columns)
+        .map((key) => `${key} = ?`)
+        .join(", ")} WHERE id = ?`
+    )
+    .run(...Object.values(columns), note.id);
+  return rawNote(db, note.id);
+}
+
+const rawFolder = (db, id) => db.db.prepare("SELECT * FROM folders WHERE id = ?").get(id) ?? null;
+
+test("a pulled folder delete unfiles every note in place and removes only the folder", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const folder = db.createFolder("Client").folder;
+  db.markFolderSynced(folder.id, "cloud-client");
+  const edited = syncedNote(db, "Edited", folder.id, { sync_status: "pending" });
+  const unsent = db.saveNote("Unsent", "only here", "personal", null, null, folder.id).note;
+  const clean = syncedNote(db, "Clean", folder.id);
+  const linking = syncedNote(db, "Linking", folder.id, { sync_status: "folder_link_pending" });
+  const deleted = syncedNote(db, "Deleted", folder.id);
+  db.deleteNote(deleted.id);
+  const editedChat = db.createAgentConversation("Edited chat", edited.id);
+  const cleanChat = db.createAgentConversation("Clean chat", clean.id);
+
+  const result = db.hardDeleteFolder(folder.id, { preserveDirtyNotes: true });
+
+  assert.equal(result.success, true);
+  assert.deepEqual(result.noteIds, [], "no note's file goes with the folder");
+  assert.deepEqual(result.preservedNotes, []);
+  const kept = [edited, unsent, clean, linking].map((note) => note.id).sort();
+  assert.deepEqual(result.unfiledNotes.map((note) => note.id).sort(), kept);
+  assert.deepEqual(result.relocatedNotes.map((note) => note.id).sort(), kept);
+  assert.equal(rawFolder(db, folder.id), null);
+
+  for (const [note, status] of [
+    [edited, "pending"],
+    [unsent, "pending"],
+    [clean, "synced"],
+    [linking, "synced"],
+  ]) {
+    const row = rawNote(db, note.id);
+    assert.equal(row.deleted_at, null, `${note.title} is still a note`);
+    assert.equal(row.folder_id, null);
+    assert.equal(row.space_id, note.space_id, `${note.title} stays in its space`);
+    assert.equal(row.client_note_id, note.client_note_id, `${note.title} keeps its identity`);
+    assert.equal(row.cloud_id, note.cloud_id ?? null, `${note.title} keeps its cloud note`);
+    assert.equal(row.sync_status, status);
+  }
+  assert.equal(rawNote(db, edited.id).cloud_id, "cloud-Edited", "the same cloud note, not a copy");
+  assert.equal(rawNote(db, edited.id).content, "Edited body");
+  const tombstone = rawNote(db, deleted.id);
+  assert.ok(tombstone.deleted_at);
+  assert.equal(tombstone.folder_id, null);
+  assert.ok(
+    db.getPendingNoteDeletes().some((note) => note.id === deleted.id),
+    "its own delete still goes up"
+  );
+
+  assert.equal(db.getAgentConversation(editedChat.id).note_id, edited.id);
+  assert.equal(db.getAgentConversation(cleanChat.id).note_id, clean.id);
+});
+
+test("a pulled delete of a team folder keeps its notes in the team, unfiled", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const folder = db.createFolder("Plans", team.id).folder;
+  db.markFolderSynced(folder.id, "cloud-plans");
+  const edited = syncedNote(db, "Edited", folder.id, { sync_status: "error" });
+
+  const result = db.hardDeleteFolder(folder.id, { preserveDirtyNotes: true });
+
+  assert.deepEqual(result.preservedNotes, []);
+  const row = rawNote(db, edited.id);
+  assert.equal(row.space_id, team.id);
+  assert.equal(row.folder_id, null);
+  assert.equal(row.cloud_id, "cloud-Edited");
+  assert.equal(row.sync_status, "error");
+});
+
+test("a pulled delete after this device deleted the folder brings nothing back", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const folder = db.createFolder("Client").folder;
+  db.markFolderSynced(folder.id, "cloud-client");
+  const edited = syncedNote(db, "Edited", folder.id, { sync_status: "pending" });
+  const unsent = db.saveNote("Unsent", "held", "personal", null, null, folder.id).note;
+  const privateCount = () =>
+    db.db
+      .prepare("SELECT COUNT(*) AS count FROM notes WHERE folder_id IS NULL AND deleted_at IS NULL")
+      .get().count;
+  const before = privateCount();
+  assert.equal(db.deleteFolder(folder.id).success, true);
+  // A write that reached the hidden folder late is still inside the delete.
+  const late = db.saveNote("Late", "stale write").note;
+  db.db.prepare("UPDATE notes SET folder_id = ? WHERE id = ?").run(folder.id, late.id);
+
+  const result = db.hardDeleteFolder(folder.id, { preserveDirtyNotes: true });
+
+  assert.equal(result.success, true);
+  assert.deepEqual(result.preservedNotes, []);
+  assert.equal(rawNote(db, edited.id), null);
+  assert.equal(rawNote(db, unsent.id), null);
+  assert.equal(rawNote(db, late.id), null);
+  assert.equal(privateCount(), before);
+});
+
+test("a pulled delete leaves other accounts' notes unforked and undeleted", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const folder = db.createFolder("Shared device").folder;
+  db.markFolderSynced(folder.id, "cloud-shared-device");
+  const theirs = syncedNote(db, "Theirs", folder.id, {
+    sync_status: "pending",
+    account_id: "other-account",
+  });
+  const mine = syncedNote(db, "Mine", folder.id, { sync_status: "pending" });
+
+  const result = db.hardDeleteFolder(folder.id, { preserveDirtyNotes: true });
+
+  assert.deepEqual(
+    result.unfiledNotes.map((note) => note.id),
+    [mine.id]
+  );
+  assert.equal(rawNote(db, mine.id).cloud_id, "cloud-Mine");
+  const released = rawNote(db, theirs.id);
+  assert.equal(released.folder_id, null);
+  assert.equal(released.cloud_id, "cloud-Theirs", "another account's note is never forked");
+  assert.equal(released.client_note_id, theirs.client_note_id);
+  assert.ok(!result.noteIds.includes(theirs.id));
+});
+
+test("a pulled folder delete needs no Private space to keep unsent notes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const folder = db.createFolder("Plans", team.id).folder;
+  db.markFolderSynced(folder.id, "cloud-plans");
+  const edited = syncedNote(db, "Edited", folder.id, { sync_status: "pending" });
+  t.mock.method(db, "_forkPrivateSpaceId", () => null);
+
+  assert.equal(db.hardDeleteFolder(folder.id, { preserveDirtyNotes: true }).success, true);
+
+  assert.equal(rawNote(db, edited.id).folder_id, null);
+  assert.equal(rawNote(db, edited.id).space_id, team.id);
+});
+
+test("a push acknowledgement whose folder isn't the row's keeps the link owed", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const folder = db.createFolder("Client").folder;
+  const created = db.saveNote("Created", "body", "personal", null, null, folder.id).note;
+  const patched = syncedNote(db, "Patched", folder.id, { sync_status: "pending" });
+  // The folder got its cloud id while both pushes were in flight.
+  db.markFolderSynced(folder.id, "cloud-client");
+  const unfiled = { folder_id: null, content: "body", enhanced_content: null };
+
+  const createAck = db.acknowledgeNoteCreate(created.id, created, "cloud-created", null, null, {
+    cloudNote: { ...unfiled, id: "cloud-created", client_note_id: created.client_note_id },
+  });
+  assert.equal(createAck.outcome, "synced");
+  assert.equal(rawNote(db, created.id).sync_status, "folder_link_pending");
+
+  const patchAck = db.markNoteSyncedIfUnchanged(
+    patched.id,
+    rawNote(db, patched.id),
+    "cloud-Patched",
+    "2026-01-02T00:00:00.000Z",
+    null,
+    null,
+    { ...unfiled, id: "cloud-Patched", content: "Patched body" }
+  );
+  assert.equal(patchAck.outcome, "synced");
+  assert.equal(rawNote(db, patched.id).sync_status, "folder_link_pending");
+
+  // A response naming the row's folder settles it.
+  db.db.prepare("UPDATE notes SET sync_status = 'pending' WHERE id = ?").run(patched.id);
+  db.markNoteSyncedIfUnchanged(
+    patched.id,
+    rawNote(db, patched.id),
+    "cloud-Patched",
+    "2026-01-03T00:00:00.000Z",
+    null,
+    null,
+    { id: "cloud-Patched", folder_id: "cloud-client", content: "Patched body" }
+  );
+  assert.equal(rawNote(db, patched.id).sync_status, "synced");
+});
+
+test("a note saved into a folder whose delete is pending lands at the top of its space", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const privateFolder = db.createFolder("Client").folder;
+  const teamFolder = db.createFolder("Plans", team.id).folder;
+  db.markFolderSynced(privateFolder.id, "cloud-client");
+  db.markFolderSynced(teamFolder.id, "cloud-plans");
+  assert.equal(db.deleteFolder(privateFolder.id).success, true);
+  assert.equal(db.deleteFolder(teamFolder.id).success, true);
+
+  const recorded = db.saveNote("Recording", "transcript", "meeting", null, 60, privateFolder.id);
+  const uploaded = db.saveNote("Upload", "text", "personal", null, null, teamFolder.id);
+
+  assert.deepEqual(recorded.folderFallback, {
+    reason: "folder_deleted",
+    folderId: privateFolder.id,
+  });
+  assert.equal(recorded.note.folder_id, null);
+  assert.equal(recorded.note.space_id, rawFolder(db, privateFolder.id).space_id);
+  assert.equal(uploaded.note.folder_id, null);
+  assert.equal(uploaded.note.space_id, team.id);
+  // The confirmed deletes take neither.
+  db.hardDeleteFolder(privateFolder.id);
+  db.hardDeleteFolder(teamFolder.id);
+  assert.equal(rawNote(db, recorded.note.id).deleted_at, null);
+  assert.equal(rawNote(db, uploaded.note.id).deleted_at, null);
+  assert.equal(db.saveNote("Plain", "x", "personal").folderFallback, undefined);
+});
+
+test("a note can't be moved into a folder whose delete is pending", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const folder = db.createFolder("Client").folder;
+  db.markFolderSynced(folder.id, "cloud-client");
+  const note = db.saveNote("Loose", "body").note;
+  assert.equal(db.deleteFolder(folder.id).success, true);
+
+  assert.deepEqual(db.updateNote(note.id, { folder_id: folder.id }), {
+    success: false,
+    error: "Folder not found",
+  });
+  assert.equal(rawNote(db, note.id).folder_id, note.folder_id);
+});
+
+test("a write into a deleted note is refused and leaves the tombstone as it was", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const deleted = syncedNote(db, "Deleted", null);
+  db.deleteNote(deleted.id);
+  const folder = db.createFolder("Client").folder;
+  db.markFolderSynced(folder.id, "cloud-client");
+  const held = syncedNote(db, "Held", folder.id);
+  db.deleteFolder(folder.id);
+  const tombstone = rawNote(db, deleted.id);
+  const heldRow = rawNote(db, held.id);
+
+  for (const row of [tombstone, heldRow]) {
+    assert.deepEqual(db.updateNote(row.id, { content: "a late save" }), {
+      success: false,
+      error: "Note was deleted",
+      code: "note_deleted",
+    });
+    assert.deepEqual(rawNote(db, row.id), row);
+  }
+});
+
+// A cloud-backed parent holding a subfolder the server has never seen, with a
+// never-sent note, a note whose create was attempted, and one with a cloud id.
+function parentWithUnsyncedSubfolder(db, spaceId = null) {
+  const parent = db.createFolder("Client", spaceId).folder;
+  db.markFolderSynced(parent.id, "cloud-client");
+  const parentNote = syncedNote(db, "Parent note", parent.id);
+  const subfolder = db.createFolder("Q1", spaceId, parent.id).folder;
+  const neverSent = db.saveNote("Never sent", "local", "personal", null, null, subfolder.id).note;
+  const attempted = db.saveNote("Attempted", "maybe", "personal", null, null, subfolder.id).note;
+  db.markNoteCreatesAttempted([attempted.client_note_id]);
+  const uploaded = syncedNote(db, "Uploaded", subfolder.id);
+  const chat = db.createAgentConversation("Never sent chat", neverSent.id);
+  assert.equal(db.deleteFolder(parent.id).success, true);
+  return { parent, parentNote, subfolder, neverSent, attempted, uploaded, chat };
+}
+
+test("a parent's pending delete hides its unsynced subfolder without ever sending it", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { parent, subfolder, neverSent } = parentWithUnsyncedSubfolder(db);
+
+  assert.ok(rawFolder(db, subfolder.id).deleted_at);
+  assert.ok(rawNote(db, neverSent.id).deleted_at);
+  assert.ok(!db.getFolders().some((folder) => folder.id === subfolder.id));
+  assert.deepEqual(
+    db.getPendingFolderDeletes().map((folder) => folder.id),
+    [parent.id]
+  );
+  assert.ok(!db.getPendingFolders().some((folder) => folder.id === subfolder.id));
+});
+
+test("a refused delete restores the unsynced subfolder nested, with its notes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { parent, subfolder, neverSent, attempted, uploaded, chat } =
+    parentWithUnsyncedSubfolder(db);
+
+  const restored = db.restoreFolderAfterDeniedDelete(parent.id);
+
+  assert.equal(restored.success, true);
+  assert.deepEqual(
+    restored.subfolders.map((folder) => folder.id),
+    [subfolder.id]
+  );
+  const row = rawFolder(db, subfolder.id);
+  assert.equal(row.deleted_at, null);
+  assert.equal(row.parent_folder_id, parent.id);
+  assert.equal(row.sync_status, "pending");
+  for (const note of [neverSent, attempted, uploaded]) {
+    const noteRow = rawNote(db, note.id);
+    assert.equal(noteRow.deleted_at, null);
+    assert.equal(noteRow.folder_id, subfolder.id);
+    assert.ok(restored.notes.some((restoredNote) => restoredNote.id === note.id));
+  }
+  assert.equal(rawNote(db, uploaded.id).sync_status, "synced");
+  assert.equal(db.getAgentConversation(chat.id).deleted_at, null);
+  assert.equal(
+    db.db.prepare("SELECT COUNT(*) AS count FROM optimistic_folder_delete_rows").get().count,
+    0
+  );
+});
+
+test("a confirmed delete removes the unsynced subfolder and tombstones what the server may hold", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { parent, parentNote, subfolder, neverSent, attempted, uploaded, chat } =
+    parentWithUnsyncedSubfolder(db);
+
+  const result = db.hardDeleteFolder(parent.id);
+
+  assert.equal(result.success, true);
+  assert.equal(rawFolder(db, parent.id), null);
+  assert.equal(rawFolder(db, subfolder.id), null);
+  assert.equal(rawNote(db, parentNote.id), null, "the parent's cascade covers its own notes");
+  assert.equal(rawNote(db, neverSent.id), null);
+  assert.deepEqual(db.getConversationsForNote(neverSent.id), []);
+  assert.ok(!db.getAgentConversations().some((conversation) => conversation.id === chat.id));
+
+  for (const note of [attempted, uploaded]) {
+    const tombstone = rawNote(db, note.id);
+    assert.ok(tombstone.deleted_at, `${note.title} keeps a tombstone`);
+    assert.equal(tombstone.folder_id, null);
+    assert.equal(tombstone.sync_status, "pending");
+  }
+  assert.deepEqual(
+    db.getPendingNoteDeletes().map((note) => note.id),
+    [uploaded.id]
+  );
+  assert.equal(
+    db.db.prepare("SELECT COUNT(*) AS count FROM optimistic_folder_delete_rows").get().count,
+    0
+  );
+});
+
+test("a restart with a parent's delete pending keeps the unsynced subfolder restorable", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { parent, subfolder, neverSent, chat } = parentWithUnsyncedSubfolder(db);
+
+  db.db.close();
+  const reopened = new DatabaseManager();
+  t.after(() => reopened.db.close());
+  reopened.setActiveAccountId("test-account");
+  reopened._removeNeverSyncedTombstones();
+
+  assert.ok(rawFolder(reopened, subfolder.id).deleted_at);
+  assert.ok(rawNote(reopened, neverSent.id).deleted_at, "journaled rows survive the migration");
+  assert.deepEqual(
+    reopened.getPendingFolderDeletes().map((folder) => folder.id),
+    [parent.id]
+  );
+
+  assert.equal(reopened.restoreFolderAfterDeniedDelete(parent.id).success, true);
+  assert.equal(rawFolder(reopened, subfolder.id).parent_folder_id, parent.id);
+  assert.equal(rawNote(reopened, neverSent.id).deleted_at, null);
+  assert.equal(reopened.getAgentConversation(chat.id).deleted_at, null);
+});
+
+test("a name clash says where the name is already used", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const client = db.createFolder("Client A").folder;
+  const quarter = db.createFolder("2024", null, client.id).folder;
+  const other = db.createFolder("Client B").folder;
+  const plans = db.createFolder("Plans").folder;
+  const notes = db.createFolder("Notes", null, plans.id).folder;
+  db.createFolder("Notes", team.id);
+
+  const nestedClash = {
+    success: false,
+    error: "A folder with that name already exists",
+    takenName: "2024",
+    takenInFolderId: client.id,
+  };
+  assert.deepEqual(db.createFolder("2024", null, other.id), nestedClash);
+  assert.deepEqual(db.createFolder("2024"), nestedClash);
+  assert.deepEqual(db.renameFolder(other.id, "2024"), nestedClash);
+  assert.deepEqual(db.createFolder("Client A", null, other.id), {
+    success: false,
+    error: "A folder with that name already exists",
+    takenName: "Client A",
+    takenInFolderId: null,
+  });
+  // The clash is with the subfolder a parent would bring along.
+  const moved = db.moveFolderToSpace(plans.id, team.id);
+  assert.equal(moved.success, false);
+  assert.equal(moved.takenName, notes.name);
+  assert.equal(moved.takenInFolderId, null);
+  assert.equal(quarter.parent_folder_id, client.id);
+});
+
+test("a subfolder name taken meanwhile restores it under a free name, with its parent", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { parent, subfolder } = parentWithUnsyncedSubfolder(db);
+  // The hidden row blocks its name in the UI, so the clash arrives from a pull.
+  db.db.prepare("UPDATE folders SET name = 'Elsewhere' WHERE id = ?").run(subfolder.id);
+  db.createFolder("Q1");
+  db.db.prepare("UPDATE folders SET name = 'Q1' WHERE id = ?").run(subfolder.id);
+
+  const restored = db.restoreFolderAfterDeniedDelete(parent.id);
+
+  assert.equal(restored.success, true);
+  assert.equal(rawFolder(db, parent.id).deleted_at, null, "the parent isn't kept hidden");
+  const back = rawFolder(db, subfolder.id);
+  assert.equal(back.deleted_at, null);
+  assert.equal(back.name, "Q1 (2)");
+  assert.equal(back.parent_folder_id, parent.id);
+});
+
+test("a teamspace parent's own name clash still refuses, and leaves the delete held", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  // A Private parent comes back renamed instead; a teamspace folder's name is
+  // the team's, so its clash waits for the user.
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const { parent, subfolder } = parentWithUnsyncedSubfolder(db, team.id);
+  const parentName = rawFolder(db, parent.id).name;
+  db.db.prepare("UPDATE folders SET name = 'Elsewhere' WHERE id = ?").run(parent.id);
+  db.createFolder(parentName, team.id);
+  db.db.prepare("UPDATE folders SET name = ? WHERE id = ?").run(parentName, parent.id);
+
+  const restored = db.restoreFolderAfterDeniedDelete(parent.id);
+
+  assert.equal(restored.success, false);
+  assert.equal(restored.reason, "name-taken");
+  assert.ok(rawFolder(db, parent.id).deleted_at);
+  assert.ok(rawFolder(db, subfolder.id).deleted_at);
+});
+
+test("a pulled delete of a folder the cloud never linked keeps its uploaded notes live", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const folder = db.createFolder("Client").folder;
+  const uploaded = syncedNote(db, "Uploaded", folder.id);
+
+  const result = db.hardDeleteFolder(folder.id, { preserveDirtyNotes: true });
+
+  assert.deepEqual(result.noteIds, [], "its mirror file must not be deleted");
+  assert.deepEqual(result.preservedNotes, []);
+  assert.deepEqual(
+    result.unfiledNotes.map((note) => note.id),
+    [uploaded.id]
+  );
+  const kept = rawNote(db, uploaded.id);
+  assert.equal(kept.deleted_at, null, "nobody chose to delete this note");
+  assert.equal(kept.folder_id, null);
+  assert.equal(kept.sync_status, "synced", "nothing is queued, so no DELETE goes up");
+  assert.equal(kept.client_note_id, uploaded.client_note_id);
+});
+
+test("this device's own delete of a never-synced folder still tombstones its uploaded notes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const folder = db.createFolder("Client").folder;
+  const uploaded = syncedNote(db, "Uploaded", folder.id);
+
+  db.deleteFolder(folder.id);
+
+  const tombstone = rawNote(db, uploaded.id);
+  assert.ok(tombstone.deleted_at);
+  assert.equal(tombstone.sync_status, "pending");
+});
+
+test("a pulled delete unfiles a note still sending its folder link, without forking it", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const folder = db.createFolder("Client").folder;
+  db.markFolderSynced(folder.id, "cloud-client");
+  const linking = syncedNote(db, "Linking", folder.id, { sync_status: "folder_link_pending" });
+
+  const result = db.hardDeleteFolder(folder.id, { preserveDirtyNotes: true });
+
+  assert.deepEqual(result.preservedNotes, []);
+  const kept = rawNote(db, linking.id);
+  assert.equal(kept.folder_id, null);
+  assert.equal(kept.sync_status, "synced");
+  assert.equal(kept.cloud_id, "cloud-Linking", "the same cloud note, not a copy");
+});
+
+test("relocating a folder the cloud never linked keeps its uploaded notes on this device", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const folder = db.createFolder("Client", team.id).folder;
+  const uploaded = syncedNote(db, "Uploaded", folder.id);
+  db.db.prepare("UPDATE notes SET space_id = ? WHERE id = ?").run(team.id, uploaded.id);
+
+  const result = db.relocateRevokedFolder(folder.id, db.getPrivateSpaceId(), false);
+
+  assert.equal(result.success, true);
+  assert.deepEqual(result.deletedNoteIds, []);
+  const kept = rawNote(db, uploaded.id);
+  assert.equal(kept.deleted_at, null);
+  assert.equal(kept.folder_id, null);
+  assert.equal(kept.space_id, team.id, "it's still the cloud's note in that space");
+});
+
+test("revoking a space settles a held parent and its unsynced subfolder in any order", (t) => {
+  for (const reversed of [false, true]) {
+    const db = createDb(t);
+    if (!db) return;
+    const team = createTestTeamSpace(db, { name: "Growth" }).space;
+    const parent = db.createFolder("Plans", team.id).folder;
+    db.markFolderSynced(parent.id, "cloud-plans");
+    const subfolder = db.createFolder("Q1", team.id, parent.id).folder;
+    const unsent = db.saveNote("Unsent", "keep", "personal", null, null, subfolder.id).note;
+    assert.equal(db.deleteFolder(parent.id).success, true);
+    if (reversed) {
+      const rows = db.db.prepare("SELECT * FROM optimistic_folder_delete_rows").all();
+      db.db.prepare("DELETE FROM optimistic_folder_delete_rows").run();
+      const insert = db.db.prepare(
+        "INSERT INTO optimistic_folder_delete_rows (folder_id, entity_type, entity_id, original_sync_status, original_deleted_at, original_updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+      );
+      for (const row of rows.reverse()) {
+        insert.run(
+          row.folder_id,
+          row.entity_type,
+          row.entity_id,
+          row.original_sync_status,
+          row.original_deleted_at,
+          row.original_updated_at
+        );
+      }
+    }
+
+    assert.equal(db.purgeSpace(team.id).success, true);
+    const kept = db.getNote(unsent.id);
+    assert.equal(kept.deleted_at, null);
+    assert.equal(kept.space_id, db.getPrivateSpaceId());
+  }
+});
+
+test("a never-synced folder finalizes now, but a note the server may hold keeps a tombstone", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const folder = db.createFolder("Offline").folder;
+  const neverSent = db.saveNote("Never sent", "local", "personal", null, null, folder.id).note;
+  const uploaded = syncedNote(db, "Uploaded", folder.id);
+  const attempted = db.saveNote("Attempted", "maybe", "personal", null, null, folder.id).note;
+  db.markNoteCreatesAttempted([attempted.client_note_id]);
+
+  const result = db.deleteFolder(folder.id);
+
+  assert.equal(result.success, true);
+  assert.equal(rawFolder(db, folder.id), null);
+  assert.equal(rawNote(db, neverSent.id), null);
+  assert.deepEqual(result.noteIds.sort(), [neverSent.id, uploaded.id, attempted.id].sort());
+  for (const note of [uploaded, attempted]) {
+    const tombstone = rawNote(db, note.id);
+    assert.ok(tombstone.deleted_at);
+    assert.equal(tombstone.folder_id, null);
+    assert.equal(tombstone.sync_status, "pending");
+  }
+  assert.deepEqual(
+    db.getPendingNoteDeletes().map((note) => note.id),
+    [uploaded.id]
+  );
+});
+
+test("getSubfolders, delete and move skip a child sitting in another space", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "test-workspace",
+    defaultWorkspaceId: "test-workspace",
+  });
+  db.bindDefaultPrivateSpace("test-workspace");
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const parent = db.createFolder("Client").folder;
+  const stray = db.createFolder("Stray", team.id).folder;
+  const note = db.saveNote("Stray note", "keep", "personal", null, null, stray.id).note;
+  db.db.prepare("UPDATE folders SET parent_folder_id = ? WHERE id = ?").run(parent.id, stray.id);
+  const shown = db.createFolder("Shown", null, parent.id).folder;
+
+  assert.deepEqual(
+    db.getSubfolders(parent.id).map((folder) => folder.id),
+    [shown.id]
+  );
+
+  const otherTeam = createTestTeamSpace(db, { name: "Other" }).space;
+  const moved = db.moveFolderToSpace(parent.id, otherTeam.id);
+  assert.equal(moved.success, true);
+  assert.equal(rawFolder(db, stray.id).space_id, team.id, "the stray stays where it is");
+  assert.equal(rawFolder(db, shown.id).space_id, otherTeam.id);
+
+  const deleted = db.deleteFolder(parent.id);
+  assert.equal(deleted.success, true);
+  assert.deepEqual(deleted.folderIds.sort(), [shown.id, parent.id].sort());
+  const survivor = rawFolder(db, stray.id);
+  assert.equal(survivor.deleted_at, null);
+  assert.equal(survivor.parent_folder_id, null, "the foreign key lets go of the deleted parent");
+  assert.equal(rawNote(db, note.id).deleted_at, null);
+});
+
+test("a folder's first cloud id queues its uploaded notes once, without touching updated_at", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const folder = db.createFolder("Client").folder;
+  const uploaded = syncedNote(db, "Uploaded", folder.id, { updated_at: "2026-01-01 00:00:00" });
+  const draft = db.saveNote("Draft", "unsent", "personal", null, null, folder.id).note;
+  const tombstone = syncedNote(db, "Tombstone", folder.id, {
+    deleted_at: "2026-01-01 00:00:00",
+    sync_status: "pending",
+  });
+  const elsewhere = syncedNote(db, "Elsewhere", null);
+  const noBase = syncedNote(db, "No base", folder.id, { cloud_updated_at: null });
+
+  const result = db.acknowledgeFolderCreate(
+    folder.id,
+    db.getFolderByClientId(folder.client_folder_id),
+    null,
+    folder.client_folder_id,
+    "cloud-client",
+    "2026-06-01T00:00:00.000Z"
+  );
+  assert.equal(result.outcome, "synced");
+
+  const queued = rawNote(db, uploaded.id);
+  assert.equal(queued.sync_status, "folder_link_pending");
+  assert.equal(queued.updated_at, "2026-01-01 00:00:00");
+  assert.equal(rawNote(db, draft.id).sync_status, "pending");
+  assert.equal(rawNote(db, tombstone.id).sync_status, "pending");
+  assert.equal(rawNote(db, elsewhere.id).sync_status, "synced");
+  assert.equal(rawNote(db, noBase.id).sync_status, "synced", "its PATCH would have no guard");
+  assert.ok(db.getPendingNotes().some((note) => note.id === uploaded.id));
+
+  db.db.prepare("UPDATE notes SET sync_status = 'synced' WHERE id = ?").run(uploaded.id);
+  db.renameFolder(folder.id, "Client renamed");
+  const again = db.acknowledgeFolderCreate(
+    folder.id,
+    db.getFolderByClientId(folder.client_folder_id),
+    "cloud-client",
+    folder.client_folder_id,
+    "cloud-client",
+    "2026-06-02T00:00:00.000Z"
+  );
+  assert.equal(again.outcome, "synced");
+  assert.equal(rawNote(db, uploaded.id).sync_status, "synced", "only the first cloud id queues");
+});
+
+test("a folder adopting a cloud row on a name collision queues its uploaded notes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const local = db.createFolder("Plans", team.id).folder;
+  const uploaded = syncedNote(db, "Uploaded", local.id);
+
+  db.upsertFolderFromCloud(
+    {
+      id: "cloud-plans",
+      client_folder_id: "client-from-elsewhere",
+      name: "Plans",
+      sort_order: 0,
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-01-02T00:00:00.000Z",
+    },
+    team.id
+  );
+
+  assert.equal(rawFolder(db, local.id).cloud_id, "cloud-plans");
+  assert.equal(rawNote(db, uploaded.id).sync_status, "folder_link_pending");
+});
+
+test("a local edit turns a queued folder link into an ordinary pending note", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const folder = db.createFolder("Client").folder;
+  const uploaded = syncedNote(db, "Uploaded", folder.id, { sync_status: "folder_link_pending" });
+
+  db.markNoteSyncError(uploaded.id);
+  assert.equal(rawNote(db, uploaded.id).sync_status, "folder_link_pending");
+
+  db.updateNote(uploaded.id, { title: "Edited" });
+  assert.equal(rawNote(db, uploaded.id).sync_status, "pending");
+});
+
+test("a pulled copy with no folder keeps a queued link and the folder that owes it", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateSpaceId = db.getPrivateSpaceId();
+  const linked = db.createFolder("Linked").folder;
+  db.markFolderSynced(linked.id, "cloud-linked");
+  const queued = syncedNote(db, "Queued", linked.id, { sync_status: "folder_link_pending" });
+  const waiting = db.createFolder("Waiting").folder;
+  const unfiled = syncedNote(db, "Unfiled", waiting.id);
+  const filedElsewhere = syncedNote(db, "Moved", linked.id);
+  const copy = (note, extra = {}) => ({
+    id: note.cloud_id,
+    client_note_id: note.client_note_id,
+    title: `${note.title} v2`,
+    content: "newer",
+    folder_id: null,
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-06-01T00:00:00.000Z",
+    ...extra,
+  });
+
+  db.upsertNoteFromCloud(copy(queued), null, privateSpaceId);
+  const queuedRow = rawNote(db, queued.id);
+  assert.equal(queuedRow.title, "Queued v2");
+  assert.equal(queuedRow.folder_id, linked.id);
+  assert.equal(queuedRow.sync_status, "folder_link_pending");
+
+  db.upsertNoteFromCloud(copy(unfiled), null, privateSpaceId);
+  assert.equal(rawNote(db, unfiled.id).folder_id, waiting.id);
+  assert.equal(rawNote(db, unfiled.id).sync_status, "synced");
+
+  db.upsertNoteFromCloud(copy(filedElsewhere), null, privateSpaceId);
+  assert.equal(rawNote(db, filedElsewhere.id).folder_id, null, "a linked folder's note follows");
+});
+
+test("a re-parent still applies after the page's tombstone nulled the old parent, but no other change does", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const oldParent = db.createFolder("Old").folder;
+  const newParent = db.createFolder("New").folder;
+  const child = db.createFolder("Child", null, oldParent.id).folder;
+  db.markFolderSynced(oldParent.id, "c-old");
+  db.markFolderSynced(newParent.id, "c-new");
+  db.markFolderSynced(child.id, "c-child");
+  const snapshot = rawFolder(db, child.id);
+  db.db
+    .prepare("UPDATE folders SET sync_status = 'synced' WHERE id IN (?, ?, ?)")
+    .run(oldParent.id, newParent.id, child.id);
+  const synced = { ...snapshot, sync_status: "synced" };
+
+  // The parent is still a live folder here, so a NULL parent is a real change.
+  db.db.prepare("UPDATE folders SET parent_folder_id = NULL WHERE id = ?").run(child.id);
+  db.applyCloudFolderParents([{ cloudId: "c-child", parentCloudId: "c-new", snapshot: synced }]);
+  assert.equal(rawFolder(db, child.id).parent_folder_id, null);
+
+  // Another column moved too: stale, whatever happened to the parent.
+  db.hardDeleteFolder(oldParent.id);
+  db.db.prepare("UPDATE folders SET name = 'Renamed' WHERE id = ?").run(child.id);
+  db.applyCloudFolderParents([{ cloudId: "c-child", parentCloudId: "c-new", snapshot: synced }]);
+  assert.equal(rawFolder(db, child.id).parent_folder_id, null);
+
+  db.db.prepare("UPDATE folders SET name = 'Child' WHERE id = ?").run(child.id);
+  db.applyCloudFolderParents([{ cloudId: "c-child", parentCloudId: "c-new", snapshot: synced }]);
+  assert.equal(rawFolder(db, child.id).parent_folder_id, newParent.id);
+});
+
+test("applyCloudFolderParents returns un-nests before nests", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const top = db.createFolder("Top").folder;
+  const middle = db.createFolder("Middle").folder;
+  const leaf = db.createFolder("Leaf", null, middle.id).folder;
+  for (const [folder, cloudId] of [
+    [top, "c-top"],
+    [middle, "c-middle"],
+    [leaf, "c-leaf"],
+  ]) {
+    db.markFolderSynced(folder.id, cloudId);
+  }
+
+  const changed = db.applyCloudFolderParents([
+    { cloudId: "c-middle", parentCloudId: "c-top", snapshot: rawFolder(db, middle.id) },
+  ]);
+
+  assert.deepEqual(
+    changed.map((folder) => [folder.id, folder.parent_folder_id]),
+    [
+      [leaf.id, null],
+      [middle.id, top.id],
+    ]
+  );
+});
+
+test("a backfill link adopts a pending row with no parent, and only that", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const parent = db.createFolder("Parent").folder;
+  const other = db.createFolder("Other").folder;
+  const flat = db.createFolder("Flat").folder;
+  const nested = db.createFolder("Nested", null, other.id).folder;
+  for (const [folder, cloudId] of [
+    [parent, "c-parent"],
+    [other, "c-other"],
+    [flat, "c-flat"],
+    [nested, "c-nested"],
+  ]) {
+    db.markFolderSynced(folder.id, cloudId);
+  }
+  db.renameFolder(flat.id, "Flat renamed");
+  db.renameFolder(nested.id, "Nested renamed");
+  const link = (cloudId, folder, adoptIfPending) => ({
+    cloudId,
+    parentCloudId: "c-parent",
+    snapshot: rawFolder(db, folder.id),
+    adoptIfPending,
+  });
+
+  db.applyCloudFolderParents([link("c-flat", flat, false)]);
+  assert.equal(
+    rawFolder(db, flat.id).parent_folder_id,
+    null,
+    "an ordinary pull keeps pending rows"
+  );
+
+  db.applyCloudFolderParents([link("c-flat", flat, true), link("c-nested", nested, true)]);
+  const adopted = rawFolder(db, flat.id);
+  assert.equal(adopted.parent_folder_id, parent.id);
+  assert.equal(adopted.sync_status, "pending");
+  assert.equal(adopted.name, "Flat renamed");
 });
 
 // Private spaces per workspace and account (Task 2).
@@ -4141,6 +5560,137 @@ test("a default folder folds into a same-named folder the user made in the targe
   assert.equal(noteRow(db.db, pendingMeeting.id).space_id, w1);
   assert.equal(db.getMeetingsFolder().id, userMeetings.id);
   assert.deepEqual(accountFolderNames(db.db, "a"), ["Meetings", "Personal"]);
+});
+
+test("binding and relocating a Private with subfolders in it never throws", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const { pending, w1 } = pendingAndW1(db);
+  // A parent that folds into its namesake (D41) hands it its subfolder.
+  const folded = db.createFolder("Clients", pending).folder;
+  const foldedChild = db.createFolder("Acme", pending, folded.id).folder;
+  const foldedNote = db.saveNote("Acme plan", "", "personal", null, null, foldedChild.id).note;
+  const namesake = db.createFolder("Clients", w1).folder;
+  // A parent that moves takes its subfolder along.
+  const moved = db.createFolder("Projects", pending).folder;
+  const movedChild = db.createFolder("Launch", pending, moved.id).folder;
+
+  db.bindDefaultPrivateSpace("w1");
+
+  assert.equal(folderRow(db.db, folded.id), undefined);
+  assert.equal(folderRow(db.db, foldedChild.id).space_id, w1);
+  assert.equal(folderRow(db.db, foldedChild.id).parent_folder_id, namesake.id);
+  assert.equal(folderRow(db.db, foldedChild.id).sync_status, "pending");
+  assert.equal(noteRow(db.db, foldedNote.id).folder_id, foldedChild.id);
+  assert.ok(folderRow(db.db, namesake.id));
+  assert.equal(folderRow(db.db, movedChild.id).space_id, w1);
+  assert.equal(folderRow(db.db, movedChild.id).parent_folder_id, moved.id);
+  assertEveryRowInItsFolderSpace(db.db);
+
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "w2", defaultWorkspaceId: "w1" });
+  const lost = db.createFolder("Lost").folder;
+  const lostChild = db.createFolder("Lost child", null, lost.id).folder;
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "w1", defaultWorkspaceId: "w1" });
+  db.relocatePrivateSpace("w2", null);
+
+  assert.equal(folderRow(db.db, lostChild.id).space_id, w1);
+  assert.equal(folderRow(db.db, lostChild.id).parent_folder_id, lost.id);
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("a merge folds subfolders only into the same-named subfolder of their parent's survivor", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const { pending, w1 } = pendingAndW1(db);
+  const syncedFolder = (name, space, parent = null, cloudId = null) => {
+    const folder = db.createFolder(name, space, parent).folder;
+    if (cloudId) db.markFolderSynced(folder.id, cloudId);
+    return folderRow(db.db, folder.id);
+  };
+  // Both sides hold Clients/Acme; w1 also holds a top-level "Beta", and the
+  // pending side's Clients holds a subfolder "Beta".
+  const pendingClients = syncedFolder("Clients", pending);
+  const pendingAcme = syncedFolder("Acme", pending, pendingClients.id);
+  const pendingBeta = syncedFolder("Beta", pending, pendingClients.id, "cloud-pending-beta");
+  const acmeNote = db.saveNote("Acme plan", "", "personal", null, null, pendingAcme.id).note;
+  const betaNote = db.saveNote("Beta plan", "", "personal", null, null, pendingBeta.id).note;
+  const w1Clients = syncedFolder("Clients", w1, null, "cloud-w1-clients");
+  const w1Acme = syncedFolder("Acme", w1, w1Clients.id);
+  const w1Beta = syncedFolder("Beta", w1, null, "cloud-w1-beta");
+  const w1BetaNote = db.saveNote("W1 beta", "", "personal", null, null, w1Beta.id).note;
+
+  db.bindDefaultPrivateSpace("w1");
+
+  // Clients folds into w1's linked one, Acme into w1's Acme under it.
+  assert.equal(folderRow(db.db, pendingClients.id), undefined);
+  assert.equal(folderRow(db.db, pendingAcme.id), undefined);
+  assert.equal(noteRow(db.db, acmeNote.id).folder_id, w1Acme.id);
+  assert.equal(folderRow(db.db, w1Acme.id).parent_folder_id, w1Clients.id);
+  // A subfolder never folds into a top-level namesake: Beta stays nested,
+  // renamed since names are unique in a space, and its nesting is queued.
+  const beta = folderRow(db.db, pendingBeta.id);
+  assert.equal(beta.space_id, w1);
+  assert.equal(beta.parent_folder_id, w1Clients.id);
+  assert.equal(beta.name, "Beta (2)");
+  assert.equal(beta.sync_status, "pending");
+  assert.equal(beta.cloud_id, "cloud-pending-beta");
+  assert.equal(noteRow(db.db, betaNote.id).folder_id, pendingBeta.id);
+  assert.equal(folderRow(db.db, w1Beta.id).parent_folder_id, null);
+  assert.equal(noteRow(db.db, w1BetaNote.id).folder_id, w1Beta.id);
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("a merge that retires the target's folder moves its subfolders to the survivor", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const { pending, w1 } = pendingAndW1(db);
+  // The pending side's Clients is cloud-linked, w1's is not: w1's is retired.
+  const pendingClients = db.createFolder("Clients", pending).folder;
+  db.markFolderSynced(pendingClients.id, "cloud-clients");
+  const w1Clients = db.createFolder("Clients", w1).folder;
+  const w1Child = db.createFolder("Q1", w1, w1Clients.id).folder;
+  db.markFolderSynced(w1Child.id, "cloud-q1");
+  const childNote = db.saveNote("Q1 plan", "", "personal", null, null, w1Child.id).note;
+  const parentNote = db.saveNote("Clients plan", "", "personal", null, null, w1Clients.id).note;
+
+  db.bindDefaultPrivateSpace("w1");
+
+  assert.equal(folderRow(db.db, w1Clients.id), undefined);
+  const survivor = folderRow(db.db, pendingClients.id);
+  assert.equal(survivor.space_id, w1);
+  assert.equal(survivor.name, "Clients");
+  const child = folderRow(db.db, w1Child.id);
+  assert.equal(child.parent_folder_id, pendingClients.id, "never left top-level");
+  assert.equal(child.sync_status, "pending", "its new nesting syncs");
+  assert.equal(noteRow(db.db, childNote.id).folder_id, w1Child.id);
+  assert.equal(noteRow(db.db, parentNote.id).folder_id, pendingClients.id);
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("relocating a lost workspace's Private keeps a default's subfolders nested", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a", { activeWorkspaceId: "w1", defaultWorkspaceId: "w1" });
+  db.bindDefaultPrivateSpace("w1");
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "w2", defaultWorkspaceId: "w1" });
+  const w2 = db.getPrivateSpaceId();
+  const lostPersonal = db.saveNote("Lost idea", "", "personal").note;
+  const personalChild = db.createFolder("Ideas", w2, lostPersonal.folder_id).folder;
+  const childNote = db.saveNote("Idea", "", "personal", null, null, personalChild.id).note;
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "w1", defaultWorkspaceId: "w1" });
+  const w1 = db.getDefaultPrivateSpaceId();
+  const w1Personal = db.saveNote("Home idea", "", "personal").note.folder_id;
+
+  db.relocatePrivateSpace("w2", null);
+
+  // The unlinked default folds into w1's Personal, which takes its subfolder.
+  assert.equal(folderRow(db.db, lostPersonal.folder_id), undefined);
+  assert.equal(noteRow(db.db, lostPersonal.id).folder_id, w1Personal);
+  const child = folderRow(db.db, personalChild.id);
+  assert.equal(child.space_id, w1);
+  assert.equal(child.parent_folder_id, w1Personal);
+  assert.equal(noteRow(db.db, childNote.id).folder_id, personalChild.id);
+  assertEveryRowInItsFolderSpace(db.db);
 });
 
 test("a known default workspace without a row yet wins over the account's earlier default", (t) => {

@@ -191,6 +191,8 @@ function makeDatabase() {
       return summaries;
     },
     getFolders: () => state.folders.filter((row) => !row.deleted_at),
+    // The stand-in's folders are all top-level.
+    getSubfolders: () => [],
     renameFolder: (id, name) => {
       folder(id).name = name;
       return { success: true, folder: folder(id) };
