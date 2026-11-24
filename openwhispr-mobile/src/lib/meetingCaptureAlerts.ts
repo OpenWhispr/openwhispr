@@ -4,9 +4,11 @@ import { getNotificationStatus } from '@/lib/notifications';
 import {
   OWED_CAPTURE_TITLE,
   PARTIAL_CAPTURE_TITLE,
+  meetingCaptureAlert,
   owedCaptureMessage,
   partialCaptureMessage,
   type CaptureCoverage,
+  type MeetingCaptureAlertInput,
 } from '@/lib/notes/meetingCapture';
 
 // Long enough that a brief interruption (Siri, a declined call) resumes before it fires and
@@ -126,4 +128,10 @@ export function alertIfPartialCapture(
     return;
   }
   Alert.alert(PARTIAL_CAPTURE_TITLE, partialCaptureMessage(coverage));
+}
+
+/** A finished cloud meeting's alert, once the note is open, when part of it is missing. */
+export function alertCloudMeetingCapture(input: MeetingCaptureAlertInput): void {
+  const alert = meetingCaptureAlert(input);
+  if (alert) Alert.alert(alert.title, alert.message);
 }

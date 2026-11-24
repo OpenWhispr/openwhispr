@@ -707,6 +707,11 @@ interface NotesStore {
   ) => Promise<{
     /** Audio the note is done without, still to be transcribed from its recording. */
     owedMs: number;
+    /**
+     * Audio the note is done without whose list could not be saved, so nothing will resume it;
+     * present only when there is some.
+     */
+    unsavedOwedMs?: number;
   }>;
   /**
    * A done cloud meeting whose backfill fell short: transcribes the stretches its sidecar still
@@ -1184,11 +1189,14 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       }
       let transcript = live;
       let owed: AudioWindow[] = recordingUri ? result.droppedWindows : [];
+      // Whether a list on disk names what is still owed. The first list covers what the second
+      // would, so either one being written is enough.
+      let owedSaved = false;
       if (recordingUri && owed.length > 0) {
         // Before the first upload: a kill from here on leaves the list on disk, so the launch
         // recovery transcribes exactly these stretches instead of deleting a recording that
         // looks processed. A list that can't be written does not stop the pass.
-        await recordOwedAudio(noteId, owed);
+        owedSaved = await recordOwedAudio(noteId, owed);
         // Offline every piece would wait out its timeouts; the stretches stay owed instead.
         if (await isDeviceOnline()) {
           ({ transcript, failedWindows: owed } = await backfillCloudMeeting(
@@ -1200,7 +1208,9 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
         }
         // Before done, so a done note's list never claims less than its recording owes. With
         // nothing owed the discard below removes the list with the recording.
-        if (owed.length > 0 && isLiveNote(noteId)) await recordOwedAudio(noteId, owed);
+        if (owed.length > 0 && isLiveNote(noteId)) {
+          owedSaved = (await recordOwedAudio(noteId, owed)) || owedSaved;
+        }
       }
       // While the recording is still on disk: the diarizer reads it. Leaves the status at
       // transcribing or diarizing, both of which may move to done. An utterance the session
@@ -1226,7 +1236,9 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
         });
       }
       await finalizeMeetingNoteContent(noteId);
-      return { owedMs: isLiveNote(noteId) ? windowsMs(owed) : 0 };
+      const stillOwedMs = isLiveNote(noteId) ? windowsMs(owed) : 0;
+      if (stillOwedMs > 0 && !owedSaved) return { owedMs: 0, unsavedOwedMs: stillOwedMs };
+      return { owedMs: stillOwedMs };
     } finally {
       meetingBackfillsInFlight.delete(noteId);
       get().loadNotes();

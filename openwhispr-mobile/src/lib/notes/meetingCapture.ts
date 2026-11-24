@@ -165,3 +165,50 @@ export const OWED_CAPTURE_TITLE = "Part of this meeting isn't transcribed yet";
 export function owedCaptureMessage(coverage: CaptureCoverage): string {
   return `OpenWhispr has transcribed ${formatRecordedMinutes(coverage.recordedSeconds)} of this ${formatElapsedMinutes(coverage.elapsedSeconds)} meeting so far. Audio still saved on this device is transcribed the next time OpenWhispr is open with a connection.`;
 }
+
+const MIC_MISSED_SENTENCE = 'The rest was missed while the microphone was interrupted.';
+
+export interface MeetingCaptureAlertInput {
+  /** From when capture began. */
+  elapsedMs: number;
+  /** Audio the microphone delivered. */
+  capturedMs: number;
+  /**
+   * Captured audio the note will never get: dropped by the stream with no recording to take it
+   * from, or owed by a recording whose list of owed audio could not be saved.
+   */
+  missedMs: number;
+  /** Recorded audio saved to be transcribed later. */
+  owedMs: number;
+}
+
+/**
+ * The alert for a cloud meeting that ended with part of it missing from the note, or null.
+ * Owed audio is promised only when it was saved, and never stands in for audio the microphone
+ * didn't record.
+ */
+export function meetingCaptureAlert(
+  input: MeetingCaptureAlertInput,
+): { title: string; message: string } | null {
+  const kept = captureCoverage(input.capturedMs - input.missedMs, input.elapsedMs);
+  if (input.owedMs <= 0) {
+    return kept.isPartial
+      ? { title: PARTIAL_CAPTURE_TITLE, message: partialCaptureMessage(kept) }
+      : null;
+  }
+  if (kept.isPartial) {
+    // The microphone also stopped: only what it recorded can still be transcribed.
+    const owedSeconds = Math.max(0, Math.floor(input.owedMs / 1000));
+    return {
+      title: PARTIAL_CAPTURE_TITLE,
+      message: `OpenWhispr recorded ${formatRecordedMinutes(kept.recordedSeconds)} of this ${formatElapsedMinutes(kept.elapsedSeconds)} meeting. ${MIC_MISSED_SENTENCE} The transcript is still missing ${formatRecordedMinutes(owedSeconds)} of the recording, which is transcribed from audio saved on this device the next time OpenWhispr is open with a connection.`,
+    };
+  }
+  const transcribed = captureCoverage(
+    input.capturedMs - input.missedMs - input.owedMs,
+    input.elapsedMs,
+  );
+  return transcribed.isPartial
+    ? { title: OWED_CAPTURE_TITLE, message: owedCaptureMessage(transcribed) }
+    : null;
+}

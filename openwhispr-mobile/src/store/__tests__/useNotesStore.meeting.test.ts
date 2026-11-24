@@ -804,6 +804,18 @@ describe('meeting post-pass', () => {
     ).resolves.toEqual({ owedMs: 25_000 });
   });
 
+  it('reports owed audio it could not save as unsaved, never as owed', async () => {
+    mockCloudTranscribe.mockRejectedValue(new Error('Network request failed'));
+    mockWriteAsStringAsync.mockRejectedValue(new Error('disk full'));
+
+    await expect(
+      finalize({
+        utterances: [utterance('Live.', 0, 1000)],
+        droppedWindows: [{ startMs: 10_000, endMs: 70_000 }],
+      }),
+    ).resolves.toEqual({ owedMs: 0, unsavedOwedMs: 60_000 });
+  });
+
   describe('stopped with no connection', () => {
     beforeEach(() => {
       mockNetworkState.mockResolvedValue({ isConnected: false });

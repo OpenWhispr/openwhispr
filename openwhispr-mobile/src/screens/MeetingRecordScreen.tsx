@@ -31,7 +31,11 @@ import { useMeetingLiveActivity, type MeetingActivityPhase } from '@/hooks/useMe
 import { useMeetingRecorderHealth } from '@/hooks/useMeetingRecorderHealth';
 import { captureCoverage, isCloudMeetingCapturing } from '@/lib/notes/meetingCapture';
 import { reportCaptureInterrupted, reportMeetingFinished } from '@/lib/meetingCaptureTelemetry';
-import { alertIfPartialCapture, useCapturePausedNotification } from '@/lib/meetingCaptureAlerts';
+import {
+  alertCloudMeetingCapture,
+  alertIfPartialCapture,
+  useCapturePausedNotification,
+} from '@/lib/meetingCaptureAlerts';
 import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
 import { Sentry } from '@/lib/sentry';
@@ -412,9 +416,6 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
         (cloudMeeting.capturedSeconds - cloudMeeting.droppedSeconds) * 1000,
         elapsedMs,
       );
-      // With a recording, audio the stream dropped is transcribed from the file afterwards,
-      // so only audio the mic never delivered is missing from the note.
-      const recordedCoverage = captureCoverage(cloudMeeting.capturedSeconds * 1000, elapsedMs);
       const hadError = cloudMeeting.status === 'error';
       const { interruptions, reconnects, droppedSeconds } = cloudMeeting;
       setPhase('processing');
@@ -437,7 +438,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
         return;
       }
       try {
-        const { owedMs } = await finalizeCloudMeeting(noteId, result, captured);
+        const { owedMs, unsavedOwedMs = 0 } = await finalizeCloudMeeting(noteId, result, captured);
         router.replace(`/(tabs)/(notes)/${noteId}`);
         reportMeetingFinished({
           path: 'cloud',
@@ -446,15 +447,16 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
           reconnects,
           droppedSeconds,
         });
-        if (owedMs > 0) {
+        alertCloudMeetingCapture({
+          elapsedMs,
+          capturedMs: captured * 1000,
+          // With a recording, audio the stream dropped is transcribed from the file (now, or
+          // later when its list was saved), so only owed audio nothing names is missed.
+          missedMs: result.recordingUri ? unsavedOwedMs : droppedSeconds * 1000,
           // Done, but part of the recording is still waiting to be transcribed: without this
           // the note would look complete until the stretches appear on their own later.
-          alertIfPartialCapture(captureCoverage(captured * 1000 - owedMs, elapsedMs), {
-            owed: true,
-          });
-        } else {
-          alertIfPartialCapture(result.recordingUri ? recordedCoverage : coverage);
-        }
+          owedMs,
+        });
       } catch (error) {
         markNoteFailed(noteId);
         // A fixed message and a code: the error itself can carry a file path.

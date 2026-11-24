@@ -5,6 +5,7 @@ import {
   isCaptureStalled,
   isCloudMeetingCapturing,
   isCloudMeetingRecordingAudio,
+  meetingCaptureAlert,
   partialCaptureMessage,
   trackCaptureGrowth,
 } from '../meetingCapture';
@@ -196,5 +197,70 @@ describe('partialCaptureMessage', () => {
     expect(partialCaptureMessage(captureCoverage(20_000, 90_000))).toContain(
       'recorded under 1 min of this 2 min meeting',
     );
+  });
+});
+
+describe('meetingCaptureAlert', () => {
+  const MIN = 60_000;
+
+  it('says nothing for a meeting that was recorded and transcribed', () => {
+    expect(
+      meetingCaptureAlert({ elapsedMs: 30 * MIN, capturedMs: 30 * MIN, missedMs: 0, owedMs: 0 }),
+    ).toBeNull();
+  });
+
+  it('keeps the plain partial alert when nothing is owed', () => {
+    expect(
+      meetingCaptureAlert({ elapsedMs: 61 * MIN, capturedMs: 9 * MIN, missedMs: 0, owedMs: 0 }),
+    ).toEqual({
+      title: "Part of this meeting wasn't recorded",
+      message:
+        'OpenWhispr recorded 9 min of this 61 min meeting. The rest was missed while the microphone or the connection was interrupted.',
+    });
+  });
+
+  it('keeps the owed alert when the microphone kept recording', () => {
+    expect(
+      meetingCaptureAlert({
+        elapsedMs: 61 * MIN,
+        capturedMs: 61 * MIN,
+        missedMs: 0,
+        owedMs: 52 * MIN,
+      }),
+    ).toEqual({
+      title: "Part of this meeting isn't transcribed yet",
+      message:
+        'OpenWhispr has transcribed 9 min of this 61 min meeting so far. Audio still saved on this device is transcribed the next time OpenWhispr is open with a connection.',
+    });
+  });
+
+  it('says what was recorded and what of it is still owed when the microphone also stopped', () => {
+    expect(
+      meetingCaptureAlert({
+        elapsedMs: 61 * MIN,
+        capturedMs: 40 * MIN,
+        missedMs: 0,
+        owedMs: 12 * MIN,
+      }),
+    ).toEqual({
+      title: "Part of this meeting wasn't recorded",
+      message:
+        'OpenWhispr recorded 40 min of this 61 min meeting. The rest was missed while the microphone was interrupted. The transcript is still missing 12 min of the recording, which is transcribed from audio saved on this device the next time OpenWhispr is open with a connection.',
+    });
+  });
+
+  it('counts owed audio it could not save as missed, promising nothing for it', () => {
+    expect(
+      meetingCaptureAlert({
+        elapsedMs: 61 * MIN,
+        capturedMs: 61 * MIN,
+        missedMs: 20 * MIN,
+        owedMs: 0,
+      }),
+    ).toEqual({
+      title: "Part of this meeting wasn't recorded",
+      message:
+        'OpenWhispr recorded 41 min of this 61 min meeting. The rest was missed while the microphone or the connection was interrupted.',
+    });
   });
 });
