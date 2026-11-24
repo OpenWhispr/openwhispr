@@ -23,6 +23,11 @@ export interface RealtimeCallbacks {
   onDebug?: (event: unknown) => void;
   onError?: (error: unknown) => void;
   onClose?: () => void;
+  /**
+   * The session's first leg is open and accepted, fired once. A recorded meeting returns its
+   * session before any socket exists, so this is when its stream is actually live.
+   */
+  onConnected?: () => void;
   /** A reconnectable drop was detected; the service is re-establishing the leg (mic keeps running). */
   onReconnecting?: () => void;
   /** A replacement leg is live after a drop; capture resumed. */

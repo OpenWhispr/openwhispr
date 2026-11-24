@@ -603,6 +603,13 @@ export async function startRealtimeMeetingWs(
     scheduleRotation();
   };
 
+  let connectedOnce = false;
+  const markConnected = (): void => {
+    if (connectedOnce) return;
+    connectedOnce = true;
+    callbacks.onConnected?.();
+  };
+
   const goTerminal = (error: unknown): void => {
     if (terminated) return;
     terminated = true;
@@ -668,6 +675,7 @@ export async function startRealtimeMeetingWs(
           return;
         }
         swapCurrentLeg(ws);
+        markConnected();
         if (announced) callbacks.onReconnected?.();
       })
       .catch((error) => {
@@ -811,6 +819,7 @@ export async function startRealtimeMeetingWs(
     legStartedAt = Date.now();
     flush(); // drain the cold-start buffer
     scheduleRotation();
+    markConnected();
   }
 
   return {

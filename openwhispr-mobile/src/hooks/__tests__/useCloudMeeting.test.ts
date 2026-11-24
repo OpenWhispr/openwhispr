@@ -325,6 +325,46 @@ describe('useCloudMeeting', () => {
     expect(result.current.liveSinceMs).toBe(1_045_000);
   });
 
+  it('keeps a recorded meeting connecting until its first connection, with the clock running', async () => {
+    const { result } = setup(true, 'file:///docs/meeting-7.wav');
+    const fake = latest();
+    await goLive(fake);
+    fake.setCapturedMs(4_000);
+    tick(1_000);
+    // Capture runs (the file takes the audio), but no socket has been accepted yet.
+    expect(result.current.status).toBe('connecting');
+    expect(result.current.capturedSeconds).toBe(4);
+    expect(result.current.liveSinceMs).not.toBeNull();
+
+    act(() => {
+      fake.callbacks.onConnected?.();
+    });
+    expect(result.current.status).toBe('live');
+  });
+
+  it('does not count a recorded meeting that starts offline as a reconnect', async () => {
+    const { result } = setup(true, 'file:///docs/meeting-7.wav');
+    const fake = latest();
+    await goLive(fake);
+    act(() => {
+      fake.callbacks.onReconnecting?.();
+    });
+    expect(result.current.status).toBe('reconnecting');
+    expect(result.current.reconnects).toBe(0);
+
+    act(() => {
+      fake.callbacks.onConnected?.();
+      fake.callbacks.onReconnected?.();
+    });
+    expect(result.current.status).toBe('live');
+
+    act(() => {
+      fake.callbacks.onReconnecting?.();
+    });
+    // A drop after the first connection is a real reconnect.
+    expect(result.current.reconnects).toBe(1);
+  });
+
   it('returns the recording and the dropped windows at stop, read after the stop settled', async () => {
     const { result } = setup(true, 'file:///docs/meeting-7.wav');
     const fake = latest();

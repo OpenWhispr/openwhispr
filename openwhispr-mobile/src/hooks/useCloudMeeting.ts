@@ -51,7 +51,7 @@ export interface CloudMeeting {
   droppedSeconds: number;
   /** Times the mic stopped delivering audio. */
   interruptions: number;
-  /** Times the socket dropped and had to reconnect. */
+  /** Times the socket dropped and had to reconnect; a first connect that failed isn't one. */
   reconnects: number;
   /**
    * Epoch ms at which the session started capturing; null until then. The mic prompt and
@@ -95,6 +95,8 @@ export function useCloudMeeting({
   const [droppedSeconds, setDroppedSeconds] = useState(initial.droppedSeconds);
   const [interruptions, setInterruptions] = useState(initial.interruptions);
   const [reconnects, setReconnects] = useState(initial.reconnects);
+  // Only a recorded meeting returns its session before the first socket is accepted.
+  const [connected, setConnected] = useState(true);
   const [liveSinceMs, setLiveSinceMs] = useState<number | null>(null);
 
   const sessionRef = useRef<RealtimeSession | null>(null);
@@ -111,6 +113,8 @@ export function useCloudMeeting({
   const recordingFailedRef = useRef(false);
   // Captured when the session starts: `stop` is memoized and the option may only arrive then.
   const recordingUriRef = useRef<string | undefined>(undefined);
+  // A failed first connect is not a reconnect: nothing was connected to lose.
+  const connectedRef = useRef(true);
   const onUtteranceRef = useRef(onUtterance);
   onUtteranceRef.current = onUtterance;
 
@@ -130,6 +134,7 @@ export function useCloudMeeting({
     captureLostReasonRef.current = null;
     recordingFailedRef.current = false;
     recordingUriRef.current = recordingUri;
+    connectedRef.current = !recordingUri;
     // Attached before start: a file that can't be opened is reported before start resolves.
     // The generation check keeps an earlier session's late event off this one.
     const failedSubscription = addRecordingFailedListener(() => {
@@ -159,6 +164,7 @@ export function useCloudMeeting({
     setDroppedSeconds(fresh.droppedSeconds);
     setInterruptions(fresh.interruptions);
     setReconnects(fresh.reconnects);
+    setConnected(!recordingUri);
     setLiveSinceMs(null);
     const isCurrent = (): boolean => generationRef.current === generation;
     const isLive = (): boolean => isCurrent() && !stoppedRef.current;
@@ -190,11 +196,16 @@ export function useCloudMeeting({
           setFailed(true);
           reportEnded();
         },
+        onConnected: () => {
+          if (!isLive()) return;
+          connectedRef.current = true;
+          setConnected(true);
+        },
         onReconnecting: () => {
           if (!isLive()) return;
           setPartialText('');
           setReconnecting(true);
-          setReconnects((n) => n + 1);
+          if (connectedRef.current) setReconnects((n) => n + 1);
         },
         onReconnected: () => {
           if (isLive()) setReconnecting(false);
@@ -295,6 +306,7 @@ export function useCloudMeeting({
     failed,
     capturing: micCapturing,
     reconnecting,
+    connected,
   });
 
   return {

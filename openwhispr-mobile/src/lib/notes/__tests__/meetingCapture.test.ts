@@ -4,6 +4,7 @@ import {
   initialCloudMeetingSession,
   isCaptureStalled,
   isCloudMeetingCapturing,
+  isCloudMeetingRecordingAudio,
   partialCaptureMessage,
   trackCaptureGrowth,
 } from '../meetingCapture';
@@ -50,6 +51,35 @@ describe('deriveCloudMeetingStatus', () => {
         reconnecting: false,
       }),
     ).toBe('live');
+  });
+});
+
+describe('deriveCloudMeetingStatus before the first connection', () => {
+  const base = { started: true, failed: false, capturing: true, reconnecting: false };
+
+  it('stays connecting until the first connection, then goes live', () => {
+    expect(deriveCloudMeetingStatus({ ...base, connected: false })).toBe('connecting');
+    expect(deriveCloudMeetingStatus({ ...base, connected: true })).toBe('live');
+  });
+
+  it('shows a failed first attempt as reconnecting and a stopped mic as interrupted', () => {
+    expect(deriveCloudMeetingStatus({ ...base, connected: false, reconnecting: true })).toBe(
+      'reconnecting',
+    );
+    expect(deriveCloudMeetingStatus({ ...base, connected: false, capturing: false })).toBe(
+      'interrupted',
+    );
+  });
+});
+
+describe('isCloudMeetingRecordingAudio', () => {
+  it('reads as recording while connecting only once capture has started', () => {
+    expect(isCloudMeetingRecordingAudio('connecting', false)).toBe(false);
+    expect(isCloudMeetingRecordingAudio('connecting', true)).toBe(true);
+    expect(isCloudMeetingRecordingAudio('live', true)).toBe(true);
+    expect(isCloudMeetingRecordingAudio('reconnecting', true)).toBe(true);
+    expect(isCloudMeetingRecordingAudio('interrupted', true)).toBe(false);
+    expect(isCloudMeetingRecordingAudio('error', true)).toBe(false);
   });
 });
 

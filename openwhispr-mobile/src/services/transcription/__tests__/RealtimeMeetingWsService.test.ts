@@ -1546,6 +1546,49 @@ describe('startRealtimeMeetingWs — a meeting that starts offline', () => {
     await stopped;
   });
 
+  it('reports its first connection only once the first leg is open, and only once', async () => {
+    const callbacks = { onConnected: jest.fn(), onReconnecting: jest.fn() };
+    const session = await startRealtimeMeetingWs({ recordingUri }, callbacks, { wsFactory });
+    await flushMicro();
+    // The session is already returned (Stop works), but no socket is open yet.
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(callbacks.onConnected).not.toHaveBeenCalled();
+
+    const leg1 = lastLeg();
+    leg1.open();
+    await flushMicro();
+    expect(callbacks.onConnected).toHaveBeenCalledTimes(1);
+
+    ageLeg();
+    leg1.serverClose(1006);
+    await flushMicro();
+    lastLeg().open();
+    await flushMicro();
+    // A later reconnect is not a first connection.
+    expect(callbacks.onConnected).toHaveBeenCalledTimes(1);
+    const stopped = session.stop();
+    lastLeg().emit(commitEmpty);
+    await stopped;
+  });
+
+  it('never reports a connection when the first leg never opens', async () => {
+    (api.post as jest.Mock).mockRejectedValue(new Error('Network request failed'));
+    const callbacks = { onConnected: jest.fn() };
+    const session = await startRealtimeMeetingWs({ recordingUri }, callbacks, { wsFactory });
+    await jest.advanceTimersByTimeAsync(20_000);
+    expect(callbacks.onConnected).not.toHaveBeenCalled();
+    await session.stop();
+  });
+
+  it('reports the first connection before returning a session without a recording file', async () => {
+    const callbacks = { onConnected: jest.fn() };
+    const { session, leg1 } = await boot(callbacks);
+    expect(callbacks.onConnected).toHaveBeenCalledTimes(1);
+    const stopped = session.stop();
+    leg1.emit(commitEmpty);
+    await stopped;
+  });
+
   it('keeps the token-first start when there is no recording file', async () => {
     (api.post as jest.Mock).mockRejectedValue(new Error('Network request failed'));
 

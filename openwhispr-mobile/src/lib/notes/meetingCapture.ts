@@ -15,12 +15,31 @@ export function deriveCloudMeetingStatus(input: {
   failed: boolean;
   capturing: boolean;
   reconnecting: boolean;
+  /**
+   * Whether the first socket has been accepted. A recorded meeting starts capturing before
+   * any socket exists, so it isn't live until then. Absent means connected: a session without
+   * a recording only starts once its first socket is open.
+   */
+  connected?: boolean;
 }): CloudMeetingStatus {
   if (input.failed) return 'error';
   if (!input.started) return 'connecting';
   if (!input.capturing) return 'interrupted';
   if (input.reconnecting) return 'reconnecting';
+  if (input.connected === false) return 'connecting';
   return 'live';
+}
+
+/**
+ * Whether the screen shows the recording dot. A recorded meeting that is still connecting is
+ * already writing its audio to the file, so it reads as recording once capture has started.
+ */
+export function isCloudMeetingRecordingAudio(
+  status: CloudMeetingStatus,
+  captureStarted: boolean,
+): boolean {
+  if (status === 'connecting') return captureStarted;
+  return status === 'live' || status === 'reconnecting';
 }
 
 /**

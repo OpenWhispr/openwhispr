@@ -11,6 +11,7 @@ import { MeetingTabs, type MeetingTab } from './MeetingTabs';
 import { LiveTranscriptList } from './LiveTranscriptList';
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
 import type { CloudMeetingStatus } from '@/hooks/useCloudMeeting';
+import { isCloudMeetingRecordingAudio } from '@/lib/notes/meetingCapture';
 
 const formatClock = (seconds: number): string =>
   `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
@@ -23,10 +24,6 @@ const STATUS_LABEL: Record<CloudMeetingStatus, string> = {
   error: 'DISCONNECTED',
 };
 
-// Red while the mic is feeding the recording; a reconnect still holds its audio to send.
-const isRecordingStatus = (status: CloudMeetingStatus): boolean =>
-  status === 'live' || status === 'reconnecting';
-
 const stoppedMessage = (error: string | null): string => {
   const reason = error?.trim();
   if (!reason) return 'Recording has stopped.';
@@ -35,6 +32,8 @@ const stoppedMessage = (error: string | null): string => {
 
 interface CloudMeetingRecordingProps {
   status: CloudMeetingStatus;
+  /** Capture has started; a recorded meeting still connecting is already recording. */
+  captureStarted: boolean;
   error: string | null;
   /** Audio the mic actually captured, so the clock stops while nothing is recorded. */
   capturedSeconds: number;
@@ -53,6 +52,7 @@ interface CloudMeetingRecordingProps {
  */
 export function CloudMeetingRecording({
   status,
+  captureStarted,
   error,
   capturedSeconds,
   rawNotes,
@@ -78,7 +78,7 @@ export function CloudMeetingRecording({
         style={{ borderCurve: 'continuous' }}
       >
         <View
-          className={`h-2.5 w-2.5 rounded-full ${isRecordingStatus(status) ? 'bg-systemRed' : 'bg-tertiaryLabel'}`}
+          className={`h-2.5 w-2.5 rounded-full ${isCloudMeetingRecordingAudio(status, captureStarted) ? 'bg-systemRed' : 'bg-tertiaryLabel'}`}
         />
         <View>
           <Text className="text-[12px] font-semibold tracking-wide text-secondaryLabel">

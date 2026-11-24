@@ -636,6 +636,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     return (
       <CloudMeetingRecording
         status={cloudMeeting.status}
+        captureStarted={cloudMeeting.liveSinceMs !== null}
         error={cloudMeeting.error}
         capturedSeconds={cloudMeeting.capturedSeconds}
         rawNotes={rawNotes}
