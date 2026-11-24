@@ -917,7 +917,9 @@ describe('startRealtimeMeetingWs — dropped audio windows', () => {
     await flushMicro(); // the 20 s still in the buffer (41000–61000 ms) reaches leg 2
 
     // 40 one-second frames fell off the front: 1000–41000 ms, i.e. 60 s minus the 20 s buffer.
-    expect(session.droppedWindows()).toEqual([{ startMs: 1000, endMs: 41_000 }]);
+    // Leg 1 also died having been sent 0–1000 ms and having completed no turn (transcribed up
+    // to its offset, 0), so 0–1000 ms is lost too; it touches the eviction window and merges.
+    expect(session.droppedWindows()).toEqual([{ startMs: 0, endMs: 41_000 }]);
     expect(leg2.appendedBytes()).toBe(4000);
   });
 
@@ -946,7 +948,9 @@ describe('startRealtimeMeetingWs — dropped audio windows', () => {
 
     await session.stop();
 
-    expect(session.droppedWindows()).toEqual([{ startMs: 1000, endMs: 9000 }]);
+    // 1000–9000 ms abandoned in the ring, plus 0–1000 ms leg 1 was sent but never transcribed
+    // before it died; the two touch and merge.
+    expect(session.droppedWindows()).toEqual([{ startMs: 0, endMs: 9000 }]);
     expect(session.droppedMs()).toBe(0); // droppedMs still counts only evictions and failed sends
   });
 
@@ -976,6 +980,139 @@ describe('startRealtimeMeetingWs — dropped audio windows', () => {
     await boot();
 
     expect(LivePCMStreaming.start).toHaveBeenCalledWith(24000);
+  });
+});
+
+describe('startRealtimeMeetingWs — audio a dead leg never transcribed', () => {
+  // sampleRate 100 → 200 bytes a second, so a 200-byte frame is 1000 ms of capture.
+  const SECOND = new Array(200).fill(5);
+  const speechStopped = (itemId: string, audioEndMs: number): WsMessage => ({
+    type: 'input_audio_buffer.speech_stopped',
+    item_id: itemId,
+    audio_end_ms: audioEndMs,
+  });
+
+  async function sendSeconds(count: number): Promise<void> {
+    for (let i = 0; i < count; i++) {
+      emitFrame(SECOND);
+      await jest.advanceTimersByTimeAsync(FLUSH_MS + 10);
+    }
+  }
+
+  function completeTurn(leg: FakeWebSocket, itemId: string, startMs: number, endMs: number): void {
+    leg.emit(speechStarted(itemId, startMs));
+    leg.emit(speechStopped(itemId, endMs));
+    leg.emit(completed(itemId, `turn ${itemId}`));
+  }
+
+  it('reports what a leg that dies mid-turn was sent after its last completed turn', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    await sendSeconds(1); // 0–1000 ms sent
+    completeTurn(leg1, 'a', 0, 1000); // transcribed up to 0 + 1000 = 1000 ms
+    await sendSeconds(2); // 1000–3000 ms sent
+    leg1.emit(committed('b')); // a turn the server never finishes
+
+    ageLeg();
+    leg1.serverClose(1006);
+    await flushMicro();
+
+    // Sent up to 3000 ms, transcribed up to 1000 ms.
+    expect(session.droppedWindows()).toEqual([{ startMs: 1000, endMs: 3000 }]);
+  });
+
+  it("starts a reconnected leg's lost stretch at its offset when it completed nothing", async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    await sendSeconds(1); // 0–1000 ms to leg 1
+    completeTurn(leg1, 'a', 0, 1000); // leg 1 transcribed all it was sent: no window
+    ageLeg();
+    leg1.serverClose(1006);
+    await flushMicro();
+    const leg2 = lastLeg();
+    leg2.open(); // the ring is empty, so leg 2's offset is 1000 ms
+    await flushMicro();
+    await sendSeconds(1); // 1000–2000 ms to leg 2
+
+    ageLeg();
+    leg2.serverClose(1006);
+    await flushMicro();
+
+    // Leg 2: transcribed up to its offset (1000 ms), sent up to 2000 ms.
+    expect(session.droppedWindows()).toEqual([{ startMs: 1000, endMs: 2000 }]);
+  });
+
+  it('reports only what a leg was sent after its last completed turn when it closes', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    await sendSeconds(2); // 0–2000 ms sent
+    completeTurn(leg1, 'a', 0, 1500); // transcribed up to 1500 ms
+
+    ageLeg();
+    leg1.serverClose(1006);
+    await flushMicro();
+
+    // The last 500 ms sent (1500–2000 ms) never came back as text.
+    expect(session.droppedWindows()).toEqual([{ startMs: 1500, endMs: 2000 }]);
+  });
+
+  it('reports the unfinished tail when the stop drain times out', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    await sendSeconds(2); // 0–2000 ms sent
+    completeTurn(leg1, 'a', 0, 1000); // transcribed up to 1000 ms
+
+    const stopped = session.stop();
+    leg1.emit(committed('last')); // the last turn is committed but never transcribed
+    await jest.advanceTimersByTimeAsync(STOP_FLUSH_TIMEOUT_MS);
+    await stopped;
+
+    expect(session.droppedWindows()).toEqual([{ startMs: 1000, endMs: 2000 }]);
+  });
+
+  it('reports nothing when the stop drain completes', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    await sendSeconds(2); // 0–2000 ms sent
+    completeTurn(leg1, 'a', 0, 1000);
+
+    const stopped = session.stop();
+    leg1.emit(committed('last'));
+    leg1.emit(completed('last', 'final words')); // the drain finishes cleanly
+    await stopped;
+
+    expect(session.droppedWindows()).toEqual([]);
+  });
+
+  it('reports nothing for a rotation whose old leg drains cleanly', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    await sendSeconds(1); // 0–1000 ms sent, no turn completed
+
+    await advanceToRotation();
+    await flushMicro();
+    const leg2 = lastLeg();
+    leg2.open();
+    await flushMicro();
+    expect(leg1.didCommit()).toBe(true);
+    leg1.emit(commitEmpty); // the old leg had nothing left: a clean drain
+    await flushMicro();
+    expect(leg1.closed).toBe(true);
+
+    expect(session.droppedWindows()).toEqual([]);
+  });
+
+  it('records the audio still in the ring when a refused token ends the session', async () => {
+    const callbacks = { onError: jest.fn() };
+    const { session, leg1 } = await boot(callbacks, { sampleRate: 100 });
+    await sendSeconds(1); // 0–1000 ms sent
+    completeTurn(leg1, 'a', 0, 1000); // leg 1 transcribed everything: no leg window
+    (api.post as jest.Mock).mockRejectedValue(
+      Object.assign(new Error('Forbidden'), { status: 403 }),
+    );
+
+    ageLeg();
+    leg1.serverClose(1006);
+    // Captured before the reconnect's token request is refused: 1000–4000 ms in the ring.
+    for (let i = 0; i < 3; i++) emitFrame(SECOND);
+    await flushMicro();
+
+    expect(callbacks.onError).toHaveBeenCalledTimes(1);
+    expect(session.droppedWindows()).toEqual([{ startMs: 1000, endMs: 4000 }]);
   });
 });
 

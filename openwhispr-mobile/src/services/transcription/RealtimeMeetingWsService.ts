@@ -116,21 +116,68 @@ export async function startRealtimeMeetingWs(
     }
   };
 
+  // The leg whose message the reducer is handling, so a completed turn credits that leg.
+  let eventLeg: WebSocketLike | null = null;
   // One reducer per session — this is why utterances survive every leg swap.
-  const reducer = createRealtimeEventReducer(callbacks);
+  const reducer = createRealtimeEventReducer({
+    ...callbacks,
+    onUtterance: (utterance) => {
+      const meta = eventLeg ? legMeta.get(eventLeg) : undefined;
+      // endMs is already on the capture clock: the leg offset was applied before the reducer.
+      if (meta && utterance.endMs !== null) {
+        meta.transcribedUpToMs = Math.max(meta.transcribedUpToMs, utterance.endMs);
+      }
+      callbacks.onUtterance?.(utterance);
+    },
+  });
   const pcmRing = new PcmRingBuffer(pcmTailCapBytes(sampleRate), sampleRate);
   const bytesToMs = (bytes: number): number => Math.floor((bytes * 1000) / (sampleRate * 2));
+  // Window ends round up, so a window never stops short of the audio it lost.
+  const bytesToMsCeil = (bytes: number): number => Math.ceil((bytes * 1000) / (sampleRate * 2));
   let capturedBytes = 0;
   // Merged chunks a failed send threw away; the ring counts its own evictions.
   let sendDroppedBytes = 0;
-  // Capture-clock stretches lost outside the ring: failed sends, and audio still buffered
-  // when the session ended with no socket to take it. The ring records its own evictions.
+  // Capture-clock stretches lost outside the ring: failed sends, audio still buffered when the
+  // session ended with no socket to take it, and audio a leg was sent but died before
+  // transcribing. The ring records its own evictions. None of it counts toward droppedMs: that
+  // figure drives the partial-recording alert, and this audio is recovered from the file.
   const lostWindows: AudioWindow[] = [];
+  // Merged as it grows, so a flaky stretch can't add an entry per flush tick.
+  const addLostWindow = (window: AudioWindow): void => {
+    if (window.endMs <= window.startMs) return;
+    const merged = mergeAudioWindows([...lostWindows, window]);
+    lostWindows.length = 0;
+    lostWindows.push(...merged);
+  };
   // The ring always holds the newest audio captured, back to back, so this is where it starts.
   const ringStartMs = (): number => bytesToMs(capturedBytes - pcmRing.byteLength);
   // Per-leg index + offset, keyed by socket so a replaced leg's late messages keep
-  // their own leg's namespace/offset during a swap.
-  const legMeta = new WeakMap<WebSocketLike, { legIndex: number; offsetMs: number }>();
+  // their own leg's namespace/offset during a swap. `sentUpToMs` is the end of the last audio
+  // handed to the socket, `transcribedUpToMs` the end of its latest completed turn (both on
+  // the capture clock); `ended` makes a leg's loss count once.
+  interface LegMeta {
+    legIndex: number;
+    offsetMs: number;
+    sentUpToMs: number;
+    transcribedUpToMs: number;
+    ended: boolean;
+  }
+  const legMeta = new WeakMap<WebSocketLike, LegMeta>();
+
+  // A leg that ends without a clean drain loses whatever it was sent past its last completed
+  // turn: the server may have heard it, but no text for it will ever arrive.
+  const recordLegLoss = (ws: WebSocketLike): void => {
+    const meta = legMeta.get(ws);
+    if (!meta || meta.ended) return;
+    meta.ended = true;
+    addLostWindow({ startMs: meta.transcribedUpToMs, endMs: meta.sentUpToMs });
+  };
+
+  // A clean drain means every turn the leg was sent came back, so it lost nothing.
+  const markLegDrained = (ws: WebSocketLike): void => {
+    const meta = legMeta.get(ws);
+    if (meta) meta.ended = true;
+  };
 
   let currentWs: WebSocketLike | null = null;
   // Leg mid-connect; tracked so a terminal stop closes it instead of leaking until timeout.
@@ -148,7 +195,11 @@ export async function startRealtimeMeetingWs(
   let leaseHeld = false;
   // Legs committed and waiting for their last turn; `sawReply` is set once the server
   // answered our commit (committed or commit_empty) on that leg.
-  const drains = new Set<{ ws: WebSocketLike; sawReply: boolean; finish: () => void }>();
+  const drains = new Set<{
+    ws: WebSocketLike;
+    sawReply: boolean;
+    finish: (clean: boolean) => void;
+  }>();
   const drainPromises = new Set<Promise<void>>();
   let stopPromise: Promise<void> | null = null;
 
@@ -179,7 +230,7 @@ export async function startRealtimeMeetingWs(
   // Audio left in the ring when the session ends never reaches a socket.
   const abandonRing = (): void => {
     if (pcmRing.byteLength === 0) return;
-    lostWindows.push({ startMs: ringStartMs(), endMs: bytesToMs(capturedBytes) });
+    addLostWindow({ startMs: ringStartMs(), endMs: bytesToMsCeil(capturedBytes) });
     pcmRing.drain();
   };
 
@@ -195,10 +246,12 @@ export async function startRealtimeMeetingWs(
       ws.send(
         JSON.stringify({ type: 'input_audio_buffer.append', audio: merged.toString('base64') }),
       );
+      const meta = legMeta.get(ws);
+      if (meta) meta.sentUpToMs = bytesToMsCeil(capturedBytes);
     } catch {
       // Socket may have closed between the readyState check and send; drop the chunk.
       sendDroppedBytes += merged.length;
-      lostWindows.push({ startMs, endMs: bytesToMs(capturedBytes) });
+      addLostWindow({ startMs, endMs: bytesToMsCeil(capturedBytes) });
     }
   };
 
@@ -216,7 +269,7 @@ export async function startRealtimeMeetingWs(
   const settleDrains = (): void => {
     if (reducer.pendingItemCount() > 0) return;
     for (const drain of drains) {
-      if (drain.sawReply) drain.finish();
+      if (drain.sawReply) drain.finish(true);
     }
   };
 
@@ -235,7 +288,7 @@ export async function startRealtimeMeetingWs(
 
   const finishDrainsFor = (ws: WebSocketLike): void => {
     for (const drain of drains) {
-      if (drain.ws === ws) drain.finish();
+      if (drain.ws === ws) drain.finish(false);
     }
   };
 
@@ -243,12 +296,14 @@ export async function startRealtimeMeetingWs(
   // it, or STOP_FLUSH_TIMEOUT_MS passes. A leg that isn't open just closes.
   const finishLeg = (ws: WebSocketLike): Promise<void> => {
     if (ws.readyState !== WS_OPEN) {
+      recordLegLoss(ws);
       closeWs(ws);
       return Promise.resolve();
     }
     try {
       ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
     } catch {
+      recordLegLoss(ws);
       closeWs(ws);
       return Promise.resolve();
     }
@@ -257,9 +312,12 @@ export async function startRealtimeMeetingWs(
       const drain = {
         ws,
         sawReply: false,
-        finish: (): void => {
+        // `clean`: the reply came with nothing pending. A timeout or a closed socket isn't.
+        finish: (clean: boolean): void => {
           if (!drains.delete(drain)) return;
           if (timer) clearTimeout(timer);
+          if (clean) markLegDrained(ws);
+          else recordLegLoss(ws);
           closeWs(ws);
           forgetLegTurns(ws);
           resolve();
@@ -267,7 +325,7 @@ export async function startRealtimeMeetingWs(
         },
       };
       drains.add(drain);
-      timer = setTimeout(drain.finish, STOP_FLUSH_TIMEOUT_MS);
+      timer = setTimeout(() => drain.finish(false), STOP_FLUSH_TIMEOUT_MS);
     });
     drainPromises.add(promise);
     void promise.then(() => drainPromises.delete(promise));
@@ -343,17 +401,19 @@ export async function startRealtimeMeetingWs(
     if (typeof rewritten.item_id === 'string') {
       rewritten.item_id = namespaceItemId(meta.legIndex, rewritten.item_id);
     }
-    reducer.handleEvent(rewritten);
+    eventLeg = ws;
+    try {
+      reducer.handleEvent(rewritten);
+    } finally {
+      eventLeg = null;
+    }
     if (evt.type === 'input_audio_buffer.committed') markDrainReply(ws);
     if (drains.size > 0) settleDrains();
   };
 
   // Opens one leg; resolves on open, rejects on pre-open close/error/timeout. Does NOT
   // tear down capture on close — a post-open close routes to handleLegClosed.
-  const connectLeg = (
-    clientSecret: string,
-    meta: { legIndex: number; offsetMs: number },
-  ): Promise<WebSocketLike> =>
+  const connectLeg = (clientSecret: string, meta: LegMeta): Promise<WebSocketLike> =>
     new Promise<WebSocketLike>((resolve, reject) => {
       const ws = wsFactory(OPENAI_REALTIME_WS_URL, [
         'realtime',
@@ -404,6 +464,8 @@ export async function startRealtimeMeetingWs(
           reject(new Error(`Realtime WebSocket closed before open (code ${code ?? 'unknown'})`));
           return;
         }
+        // The current leg dying, or a leg closing mid-drain, ends it without a clean drain.
+        if (ws === currentWs || [...drains].some((drain) => drain.ws === ws)) recordLegLoss(ws);
         // A leg the server closed has nothing more to deliver.
         forgetLegTurns(ws);
         finishDrainsFor(ws);
@@ -415,7 +477,13 @@ export async function startRealtimeMeetingWs(
   // The offset is set when the leg is swapped in, once it is known which audio it gets first.
   const openLeg = (clientSecret: string): Promise<WebSocketLike> => {
     legIndex += 1;
-    return connectLeg(clientSecret, { legIndex, offsetMs: 0 });
+    return connectLeg(clientSecret, {
+      legIndex,
+      offsetMs: 0,
+      sentUpToMs: 0,
+      transcribedUpToMs: 0,
+      ended: false,
+    });
   };
 
   const scheduleRotation = (): void => {
@@ -435,7 +503,12 @@ export async function startRealtimeMeetingWs(
     // ring still holds, which is the newest audio captured. Its offset is therefore that
     // audio's position in the capture, so timings stay on one clock across every leg.
     const meta = legMeta.get(ws);
-    if (meta) meta.offsetMs = bytesToMs(capturedBytes - pcmRing.byteLength);
+    if (meta) {
+      meta.offsetMs = bytesToMs(capturedBytes - pcmRing.byteLength);
+      // Nothing sent or transcribed yet: the leg's lost stretch, if any, starts at its offset.
+      meta.sentUpToMs = meta.offsetMs;
+      meta.transcribedUpToMs = meta.offsetMs;
+    }
     currentWs = ws;
     legStartedAt = Date.now();
     // Rotation fires no reconnect callback, so this is the only signal that clears a
