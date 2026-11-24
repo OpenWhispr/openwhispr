@@ -411,7 +411,6 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
       const { interruptions, reconnects, droppedSeconds } = cloudMeeting;
       setPhase('processing');
       const result = await cloudMeeting.stop();
-      const { utterances } = result;
       if (noteId == null) {
         setPhase('prompt');
         return;
@@ -422,14 +421,15 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
       if (result.recordingUri) {
         notesRepository.updateNoteMeta(noteId, { sourceFile: result.recordingUri });
       }
-      // A failed session with nothing transcribed shouldn't become a done, empty note.
-      if (hadError && utterances.length === 0) {
+      // A failed session with nothing transcribed and no recording shouldn't become a done,
+      // empty note. With a recording the store tries the file and decides done or failed.
+      if (hadError && result.utterances.length === 0 && !result.recordingUri) {
         markNoteFailed(noteId);
         setPhase('prompt');
         return;
       }
       try {
-        await finalizeCloudMeeting(noteId, utterances, captured);
+        await finalizeCloudMeeting(noteId, result, captured);
         router.replace(`/(tabs)/(notes)/${noteId}`);
         reportMeetingFinished({
           path: 'cloud',
@@ -636,7 +636,9 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
         <Text className="text-[13px] text-tertiaryLabel">
           {phase === 'downloading'
             ? 'One-time ~100 MB · then fully on-device'
-            : 'Transcribing · separating voices · finalizing note'}
+            : meetingPath === 'cloud'
+              ? 'Finishing the transcript…'
+              : 'Transcribing · separating voices · finalizing note'}
         </Text>
       </View>
     </View>

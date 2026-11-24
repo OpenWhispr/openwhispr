@@ -1,4 +1,27 @@
-jest.mock('expo-file-system/legacy', () => ({ documentDirectory: 'file:///app/documents/' }));
+const mockDeleteAsync = jest.fn(
+  async (_uri: string, _options?: object): Promise<void> => undefined,
+);
+const mockGetInfoAsync = jest.fn(
+  async (_uri: string): Promise<{ exists: boolean; size?: number }> => ({ exists: false }),
+);
+const mockCloudTranscribe = jest.fn();
+const mockExtractWavRange = jest.fn();
+jest.mock('expo-file-system/legacy', () => ({
+  documentDirectory: 'file:///app/documents/',
+  cacheDirectory: 'file:///app/cache/',
+  deleteAsync: (uri: string, options?: object) => mockDeleteAsync(uri, options),
+  getInfoAsync: (uri: string) => mockGetInfoAsync(uri),
+}));
+jest.mock('@/services/transcription/TranscriptionService', () => ({
+  TranscriptionService: { transcribe: (...args: unknown[]) => mockCloudTranscribe(...args) },
+}));
+jest.mock('@/lib/notes/wavRange', () => ({
+  ...jest.requireActual('@/lib/notes/wavRange'),
+  extractWavRange: (...args: unknown[]) => mockExtractWavRange(...args),
+}));
+jest.mock('@/lib/permissions', () => ({
+  isNoSpeechError: (error: unknown) => error instanceof Error && /no speech/i.test(error.message),
+}));
 const mockProcessMeeting = jest.fn();
 const mockGetDiarizer = jest.fn();
 const mockLocalTranscribe = jest.fn();
@@ -24,6 +47,7 @@ const mockProcessingModeState: { activeMode: 'cloud' | 'private' } = {
 
 jest.mock('@sentry/react-native', () => ({
   captureException: jest.fn(),
+  captureMessage: jest.fn(),
 }));
 jest.mock('@/data/remote/notesApi', () => ({
   deleteNote: jest.fn(),
@@ -125,6 +149,7 @@ import * as localReasoning from '@/lib/localReasoning';
 import type { Speaker } from '@/data/types';
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
 import * as Sentry from '@sentry/react-native';
+import * as meetingPostPass from '@/lib/notes/meetingPostPass';
 
 const speaker = (overrides: Partial<Speaker>): Speaker =>
   ({
@@ -420,14 +445,18 @@ describe('finalizeCloudMeeting', () => {
 
     await useNotesStore.getState().finalizeCloudMeeting(
       7,
-      [
-        {
-          itemId: 'utterance-1',
-          text: 'Ship the onboarding fix.',
-          startMs: 0,
-          endMs: 2000,
-        },
-      ],
+      {
+        utterances: [
+          {
+            itemId: 'utterance-1',
+            text: 'Ship the onboarding fix.',
+            startMs: 0,
+            endMs: 2000,
+          },
+        ],
+        droppedWindows: [],
+        recordingUri: null,
+      },
       2,
     );
 
@@ -452,7 +481,9 @@ describe('finalizeCloudMeeting', () => {
       .mockReturnValueOnce('recording')
       .mockReturnValueOnce('transcribing');
 
-    await useNotesStore.getState().finalizeCloudMeeting(7, [], 0);
+    await useNotesStore
+      .getState()
+      .finalizeCloudMeeting(7, { utterances: [], droppedWindows: [], recordingUri: null }, 0);
 
     expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
   });
@@ -464,16 +495,318 @@ describe('finalizeCloudMeeting', () => {
     });
 
     await expect(
-      useNotesStore
-        .getState()
-        .finalizeCloudMeeting(
-          7,
-          [{ itemId: 'utterance-1', text: 'Transcript', startMs: 0, endMs: 1000 }],
-          1,
-        ),
+      useNotesStore.getState().finalizeCloudMeeting(
+        7,
+        {
+          utterances: [{ itemId: 'utterance-1', text: 'Transcript', startMs: 0, endMs: 1000 }],
+          droppedWindows: [],
+          recordingUri: null,
+        },
+        1,
+      ),
     ).rejects.toThrow('database unavailable');
 
     expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
+  });
+});
+
+describe('meeting post-pass', () => {
+  const RECORDING = 'file:///app/documents/meeting-7.wav';
+  let status: string;
+  let note: Record<string, unknown> | null;
+  let filesOnDisk: Set<string>;
+
+  const utterance = (text: string, startMs: number, endMs: number) => ({
+    itemId: `u-${startMs}`,
+    text,
+    startMs,
+    endMs,
+  });
+
+  const finalize = (
+    result: Partial<
+      Parameters<ReturnType<typeof useNotesStore.getState>['finalizeCloudMeeting']>[1]
+    >,
+    capturedSeconds = 3600,
+  ): Promise<void> =>
+    useNotesStore
+      .getState()
+      .finalizeCloudMeeting(
+        7,
+        { utterances: [], droppedWindows: [], recordingUri: RECORDING, ...result },
+        capturedSeconds,
+      );
+
+  const savedTexts = (call: number): string[] =>
+    (notesRepository.replaceSegments as jest.Mock).mock.calls[call][1].map(
+      (row: { text: string }) => row.text,
+    );
+
+  beforeEach(() => {
+    mockAuthState.user = signedInUser;
+    status = 'recording';
+    filesOnDisk = new Set([RECORDING]);
+    note = {
+      id: 7,
+      title: 'Untitled meeting',
+      content: '',
+      noteType: 'meeting',
+      diarizationEnabled: 0,
+      isPrivate: 0,
+      deletedAt: null,
+      sourceFile: RECORDING,
+      calendarEventId: null,
+      participants: null,
+      enhancedContent: null,
+      expectedSpeakerCount: null,
+    };
+    (notesRepository.getTranscriptionStatus as jest.Mock).mockImplementation(() => status);
+    (notesRepository.setTranscriptionStatus as jest.Mock).mockImplementation((_id, to) => {
+      status = to;
+    });
+    (notesRepository.getNoteById as jest.Mock).mockImplementation(() => note);
+    (notesRepository.updateNoteMeta as jest.Mock).mockImplementation((_id, updates) => {
+      if (note) note = { ...note, ...updates };
+    });
+    mockDeleteAsync.mockImplementation(async (uri: string) => {
+      filesOnDisk.delete(uri);
+    });
+    mockGetInfoAsync.mockImplementation(async (uri: string) => ({
+      exists: filesOnDisk.has(uri),
+      size: 44 + 32 * 60_000,
+    }));
+    mockExtractWavRange.mockImplementation(
+      async (_uri: string, startMs: number) => `file:///app/cache/range-${startMs}.wav`,
+    );
+    mockCloudTranscribe.mockImplementation(async ({ audioUri }: { audioUri: string }) => ({
+      text: audioUri === RECORDING ? 'Whole recording.' : `Backfilled ${audioUri.slice(-14)}`,
+      duration: 0,
+      provider: 'cloud',
+    }));
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    (notesRepository.getSegments as jest.Mock).mockReset().mockReturnValue([]);
+    (notesRepository.updateNoteMeta as jest.Mock).mockReset();
+    (notesRepository.setTranscriptionStatus as jest.Mock).mockReset();
+  });
+
+  it('writes the live transcript and the backfilled gap in time order', async () => {
+    await finalize({
+      utterances: [utterance('Before.', 0, 1000), utterance('After.', 200_000, 201_000)],
+      droppedWindows: [{ startMs: 100_000, endMs: 190_000 }],
+    });
+
+    expect(mockExtractWavRange).toHaveBeenCalledWith(RECORDING, 100_000, 190_000);
+    expect(savedTexts(0)).toEqual(['Before.', 'After.']);
+    expect(savedTexts(1)).toEqual(['Before.', expect.stringContaining('Backfilled'), 'After.']);
+    expect(
+      (notesRepository.replaceSegments as jest.Mock).mock.calls[1][1].map(
+        (row: { sortOrder: number }) => row.sortOrder,
+      ),
+    ).toEqual([0, 1, 2]);
+    expect(status).toBe('done');
+  });
+
+  it('does not backfill or touch the file when nothing was dropped', async () => {
+    await finalize({ utterances: [utterance('All heard.', 0, 1000)] });
+
+    expect(mockExtractWavRange).not.toHaveBeenCalled();
+    expect(mockCloudTranscribe).not.toHaveBeenCalled();
+    expect(notesRepository.replaceSegments).toHaveBeenCalledTimes(1);
+    expect(status).toBe('done');
+  });
+
+  it('keeps the live transcript when the backfill throws', async () => {
+    jest
+      .spyOn(meetingPostPass, 'backfillDroppedAudio')
+      .mockRejectedValueOnce(new Error('unexpected'));
+
+    await finalize({
+      utterances: [utterance('Kept.', 0, 1000)],
+      droppedWindows: [{ startMs: 10_000, endMs: 20_000 }],
+    });
+
+    expect(notesRepository.replaceSegments).toHaveBeenCalledTimes(1);
+    expect(savedTexts(0)).toEqual(['Kept.']);
+    expect(status).toBe('done');
+    expect(Sentry.captureMessage).toHaveBeenCalledWith(
+      'meeting-post-pass-backfill-failed',
+      expect.objectContaining({ tags: expect.objectContaining({ feature: 'meeting-post-pass' }) }),
+    );
+  });
+
+  it('deletes the recording and clears sourceFile once the note is done', async () => {
+    await finalize({ utterances: [utterance('Done.', 0, 1000)] });
+
+    expect(status).toBe('done');
+    expect(mockDeleteAsync).toHaveBeenCalledWith(RECORDING, { idempotent: true });
+    expect(filesOnDisk.has(RECORDING)).toBe(false);
+    expect(notesRepository.updateNoteMeta).toHaveBeenCalledWith(7, { sourceFile: null });
+  });
+
+  it('deletes the recording even when the backfill or the speaker pass failed', async () => {
+    mockCloudTranscribe.mockRejectedValue(new Error('Network request failed'));
+
+    await finalize({
+      utterances: [utterance('Live.', 0, 1000)],
+      droppedWindows: [{ startMs: 10_000, endMs: 20_000 }],
+    });
+
+    // One piece, tried twice, then skipped.
+    expect(mockCloudTranscribe).toHaveBeenCalledTimes(2);
+    expect(savedTexts(0)).toEqual(['Live.']);
+    expect(status).toBe('done');
+    expect(filesOnDisk.has(RECORDING)).toBe(false);
+    expect(note?.sourceFile).toBeNull();
+  });
+
+  it('keeps the link when the recording could not be deleted', async () => {
+    mockDeleteAsync.mockRejectedValueOnce(Object.assign(new Error('/private/path'), { code: 'E' }));
+
+    await finalize({ utterances: [utterance('Done.', 0, 1000)] });
+
+    expect(status).toBe('done');
+    expect(note?.sourceFile).toBe(RECORDING);
+    expect(Sentry.captureMessage).toHaveBeenCalledWith(
+      'meeting-recording-discard-failed',
+      expect.objectContaining({ tags: expect.objectContaining({ feature: 'meeting-post-pass' }) }),
+    );
+    expect(JSON.stringify((Sentry.captureMessage as jest.Mock).mock.calls)).not.toContain(
+      'private',
+    );
+  });
+
+  it('transcribes the whole recording when nothing was heard live', async () => {
+    await finalize({ utterances: [] });
+
+    expect(mockCloudTranscribe).toHaveBeenCalledWith(
+      expect.objectContaining({ audioUri: RECORDING, provider: 'cloud', purpose: 'meeting' }),
+    );
+    expect(
+      savedTexts((notesRepository.replaceSegments as jest.Mock).mock.calls.length - 1),
+    ).toEqual(['Whole recording.']);
+    expect(status).toBe('done');
+    expect(filesOnDisk.has(RECORDING)).toBe(false);
+    expect(note?.sourceFile).toBeNull();
+  });
+
+  it('ends failed with the recording linked when nothing could be transcribed', async () => {
+    mockCloudTranscribe.mockRejectedValue(new Error('Network request failed'));
+
+    await expect(finalize({ utterances: [] })).resolves.toBeUndefined();
+
+    expect(status).toBe('failed');
+    expect(mockDeleteAsync).not.toHaveBeenCalled();
+    expect(note?.sourceFile).toBe(RECORDING);
+  });
+
+  it('ends done and empty when the recording holds no speech', async () => {
+    mockCloudTranscribe.mockRejectedValue(new Error('No speech detected'));
+
+    await finalize({ utterances: [] });
+
+    expect(status).toBe('done');
+    expect(filesOnDisk.has(RECORDING)).toBe(false);
+  });
+
+  it('keeps a meeting with no recording as before', async () => {
+    note = { ...note, sourceFile: null };
+    await finalize({
+      utterances: [],
+      droppedWindows: [{ startMs: 0, endMs: 10_000 }],
+      recordingUri: null,
+    });
+
+    expect(mockCloudTranscribe).not.toHaveBeenCalled();
+    expect(mockExtractWavRange).not.toHaveBeenCalled();
+    expect(mockDeleteAsync).not.toHaveBeenCalled();
+    expect(status).toBe('done');
+  });
+
+  it('writes nothing more for a note deleted during the post-pass', async () => {
+    mockCloudTranscribe.mockImplementation(async () => {
+      note = { ...note, deletedAt: '2026-11-24 10:00:00' };
+      return { text: 'Late text.', duration: 0, provider: 'cloud' };
+    });
+
+    await finalize({
+      utterances: [utterance('Live.', 0, 1000)],
+      droppedWindows: [{ startMs: 10_000, endMs: 20_000 }],
+    });
+
+    // Deleting the note removed its segments; the merged list must not bring them back.
+    expect(notesRepository.replaceSegments).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not bring back segments for a note deleted while its recording was transcribed', async () => {
+    mockCloudTranscribe.mockImplementation(async () => {
+      note = { ...note, deletedAt: '2026-11-24 10:00:00' };
+      return { text: 'Late text.', duration: 0, provider: 'cloud' };
+    });
+
+    await finalize({ utterances: [] });
+
+    expect(notesRepository.replaceSegments).toHaveBeenCalledTimes(1);
+    expect(savedTexts(0)).toEqual([]);
+  });
+
+  describe('retry', () => {
+    beforeEach(() => {
+      status = 'failed';
+    });
+
+    it('retries a cloud meeting from its recording through the cloud', async () => {
+      await useNotesStore.getState().retryMeetingTranscription(7);
+
+      expect(mockProcessMeeting).not.toHaveBeenCalled();
+      expect(mockCloudTranscribe).toHaveBeenCalledWith(
+        expect.objectContaining({ audioUri: RECORDING, provider: 'cloud' }),
+      );
+      expect(savedTexts(0)).toEqual(['Whole recording.']);
+      expect(status).toBe('done');
+    });
+
+    it('deletes the recording after a successful retry', async () => {
+      await useNotesStore.getState().retryMeetingTranscription(7);
+
+      expect(filesOnDisk.has(RECORDING)).toBe(false);
+      expect(note?.sourceFile).toBeNull();
+    });
+
+    it('keeps the recording when the note ends failed', async () => {
+      mockCloudTranscribe.mockRejectedValue(new Error('Network request failed'));
+
+      await expect(useNotesStore.getState().retryMeetingTranscription(7)).rejects.toThrow(
+        'Network',
+      );
+
+      expect(status).toBe('failed');
+      expect(mockDeleteAsync).not.toHaveBeenCalled();
+      expect(note?.sourceFile).toBe(RECORDING);
+    });
+
+    it('keeps the saved live transcript when the retry hears no speech', async () => {
+      mockCloudTranscribe.mockRejectedValue(new Error('No speech detected'));
+      (notesRepository.getSegments as jest.Mock).mockReturnValue([
+        { ...segment('Saved live.'), speakerLabel: null },
+      ]);
+
+      await useNotesStore.getState().retryMeetingTranscription(7);
+
+      expect(savedTexts(0)).toEqual(['Saved live.']);
+      expect(status).toBe('done');
+    });
+
+    it('still retries an on-device meeting through the on-device pipeline', async () => {
+      note = { ...note, diarizationEnabled: 1 };
+
+      await useNotesStore.getState().retryMeetingTranscription(7);
+
+      expect(mockProcessMeeting).toHaveBeenCalled();
+      expect(mockCloudTranscribe).not.toHaveBeenCalled();
+    });
   });
 });
 

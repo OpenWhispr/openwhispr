@@ -1,9 +1,10 @@
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
 import { create } from 'zustand';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sentry from '@sentry/react-native';
 import { notesRepository, spacesRepository } from '@/data';
 import type { Note, Folder, NoteUpdate, Space } from '@/data';
-import type { ConflictedNote, Segment, Speaker, SpeakerProfile } from '@/data/types';
+import type { ConflictedNote, NewSegment, Segment, Speaker, SpeakerProfile } from '@/data/types';
 import type { CalendarParticipant } from '@/data/calendarTypes';
 import type { Diarizer } from '@/lib/diarization/diarizer';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -24,7 +25,8 @@ import {
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
 import type { TranscriptionStatus } from '@/types';
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
-import { assertTransition } from '@/lib/diarization/transcriptionStatus';
+import type { CloudMeetingResult } from '@/hooks/useCloudMeeting';
+import { assertTransition, canTransition } from '@/lib/diarization/transcriptionStatus';
 import { formatTranscriptForExport } from '@/lib/diarization/transcriptDisplay';
 import { buildMergeTargetPatch, buildRenameSpeakerPatch } from '@/lib/diarization/speakerEdits';
 import {
@@ -40,7 +42,16 @@ import {
   isDefaultGenerateNotesAction,
 } from '@/lib/notes/generateNotesPrompt';
 import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
-import { mapUtterancesToSegments } from '@/lib/notes/cloudMeetingSegments';
+import {
+  mapUtterancesToSegments,
+  type CloudMeetingSegment,
+} from '@/lib/notes/cloudMeetingSegments';
+import {
+  backfillDroppedAudio,
+  createCloudPostPassDeps,
+  mergeTranscript,
+  transcribeRecordingToSegments,
+} from '@/lib/notes/meetingPostPass';
 import { DEFAULT_MEETING_TITLE } from '@/lib/notes/meetingConstants';
 import { generateLocalMeetingNotes } from '@/lib/notes/localMeetingNotes';
 import {
@@ -461,6 +472,47 @@ const finalizeMeetingNoteContent = async (noteId: number): Promise<void> => {
   });
 };
 
+const isLiveNote = (noteId: number): boolean => {
+  const note = notesRepository.getNoteById(noteId);
+  return !!note && !note.deletedAt;
+};
+
+const withNoteId = (noteId: number, segments: CloudMeetingSegment[]): NewSegment[] =>
+  segments.map((segment) => ({ ...segment, noteId }));
+
+const errorCode = (error: unknown): string => {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'string' ? code : 'unknown';
+};
+
+/** Fills the stretches the live stream missed. Best effort: on any failure the live transcript stands. */
+const backfillCloudMeeting = async (
+  noteId: number,
+  recordingUri: string,
+  live: CloudMeetingSegment[],
+  droppedWindows: CloudMeetingResult['droppedWindows'],
+): Promise<CloudMeetingSegment[]> => {
+  try {
+    const { segments } = await backfillDroppedAudio(
+      recordingUri,
+      droppedWindows,
+      createCloudPostPassDeps(getPreferredTranscriptionLanguage()),
+    );
+    // A note deleted meanwhile has lost its segments; writing would bring them back.
+    if (segments.length === 0 || !isLiveNote(noteId)) return live;
+    const merged = mergeTranscript(live, segments);
+    notesRepository.replaceSegments(noteId, withNoteId(noteId, merged));
+    return merged;
+  } catch (error) {
+    Sentry.captureMessage('meeting-post-pass-backfill-failed', {
+      level: 'warning',
+      tags: { feature: 'meeting-post-pass', error_code: errorCode(error) },
+      extra: { windows: droppedWindows.length },
+    });
+    return live;
+  }
+};
+
 interface NotesStore {
   /** The active workspace's Private folders (see NotesRepository.getPrivateFolders) — every UI
    * folder surface reads this. Team-space content is reached through the Spaces section instead. */
@@ -539,12 +591,21 @@ interface NotesStore {
     expectedSpeakerCount?: number,
   ) => Promise<void>;
   retryMeetingTranscription: (noteId: number) => Promise<void>;
+  /**
+   * Saves the live transcript, fills what the stream missed from the recording, and deletes
+   * the recording once the note is done. A note with a recording and no text at all ends
+   * failed with its recording kept, so Retry can try again.
+   */
   finalizeCloudMeeting: (
     noteId: number,
-    utterances: RealtimeUtterance[],
+    result: CloudMeetingResult,
     /** Audio the mic delivered, in seconds; spreads utterances that carry no timings. */
     capturedSeconds: number,
   ) => Promise<void>;
+  /** A meeting with a recording and no transcript: transcribes the whole file through cloud chunks. */
+  transcribeMeetingRecording: (noteId: number) => Promise<void>;
+  /** Deletes a meeting's recording and clears its `sourceFile`. Never throws. */
+  discardMeetingRecording: (noteId: number) => Promise<void>;
   /** Saves one live utterance. Never throws: a failed write is reported and the meeting goes on. */
   appendCloudMeetingUtterance: (
     noteId: number,
@@ -950,24 +1011,123 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     if (!note.sourceFile || !isManagedMeetingAudioUri(noteId, note.sourceFile)) {
       throw new Error('Original audio is no longer available for this note.');
     }
+    // A cloud meeting's recording goes back to the cloud; the on-device pipeline would
+    // diarize a meeting the user never chose to process on this phone.
+    if (canUseCloudForMeetingNote(note) && note.diarizationEnabled === 0) {
+      await get().transcribeMeetingRecording(noteId);
+      return;
+    }
     await get().runMeetingPipeline(noteId, note.sourceFile, note.expectedSpeakerCount ?? undefined);
   },
 
-  finalizeCloudMeeting: async (noteId, utterances, capturedSeconds) => {
+  finalizeCloudMeeting: async (noteId, result, capturedSeconds) => {
     try {
       get().transitionStatus(noteId, 'transcribing'); // recording -> transcribing
-      const segments = mapUtterancesToSegments(utterances, capturedSeconds).map((segment) => ({
-        ...segment,
-        noteId,
-      }));
-      notesRepository.replaceSegments(noteId, segments);
+      const live = mapUtterancesToSegments(result.utterances, capturedSeconds);
+      // Saved first, so whatever happens to the post-pass the live transcript is kept.
+      notesRepository.replaceSegments(noteId, withNoteId(noteId, live));
+      const recordingUri = isManagedMeetingAudioUri(noteId, result.recordingUri)
+        ? result.recordingUri
+        : null;
+      let transcript = live;
+      if (recordingUri && result.droppedWindows.length > 0) {
+        transcript = await backfillCloudMeeting(noteId, recordingUri, live, result.droppedWindows);
+      }
+      if (recordingUri && !transcript.some((segment) => segment.text?.trim())) {
+        if (notesRepository.getNoteById(noteId)?.sourceFile !== recordingUri) {
+          notesRepository.updateNoteMeta(noteId, { sourceFile: recordingUri });
+        }
+        // Nothing heard live or in the gaps (often offline the whole time). A failure leaves
+        // the note failed with its recording, which is what the note's Retry needs.
+        await get()
+          .transcribeMeetingRecording(noteId)
+          .catch(() => undefined);
+        return;
+      }
+      // Task 7: the speaker pass runs here, while the recording is still on disk.
       get().transitionStatus(noteId, 'done'); // transcribing -> done (cloud skips diarizing)
-      if (segments.some((segment) => segment.text?.trim())) {
+      if (transcript.some((segment) => segment.text?.trim())) {
         logTranscriptionCompleted({ source: 'meeting', provider: 'cloud' });
       }
+      await get().discardMeetingRecording(noteId);
       await finalizeMeetingNoteContent(noteId);
     } finally {
       get().loadNotes();
+    }
+  },
+
+  transcribeMeetingRecording: async (noteId) => {
+    try {
+      const note = notesRepository.getNoteById(noteId);
+      if (!note || note.deletedAt) {
+        throw new Error('Note not found');
+      }
+      const recordingUri = note.sourceFile;
+      if (!recordingUri || !isManagedMeetingAudioUri(noteId, recordingUri)) {
+        throw new Error('Original audio is no longer available for this note.');
+      }
+      if (notesRepository.getTranscriptionStatus(noteId) !== 'transcribing') {
+        get().transitionStatus(noteId, 'transcribing'); // failed -> transcribing (Retry)
+      }
+      let segments: CloudMeetingSegment[];
+      try {
+        segments = await transcribeRecordingToSegments(
+          recordingUri,
+          getPreferredTranscriptionLanguage(),
+        );
+      } catch (error) {
+        const status = notesRepository.getTranscriptionStatus(noteId);
+        if (isLiveNote(noteId) && canTransition(status, 'failed')) {
+          get().transitionStatus(noteId, 'failed');
+        }
+        throw error;
+      }
+      if (!isLiveNote(noteId)) return;
+      // Silence in the file must not erase live text a crashed meeting already saved.
+      const transcript =
+        segments.length > 0
+          ? withNoteId(noteId, segments)
+          : notesRepository.getSegments(noteId).map(
+              (row): NewSegment => ({
+                noteId,
+                text: row.text,
+                startMs: row.startMs,
+                endMs: row.endMs,
+                speakerLabel: row.speakerLabel,
+                sortOrder: row.sortOrder,
+              }),
+            );
+      notesRepository.replaceSegments(noteId, transcript);
+      // Task 7: the speaker pass runs here, while the recording is still on disk.
+      get().transitionStatus(noteId, 'done');
+      if (transcript.some((segment) => segment.text?.trim())) {
+        logTranscriptionCompleted({ source: 'meeting', provider: 'cloud' });
+      }
+      await get().discardMeetingRecording(noteId);
+      await finalizeMeetingNoteContent(noteId);
+    } finally {
+      get().loadNotes();
+    }
+  },
+
+  discardMeetingRecording: async (noteId) => {
+    try {
+      const uri = notesRepository.getNoteById(noteId)?.sourceFile;
+      if (!uri || !isManagedMeetingAudioUri(noteId, uri)) return;
+      await FileSystem.deleteAsync(uri, { idempotent: true });
+      // The launch repair re-links a recording whose note has no sourceFile, so the link
+      // goes only once the file is really gone.
+      if ((await FileSystem.getInfoAsync(uri)).exists) {
+        throw Object.assign(new Error('Recording still on disk'), { code: 'still_exists' });
+      }
+      if (notesRepository.getNoteById(noteId)?.sourceFile === uri) {
+        notesRepository.updateNoteMeta(noteId, { sourceFile: null });
+      }
+    } catch (error) {
+      Sentry.captureMessage('meeting-recording-discard-failed', {
+        level: 'warning',
+        tags: { feature: 'meeting-post-pass', error_code: errorCode(error) },
+      });
     }
   },
 
