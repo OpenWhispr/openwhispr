@@ -2,10 +2,8 @@ import { useEffect } from 'react';
 import { Alert, AppState, Platform } from 'react-native';
 import { getNotificationStatus } from '@/lib/notifications';
 import {
-  OWED_CAPTURE_TITLE,
   PARTIAL_CAPTURE_TITLE,
   meetingCaptureAlert,
-  owedCaptureMessage,
   partialCaptureMessage,
   type CaptureCoverage,
   type MeetingCaptureAlertInput,
@@ -114,19 +112,9 @@ export function useCapturePausedNotification(active: boolean, capturing: boolean
   }, [active, capturing]);
 }
 
-/**
- * Tells the user, once the note is open, how much of a partly recorded meeting was kept. With
- * `owed`, the coverage counts what is transcribed so far and the rest is still on its way.
- */
-export function alertIfPartialCapture(
-  coverage: CaptureCoverage,
-  options: { owed?: boolean } = {},
-): void {
+/** Tells the user, once the note is open, how much of a partly recorded meeting was kept. */
+export function alertIfPartialCapture(coverage: CaptureCoverage): void {
   if (!coverage.isPartial) return;
-  if (options.owed) {
-    Alert.alert(OWED_CAPTURE_TITLE, owedCaptureMessage(coverage));
-    return;
-  }
   Alert.alert(PARTIAL_CAPTURE_TITLE, partialCaptureMessage(coverage));
 }
 

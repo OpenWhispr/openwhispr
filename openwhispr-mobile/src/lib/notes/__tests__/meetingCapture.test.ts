@@ -202,65 +202,119 @@ describe('partialCaptureMessage', () => {
 
 describe('meetingCaptureAlert', () => {
   const MIN = 60_000;
+  const PARTIAL = "Part of this meeting wasn't recorded";
+  const UNTRANSCRIBED = "Part of this meeting wasn't transcribed";
+  const LATER =
+    'which is transcribed from audio saved on this device the next time OpenWhispr is open with a connection.';
+
+  // Mic gap (40 of 61 min recorded) x owed audio saved (12 min) x owed audio not saved (20 min).
+  const alertFor = (micGap: boolean, owed: boolean, unsaved: boolean) =>
+    meetingCaptureAlert({
+      elapsedMs: 61 * MIN,
+      capturedMs: micGap ? 40 * MIN : 61 * MIN,
+      missedMs: 0,
+      owedMs: owed ? 12 * MIN : 0,
+      unsavedMs: unsaved ? 20 * MIN : 0,
+    });
 
   it('says nothing for a meeting that was recorded and transcribed', () => {
-    expect(
-      meetingCaptureAlert({ elapsedMs: 30 * MIN, capturedMs: 30 * MIN, missedMs: 0, owedMs: 0 }),
-    ).toBeNull();
+    expect(alertFor(false, false, false)).toBeNull();
   });
 
-  it('keeps the plain partial alert when nothing is owed', () => {
-    expect(
-      meetingCaptureAlert({ elapsedMs: 61 * MIN, capturedMs: 9 * MIN, missedMs: 0, owedMs: 0 }),
-    ).toEqual({
-      title: "Part of this meeting wasn't recorded",
+  it('says how much is still to be transcribed when the microphone kept recording', () => {
+    expect(alertFor(false, true, false)).toEqual({
+      title: "Part of this meeting isn't transcribed yet",
       message:
-        'OpenWhispr recorded 9 min of this 61 min meeting. The rest was missed while the microphone or the connection was interrupted.',
+        'OpenWhispr has transcribed 49 min of this 61 min meeting so far. Audio still saved on this device is transcribed the next time OpenWhispr is open with a connection.',
     });
   });
 
-  it('keeps the owed alert when the microphone kept recording', () => {
-    expect(
-      meetingCaptureAlert({
-        elapsedMs: 61 * MIN,
-        capturedMs: 61 * MIN,
-        missedMs: 0,
-        owedMs: 52 * MIN,
-      }),
-    ).toEqual({
-      title: "Part of this meeting isn't transcribed yet",
+  it('says how much was recorded when the microphone stopped', () => {
+    expect(alertFor(true, false, false)).toEqual({
+      title: PARTIAL,
       message:
-        'OpenWhispr has transcribed 9 min of this 61 min meeting so far. Audio still saved on this device is transcribed the next time OpenWhispr is open with a connection.',
+        'OpenWhispr recorded 40 min of this 61 min meeting. The rest was missed while the microphone or the connection was interrupted.',
     });
   });
 
   it('says what was recorded and what of it is still owed when the microphone also stopped', () => {
-    expect(
-      meetingCaptureAlert({
-        elapsedMs: 61 * MIN,
-        capturedMs: 40 * MIN,
-        missedMs: 0,
-        owedMs: 12 * MIN,
-      }),
-    ).toEqual({
-      title: "Part of this meeting wasn't recorded",
-      message:
-        'OpenWhispr recorded 40 min of this 61 min meeting. The rest was missed while the microphone was interrupted. The transcript is still missing 12 min of the recording, which is transcribed from audio saved on this device the next time OpenWhispr is open with a connection.',
+    expect(alertFor(true, true, false)).toEqual({
+      title: PARTIAL,
+      message: `OpenWhispr recorded 40 min of this 61 min meeting. The rest was missed while the microphone was interrupted. The transcript is still missing 12 min of the recording, ${LATER}`,
     });
   });
 
-  it('counts owed audio it could not save as missed, promising nothing for it', () => {
+  it('counts audio it could not save for later as recorded, and says it could not be transcribed', () => {
+    expect(alertFor(false, false, true)).toEqual({
+      title: UNTRANSCRIBED,
+      message:
+        'OpenWhispr recorded this 61 min meeting. OpenWhispr could not transcribe 20 min of the recording.',
+    });
+  });
+
+  it('says both what could not be transcribed and what is still owed', () => {
+    expect(alertFor(false, true, true)).toEqual({
+      title: UNTRANSCRIBED,
+      message: `OpenWhispr recorded this 61 min meeting. OpenWhispr could not transcribe 20 min of the recording. The transcript is still missing 12 min of the recording, ${LATER}`,
+    });
+  });
+
+  it('keeps the microphone sentence beside what could not be transcribed', () => {
+    expect(alertFor(true, false, true)).toEqual({
+      title: PARTIAL,
+      message:
+        'OpenWhispr recorded 40 min of this 61 min meeting. The rest was missed while the microphone was interrupted. OpenWhispr could not transcribe 20 min of the recording.',
+    });
+  });
+
+  it('says all three when the microphone stopped and part of the recording is lost and owed', () => {
+    expect(alertFor(true, true, true)).toEqual({
+      title: PARTIAL,
+      message: `OpenWhispr recorded 40 min of this 61 min meeting. The rest was missed while the microphone was interrupted. OpenWhispr could not transcribe 20 min of the recording. The transcript is still missing 12 min of the recording, ${LATER}`,
+    });
+  });
+
+  it('says under 1 min for a short stretch it could not save, once enough is missing', () => {
+    expect(
+      meetingCaptureAlert({
+        elapsedMs: 61 * MIN,
+        capturedMs: 60 * MIN + 45_000,
+        missedMs: 0,
+        owedMs: 0,
+        unsavedMs: 40_000,
+      }),
+    ).toEqual({
+      title: UNTRANSCRIBED,
+      message:
+        'OpenWhispr recorded this 61 min meeting. OpenWhispr could not transcribe under 1 min of the recording.',
+    });
+  });
+
+  it('stays quiet when under half a minute could not be transcribed', () => {
     expect(
       meetingCaptureAlert({
         elapsedMs: 61 * MIN,
         capturedMs: 61 * MIN,
-        missedMs: 20 * MIN,
+        missedMs: 0,
         owedMs: 0,
+        unsavedMs: 20_000,
+      }),
+    ).toBeNull();
+  });
+
+  it('keeps the plain partial alert for audio the stream dropped with no recording', () => {
+    expect(
+      meetingCaptureAlert({
+        elapsedMs: 61 * MIN,
+        capturedMs: 61 * MIN,
+        missedMs: 52 * MIN,
+        owedMs: 0,
+        unsavedMs: 0,
       }),
     ).toEqual({
-      title: "Part of this meeting wasn't recorded",
+      title: PARTIAL,
       message:
-        'OpenWhispr recorded 41 min of this 61 min meeting. The rest was missed while the microphone or the connection was interrupted.',
+        'OpenWhispr recorded 9 min of this 61 min meeting. The rest was missed while the microphone or the connection was interrupted.',
     });
   });
 });

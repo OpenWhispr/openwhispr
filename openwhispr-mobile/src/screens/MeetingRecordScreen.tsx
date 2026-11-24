@@ -451,11 +451,13 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
           elapsedMs,
           capturedMs: captured * 1000,
           // With a recording, audio the stream dropped is transcribed from the file (now, or
-          // later when its list was saved), so only owed audio nothing names is missed.
-          missedMs: result.recordingUri ? unsavedOwedMs : droppedSeconds * 1000,
+          // later when its list was saved), so nothing it recorded is missed.
+          missedMs: result.recordingUri ? 0 : droppedSeconds * 1000,
           // Done, but part of the recording is still waiting to be transcribed: without this
           // the note would look complete until the stretches appear on their own later.
           owedMs,
+          // Recorded, but its list of owed audio could not be saved, so it never will be.
+          unsavedMs: unsavedOwedMs,
         });
       } catch (error) {
         markNoteFailed(noteId);

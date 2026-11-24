@@ -185,22 +185,6 @@ describe('alertIfPartialCapture', () => {
     );
   });
 
-  it('says the rest is still to be transcribed when the recording owes audio', () => {
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    // 61 min recorded, 52 min of it still owed to the transcript.
-    alertIfPartialCapture(captureCoverage(3_660_000 - 3_120_000, 3_660_000), { owed: true });
-    expect(alert).toHaveBeenCalledWith(
-      "Part of this meeting isn't transcribed yet",
-      'OpenWhispr has transcribed 9 min of this 61 min meeting so far. Audio still saved on this device is transcribed the next time OpenWhispr is open with a connection.',
-    );
-  });
-
-  it('stays quiet when under half a minute is owed', () => {
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    alertIfPartialCapture(captureCoverage(1_780_000, 1_800_000), { owed: true });
-    expect(alert).not.toHaveBeenCalled();
-  });
-
   it('stays quiet when the whole meeting was recorded', () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     alertIfPartialCapture(captureCoverage(1_795_000, 1_800_000));
