@@ -32,40 +32,17 @@ test("every shipping registry model survives resolveByokModel", async () => {
     const provider = registry.transcriptionProviders.find((p) => p.id === providerId);
     assert.ok(provider, `registry is missing provider ${providerId}`);
 
-    // A Note Recording-only model never reaches a batch request, and a streaming model
-    // with a batch counterpart is pinned by the next test.
+    // A Note Recording-only model never reaches a batch request. A streaming model takes its
+    // provider's batch model: Gemini answers 400 for gemini-3.5-transcribe-live (#3369).
     for (const model of provider.models.filter(
-      (m) =>
-        !isNoteRecordingOnlyTranscriptionModel(providerId, m.id) &&
-        !(m.streaming && provider.batchModel)
+      (m) => !isNoteRecordingOnlyTranscriptionModel(providerId, m.id)
     )) {
       assert.equal(
         resolveByokModel(providerId, model.id),
-        model.id,
-        `${providerId}/${model.id} is offered by the picker but rewritten by the resolver`
+        model.streaming && provider.batchModel ? provider.batchModel : model.id,
+        `${providerId}/${model.id} is offered by the picker but resolved to another model`
       );
     }
-  }
-});
-
-// A batch request (voice assistant take, chat mic, Retry, upload) can't use a realtime
-// model: Gemini answers 400 for gemini-3.5-transcribe-live (#3369).
-test("a streaming model resolves to its provider's batch model", async () => {
-  const { resolveByokModel } = await load();
-
-  const pairs = registry.transcriptionProviders.flatMap((provider) =>
-    provider.batchModel
-      ? provider.models
-          .filter((m) => m.streaming)
-          .map((m) => [provider.id, m.id, provider.batchModel])
-      : []
-  );
-  assert.ok(
-    pairs.some(([providerId]) => providerId === "gemini"),
-    "the registry still offers Gemini's Live model beside its batch model"
-  );
-  for (const [providerId, modelId, batchModel] of pairs) {
-    assert.equal(resolveByokModel(providerId, modelId), batchModel, `${providerId}/${modelId}`);
   }
 });
 
