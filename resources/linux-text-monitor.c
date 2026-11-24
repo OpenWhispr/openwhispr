@@ -223,6 +223,11 @@ int main(int argc, char **argv) {
         /* consumed */
     }
 
+    /* Route every call through the bus, never libatspi's direct connection to
+     * each application: GTK3's bridge before at-spi2-core 2.62 keeps every one
+     * it accepts, with its pidfds, until the app exits (#3242).
+     * linux-fast-paste does the same. */
+    setenv("ATSPI_DISABLE_P2P", "1", 1);
     int init_result = atspi_init();
     if (init_result != 0 && init_result != 1) {
         printf("NO_ELEMENT\n");

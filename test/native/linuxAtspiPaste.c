@@ -1,6 +1,8 @@
 #define _GNU_SOURCE
 #include <atspi/atspi.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* A synthetic accessibility graph keeps this test off the real desktop and bus. */
 static GObject *desktop;
@@ -11,8 +13,15 @@ static AtspiStateSet *active_states;
 static const char *application_name;
 static int criticals;
 static int finalized;
+static int inits_with_direct_connections;
 
-static int fixture_atspi_init(void) { return 0; }
+/* libatspi reads ATSPI_DISABLE_P2P when it first meets each application, so it
+ * must already be set when AT-SPI starts (#3242). */
+static int fixture_atspi_init(void) {
+  const char *disable_p2p = getenv("ATSPI_DISABLE_P2P");
+  if (!disable_p2p || strcmp(disable_p2p, "1") != 0) inits_with_direct_connections++;
+  return 0;
+}
 static void fixture_atspi_set_timeout(gint timeout, gint startup_timeout) {}
 static AtspiAccessible *fixture_atspi_get_desktop(gint index) {
   return (AtspiAccessible *)g_object_ref(desktop);
@@ -65,6 +74,7 @@ static int check_detection(int expected) {
 }
 
 int main(void) {
+  unsetenv("ATSPI_DISABLE_P2P");
   desktop = g_object_new(G_TYPE_OBJECT, NULL);
   application = g_object_new(G_TYPE_OBJECT, NULL);
   missing_window = g_object_new(G_TYPE_OBJECT, NULL);
@@ -96,6 +106,11 @@ int main(void) {
   g_object_unref(desktop);
   if (!valid || finalized != 5) {
     fprintf(stderr, "expected five finalized fixture objects; got %d\n", finalized);
+    return 1;
+  }
+  if (inits_with_direct_connections != 0) {
+    fprintf(stderr, "AT-SPI started %d time(s) with direct application connections enabled\n",
+            inits_with_direct_connections);
     return 1;
   }
   puts("AT-SPI paste detection and cleanup checks passed");

@@ -24,6 +24,7 @@ Input (stdin):
 Requires: python3-atspi / pyatspi (gi.repository.Atspi)
 """
 
+import os
 import sys
 import signal
 import threading
@@ -124,6 +125,11 @@ def main():
         print("NO_ELEMENT", flush=True)
         sys.exit(1)
 
+    # Route every call through the bus, never libatspi's direct connection to
+    # each application: GTK3's bridge before at-spi2-core 2.62 keeps every one
+    # it accepts, with its pidfds, until the app exits (#3242).
+    # linux-text-monitor.c does the same.
+    os.environ["ATSPI_DISABLE_P2P"] = "1"
     Atspi.init()
     if probe_editable:
         Atspi.set_timeout(PROBE_ATSPI_CALL_TIMEOUT_MS, -1)

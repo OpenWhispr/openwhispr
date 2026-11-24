@@ -484,6 +484,12 @@ static int check_parent_terminal(Display *dpy, Window win) {
 
 #ifdef HAVE_ATSPI
 static int init_atspi(void) {
+    /* Route every call through the bus, never libatspi's direct connection to
+     * each application: GTK3's bridge before at-spi2-core 2.62 keeps every one
+     * it accepts, with the pidfds libdbus holds for it, until the app exits, so
+     * each walk here would leave more in every GTK3 app until it runs out of
+     * file descriptors (#3242). libatspi reads this when it meets each app. */
+    setenv("ATSPI_DISABLE_P2P", "1", 1);
     int status = atspi_init();
     atspi_set_timeout(ATSPI_CALL_TIMEOUT_MS, -1);
     return status;
