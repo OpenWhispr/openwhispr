@@ -303,3 +303,59 @@ it('keeps a light-only palette for the launch screens until they move (segment 7
   expect(lightOnboarding.canvas).toBe(lightTheme.canvas);
   expect(lightOnboarding.brandMid).toBe(lightTheme.accent);
 });
+
+describe('the practice keyboard across a light/dark switch (§3b)', () => {
+  const { Appearance, Keyboard } = require('react-native');
+  const { KEYBOARD_RESTART_MS, useKeyboardAnchor } = require('../onboarding/practiceParts');
+
+  function listen() {
+    const keyboard: Record<string, () => void> = {};
+    let appearance = () => undefined as void;
+    jest.spyOn(Keyboard, 'addListener').mockImplementation(((event: string, fn: () => void) => {
+      keyboard[event] = fn;
+      return { remove: jest.fn() };
+    }) as never);
+    jest.spyOn(Appearance, 'addChangeListener').mockImplementation(((fn: () => void) => {
+      appearance = fn;
+      return { remove: jest.fn() };
+    }) as never);
+    jest.spyOn(Keyboard, 'isVisible').mockReturnValue(false);
+    const onHide = jest.fn();
+    function Probe() {
+      useKeyboardAnchor(onHide);
+      return null;
+    }
+    render(<Probe />);
+    return { keyboard, switchTheme: () => appearance(), onHide };
+  }
+
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  it('a keyboard closing on its own still leaves the box', () => {
+    const { keyboard, onHide } = listen();
+    keyboard.keyboardDidHide();
+    expect(onHide).toHaveBeenCalledTimes(1);
+  });
+
+  it('the keyboard restarting after a switch keeps the box focused', () => {
+    const { keyboard, switchTheme, onHide } = listen();
+    switchTheme();
+    keyboard.keyboardDidHide();
+    (Keyboard.isVisible as jest.Mock).mockReturnValue(true);
+    act(() => jest.advanceTimersByTime(KEYBOARD_RESTART_MS + 100));
+    expect(onHide).not.toHaveBeenCalled();
+  });
+
+  it('a keyboard still gone once the restart time is up does leave the box', () => {
+    const { keyboard, switchTheme, onHide } = listen();
+    switchTheme();
+    keyboard.keyboardDidHide();
+    expect(onHide).not.toHaveBeenCalled();
+    act(() => jest.advanceTimersByTime(KEYBOARD_RESTART_MS + 100));
+    expect(onHide).toHaveBeenCalledTimes(1);
+  });
+});

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  Appearance,
   Dimensions,
   Image,
   Keyboard,
@@ -77,6 +78,9 @@ function anchorTop(current: number | null): number {
   return Dimensions.get('screen').height * 0.58;
 }
 
+/** How long after a light/dark switch a keyboard closing may be the keyboard restarting. */
+export const KEYBOARD_RESTART_MS = 1500;
+
 /**
  * Keeps the practice's guidance and bubble just above the keyboard line. `onHide` runs when the
  * keyboard closes (the back gesture), which the practices treat as leaving the text box.
@@ -105,8 +109,26 @@ export function useKeyboardAnchor(onHide?: () => void) {
       setKeyboardTop(event.endCoordinates.screenY);
       place(event.endCoordinates.screenY);
     });
+    // A light/dark switch restarts some keyboards (Samsung's), which closes and reopens them: that
+    // isn't leaving the box, so a close soon after a switch is checked again before it counts.
+    let switchedAt = -Infinity;
+    let recheck: ReturnType<typeof setTimeout> | undefined;
+    const appearance = Appearance.addChangeListener(() => {
+      switchedAt = Date.now();
+    });
     const hide = Keyboard.addListener('keyboardDidHide', () => {
       setKeyboardTop(null);
+      const since = Date.now() - switchedAt;
+      if (since < KEYBOARD_RESTART_MS) {
+        clearTimeout(recheck);
+        recheck = setTimeout(
+          () => {
+            if (mounted.current && !Keyboard.isVisible()) hideRef.current?.();
+          },
+          KEYBOARD_RESTART_MS - since + 50,
+        );
+        return;
+      }
       hideRef.current?.();
     });
     // The keyboard can stay open from the previous practice, so no show event arrives.
@@ -120,6 +142,8 @@ export function useKeyboardAnchor(onHide?: () => void) {
       mounted.current = false;
       show.remove();
       hide.remove();
+      appearance.remove();
+      clearTimeout(recheck);
     };
   }, [place]);
 
