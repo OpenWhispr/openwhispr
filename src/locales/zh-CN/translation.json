@@ -3718,6 +3718,9 @@
     "mutationErrors": {
       "folderNameRequired": "请输入文件夹名称。",
       "folderAlreadyExists": "已存在同名文件夹。",
+      "folderNameTakenIn": "“{{name}}”已在“{{parent}}”中使用。每个空间中的文件夹名称只能使用一次。",
+      "folderNameTakenTopLevel": "“{{name}}”已在顶层使用。每个空间中的文件夹名称只能使用一次。",
+      "reservedSubfolderName": "“{{name}}”是私密中默认文件夹的名称，子文件夹不能使用。",
       "folderNotFound": "找不到该文件夹。",
       "defaultFolderImmutable": "无法更改默认文件夹。",
       "spaceNameRequired": "请输入空间名称。",
@@ -3771,6 +3774,8 @@
       "confirmMoveInTitle": "移动到 {{space}}？",
       "confirmMoveIn": "{{space}} 中的所有人都将能查看和编辑此笔记。此后笔记将无法移出 Teamspace。",
       "confirmMoveInFolder": "{{space}} 中的所有人都将能查看和编辑此文件夹及其笔记。此后文件夹及其笔记将无法移出 Teamspace。",
+      "confirmMoveInFolderSubfolders": "{{space}} 中的所有人都将能查看和编辑此文件夹，包括其中的 {{subfolders}}和 {{notes}}。此后文件夹及其笔记将无法移出 Teamspace。",
+      "confirmMoveInSubfolder": "{{space}} 中的所有人都将能查看和编辑此子文件夹及其笔记。它将成为 {{space}} 中的顶层文件夹，此移动无法撤销。",
       "cantMoveOut": "笔记无法移出 Teamspace。",
       "cantMoveTeammate": "只有笔记所有者或工作区管理员才能将其移至其他空间。",
       "moved": "已将“{{title}}”移动到 {{target}}",
@@ -3847,7 +3852,7 @@
         "title": "Teamspace",
         "description": "工作区内的共享区域。添加人员或团队以授予访问权限。"
       },
-      "contents": "每个空间都可以包含文件夹和笔记。",
+      "contents": "每个空间都可以包含文件夹和笔记，每个文件夹还可以包含子文件夹。",
       "done": "知道了",
       "reopen": "了解空间的组织方式"
     },
@@ -3860,13 +3865,18 @@
       "title": "文件夹",
       "soon": "即将推出",
       "folderName": "文件夹名称",
+      "topLevel": "顶层",
       "couldNotCreate": "无法创建文件夹",
       "couldNotRename": "无法重命名文件夹",
       "couldNotDelete": "无法删除文件夹",
       "deleteTitle": "删除文件夹？",
       "deleteDescription": "这将永久删除「{{name}}」及其 {{count}} 条笔记。此操作无法撤销。",
       "deleteDescriptionEmpty": "这将永久删除「{{name}}」。此操作无法撤销。",
-      "deleteConfirm": "删除文件夹和笔记"
+      "deleteDescriptionSubfolders": "这将永久删除「{{name}}」，包括其中的 {{subfolders}}和 {{notes}}。此操作无法撤销。",
+      "subfolderCount_one": "{{count}} 个子文件夹",
+      "subfolderCount_other": "{{count}} 个子文件夹",
+      "deleteConfirm": "删除文件夹和笔记",
+      "recordingInFolder": "此文件夹中的“{{title}}”正在录制。请先停止录制，再删除文件夹。"
     },
     "list": {
       "title": "笔记",
@@ -4053,6 +4063,11 @@
           "empty": "添加标题以生成目录。"
         }
       },
+      "lostNoteCopy": {
+        "title": "你最近的编辑已保存到新笔记",
+        "description": "“{{title}}”在这些编辑保存前已被删除，因此它们已保存到“私密”中的一条新笔记。",
+        "open": "打开笔记"
+      },
       "muteMic": "静音麦克风",
       "unmuteMic": "取消麦克风静音",
       "micMuted": "麦克风已静音"
@@ -4203,7 +4218,12 @@
       "recordingDisabledByOrg": "您的组织已禁用会议录音。",
       "stoppedAccountChanged": "由于您已退出登录或切换了账号，录音已停止。",
       "stoppedPolicyUnresolved": "由于无法检查您的组织设置，录音已停止。",
-      "stoppedWorkspaceChanged": "由于您切换了工作区，录音已停止。"
+      "stoppedWorkspaceChanged": "由于您切换了工作区，录音已停止。",
+      "recordingCopy": {
+        "title": "录制已移到新笔记",
+        "description": "“{{title}}”在录制期间被删除。转录内容已保存到“私密”中的一条新笔记。",
+        "open": "打开笔记"
+      }
     },
     "meetingPill": {
       "returnToNote": "返回到录音",
@@ -4217,6 +4237,7 @@
       "searchFolders": "搜索文件夹...",
       "noResults": "未找到文件夹",
       "newFolder": "新建文件夹",
+      "newSubfolder": "新建子文件夹",
       "showInFileManager": "在{{manager}}中显示"
     },
     "actions": {
@@ -4451,6 +4472,7 @@
         "members_one": "{{count}} 位成员",
         "members_other": "{{count}} 位成员"
       },
+      "subfolders": "子文件夹",
       "banner": {
         "title": {
           "team": "你的 Teamspace",
@@ -6840,7 +6862,7 @@
         "FOLDER_UNAVAILABLE": "此保存位置不可用。请选择其他文件夹。",
         "SPACE_UNAVAILABLE": "此保存位置不可用。请选择其他文件夹。",
         "FOLDER_NAME_REQUIRED": "请输入文件夹名称。",
-        "FOLDER_NAME_TAKEN": "此位置已存在同名文件夹。",
+        "FOLDER_NAME_TAKEN": "此空间已存在同名文件夹。",
         "CREATE_FAILED": "无法完成，请重试。",
         "LINKED_NOTE_CHANGED": "请检查保存位置，然后重新加入。",
         "NOTE_UNAVAILABLE": "此笔记不可用。请重试，不要创建替代笔记。",

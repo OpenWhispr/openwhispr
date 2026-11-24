@@ -44,6 +44,7 @@ import type {
   NoteShareInvitation,
   ShareSettings,
   SpaceItem,
+  FolderNameClash,
 } from "../types/electron";
 
 export interface NoteShareCacheEntry {
@@ -384,6 +385,12 @@ export function contextContainerKey(context: ActiveContext): string {
     : spaceContainerKey(context.spaceId);
 }
 
+// Deleting or moving a folder takes its subfolders with it.
+function folderAndSubfolderKeys(folders: FolderItem[], folderId: number): string[] {
+  const subfolderIds = folders.filter((f) => f.parent_folder_id === folderId).map((f) => f.id);
+  return [folderId, ...subfolderIds].map(folderContainerKey);
+}
+
 function noteContainerKey(note: NoteItem): string {
   return note.folder_id != null
     ? folderContainerKey(note.folder_id)
@@ -517,17 +524,24 @@ function ensureIpcListeners() {
     const dispose = window.electronAPI.onFolderDeleted(({ id }) => {
       if (id == null) return;
       const state = useNoteStore.getState();
-      const key = folderContainerKey(id);
-      const teardown = teardownNoteContainers(state, [key]);
+      // Main sends one event per folder it deletes; a parent's subfolders
+      // that survive it (a delete pulled from the cloud) stay loaded.
+      const teardown = teardownNoteContainers(state, [folderContainerKey(id)]);
       persistExpandedContainers(teardown.expandedContainers);
+      // Dropped now, so the next event of a parent-then-subfolder delete
+      // doesn't fall back to the parent.
       const extra: Partial<NoteState> = {
+        folders: state.folders.filter((f) => f.id !== id),
         expandedContainers: teardown.expandedContainers,
         activeNoteId: teardown.activeNoteId,
       };
       let fallbackContext: ActiveContext | null = null;
       if (state.activeContext?.folderId === id) {
-        // The active folder vanished under us — degrade to its space root.
-        fallbackContext = { spaceId: state.activeContext.spaceId, folderId: null };
+        // The active folder vanished under us — degrade to the deleted
+        // subfolder's parent, else to the space root.
+        const deleted = state.folders.find((f) => f.id === id);
+        const parent = state.folders.find((f) => f.id === deleted?.parent_folder_id);
+        fallbackContext = { spaceId: state.activeContext.spaceId, folderId: parent?.id ?? null };
         extra.activeContext = fallbackContext;
         extra.notes = teardown.notesByContainer[contextContainerKey(fallbackContext)] ?? [];
       }
@@ -706,6 +720,7 @@ export function resetForAccountChange(): void {
   landOnActivePrivate = false;
   pickedNoteId = null;
   pickedContext = null;
+  notesDeletedHere.clear();
   // The next account's first scope reads the spaces again, even one that names
   // the same workspaces (the same account signing back in).
   publishedScopeKey = null;
@@ -831,7 +846,10 @@ export function toggleContainerExpanded(key: string): void {
 /** Expand the containers that make a space/folder (and its notes) visible in the tree. */
 export function revealContainer(spaceId: number, folderId: number | null): void {
   setContainerExpanded(spaceContainerKey(spaceId), true);
-  if (folderId != null) setContainerExpanded(folderContainerKey(folderId), true);
+  if (folderId == null) return;
+  const parentId = useNoteStore.getState().folders.find((f) => f.id === folderId)?.parent_folder_id;
+  if (parentId != null) setContainerExpanded(folderContainerKey(parentId), true);
+  setContainerExpanded(folderContainerKey(folderId), true);
 }
 
 export function setActiveContext(spaceId: number, folderId: number | null): void {
@@ -1173,9 +1191,12 @@ export function hideSpaceInView(spaceId: number): (reopen: boolean) => Promise<v
 
 export async function createFolder(
   name: string,
-  spaceId: number
-): Promise<{ success: boolean; folder?: FolderItem; error?: string }> {
-  const result = await window.electronAPI.createFolder(name, spaceId);
+  spaceId: number,
+  parentFolderId: number | null = null
+): Promise<{ success: boolean; folder?: FolderItem; error?: string } & FolderNameClash> {
+  // Main reads its third argument as a write guard; the UI's folder writes
+  // carry none, as on main, and an explicit null would read as a stale write.
+  const result = await window.electronAPI.createFolder(name, spaceId, undefined, parentFolderId);
   if (result.success && result.folder) {
     await loadFolders();
     syncService.debouncedPush("folder", result.folder.id);
@@ -1186,7 +1207,7 @@ export async function createFolder(
 export async function renameFolder(
   id: number,
   name: string
-): Promise<{ success: boolean; folder?: FolderItem; error?: string }> {
+): Promise<{ success: boolean; folder?: FolderItem; error?: string } & FolderNameClash> {
   const result = await window.electronAPI.renameFolder(id, name);
   if (result.success) {
     await loadFolders();
@@ -1195,14 +1216,51 @@ export async function renameFolder(
   return result;
 }
 
+export async function setFolderParent(
+  id: number,
+  parentFolderId: number | null
+): Promise<{ success: boolean; folder?: FolderItem; error?: string } & FolderNameClash> {
+  // No write guard, like the UI's other folder writes (createFolder above).
+  const result = await window.electronAPI.setFolderParent(id, parentFolderId);
+  if (result.success) {
+    await loadFolders();
+    syncService.debouncedPush("folder", id);
+  }
+  return result;
+}
+
+// Notes the user deleted here with their folder. An open note's save that the delete refused is
+// then dropped as the delete intended, not rescued like a note deleted elsewhere (see
+// PersonalNotesView). Kept briefly: that save is sent as the view closes the note.
+const NOTE_DELETED_HERE_TTL_MS = 60_000;
+const notesDeletedHere = new Map<number, number>();
+
+function rememberNotesDeletedHere(ids: Iterable<number>): void {
+  const now = Date.now();
+  for (const [id, at] of notesDeletedHere) {
+    if (now - at >= NOTE_DELETED_HERE_TTL_MS) notesDeletedHere.delete(id);
+  }
+  for (const id of ids) notesDeletedHere.set(id, now);
+}
+
+export function wasNoteDeletedHere(id: number): boolean {
+  const at = notesDeletedHere.get(id);
+  return at != null && Date.now() - at < NOTE_DELETED_HERE_TTL_MS;
+}
+
 export async function deleteFolder(id: number): Promise<{ success: boolean; error?: string }> {
   const result = await window.electronAPI.deleteFolder(id);
   if (!result.success) return result;
 
   const state = useNoteStore.getState();
   const folder = state.folders.find((f) => f.id === id);
-  const key = folderContainerKey(id);
-  const teardown = teardownNoteContainers(state, [key]);
+  const keys = folderAndSubfolderKeys(state.folders, id);
+  const teardown = teardownNoteContainers(state, keys);
+  // Before the teardown closes an open note in the folder, which sends its pending save.
+  rememberNotesDeletedHere([
+    ...(result.noteIds ?? []),
+    ...teardown.removedNotes.map((note) => note.id),
+  ]);
   persistExpandedContainers(teardown.expandedContainers);
   useNoteStore.setState({
     notesByContainer: teardown.notesByContainer,
@@ -1210,11 +1268,17 @@ export async function deleteFolder(id: number): Promise<{ success: boolean; erro
     activeNoteId: teardown.activeNoteId,
   });
 
-  await loadFolders();
-  if (getActiveFolderIdValue() === id && folder) {
-    const { folders } = useNoteStore.getState();
-    const spaceFolders = folders.filter((f) => f.space_id === folder.space_id);
-    const fallback = findDefaultFolder(spaceFolders) ?? spaceFolders[0];
+  // Before the reload: main's folder-deleted echo lands during it and would
+  // otherwise move the view with the listener's own fallback.
+  const activeFolderId = getActiveFolderIdValue();
+  if (folder && activeFolderId != null && keys.includes(folderContainerKey(activeFolderId))) {
+    const spaceFolders = state.folders.filter(
+      (f) => f.space_id === folder.space_id && !keys.includes(folderContainerKey(f.id))
+    );
+    const fallback =
+      state.folders.find((f) => f.id === folder.parent_folder_id) ??
+      findDefaultFolder(spaceFolders) ??
+      spaceFolders[0];
     setActiveContext(folder.space_id, fallback?.id ?? null);
     pickedContext = useNoteStore.getState().activeContext;
     if (getActiveNoteIdValue() == null) {
@@ -1224,6 +1288,7 @@ export async function deleteFolder(id: number): Promise<{ success: boolean; erro
       if (notes.length > 0) pickNote(notes[0].id);
     }
   }
+  await loadFolders();
   syncService.requestSyncAll("manual");
   return result;
 }
@@ -1231,19 +1296,31 @@ export async function deleteFolder(id: number): Promise<{ success: boolean; erro
 export async function moveFolderToSpace(
   folderId: number,
   spaceId: number
-): Promise<{ success: boolean; folder?: FolderItem; error?: string; code?: MoveRefusalCode }> {
+): Promise<
+  {
+    success: boolean;
+    folder?: FolderItem;
+    error?: string;
+    code?: MoveRefusalCode;
+  } & FolderNameClash
+> {
   const result = await window.electronAPI.moveFolderToSpace(folderId, spaceId);
   if (!result.success) return result;
 
   await loadFolders();
-  const key = folderContainerKey(folderId);
-  if (useNoteStore.getState().notesByContainer[key]) {
-    // Refresh the container so its notes carry the new space_id.
-    await loadContainerNotes(key);
-  }
+  const { folders, notesByContainer } = useNoteStore.getState();
+  const keys = folderAndSubfolderKeys(folders, folderId);
+  // Refresh the loaded containers so their notes carry the new space_id.
+  await Promise.all(
+    keys.filter((key) => notesByContainer[key]).map((key) => loadContainerNotes(key))
+  );
   const { activeContext } = useNoteStore.getState();
-  if (activeContext?.folderId === folderId && activeContext.spaceId !== spaceId) {
-    useNoteStore.setState({ activeContext: { spaceId, folderId } });
+  if (
+    activeContext &&
+    activeContext.spaceId !== spaceId &&
+    keys.includes(contextContainerKey(activeContext))
+  ) {
+    useNoteStore.setState({ activeContext: { spaceId, folderId: activeContext.folderId } });
   }
   syncService.requestSyncAll("manual");
   return result;

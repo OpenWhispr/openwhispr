@@ -66,6 +66,33 @@ function workspaceDirectories(spaces, workspaceNames) {
   return distinctNames([null, ...ids], dirNameOf, (id) => id.slice(0, WORKSPACE_ID_SUFFIX_LENGTH));
 }
 
+// Each folder's parent as the layout uses it. A subfolder whose parent is gone, in
+// another space, or in a loop of parents goes at its space's top level: dropping it
+// would release its directory and put its notes at the space's root.
+function effectiveParentIds(folders) {
+  const foldersById = new Map(folders.map((folder) => [folder.id, folder]));
+  const declaredParent = (folder) => {
+    const parent = foldersById.get(folder.parent_folder_id);
+    return parent && parent.space_id === folder.space_id ? parent : null;
+  };
+  const parentIds = new Map();
+  for (const folder of folders) {
+    const seen = new Set([folder.id]);
+    let inLoop = false;
+    for (let ancestor = declaredParent(folder); ancestor; ancestor = declaredParent(ancestor)) {
+      if (ancestor.id === folder.id) {
+        inLoop = true;
+        break;
+      }
+      // A loop above this folder, whose members are placed at the top level.
+      if (seen.has(ancestor.id)) break;
+      seen.add(ancestor.id);
+    }
+    parentIds.set(folder.id, inLoop ? null : (declaredParent(folder)?.id ?? null));
+  }
+  return parentIds;
+}
+
 function buildNotePlacements({ spaces, folders, workspaceNames }) {
   const spaceLocations = new Map();
   const folderLocations = new Map();
@@ -110,31 +137,47 @@ function buildNotePlacements({ spaces, folders, workspaceNames }) {
     }
   }
 
-  // Grouped by the directory they go in, which two accounts' Private sections of one
-  // workspace share. Folders with the very same name share a directory, since files carry
-  // unique note ids and are handled one by one; names that differ only in case don't, or a
-  // case-insensitive disk would merge them and each write would rename the directory.
+  // A subfolder's directory sits inside its parent's, so parents are placed first.
+  // Siblings are grouped by the directory they go in, not by their parent: two
+  // accounts' Private sections of one workspace share a directory, and so do their
+  // same-named folders, whose subfolders then share it too. Folders with the very
+  // same name share a directory, since files carry unique note ids and are handled
+  // one by one; names that differ only in case don't, or a case-insensitive disk
+  // would merge them and each write would rename the directory.
   const knownFolders = folders.filter((folder) => spaceLocations.has(folder.space_id));
-  for (const siblings of groupBy(knownFolders, (folder) =>
-    spaceLocations.get(folder.space_id).segments.join("/")
-  ).values()) {
-    const firstByName = new Map();
-    for (const folder of [...siblings].sort(byId)) {
-      if (!firstByName.has(folder.name)) firstByName.set(folder.name, folder);
+  const parentIds = effectiveParentIds(knownFolders);
+  const childrenOf = groupBy(
+    knownFolders.filter((folder) => parentIds.get(folder.id) != null),
+    (folder) => parentIds.get(folder.id)
+  );
+  const containerOf = (folder) => {
+    const parentId = parentIds.get(folder.id);
+    return parentId == null ? spaceLocations.get(folder.space_id) : folderLocations.get(parentId);
+  };
+  let level = knownFolders.filter((folder) => parentIds.get(folder.id) == null);
+  while (level.length > 0) {
+    for (const siblings of groupBy(level, (folder) =>
+      containerOf(folder).segments.join("\0")
+    ).values()) {
+      const firstByName = new Map();
+      for (const folder of [...siblings].sort(byId)) {
+        if (!firstByName.has(folder.name)) firstByName.set(folder.name, folder);
+      }
+      const folderDirs = distinctNames(
+        [...firstByName.values()],
+        (folder) => folder.name,
+        (folder) => folder.id
+      );
+      for (const folder of siblings) {
+        const container = containerOf(folder);
+        folderLocations.set(folder.id, {
+          ...container,
+          segments: [...container.segments, folderDirs.get(firstByName.get(folder.name))],
+          folder: container.folder ? `${container.folder}/${folder.name}` : folder.name,
+        });
+      }
     }
-    const folderDirs = distinctNames(
-      [...firstByName.values()],
-      (folder) => folder.name,
-      (folder) => folder.id
-    );
-    for (const folder of siblings) {
-      const parent = spaceLocations.get(folder.space_id);
-      folderLocations.set(folder.id, {
-        ...parent,
-        segments: [...parent.segments, folderDirs.get(firstByName.get(folder.name))],
-        folder: folder.name,
-      });
-    }
+    level = level.flatMap((folder) => childrenOf.get(folder.id) ?? []);
   }
 
   const forNote = (note) => {
@@ -153,10 +196,19 @@ function buildNotePlacements({ spaces, folders, workspaceNames }) {
     };
   };
 
+  // Whether a folder sits somewhere inside another's directory.
+  const isInsideFolder = (folderId, ancestorId) => {
+    for (let id = parentIds.get(folderId); id != null; id = parentIds.get(id)) {
+      if (id === ancestorId) return true;
+    }
+    return false;
+  };
+
   return {
     forNote,
     folderLocation: (folderId) => folderLocations.get(folderId) ?? null,
     folderLocations: () => [...folderLocations.values()],
+    isInsideFolder,
   };
 }
 

@@ -4284,6 +4284,9 @@
     "mutationErrors": {
       "folderNameRequired": "Saisissez un nom de dossier.",
       "folderAlreadyExists": "Un dossier portant ce nom existe déjà.",
+      "folderNameTakenIn": "« {{name}} » est déjà utilisé dans « {{parent}} ». Un nom de dossier ne peut être utilisé qu'une seule fois par espace.",
+      "folderNameTakenTopLevel": "« {{name}} » est déjà utilisé au niveau supérieur. Un nom de dossier ne peut être utilisé qu'une seule fois par espace.",
+      "reservedSubfolderName": "« {{name}} » est le nom d'un dossier par défaut dans Privé : un sous-dossier ne peut pas l'utiliser.",
       "folderNotFound": "Ce dossier est introuvable.",
       "defaultFolderImmutable": "Les dossiers par défaut ne peuvent pas être modifiés.",
       "spaceNameRequired": "Saisissez un nom d’espace.",
@@ -4337,6 +4340,8 @@
       "confirmMoveInTitle": "Déplacer vers {{space}} ?",
       "confirmMoveIn": "Tous les membres de {{space}} pourront voir et modifier cette note. Les notes ne pourront plus être retirées d'un teamspace par la suite.",
       "confirmMoveInFolder": "Tous les membres de {{space}} pourront voir et modifier ce dossier et ses notes. Les dossiers et les notes ne pourront plus être retirés d'un teamspace par la suite.",
+      "confirmMoveInFolderSubfolders": "Tous les membres de {{space}} pourront voir et modifier ce dossier, y compris {{subfolders}} et {{notes}}. Les dossiers et les notes ne pourront plus être retirés d'un teamspace par la suite.",
+      "confirmMoveInSubfolder": "Tous les membres de {{space}} pourront voir et modifier ce sous-dossier et ses notes. Il deviendra un dossier de niveau supérieur dans {{space}}, et ce déplacement est irréversible.",
       "cantMoveOut": "Les notes ne peuvent pas être retirées d'un teamspace.",
       "cantMoveTeammate": "Seul le propriétaire de la note ou un administrateur du workspace peut la déplacer vers un autre espace.",
       "moved": "« {{title}} » déplacée vers {{target}}",
@@ -4413,7 +4418,7 @@
         "title": "Teamspace",
         "description": "Un espace partagé au sein d'un workspace. Ajoutez des personnes ou des équipes pour leur donner accès."
       },
-      "contents": "Chaque espace peut contenir des dossiers et des notes.",
+      "contents": "Chaque espace peut contenir des dossiers et des notes, et chaque dossier peut avoir des sous-dossiers.",
       "done": "Compris",
       "reopen": "Comprendre l'organisation des espaces"
     },
@@ -4426,13 +4431,18 @@
       "title": "Dossiers",
       "soon": "Bientôt",
       "folderName": "Nom du dossier",
+      "topLevel": "Niveau supérieur",
       "couldNotCreate": "Impossible de créer le dossier",
       "couldNotRename": "Impossible de renommer le dossier",
       "couldNotDelete": "Impossible de supprimer le dossier",
       "deleteTitle": "Supprimer le dossier ?",
       "deleteDescription": "Cette action supprimera définitivement \"{{name}}\" et ses {{count}} note(s). Cette action est irréversible.",
       "deleteDescriptionEmpty": "Cette action supprimera définitivement \"{{name}}\". Cette action est irréversible.",
-      "deleteConfirm": "Supprimer le dossier et les notes"
+      "deleteDescriptionSubfolders": "Cette action supprimera définitivement \"{{name}}\", y compris {{subfolders}} et {{notes}}. Cette action est irréversible.",
+      "subfolderCount_one": "{{count}} sous-dossier",
+      "subfolderCount_other": "{{count}} sous-dossiers",
+      "deleteConfirm": "Supprimer le dossier et les notes",
+      "recordingInFolder": "« {{title}} » est en cours d'enregistrement dans ce dossier. Arrêtez l'enregistrement, puis supprimez le dossier."
     },
     "list": {
       "title": "Notes",
@@ -4619,6 +4629,11 @@
           "empty": "Ajoutez des titres pour créer la table des matières."
         }
       },
+      "lostNoteCopy": {
+        "title": "Vos dernières modifications sont dans une nouvelle note",
+        "description": "« {{title}} » a été supprimée avant leur enregistrement : elles ont été enregistrées dans une nouvelle note dans Privé.",
+        "open": "Ouvrir la note"
+      },
       "muteMic": "Couper le microphone",
       "unmuteMic": "Réactiver le microphone",
       "micMuted": "Microphone coupé"
@@ -4769,7 +4784,12 @@
       "recordingDisabledByOrg": "L’enregistrement des réunions est désactivé par votre organisation.",
       "stoppedAccountChanged": "L’enregistrement s’est arrêté, car vous vous êtes déconnecté ou avez changé de compte.",
       "stoppedPolicyUnresolved": "L’enregistrement s’est arrêté, car les paramètres de votre organisation n’ont pas pu être vérifiés.",
-      "stoppedWorkspaceChanged": "L’enregistrement s’est arrêté, car vous avez changé d’espace de travail."
+      "stoppedWorkspaceChanged": "L’enregistrement s’est arrêté, car vous avez changé d’espace de travail.",
+      "recordingCopy": {
+        "title": "Enregistrement déplacé dans une nouvelle note",
+        "description": "« {{title}} » a été supprimée pendant l'enregistrement. La transcription est enregistrée dans une nouvelle note dans Privé.",
+        "open": "Ouvrir la note"
+      }
     },
     "meetingPill": {
       "returnToNote": "Revenir à l'enregistrement",
@@ -4801,6 +4821,7 @@
       "searchFolders": "Rechercher des dossiers...",
       "noResults": "Aucun dossier trouvé",
       "newFolder": "Nouveau dossier",
+      "newSubfolder": "Nouveau sous-dossier",
       "showInFileManager": "Afficher dans {{manager}}"
     },
     "actions": {
@@ -5017,6 +5038,7 @@
         "members_one": "{{count}} membre",
         "members_other": "{{count}} membres"
       },
+      "subfolders": "Sous-dossiers",
       "banner": {
         "title": {
           "team": "Votre teamspace",
@@ -6868,7 +6890,7 @@
         "FOLDER_UNAVAILABLE": "Cette destination est indisponible. Choisissez un autre dossier.",
         "SPACE_UNAVAILABLE": "Cette destination est indisponible. Choisissez un autre dossier.",
         "FOLDER_NAME_REQUIRED": "Saisissez un nom de dossier.",
-        "FOLDER_NAME_TAKEN": "Un dossier porte déjà ce nom à cet emplacement.",
+        "FOLDER_NAME_TAKEN": "Un dossier porte déjà ce nom dans cet espace.",
         "CREATE_FAILED": "Impossible de terminer. Réessayez.",
         "LINKED_NOTE_CHANGED": "Vérifiez la destination, puis rejoignez à nouveau.",
         "NOTE_UNAVAILABLE": "Cette note est indisponible. Réessayez sans en créer une autre.",
