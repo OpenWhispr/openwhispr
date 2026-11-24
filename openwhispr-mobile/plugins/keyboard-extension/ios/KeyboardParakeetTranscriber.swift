@@ -132,7 +132,7 @@ final class KeyboardParakeetTranscriber: @preconcurrency DirectLocalTranscriber 
       return Self.failLater(.noRoom, completion)
     }
     // v2 is English only and takes no hint; v3 uses it to keep tokens in the language's script.
-    let language = model == .parakeetV3 ? languageHint.flatMap { Language(rawValue: $0) } : nil
+    let language = model == .parakeetV3 ? DirectLocalLanguage.code(from: languageHint).flatMap { Language(rawValue: $0) } : nil
     residency.transcriptionStarted()
     let started = Self.uptime
     let task = Task { [weak self] in

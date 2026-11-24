@@ -15,6 +15,18 @@ enum DirectLocalModel: String, Equatable {
   }
 }
 
+/// Turns the app's language hint into the bare code FluidAudio's `Language(rawValue:)` takes.
+enum DirectLocalLanguage {
+  /// A hint can carry a region (`de-DE`, `de_CH`) or other casing, which would never match a
+  /// raw value, so only the first subtag, lowercased, is looked up.
+  static func code(from hint: String?) -> String? {
+    guard let hint else { return nil }
+    let first = hint.split(whereSeparator: { $0 == "-" || $0 == "_" }).first
+    guard let first, !first.isEmpty else { return nil }
+    return first.lowercased()
+  }
+}
+
 /// On-device transcription for the keyboard. The FluidAudio-backed one in the keyboard; a fake
 /// in tests. Every call happens on the main thread, and completions come back on it.
 protocol DirectLocalTranscriber: AnyObject {

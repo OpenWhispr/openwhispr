@@ -6,6 +6,16 @@ extension DirectDictationTests {
     testBudget()
     testResidency()
     testLocalModelLog()
+    testLanguageCode()
+  }
+
+  static func testLanguageCode() {
+    expect(DirectLocalLanguage.code(from: "de"), "de", "language: bare code")
+    expect(DirectLocalLanguage.code(from: "de-DE"), "de", "language: hyphen region")
+    expect(DirectLocalLanguage.code(from: "de_CH"), "de", "language: underscore region")
+    expect(DirectLocalLanguage.code(from: "DE"), "de", "language: uppercase")
+    expect(DirectLocalLanguage.code(from: ""), nil, "language: empty")
+    expect(DirectLocalLanguage.code(from: nil), nil, "language: nil")
   }
 
   static func testLocalModelLog() {
