@@ -20,6 +20,22 @@ export const CONNECT_TIMEOUT_MS = 15000;
 // How long a closing leg waits for its last turn to be transcribed.
 export const STOP_FLUSH_TIMEOUT_MS = 3000;
 
+// A leg the server closes sooner than this after it opened counts as short-lived.
+export const SHORT_LEG_MS = 5000;
+
+/**
+ * Wait before reconnecting after `consecutiveShortLegs` legs in a row closed right after
+ * opening. Each reconnect starts a fresh retry loop whose first attempt is immediate, so
+ * without this a server that accepts and then drops every socket gets an unthrottled loop.
+ */
+export function shortLegBackoffMs(consecutiveShortLegs: number): number {
+  if (consecutiveShortLegs <= 0) return 0;
+  return Math.min(
+    RECONNECT_MAX_DELAY_MS,
+    RECONNECT_INITIAL_DELAY_MS * 2 ** (consecutiveShortLegs - 1),
+  );
+}
+
 export const PCM_TAIL_SECONDS = 20;
 
 // PCM16 mono is 2 bytes/sample.
@@ -94,7 +110,12 @@ export function classifyClose(
  * fresh leg, so without this two legs could overwrite each other (and collide as keys).
  */
 export function namespaceItemId(legIndex: number, itemId: string): string {
-  return `L${legIndex}:${itemId}`;
+  return `${legItemPrefix(legIndex)}${itemId}`;
+}
+
+/** The prefix every namespaced item id of one leg starts with. */
+export function legItemPrefix(legIndex: number): string {
+  return `L${legIndex}:`;
 }
 
 interface LegOffsetEvent {

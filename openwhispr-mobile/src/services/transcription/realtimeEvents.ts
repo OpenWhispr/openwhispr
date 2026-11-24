@@ -58,6 +58,8 @@ export interface RealtimeEventReducer {
   utterances: () => RealtimeUtterance[];
   /** Items the server committed and has not yet transcribed. */
   pendingItemCount: () => number;
+  /** Forget pending items whose id starts with `prefix` (a leg that closed won't finish them). */
+  dropPendingItems: (prefix: string) => void;
 }
 
 export function createRealtimeEventReducer(callbacks: RealtimeCallbacks): RealtimeEventReducer {
@@ -134,5 +136,10 @@ export function createRealtimeEventReducer(callbacks: RealtimeCallbacks): Realti
     handleEvent,
     utterances: () => [...finalized],
     pendingItemCount: () => pending.size,
+    dropPendingItems: (prefix: string): void => {
+      for (const itemId of pending) {
+        if (itemId.startsWith(prefix)) pending.delete(itemId);
+      }
+    },
   };
 }

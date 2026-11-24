@@ -33,14 +33,17 @@ import {
   PcmRingBuffer,
   applyLegOffset,
   classifyClose,
+  legItemPrefix,
   namespaceItemId,
   pcmTailCapBytes,
+  shortLegBackoffMs,
   ROTATION_MS,
   RECONNECT_MAX_RETRIES,
   RECONNECT_INITIAL_DELAY_MS,
   RECONNECT_MAX_DELAY_MS,
   CONNECT_TIMEOUT_MS,
   STOP_FLUSH_TIMEOUT_MS,
+  SHORT_LEG_MS,
 } from './realtimeReconnect';
 
 export type { RealtimeCallbacks, RealtimeSession, RealtimeUtterance } from './realtimeEvents';
@@ -50,6 +53,15 @@ const OPENAI_REALTIME_WS_URL = 'wss://api.openai.com/v1/realtime?intent=transcri
 // backpressure control available.
 const FLUSH_INTERVAL_MS = 150;
 const WS_OPEN = 1; // WebSocket.OPEN, decoupled from the global so tests can inject a fake
+
+// The shared API strategy treats every 4xx as final. A 408 is the token endpoint timing
+// out, which a retry can fix; a 429 stays final (here it means the plan's word limit).
+const apiRetryStrategy = createApiRetryStrategy();
+const shouldRetryReconnect = (error: unknown): boolean => {
+  const status = (error as { status?: unknown } | null)?.status;
+  if (status === 408) return true;
+  return apiRetryStrategy.shouldRetry?.(error) ?? true;
+};
 
 interface TokenResponse {
   clientSecret: string;
@@ -107,6 +119,8 @@ export async function startRealtimeMeetingWs(
   const pcmRing = new PcmRingBuffer(pcmTailCapBytes(sampleRate));
   const bytesToMs = (bytes: number): number => Math.floor((bytes * 1000) / (sampleRate * 2));
   let capturedBytes = 0;
+  // Merged chunks a failed send threw away; the ring counts its own evictions.
+  let sendDroppedBytes = 0;
   // Per-leg index + offset, keyed by socket so a replaced leg's late messages keep
   // their own leg's namespace/offset during a swap.
   const legMeta = new WeakMap<WebSocketLike, { legIndex: number; offsetMs: number }>();
@@ -116,6 +130,9 @@ export async function startRealtimeMeetingWs(
   let connectingWs: WebSocketLike | null = null;
   let flushTimer: ReturnType<typeof setInterval> | null = null;
   let rotationTimer: ReturnType<typeof setTimeout> | null = null;
+  let reconnectDelayTimer: ReturnType<typeof setTimeout> | null = null;
+  // Legs in a row the server closed within SHORT_LEG_MS of opening.
+  let consecutiveShortLegs = 0;
   let frameSub: { remove(): void } | null = null;
   let captureSub: { remove(): void } | null = null;
   let micStopped = false;
@@ -164,6 +181,7 @@ export async function startRealtimeMeetingWs(
       );
     } catch {
       // Socket may have closed between the readyState check and send; drop the chunk.
+      sendDroppedBytes += merged.length;
     }
   };
 
@@ -189,6 +207,13 @@ export async function startRealtimeMeetingWs(
     for (const drain of drains) {
       if (drain.ws === ws) drain.sawReply = true;
     }
+  };
+
+  // A closed leg never finishes its pending turns; left in place they would hold every
+  // later drain to its full timeout.
+  const forgetLegTurns = (ws: WebSocketLike): void => {
+    const meta = legMeta.get(ws);
+    if (meta) reducer.dropPendingItems(legItemPrefix(meta.legIndex));
   };
 
   const finishDrainsFor = (ws: WebSocketLike): void => {
@@ -219,7 +244,9 @@ export async function startRealtimeMeetingWs(
           if (!drains.delete(drain)) return;
           if (timer) clearTimeout(timer);
           closeWs(ws);
+          forgetLegTurns(ws);
           resolve();
+          settleDrains();
         },
       };
       drains.add(drain);
@@ -258,6 +285,10 @@ export async function startRealtimeMeetingWs(
     if (rotationTimer) {
       clearTimeout(rotationTimer);
       rotationTimer = null;
+    }
+    if (reconnectDelayTimer) {
+      clearTimeout(reconnectDelayTimer);
+      reconnectDelayTimer = null;
     }
     // Close any in-flight connect so a stop doesn't leave it to time out (and re-enter retry).
     if (connectingWs) {
@@ -352,8 +383,10 @@ export async function startRealtimeMeetingWs(
           reject(new Error(`Realtime WebSocket closed before open (code ${code ?? 'unknown'})`));
           return;
         }
-        // A draining leg the server closed has nothing more to deliver.
+        // A leg the server closed has nothing more to deliver.
+        forgetLegTurns(ws);
         finishDrainsFor(ws);
+        settleDrains();
         void handleLegClosed(ws, code);
       };
     });
@@ -401,10 +434,26 @@ export async function startRealtimeMeetingWs(
   // Replace a dead leg with a fresh one (capped backoff, no attempt limit), mic never stopping. Keeps
   // cumulativeOffsetMs unchanged: the new session's restarted clock rewinds this leg's
   // ms labels, but display order is by sortOrder (utterance index), not startMs.
-  const attemptReconnect = (): void => {
+  // `delayMs` holds the first attempt back (after short-lived legs); clearTimers cancels it.
+  const attemptReconnect = (delayMs = 0): void => {
     if (terminated || reconnecting || rotating) return;
     reconnecting = true;
     callbacks.onReconnecting?.();
+    if (delayMs > 0) {
+      reconnectDelayTimer = setTimeout(() => {
+        reconnectDelayTimer = null;
+        if (terminated) {
+          reconnecting = false;
+          return;
+        }
+        runReconnect();
+      }, delayMs);
+      return;
+    }
+    runReconnect();
+  };
+
+  const runReconnect = (): void => {
     withRetry(
       async () => {
         // Bail once stopped so a stop() mid-backoff can't keep opening sockets / fetching
@@ -420,7 +469,7 @@ export async function startRealtimeMeetingWs(
         maxRetries: RECONNECT_MAX_RETRIES,
         initialDelay: RECONNECT_INITIAL_DELAY_MS,
         maxDelay: RECONNECT_MAX_DELAY_MS,
-        ...createApiRetryStrategy(),
+        shouldRetry: shouldRetryReconnect,
       },
     )
       .then((ws) => {
@@ -465,6 +514,7 @@ export async function startRealtimeMeetingWs(
   const handleLegClosed = async (ws: WebSocketLike, code: number | undefined): Promise<void> => {
     if (ws !== currentWs || terminated || rotating || reconnecting) return;
     const sessionAgeMs = Date.now() - sessionStartedAt;
+    const legAgeMs = Date.now() - legStartedAt;
     let isConnected = true;
     try {
       const state = await Network.getNetworkStateAsync();
@@ -473,13 +523,14 @@ export async function startRealtimeMeetingWs(
       // Can't sample the network — assume connected; attemptReconnect re-gates.
     }
     if (ws !== currentWs || terminated || rotating || reconnecting) return; // re-check post-await
+    consecutiveShortLegs = legAgeMs < SHORT_LEG_MS ? consecutiveShortLegs + 1 : 0;
     const decision = classifyClose(code, isConnected, sessionAgeMs);
     if (decision === 'terminal') {
       goTerminal(new Error(`Realtime WebSocket closed (code ${code ?? 'unknown'})`));
     } else if (decision === 'rotate') {
       void rollLeg();
     } else {
-      attemptReconnect();
+      attemptReconnect(shortLegBackoffMs(consecutiveShortLegs));
     }
   };
 
@@ -545,6 +596,6 @@ export async function startRealtimeMeetingWs(
     stop,
     utterances: reducer.utterances,
     capturedMs: () => bytesToMs(capturedBytes),
-    droppedMs: () => bytesToMs(pcmRing.droppedBytes),
+    droppedMs: () => bytesToMs(pcmRing.droppedBytes + sendDroppedBytes),
   };
 }

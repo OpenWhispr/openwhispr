@@ -8,7 +8,12 @@
  */
 import { Buffer } from 'buffer';
 import { startRealtimeMeetingWs, type WebSocketLike } from '../RealtimeMeetingWsService';
-import { ROTATION_MS, CONNECT_TIMEOUT_MS, STOP_FLUSH_TIMEOUT_MS } from '../realtimeReconnect';
+import {
+  ROTATION_MS,
+  CONNECT_TIMEOUT_MS,
+  STOP_FLUSH_TIMEOUT_MS,
+  SHORT_LEG_MS,
+} from '../realtimeReconnect';
 import { acquireCaptureLease, releaseCaptureLease } from '@/lib/captureLease';
 import { MEETING_RECORDING_DISABLED_MESSAGE } from '../policyErrors';
 import { api } from '@/lib/apiClient';
@@ -138,6 +143,14 @@ async function advanceToRotation(): Promise<void> {
   await jest.advanceTimersByTimeAsync(1);
 }
 
+/**
+ * Let the open leg live past SHORT_LEG_MS, so closing it reconnects at once instead of
+ * through the short-lived-leg backoff. The flush ticks queue no async work.
+ */
+function ageLeg(): void {
+  jest.advanceTimersByTime(SHORT_LEG_MS);
+}
+
 function emitFrame(bytes: number[]): void {
   const calls = (addPcmFrameListener as jest.Mock).mock.calls;
   const cb = calls[calls.length - 1]?.[0] as ((frame: { audio: string }) => void) | undefined;
@@ -231,6 +244,7 @@ describe('startRealtimeMeetingWs — normal meeting (leg-swap parity)', () => {
 describe('startRealtimeMeetingWs — token purpose', () => {
   it('declares every mint, including a reconnect, as a meeting', async () => {
     const { leg1 } = await boot({}, { language: 'de' });
+    ageLeg();
     leg1.serverClose(1006);
     await flushMicro();
     lastLeg().open();
@@ -284,6 +298,7 @@ describe('startRealtimeMeetingWs — reconnect', () => {
     const callbacks = { onReconnecting: jest.fn(), onReconnected: jest.fn() };
     const { leg1 } = await boot(callbacks);
 
+    ageLeg();
     leg1.serverClose(1006);
     await flushMicro();
 
@@ -308,6 +323,7 @@ describe('startRealtimeMeetingWs — reconnect', () => {
     const callbacks = { onReconnected: jest.fn() };
     const { session, leg1 } = await boot(callbacks);
 
+    ageLeg();
     leg1.serverClose(1006);
     await flushMicro(); // enters reconnect; a replacement leg is connecting
     const leg2 = lastLeg();
@@ -325,6 +341,7 @@ describe('startRealtimeMeetingWs — reconnect', () => {
   it('halts the reconnect loop on stop(): no sockets opened or tokens fetched afterwards', async () => {
     const { session, leg1 } = await boot();
 
+    ageLeg();
     leg1.serverClose(1006);
     await flushMicro(); // reconnecting; a replacement leg is connecting
     const socketsAtStop = FakeWebSocket.instances.length;
@@ -390,12 +407,12 @@ describe('startRealtimeMeetingWs — reconnect', () => {
   });
 
   it('still ends the session when the token endpoint answers 4xx', async () => {
-    const callbacks = { onError: jest.fn() };
+    const callbacks = { onError: jest.fn(), onClose: jest.fn() };
     const { leg1 } = await boot(callbacks);
 
     (api.post as jest.Mock).mockClear();
     (api.post as jest.Mock).mockRejectedValue(
-      Object.assign(new Error('Bad Request'), { status: 400 }),
+      Object.assign(new Error('Forbidden'), { status: 403 }),
     );
 
     leg1.serverClose(1006);
@@ -406,7 +423,68 @@ describe('startRealtimeMeetingWs — reconnect', () => {
     // A 4xx is deterministic — the strategy must not retry it.
     expect(api.post as jest.Mock).toHaveBeenCalledTimes(1);
     expect(callbacks.onError).toHaveBeenCalledTimes(1);
+    expect(callbacks.onClose).toHaveBeenCalledTimes(1);
     expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a 408 from the token endpoint and keeps the mic', async () => {
+    const callbacks = { onError: jest.fn(), onReconnected: jest.fn() };
+    const { leg1 } = await boot(callbacks);
+
+    (api.post as jest.Mock)
+      .mockClear()
+      .mockRejectedValueOnce(Object.assign(new Error('Request Timeout'), { status: 408 }));
+    ageLeg();
+    leg1.serverClose(1006);
+    await flushMicro();
+    await jest.advanceTimersByTimeAsync(1_000); // the first backoff step
+    await flushMicro();
+
+    expect(api.post as jest.Mock).toHaveBeenCalledTimes(2);
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(LivePCMStreaming.stop).not.toHaveBeenCalled();
+    lastLeg().open();
+    await flushMicro();
+    expect(callbacks.onReconnected).toHaveBeenCalledTimes(1);
+  });
+
+  it('backs off when every new leg is closed at once', async () => {
+    const { session, leg1 } = await boot();
+    // The first leg lived long enough, so its reconnect starts straight away.
+    jest.advanceTimersByTime(10_000);
+    (api.post as jest.Mock).mockClear();
+
+    leg1.serverClose(1006);
+    await flushMicro();
+    expect(api.post as jest.Mock).toHaveBeenCalledTimes(1);
+
+    // Each replacement opens and is closed by the server at once: 1 s, 2 s, then 4 s waits.
+    for (const [index, waitMs] of [1_000, 2_000, 4_000].entries()) {
+      const leg = lastLeg();
+      leg.open();
+      await flushMicro();
+      leg.serverClose(1006);
+      await flushMicro();
+      await jest.advanceTimersByTimeAsync(waitMs - 1);
+      await flushMicro();
+      expect(api.post as jest.Mock).toHaveBeenCalledTimes(index + 1);
+      await jest.advanceTimersByTimeAsync(1);
+      await flushMicro();
+      expect(api.post as jest.Mock).toHaveBeenCalledTimes(index + 2);
+    }
+
+    // Stop during the next wait: nothing more is fetched or opened.
+    const leg = lastLeg();
+    leg.open();
+    await flushMicro();
+    leg.serverClose(1006);
+    await flushMicro();
+    const sockets = FakeWebSocket.instances.length;
+    await session.stop();
+    await jest.advanceTimersByTimeAsync(60_000);
+    await flushMicro();
+    expect(api.post as jest.Mock).toHaveBeenCalledTimes(4);
+    expect(FakeWebSocket.instances.length).toBe(sockets);
   });
 });
 
@@ -506,6 +584,7 @@ describe('startRealtimeMeetingWs — bounded outage buffer', () => {
     // sampleRate 100 → cap = 100 * 2 * 20 = 4000 bytes.
     const { leg1 } = await boot({}, { sampleRate: 100 });
 
+    ageLeg();
     leg1.serverClose(1006);
     await flushMicro(); // reconnecting; replacement leg connecting, not yet open
 
@@ -681,6 +760,7 @@ describe('startRealtimeMeetingWs — stop finishes the last turn', () => {
 
   it('does not wait when no socket is open', async () => {
     const { session, leg1 } = await boot();
+    ageLeg();
     leg1.serverClose(1006);
     await flushMicro(); // reconnecting; the replacement leg is still connecting
     const leg2 = lastLeg();
@@ -775,11 +855,44 @@ describe('startRealtimeMeetingWs — stop finishes the last turn', () => {
     expect(session.capturedMs()).toBe(1000);
     expect(session.droppedMs()).toBe(0);
 
+    ageLeg();
     leg1.serverClose(1006);
     await flushMicro(); // the replacement leg is connecting, not open
     for (let i = 0; i < 10; i++) emitFrame(new Array(1000).fill(2));
 
     expect(session.capturedMs()).toBe(51_000);
     expect(session.droppedMs()).toBe(30_000); // six 1000-byte frames fell off the front
+  });
+
+  it("forgets a dead leg's unfinished turn so a later stop does not wait", async () => {
+    const { session, leg1 } = await boot();
+    ageLeg();
+    leg1.emit(committed('X')); // the leg dies before X is transcribed
+    leg1.serverClose(1006);
+    await flushMicro();
+    const leg2 = lastLeg();
+    leg2.open();
+    await flushMicro();
+
+    const progress = track(session.stop());
+    leg2.emit(commitEmpty);
+    await flushMicro();
+
+    expect(progress.done()).toBe(true);
+    expect(leg2.closed).toBe(true);
+  });
+
+  it('counts audio as dropped when the send fails', async () => {
+    // sampleRate 100 → 200 bytes a second.
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    leg1.send = (): void => {
+      throw new Error('socket gone');
+    };
+
+    emitFrame(new Array(200).fill(3));
+    await jest.advanceTimersByTimeAsync(FLUSH_MS + 10);
+
+    expect(session.capturedMs()).toBe(1000);
+    expect(session.droppedMs()).toBe(1000);
   });
 });

@@ -6,7 +6,8 @@ import {
 } from '@/services/transcription/RealtimeMeetingWsService';
 import {
   deriveCloudMeetingStatus,
-  isCaptureStalled,
+  initialCloudMeetingSession,
+  trackCaptureGrowth,
   type CloudMeetingStatus,
 } from '@/lib/notes/meetingCapture';
 
@@ -46,72 +47,99 @@ export function useCloudMeeting({
   language?: string;
   onUtterance?: (utterance: RealtimeUtterance, index: number, capturedMs: number) => void;
 }): CloudMeeting {
-  const [started, setStarted] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const [capturing, setCapturing] = useState(true);
-  const [stalled, setStalled] = useState(false);
-  const [reconnecting, setReconnecting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [partialText, setPartialText] = useState('');
-  const [utterances, setUtterances] = useState<RealtimeUtterance[]>([]);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [capturedSeconds, setCapturedSeconds] = useState(0);
-  const [droppedSeconds, setDroppedSeconds] = useState(0);
-  const [interruptions, setInterruptions] = useState(0);
-  const [reconnects, setReconnects] = useState(0);
+  const [initial] = useState(() => initialCloudMeetingSession(Date.now()));
+  const [started, setStarted] = useState(initial.started);
+  const [failed, setFailed] = useState(initial.failed);
+  const [capturing, setCapturing] = useState(initial.capturing);
+  const [stalled, setStalled] = useState(initial.stalled);
+  const [reconnecting, setReconnecting] = useState(initial.reconnecting);
+  const [error, setError] = useState<string | null>(initial.error);
+  const [partialText, setPartialText] = useState(initial.partialText);
+  const [utterances, setUtterances] = useState<RealtimeUtterance[]>(initial.utterances);
+  const [elapsedSeconds, setElapsedSeconds] = useState(initial.elapsedSeconds);
+  const [capturedSeconds, setCapturedSeconds] = useState(initial.capturedSeconds);
+  const [droppedSeconds, setDroppedSeconds] = useState(initial.droppedSeconds);
+  const [interruptions, setInterruptions] = useState(initial.interruptions);
+  const [reconnects, setReconnects] = useState(initial.reconnects);
 
   const sessionRef = useRef<RealtimeSession | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const stoppedRef = useRef(false);
-  const utteranceCountRef = useRef(0);
+  // Bumped per recording so a previous session still draining its last turn can't write
+  // into the next one.
+  const generationRef = useRef(0);
+  const utteranceCountRef = useRef(initial.utteranceCount);
+  const clockRef = useRef(initial.clock);
+  const micCapturingRef = useRef(initial.capturing);
   const onUtteranceRef = useRef(onUtterance);
   onUtteranceRef.current = onUtterance;
-  const lastCapturedMsRef = useRef(0);
-  const lastGrowthAtRef = useRef(0);
 
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    setStarted(false);
-    setFailed(false);
-    setReconnecting(false);
-    setCapturing(true);
-    setStalled(false);
+    // The session itself, kept here because `stop()` clears sessionRef before the last
+    // turn has drained and that turn still needs its captured time.
+    let liveSession: RealtimeSession | null = null;
+    const generation = generationRef.current + 1;
+    generationRef.current = generation;
+    const fresh = initialCloudMeetingSession(Date.now());
+    stoppedRef.current = false;
+    startedAtRef.current = null;
+    utteranceCountRef.current = fresh.utteranceCount;
+    clockRef.current = fresh.clock;
+    micCapturingRef.current = fresh.capturing;
+    setStarted(fresh.started);
+    setFailed(fresh.failed);
+    setCapturing(fresh.capturing);
+    setStalled(fresh.stalled);
+    setReconnecting(fresh.reconnecting);
+    setError(fresh.error);
+    setPartialText(fresh.partialText);
+    setUtterances(fresh.utterances);
+    setElapsedSeconds(fresh.elapsedSeconds);
+    setCapturedSeconds(fresh.capturedSeconds);
+    setDroppedSeconds(fresh.droppedSeconds);
+    setInterruptions(fresh.interruptions);
+    setReconnects(fresh.reconnects);
+    const isCurrent = (): boolean => generationRef.current === generation;
+    const isLive = (): boolean => isCurrent() && !stoppedRef.current;
     startRealtimeMeetingWs(
       { language },
       {
-        onPartial: (text) => setPartialText(text),
+        onPartial: (text) => {
+          if (isLive()) setPartialText(text);
+        },
         onUtterance: (utterance) => {
+          // Still delivered while Stop drains the last turn, so it is saved too.
+          if (!isCurrent()) return;
           const index = utteranceCountRef.current;
           utteranceCountRef.current += 1;
           setUtterances((prev) => [...prev, utterance]);
           setPartialText('');
-          onUtteranceRef.current?.(utterance, index, sessionRef.current?.capturedMs() ?? 0);
+          onUtteranceRef.current?.(utterance, index, liveSession?.capturedMs() ?? 0);
         },
         onError: (e) => {
-          if (stoppedRef.current) return;
+          // Recorded for display only: the reducer forwards non-fatal server errors too, and
+          // only an ended session (onClose, or a start that failed) is an error state.
+          if (!isLive()) return;
           const message = (e as { error?: { message?: string } })?.error?.message;
           setError(typeof message === 'string' ? message : 'Transcription error');
-          setFailed(true);
         },
         onClose: () => {
-          // A close we didn't initiate (server/network drop) is an error.
-          if (!stoppedRef.current) setFailed(true);
+          // A close we didn't initiate means the session ended.
+          if (isLive()) setFailed(true);
         },
         onReconnecting: () => {
-          // Safe to clear a transient failure here: a terminal one sets `terminated` in the
-          // service, so no reconnect follows it.
-          if (stoppedRef.current) return;
+          if (!isLive()) return;
           setPartialText('');
-          setFailed(false);
           setReconnecting(true);
           setReconnects((n) => n + 1);
         },
         onReconnected: () => {
-          if (!stoppedRef.current) setReconnecting(false);
+          if (isLive()) setReconnecting(false);
         },
         onCaptureState: ({ capturing: next }) => {
-          if (!stoppedRef.current) setCapturing(next);
+          if (isLive()) setCapturing(next);
         },
       },
     )
@@ -120,10 +148,12 @@ export function useCloudMeeting({
           void session.stop();
           return;
         }
+        liveSession = session;
         sessionRef.current = session;
         const now = Date.now();
         startedAtRef.current = now;
-        lastGrowthAtRef.current = now;
+        // Startup can take seconds; the stall clock starts when capture does.
+        clockRef.current = { ...clockRef.current, lastGrowthAtMs: now };
         setStarted(true);
       })
       .catch((e) => {
@@ -152,11 +182,9 @@ export function useCloudMeeting({
       if (!session || startedAt == null) return;
       const now = Date.now();
       const capturedMs = session.capturedMs();
-      if (capturedMs > lastCapturedMsRef.current) {
-        lastCapturedMsRef.current = capturedMs;
-        lastGrowthAtRef.current = now;
-      }
-      setStalled(isCaptureStalled(lastGrowthAtRef.current, now));
+      const growth = trackCaptureGrowth(clockRef.current, capturedMs, now);
+      clockRef.current = growth.clock;
+      setStalled(growth.stalled);
       setElapsedSeconds(Math.floor((now - startedAt) / 1000));
       setCapturedSeconds(Math.floor(capturedMs / 1000));
       setDroppedSeconds(Math.floor(session.droppedMs() / 1000));
@@ -168,7 +196,6 @@ export function useCloudMeeting({
 
   // The native event and the stall check can both report one interruption; count it once.
   const micCapturing = capturing && !stalled;
-  const micCapturingRef = useRef(micCapturing);
   useEffect(() => {
     if (started && micCapturingRef.current && !micCapturing) {
       setInterruptions((n) => n + 1);

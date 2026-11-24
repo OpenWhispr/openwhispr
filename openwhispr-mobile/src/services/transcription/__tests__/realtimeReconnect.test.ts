@@ -3,6 +3,7 @@ import {
   PcmRingBuffer,
   classifyClose,
   namespaceItemId,
+  legItemPrefix,
   applyLegOffset,
   shouldRotate,
   pcmTailCapBytes,
@@ -13,6 +14,8 @@ import {
   RECONNECT_MAX_DELAY_MS,
   CONNECT_TIMEOUT_MS,
   STOP_FLUSH_TIMEOUT_MS,
+  SHORT_LEG_MS,
+  shortLegBackoffMs,
 } from '../realtimeReconnect';
 import { createRealtimeEventReducer } from '../realtimeEvents';
 
@@ -134,6 +137,32 @@ describe('createRealtimeEventReducer pending items', () => {
       item_id: 'b',
     });
     expect(reducer.pendingItemCount()).toBe(0);
+  });
+});
+
+describe('dropPendingItems', () => {
+  it('forgets only the pending items under the given leg prefix', () => {
+    const reducer = createRealtimeEventReducer({});
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: namespaceItemId(1, 'a') });
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: namespaceItemId(2, 'a') });
+    reducer.handleEvent({
+      type: 'input_audio_buffer.committed',
+      item_id: namespaceItemId(11, 'b'),
+    });
+
+    reducer.dropPendingItems(legItemPrefix(1));
+
+    expect(reducer.pendingItemCount()).toBe(2);
+  });
+});
+
+describe('shortLegBackoffMs', () => {
+  it('waits nothing after a healthy leg and doubles up to the cap after short ones', () => {
+    expect(SHORT_LEG_MS).toBe(5000);
+    expect(shortLegBackoffMs(0)).toBe(0);
+    expect(shortLegBackoffMs(1)).toBe(1000);
+    expect(shortLegBackoffMs(2)).toBe(2000);
+    expect(shortLegBackoffMs(5)).toBe(15000);
   });
 });
 
