@@ -394,6 +394,21 @@ test("a parent's case-only rename keeps its subfolder's files and ownership", as
   assert.equal(fx.noteRows(101).length, 1);
 });
 
+// The old layout kept each folder in a top-level directory and predates
+// subfolders, so only a top-level folder's empty old directory is tidied away.
+test("an empty directory of the user's named like a subfolder stays", async (t) => {
+  const fx = await createFixture(t, clientTree);
+  fx.writeUserFile("Q1/.DS_Store", "");
+  fx.writeUserFile("Client A/.DS_Store", "");
+
+  fx.sync.disable();
+  await fx.sync.enable(fx.basePath);
+  await fx.sync.flush();
+
+  assert.equal(fs.existsSync(path.join(fx.basePath, "Q1", ".DS_Store")), true);
+  assert.equal(fs.existsSync(path.join(fx.basePath, "Client A")), false);
+});
+
 // The parent's own files stay where they were, its subfolder goes alone, and
 // what was already in the way is left as it is.
 test("a parent whose new directory is taken loses nothing", async (t) => {

@@ -394,8 +394,13 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
         placements.folderLocations().map((location) => mirror.relPathFor(null, location, "dir"))
       )
     );
+    // The old layout predates subfolders, so only a top-level folder's name can be
+    // an old directory; an empty directory named like a subfolder is the user's.
     const { folders } = db.getMirrorContainers();
-    mirror.removeEmptyOldDirs(["Personal", ...folders.map((folder) => folder.name)]);
+    mirror.removeEmptyOldDirs([
+      "Personal",
+      ...folders.filter((folder) => folder.parent_folder_id == null).map((folder) => folder.name),
+    ]);
   };
 
   const reconcile = () => {
