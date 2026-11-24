@@ -985,13 +985,24 @@ export function MeetingTranscriptChat({
     return map;
   }, [speakerProfiles]);
 
+  const micMutedStatus = isRecording && micMuted && (
+    <span
+      role="status"
+      className="flex items-center gap-1 rounded-md bg-amber-500/12 px-1.5 py-0.5 text-xs text-amber-700 dark:text-amber-400"
+    >
+      <MicOff size={12} className="shrink-0" />
+      {t("notes.editor.micMuted")}
+    </span>
+  );
+
   if (!hasContent) {
     return (
       <div className="h-full flex flex-col">
-        <div className="flex-1 flex items-center justify-center px-5">
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 px-5">
           <p className="text-xs text-muted-foreground/70 select-none">
             {t("notes.editor.conversationWillAppear")}
           </p>
+          {micMutedStatus}
         </div>
       </div>
     );
@@ -1034,15 +1045,7 @@ export function MeetingTranscriptChat({
                 </span>
               )}
             </div>
-            {isRecording && micMuted && (
-              <span
-                role="status"
-                className="flex items-center gap-1 rounded-md bg-amber-500/12 px-1.5 py-0.5 text-amber-700 dark:text-amber-400"
-              >
-                <MicOff size={12} className="shrink-0" />
-                {t("notes.editor.micMuted")}
-              </span>
-            )}
+            {micMutedStatus}
             <div className="flex-1" />
             {!isDiarizing && sessionDiarizationEnabled && (
               <div className="flex items-center gap-1.5">

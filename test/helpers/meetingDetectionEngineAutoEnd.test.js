@@ -275,14 +275,16 @@ test("reliable mic release requests an immediate stop", async () => {
 test("system activity from meeting chunks defers ownership stop until quiet", async () => {
   const harness = createEngine();
   const messages = [];
+  const ownerWebContents = harness.owner(messages);
 
   await harness.engine.beginRecordingSession({
     sessionId: "meeting-1",
     autoEndEligible: true,
-    ownerWebContents: harness.owner(messages),
+    ownerWebContents,
     systemAudioAvailable: true,
   });
   harness.clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  harness.engine.setRecordingMicMuted("meeting-1", true, ownerWebContents);
   harness.engine.recordMeetingAudioChunk("system", LOUD_CHUNK);
   harness.clock.advance(TICK_MS);
 
@@ -345,7 +347,9 @@ test("a muted mic keeps fallback silence from ending the recording", async () =>
   assert.deepEqual(messages, [], "a muted mic says nothing about the room");
 
   harness.engine.setRecordingMicMuted("meeting-1", false, ownerWebContents);
-  harness.clock.advance(SILENCE_WINDOW_MS + 5 * TICK_MS);
+  harness.clock.advance(SILENCE_WINDOW_MS - TICK_MS);
+  assert.deepEqual(messages, [], "muted time does not count toward fallback silence");
+  harness.clock.advance(TICK_MS);
   assert.deepEqual(messages, [
     {
       channel: "meeting-auto-end-requested",
@@ -353,6 +357,44 @@ test("a muted mic keeps fallback silence from ending the recording", async () =>
     },
   ]);
   harness.engine.stop();
+});
+
+test("a muted recording still ends after the last meeting process exits and system audio stays quiet", async () => {
+  const { engine, clock, owner, audioActivityDetector, meetingProcessDetector } = createEngine();
+  const messages = [];
+  const ownerWebContents = owner(messages);
+  audioActivityDetector.externalMicState = { reliable: false, externalMicActive: false };
+  await engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents,
+  });
+  engine.setRecordingMicMuted("meeting-1", true, ownerWebContents);
+  await engine.setRecordingSystemAudioAvailable("meeting-1", true, ownerWebContents);
+  clock.advance(SILENCE_WINDOW_MS);
+  assert.deepEqual(messages, [], "arming auto-end preserves the existing mute");
+
+  meetingProcessDetector.detected = ["zoom"];
+  meetingProcessDetector.endProcess("zoom");
+  clock.advance(FAST_SILENCE_MS - TICK_MS);
+  engine.recordMeetingAudioChunk("system", LOUD_CHUNK);
+  clock.advance(SILENCE_WINDOW_MS * 2);
+  assert.deepEqual(messages, [], "new system audio cancels the exit evidence");
+
+  meetingProcessDetector.detected = ["teams"];
+  meetingProcessDetector.endProcess("teams");
+  clock.advance(FAST_SILENCE_MS - TICK_MS);
+  engine.setRecordingMicMuted("meeting-1", false, ownerWebContents);
+  engine.setRecordingMicMuted("meeting-1", true, ownerWebContents);
+  assert.deepEqual(messages, []);
+  clock.advance(TICK_MS);
+  assert.deepEqual(messages, [
+    {
+      channel: "meeting-auto-end-requested",
+      payload: { sessionId: "meeting-1", reason: "process-exit" },
+    },
+  ]);
+  engine.stop();
 });
 
 test("mic mute from another session or window is refused", async () => {

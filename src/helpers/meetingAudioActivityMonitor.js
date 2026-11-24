@@ -23,9 +23,6 @@ const createMeetingAudioActivityMonitor = ({ onActivityChanged = () => {} } = {}
   const pending = { mic: false, system: false };
   const lastActiveAt = { mic: null, system: null };
   const active = { mic: false, system: false };
-  // A muted mic delivers only silence, which says nothing about the room, so
-  // while it is held the mic counts as active and auto-end never fires on it.
-  let micHeld = false;
 
   const getState = () => ({ micActive: active.mic, systemActive: active.system });
 
@@ -35,11 +32,6 @@ const createMeetingAudioActivityMonitor = ({ onActivityChanged = () => {} } = {}
       lastActiveAt[source] = null;
       active[source] = false;
     }
-    micHeld = false;
-  };
-
-  const setMicHeld = (held) => {
-    micHeld = held === true;
   };
 
   // Hot path — runs for every chunk of both channels. Once a chunk in the
@@ -54,7 +46,7 @@ const createMeetingAudioActivityMonitor = ({ onActivityChanged = () => {} } = {}
   const tick = (nowMs) => {
     let changed = false;
     for (const [source, channel] of Object.entries(CHANNELS)) {
-      if (pending[source] || (source === "mic" && micHeld)) {
+      if (pending[source]) {
         pending[source] = false;
         lastActiveAt[source] = nowMs;
       }
@@ -68,7 +60,7 @@ const createMeetingAudioActivityMonitor = ({ onActivityChanged = () => {} } = {}
     if (changed) onActivityChanged(getState());
   };
 
-  return { recordChunk, tick, reset, setMicHeld, getState };
+  return { recordChunk, tick, reset, getState };
 };
 
 module.exports = {

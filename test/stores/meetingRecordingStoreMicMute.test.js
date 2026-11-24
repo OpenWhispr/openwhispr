@@ -1,8 +1,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const React = require("react");
+const { createRoot } = require("react-dom/client");
 const {
+  addTeardown,
   createRendererServer,
   installBrowserGlobals,
+  installHappyDom,
   installMicCaptureGlobals,
 } = require("../lib/rendererTestHarness");
 
@@ -52,7 +56,14 @@ function makeMicStream(label) {
   };
 }
 
-function installMuteHarness(t, { mainStart } = {}) {
+async function installMuteHarness(t, { connection, withDom = false } = {}) {
+  let store;
+  // node:test runs these hooks in order. Stop before restoring the recording's window.
+  addTeardown(t, async () => {
+    connection?.resolve();
+    await store?.stopRecording();
+    assert.ifError(store?.useMeetingRecordingStore.getState().error);
+  });
   installMicCaptureGlobals(t);
   const mics = [];
   navigator.mediaDevices.getUserMedia = async () => {
@@ -81,7 +92,7 @@ function installMuteHarness(t, { mainStart } = {}) {
       strategy: "unsupported",
     }),
     meetingTranscriptionStart: async () => {
-      await mainStart;
+      await connection?.promise;
       return {
         success: true,
         systemAudioMode: "unsupported",
@@ -104,28 +115,29 @@ function installMuteHarness(t, { mainStart } = {}) {
     onMeetingSystemAudioSilent: noopListener,
     onMeetingSystemAudioDegraded: noopListener,
   };
-  installBrowserGlobals(t, {
-    window: { electronAPI: api, setTimeout: (fn, ms) => setTimeout(fn, ms) },
-  });
-  return { mics, workletPorts, sent, mutedReports };
-}
+  if (withDom) {
+    const window = await installHappyDom(t);
+    window.electronAPI = api;
+  } else {
+    installBrowserGlobals(t, {
+      window: { electronAPI: api, setTimeout: (fn, ms) => setTimeout(fn, ms) },
+    });
+  }
 
-async function loadStore(t) {
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-meeting-mic-mute-test-",
   });
-  return vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+  store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+  return { store, vite, mics, workletPorts, sent, mutedReports };
 }
 
 const speech = () => new Int16Array([1200, -900, 3000, -2500]).buffer;
 const isSilent = (buffer) => new Int16Array(buffer).every((sample) => sample === 0);
 
 test("muting disables the mic track and sends silence in its place", async (t) => {
-  const { mics, workletPorts, sent } = installMuteHarness(t);
-  const store = await loadStore(t);
+  const { mics, workletPorts, sent, store } = await installMuteHarness(t);
 
   assert.equal(await store.startRecording(START_ARGS), true);
-  t.after(() => store.stopRecording());
   const port = workletPorts[0];
   assert.ok(port?.onmessage, "the mic pipeline is connected");
 
@@ -148,11 +160,9 @@ test("muting disables the mic track and sends silence in its place", async (t) =
 });
 
 test("a replacement microphone comes up muted while the recording is muted", async (t) => {
-  const { mics } = installMuteHarness(t);
-  const store = await loadStore(t);
+  const { mics, store } = await installMuteHarness(t);
 
   await store.startRecording(START_ARGS);
-  t.after(() => store.stopRecording());
   store.setMicMuted(true);
 
   mics[0].track.end();
@@ -162,11 +172,12 @@ test("a replacement microphone comes up muted while the recording is muted", asy
   assert.equal(mics.length, 2, "recovery opened a replacement mic");
   assert.equal(mics[1].track.enabled, false);
   assert.equal(store.useMeetingRecordingStore.getState().micMuted, true);
+  store.setMicMuted(false);
+  assert.equal(mics[1].track.enabled, true);
 });
 
 test("a new recording starts with the microphone live", async (t) => {
-  const { mics } = installMuteHarness(t);
-  const store = await loadStore(t);
+  const { mics, store } = await installMuteHarness(t);
 
   // Stale state from any earlier path must not carry into a new recording.
   store.useMeetingRecordingStore.setState({ micMuted: true });
@@ -176,27 +187,24 @@ test("a new recording starts with the microphone live", async (t) => {
   store.setMicMuted(true);
   await store.stopRecording();
   assert.equal(store.useMeetingRecordingStore.getState().micMuted, false);
+  assert.equal(store.useMeetingRecordingStore.getState().micCaptureStatus, "inactive");
 
   await store.startRecording(START_ARGS);
-  t.after(() => store.stopRecording());
   assert.equal(store.useMeetingRecordingStore.getState().micMuted, false);
   assert.equal(mics.at(-1).track.enabled, true);
 });
 
 test("mute does nothing when no recording is running", async (t) => {
-  installMuteHarness(t);
-  const store = await loadStore(t);
+  const { store } = await installMuteHarness(t);
 
   store.setMicMuted(true);
   assert.equal(store.useMeetingRecordingStore.getState().micMuted, false);
 });
 
 test("mute is reported to main so auto-end doesn't read the room as silent", async (t) => {
-  const { mutedReports } = installMuteHarness(t);
-  const store = await loadStore(t);
+  const { mutedReports, store } = await installMuteHarness(t);
 
   await store.startRecording(START_ARGS);
-  t.after(() => store.stopRecording());
   const sessionId = store.getActiveRecordingSessionId();
   store.setMicMuted(true);
   store.setMicMuted(false);
@@ -207,26 +215,49 @@ test("mute is reported to main so auto-end doesn't read the room as silent", asy
   ]);
 });
 
-test("speech buffered while main connects stays behind when muted before it is sent", async (t) => {
-  const connect = Promise.withResolvers();
-  const { workletPorts, sent, mutedReports } = installMuteHarness(t, {
-    mainStart: connect.promise,
+test("the mute button silences only the microphone audio captured while muted during setup", async (t) => {
+  let root;
+  addTeardown(t, async () => {
+    if (root) await React.act(() => root.unmount());
   });
-  const store = await loadStore(t);
-
+  const connection = Promise.withResolvers();
+  const { store, vite, mics, workletPorts, sent, mutedReports } = await installMuteHarness(t, {
+    connection,
+    withDom: true,
+  });
+  const { default: MicMuteButton } = await vite.ssrLoadModule(
+    "/components/notes/MicMuteButton.tsx"
+  );
+  const host = globalThis.document.createElement("div");
+  root = createRoot(host);
   const starting = store.startRecording(START_ARGS);
   for (let i = 0; i < 20 && !workletPorts[0]?.onmessage; i++) await flush();
-  workletPorts[0].onmessage({ data: speech() });
-  store.setMicMuted(true);
-  connect.resolve();
-  await starting;
-  t.after(() => store.stopRecording());
+  await React.act(() => root.render(React.createElement(MicMuteButton)));
+  const button = host.querySelector("button");
+  assert.ok(button, "the open mic can be muted before main connects");
 
-  const mic = sent.filter((entry) => entry.source === "mic");
-  assert.equal(mic.length, 1);
-  assert.ok(isSilent(mic[0].chunk));
-  assert.ok(
-    mutedReports.some((report) => report.muted && report.sessionId),
-    "the mute is resent once the session is live"
+  const port = workletPorts[0];
+  port.onmessage({ data: speech() });
+  await React.act(() => button.click());
+  assert.equal(mics[0].track.enabled, false);
+  assert.equal(button.getAttribute("aria-pressed"), "true");
+  port.onmessage({ data: speech() });
+  await React.act(() => button.click());
+  assert.equal(mics[0].track.enabled, true);
+  port.onmessage({ data: speech() });
+  await React.act(() => button.click());
+  port.onmessage({ data: speech() });
+  assert.equal(sent.length, 0);
+
+  connection.resolve();
+  await starting;
+  const silence = new ArrayBuffer(speech().byteLength);
+  assert.deepEqual(
+    sent.filter((entry) => entry.source === "mic").map(({ chunk }) => chunk),
+    [speech(), silence, speech(), silence]
+  );
+  assert.deepEqual(
+    mutedReports.map(({ muted }) => muted),
+    [true, false, true, true]
   );
 });

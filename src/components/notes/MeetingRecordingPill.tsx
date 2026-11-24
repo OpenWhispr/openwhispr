@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { MicOff, Square } from "../icons";
@@ -33,6 +33,7 @@ export default function MeetingRecordingPill({
   onReturnToNote,
 }: MeetingRecordingPillProps) {
   const { t } = useTranslation();
+  const descriptionId = useId();
   const isRecording = useMeetingRecordingStore((s) => s.isRecording);
   const recordingNoteId = useMeetingRecordingStore((s) => s.recordingNoteId);
   const recordingNoteTitle = useMeetingRecordingStore((s) => s.recordingNoteTitle);
@@ -87,6 +88,7 @@ export default function MeetingRecordingPill({
           type="button"
           onClick={onReturnToNote}
           aria-label={returnLabel}
+          aria-describedby={descriptionId}
           title={returnLabel}
           className={cn(
             "flex items-center gap-3 px-1 -mx-1 rounded-md",
@@ -111,7 +113,10 @@ export default function MeetingRecordingPill({
               ))}
             </div>
           )}
-          <span className="text-xs font-medium text-foreground/80 truncate max-w-[12rem]">
+          <span
+            id={descriptionId}
+            className="text-xs font-medium text-foreground/80 truncate max-w-[12rem]"
+          >
             {micMuted
               ? t("notes.meetingPill.micMuted")
               : isWaitingForMic

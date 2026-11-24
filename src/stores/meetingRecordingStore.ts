@@ -618,7 +618,7 @@ export const getMicAnalyser = (): AnalyserNode | null => micAnalyser;
 // A disabled track keeps delivering silent frames on the same clock, so the
 // provider socket, the audio timeline and the mic gate all carry on as if the
 // user had simply stopped talking. The meeting app's own mic is untouched.
-const applyMicMuted = (stream: MediaStream | null, muted: boolean) => {
+const applyMicMuted = (stream: MediaStream | null, muted: boolean): void => {
   stream?.getAudioTracks().forEach((track) => {
     track.enabled = !muted;
   });
@@ -878,6 +878,7 @@ async function cleanup(): Promise<void> {
     micStream?.getTracks().forEach((t) => t.stop());
   } catch {}
   micStream = null;
+  useMeetingRecordingStore.setState({ micCaptureStatus: "inactive" });
 
   try {
     await micContext?.close();
@@ -1271,12 +1272,17 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
           }
           micStream = micResult;
           applyMicMuted(micResult, useMeetingRecordingStore.getState().micMuted);
+          const micTrack = micResult.getAudioTracks()[0];
+          useMeetingRecordingStore.setState({
+            micCaptureStatus: micTrack?.readyState === "live" ? "active" : "unavailable",
+          });
           // A Stop while main is still connecting (up to its connect timeout)
           // turns the microphone off now; the rest is torn down once start settles.
           startOperation.onCancel(() => {
             if (micStream !== micResult) return;
             stopMediaStream(micResult);
             micStream = null;
+            useMeetingRecordingStore.setState({ micCaptureStatus: "inactive" });
           });
           const ctx = new AudioContext({ sampleRate: 24000 });
           micContext = ctx;
@@ -1320,7 +1326,6 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
             analyserSink.connect(ctx.destination);
             micAnalyser = analyser;
 
-            const micTrack = micResult.getAudioTracks()[0];
             logger.info(
               "Mic capture started for meeting transcription",
               {
@@ -1857,14 +1862,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       isStartingFlag = false;
       socketReady = true;
 
-      // Speech held through the connect stays behind if the user muted meanwhile.
-      const mutedAtFlush = useMeetingRecordingStore.getState().micMuted;
       for (const { chunk, capturedAt } of pendingMicChunks) {
-        window.electronAPI?.meetingTranscriptionSend?.(
-          mutedAtFlush ? new ArrayBuffer(chunk.byteLength) : chunk,
-          "mic",
-          capturedAt
-        );
+        window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic", capturedAt);
       }
       for (const { chunk, capturedAt } of pendingSystemChunks) {
         window.electronAPI?.meetingTranscriptionSend?.(chunk, "system", capturedAt);
