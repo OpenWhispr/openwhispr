@@ -11,11 +11,14 @@ export const ROTATION_MS = 50 * 60 * 1000;
 // a session the server rejects near the ~60-min cap.
 export const ROTATE_ON_RECONNECT_THRESHOLD_MS = 55 * 60 * 1000;
 
-// Bounded reconnect backoff budget (drives `withRetry` in the service).
-export const RECONNECT_MAX_RETRIES = 6;
+// Reconnects never give up: the mic keeps recording through any outage and the
+// backoff is capped, so a long one only costs a retry every RECONNECT_MAX_DELAY_MS.
+export const RECONNECT_MAX_RETRIES = Number.POSITIVE_INFINITY;
 export const RECONNECT_INITIAL_DELAY_MS = 1000;
 export const RECONNECT_MAX_DELAY_MS = 15000;
 export const CONNECT_TIMEOUT_MS = 15000;
+// How long a closing leg waits for its last turn to be transcribed.
+export const STOP_FLUSH_TIMEOUT_MS = 3000;
 
 export const PCM_TAIL_SECONDS = 20;
 
@@ -31,6 +34,7 @@ export function pcmTailCapBytes(sampleRate: number): number {
 export class PcmRingBuffer {
   private chunks: Buffer[] = [];
   private bytes = 0;
+  private dropped = 0;
 
   constructor(private readonly maxBytes: number) {}
 
@@ -41,6 +45,7 @@ export class PcmRingBuffer {
     while (this.bytes > this.maxBytes && this.chunks.length > 1) {
       const dropped = this.chunks.shift() as Buffer;
       this.bytes -= dropped.length;
+      this.dropped += dropped.length;
     }
   }
 
@@ -53,6 +58,11 @@ export class PcmRingBuffer {
 
   get byteLength(): number {
     return this.bytes;
+  }
+
+  /** Bytes pushed out past the cap over the buffer's life; drains don't count. */
+  get droppedBytes(): number {
+    return this.dropped;
   }
 }
 

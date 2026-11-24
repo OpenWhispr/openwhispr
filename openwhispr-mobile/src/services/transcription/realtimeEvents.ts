@@ -26,12 +26,19 @@ export interface RealtimeCallbacks {
   onReconnecting?: () => void;
   /** A replacement leg is live after a drop; capture resumed. */
   onReconnected?: () => void;
+  /** The microphone stopped or resumed delivering audio. */
+  onCaptureState?: (event: { capturing: boolean; reason: string }) => void;
 }
 
 export interface RealtimeSession {
-  stop: () => void;
+  /** Stops the mic at once, lets the last turn finish (up to 3 s), then closes. */
+  stop: () => Promise<void>;
   /** Ordered finalized utterances captured so far. */
   utterances: () => RealtimeUtterance[];
+  /** Audio received from the mic, in ms. */
+  capturedMs: () => number;
+  /** Audio dropped while no socket could take it, in ms. */
+  droppedMs: () => number;
 }
 
 // Loose shape of the events this reducer reads; each type carries only its subset.
@@ -49,6 +56,8 @@ export interface RealtimeEventReducer {
   handleEvent: (event: unknown) => void;
   /** Ordered finalized utterances captured so far. */
   utterances: () => RealtimeUtterance[];
+  /** Items the server committed and has not yet transcribed. */
+  pendingItemCount: () => number;
 }
 
 export function createRealtimeEventReducer(callbacks: RealtimeCallbacks): RealtimeEventReducer {
@@ -56,6 +65,8 @@ export function createRealtimeEventReducer(callbacks: RealtimeCallbacks): Realti
   const partials = new Map<string, string>();
   const timing = new Map<string, { startMs: number | null; endMs: number | null }>();
   const finalized: RealtimeUtterance[] = [];
+  // Committed turns still being transcribed; a closing leg waits for this to empty.
+  const pending = new Set<string>();
 
   const handleEvent = (raw: unknown): void => {
     callbacks.onDebug?.(raw);
@@ -84,8 +95,17 @@ export function createRealtimeEventReducer(callbacks: RealtimeCallbacks): Realti
         callbacks.onPartial?.(next, itemId);
         break;
       }
+      case 'input_audio_buffer.committed': {
+        if (itemId) pending.add(itemId);
+        break;
+      }
+      case 'conversation.item.input_audio_transcription.failed': {
+        if (itemId) pending.delete(itemId);
+        break;
+      }
       case 'conversation.item.input_audio_transcription.completed': {
         if (!itemId) break;
+        pending.delete(itemId);
         const t = timing.get(itemId) ?? { startMs: null, endMs: null };
         const utterance: RealtimeUtterance = {
           itemId,
@@ -110,5 +130,9 @@ export function createRealtimeEventReducer(callbacks: RealtimeCallbacks): Realti
     }
   };
 
-  return { handleEvent, utterances: () => [...finalized] };
+  return {
+    handleEvent,
+    utterances: () => [...finalized],
+    pendingItemCount: () => pending.size,
+  };
 }

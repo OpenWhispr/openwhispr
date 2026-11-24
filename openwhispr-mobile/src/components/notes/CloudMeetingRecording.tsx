@@ -19,6 +19,7 @@ const STATUS_LABEL: Record<CloudMeetingStatus, string> = {
   connecting: 'CONNECTING',
   live: 'RECORDING',
   reconnecting: 'RECONNECTING',
+  interrupted: 'NOT RECORDING',
   error: 'DISCONNECTED',
 };
 

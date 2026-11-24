@@ -334,10 +334,11 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   };
 
   const finishCloud = async (): Promise<void> => {
-    const utterances = cloudMeeting.stop();
+    // Read these before awaiting: the stop waits for the last turn and state moves on meanwhile.
     const elapsed = cloudMeeting.elapsedSeconds;
     const hadError = cloudMeeting.status === 'error';
     setPhase('processing');
+    const utterances = await cloudMeeting.stop();
     if (noteId == null) {
       setPhase('prompt');
       return;

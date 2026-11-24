@@ -12,6 +12,7 @@ import {
   RECONNECT_INITIAL_DELAY_MS,
   RECONNECT_MAX_DELAY_MS,
   CONNECT_TIMEOUT_MS,
+  STOP_FLUSH_TIMEOUT_MS,
 } from '../realtimeReconnect';
 import { createRealtimeEventReducer } from '../realtimeEvents';
 
@@ -33,6 +34,18 @@ describe('PcmRingBuffer', () => {
     expect(ring.byteLength).toBe(8);
     const drained = Buffer.concat(ring.drain());
     expect([...drained]).toEqual([2, 2, 2, 2, 3, 3, 3, 3]);
+  });
+
+  it('counts the bytes it drops, and a drain does not count as a drop', () => {
+    const ring = new PcmRingBuffer(100);
+    ring.push(Buffer.alloc(60));
+    expect(ring.droppedBytes).toBe(0);
+    ring.push(Buffer.alloc(60)); // 120 > 100: the oldest chunk goes
+    ring.push(Buffer.alloc(60));
+    expect(ring.droppedBytes).toBe(120);
+    expect(ring.byteLength).toBe(60);
+    ring.drain();
+    expect(ring.droppedBytes).toBe(120); // a drain sends audio, it does not drop it
   });
 
   it('empties on drain so a subsequent drain returns nothing', () => {
@@ -105,6 +118,25 @@ describe('namespaceItemId', () => {
   });
 });
 
+describe('createRealtimeEventReducer pending items', () => {
+  it('counts committed items until they complete or fail', () => {
+    const reducer = createRealtimeEventReducer({});
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: 'a' });
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: 'b' });
+    expect(reducer.pendingItemCount()).toBe(2);
+    reducer.handleEvent({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'a',
+      transcript: 'hi',
+    });
+    reducer.handleEvent({
+      type: 'conversation.item.input_audio_transcription.failed',
+      item_id: 'b',
+    });
+    expect(reducer.pendingItemCount()).toBe(0);
+  });
+});
+
 describe('applyLegOffset', () => {
   it('passes an event through untouched when the offset is zero (leg 0)', () => {
     const event = { type: 'x', audio_start_ms: 100, audio_end_ms: 500 };
@@ -135,8 +167,9 @@ describe('reconnect constants', () => {
     expect(ROTATE_ON_RECONNECT_THRESHOLD_MS).toBeLessThan(60 * 60 * 1000);
   });
 
-  it('exposes a bounded reconnect backoff budget', () => {
-    expect(RECONNECT_MAX_RETRIES).toBe(6);
+  it('never runs out of reconnect attempts, with a capped backoff', () => {
+    expect(RECONNECT_MAX_RETRIES).toBe(Number.POSITIVE_INFINITY);
+    expect(STOP_FLUSH_TIMEOUT_MS).toBe(3000);
     expect(RECONNECT_INITIAL_DELAY_MS).toBe(1000);
     expect(RECONNECT_MAX_DELAY_MS).toBe(15000);
     expect(CONNECT_TIMEOUT_MS).toBe(15000);

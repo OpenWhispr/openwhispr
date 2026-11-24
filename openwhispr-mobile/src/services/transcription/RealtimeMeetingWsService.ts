@@ -4,7 +4,10 @@
  * A session spans one or more legs (one OpenAI ws + ephemeral token each). The mic,
  * event reducer, PCM ring buffer, and flush timer are session-scoped and outlive any
  * leg; only the active socket (currentWs) is swapped — on reconnect (network drop) or
- * rotation (before OpenAI's ~60-min session cap). One reducer means utterances
+ * rotation (before OpenAI's ~60-min session cap). Reconnects never give up on their own:
+ * only a refused token or a policy close ends the session early. A leg that is retired
+ * (rotation, Stop) is committed and kept open until its last turn is transcribed, up to
+ * STOP_FLUSH_TIMEOUT_MS, so the final words of a leg are not cut off. One reducer means utterances
  * accumulate across every leg; each leg's messages are rewritten first (item_id
  * namespaced, timings offset) so a fresh leg's restarted ids/clock don't collide with
  * or rewind the transcript.
@@ -19,6 +22,7 @@ import { withRetry, createApiRetryStrategy } from '@/lib/retry';
 import {
   LivePCMStreaming,
   addPcmFrameListener,
+  addCaptureStateListener,
   DEFAULT_SAMPLE_RATE,
   type PcmFrame,
 } from '../../../modules/live-pcm-streaming/src';
@@ -36,6 +40,7 @@ import {
   RECONNECT_INITIAL_DELAY_MS,
   RECONNECT_MAX_DELAY_MS,
   CONNECT_TIMEOUT_MS,
+  STOP_FLUSH_TIMEOUT_MS,
 } from './realtimeReconnect';
 
 export type { RealtimeCallbacks, RealtimeSession, RealtimeUtterance } from './realtimeEvents';
@@ -100,6 +105,8 @@ export async function startRealtimeMeetingWs(
   // One reducer per session — this is why utterances survive every leg swap.
   const reducer = createRealtimeEventReducer(callbacks);
   const pcmRing = new PcmRingBuffer(pcmTailCapBytes(sampleRate));
+  const bytesToMs = (bytes: number): number => Math.floor((bytes * 1000) / (sampleRate * 2));
+  let capturedBytes = 0;
   // Per-leg index + offset, keyed by socket so a replaced leg's late messages keep
   // their own leg's namespace/offset during a swap.
   const legMeta = new WeakMap<WebSocketLike, { legIndex: number; offsetMs: number }>();
@@ -110,15 +117,23 @@ export async function startRealtimeMeetingWs(
   let flushTimer: ReturnType<typeof setInterval> | null = null;
   let rotationTimer: ReturnType<typeof setTimeout> | null = null;
   let frameSub: { remove(): void } | null = null;
+  let captureSub: { remove(): void } | null = null;
+  let micStopped = false;
   // Flips false on the first release so every exit path can call releaseLease safely.
   let leaseHeld = false;
+  // Legs committed and waiting for their last turn; `sawReply` is set once the server
+  // answered our commit (committed or commit_empty) on that leg.
+  const drains = new Set<{ ws: WebSocketLike; sawReply: boolean; finish: () => void }>();
+  const drainPromises = new Set<Promise<void>>();
+  let stopPromise: Promise<void> | null = null;
 
   let legIndex = 0;
   let cumulativeOffsetMs = 0; // summed wall-clock duration of all prior legs
   let legStartedAt = 0;
   let sessionStartedAt = 0; // drives the rotate-vs-reconnect age
 
-  // terminated makes stop()/goTerminal idempotent and cancels in-flight swaps;
+  // terminated makes stop()/goTerminal idempotent and cancels in-flight swaps (stop sets it
+  // before the last turn drains, so nothing reconnects or rotates meanwhile);
   // rotating/reconnecting serialize swaps.
   let terminated = false;
   let rotating = false;
@@ -132,6 +147,7 @@ export async function startRealtimeMeetingWs(
   };
 
   const enqueuePcm = (buf: Buffer): void => {
+    capturedBytes += buf.length;
     pcmRing.push(buf);
   };
 
@@ -151,17 +167,67 @@ export async function startRealtimeMeetingWs(
     }
   };
 
-  const closeWs = (ws: WebSocketLike | null, options?: { commit?: boolean }): void => {
+  const closeWs = (ws: WebSocketLike | null): void => {
     if (!ws) return;
     try {
-      // Optional final commit so the leg's last turn finalizes (empty buffer → benign commit_empty).
-      if (options?.commit && ws.readyState === WS_OPEN) {
-        ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-      }
       ws.close();
     } catch {
       // best-effort teardown
     }
+  };
+
+  // A reply alone isn't enough: a turn the server's VAD committed before ours may still be
+  // mid-transcription when our commit comes back empty.
+  const settleDrains = (): void => {
+    if (reducer.pendingItemCount() > 0) return;
+    for (const drain of drains) {
+      if (drain.sawReply) drain.finish();
+    }
+  };
+
+  const markDrainReply = (ws: WebSocketLike): void => {
+    for (const drain of drains) {
+      if (drain.ws === ws) drain.sawReply = true;
+    }
+  };
+
+  const finishDrainsFor = (ws: WebSocketLike): void => {
+    for (const drain of drains) {
+      if (drain.ws === ws) drain.finish();
+    }
+  };
+
+  // Commit a leg's buffer and close it once its last turn is transcribed, the server closes
+  // it, or STOP_FLUSH_TIMEOUT_MS passes. A leg that isn't open just closes.
+  const finishLeg = (ws: WebSocketLike): Promise<void> => {
+    if (ws.readyState !== WS_OPEN) {
+      closeWs(ws);
+      return Promise.resolve();
+    }
+    try {
+      ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+    } catch {
+      closeWs(ws);
+      return Promise.resolve();
+    }
+    const promise = new Promise<void>((resolve) => {
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const drain = {
+        ws,
+        sawReply: false,
+        finish: (): void => {
+          if (!drains.delete(drain)) return;
+          if (timer) clearTimeout(timer);
+          closeWs(ws);
+          resolve();
+        },
+      };
+      drains.add(drain);
+      timer = setTimeout(drain.finish, STOP_FLUSH_TIMEOUT_MS);
+    });
+    drainPromises.add(promise);
+    void promise.then(() => drainPromises.delete(promise));
+    return promise;
   };
 
   const releaseLease = (): void => {
@@ -170,15 +236,21 @@ export async function startRealtimeMeetingWs(
     releaseCaptureLease('meeting-cloud');
   };
 
-  // Mic + timers only, never the socket — a reconnectable close must not stop capture.
-  const teardownCapture = (): void => {
+  const stopMic = (): void => {
+    if (micStopped) return;
+    micStopped = true;
     frameSub?.remove();
     frameSub = null;
+    captureSub?.remove();
+    captureSub = null;
     // Release only once the native stop has settled: re-arming the keyboard's warm mic while
     // this teardown is still deactivating the audio session is the bug the lease prevents.
     Promise.resolve(LivePCMStreaming.stop())
       .catch(() => {})
       .finally(releaseLease);
+  };
+
+  const clearTimers = (): void => {
     if (flushTimer) {
       clearInterval(flushTimer);
       flushTimer = null;
@@ -194,6 +266,12 @@ export async function startRealtimeMeetingWs(
     }
   };
 
+  // Mic + timers only, never the socket — a reconnectable close must not stop capture.
+  const teardownCapture = (): void => {
+    stopMic();
+    clearTimers();
+  };
+
   const handleMessage = (ws: WebSocketLike, event: { data: string }): void => {
     let parsed: unknown;
     try {
@@ -203,7 +281,10 @@ export async function startRealtimeMeetingWs(
     }
     const evt = parsed as { type?: string; error?: { code?: string } };
     if (evt.type === 'error' && evt.error?.code === 'input_audio_buffer_commit_empty') {
-      return; // benign: our commit hit an already-drained buffer
+      // Benign: our commit hit an already-drained buffer.
+      markDrainReply(ws);
+      settleDrains();
+      return;
     }
     const meta = legMeta.get(ws) ?? { legIndex: 0, offsetMs: 0 };
     const rewritten = applyLegOffset(parsed as object, meta.offsetMs) as { item_id?: unknown };
@@ -211,6 +292,8 @@ export async function startRealtimeMeetingWs(
       rewritten.item_id = namespaceItemId(meta.legIndex, rewritten.item_id);
     }
     reducer.handleEvent(rewritten);
+    if (evt.type === 'input_audio_buffer.committed') markDrainReply(ws);
+    if (drains.size > 0) settleDrains();
   };
 
   // Opens one leg; resolves on open, rejects on pre-open close/error/timeout. Does NOT
@@ -269,6 +352,8 @@ export async function startRealtimeMeetingWs(
           reject(new Error(`Realtime WebSocket closed before open (code ${code ?? 'unknown'})`));
           return;
         }
+        // A draining leg the server closed has nothing more to deliver.
+        finishDrainsFor(ws);
         void handleLegClosed(ws, code);
       };
     });
@@ -286,9 +371,9 @@ export async function startRealtimeMeetingWs(
   };
 
   // Point the flush loop at a fresh, open leg and retire the previous one. On a
-  // reconnect the previous leg is already dead so closeWs is a no-op; on a rotation
-  // (or a rotation that fell back to reconnect while the old leg was live) it commits
-  // and closes it. Always re-arm the rotation clock onto the new leg.
+  // reconnect the previous leg is already dead so finishLeg just closes it; on a rotation
+  // (or a rotation that fell back to reconnect while the old leg was live) it commits it
+  // and closes it once its last turn is in. Always re-arm the rotation clock onto the new leg.
   const swapCurrentLeg = (ws: WebSocketLike): void => {
     const previous = currentWs;
     currentWs = ws;
@@ -298,7 +383,7 @@ export async function startRealtimeMeetingWs(
     callbacks.onPartial?.('', '');
     flush();
     if (previous && previous !== ws) {
-      closeWs(previous, { commit: true });
+      void finishLeg(previous);
     }
     scheduleRotation();
   };
@@ -313,7 +398,7 @@ export async function startRealtimeMeetingWs(
     notifyClose();
   };
 
-  // Replace a dead leg with a fresh one (bounded backoff), mic never stopping. Keeps
+  // Replace a dead leg with a fresh one (capped backoff, no attempt limit), mic never stopping. Keeps
   // cumulativeOffsetMs unchanged: the new session's restarted clock rewinds this leg's
   // ms labels, but display order is by sortOrder (utterance index), not startMs.
   const attemptReconnect = (): void => {
@@ -350,7 +435,7 @@ export async function startRealtimeMeetingWs(
       .catch((error) => {
         reconnecting = false;
         if (terminated) return;
-        goTerminal(error); // budget exhausted / 4xx token — utterances still preserved
+        goTerminal(error); // 4xx token — utterances still preserved
       });
   };
 
@@ -398,14 +483,25 @@ export async function startRealtimeMeetingWs(
     }
   };
 
-  const stop = (): void => {
-    if (terminated) return;
-    terminated = true;
-    const ws = currentWs;
+  const finishSession = async (): Promise<void> => {
+    // The mic goes first so nothing more is captured, then the held audio is sent and
+    // committed so the last turn is transcribed before the socket closes.
+    stopMic();
+    clearTimers();
     flush();
-    closeWs(ws, { commit: true });
+    const ws = currentWs;
     currentWs = null;
-    teardownCapture();
+    if (ws) void finishLeg(ws);
+    // Also waits for a leg a recent rotation is still retiring.
+    await Promise.all([...drainPromises]);
+  };
+
+  const stop = (): Promise<void> => {
+    if (stopPromise) return stopPromise;
+    if (terminated) return Promise.resolve();
+    terminated = true;
+    stopPromise = finishSession();
+    return stopPromise;
   };
 
   const firstSecret = await fetchClientSecret();
@@ -415,6 +511,9 @@ export async function startRealtimeMeetingWs(
   frameSub = addPcmFrameListener((frame: PcmFrame) => {
     enqueuePcm(Buffer.from(frame.audio, 'base64'));
   });
+  captureSub = addCaptureStateListener((event) => {
+    callbacks.onCaptureState?.({ capturing: event.state === 'capturing', reason: event.reason });
+  });
   await acquireCaptureLease('meeting-cloud');
   leaseHeld = true;
   try {
@@ -422,6 +521,8 @@ export async function startRealtimeMeetingWs(
   } catch (error) {
     frameSub?.remove();
     frameSub = null;
+    captureSub?.remove();
+    captureSub = null;
     releaseLease();
     throw error;
   }
@@ -440,5 +541,10 @@ export async function startRealtimeMeetingWs(
   flush(); // drain the cold-start buffer
   scheduleRotation();
 
-  return { stop, utterances: reducer.utterances };
+  return {
+    stop,
+    utterances: reducer.utterances,
+    capturedMs: () => bytesToMs(capturedBytes),
+    droppedMs: () => bytesToMs(pcmRing.droppedBytes),
+  };
 }
