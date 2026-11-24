@@ -495,15 +495,13 @@ static int check_parent_terminal(Display *dpy, Window win) {
 static int atspi_started;
 
 DBusConnection *dbus_connection_open_private(const char *address, DBusError *error) {
-    static DBusConnection *(*forward)(const char *, DBusError *);
     if (atspi_started) {
         dbus_set_error_const(error, DBUS_ERROR_NOT_SUPPORTED, "direct connections disabled");
         return NULL;
     }
-    if (!forward) {
-        forward = (DBusConnection *(*)(const char *, DBusError *))dlsym(
+    DBusConnection *(*forward)(const char *, DBusError *) =
+        (DBusConnection *(*)(const char *, DBusError *))dlsym(
             RTLD_NEXT, "dbus_connection_open_private");
-    }
     return forward(address, error);
 }
 
