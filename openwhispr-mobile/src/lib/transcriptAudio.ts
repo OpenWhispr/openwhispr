@@ -67,14 +67,51 @@ export async function excludeMeetingFileFromBackup(uri: string): Promise<void> {
   }
 }
 
+/** How often a resume of a note's owed audio got nothing through, and when it last tried. */
+export interface BackfillRetry {
+  attempts: number;
+  /** Epoch ms. */
+  lastAttemptAt: number;
+}
+
+export interface PendingBackfillState extends BackfillRetry {
+  windows: AudioWindow[];
+}
+
+/** The wait after the first resume that got nothing through; it doubles per failed attempt. */
+export const BACKFILL_RETRY_BASE_MS = 5 * 60 * 1000;
+export const BACKFILL_RETRY_MAX_MS = 6 * 60 * 60 * 1000;
+
+/** How long to wait after `attempts` resumes in a row got nothing through; 0 when none has. */
+export function backfillRetryDelayMs(attempts: number): number {
+  if (!(attempts >= 1)) return 0;
+  // Past 7 doublings the cap is reached; the exponent is bounded so it never overflows.
+  return Math.min(BACKFILL_RETRY_BASE_MS * 2 ** Math.min(attempts - 1, 16), BACKFILL_RETRY_MAX_MS);
+}
+
+/**
+ * Whether a resume may upload now. A clock set back since the last attempt counts as due, or
+ * the owed audio could wait for days.
+ */
+export function isBackfillRetryDue(retry: BackfillRetry, nowMs: number): boolean {
+  if (nowMs < retry.lastAttemptAt) return true;
+  return nowMs - retry.lastAttemptAt >= backfillRetryDelayMs(retry.attempts);
+}
+
 /** Rejects when it cannot be written, so the caller knows nothing on disk names the owed audio. */
-export async function savePendingBackfill(noteId: number, windows: AudioWindow[]): Promise<void> {
+export async function savePendingBackfill(
+  noteId: number,
+  windows: AudioWindow[],
+  /** Absent for audio no resume has tried yet. */
+  retry?: BackfillRetry,
+): Promise<void> {
   const uri = meetingBackfillUri(noteId);
   await FileSystem.writeAsStringAsync(
     uri,
     JSON.stringify({
       version: PENDING_BACKFILL_VERSION,
       windows: windows.map(({ startMs, endMs }) => ({ startMs, endMs })),
+      ...(retry ? { attempts: retry.attempts, lastAttemptAt: retry.lastAttemptAt } : {}),
     }),
   );
   // After every write: a file replaced on disk loses the mark.
@@ -93,21 +130,38 @@ const isWindow = (value: unknown): value is AudioWindow => {
   );
 };
 
-/** The saved windows, or null when there is no sidecar or it can't be trusted. */
-export async function readPendingBackfill(noteId: number): Promise<AudioWindow[] | null> {
+// Written by this app, but a file from a damaged write must never block or crash a resume.
+const nonNegativeNumber = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+
+/** The saved windows and retry count, or null when there is no sidecar or it can't be trusted. */
+export async function readPendingBackfillState(
+  noteId: number,
+): Promise<PendingBackfillState | null> {
   try {
     const uri = meetingBackfillUri(noteId);
     if (!(await FileSystem.getInfoAsync(uri)).exists) return null;
     const parsed = JSON.parse(await FileSystem.readAsStringAsync(uri)) as {
       version?: unknown;
       windows?: unknown;
+      attempts?: unknown;
+      lastAttemptAt?: unknown;
     } | null;
     if (parsed?.version !== PENDING_BACKFILL_VERSION || !Array.isArray(parsed.windows)) return null;
     if (!parsed.windows.every(isWindow)) return null;
-    return parsed.windows.map(({ startMs, endMs }) => ({ startMs, endMs }));
+    return {
+      windows: parsed.windows.map(({ startMs, endMs }) => ({ startMs, endMs })),
+      attempts: Math.floor(nonNegativeNumber(parsed.attempts)),
+      lastAttemptAt: nonNegativeNumber(parsed.lastAttemptAt),
+    };
   } catch {
     return null;
   }
+}
+
+/** The saved windows, or null when there is no sidecar or it can't be trusted. */
+export async function readPendingBackfill(noteId: number): Promise<AudioWindow[] | null> {
+  return (await readPendingBackfillState(noteId))?.windows ?? null;
 }
 
 /**

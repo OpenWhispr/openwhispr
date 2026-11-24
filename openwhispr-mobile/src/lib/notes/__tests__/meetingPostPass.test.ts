@@ -212,6 +212,40 @@ describe('backfillDroppedAudio', () => {
     ]);
   });
 
+  it('finishes the piece in hand and stops before the next once asked to stop', async () => {
+    const deps = makeDeps();
+    let stop = false;
+    (deps.transcribe as jest.Mock).mockImplementation(async (uri: string) => {
+      // A meeting starts while the first piece uploads.
+      stop = true;
+      return `text for ${uri}`;
+    });
+    const result = await backfillDroppedAudio(RECORDING, [{ startMs: 0, endMs: 250_000 }], deps, {
+      shouldStop: () => stop,
+    });
+    expect(deps.extract).toHaveBeenCalledTimes(1);
+    expect(result.segments).toHaveLength(1);
+    expect(result.stopped).toBe(true);
+    expect(result.failedWindows).toEqual([
+      { startMs: 120_000, endMs: 240_000 },
+      { startMs: 240_000, endMs: 250_000 },
+    ]);
+  });
+
+  it('starts nothing when asked to stop before the first piece', async () => {
+    const deps = makeDeps();
+    const result = await backfillDroppedAudio(RECORDING, [{ startMs: 0, endMs: 10_000 }], deps, {
+      shouldStop: () => true,
+    });
+    expect(deps.extract).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      segments: [],
+      failed: 1,
+      failedWindows: [{ startMs: 0, endMs: 10_000 }],
+      stopped: true,
+    });
+  });
+
   it('never rejects, even when cleanup throws', async () => {
     const deps = makeDeps();
     (deps.cleanup as jest.Mock).mockRejectedValue(new Error('disk'));

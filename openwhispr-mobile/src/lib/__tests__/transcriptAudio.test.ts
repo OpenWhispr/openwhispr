@@ -23,13 +23,18 @@ jest.mock('../../../modules/live-pcm-streaming/src', () => ({
 
 import * as FileSystem from 'expo-file-system/legacy';
 import {
+  BACKFILL_RETRY_BASE_MS,
+  BACKFILL_RETRY_MAX_MS,
+  backfillRetryDelayMs,
   clearPendingBackfill,
   excludeMeetingFileFromBackup,
   hasPendingBackfillFile,
   isManagedMeetingAudioUri,
   meetingBackfillUri,
   meetingRecordingUri,
+  isBackfillRetryDue,
   readPendingBackfill,
+  readPendingBackfillState,
   savePendingBackfill,
 } from '@/lib/transcriptAudio';
 
@@ -98,6 +103,87 @@ describe('pending backfill sidecar', () => {
   it('rejects when the sidecar cannot be saved', async () => {
     jest.mocked(FileSystem.writeAsStringAsync).mockRejectedValueOnce(new Error('full'));
     await expect(savePendingBackfill(7, [{ startMs: 0, endMs: 1 }])).rejects.toThrow('full');
+  });
+});
+
+describe('owed-audio retry backoff', () => {
+  beforeEach(() => mockFiles.clear());
+  const MIN = 60_000;
+
+  it('keeps the attempts beside the windows', async () => {
+    const windows = [{ startMs: 0, endMs: 1000 }];
+    await savePendingBackfill(7, windows, { attempts: 2, lastAttemptAt: 5_000 });
+    expect(JSON.parse(mockFiles.get(meetingBackfillUri(7)) ?? '')).toEqual({
+      version: 1,
+      windows,
+      attempts: 2,
+      lastAttemptAt: 5_000,
+    });
+    await expect(readPendingBackfillState(7)).resolves.toEqual({
+      windows,
+      attempts: 2,
+      lastAttemptAt: 5_000,
+    });
+    // The plain reader still reads the same file.
+    await expect(readPendingBackfill(7)).resolves.toEqual(windows);
+  });
+
+  it('reads a file without attempts, or with bad ones, as never tried', async () => {
+    const windows = [{ startMs: 0, endMs: 1000 }];
+    mockFiles.set(meetingBackfillUri(7), JSON.stringify({ version: 1, windows }));
+    await expect(readPendingBackfillState(7)).resolves.toEqual({
+      windows,
+      attempts: 0,
+      lastAttemptAt: 0,
+    });
+    for (const [attempts, lastAttemptAt] of [
+      ['3', 'x'],
+      [-2, null],
+      [Number.POSITIVE_INFINITY, Number.NaN],
+    ]) {
+      // JSON can't carry Infinity or NaN; written as strings they must still read as 0.
+      mockFiles.set(
+        meetingBackfillUri(7),
+        `{"version":1,"windows":${JSON.stringify(windows)},"attempts":${JSON.stringify(
+          attempts,
+        )},"lastAttemptAt":${JSON.stringify(lastAttemptAt)}}`,
+      );
+      await expect(readPendingBackfillState(7)).resolves.toEqual({
+        windows,
+        attempts: 0,
+        lastAttemptAt: 0,
+      });
+    }
+    mockFiles.set(
+      meetingBackfillUri(7),
+      `{"version":1,"windows":${JSON.stringify(windows)},"attempts":1e999,"lastAttemptAt":1e999}`,
+    );
+    await expect(readPendingBackfillState(7)).resolves.toEqual({
+      windows,
+      attempts: 0,
+      lastAttemptAt: 0,
+    });
+  });
+
+  it('doubles the wait per failed attempt from 5 minutes up to 6 hours', () => {
+    expect(BACKFILL_RETRY_BASE_MS).toBe(5 * MIN);
+    expect(BACKFILL_RETRY_MAX_MS).toBe(6 * 60 * MIN);
+    expect(backfillRetryDelayMs(0)).toBe(0);
+    expect(backfillRetryDelayMs(1)).toBe(5 * MIN);
+    expect(backfillRetryDelayMs(2)).toBe(10 * MIN);
+    expect(backfillRetryDelayMs(3)).toBe(20 * MIN);
+    expect(backfillRetryDelayMs(7)).toBe(320 * MIN);
+    expect(backfillRetryDelayMs(8)).toBe(6 * 60 * MIN);
+    expect(backfillRetryDelayMs(500)).toBe(6 * 60 * MIN);
+  });
+
+  it('is due when never tried, once the wait is over, or when the clock went back', () => {
+    const now = 10_000_000;
+    expect(isBackfillRetryDue({ attempts: 0, lastAttemptAt: now }, now)).toBe(true);
+    expect(isBackfillRetryDue({ attempts: 1, lastAttemptAt: now - 5 * MIN + 1 }, now)).toBe(false);
+    expect(isBackfillRetryDue({ attempts: 1, lastAttemptAt: now - 5 * MIN }, now)).toBe(true);
+    expect(isBackfillRetryDue({ attempts: 2, lastAttemptAt: now - 9 * MIN }, now)).toBe(false);
+    expect(isBackfillRetryDue({ attempts: 1, lastAttemptAt: now + 60 * MIN }, now)).toBe(true);
   });
 });
 

@@ -38,6 +38,8 @@ export interface BackfillResult {
   failed: number;
   /** Those pieces' windows on the recording's clock, for a later attempt. */
   failedWindows: AudioWindow[];
+  /** Set when `shouldStop` ended the run: the pieces left were never tried, not refused. */
+  stopped?: true;
 }
 
 /**
@@ -51,11 +53,17 @@ export async function backfillDroppedAudio(
   recordingUri: string,
   windows: AudioWindow[],
   deps: PostPassDeps,
+  /** Asked before each piece; true leaves that piece and the rest owed. */
+  options: { shouldStop?: () => boolean } = {},
 ): Promise<BackfillResult> {
   const segments: CloudMeetingSegment[] = [];
   const pieces = splitWindows(windows, BACKFILL_CHUNK_MS, BACKFILL_MIN_MS);
   // One piece at a time keeps memory and upload bandwidth bounded on a long outage.
   for (const [index, piece] of pieces.entries()) {
+    if (options.shouldStop?.()) {
+      const failedWindows = pieces.slice(index);
+      return { segments, failed: failedWindows.length, failedWindows, stopped: true };
+    }
     let pieceUri: string;
     try {
       pieceUri = await deps.extract(recordingUri, piece.startMs, piece.endMs);

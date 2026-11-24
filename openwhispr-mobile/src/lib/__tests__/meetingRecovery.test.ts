@@ -109,6 +109,7 @@ function makeDeps(notes: Note[], initialStorage: Record<string, string> = {}): H
     savePendingBackfill: jest.fn(async (id: number) => {
       calls.push(`save:${id}`);
     }),
+    isMeetingCapturing: jest.fn(() => false),
   };
   return { deps, store, calls };
 }
@@ -751,6 +752,35 @@ describe('recoverOrphanedMeetings with the meeting recording', () => {
     expect(deps.resumeBackfill).not.toHaveBeenCalled();
   });
 
+  it('leaves settled backfills while a meeting is being captured', async () => {
+    const { deps } = makeDeps([
+      note({ id: 55, transcriptionStatus: 'done' }),
+      note({ id: 56, transcriptionStatus: 'done' }),
+    ]);
+    (deps.listPendingBackfills as jest.Mock).mockResolvedValue([55, 56]);
+    (deps.isMeetingCapturing as jest.Mock).mockReturnValue(true);
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(deps.resumeBackfill).not.toHaveBeenCalled();
+    expect(deps.discardRecording).not.toHaveBeenCalled();
+  });
+
+  it('stops the settled backfills before the next note once a meeting starts', async () => {
+    const { deps } = makeDeps([
+      note({ id: 57, transcriptionStatus: 'done' }),
+      note({ id: 58, transcriptionStatus: 'done' }),
+    ]);
+    (deps.listPendingBackfills as jest.Mock).mockResolvedValue([57, 58]);
+    (deps.resumeBackfill as jest.Mock).mockImplementation(async () => {
+      (deps.isMeetingCapturing as jest.Mock).mockReturnValue(true);
+    });
+
+    await recoverOrphanedMeetings(deps);
+
+    expect((deps.resumeBackfill as jest.Mock).mock.calls).toEqual([[57]]);
+  });
+
   it('waits for the app to be active before resuming a settled backfill', async () => {
     const { deps, calls } = makeDeps([note({ id: 54, transcriptionStatus: 'done' })]);
     (deps.listPendingBackfills as jest.Mock).mockResolvedValue([54]);
@@ -934,6 +964,7 @@ describe('createForegroundBackfillResumer', () => {
       isOnline: jest.fn(async () => true),
       resumeBackfill: jest.fn(async (_noteId: number): Promise<void> => undefined),
       reportError: jest.fn(),
+      isMeetingCapturing: jest.fn(() => false),
     };
     return { deps, onChange: createForegroundBackfillResumer(deps) };
   };
@@ -1005,6 +1036,30 @@ describe('createForegroundBackfillResumer', () => {
     onChange('active');
     await flushMicrotasks();
     expect(deps.resumeBackfill).toHaveBeenCalledTimes(2);
+  });
+
+  it('uploads nothing while a meeting is being captured', async () => {
+    const { deps, onChange } = makeResumer([30, 31]);
+    deps.isMeetingCapturing.mockReturnValue(true);
+
+    onChange('background');
+    onChange('active');
+    await flushMicrotasks();
+
+    expect(deps.resumeBackfill).not.toHaveBeenCalled();
+  });
+
+  it('stops before the next note once a meeting starts', async () => {
+    const { deps, onChange } = makeResumer([30, 31]);
+    deps.resumeBackfill.mockImplementation(async () => {
+      deps.isMeetingCapturing.mockReturnValue(true);
+    });
+
+    onChange('background');
+    onChange('active');
+    await flushMicrotasks();
+
+    expect((deps.resumeBackfill as jest.Mock).mock.calls).toEqual([[30]]);
   });
 
   it('reports a failed resume and goes on', async () => {

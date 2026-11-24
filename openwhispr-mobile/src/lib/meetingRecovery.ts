@@ -90,6 +90,8 @@ export interface MeetingRecoveryDeps {
   getSegmentTimes(noteId: number): { startMs: number; endMs: number }[];
   /** Rejects when it can't be written. */
   savePendingBackfill(noteId: number, windows: AudioWindow[]): Promise<void>;
+  /** True while a meeting records: owed audio then waits, off the live stream's network. */
+  isMeetingCapturing(): boolean;
 }
 
 /**
@@ -252,8 +254,8 @@ async function finishKeptMeeting(
     if (!deps.hasSpeakerLabels(noteId))
       await attempt(deps, noteId, () => deps.labelSpeakers(noteId));
     if (owesAudio) {
-      // Offline the recording and its sidecar wait for the next launch.
-      if (await deps.isOnline().catch(() => false)) {
+      // Offline, or during a meeting, the recording and its sidecar wait for a later pass.
+      if (!deps.isMeetingCapturing() && (await deps.isOnline().catch(() => false))) {
         await attempt(deps, noteId, () => deps.resumeBackfill(noteId));
       }
     } else {
@@ -386,6 +388,8 @@ export async function recoverOrphanedMeetings(deps: MeetingRecoveryDeps): Promis
   await deps.waitUntilActive();
   if (await deps.isOnline().catch(() => false)) {
     for (const noteId of backfills) {
+      // Checked per note: a meeting started meanwhile must not share its network with uploads.
+      if (deps.isMeetingCapturing()) return;
       await attempt(deps, noteId, () => deps.resumeBackfill(noteId));
     }
   }
@@ -398,6 +402,8 @@ export interface ForegroundBackfillDeps {
   /** Transcribes what a done meeting's sidecar still owes; skips notes it may not touch. */
   resumeBackfill(noteId: number): Promise<void>;
   reportError(error: unknown, noteId: number): void;
+  /** True while a meeting records: owed audio then waits, off the live stream's network. */
+  isMeetingCapturing(): boolean;
 }
 
 /**
@@ -412,9 +418,11 @@ export function createForegroundBackfillResumer(
   let running = false;
   const runPass = async (): Promise<void> => {
     try {
+      if (deps.isMeetingCapturing()) return;
       const noteIds = await deps.listPendingBackfills();
       if (noteIds.length === 0 || !(await deps.isOnline().catch(() => false))) return;
       for (const noteId of noteIds) {
+        if (deps.isMeetingCapturing()) return;
         await attempt(deps, noteId, () => deps.resumeBackfill(noteId));
       }
     } catch (error) {
@@ -542,6 +550,22 @@ const reportRecoveryError = (error: unknown, noteId?: number): void => {
   });
 };
 
+// The capture lease can't be read from JS. A meeting this runtime started is the only one
+// recording now; a 'recording' note from an earlier process is an orphan, not a live meeting.
+const isMeetingCapturing = (): boolean =>
+  notesRepository
+    .getAllNotes()
+    .some(
+      (note) =>
+        note.noteType === 'meeting' &&
+        note.transcriptionStatus === 'recording' &&
+        !createdBeforeRuntime(note, RUNTIME_STARTED_AT_MS),
+    );
+
+// Stops between pieces too, since one note's owed audio can be many two-minute uploads.
+const resumeOwedBackfill = (noteId: number): Promise<void> =>
+  useNotesStore.getState().resumeMeetingBackfill(noteId, { shouldStop: isMeetingCapturing });
+
 /** Runs the sweep once per JS runtime. Call after the notes store is initialized. */
 export function startMeetingRecoveryOnce(): void {
   if (hasStarted) return;
@@ -554,8 +578,9 @@ export function startMeetingRecoveryOnce(): void {
     createForegroundBackfillResumer({
       listPendingBackfills: () => listPendingBackfillIds(directory),
       isOnline: isDeviceOnline,
-      resumeBackfill: (noteId) => useNotesStore.getState().resumeMeetingBackfill(noteId),
+      resumeBackfill: resumeOwedBackfill,
       reportError: reportRecoveryError,
+      isMeetingCapturing,
     }),
   );
   // A recording found again can make its meeting resumable, so this runs first.
@@ -602,7 +627,9 @@ export function startMeetingRecoveryOnce(): void {
         recordingUri: meetingRecordingUri,
         linkRecording: (noteId, uri) => notesRepository.restoreMeetingRecordingPath(noteId, uri),
         labelSpeakers: (noteId) =>
-          useNotesStore.getState().labelMeetingSpeakers(noteId, { utteranceTimed: true }),
+          useNotesStore
+            .getState()
+            .labelMeetingSpeakers(noteId, { utteranceTimed: true, exclusive: true }),
         hasSpeakerLabels: (noteId) =>
           notesRepository.getSegments(noteId).some((segment) => !!segment.speakerLabel) &&
           notesRepository.getSpeakers(noteId).length > 0,
@@ -625,7 +652,7 @@ export function startMeetingRecoveryOnce(): void {
         deletePendingBackfill: clearPendingBackfill,
         wasRelinked: (noteId) => relinked.has(noteId),
         isOnline: isDeviceOnline,
-        resumeBackfill: (noteId) => useNotesStore.getState().resumeMeetingBackfill(noteId),
+        resumeBackfill: resumeOwedBackfill,
         listProcessedRecordings: () =>
           notesRepository
             .getAllNotes()
@@ -643,6 +670,7 @@ export function startMeetingRecoveryOnce(): void {
         getSegmentTimes: (noteId) =>
           notesRepository.getSegments(noteId).map(({ startMs, endMs }) => ({ startMs, endMs })),
         savePendingBackfill,
+        isMeetingCapturing,
       });
     })
     .catch((error: unknown) => {

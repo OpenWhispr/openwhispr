@@ -1122,6 +1122,69 @@ describe('meeting post-pass', () => {
       expect(statuses).toEqual(['transcribing', 'done']);
     });
 
+    describe('alongside a backfill', () => {
+      const oweTen = (): void => {
+        filesOnDisk.add(SIDECAR);
+        fileContents.set(
+          SIDECAR,
+          JSON.stringify({ version: 1, windows: [{ startMs: 10_000, endMs: 20_000 }] }),
+        );
+      };
+
+      beforeEach(() => {
+        status = 'done';
+        saved = [
+          { text: 'Hi.', startMs: 0, endMs: 2000, speakerLabel: null },
+          { text: 'Hello.', startMs: 6000, endMs: 8000, speakerLabel: null },
+        ];
+        oweTen();
+      });
+
+      it('keeps a resume off a note whose speakers are being labelled', async () => {
+        let finishDiarize: () => void = () => undefined;
+        diarize.mockImplementation(
+          (uri: string) =>
+            new Promise((resolve, reject) => {
+              finishDiarize = () =>
+                filesOnDisk.has(uri) ? resolve(diarization) : reject(new Error('missing file'));
+            }),
+        );
+
+        const labelling = useNotesStore
+          .getState()
+          .labelMeetingSpeakers(7, { utteranceTimed: true, exclusive: true });
+        await new Promise((resolve) => setImmediate(resolve));
+        await useNotesStore.getState().resumeMeetingBackfill(7);
+        expect(mockCloudTranscribe).not.toHaveBeenCalled();
+        expect(filesOnDisk.has(RECORDING)).toBe(true);
+
+        finishDiarize();
+        await expect(labelling).resolves.toBe(true);
+      });
+
+      it('labels nothing while a resume holds the note', async () => {
+        let finishUpload: () => void = () => undefined;
+        mockCloudTranscribe.mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              finishUpload = () => resolve({ text: 'Late.', duration: 0 });
+            }),
+        );
+
+        const resuming = useNotesStore.getState().resumeMeetingBackfill(7);
+        await new Promise((resolve) => setImmediate(resolve));
+        await expect(
+          useNotesStore
+            .getState()
+            .labelMeetingSpeakers(7, { utteranceTimed: true, exclusive: true }),
+        ).resolves.toBe(false);
+        expect(diarize).not.toHaveBeenCalled();
+
+        finishUpload();
+        await resuming;
+      });
+    });
+
     it('does nothing where the diarizer is unavailable', async () => {
       available = false;
 
@@ -1228,6 +1291,19 @@ describe('meeting post-pass', () => {
       expect(diarize).not.toHaveBeenCalled();
       expect(status).toBe('done');
     });
+  });
+
+  it('leaves what Stop could not transcribe owed with no failed attempt, so the next resume runs', async () => {
+    mockCloudTranscribe.mockRejectedValue(new Error('Network request failed'));
+
+    await finalize({
+      utterances: [utterance('Hi.', 0, 2000)],
+      droppedWindows: [{ startMs: 10_000, endMs: 20_000 }],
+    });
+
+    const written = JSON.parse(fileContents.get(SIDECAR) ?? '{}');
+    expect(written.windows).toEqual([{ startMs: 10_000, endMs: 20_000 }]);
+    expect(written.attempts ?? 0).toBe(0);
   });
 
   describe('resuming a backfill at launch', () => {
@@ -1365,6 +1441,104 @@ describe('meeting post-pass', () => {
       await useNotesStore.getState().resumeMeetingBackfill(7);
 
       expect(notesRepository.replaceSegments).not.toHaveBeenCalled();
+    });
+
+    describe('retries', () => {
+      const NOW = 50_000_000;
+      const MIN = 60_000;
+      const sidecar = (): Record<string, unknown> => JSON.parse(fileContents.get(SIDECAR) ?? '{}');
+      let nowSpy: jest.SpyInstance<number, []>;
+
+      beforeEach(() => {
+        nowSpy = jest.spyOn(Date, 'now').mockReturnValue(NOW);
+      });
+      afterEach(() => nowSpy.mockRestore());
+
+      it('counts a resume that gets nothing through and waits before the next', async () => {
+        owe([{ startMs: 10_000, endMs: 20_000 }]);
+        mockCloudTranscribe.mockRejectedValue(new Error('Network request failed'));
+
+        await useNotesStore.getState().resumeMeetingBackfill(7);
+        expect(sidecar()).toMatchObject({ attempts: 1, lastAttemptAt: NOW });
+        expect(mockCloudTranscribe).toHaveBeenCalledTimes(2); // one piece, tried twice
+
+        nowSpy.mockReturnValue(NOW + 5 * MIN - 1);
+        await useNotesStore.getState().resumeMeetingBackfill(7);
+        expect(mockCloudTranscribe).toHaveBeenCalledTimes(2);
+
+        nowSpy.mockReturnValue(NOW + 5 * MIN);
+        await useNotesStore.getState().resumeMeetingBackfill(7);
+        expect(mockCloudTranscribe).toHaveBeenCalledTimes(4);
+        expect(sidecar()).toMatchObject({ attempts: 2, lastAttemptAt: NOW + 5 * MIN });
+        expect(filesOnDisk.has(RECORDING)).toBe(true);
+      });
+
+      it('starts the count again after a resume that gets a piece through', async () => {
+        filesOnDisk.add(SIDECAR);
+        fileContents.set(
+          SIDECAR,
+          JSON.stringify({
+            version: 1,
+            windows: [
+              { startMs: 10_000, endMs: 20_000 },
+              { startMs: 30_000, endMs: 40_000 },
+            ],
+            attempts: 3,
+            lastAttemptAt: NOW - 6 * 60 * MIN,
+          }),
+        );
+        mockCloudTranscribe.mockImplementation(async ({ audioUri }: { audioUri: string }) => {
+          if (audioUri.endsWith('range-10000.wav')) return { text: 'Recovered.', duration: 0 };
+          throw new Error('Network request failed');
+        });
+
+        await useNotesStore.getState().resumeMeetingBackfill(7);
+
+        expect(sidecar()).toMatchObject({
+          windows: [{ startMs: 30_000, endMs: 40_000 }],
+          attempts: 0,
+        });
+      });
+
+      it('does not count a resume paused for a meeting', async () => {
+        filesOnDisk.add(SIDECAR);
+        fileContents.set(
+          SIDECAR,
+          JSON.stringify({
+            version: 1,
+            windows: [{ startMs: 0, endMs: 250_000 }],
+            attempts: 1,
+            lastAttemptAt: NOW - 5 * MIN,
+          }),
+        );
+
+        await useNotesStore.getState().resumeMeetingBackfill(7, { shouldStop: () => true });
+
+        expect(mockCloudTranscribe).not.toHaveBeenCalled();
+        expect(sidecar()).toMatchObject({ attempts: 1, lastAttemptAt: NOW - 5 * MIN });
+        expect(filesOnDisk.has(RECORDING)).toBe(true);
+      });
+
+      it('stops between pieces once a meeting starts, keeping the rest owed', async () => {
+        owe([{ startMs: 0, endMs: 250_000 }]);
+        let capturing = false;
+        mockCloudTranscribe.mockImplementation(async () => {
+          capturing = true;
+          return { text: 'First piece.', duration: 0 };
+        });
+
+        await useNotesStore.getState().resumeMeetingBackfill(7, { shouldStop: () => capturing });
+
+        expect(mockCloudTranscribe).toHaveBeenCalledTimes(1);
+        expect(sidecar()).toMatchObject({
+          windows: [
+            { startMs: 120_000, endMs: 240_000 },
+            { startMs: 240_000, endMs: 250_000 },
+          ],
+          attempts: 0,
+        });
+        expect(filesOnDisk.has(RECORDING)).toBe(true);
+      });
     });
 
     it('never throws', async () => {

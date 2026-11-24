@@ -1,8 +1,10 @@
 import {
   clearPendingBackfill,
+  isBackfillRetryDue,
   isManagedMeetingAudioUri,
-  readPendingBackfill,
+  readPendingBackfillState,
   savePendingBackfill,
+  type BackfillRetry,
 } from '@/lib/transcriptAudio';
 import { create } from 'zustand';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -55,6 +57,8 @@ import {
   type CloudMeetingSegment,
 } from '@/lib/notes/cloudMeetingSegments';
 import {
+  BACKFILL_CHUNK_MS,
+  BACKFILL_MIN_MS,
   backfillDroppedAudio,
   createCloudPostPassDeps,
   isDeviceOnline,
@@ -62,6 +66,7 @@ import {
   recordingDurationMs,
   transcribeRecordingToSegments,
 } from '@/lib/notes/meetingPostPass';
+import { splitWindows } from '@/lib/notes/wavRange';
 import { DEFAULT_MEETING_TITLE } from '@/lib/notes/meetingConstants';
 import { generateLocalMeetingNotes } from '@/lib/notes/localMeetingNotes';
 import {
@@ -520,20 +525,31 @@ const backfillCloudMeeting = async (
   /** Read after the backfill, so the merge never drops a row saved while it ran. */
   readLive: () => CloudMeetingSegment[],
   droppedWindows: CloudMeetingResult['droppedWindows'],
-): Promise<{ transcript: CloudMeetingSegment[]; failedWindows: AudioWindow[] }> => {
+  shouldStop?: () => boolean,
+): Promise<{
+  transcript: CloudMeetingSegment[];
+  failedWindows: AudioWindow[];
+  /** At least one piece was transcribed or found empty. */
+  progressed: boolean;
+  /** `shouldStop` ended it; the pieces left were never tried. */
+  stopped: boolean;
+}> => {
   try {
-    const { segments, failedWindows } = await backfillDroppedAudio(
+    const { segments, failed, failedWindows, stopped } = await backfillDroppedAudio(
       recordingUri,
       droppedWindows,
       createCloudPostPassDeps(getPreferredTranscriptionLanguage()),
+      { shouldStop },
     );
+    const pieces = splitWindows(droppedWindows, BACKFILL_CHUNK_MS, BACKFILL_MIN_MS).length;
+    const outcome = { failedWindows, progressed: failed < pieces, stopped: stopped === true };
     // A note deleted meanwhile has lost its segments; writing would bring them back.
     if (segments.length === 0 || !isLiveNote(noteId)) {
-      return { transcript: readLive(), failedWindows };
+      return { transcript: readLive(), ...outcome };
     }
     const merged = mergeTranscript(readLive(), segments);
     notesRepository.replaceSegments(noteId, withNoteId(noteId, merged));
-    return { transcript: merged, failedWindows };
+    return { transcript: merged, ...outcome };
   } catch (error) {
     Sentry.captureMessage('meeting-post-pass-backfill-failed', {
       level: 'warning',
@@ -541,7 +557,12 @@ const backfillCloudMeeting = async (
       extra: { windows: droppedWindows.length },
     });
     // Nothing is known to be transcribed, so every gap is still owed.
-    return { transcript: readLive(), failedWindows: droppedWindows };
+    return {
+      transcript: readLive(),
+      failedWindows: droppedWindows,
+      progressed: false,
+      stopped: false,
+    };
   }
 };
 
@@ -549,9 +570,13 @@ const windowsMs = (windows: AudioWindow[]): number =>
   windows.reduce((sum, window) => sum + (window.endMs - window.startMs), 0);
 
 /** Writes what the recording still owes beside it; false when it could not be written. */
-const recordOwedAudio = async (noteId: number, windows: AudioWindow[]): Promise<boolean> => {
+const recordOwedAudio = async (
+  noteId: number,
+  windows: AudioWindow[],
+  retry?: BackfillRetry,
+): Promise<boolean> => {
   try {
-    await savePendingBackfill(noteId, windows);
+    await savePendingBackfill(noteId, windows, retry);
     return true;
   } catch (error) {
     Sentry.captureMessage('meeting-backfill-sidecar-failed', {
@@ -571,6 +596,7 @@ const settleMeetingRecording = async (
   noteId: number,
   failedWindows: AudioWindow[],
   discard: (noteId: number) => Promise<void>,
+  retry: BackfillRetry,
 ): Promise<void> => {
   if (failedWindows.length === 0 || !isLiveNote(noteId)) {
     await discard(noteId);
@@ -581,11 +607,13 @@ const settleMeetingRecording = async (
     tags: { feature: 'meeting-post-pass' },
     extra: { failedPieces: failedWindows.length, failedMs: windowsMs(failedWindows) },
   });
-  await recordOwedAudio(noteId, failedWindows);
+  await recordOwedAudio(noteId, failedWindows, retry);
 };
 
 // One backfill per note at a time: launch recovery, a return to the foreground and Stop can
 // all reach the same note, and two runs would upload and merge the same stretches twice.
+// Launch recovery's speaker pass takes it too: a backfill that finishes deletes the recording
+// the diarizer is reading.
 const meetingBackfillsInFlight = new Set<number>();
 
 interface NotesStore {
@@ -685,11 +713,27 @@ interface NotesStore {
    * owes into the saved transcript, then deletes the recording, or keeps it for what is still
    * owed. Uploads nothing for a note that may not use the cloud. Never throws.
    */
-  resumeMeetingBackfill: (noteId: number) => Promise<void>;
+  resumeMeetingBackfill: (
+    noteId: number,
+    options?: {
+      /** Asked before each piece; true leaves the rest owed without counting a failed try. */
+      shouldStop?: () => boolean;
+    },
+  ) => Promise<void>;
   /** A meeting with a recording and no transcript: transcribes the whole file through cloud chunks. */
   transcribeMeetingRecording: (noteId: number) => Promise<void>;
   /** Runs the diarizer on the note's recording and labels its segments. Never throws; false when it did nothing. */
-  labelMeetingSpeakers: (noteId: number, options: { utteranceTimed: boolean }) => Promise<boolean>;
+  labelMeetingSpeakers: (
+    noteId: number,
+    options: {
+      utteranceTimed: boolean;
+      /**
+       * Holds the note's backfill guard while it reads the recording, and does nothing while a
+       * backfill holds it. For a caller not already holding it (launch recovery).
+       */
+      exclusive?: boolean;
+    },
+  ) => Promise<boolean>;
   /** Deletes a meeting's recording and clears its `sourceFile`. Never throws. */
   discardMeetingRecording: (noteId: number) => Promise<void>;
   /** Saves one live utterance. Never throws: a failed write is reported and the meeting goes on. */
@@ -1189,7 +1233,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     }
   },
 
-  resumeMeetingBackfill: async (noteId) => {
+  resumeMeetingBackfill: async (noteId, options = {}) => {
     if (meetingBackfillsInFlight.has(noteId)) return;
     meetingBackfillsInFlight.add(noteId);
     try {
@@ -1201,13 +1245,27 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       if (notesRepository.getTranscriptionStatus(noteId) !== 'done') return;
       const recordingUri = note.sourceFile;
       if (!recordingUri || !isManagedMeetingAudioUri(noteId, recordingUri)) return;
-      const owed = await readPendingBackfill(noteId);
-      if (!owed || owed.length === 0) return;
+      const pending = await readPendingBackfillState(noteId);
+      if (!pending || pending.windows.length === 0) return;
+      // A piece the server keeps refusing would otherwise go up again on every return to the app.
+      if (!isBackfillRetryDue(pending, Date.now())) return;
       // Re-read at merge time: the note is done, so the user may be editing it meanwhile.
       const readSaved = (): CloudMeetingSegment[] =>
         savedAsNew(noteId, notesRepository.getSegments(noteId));
-      const { failedWindows } = await backfillCloudMeeting(noteId, recordingUri, readSaved, owed);
-      await settleMeetingRecording(noteId, failedWindows, get().discardMeetingRecording);
+      const { failedWindows, progressed, stopped } = await backfillCloudMeeting(
+        noteId,
+        recordingUri,
+        readSaved,
+        pending.windows,
+        options.shouldStop,
+      );
+      let retry: BackfillRetry;
+      if (progressed) retry = { attempts: 0, lastAttemptAt: Date.now() };
+      // Paused before it tried anything: not a failure.
+      else if (stopped)
+        retry = { attempts: pending.attempts, lastAttemptAt: pending.lastAttemptAt };
+      else retry = { attempts: pending.attempts + 1, lastAttemptAt: Date.now() };
+      await settleMeetingRecording(noteId, failedWindows, get().discardMeetingRecording, retry);
     } catch (error) {
       Sentry.captureMessage('meeting-backfill-resume-failed', {
         level: 'warning',
@@ -1279,8 +1337,17 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     }
   },
 
-  labelMeetingSpeakers: async (noteId, { utteranceTimed }) => {
+  labelMeetingSpeakers: async (noteId, { utteranceTimed, exclusive = false }) => {
     if (!utteranceTimed) return false;
+    if (exclusive) {
+      if (meetingBackfillsInFlight.has(noteId)) return false;
+      meetingBackfillsInFlight.add(noteId);
+      try {
+        return await get().labelMeetingSpeakers(noteId, { utteranceTimed });
+      } finally {
+        meetingBackfillsInFlight.delete(noteId);
+      }
+    }
     const startedAt = Date.now();
     // Set while labelled segments are written but their speakers aren't yet, the one stretch a
     // failure must undo.
