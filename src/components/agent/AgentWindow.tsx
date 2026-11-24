@@ -646,6 +646,7 @@ export default function AgentWindow() {
   });
   const listening = voice.status === "recording" || voice.opening;
   const transcribing = voice.status === "transcribing";
+  const { cancel: cancelTake } = voice;
 
   // A spoken turn of a call: sent into the chat on screen with what the next
   // request carries, and answered for speech. A turn still running (talked
@@ -786,13 +787,38 @@ export default function AgentWindow() {
     }
   }, [callCard, callCardHidden, callFailed, dispatch, state.call, state.layout]);
 
+  // Call on a take still listening drops what it heard: the call starts once
+  // the take lets go of the microphone.
+  // What the press read (another app's selection, a screenshot) stays for its first request.
+  const [callAfterTake, setCallAfterTake] = useState(false);
   const startCall = useCallback(async () => {
     if (refuseIfRestricted()) return;
-    if (callSession !== "off" || listening || transcribing) return;
+    if (callSession !== "off" || transcribing) return;
+    if (listening) {
+      cancelCaretDelivery();
+      cancelTake();
+      setCallAfterTake(true);
+      return;
+    }
     stopReading();
     dispatch({ type: "startCall" });
     await voiceCall.start();
-  }, [callSession, dispatch, listening, refuseIfRestricted, stopReading, transcribing, voiceCall]);
+  }, [
+    callSession,
+    cancelCaretDelivery,
+    cancelTake,
+    dispatch,
+    listening,
+    refuseIfRestricted,
+    stopReading,
+    transcribing,
+    voiceCall,
+  ]);
+  useEffect(() => {
+    if (!callAfterTake || listening || transcribing) return;
+    setCallAfterTake(false);
+    void startCall();
+  }, [callAfterTake, listening, startCall, transcribing]);
 
   // Sent from a card saying no model hears the call's language, the user picked
   // another: the call starts again in it. Its settings close, so no later pick
@@ -1016,10 +1042,10 @@ export default function AgentWindow() {
     [busy, capturePressContext, dispatch, editingSelection, refuseIfRestricted, stopReading, voice]
   );
 
-  const { cancel: cancelTake } = voice;
   // The take belongs to the chat it was spoken in: opening another drops it.
   const dropTake = useCallback(() => {
     cancelCaretDelivery();
+    setCallAfterTake(false);
     selectionEditRef.current?.abort();
     selectionEditRef.current = null;
     editTargetRef.current = null;

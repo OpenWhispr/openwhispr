@@ -56,6 +56,28 @@ const MOCKS = {
       };
     }
   `,
+  // A call that starts at once: the test speaks its turns through onUserTurn.
+  "/useVoiceCall": `
+    import { useSyncExternalStore } from "react";
+    const listeners = new Set();
+    let session = "off";
+    const set = (next) => { session = next; listeners.forEach((listener) => listener()); };
+    globalThis.__call = { starts: 0 };
+    const call = {
+      readLevel: () => 0,
+      start: async () => { globalThis.__call.starts += 1; set("active"); return true; },
+      end: async () => set("off"),
+      stopReply() {}, stopSpeech() {}, announce() {}, setMicMuted() {}, setInputHeld() {}, clearFailure() {},
+    };
+    export function useVoiceCall(options) {
+      globalThis.__call.options = options;
+      const current = useSyncExternalStore(
+        (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
+        () => session
+      );
+      return { ...call, session: current, micMuted: false, speaking: false, failure: null, harnessAvailable: false };
+    }
+  `,
   "/useAgentVoice": `
     import { useSyncExternalStore } from "react";
     const listeners = new Set();
@@ -1483,7 +1505,9 @@ test("in a call, Esc in a waiting card's field stops its turn, as the card has n
   await React.act(async () =>
     view.host
       .querySelector("[data-approval-card] textarea")
-      .dispatchEvent(new view.happyWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+      .dispatchEvent(
+        new view.happyWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+      )
   );
   assert.equal(globalThis.__chat.cancels, 1);
   assert.ok(view.button("End call"), "the call goes on");
@@ -1759,6 +1783,21 @@ test("an answer the field refused stays in the window", async (t) => {
   assert.equal(pastes.length, 1);
   assert.equal(hides(), 0);
   assert.equal(globalThis.__chat.newChats, 0);
+});
+
+test("Call on a take still listening drops it and starts once the take lets go of the microphone", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () => globalThis.__voice.set("recording"));
+  await React.act(async () => view.button("Start Voice Agent").click());
+
+  assert.equal(globalThis.__voice.cancels, 1);
+  assert.equal(globalThis.__call.starts, 0, "the take still holds the microphone");
+  await React.act(async () => globalThis.__voice.set("idle"));
+  await view.settle();
+  assert.equal(globalThis.__call.starts, 1);
+  assert.ok(view.button("End call"));
+  assert.deepEqual(globalThis.__chat.sent, [], "what the take heard is never sent");
 });
 
 for (const action of ["dismiss", "Stop", "account change", "unmount", "newer request"]) {

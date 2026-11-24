@@ -3,9 +3,10 @@
 
 // The window shrinks to what it shows, plus an 8px margin on every side for
 // the surface's shadow; on Windows and Linux its transparent parts still take
-// clicks. The pill row is never wider than PILL_CONTENT_WIDTH (the idle pill,
-// with Call, is 206px, and Thinking… in German 199px), except the pill that reads
-// "Waiting for answer" (the reference's is 287px, French 299px) or a notice.
+// clicks. The pill row is never wider than PILL_CONTENT_WIDTH (with Call, the
+// listening pill is 212px and the idle one 206px; Thinking… in German 199px),
+// except the pill that reads "Waiting for answer" (the reference's is 287px,
+// French 299px) or a notice.
 const SHADOW_MARGIN = 8;
 const PILL_CONTENT_WIDTH = 216;
 const WAITING_PILL_CONTENT_WIDTH = 304;

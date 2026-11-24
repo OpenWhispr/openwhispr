@@ -362,7 +362,7 @@ export interface AgentPillControls {
 /**
  * The pill's controls for where it shows and what is happening. Expand only
  * exists outside the modal; the typing layout swaps Keyboard for Mic. Call
- * starts a voice call while nothing else runs.
+ * starts a voice call while nothing else runs, or in place of a take still listening.
  * "Thinking…" covers transcribing and a reply with nothing to show yet; in the
  * modal that reply can already be stopped. Waiting for an answer, the pill
  * offers the keyboard (and Expand) to reach the card.
@@ -382,7 +382,7 @@ export function resolveAgentPillControls(
   const expand: AgentPillButton[] = placement === "compact" ? ["expand"] : [];
   switch (status) {
     case "listening":
-      return controls([...expand, "keyboard", "close"], { waveform: true });
+      return controls([...expand, "call", "keyboard", "close"], { waveform: true });
     case "transcribing":
       return controls(["keyboard", "close"], { thinking: true });
     case "waiting":

@@ -143,14 +143,14 @@ test("the pill's controls follow the reference states", async () => {
     waveform: true,
     thinking: false,
     waiting: false,
-    buttons: ["expand", "keyboard", "close"],
+    buttons: ["expand", "call", "keyboard", "close"],
   });
   assert.deepEqual(controls("compact", "thinking").buttons, ["keyboard", "close"]);
   assert.equal(controls("compact", "thinking").thinking, true);
   assert.deepEqual(controls("compact", "transcribing").buttons, ["keyboard", "close"]);
   assert.deepEqual(controls("modal", "transcribing").buttons, ["keyboard", "close"]);
   assert.deepEqual(controls("typing", "idle").buttons, ["expand", "call", "mic", "close"]);
-  assert.deepEqual(controls("modal", "listening").buttons, ["keyboard", "close"]);
+  assert.deepEqual(controls("modal", "listening").buttons, ["call", "keyboard", "close"]);
   assert.deepEqual(controls("modal", "streaming").buttons, ["keyboard", "stop", "close"]);
   assert.deepEqual(controls("modal", "idle").buttons, ["call", "mic", "keyboard", "close"]);
   assert.deepEqual(controls("compact", "idle").buttons, [
