@@ -1126,8 +1126,12 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
         return;
       }
       // While the recording is still on disk: the diarizer reads it. Leaves the status at
-      // transcribing or diarizing, both of which may move to done.
-      await get().labelMeetingSpeakers(noteId, { utteranceTimed: true });
+      // transcribing or diarizing, both of which may move to done. An utterance the session
+      // sent without timing was spread evenly over the meeting, which must not be labelled.
+      const utteranceTimed =
+        result.utterances.length > 0 &&
+        result.utterances.every((u) => u.startMs != null && u.endMs != null);
+      await get().labelMeetingSpeakers(noteId, { utteranceTimed });
       get().transitionStatus(noteId, 'done');
       if (transcript.some((segment) => segment.text?.trim())) {
         logTranscriptionCompleted({ source: 'meeting', provider: 'cloud' });
@@ -1294,18 +1298,21 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       });
       return true;
     } catch (error) {
-      if (restore && isLiveNote(noteId)) {
-        try {
-          notesRepository.replaceSegments(noteId, restore);
-        } catch {
-          // The labelled rows stay; their text and timing are the user's, unchanged.
-        }
+      // Nothing here may throw: the caller moves the note on to done only once this settles.
+      try {
+        if (restore && isLiveNote(noteId)) notesRepository.replaceSegments(noteId, restore);
+      } catch {
+        // The labelled rows stay; their text and timing are the user's, unchanged.
       }
-      Sentry.captureMessage('meeting-speaker-pass', {
-        level: 'warning',
-        tags: { feature: 'meeting-post-pass', outcome: 'failed', error_code: errorCode(error) },
-        extra: { durationMs: Date.now() - startedAt },
-      });
+      try {
+        Sentry.captureMessage('meeting-speaker-pass', {
+          level: 'warning',
+          tags: { feature: 'meeting-post-pass', outcome: 'failed', error_code: errorCode(error) },
+          extra: { durationMs: Date.now() - startedAt },
+        });
+      } catch {
+        // Telemetry is best effort.
+      }
       // Labels already written stand even if identifying them failed.
       return labelled;
     }

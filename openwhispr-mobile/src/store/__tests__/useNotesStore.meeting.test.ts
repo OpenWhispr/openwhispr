@@ -221,6 +221,8 @@ beforeEach(() => {
     model: 'test',
   });
   mockGetDiarizer.mockReturnValue({
+    // Off unless a test turns it on, as on Android: no speaker pass.
+    isAvailable: () => false,
     diarize: jest.fn(),
     isModelDownloaded: jest.fn(async () => true),
     downloadModel: jest.fn(async () => undefined),
@@ -1062,6 +1064,40 @@ describe('meeting post-pass', () => {
       ).resolves.toBe(false);
       expect(diarize).not.toHaveBeenCalled();
       expect(status).toBe('transcribing');
+    });
+
+    it('does not label speakers when an utterance has no timing', async () => {
+      await finalize({
+        utterances: [
+          utterance('Timed.', 0, 2000),
+          { itemId: 'u-untimed', text: 'Untimed.', startMs: null, endMs: null },
+        ],
+      });
+
+      expect(diarize).not.toHaveBeenCalled();
+      expect(status).toBe('done');
+      expect(saved.map((row) => row.text)).toEqual(['Timed.', 'Untimed.']);
+      expect(filesOnDisk.has(RECORDING)).toBe(false);
+    });
+
+    it('still resolves false when the database read in its failure path throws', async () => {
+      saved = [{ text: 'Hi.', startMs: 0, endMs: 2000, speakerLabel: null }];
+      status = 'transcribing';
+      let reads = 0;
+      (notesRepository.getNoteById as jest.Mock).mockImplementation(() => {
+        reads += 1;
+        // Reads 1 and 2 are the gate and the after-diarize check; the third is the restore's.
+        if (reads > 2) throw new Error('database unavailable');
+        return note;
+      });
+      (notesRepository.upsertSpeakers as jest.Mock).mockImplementation(() => {
+        throw new Error('write failed');
+      });
+
+      await expect(
+        useNotesStore.getState().labelMeetingSpeakers(7, { utteranceTimed: true }),
+      ).resolves.toBe(false);
+      expect(reads).toBe(3);
     });
 
     it('does not label a whole-file transcription', async () => {
