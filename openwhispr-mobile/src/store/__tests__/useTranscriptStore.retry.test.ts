@@ -559,6 +559,73 @@ it('retries an On-Device recording on Cloud after switching to Cloud', async () 
   );
 });
 
+describe('retries a local keyboard row on the device', () => {
+  const localKeyboardRow = (): Transcript =>
+    failedTranscript({
+      provider: 'local',
+      localOnly: true,
+      audioUrl: 'file://docs/transcript-audio/t1.wav',
+      audioFileName: 'job-1.wav',
+      audioMimeType: 'audio/wav',
+    });
+
+  it.each(['cloud', 'providers', 'private'] as const)(
+    'stays On-Device in %s mode',
+    async (mode) => {
+      mockProcessingModeState.activeMode = mode;
+      mockIsWavAudioFile.mockReturnValue(true);
+      mockTranscribeAndCleanup.mockResolvedValueOnce({
+        text: 'raw transcript',
+        originalText: 'raw transcript',
+        transcription: { text: 'raw transcript', duration: 3, provider: 'local' },
+        cleanupApplied: false,
+        fusedCleanup: false,
+      });
+      useTranscriptStore.setState({ transcripts: [localKeyboardRow()] });
+      await useTranscriptStore.getState().retryTranscript('t1');
+      expect(mockSnapshotTranscriptionJob).not.toHaveBeenCalled();
+      expect(mockTranscribeAndCleanup).toHaveBeenCalledTimes(1);
+      expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: 'local',
+          inferenceRoute: undefined,
+          cleanupRoute: { mode: 'local', scope: 'cleanup' },
+        }),
+      );
+    },
+  );
+
+  it('fails rather than uploading when the local model is gone', async () => {
+    mockProcessingModeState.activeMode = 'cloud';
+    mockTranscribeAndCleanup.mockRejectedValueOnce(
+      new Error('Local transcription is not available. Please download a model.'),
+    );
+    useTranscriptStore.setState({ transcripts: [localKeyboardRow()] });
+    await expect(useTranscriptStore.getState().retryTranscript('t1')).rejects.toThrow();
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledTimes(1);
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'local' }),
+    );
+    expect(useTranscriptStore.getState().transcripts[0]).toMatchObject({
+      provider: 'local',
+      localOnly: true,
+      status: 'failed',
+    });
+  });
+
+  it('keeps the flag when the outbox saves the row', async () => {
+    useTranscriptStore.setState({ transcripts: [] });
+    await useTranscriptStore.getState().addFailedTranscript({
+      id: 't1',
+      audioUrl: 'file://docs/transcript-audio/t1.wav',
+      provider: 'local',
+      localOnly: true,
+      errorMessage: 'failed',
+    });
+    expect(useTranscriptStore.getState().transcripts[0]).toMatchObject({ localOnly: true });
+  });
+});
+
 it('saves the rerouted text routes when a rerouted retry fails', async () => {
   useTranscriptStore.setState({
     transcripts: [

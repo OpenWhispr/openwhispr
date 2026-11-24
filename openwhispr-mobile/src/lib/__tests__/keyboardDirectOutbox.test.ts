@@ -153,7 +153,9 @@ describe('drainKeyboardDirectOutbox', () => {
         createdAt: NOW - 29 * MINUTE,
       },
     ]);
-    expect(h.events).toEqual([{ captureId: 'job-1', words: 5, occurredAt: NOW - 29 * MINUTE }]);
+    expect(h.events).toEqual([
+      { captureId: 'job-1', words: 5, occurredAt: NOW - 29 * MINUTE, provider: 'cloud' },
+    ]);
     expect(h.disk).toEqual({});
   });
 
@@ -350,6 +352,126 @@ describe('drainKeyboardDirectOutbox', () => {
     });
     expect(h.disk['job-1.pcm']).toBe('raw');
     expect(h.disk['job-1.json']).toBeDefined();
+  });
+
+  it('imports a completed Parakeet take as a local transcript', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({
+          engine: 'parakeet-v2',
+          text: 'send it to my email',
+          originalText: null,
+          cleanupApplied: null,
+        }),
+      ),
+    });
+    expect(await drainKeyboardDirectOutbox(h.deps)).toEqual({
+      completed: 1,
+      failed: 0,
+      dropped: 0,
+    });
+    expect(h.added).toEqual([
+      {
+        id: 'job-1',
+        jobId: 'job-1',
+        text: 'send it to my email',
+        originalText: 'send it to my email',
+        provider: 'local',
+        requestContext: 'keyboard',
+        keyboardTone: 'formal',
+        duration: 4,
+        createdAt: NOW - 29 * MINUTE,
+      },
+    ]);
+    expect(h.events).toEqual([
+      { captureId: 'job-1', words: 5, occurredAt: NOW - 29 * MINUTE, provider: 'local' },
+    ]);
+    expect(h.disk).toEqual({});
+  });
+
+  it('a failed Parakeet take becomes a retryable local row', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({ engine: 'parakeet-v3', status: 'failed', text: null, originalText: null }),
+      ),
+      'job-1.pcm': 'raw',
+    });
+    expect(await drainKeyboardDirectOutbox(h.deps)).toEqual({
+      completed: 0,
+      failed: 1,
+      dropped: 0,
+    });
+    expect(h.failed).toEqual([
+      {
+        id: 'job-1',
+        jobId: 'job-1',
+        audioUrl: 'file:///group/direct-dictations/job-1.wav',
+        audioFileName: 'job-1.wav',
+        audioMimeType: 'audio/wav',
+        duration: 4,
+        provider: 'local',
+        localOnly: true,
+        requestContext: 'keyboard',
+        keyboardTone: 'formal',
+        errorMessage: "Couldn't transcribe. Tap to retry.",
+        createdAt: NOW - 30 * MINUTE,
+      },
+    ]);
+    expect(h.disk).toEqual({});
+  });
+
+  it('turns a Parakeet take the keyboard was killed while transcribing into a local row', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({
+          engine: 'parakeet-v2',
+          status: 'pending',
+          startedAtMs: NOW - 11 * MINUTE,
+          text: null,
+          originalText: null,
+        }),
+      ),
+      'job-1.pcm': 'raw',
+      'job-1.wav': 'stale wav the transcriber was reading',
+    });
+    expect((await drainKeyboardDirectOutbox(h.deps)).failed).toBe(1);
+    expect(h.failed).toEqual([
+      expect.objectContaining({
+        provider: 'local',
+        localOnly: true,
+        audioFileName: 'job-1.wav',
+        audioMimeType: 'audio/wav',
+      }),
+    ]);
+    expect(h.disk).toEqual({});
+  });
+
+  it('leaves a recent pending Parakeet take to the keyboard', async () => {
+    const files = {
+      'job-1.json': JSON.stringify(
+        record({ engine: 'parakeet-v2', status: 'pending', startedAtMs: NOW - 5 * MINUTE }),
+      ),
+      'job-1.pcm': 'raw',
+    };
+    const h = harness(files);
+    await drainKeyboardDirectOutbox(h.deps);
+    expect(h.failed).toEqual([]);
+    expect(h.disk).toEqual(files);
+  });
+
+  it('a record without engine still imports as cloud', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(record()),
+      'job-2.json': JSON.stringify(
+        record({ jobId: 'job-2', engine: 'cloud', status: 'failed', text: null }),
+      ),
+      'job-2.m4a': 'audio',
+    });
+    await drainKeyboardDirectOutbox(h.deps);
+    expect(h.added).toEqual([expect.objectContaining({ id: 'job-1', provider: 'cloud' })]);
+    expect(h.events).toEqual([expect.objectContaining({ provider: 'cloud' })]);
+    expect(h.failed).toEqual([expect.objectContaining({ id: 'job-2', provider: 'cloud' })]);
+    expect(h.failed[0]).not.toHaveProperty('localOnly');
   });
 
   it('does nothing without the App Group folder', async () => {

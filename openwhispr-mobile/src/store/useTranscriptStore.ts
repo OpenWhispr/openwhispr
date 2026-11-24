@@ -37,6 +37,7 @@ export type FailedTranscriptInput = {
   audioMimeType?: string;
   duration?: number;
   provider: TranscriptionProvider;
+  localOnly?: boolean;
   inferenceRoute?: Transcript['inferenceRoute'];
   cleanupRoute?: Transcript['cleanupRoute'];
   cleanupUnavailable?: string;
@@ -304,6 +305,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           audioMimeType: transcript.audioMimeType,
           duration: transcript.duration,
           provider: transcript.provider,
+          ...(transcript.localOnly ? { localOnly: true } : {}),
           inferenceRoute: transcript.inferenceRoute,
           cleanupRoute: transcript.cleanupRoute,
           cleanupUnavailable: transcript.cleanupUnavailable,
@@ -352,17 +354,24 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
       }
       const { activeMode } = useProcessingModeStore.getState();
       const scope = current.requestContext === 'file' ? 'upload' : 'dictation';
-      // Provider recordings keep their original route. Cloud and On-Device
-      // recordings follow the current mode, including the provider it now selects;
-      // in Local Mode, uploads follow what is chosen for them.
+      // Provider recordings keep their original route, and so does a keyboard Local take, which
+      // must never leave this iPhone. Other Cloud and On-Device recordings follow the current mode,
+      // including the provider it now selects; in Local Mode, uploads follow what is chosen for them.
       const rerouted =
         current.provider !== 'byok' &&
+        !current.localOnly &&
         (activeMode === 'providers' || (activeMode === 'private' && scope === 'upload'))
           ? snapshotTranscriptionJob(scope)
           : undefined;
       const provider =
         rerouted?.provider ??
-        (current.provider === 'byok' ? 'byok' : activeMode === 'private' ? 'local' : 'cloud');
+        (current.localOnly
+          ? 'local'
+          : current.provider === 'byok'
+            ? 'byok'
+            : activeMode === 'private'
+              ? 'local'
+              : 'cloud');
       const inferenceRoute = rerouted ? rerouted.inferenceRoute : current.inferenceRoute;
       const textRoutes =
         rerouted ?? (provider === current.provider ? current : snapshotTextInference(provider));
