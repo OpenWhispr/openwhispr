@@ -147,7 +147,12 @@ function SnippetRow({ snippet, onEdit }: { snippet: Snippet; onEdit: () => void 
             justifyContent: 'center',
           }}
         >
-          <SystemIcon name="text.bubble" mdName="MessagesSquare" size={18} color={theme.secondary} />
+          <SystemIcon
+            name="text.bubble"
+            mdName="MessagesSquare"
+            size={18}
+            color={theme.secondary}
+          />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
           <Text numberOfLines={1} style={notesLook.rowTitle}>

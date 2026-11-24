@@ -160,10 +160,7 @@ function AddLanguageSheet({
                     setSearch('');
                     onAdd(item.code);
                   }}
-                  style={({ pressed }) => [
-                    l.option,
-                    pressed && { backgroundColor: theme.tile },
-                  ]}
+                  style={({ pressed }) => [l.option, pressed && { backgroundColor: theme.tile }]}
                 >
                   <Text style={{ fontSize: 18 }}>{item.flag}</Text>
                   <Text style={l.label}>{item.label}</Text>
