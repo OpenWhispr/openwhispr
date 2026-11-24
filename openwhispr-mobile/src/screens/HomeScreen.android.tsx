@@ -41,16 +41,9 @@ import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { buildUsageGateParams, SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import type { Recording } from '../../modules/android-dictation/src';
 import { useHomeT } from '@/android/home/strings';
-import {
-  AccountAvatar,
-  HomeToast,
-  home,
-  IconTile,
-  PillButton,
-  SectionHeader,
-  type,
-} from '@/android/home/kit';
+import { AccountAvatar, home, IconTile, PillButton, SectionHeader, type } from '@/android/home/kit';
 import { edgeCard, look } from '@/android/settings/look';
+import { showToast as showSettingsToast } from '@/android/settings/kit';
 import { BubbleCard } from '@/android/home/BubbleCard';
 import { Notch, NOTCH_REACH } from '@/android/home/Notch';
 import { notchAnnouncement, notchStateFor, type NotchModel } from '@/android/home/notchModel';
@@ -141,9 +134,9 @@ export default function AndroidHome() {
   const historyRef = useRef<View>(null);
   const [highlight, setHighlight] = useState<{ id: string; arriving: boolean } | null>(null);
   const scrollY = useRef(0);
-  const [toast, setToast] = useState({ message: '', id: 0 });
+  // The app's one toast (`SettingsToastHost`), lifted over the tab bar.
   const showToast = useCallback(
-    (message: string) => setToast((previous) => ({ message, id: previous.id + 1 })),
+    (message: string) => showSettingsToast(message, 'success', undefined, { aboveTabBar: true }),
     [],
   );
   const { stage, cancel, pickAndTranscribeFile } = useFileUpload({
@@ -611,7 +604,6 @@ export default function AndroidHome() {
           ) : null}
         </View>
       </ScrollView>
-      <HomeToast message={toast.message} showId={toast.id} />
       {recorderOpen ? (
         <TryItRecorder
           onCancel={() => {

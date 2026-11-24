@@ -285,7 +285,7 @@ export function ModelListRow({
             opacity: dimmed ? 0.45 : pressed ? 0.7 : 1,
             backgroundColor: tint.interpolate({
               inputRange: [0, 1],
-              outputRange: ['rgba(21,75,212,0)', home.tint],
+              outputRange: ['rgba(21,85,212,0)', home.tint],
             }),
           }}
         >

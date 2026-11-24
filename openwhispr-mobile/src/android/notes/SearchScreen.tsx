@@ -7,7 +7,7 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { notesRepository } from '@/data';
 import type { Note } from '@/data';
 import { useNotesStore } from '@/store/useNotesStore';
-import { AppFont } from '@/lib/fonts';
+import { SearchField } from '../controls';
 import { safeHaptics } from '@/lib/utils';
 import { home } from '../home/kit';
 import { edge } from '../settings/look';
@@ -142,55 +142,16 @@ export default function SearchScreen() {
         }}
       >
         <BackButton />
-        <View
-          style={[
-            edge,
-            {
-              flex: 1,
-              minHeight: 44,
-              borderRadius: 12,
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingLeft: 14,
-              paddingRight: 6,
-              gap: 8,
-            },
-          ]}
-        >
-          <SystemIcon name="magnifyingglass" mdName="Search" size={18} color={home.secondary} />
-          <TextInput
-            ref={input}
-            autoFocus
-            value={query}
-            onChangeText={setQuery}
-            placeholder={t('searchNotes')}
-            placeholderTextColor={home.tertiary}
-            returnKeyType="search"
-            onSubmitEditing={() => rememberSearch(query)}
-            style={{
-              flex: 1,
-              fontSize: 17,
-              color: home.text,
-              fontFamily: AppFont.regular,
-              paddingVertical: 8,
-            }}
-          />
-          {query ? (
-            <Pressable
-              cssInterop={false}
-              accessibilityRole="button"
-              accessibilityLabel={t('clear')}
-              hitSlop={8}
-              onPress={() => {
-                setQuery('');
-                input.current?.focus();
-              }}
-              style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <SystemIcon name="xmark" mdName="X" size={18} color={home.secondary} />
-            </Pressable>
-          ) : null}
-        </View>
+        <SearchField
+          ref={input}
+          autoFocus
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t('searchNotes')}
+          clearLabel={t('clear')}
+          onSubmitEditing={() => rememberSearch(query)}
+          style={{ flex: 1 }}
+        />
       </View>
       <ScrollView
         keyboardShouldPersistTaps="handled"

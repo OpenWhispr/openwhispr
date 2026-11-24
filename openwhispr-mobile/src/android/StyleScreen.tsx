@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { useScrollToTop } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
-import { glassEdge, home } from './home/kit';
+import { SegmentedControl } from '@/components/ui/SegmentedControl.android';
+import { theme } from './theme';
 import { Toggle, showToast } from './settings/kit';
 import { KIND_APPS } from './style/examples';
 import {
@@ -15,7 +16,6 @@ import {
   KIND_ROW,
   KIND_SHORT,
   ToneSlider,
-  ink,
   useToneText,
 } from './style/kit';
 import { useStyleT } from './style/strings';
@@ -69,7 +69,10 @@ export default function StyleScreen() {
   const picked = style.tones[kind];
   const faded = !style.enabled;
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: ink.canvas }} edges={['top', 'left', 'right']}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: theme.canvas }}
+      edges={['top', 'left', 'right']}
+    >
       <ScrollView
         ref={scroll}
         contentContainerStyle={{
@@ -86,11 +89,11 @@ export default function StyleScreen() {
           <View style={{ flex: 1, gap: 2 }}>
             <Text
               accessibilityRole="header"
-              style={{ fontSize: 30, lineHeight: 38, fontWeight: '700', color: home.text }}
+              style={{ fontSize: 30, lineHeight: 38, fontWeight: '700', color: theme.ink }}
             >
               {t('tabTitle')}
             </Text>
-            <Text style={{ fontSize: 14, lineHeight: 18, color: home.secondary }}>
+            <Text style={{ fontSize: 14, lineHeight: 18, color: theme.secondary }}>
               {style.enabled ? t('subtitleOn') : t('subtitleOff')}
             </Text>
           </View>
@@ -115,7 +118,7 @@ export default function StyleScreen() {
                 gap: 12,
               }}
             >
-              <Text style={{ fontSize: 18, lineHeight: 23, fontWeight: '700', color: home.text }}>
+              <Text style={{ fontSize: 18, lineHeight: 23, fontWeight: '700', color: theme.ink }}>
                 {tone.name(picked)}
               </Text>
               <Text
@@ -123,7 +126,7 @@ export default function StyleScreen() {
                   flexShrink: 1,
                   fontSize: 13,
                   lineHeight: 17,
-                  color: home.secondary,
+                  color: theme.secondary,
                   textAlign: 'right',
                 }}
               >
@@ -144,63 +147,29 @@ export default function StyleScreen() {
   );
 }
 
-/** Four kinds of app, each with its app marks; the selected one is white with the glass edge. */
+/**
+ * Four kinds of app on the shared tabs (inset track, raised picked tab), each with its app marks
+ * cut out of the surface behind them.
+ */
 function KindPicker({ value, onChange }: { value: ToneKind; onChange: (kind: ToneKind) => void }) {
   const t = useStyleT();
   return (
-    <View
-      accessibilityRole="tablist"
-      style={{
-        flexDirection: 'row',
-        backgroundColor: ink.segmentTrack,
-        borderRadius: 16,
-        padding: 4,
-      }}
-    >
-      {TONE_KINDS.map((kind) => {
-        const selected = kind === value;
-        return (
-          <Pressable
-            key={kind}
-            cssInterop={false}
-            accessibilityRole="tab"
-            accessibilityLabel={t(KIND_ROW[kind])}
-            accessibilityState={{ selected }}
-            onPress={() => onChange(kind)}
-            style={[
-              {
-                flex: 1,
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                paddingVertical: 9,
-                paddingHorizontal: 4,
-                borderRadius: 12,
-                minHeight: 48,
-              },
-              selected && glassEdge,
-            ]}
-          >
-            <AppMarks
-              logos={KIND_APPS[kind]}
-              size={20}
-              behind={selected ? '#FFFFFF' : ink.segmentTrack}
-              overlap={6}
-            />
-            <Text
-              numberOfLines={1}
-              style={{
-                fontSize: 13,
-                lineHeight: 17,
-                fontWeight: selected ? '700' : '500',
-                color: selected ? home.text : home.secondary,
-              }}
-            >
-              {t(KIND_SHORT[kind])}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
+    <SegmentedControl
+      value={value}
+      onChange={onChange}
+      options={TONE_KINDS.map((kind) => ({
+        value: kind,
+        label: t(KIND_SHORT[kind]),
+        accessibilityLabel: t(KIND_ROW[kind]),
+        icon: (selected: boolean) => (
+          <AppMarks
+            logos={KIND_APPS[kind]}
+            size={20}
+            behind={selected ? theme.surface : theme.track}
+            overlap={6}
+          />
+        ),
+      }))}
+    />
   );
 }

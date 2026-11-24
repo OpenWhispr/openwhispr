@@ -15,7 +15,7 @@ import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { glassEdge } from '../home/kit';
+import { flat as glassEdge, theme } from '../theme';
 import { AccentText, GLASS_GRADIENT, colors } from './kit';
 import { placeCoachTag, type Frame, type TagPlacement } from './coachTag';
 import { Glyph, type GlyphName } from './PracticeBubble';
@@ -337,17 +337,17 @@ const p = StyleSheet.create({
     paddingRight: 10,
     borderRadius: 14,
   },
-  rowHighlight: { backgroundColor: 'rgba(21,75,212,0.12)' },
+  rowHighlight: { backgroundColor: theme.selFill },
   tile: {
     width: 28,
     height: 28,
     borderRadius: 9,
-    backgroundColor: '#F2F1EF',
+    backgroundColor: theme.tile,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rowTitle: { fontSize: 14, fontFamily: AppFont.medium, color: '#181714' },
-  rowBody: { fontSize: 12, color: '#6E6D69' },
+  rowTitle: { fontSize: 14, fontFamily: AppFont.medium, color: theme.ink },
+  rowBody: { fontSize: 12, color: theme.secondary },
   tagWrap: { position: 'absolute' },
   tag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, overflow: 'hidden' },
   tagRim: {
@@ -356,5 +356,5 @@ const p = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: 'rgba(255,255,255,0.6)',
   },
-  tagLabel: { fontSize: 12, fontFamily: AppFont.bold, color: '#FFFFFF' },
+  tagLabel: { fontSize: 12, fontFamily: AppFont.bold, color: theme.onGlass },
 });

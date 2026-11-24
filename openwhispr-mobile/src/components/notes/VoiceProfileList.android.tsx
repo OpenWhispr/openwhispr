@@ -6,6 +6,7 @@ import { SectionHeader } from './SectionHeader';
 import { SpeakerAvatar } from './SpeakerAvatar';
 import { SwipeableCard, type RestoreRow } from '@/components/ui/SwipeableCard';
 import type { SpeakerProfile } from '@/data/types';
+import { glass, theme } from '@/android/theme';
 
 interface VoiceProfileListProps {
   profiles: SpeakerProfile[];
@@ -54,10 +55,10 @@ export function VoiceProfileList({
               color="quaternaryLabel"
             />
             <View className="items-center gap-1">
-              <Text className="text-[17px] font-semibold text-label">
+              <Text className="text-[17px] font-semibold" style={{ color: theme.ink }}>
                 {unavailableMessage ? 'Voice profiles' : 'Label speakers automatically'}
               </Text>
-              <Text className="text-center text-[15px] leading-5 text-tertiaryLabel">
+              <Text className="text-center text-[15px] leading-5" style={{ color: theme.tertiary }}>
                 {unavailableMessage ??
                   'Record a short voice sample and OpenWhispr will recognize you in future meeting transcripts instead of showing "Speaker 1". Works with on-device transcription. Voice samples stay on this device and can be deleted anytime.'}
               </Text>
@@ -68,13 +69,12 @@ export function VoiceProfileList({
                 accessibilityRole="button"
                 accessibilityLabel="Teach Your Voice"
                 testID="voice-profile-enroll-owner-empty"
-                className="mt-1 h-10 items-center justify-center rounded-[10px] bg-brand px-4"
-                style={({ pressed }) => ({
-                  opacity: pressed ? 0.85 : 1,
-                  borderCurve: 'continuous',
-                })}
+                className="mt-1 h-10 items-center justify-center rounded-full px-4"
+                style={({ pressed }) => [glass, { opacity: pressed ? 0.85 : 1 }]}
               >
-                <Text className="text-[15px] font-semibold text-white">Teach Your Voice</Text>
+                <Text className="text-[15px] font-semibold" style={{ color: theme.onGlass }}>
+                  Teach Your Voice
+                </Text>
               </Pressable>
             ) : null}
           </View>
@@ -104,19 +104,29 @@ export function VoiceProfileList({
               <View className="flex-row items-center gap-2">
                 <View className="min-w-0 flex-1">
                   <View className="flex-row flex-wrap items-center gap-2">
-                    <Text className="text-[17px] font-semibold text-label">
+                    <Text className="text-[17px] font-semibold" style={{ color: theme.ink }}>
                       {profile.displayName}
                     </Text>
                     {profile.isOwner === 1 ? (
                       <View
-                        className="rounded-md bg-tertiarySystemFill px-2 py-0.5"
+                        className="rounded-md px-2 py-0.5"
+                        style={{ backgroundColor: theme.track }}
                         testID={`voice-profile-owner-badge-${profile.id}`}
                       >
-                        <Text className="text-[12px] font-semibold text-secondaryLabel">You</Text>
+                        <Text
+                          className="text-[12px] font-semibold"
+                          style={{ color: theme.secondary }}
+                        >
+                          You
+                        </Text>
                       </View>
                     ) : null}
                   </View>
-                  <Text className="mt-0.5 text-[13px] text-secondaryLabel" numberOfLines={1}>
+                  <Text
+                    className="mt-0.5 text-[13px]"
+                    style={{ color: theme.secondary }}
+                    numberOfLines={1}
+                  >
                     {formatMeta(profile)}
                   </Text>
                 </View>
@@ -143,7 +153,9 @@ export function VoiceProfileList({
                 testID="voice-profile-enroll-owner"
                 contentInsetLeft={16}
               >
-                <Text className="text-[17px] font-medium text-brand">Teach Your Voice</Text>
+                <Text className="text-[17px] font-medium" style={{ color: theme.accent }}>
+                  Teach Your Voice
+                </Text>
               </GroupedList.Row>
             )}
             {onEnrollSpeaker ? (
@@ -156,7 +168,9 @@ export function VoiceProfileList({
               >
                 <View className="flex-row items-center gap-2">
                   <SystemIcon name="plus" mdName="Plus" size={17} color="brand" />
-                  <Text className="text-[17px] font-medium text-brand">Add Someone's Voice</Text>
+                  <Text className="text-[17px] font-medium" style={{ color: theme.accent }}>
+                    Add Someone's Voice
+                  </Text>
                 </View>
               </GroupedList.Row>
             ) : null}
@@ -164,7 +178,7 @@ export function VoiceProfileList({
         </View>
       ) : null}
 
-      <Text className="mt-2 px-4 text-[13px] leading-5 text-secondaryLabel">
+      <Text className="mt-2 px-4 text-[13px] leading-5" style={{ color: theme.secondary }}>
         {unavailableMessage ??
           'Voice profiles are local to this device. They help label future meeting transcripts and can be deleted at any time.'}
       </Text>
@@ -179,7 +193,7 @@ export function VoiceProfileList({
               testID="voice-profile-delete-all"
               contentInsetLeft={16}
             >
-              <Text className="text-center text-[17px] font-medium text-systemRed">
+              <Text className="text-center text-[17px] font-medium" style={{ color: theme.error }}>
                 Delete All Profiles
               </Text>
             </GroupedList.Row>

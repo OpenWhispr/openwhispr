@@ -10,6 +10,7 @@ import { AppFont } from '@/lib/fonts';
 import { GlassButton, SecondaryButton, colors } from '../onboarding/kit';
 import { BottomSheet } from '../settings/kit';
 import { look } from '../settings/look';
+import { flat, theme } from '../theme';
 import { markEndedSheetShown, useEndedSession } from '../auth/endedSession';
 import { useLaunchT } from './strings';
 
@@ -98,7 +99,7 @@ export function SignedOutSheet() {
       body={t('signedOutBody')}
       above={
         <View style={launch.lockTile}>
-          <SystemIcon name="lock.fill" mdName="Lock" size={18} color="#1A1A1A" />
+          <SystemIcon name="lock.fill" mdName="Lock" size={18} color={theme.ink} />
         </View>
       }
     >
@@ -142,16 +143,15 @@ const launch = StyleSheet.create({
   errorScreen: { flex: 1, backgroundColor: look.canvas, paddingHorizontal: 16 },
   errorBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   errorTile: {
+    ...flat,
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
-    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
   },
-  errorMark: { color: '#C2410C', fontSize: 26, lineHeight: 30, fontFamily: AppFont.bold },
+  errorMark: { color: theme.amber, fontSize: 26, lineHeight: 30, fontFamily: AppFont.bold },
   errorTitle: {
     color: colors.ink,
     fontSize: 22,
@@ -167,14 +167,14 @@ const launch = StyleSheet.create({
     paddingHorizontal: 8,
   },
   errorActions: { gap: 4, paddingBottom: 16 },
+  // A flat icon tile: on the sheet's canvas the grey `tile` fill would barely show.
   lockTile: {
+    ...flat,
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
   },
   notNow: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   notNowLabel: { color: colors.ink, fontSize: 16, fontFamily: AppFont.medium },

@@ -308,7 +308,7 @@ function EmptyNotes({
           width: 168,
           height: 168,
           borderRadius: 84,
-          backgroundColor: 'rgba(21,75,212,0.08)',
+          backgroundColor: notesLook.selectedRow,
           alignItems: 'center',
           justifyContent: 'center',
         }}

@@ -10,12 +10,13 @@ import {
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from './SystemIcon';
-import { BRAND, iosColor } from '@/config/colors';
+import { flat, theme } from '@/android/theme';
 import { AppFont } from '@/lib/fonts';
 
 type SettingsRowProps = {
   icon: string;
   mdIcon?: LucideIconName;
+  /** iOS's tile colour. Android draws every tile grey (glossy white), so it's ignored. */
   iconBg?: string;
   iconStyle?: 'tile' | 'line';
   title: string;
@@ -36,7 +37,6 @@ type SettingsRowProps = {
 export function SettingsRow({
   icon,
   mdIcon,
-  iconBg = BRAND,
   iconStyle = 'tile',
   title,
   description,
@@ -63,7 +63,9 @@ export function SettingsRow({
         ...accessibilityState,
         disabled: disabled || accessibilityState?.disabled,
       }}
-      className={selected ? 'bg-brand/10 active:bg-brand/20' : 'active:bg-tertiarySystemFill'}
+      style={({ pressed }) => ({
+        backgroundColor: selected ? theme.selFill : pressed ? theme.tile : undefined,
+      })}
     >
       <View
         className={
@@ -78,40 +80,45 @@ export function SettingsRow({
               name={icon}
               mdName={mdIcon}
               size={22}
-              color={destructive ? 'systemRed' : 'label'}
+              color={destructive ? theme.error : theme.ink}
             />
           </View>
         ) : (
-          <View
-            style={{ backgroundColor: iconBg, borderCurve: 'continuous' }}
-            className="h-7 w-7 items-center justify-center rounded-md"
-          >
-            <SystemIcon name={icon} mdName={mdIcon} size={15} color="#FFF" />
+          // Glossy white: a flat grey tile with an ink glyph, whatever colour iOS gives it.
+          <View style={styles.tile}>
+            <SystemIcon name={icon} mdName={mdIcon} size={18} color={theme.ink} />
           </View>
         )}
 
         <View className={android ? 'min-w-0 flex-1' : 'flex-1'}>
           <Text
             numberOfLines={android ? undefined : 1}
-            className={`${destructive ? 'text-[17px] text-systemRed' : 'text-[17px] text-label'} ${dimmed}`}
+            className={`text-[17px] ${dimmed}`}
+            style={{ color: destructive ? theme.error : theme.ink }}
           >
             {title}
           </Text>
           {description && descriptionAccessory ? (
             <View className="mt-0.5 flex-row items-center gap-1.5">
-              <Text className="flex-shrink text-[13px] text-secondaryLabel">{description}</Text>
+              <Text className="flex-shrink text-[13px]" style={styles.secondary}>
+                {description}
+              </Text>
               {descriptionAccessory}
             </View>
           ) : description ? (
-            <Text className="mt-0.5 text-[13px] text-secondaryLabel">{description}</Text>
+            <Text className="mt-0.5 text-[13px]" style={styles.secondary}>
+              {description}
+            </Text>
           ) : null}
           {android && subtitle && !rightElement ? (
-            <Text className="mt-0.5 text-[15px] text-secondaryLabel">{subtitle}</Text>
+            <Text className="mt-0.5 text-[15px]" style={styles.secondary}>
+              {subtitle}
+            </Text>
           ) : null}
         </View>
 
         {!android && subtitle && !rightElement ? (
-          <Text numberOfLines={1} className="text-[15px] text-secondaryLabel">
+          <Text numberOfLines={1} className="text-[15px]" style={styles.secondary}>
             {subtitle}
           </Text>
         ) : null}
@@ -119,7 +126,7 @@ export function SettingsRow({
         {rightElement}
 
         {showChevron && onPress && !rightElement ? (
-          <SystemIcon name="chevron.right" mdName="ChevronRight" size={13} color="tertiaryLabel" />
+          <SystemIcon name="chevron.right" mdName="ChevronRight" size={13} color={theme.tertiary} />
         ) : null}
       </View>
     </Pressable>
@@ -147,16 +154,20 @@ export function SettingsTextFieldRow({
     return (
       <View className="min-h-[50px] flex-row items-center gap-4 px-4 py-3">
         <View className="h-6 w-6 items-center justify-center">
-          <SystemIcon name={icon} mdName={mdIcon} size={22} color="label" />
+          <SystemIcon name={icon} mdName={mdIcon} size={22} color={theme.ink} />
         </View>
         <View className="min-w-0 flex-1">
-          {label ? <Text className="text-[15px] text-secondaryLabel">{label}</Text> : null}
+          {label ? (
+            <Text className="text-[15px]" style={styles.secondary}>
+              {label}
+            </Text>
+          ) : null}
           <TextInput
-            placeholderTextColor={iosColor('tertiaryLabel')}
+            placeholderTextColor={theme.tertiary}
             autoCorrect={false}
             editable={editable}
-            className={`min-h-[48px] py-2 text-[17px] text-label ${editable ? '' : 'opacity-40'}`}
-            style={[{ fontFamily: AppFont.regular }, style]}
+            className={`min-h-[48px] py-2 text-[17px] ${editable ? '' : 'opacity-40'}`}
+            style={[{ fontFamily: AppFont.regular, color: theme.ink }, style]}
             {...inputProps}
           />
           {trailing}
@@ -167,15 +178,19 @@ export function SettingsTextFieldRow({
   return (
     <View className="min-h-[50px] flex-row items-center gap-4 px-4">
       <View className="h-6 w-6 items-center justify-center">
-        <SystemIcon name={icon} mdName={mdIcon} size={22} color="label" />
+        <SystemIcon name={icon} mdName={mdIcon} size={22} color={theme.ink} />
       </View>
-      {label ? <Text className="w-[84px] text-[17px] text-label">{label}</Text> : null}
+      {label ? (
+        <Text className="w-[84px] text-[17px]" style={{ color: theme.ink }}>
+          {label}
+        </Text>
+      ) : null}
       <TextInput
-        placeholderTextColor={iosColor('tertiaryLabel')}
+        placeholderTextColor={theme.tertiary}
         autoCorrect={false}
         editable={editable}
-        className={`flex-1 py-3 text-[17px] text-label ${editable ? '' : 'opacity-40'}`}
-        style={[{ fontFamily: AppFont.regular }, style]}
+        className={`flex-1 py-3 text-[17px] ${editable ? '' : 'opacity-40'}`}
+        style={[{ fontFamily: AppFont.regular, color: theme.ink }, style]}
         {...inputProps}
       />
       {trailing}
@@ -194,26 +209,16 @@ export function SettingsSection({ title, borderless = false, children }: Setting
   return (
     <View className="mb-7">
       {title ? (
-        <Text className="mb-1.5 px-8 text-[13px] uppercase tracking-wider text-secondaryLabel">
+        <Text className="mb-1.5 px-8 text-[13px] uppercase tracking-wider" style={styles.secondary}>
           {title}
         </Text>
       ) : null}
 
-      <View
-        className={borderless ? 'mx-4' : 'mx-4 bg-secondarySystemGroupedBackground'}
-        style={borderless ? undefined : styles.cardShadow}
-      >
-        <View
-          style={styles.cardInner}
-          className={
-            borderless
-              ? 'overflow-hidden rounded-[14px]'
-              : 'overflow-hidden rounded-[14px] border border-separator'
-          }
-        >
+      <View className="mx-4" style={borderless ? undefined : styles.card}>
+        <View style={styles.cardInner}>
           {childArray.map((child, i) => (
             <React.Fragment key={i}>
-              {i > 0 ? <View className="ml-14 h-px bg-separator" /> : null}
+              {i > 0 ? <View style={styles.divider} /> : null}
               {child}
             </React.Fragment>
           ))}
@@ -224,12 +229,17 @@ export function SettingsSection({ title, borderless = false, children }: Setting
 }
 
 const styles = StyleSheet.create({
-  cardShadow: {
-    borderRadius: 14,
-    borderCurve: 'continuous',
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.10)',
+  // Glossy white: a flat card, corners 16, inset hairline dividers.
+  card: { ...flat, borderRadius: 16 },
+  cardInner: { borderRadius: 16, overflow: 'hidden' },
+  divider: { height: 1, marginLeft: 64, backgroundColor: theme.hairline },
+  tile: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: theme.tile,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  cardInner: {
-    borderCurve: 'continuous',
-  },
+  secondary: { color: theme.secondary },
 });

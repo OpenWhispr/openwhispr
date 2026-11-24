@@ -25,28 +25,30 @@ import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useOnboardingT } from './strings';
+import { flat, raised, raisedPressed, theme } from '../theme';
 
 export const colors = {
-  canvas: '#F1F0EE',
-  surface: '#FFFFFF',
-  surface2: '#F7F6F4',
-  fill: '#E9E8E4',
-  ink: '#1A1A1A',
-  secondary: '#55534F',
-  tertiary: '#8C8A85',
-  divider: '#E2E0DB',
-  accent: '#1E55D6',
-  accentSoft: '#E6EDFC',
-  brandTop: '#5B81E4',
-  brandMid: '#154BD4',
-  brandDeep: '#163992',
-  green: '#22A350',
-  amberBg: '#FFF4E3',
-  amberLine: '#F2B661',
-  amberInk: '#8A5300',
+  canvas: theme.canvas,
+  surface: theme.surface,
+  surface2: theme.surface2,
+  fill: theme.track,
+  ink: theme.ink,
+  secondary: theme.secondary,
+  tertiary: theme.tertiary,
+  divider: theme.trackStrong,
+  accent: theme.accent,
+  accentSoft: theme.accentSoft,
+  brandTop: theme.brandTop,
+  /** The brand-blue screens' middle stop: the one accent blue (D3). */
+  brandMid: theme.accent,
+  brandDeep: theme.brandDeep,
+  green: theme.success,
+  amberBg: theme.amberBg,
+  amberLine: theme.amberLine,
+  amberInk: theme.amberInk,
 };
 
-export const GLASS_GRADIENT = ['#5588F0', '#3466E2'] as const;
+export const GLASS_GRADIENT = [theme.glassTop, theme.glassBottom] as const;
 
 // Words wrapped in [brackets] are drawn in the accent colour.
 export function AccentText({
@@ -119,7 +121,7 @@ export function GlassButton({ label, onPress, disabled, busy, style }: ButtonPro
       <LinearGradient colors={GLASS_GRADIENT} style={s.glass}>
         <View pointerEvents="none" style={s.glassRim} />
         {busy ? (
-          <ActivityIndicator color="#FFFFFF" />
+          <ActivityIndicator color={theme.onGlass} />
         ) : (
           <Text style={s.glassLabel} numberOfLines={1}>
             {label}
@@ -130,8 +132,10 @@ export function GlassButton({ label, onPress, disabled, busy, style }: ButtonPro
   );
 }
 
-// White brand glass for the brand-blue screens: the approved sign-in recipe (#FFFFFF → #E7ECF6,
-// a white top highlight and rim, a faint navy bottom edge). No drop shadow.
+const WHITE_GLASS = [theme.surface, '#E7ECF6'] as const;
+
+// White brand glass for the brand-blue screens: the approved sign-in recipe (white → #E7ECF6,
+// a white top highlight and rim, a faint navy bottom edge). No drop shadow. Ink label, never blue.
 export function WhiteButton({ label, onPress, disabled, busy, style }: ButtonProps) {
   return (
     <Pressable
@@ -148,13 +152,13 @@ export function WhiteButton({ label, onPress, disabled, busy, style }: ButtonPro
         style,
       ]}
     >
-      <LinearGradient colors={['#FFFFFF', '#E7ECF6']} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={WHITE_GLASS} style={StyleSheet.absoluteFill} />
       <View pointerEvents="none" style={s.whiteRim} />
       <View pointerEvents="none" style={s.whiteBottom} />
       {busy ? (
-        <ActivityIndicator color={colors.brandMid} />
+        <ActivityIndicator color={colors.ink} />
       ) : (
-        <Text style={[s.glassLabel, { color: colors.brandMid }]}>{label}</Text>
+        <Text style={[s.glassLabel, { color: colors.ink }]}>{label}</Text>
       )}
     </Pressable>
   );
@@ -168,7 +172,7 @@ export function SecondaryButton({ label, onPress, disabled, style }: ButtonProps
       accessibilityLabel={label}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [s.secondary, pressed && { opacity: 0.7 }, style]}
+      style={({ pressed }) => [s.secondary, pressed && raisedPressed, style]}
     >
       <Text style={s.secondaryLabel}>{label}</Text>
     </Pressable>
@@ -193,7 +197,7 @@ export function LinkButton({
       hitSlop={8}
       style={({ pressed }) => [s.link, pressed && { opacity: 0.6 }]}
     >
-      <Text style={[s.linkLabel, light && { color: '#FFFFFF' }]}>{label}</Text>
+      <Text style={[s.linkLabel, light && { color: theme.onGlass }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -214,13 +218,13 @@ export function CircleButton({
       accessibilityLabel={label}
       onPress={onPress}
       hitSlop={8}
-      style={({ pressed }) => [s.circle, pressed && { opacity: 0.7 }]}
+      style={({ pressed }) => [s.circle, pressed && raisedPressed]}
     >
       <SystemIcon
         name={icon === 'back' ? 'chevron.left' : 'xmark'}
         mdName={icon === 'back' ? 'ChevronLeft' : 'X'}
         size={icon === 'back' ? 22 : 18}
-        color={icon === 'back' ? colors.accent : colors.ink}
+        color={colors.ink}
       />
     </Pressable>
   );
@@ -234,7 +238,7 @@ export function PillButton({ label, onPress }: { label: string; onPress: () => v
       accessibilityLabel={label}
       onPress={onPress}
       hitSlop={8}
-      style={({ pressed }) => [s.pill, pressed && { opacity: 0.7 }]}
+      style={({ pressed }) => [s.pill, pressed && raisedPressed]}
     >
       <Text style={s.pillLabel}>{label}</Text>
     </Pressable>
@@ -401,13 +405,13 @@ export const s = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.18)',
     borderTopColor: 'rgba(255,255,255,0.6)',
   },
-  glassLabel: { color: '#FFFFFF', fontSize: 17, fontFamily: AppFont.medium },
+  glassLabel: { color: theme.onGlass, fontSize: 17, fontFamily: AppFont.medium },
   whiteRim: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.7)',
-    borderTopColor: '#FFFFFF',
+    borderTopColor: theme.surface,
   },
   whiteBottom: {
     position: 'absolute',
@@ -418,47 +422,36 @@ export const s = StyleSheet.create({
     backgroundColor: 'rgba(20,51,140,0.14)',
   },
   secondary: {
+    ...raised,
     minHeight: 54,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.divider,
     marginTop: 8,
   },
   secondaryLabel: { color: colors.ink, fontSize: 17, fontFamily: AppFont.medium },
   link: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   linkLabel: { color: colors.accent, fontSize: 17, fontFamily: AppFont.medium },
   circle: {
+    ...raised,
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pill: {
+    ...raised,
     minHeight: 40,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pillLabel: { color: colors.ink, fontSize: 16, fontFamily: AppFont.medium },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    padding: 16,
-    shadowColor: '#000000',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
+  card: { ...flat, borderRadius: 16, padding: 16 },
   bubble: {
-    shadowColor: '#163992',
+    shadowColor: theme.brandDeep,
     shadowOpacity: 0.35,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },

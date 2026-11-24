@@ -6,10 +6,11 @@ import { StatusBar } from 'expo-status-bar';
 import { Text } from '@/components/ui/Text';
 import { AccentText, BubbleIcon, GlassButton, Screen, WhiteButton, colors, plain, s } from './kit';
 import { useOnboardingT } from './strings';
+import { theme } from '../theme';
 
 const APP_ICON = require('./assets/app-icon.png');
 const HOW_VIDEO = require('./assets/how-it-works-stage.mp4');
-const LIGHT_ACCENT = '#B9CEFF';
+const LIGHT_ACCENT = theme.brandHighlight;
 
 export function BrandBackground({ children }: { children: React.ReactNode }) {
   return (
@@ -67,7 +68,7 @@ export function SplashScreen({ onStart }: { onStart: () => void }) {
               center
               text={t('splashTitle')}
               accent={LIGHT_ACCENT}
-              style={{ color: '#FFFFFF', fontSize: 36, lineHeight: 42 }}
+              style={{ color: theme.onGlass, fontSize: 36, lineHeight: 42 }}
             />
             <Text
               textBreakStrategy="balanced"
@@ -102,7 +103,7 @@ export function PitchScreen({ onBack, onNext }: { onBack: () => void; onNext: ()
     >
       <View style={local.pitch}>
         <LinearGradient
-          colors={['#7DA2F2', colors.brandMid, colors.brandDeep]}
+          colors={[theme.brandLight, colors.brandMid, colors.brandDeep]}
           locations={[0, 0.6, 1]}
           start={{ x: 0.8, y: 0 }}
           end={{ x: 0.2, y: 1 }}
@@ -111,7 +112,7 @@ export function PitchScreen({ onBack, onNext }: { onBack: () => void; onNext: ()
         <AccentText
           text={t('pitch')}
           accent={LIGHT_ACCENT}
-          style={{ color: '#FFFFFF', fontSize: 36, lineHeight: 42 }}
+          style={{ color: theme.onGlass, fontSize: 36, lineHeight: 42 }}
         />
         <View style={{ flex: 1 }} />
         <View style={[s.center, { flexDirection: 'row', justifyContent: 'space-between' }]}>
@@ -215,12 +216,12 @@ const local = StyleSheet.create({
     width: 420,
     height: 420,
     borderRadius: 210,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.onGlass,
     opacity: 0.16,
   },
   splashIcon: {
     position: 'absolute',
-    shadowColor: '#0B1F66',
+    shadowColor: theme.brandDeep,
     shadowOpacity: 0.45,
     shadowRadius: 30,
     shadowOffset: { width: 0, height: 16 },

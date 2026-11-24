@@ -4,6 +4,7 @@ import { WorkflowSettingsHeader } from '@/components/settings/WorkflowSettingsHe
 import { Stack, router } from 'expo-router';
 import { Pressable } from 'react-native';
 import { SystemIcon } from '@/components/ui/SystemIcon';
+import { theme } from '@/android/theme';
 import { safeHaptics } from '@/lib/utils';
 import { customHeaderStackOptions, glassStackOptions } from '@/config/navigation';
 import { WORKFLOW_LABELS, parseWorkflow } from '@/lib/aiWorkflows';
@@ -23,7 +24,7 @@ function HeaderBackButton() {
       }}
       style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
     >
-      <SystemIcon name="chevron.left" mdName="ChevronLeft" size={22} color="brand" />
+      <SystemIcon name="chevron.left" mdName="ChevronLeft" size={22} color={theme.ink} />
     </Pressable>
   );
 }

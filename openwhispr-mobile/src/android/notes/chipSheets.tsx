@@ -8,6 +8,7 @@ import { home } from '../home/kit';
 import { BottomSheet } from '../settings/kit';
 import { edge, edgeField } from '../settings/look';
 import { GlassButton } from '../processingFable/look';
+import { SearchField } from '../controls';
 import { Card, ListRow, NoteTile, SectionLabel, notesLook, sheetList } from './look';
 import { eventTimeRange } from './calendar';
 import { initialsOf } from './initials';
@@ -444,35 +445,12 @@ export function EventSheet({
         title={t('linkCalendarEvent')}
         onBack={linked && !startPicking ? () => setPicking(false) : undefined}
       >
-        <View
-          style={[
-            edgeField,
-            {
-              minHeight: 48,
-              paddingHorizontal: 14,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 10,
-            },
-          ]}
-        >
-          <SystemIcon name="magnifyingglass" mdName="Search" size={18} color={home.secondary} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            accessibilityLabel={t('searchEvents')}
-            placeholder={t('searchEvents')}
-            placeholderTextColor={home.tertiary}
-            returnKeyType="search"
-            style={{
-              flex: 1,
-              fontSize: 16,
-              color: home.text,
-              fontFamily: AppFont.regular,
-              paddingVertical: 10,
-            }}
-          />
-        </View>
+        <SearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t('searchEvents')}
+          clearLabel={t('clear')}
+        />
         <ScrollView
           style={[sheetList.style, { maxHeight: height * 0.5 }]}
           contentContainerStyle={[sheetList.content, { gap: 12 }]}

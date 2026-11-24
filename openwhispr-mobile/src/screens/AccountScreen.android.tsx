@@ -19,7 +19,10 @@ import { safeHaptics } from '@/lib/utils';
 import { AndroidDictation } from '../../modules/android-dictation/src';
 import { gloss, home, type } from '@/android/home/kit';
 import { look } from '@/android/settings/look';
+import { theme } from '@/android/theme';
+import { ProgressBar } from '@/android/controls';
 import {
+  Badge,
   Group,
   ListRow,
   PillAction,
@@ -182,40 +185,18 @@ export default function SettingsScreen() {
               ]}
             >
               {signedIn ? (
-                <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: '#FFFFFF' }}>
+                <Text
+                  style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: theme.onGlass }}
+                >
                   {initials}
                 </Text>
               ) : (
-                <SystemIcon name="person" mdName="UserRound" size={18} color="#FFFFFF" />
+                <SystemIcon name="person" mdName="UserRound" size={18} color={theme.onGlass} />
               )}
             </View>
           }
           title={signedIn ? name : t('localWorkspace')}
-          badge={
-            signedIn && planLabel ? (
-              <View
-                style={{
-                  backgroundColor: look.track,
-                  borderRadius: 6,
-                  paddingHorizontal: 8,
-                  paddingVertical: 3,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 11,
-                    lineHeight: 14,
-                    fontWeight: '500',
-                    letterSpacing: 0.11,
-                    color: home.secondary,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {planLabel}
-                </Text>
-              </View>
-            ) : undefined
-          }
+          badge={signedIn && planLabel ? <Badge label={planLabel} neutral /> : undefined}
           subtitle={signedIn ? (user?.email ?? undefined) : t('signInToSync')}
           onPress={() => router.push(signedIn ? '/(account)/profile' : '/auth?reason=sync')}
         />
@@ -244,23 +225,7 @@ export default function SettingsScreen() {
             )}
           </View>
           {!usage.isSubscribed && (
-            <View
-              style={{
-                height: 6,
-                borderRadius: 999,
-                backgroundColor: look.track,
-                overflow: 'hidden',
-              }}
-            >
-              <View
-                style={{
-                  height: 6,
-                  borderRadius: 999,
-                  experimental_backgroundImage: gloss.experimental_backgroundImage,
-                  width: `${Math.max(2, Math.min(100, (usage.wordsUsed / Math.max(1, usage.limit)) * 100))}%`,
-                }}
-              />
-            </View>
+            <ProgressBar value={Math.max(0.02, usage.wordsUsed / Math.max(1, usage.limit))} />
           )}
           <Text style={[type.footnote, settings.tabular]}>
             {usage.isSubscribed
@@ -346,7 +311,7 @@ export default function SettingsScreen() {
                   : t('accountsCount', { count: calendarAccounts.length })
           }
           valueAccent={calendarAccounts.length === 0}
-          valueColor={signedOutCalendars > 0 ? '#B45309' : undefined}
+          valueColor={signedOutCalendars > 0 ? theme.amber : undefined}
           onPress={() => router.push('/android-calendar')}
         />
         <ListRow

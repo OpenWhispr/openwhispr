@@ -6,18 +6,18 @@ import { useScrollToTop } from '@react-navigation/native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { SegmentedControl } from '@/components/ui/SegmentedControl.android';
-import { AppFont } from '@/lib/fonts';
 import { safeHaptics } from '@/lib/utils';
 import { sharedWordKey } from '@/lib/sharedDictionaryHints';
 import type { Snippet } from '@/lib/snippets';
 import { useDictionaryStore, type DictionaryEntry } from '@/store/useDictionaryStore';
 import { useSharedDictionaryStore } from '@/store/useSharedDictionaryStore';
 import { useSnippetsStore } from '@/store/useSnippetsStore';
-import { home, type } from '../home/kit';
+import { type } from '../home/kit';
+import { SearchField } from '../controls';
+import { theme } from '../theme';
 import { useNavigationBarCanvas } from '../navigationBar';
 import { tabColors } from '../tabBar';
 import { useSettingsToast } from '../settings/kit';
-import { edge, look } from '../settings/look';
 import { Card, IconButton, NewButton, NotesHeader, SectionLabel, notesLook } from '../notes/look';
 import { SwipeRow } from '../notes/rows';
 import {
@@ -43,15 +43,15 @@ function Tile({ learned }: { learned: boolean }) {
         width: 36,
         height: 36,
         borderRadius: 10,
-        backgroundColor: look.idleFill,
+        backgroundColor: theme.tile,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
       {learned ? (
-        <SystemIcon name="sparkles" mdName="Sparkles" size={17} color={home.secondary} />
+        <SystemIcon name="sparkles" mdName="Sparkles" size={17} color={theme.secondary} />
       ) : (
-        <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: home.secondary }}>
+        <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: theme.secondary }}>
           Aa
         </Text>
       )}
@@ -101,7 +101,7 @@ function WordRow({ entry, onEdit }: { entry: DictionaryEntry; onEdit: () => void
           paddingHorizontal: 14,
           paddingVertical: 12,
           minHeight: 64,
-          backgroundColor: pressed ? 'rgba(0,0,0,0.04)' : home.surface,
+          backgroundColor: pressed ? theme.tile : theme.surface,
         })}
       >
         <Tile learned={entry.source === 'learned'} />
@@ -134,7 +134,7 @@ function SnippetRow({ snippet, onEdit }: { snippet: Snippet; onEdit: () => void 
           paddingHorizontal: 14,
           paddingVertical: 12,
           minHeight: 64,
-          backgroundColor: pressed ? 'rgba(0,0,0,0.04)' : home.surface,
+          backgroundColor: pressed ? theme.tile : theme.surface,
         })}
       >
         <View
@@ -142,12 +142,17 @@ function SnippetRow({ snippet, onEdit }: { snippet: Snippet; onEdit: () => void 
             width: 36,
             height: 36,
             borderRadius: 10,
-            backgroundColor: look.idleFill,
+            backgroundColor: theme.tile,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <SystemIcon name="text.bubble" mdName="MessagesSquare" size={18} color={home.secondary} />
+          <SystemIcon
+            name="text.bubble"
+            mdName="MessagesSquare"
+            size={18}
+            color={theme.secondary}
+          />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
           <Text numberOfLines={1} style={notesLook.rowTitle}>
@@ -189,12 +194,12 @@ function TeamWordsRow({ moved }: { moved: string[] }) {
             width: 36,
             height: 36,
             borderRadius: 10,
-            backgroundColor: look.idleFill,
+            backgroundColor: theme.tile,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <SystemIcon name="person.2" mdName="Users" size={18} color={home.secondary} />
+          <SystemIcon name="person.2" mdName="Users" size={18} color={theme.secondary} />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={notesLook.rowTitle}>{title}</Text>
@@ -208,6 +213,7 @@ function TeamWordsRow({ moved }: { moved: string[] }) {
   );
 }
 
+/** C5: the shared search field, with Cancel beside it to leave search. */
 function SearchBar({
   value,
   onChange,
@@ -222,59 +228,17 @@ function SearchBar({
   const t = useDictionaryT();
   const input = useRef<TextInput>(null);
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 47 }}>
-      <View
-        style={[
-          edge,
-          {
-            flex: 1,
-            minHeight: 48,
-            borderRadius: 14,
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingLeft: 14,
-            paddingRight: 6,
-            gap: 8,
-            borderColor: 'rgba(21,85,212,0.55)',
-            borderWidth: 1.5,
-          },
-        ]}
-      >
-        <SystemIcon name="magnifyingglass" mdName="Search" size={18} color={home.secondary} />
-        <TextInput
-          ref={input}
-          autoFocus
-          value={value}
-          onChangeText={onChange}
-          placeholder={placeholder}
-          placeholderTextColor={home.tertiary}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-          style={{
-            flex: 1,
-            fontSize: 17,
-            color: home.text,
-            fontFamily: AppFont.regular,
-            paddingVertical: 8,
-          }}
-        />
-        {value ? (
-          <Pressable
-            cssInterop={false}
-            accessibilityRole="button"
-            accessibilityLabel={t('clear')}
-            hitSlop={8}
-            onPress={() => {
-              onChange('');
-              input.current?.focus();
-            }}
-            style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <SystemIcon name="xmark" mdName="X" size={18} color={home.secondary} />
-          </Pressable>
-        ) : null}
-      </View>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 }}>
+      <SearchField
+        ref={input}
+        autoFocus
+        value={value}
+        onChangeText={onChange}
+        placeholder={placeholder}
+        clearLabel={t('clear')}
+        autoCapitalize="none"
+        style={{ flex: 1 }}
+      />
       <Pressable
         cssInterop={false}
         accessibilityRole="button"
@@ -286,7 +250,7 @@ function SearchBar({
           opacity: pressed ? 0.6 : 1,
         })}
       >
-        <Text style={{ color: home.accent, fontSize: 16, lineHeight: 22, fontWeight: '500' }}>
+        <Text style={{ color: theme.accent, fontSize: 16, lineHeight: 22, fontWeight: '500' }}>
           {t('cancel')}
         </Text>
       </Pressable>
@@ -312,7 +276,7 @@ function AddQueryRow({ query }: { query: string }) {
           gap: 12,
           padding: 14,
           minHeight: 64,
-          backgroundColor: pressed ? look.idleFill : home.surface,
+          backgroundColor: pressed ? theme.tile : theme.surface,
         })}
       >
         <View
@@ -320,15 +284,15 @@ function AddQueryRow({ query }: { query: string }) {
             width: 36,
             height: 36,
             borderRadius: 10,
-            backgroundColor: look.selFill,
+            backgroundColor: theme.selFill,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <SystemIcon name="plus" mdName="Plus" size={18} color={home.accent} />
+          <SystemIcon name="plus" mdName="Plus" size={18} color={theme.accent} />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text numberOfLines={1} style={[notesLook.rowTitle, { color: home.accent }]}>
+          <Text numberOfLines={1} style={[notesLook.rowTitle, { color: theme.accent }]}>
             {t('addQuery', { query: query.trim() })}
           </Text>
           <Text style={notesLook.rowSub}>{t('toYourWords')}</Text>
@@ -432,7 +396,7 @@ export default function DictionaryRoot() {
   return (
     <SafeAreaView
       edges={['top', 'left', 'right']}
-      style={{ flex: 1, backgroundColor: notesLook.canvas }}
+      style={{ flex: 1, backgroundColor: theme.canvas }}
     >
       <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 16 }}>
         {searching ? (

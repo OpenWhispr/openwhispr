@@ -168,7 +168,6 @@ export function RecordingView({
         <IconButton
           icon="ChevronDown"
           label={t('minimise')}
-          color={home.accent}
           onPress={() => (router.canGoBack() ? router.back() : undefined)}
         />
         <View

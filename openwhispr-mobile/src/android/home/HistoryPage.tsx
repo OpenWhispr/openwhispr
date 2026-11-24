@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Platform, Pressable, TextInput, View } from 'react-native';
+import { Alert, Platform, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
-import { SystemIcon } from '@/components/ui/SystemIcon';
 import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
 import { useTranscriptStore } from '@/store/useTranscriptStore.android';
 import { applyHistoryRetention } from '../pipeline';
 import { SettingsPage, showToast } from '../settings/kit';
-import { edgeCard, edgeField } from '../settings/look';
+import { edgeCard } from '../settings/look';
+import { SearchField } from '../controls';
 import { useHomeT } from './strings';
 import { home, SectionHeader, type } from './kit';
 import { groupHistory, matchHistory } from './model';
@@ -57,43 +57,12 @@ export default function HistoryPage() {
   const groups = groupHistory(matchHistory(history, query), h, i18n.language);
   return (
     <SettingsPage title={h('history')}>
-      <View style={[edgeField, { flexDirection: 'row', alignItems: 'center', paddingLeft: 12 }]}>
-        <SystemIcon name="magnifyingglass" mdName="Search" size={18} color={home.tertiary} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder={h('searchHistory')}
-          placeholderTextColor={home.tertiary}
-          accessibilityLabel={h('searchHistory')}
-          returnKeyType="search"
-          autoCorrect={false}
-          style={{
-            flex: 1,
-            minHeight: 44,
-            paddingHorizontal: 10,
-            fontSize: 16,
-            color: home.text,
-          }}
-        />
-        {query ? (
-          <Pressable
-            cssInterop={false}
-            accessibilityRole="button"
-            accessibilityLabel={h('clearSearch')}
-            onPress={() => setQuery('')}
-            hitSlop={4}
-            style={({ pressed }) => ({
-              width: 44,
-              height: 44,
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <SystemIcon name="xmark.circle.fill" mdName="CircleX" size={18} color={home.tertiary} />
-          </Pressable>
-        ) : null}
-      </View>
+      <SearchField
+        value={query}
+        onChangeText={setQuery}
+        placeholder={h('searchHistory')}
+        clearLabel={h('clearSearch')}
+      />
       {!history.length ? (
         <View style={[edgeCard, { padding: 14, gap: 4 }]}>
           <Text style={{ fontSize: 16, lineHeight: 22, fontWeight: '500', color: home.text }}>

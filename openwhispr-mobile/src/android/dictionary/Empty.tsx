@@ -10,10 +10,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { gloss, glossPressed, glassEdge, home } from '../home/kit';
+import { home } from '../home/kit';
+import { flat, glass, glassPressed, theme } from '../theme';
 import { useReduceMotion } from '../settings/kit';
 import { useDictionaryT } from './strings';
 
+/** The accent at 28%. */
 const RING = 'rgba(21,85,212,0.28)';
 const HERO_HEIGHT = 220;
 
@@ -81,7 +83,7 @@ function Floating({
   return (
     <Animated.View
       style={[
-        glassEdge,
+        flat,
         { position: 'absolute', boxShadow: home.tipShadow, borderRadius: 18 },
         style,
         animated,
@@ -107,13 +109,13 @@ function FixChip({ wrong, right }: { wrong: string; right: string }) {
         style={{
           fontSize: 14,
           lineHeight: 18,
-          color: home.tertiary,
+          color: theme.tertiary,
           textDecorationLine: 'line-through',
         }}
       >
         {wrong}
       </Text>
-      <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: home.accent }}>
+      <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: theme.accent }}>
         {right}
       </Text>
     </View>
@@ -123,10 +125,10 @@ function FixChip({ wrong, right }: { wrong: string; right: string }) {
 function SnippetChip({ trigger, text }: { trigger: string; text: string }) {
   return (
     <View style={{ paddingHorizontal: 14, paddingVertical: 9, gap: 2 }}>
-      <Text style={{ fontSize: 13, lineHeight: 17, color: home.secondary }}>“{trigger}”</Text>
+      <Text style={{ fontSize: 13, lineHeight: 17, color: theme.secondary }}>“{trigger}”</Text>
       <Text
         numberOfLines={1}
-        style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: home.accent }}
+        style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: theme.accent }}
       >
         ↳ {text}
       </Text>
@@ -170,13 +172,13 @@ export function DictionaryEmpty({
               alignItems: 'center',
               justifyContent: 'center',
             },
-            gloss,
+            glass,
           ]}
         >
           {words ? (
             <SystemIcon name="book" mdName="BookOpen" size={24} color="#FFFFFF" />
           ) : (
-            <Text style={{ color: '#FFFFFF', fontSize: 20, lineHeight: 24, fontWeight: '500' }}>
+            <Text style={{ color: theme.surface, fontSize: 20, lineHeight: 24, fontWeight: '500' }}>
               Aa
             </Text>
           )}
@@ -208,7 +210,7 @@ export function DictionaryEmpty({
           fontSize: 22,
           lineHeight: 30,
           fontWeight: '500',
-          color: home.text,
+          color: theme.ink,
           textAlign: 'center',
         }}
       >
@@ -217,7 +219,7 @@ export function DictionaryEmpty({
         ) : (
           <>
             {t('snippetsEmptyTitle')}{' '}
-            <Text style={{ color: home.accent }}>{t('snippetsEmptyAccent')}</Text>
+            <Text style={{ color: theme.accent }}>{t('snippetsEmptyAccent')}</Text>
           </>
         )}
       </Text>
@@ -227,7 +229,7 @@ export function DictionaryEmpty({
           marginTop: 12,
           fontSize: 16,
           lineHeight: 23,
-          color: home.secondary,
+          color: theme.secondary,
           textAlign: 'center',
           paddingHorizontal: 12,
         }}
@@ -248,12 +250,12 @@ export function DictionaryEmpty({
             alignItems: 'center',
             gap: 8,
           },
-          gloss,
-          pressed && glossPressed,
+          glass,
+          pressed && glassPressed,
         ]}
       >
         <SystemIcon name="plus" mdName="Plus" size={20} color="#FFFFFF" />
-        <Text style={{ color: '#FFFFFF', fontSize: 17, lineHeight: 24, fontWeight: '500' }}>
+        <Text style={{ color: theme.surface, fontSize: 17, lineHeight: 24, fontWeight: '500' }}>
           {words ? t('addFirstWord') : t('newSnippet')}
         </Text>
       </Pressable>

@@ -7,29 +7,31 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 
-/** Colours from the iOS design system's Theme variables (light). */
+/** The bubble's colours: Android's glossy white theme (src/android/theme.ts), light. */
 object BubbleColors {
   val accent = Color.parseColor("#1555D4")
   val surface = Color.WHITE
-  val fill = Color.parseColor("#E8E7E4")
-  val ink = Color.parseColor("#181714")
-  val secondary = Color.parseColor("#6E6D69")
+  val fill = Color.parseColor("#E6E7EB")
+  val ink = Color.parseColor("#21212B")
+  val secondary = Color.parseColor("#66636E")
   val error = Color.parseColor("#D70015")
   val errorBackground = Color.parseColor("#FDECEC")
-  /** The icon's blue, for the bubble shrunk to a dot. */
-  val dot = Color.parseColor("#2457C5")
+  /** The bubble shrunk to a dot: the one accent blue. */
+  val dot = accent
   /** Brand glass, the listening and writing bubble: #5588F0 → #3466E2. */
   val glassTop = Color.parseColor("#5588F0")
   val glassBottom = Color.parseColor("#3466E2")
-  /** The status tab's and menu's brand blue. */
-  val brand = Color.parseColor("#154BD4")
+  /** The status tab's and menu's blue: the one accent (no second brand blue). */
+  val brand = accent
   /** The menu's icon tiles. */
-  val tile = Color.parseColor("#F2F1EF")
+  val tile = Color.parseColor("#F1F2F4")
   /** The glass edge on white surfaces. */
   val hairline = Color.argb(15, 0, 0, 0)
-  /** The bottom toast. */
-  val toast = Color.argb(240, 24, 23, 20)
-  val toastAction = Color.parseColor("#8FB0FF")
+  /** The bottom toast: rgba(29,29,36,.92), and its action word. */
+  val toast = Color.argb(235, 29, 29, 36)
+  val toastAction = Color.parseColor("#8FB2FF")
+  /** A faint ring in the ink colour. */
+  val inkRing = Color.argb(18, 33, 33, 43)
 }
 
 /**
@@ -61,7 +63,7 @@ class GlyphButton(context: Context, private val glyph: Glyph, private val fill: 
   }
   private val solid = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = tint }
   private val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = Color.argb(15, 0, 0, 0) }
-  private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(18, 24, 23, 20) }
+  private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.inkRing }
   init { isClickable = true; isFocusable = true }
   override fun getAccessibilityClassName(): CharSequence = android.widget.Button::class.java.name
 

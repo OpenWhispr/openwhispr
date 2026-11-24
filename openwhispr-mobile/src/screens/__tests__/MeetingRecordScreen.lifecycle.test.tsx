@@ -142,6 +142,25 @@ jest.mock('expo-file-system/legacy', () => ({
 }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/Button', () => ({ Button: require('react-native').Pressable }));
+// The Android screen's buttons; the real module pulls in react-native-svg, which this suite
+// can't parse.
+jest.mock('@/android/processingFable/look', () => {
+  const { Pressable, Text } = require('react-native');
+  const MockButton = ({
+    label,
+    onPress,
+    testID,
+  }: {
+    label: string;
+    onPress: () => void;
+    testID?: string;
+  }) => (
+    <Pressable testID={testID} onPress={onPress}>
+      <Text>{label}</Text>
+    </Pressable>
+  );
+  return { GlassButton: MockButton, OutlineButton: MockButton };
+});
 jest.mock('@/components/features/WaveformVisualizer', () => ({ ProcessingWaveform: () => null }));
 jest.mock('@/components/notes/CalendarEventPicker', () => ({ CalendarEventPicker: () => null }));
 jest.mock('@/components/notes/SpeakerCountPrompt', () => ({

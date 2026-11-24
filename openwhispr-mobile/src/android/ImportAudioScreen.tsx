@@ -1,15 +1,15 @@
 import { useTranslation } from 'react-i18next';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Animated, ScrollView, View } from 'react-native';
+import { Alert, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation, usePreventRemove, type NavigationAction } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from '@/components/ui/Text';
-import { gloss, home } from './home/kit';
+import { home } from './home/kit';
 import { look } from './settings/look';
-import { useReduceMotion } from './settings/kit';
 import { GlassButton } from './processingFable/look';
+import { ProgressBar } from './controls';
 import { BackButton, LinkButton, edgeCard, notesLook } from './notes/look';
 import { MetaChip } from './notes/noteParts';
 import { notesT } from './notes/strings';
@@ -243,7 +243,8 @@ export default function ImportAudioScreen() {
             <Text style={notesLook.rowTitle} accessibilityLiveRegion="polite">
               {stage === 'cleaning' ? notesT('cleaningUp') : notesT('transcribing')}
             </Text>
-            <IndeterminateBar />
+            {/* The pipeline reports no %, so the bar sweeps. */}
+            <ProgressBar />
             <Text style={{ fontSize: 13, lineHeight: 18, color: home.secondary }}>
               {disclosure} {notesT('stayOnScreen')}
             </Text>
@@ -302,35 +303,6 @@ export default function ImportAudioScreen() {
           </View>
         ) : null}
       </ScrollView>
-    </View>
-  );
-}
-
-/** A brand-glass bar that sweeps while the transcript is made (the pipeline reports no %). */
-function IndeterminateBar() {
-  const reduce = useReduceMotion();
-  const x = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (reduce) return;
-    const loop = Animated.loop(
-      Animated.timing(x, { toValue: 1, duration: 1400, useNativeDriver: true }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [reduce, x]);
-  return (
-    <View style={{ height: 6, borderRadius: 3, backgroundColor: look.track, overflow: 'hidden' }}>
-      <Animated.View
-        style={[
-          { width: '40%', height: 6, borderRadius: 3 },
-          gloss,
-          {
-            transform: [
-              { translateX: x.interpolate({ inputRange: [0, 1], outputRange: [-160, 360] }) },
-            ],
-          },
-        ]}
-      />
     </View>
   );
 }

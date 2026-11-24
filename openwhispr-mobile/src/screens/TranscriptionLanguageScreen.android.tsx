@@ -1,19 +1,19 @@
 import { useState } from 'react';
-import { Alert, FlatList, TextInput, View } from 'react-native';
+import { Alert, FlatList, View } from 'react-native';
 import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import registry from '@/config/languageRegistry.json';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { safeHaptics } from '@/lib/utils';
-import { home } from '@/android/home/kit';
 import { speechModelSupportsLanguages } from '@/android/speechCapabilities';
 import type { AndroidSpeechModelId } from '@/android/speechSelection';
 import { Badge, ListRow, SettingsPage, cardStyle, settings } from '@/android/settings/kit';
 import { MODEL_ROWS, modelName } from '@/android/settings/modelCatalog';
 import { useSettingsT } from '@/android/settings/strings';
 import { useNavigationBar } from '@/android/navigationBar';
-import { bodyText, edgeField, look } from '@/android/settings/look';
+import { look } from '@/android/settings/look';
+import { SearchField } from '@/android/controls';
 
 const Divider = () => (
   <View style={{ height: 1, marginLeft: 14, backgroundColor: look.hairline }} />
@@ -80,17 +80,12 @@ export default function LanguageScreen() {
 
   return (
     <SettingsPage title={t('language')} scroll={false}>
-      <View style={[edgeField, query ? { borderColor: home.accent } : null]}>
-        <TextInput
-          accessibilityLabel={t('searchLanguages')}
-          placeholder={t('searchLanguages')}
-          placeholderTextColor={home.tertiary}
-          value={query}
-          onChangeText={setQuery}
-          returnKeyType="search"
-          style={[bodyText, { minHeight: 47, paddingHorizontal: 16, paddingVertical: 13 }]}
-        />
-      </View>
+      <SearchField
+        value={query}
+        onChangeText={setQuery}
+        placeholder={t('searchLanguages')}
+        clearLabel={t('clearSearch')}
+      />
       {/* One card that fills the room left down to the handle or bar and scrolls inside, so the
           list never runs off the bottom of the screen. */}
       <View style={[cardStyle, { flexShrink: 1 }]}>

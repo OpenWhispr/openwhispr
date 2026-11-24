@@ -17,6 +17,10 @@ import Animated, {
 import { AndroidDictation } from '../../../modules/android-dictation/src';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { BubbleIcon, GLASS_GRADIENT, PulseRings, colors } from './kit';
+import { flat, theme } from '../theme';
+
+/** The listening halo: the glass's top blue at 16%. */
+const HALO = 'rgba(85,136,240,0.16)';
 import { useOnboardingT } from './strings';
 
 export type BubbleState = 'idle' | 'pulsing' | 'listening' | 'processing' | 'pasted';
@@ -100,7 +104,7 @@ export function PracticeBubble({
           end={{ x: 1, y: 1 }}
           style={b.glass}
         >
-          <SystemIcon name="checkmark" mdName="Check" size={24} color="#FFFFFF" />
+          <SystemIcon name="checkmark" mdName="Check" size={24} color={theme.onGlass} />
         </LinearGradient>
       </Animated.View>
     );
@@ -195,7 +199,7 @@ export function PracticeBubble({
             cx={(SIZE + 12) / 2}
             cy={(SIZE + 12) / 2}
             r={(SIZE + 8) / 2}
-            stroke="rgba(21,75,212,0.18)"
+            stroke={theme.selFill}
             strokeWidth={3}
             fill="none"
             animatedProps={trackProps}
@@ -324,21 +328,16 @@ const b = StyleSheet.create({
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
-    backgroundColor: 'rgba(85,136,240,0.16)',
+    backgroundColor: HALO,
   },
   ring: { position: 'absolute' },
   cancel: {
+    ...flat,
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
   },
   badge: {
     position: 'absolute',
@@ -347,13 +346,13 @@ const b = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.surface,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 2,
   },
   bars: { flexDirection: 'row', alignItems: 'center', gap: 3, height: BAR_MAX },
-  bar: { width: 3.4, borderRadius: 2, backgroundColor: '#FFFFFF' },
+  bar: { width: 3.4, borderRadius: 2, backgroundColor: theme.onGlass },
   dots: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFFFFF' },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.onGlass },
 });

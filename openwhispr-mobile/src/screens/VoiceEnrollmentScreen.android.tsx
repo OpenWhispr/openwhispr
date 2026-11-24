@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/ui/Text';
-import { Button } from '@/components/ui/Button';
+import { PillAction } from '@/android/settings/kit';
 import { VoiceEnrollmentRecorder } from '@/components/notes/VoiceEnrollmentRecorder';
 import { useNotesStore } from '@/store/useNotesStore';
 import { notesRepository } from '@/data';
@@ -19,6 +19,7 @@ import {
   supportsVoiceEnrollment,
   VOICE_ENROLLMENT_UNAVAILABLE,
 } from '@/lib/voiceEnrollmentCapability';
+import { theme } from '@/android/theme';
 
 type SubmitInput = EnrollVoiceProfileInput | ReenrollVoiceProfileInput;
 
@@ -26,17 +27,20 @@ export default function VoiceEnrollmentScreen() {
   const router = useRouter();
   if (supportsVoiceEnrollment()) return <SupportedVoiceEnrollmentScreen />;
   return (
-    <View className="flex-1 gap-4 bg-systemBackground p-4" testID="voice-enrollment-unavailable">
-      <Text className="text-[15px] leading-5 text-secondaryLabel">
+    <View
+      className="flex-1 gap-4 p-4"
+      style={{ backgroundColor: theme.canvas }}
+      testID="voice-enrollment-unavailable"
+    >
+      <Text className="text-[15px] leading-5" style={{ color: theme.secondary }}>
         {VOICE_ENROLLMENT_UNAVAILABLE}
       </Text>
-      <Button
+      <PillAction
+        label="Back"
         onPress={() =>
           router.canGoBack() ? router.back() : router.replace('/(tabs)/(notes)/voice-profiles')
         }
-      >
-        Back
-      </Button>
+      />
     </View>
   );
 }
@@ -130,25 +134,34 @@ function SupportedVoiceEnrollmentScreen() {
 
   if (profileId != null && !existingProfile) {
     // Profiles load in the first effect; after that a missing one was deleted.
-    if (!profilesLoaded) return <View className="flex-1 bg-systemBackground" />;
+    if (!profilesLoaded)
+      return <View className="flex-1" style={{ backgroundColor: theme.canvas }} />;
     return (
-      <View className="flex-1 gap-4 bg-systemBackground p-4" testID="voice-enrollment-missing">
-        <Text className="text-[15px] leading-5 text-secondaryLabel">
+      <View
+        className="flex-1 gap-4 p-4"
+        style={{ backgroundColor: theme.canvas }}
+        testID="voice-enrollment-missing"
+      >
+        <Text className="text-[15px] leading-5" style={{ color: theme.secondary }}>
           This voice profile no longer exists.
         </Text>
-        <Button onPress={leave}>Back</Button>
+        <PillAction label="Back" onPress={leave} />
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-systemBackground">
+    <View className="flex-1" style={{ backgroundColor: theme.canvas }}>
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
       >
-        <Text accessibilityRole="header" className="mb-5 text-2xl font-bold text-label">
+        <Text
+          accessibilityRole="header"
+          className="mb-5 text-2xl font-bold"
+          style={{ color: theme.ink }}
+        >
           {title}
         </Text>
         <VoiceEnrollmentRecorder

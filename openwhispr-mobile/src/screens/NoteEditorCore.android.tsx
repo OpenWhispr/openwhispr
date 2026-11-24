@@ -45,7 +45,6 @@ import { SpeakerRenameSheet } from '@/components/notes/SpeakerRenameSheet';
 import { SpeakerMergeSheet } from '@/components/notes/SpeakerMergeSheet';
 import { VoiceprintSuggestionSheet } from '@/components/notes/VoiceprintSuggestionSheet';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { GlassBackButton } from '@/components/ui/GlassBackButton';
 import { TabScreenHeader } from '@/components/ui/TabScreenHeader';
 import { buildNoteShareContent, exportNote } from '@/lib/noteExport';
 import { AppFont } from '@/lib/fonts';
@@ -114,7 +113,7 @@ import { notesT } from '@/android/notes/strings';
 import { NoteChips } from '@/android/notes/noteChips';
 import { initialsOf } from '@/android/notes/initials';
 import { CloudFinishCard, useCloudFinishJob } from '@/android/notes/cloudFinish';
-import { notesLook } from '@/android/notes/look';
+import { BackButton, notesLook } from '@/android/notes/look';
 import { edgeCard } from '@/android/settings/look';
 import { showToast } from '@/android/settings/kit';
 import { home as homeTokens } from '@/android/home/kit';
@@ -1201,10 +1200,17 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
     // header and the tab bar here, so the back button is the only way out.
     if (!note && !isNaN(noteId)) {
       return (
-        <View className="flex-1 bg-systemBackground">
-          <TabScreenHeader title="" left={<GlassBackButton fallbackRoute={stack.root} />} />
-          <View className="flex-1 items-center justify-center">
-            <Text className="text-tertiaryLabel">
+        <View style={{ flex: 1, backgroundColor: notesLook.canvas }}>
+          <TabScreenHeader
+            title=""
+            left={
+              <BackButton
+                onPress={() => (router.canGoBack() ? router.back() : router.replace(stack.root))}
+              />
+            }
+          />
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ color: notesLook.tertiary }}>
               {copy('editorFeedback.noteNotFound', 'Note not found')}
             </Text>
           </View>

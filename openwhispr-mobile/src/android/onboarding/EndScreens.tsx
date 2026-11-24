@@ -14,6 +14,7 @@ import { AppFont } from '@/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { privateSupported } from './setup';
 import { AccentText, GlassButton, Screen, colors, s } from './kit';
+import { flat, theme } from '../theme';
 import { appIcon } from './AppsScreen';
 import type { OnboardingMode } from './flow';
 import { useOnboardingT } from './strings';
@@ -104,7 +105,7 @@ function ModeCard({
         </Text>
         <View style={[e.radio, selected && e.radioOn]}>
           {selected ? (
-            <SystemIcon name="checkmark" mdName="Check" size={14} color="#FFFFFF" />
+            <SystemIcon name="checkmark" mdName="Check" size={14} color={theme.onGlass} />
           ) : null}
         </View>
       </View>
@@ -194,7 +195,8 @@ export function ReadyScreen({ onDone, onDevice }: { onDone: () => void; onDevice
 const e = StyleSheet.create({
   mode: {
     backgroundColor: colors.surface,
-    borderRadius: 20,
+    boxShadow: flat.boxShadow,
+    borderRadius: 16,
     padding: 16,
     gap: 10,
     borderWidth: 2,
@@ -206,7 +208,7 @@ const e = StyleSheet.create({
     height: 26,
     borderRadius: 13,
     borderWidth: 1.5,
-    borderColor: '#C9C6C0',
+    borderColor: theme.dotIdle,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -217,9 +219,9 @@ const e = StyleSheet.create({
     width: TILE,
     height: TILE,
     borderRadius: 17,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.10)',
+    borderColor: theme.fieldHairline,
     shadowColor: '#000000',
     shadowOpacity: 0.08,
     shadowRadius: 18,

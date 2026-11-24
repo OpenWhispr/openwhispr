@@ -8,7 +8,8 @@ import { useSheetDragToDismiss } from '@/hooks/useSheetDragToDismiss';
 import type { Transcript } from '@/types';
 import { useHomeT } from './strings';
 import { home, IconTile, TileButton, type } from './kit';
-import { edge, edgeCard, look } from '../settings/look';
+import { edgeCard, look } from '../settings/look';
+import { raised, raisedPressed } from '../theme';
 
 const SHEET_TOP_PEEK = 8;
 const TITLE = { fontSize: 16, lineHeight: 22, fontWeight: '500' as const, color: home.text };
@@ -179,15 +180,17 @@ export function OlderRecordingsSheet({
                   accessibilityLabel={t('close')}
                   onPress={onClose}
                   hitSlop={6}
-                  style={({ pressed }) => ({
-                    ...edge,
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    opacity: pressed ? 0.7 : 1,
-                  })}
+                  style={({ pressed }) => [
+                    raised,
+                    {
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    },
+                    pressed && raisedPressed,
+                  ]}
                 >
                   <SystemIcon name="xmark" mdName="X" size={18} color={home.text} />
                 </Pressable>

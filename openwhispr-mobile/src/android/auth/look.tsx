@@ -25,6 +25,7 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
 import { AppFont } from '@/lib/fonts';
+import { theme } from '../theme';
 
 // The onboarding sign-in look (Figma "Android · Onboarding" v3-01b/c/d): blue glass background,
 // white glass pills without a drop shadow, see-through fields. One look for onboarding and the app.
@@ -32,9 +33,13 @@ export const authColors = {
   top: '#5A8DF4',
   mid: '#2F62DE',
   bottom: '#1C3FAE',
-  ink: '#181714',
-  brandInk: '#0F4ACC',
-  icon: '#1555D4',
+  ink: theme.ink,
+  // The label on a white button over the blue: ink, never blue.
+  brandInk: theme.ink,
+  // Header glyphs (back, close) are ink like every other header (D4); the circle stays see-through.
+  icon: theme.ink,
+  // Words, the logo and the field caret on the blue.
+  onBlue: theme.onGlass,
   glass: 'rgba(255,255,255,0.12)',
   circle: 'rgba(255,255,255,0.72)',
   line: 'rgba(255,255,255,0.75)',
@@ -118,7 +123,7 @@ export function AuthHeader({
   return (
     <View style={s.header}>
       <View style={s.logo} accessibilityRole="image" accessibilityLabel="OpenWhispr">
-        <OpenWhisprMark size={28} color="#FFFFFF" />
+        <OpenWhisprMark size={28} color={authColors.onBlue} />
         <Text style={s.logoWord}>OpenWhispr</Text>
       </View>
       {action && onPress ? (
@@ -242,7 +247,7 @@ export function ClearButton({ label, onPress, disabled, faded, accessibilityLabe
       accessibilityState={{ disabled: Boolean(disabled || faded) }}
       style={({ pressed }) => [s.pill, s.clear, faded && s.faded, pressed && s.pressed]}
     >
-      <Text numberOfLines={1} style={[s.pillLabel, { color: '#FFFFFF' }]}>
+      <Text numberOfLines={1} style={[s.pillLabel, { color: authColors.onBlue }]}>
         {label}
       </Text>
     </Pressable>
@@ -273,7 +278,7 @@ export function TextButton({
       accessibilityState={{ disabled: Boolean(faded) }}
       style={({ pressed }) => [s.textButton, faded && s.faded, pressed && s.pressed]}
     >
-      <Text style={[s.textLabel, strong && { color: '#FFFFFF' }]}>{label}</Text>
+      <Text style={[s.textLabel, strong && { color: authColors.onBlue }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -310,8 +315,8 @@ export const AuthField = forwardRef<
         value={value}
         editable={!faded}
         placeholderTextColor={authColors.faint}
-        selectionColor="#FFFFFF"
-        cursorColor="#FFFFFF"
+        selectionColor={authColors.onBlue}
+        cursorColor={authColors.onBlue}
         onFocus={(event) => {
           setFocused(true);
           onFocus?.(event);
@@ -430,7 +435,7 @@ const s = StyleSheet.create({
     marginTop: 16,
   },
   logo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  logoWord: { fontFamily: AppFont.bold, fontSize: 20, lineHeight: 26, color: '#FFFFFF' },
+  logoWord: { fontFamily: AppFont.bold, fontSize: 20, lineHeight: 26, color: authColors.onBlue },
   circle: {
     width: 36,
     height: 36,
@@ -444,10 +449,10 @@ const s = StyleSheet.create({
     fontSize: 32,
     lineHeight: 38,
     letterSpacing: -0.32,
-    color: '#FFFFFF',
+    color: authColors.onBlue,
   },
   line: { fontFamily: AppFont.regular, fontSize: 17, lineHeight: 22, color: authColors.line },
-  strong: { fontFamily: AppFont.medium, color: '#FFFFFF' },
+  strong: { fontFamily: AppFont.medium, color: authColors.onBlue },
   pill: {
     height: 50,
     borderRadius: 25,
@@ -507,11 +512,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     fontFamily: AppFont.regular,
     fontSize: 17,
-    color: '#FFFFFF',
+    color: authColors.onBlue,
   },
   reveal: { paddingHorizontal: 14, height: '100%', justifyContent: 'center' },
   revealLabel: { fontFamily: AppFont.medium, fontSize: 15, color: authColors.link },
-  note: { fontFamily: AppFont.medium, fontSize: 13, lineHeight: 18, color: '#FFFFFF' },
+  note: { fontFamily: AppFont.medium, fontSize: 13, lineHeight: 18, color: authColors.onBlue },
   divider: { flexDirection: 'row', alignItems: 'center', height: 16 },
   dividerLine: { flex: 1, height: 1, backgroundColor: authColors.glass },
   dividerLabel: {
@@ -527,7 +532,7 @@ const s = StyleSheet.create({
     fontFamily: AppFont.regular,
     fontSize: 13,
     lineHeight: 18,
-    color: '#FFFFFF',
+    color: authColors.onBlue,
     textAlign: 'center',
   },
   faded: { opacity: 0.5 },

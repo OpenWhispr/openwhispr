@@ -13,6 +13,7 @@ import {
   supportsVoiceEnrollment,
   VOICE_ENROLLMENT_UNAVAILABLE,
 } from '@/lib/voiceEnrollmentCapability';
+import { theme } from '@/android/theme';
 
 const notesPath = (path: string): string => `/(tabs)/(notes)/${path}`;
 
@@ -75,7 +76,7 @@ export default function VoiceProfilesScreen() {
   }, [deleteAllVoiceProfiles]);
 
   return (
-    <View className="flex-1 bg-systemBackground">
+    <View className="flex-1" style={{ backgroundColor: theme.canvas }}>
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}

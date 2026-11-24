@@ -12,7 +12,7 @@ import { Image } from 'expo-image';
 import { SvgXml } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { glassEdge, gloss, glossPressed, home } from '../home/kit';
+import { flat, glass, glassPressed, inset, knob, raised, raisedPressed, theme } from '../theme';
 import { APP_LOGOS, type AppLogo } from './appLogos';
 import { useTranslation } from 'react-i18next';
 import { exampleResult, exampleSet, parseExample } from './examples';
@@ -22,17 +22,17 @@ import type { DictationTone, ToneKind } from './toneStyle';
 
 /** Tone & Style's colours (Figma "Styles · Variant B"). */
 export const ink = {
-  canvas: '#F2F1EF',
-  segmentTrack: '#E7E6E3',
-  preview: '#F7F6F4',
-  theirBubble: '#E9E8E5',
-  yourBubble: '#E3EBFC',
-  dropped: 'rgba(110,109,105,0.45)',
-  added: '#3466E2',
-  track: '#E6E5E2',
-  progressIdle: '#E1E0DC',
-  dotIdle: '#CFCEC9',
-  pickedRing: 'rgba(52,102,226,0.9)',
+  canvas: theme.canvas,
+  segmentTrack: theme.track,
+  preview: theme.surface2,
+  theirBubble: theme.track,
+  yourBubble: theme.sentBubble,
+  dropped: theme.struck,
+  added: theme.glassBottom,
+  track: theme.track,
+  progressIdle: theme.trackStrong,
+  dotIdle: theme.dotIdle,
+  pickedRing: theme.pickedRing,
 };
 
 const LOGO_DISC = '#F4F4F2';
@@ -53,8 +53,8 @@ export function AppMark({
   behind: string;
   overlap?: number;
 }) {
-  const onWhite = behind.toUpperCase() === '#FFFFFF';
-  const xml = onWhite ? APP_LOGOS[logo] : APP_LOGOS[logo].replaceAll(LOGO_DISC, '#FFFFFF');
+  const onWhite = behind.toUpperCase() === theme.surface;
+  const xml = onWhite ? APP_LOGOS[logo] : APP_LOGOS[logo].replaceAll(LOGO_DISC, theme.surface);
   return (
     <View
       style={{
@@ -138,7 +138,7 @@ export function useToneText() {
 export function DiffText({ example, width }: { example: string; width?: number }) {
   const parts = useMemo(() => parseExample(example), [example]);
   return (
-    <Text style={{ fontSize: 15, lineHeight: 22, color: home.text, width }}>
+    <Text style={{ fontSize: 15, lineHeight: 22, color: theme.ink, width }}>
       {parts.map((part, index) =>
         part.change === 'drop' ? (
           <Text
@@ -176,7 +176,7 @@ function PersonalPreview({ example, set }: { example: string; set: ExampleSet })
           borderBottomLeftRadius: 6,
         }}
       >
-        <Text style={{ fontSize: 15, lineHeight: 20, color: home.text }}>{set.question}</Text>
+        <Text style={{ fontSize: 15, lineHeight: 20, color: theme.ink }}>{set.question}</Text>
       </View>
       <View
         style={{
@@ -202,17 +202,17 @@ const ALEX = require('../../../assets/android/style/alex-morgan.jpg');
 function WorkPreview({ example }: { example: string; set: ExampleSet }) {
   return (
     <>
-      <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '500', color: home.secondary }}>
+      <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '500', color: theme.secondary }}>
         # launch-team
       </Text>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <Image source={ALEX} style={{ width: 30, height: 30, borderRadius: 8 }} />
         <View style={{ flex: 1, gap: 3 }}>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-            <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '700', color: home.text }}>
+            <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '700', color: theme.ink }}>
               Alex Morgan
             </Text>
-            <Text style={{ fontSize: 12, lineHeight: 16, color: home.secondary }}>6:20 PM</Text>
+            <Text style={{ fontSize: 12, lineHeight: 16, color: theme.secondary }}>6:20 PM</Text>
           </View>
           <DiffText example={example} />
         </View>
@@ -226,27 +226,27 @@ function EmailPreview({ example, set }: { example: string; set: ExampleSet }) {
     <>
       <View style={{ gap: 4 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={{ fontSize: 13, lineHeight: 18, color: home.secondary }}>{set.to}</Text>
+          <Text style={{ fontSize: 13, lineHeight: 18, color: theme.secondary }}>{set.to}</Text>
           <View
             style={{
-              backgroundColor: '#FFFFFF',
+              backgroundColor: theme.surface,
               borderWidth: 1,
-              borderColor: 'rgba(0,0,0,0.1)',
+              borderColor: theme.divider,
               borderRadius: 999,
               paddingHorizontal: 10,
               paddingVertical: 3,
             }}
           >
-            <Text style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: home.text }}>
+            <Text style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: theme.ink }}>
               Sarah Chen
             </Text>
           </View>
         </View>
-        <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: home.text }}>
+        <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: theme.ink }}>
           {set.subject}
         </Text>
       </View>
-      <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)' }} />
+      <View style={{ height: 1, backgroundColor: theme.hairline }} />
       <DiffText example={example} />
     </>
   );
@@ -257,7 +257,7 @@ function OtherPreview({ example, set }: { example: string; set: ExampleSet }) {
     <>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <SvgXml xml={APP_LOGOS.notion} width={18} height={18} />
-        <Text style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: home.secondary }}>
+        <Text style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: theme.secondary }}>
           {set.notes}
         </Text>
       </View>
@@ -303,7 +303,7 @@ export function GlassCard({
   radius?: number;
   style?: StyleProp<ViewStyle>;
 }) {
-  return <View style={[glassEdge, { borderRadius: radius }, style]}>{children}</View>;
+  return <View style={[flat, { borderRadius: radius }, style]}>{children}</View>;
 }
 
 const KNOB = 28;
@@ -388,7 +388,7 @@ export function ToneSlider({
             top: 11,
             height: 6,
             borderRadius: 3,
-            backgroundColor: ink.track,
+            ...inset,
           }}
         />
         {width > 0 &&
@@ -403,9 +403,9 @@ export function ToneSlider({
                 width: 8,
                 height: 8,
                 borderRadius: 4,
-                backgroundColor: '#FFFFFF',
+                backgroundColor: theme.surface,
                 borderWidth: 1,
-                borderColor: 'rgba(0,0,0,0.12)',
+                borderColor: theme.divider,
               }}
             />
           ))}
@@ -420,14 +420,10 @@ export function ToneSlider({
                 width: KNOB,
                 height: KNOB,
                 borderRadius: KNOB / 2,
-                alignItems: 'center',
-                justifyContent: 'center',
               },
-              gloss,
+              knob,
             ]}
-          >
-            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#FFFFFF' }} />
-          </View>
+          />
         )}
       </View>
       {/* Each stop's name gets a third of the width and wraps there, so long names (Russian)
@@ -443,7 +439,7 @@ export function ToneSlider({
               fontSize: 13,
               lineHeight: 17,
               fontWeight: i === index ? '700' : '500',
-              color: i === index ? home.text : home.secondary,
+              color: i === index ? theme.ink : theme.secondary,
             }}
           >
             {tone.name(option)}
@@ -454,7 +450,7 @@ export function ToneSlider({
   );
 }
 
-/** The 36 white close circle at the top left of every setup step. */
+/** The 36 raised close circle at the top left of every setup step. */
 export function CloseButton({ onPress }: { onPress: () => void }) {
   const t = useStyleT();
   return (
@@ -465,18 +461,18 @@ export function CloseButton({ onPress }: { onPress: () => void }) {
       hitSlop={6}
       onPress={onPress}
       style={({ pressed }) => [
-        glassEdge,
+        raised,
         {
           width: 36,
           height: 36,
           borderRadius: 18,
           alignItems: 'center',
           justifyContent: 'center',
-          opacity: pressed ? 0.7 : 1,
         },
+        pressed && raisedPressed,
       ]}
     >
-      <SystemIcon name="xmark" mdName="X" size={16} color={home.text} />
+      <SystemIcon name="xmark" mdName="X" size={16} color={theme.ink} />
     </Pressable>
   );
 }
@@ -507,11 +503,11 @@ export function GlassCta({
           justifyContent: 'center',
           opacity: disabled ? 0.5 : 1,
         },
-        gloss,
-        pressed && !disabled && glossPressed,
+        glass,
+        pressed && !disabled && glassPressed,
       ]}
     >
-      <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '700', color: '#FFFFFF' }}>
+      <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '700', color: theme.onGlass }}>
         {label}
       </Text>
     </Pressable>
@@ -530,10 +526,10 @@ export function PickedCheck() {
           alignItems: 'center',
           justifyContent: 'center',
         },
-        gloss,
+        glass,
       ]}
     >
-      <SystemIcon name="checkmark" mdName="Check" size={14} color="#FFFFFF" />
+      <SystemIcon name="checkmark" mdName="Check" size={14} color={theme.onGlass} />
     </View>
   );
 }

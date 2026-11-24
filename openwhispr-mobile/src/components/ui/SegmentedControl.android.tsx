@@ -1,21 +1,15 @@
+import type { ReactNode } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Text } from './Text';
+import { inset, raised, theme } from '@/android/theme';
 
 /**
- * Android's one tab style (Dictionary's Words | Snippets): a round grey track, the picked tab a
- * round white pill with the glass edge, 16 Medium labels, and an optional grey count. Notes,
- * the recorder, Style and Dictionary all use this, so every screen's tabs look the same.
+ * Android's one tab style (Dictionary's Words | Snippets): an inset, fully round grey track, the
+ * picked tab a raised white pill with an ink label, 16 Medium labels, and an optional grey count.
+ * Notes, the recorder, Style and Dictionary all use this, so every screen's tabs look the same.
+ * Options with an `icon` (Style's kinds of app) stack it above a 13 label in a taller tab.
  */
-const TRACK = '#E8E7E4';
-const TEXT = '#181714';
-const SECONDARY = '#6E6D69';
-const TERTIARY = '#A8A7A3';
-const PICKED = {
-  backgroundColor: '#FFFFFF',
-  borderWidth: 1,
-  borderColor: 'rgba(0,0,0,0.06)',
-  boxShadow: 'inset 0px 1px 0px rgba(255,255,255,0.7), 0px 2px 10px rgba(15,23,42,0.06)',
-} as const;
+const PICKED = raised;
 
 export type SegmentedOption<T extends string> = {
   value: T;
@@ -24,6 +18,10 @@ export type SegmentedOption<T extends string> = {
   count?: number;
   /** A small orange dot after the label (a summary that's out of date). */
   dot?: boolean;
+  /** Drawn above the label; told whether its tab is picked, to match the surface behind it. */
+  icon?: (selected: boolean) => ReactNode;
+  /** What TalkBack reads when the label is a short form ("Personal" for "Personal messages"). */
+  accessibilityLabel?: string;
   testID?: string;
 };
 
@@ -40,10 +38,11 @@ export function SegmentedControl<T extends string>({
   scrollable?: boolean;
   disabled?: boolean;
 }) {
+  const stacked = options.some((option) => option.icon);
   const segments = (
     <View
       accessibilityRole="tablist"
-      style={{ flexDirection: 'row', borderRadius: 999, padding: 3, backgroundColor: TRACK }}
+      style={[{ flexDirection: 'row', borderRadius: 999, padding: 3 }, inset]}
     >
       {options.map((option) => {
         const selected = option.value === value;
@@ -55,38 +54,43 @@ export function SegmentedControl<T extends string>({
             accessibilityRole="tab"
             accessibilityState={{ selected, disabled }}
             accessibilityLabel={
-              option.count != null ? `${option.label}, ${option.count}` : option.label
+              option.accessibilityLabel ??
+              (option.count != null ? `${option.label}, ${option.count}` : option.label)
             }
             disabled={disabled}
             onPress={() => onChange(option.value)}
             style={({ pressed }) => [
               {
                 flex: scrollable ? undefined : 1,
-                minHeight: 38,
-                paddingHorizontal: 16,
+                minHeight: stacked ? 56 : 38,
+                paddingHorizontal: stacked ? 4 : 16,
+                paddingVertical: stacked ? 7 : 0,
                 borderRadius: 999,
-                flexDirection: 'row',
+                flexDirection: stacked ? 'column' : 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 6,
+                gap: stacked ? 4 : 6,
                 opacity: pressed ? 0.7 : 1,
               },
               selected && PICKED,
             ]}
           >
+            {option.icon?.(selected)}
             <Text
               numberOfLines={1}
               style={{
-                fontSize: 16,
-                lineHeight: 21,
+                fontSize: stacked ? 13 : 16,
+                lineHeight: stacked ? 17 : 21,
                 fontWeight: '500',
-                color: selected ? TEXT : SECONDARY,
+                color: selected ? theme.ink : theme.secondary,
               }}
             >
               {option.label}
             </Text>
             {option.count != null ? (
-              <Text style={{ fontSize: 16, lineHeight: 21, color: TERTIARY }}>{option.count}</Text>
+              <Text style={{ fontSize: 16, lineHeight: 21, color: theme.tertiary }}>
+                {option.count}
+              </Text>
             ) : null}
             {option.dot ? (
               <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF9500' }} />

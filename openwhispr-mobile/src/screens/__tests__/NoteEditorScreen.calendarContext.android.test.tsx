@@ -159,14 +159,16 @@ jest.mock('react-native-safe-area-context', () => ({
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
+const mockReplace = jest.fn();
+let mockCanGoBack = true;
 jest.mock('expo-router', () => ({
   useFocusEffect: jest.fn(),
   useLocalSearchParams: () => ({ id: mockRouteNoteId, tab: mockRouteTab }),
   useRouter: () => ({
     push: mockPush,
-    canGoBack: () => true,
+    canGoBack: () => mockCanGoBack,
     back: mockBack,
-    replace: jest.fn(),
+    replace: mockReplace,
   }),
 }));
 
@@ -334,14 +336,6 @@ jest.mock('@/components/ui/GlassIconButton', () => ({
 
 jest.mock('@/components/ui/SystemIcon', () => ({
   SystemIcon: () => null,
-}));
-
-jest.mock('@/components/ui/GlassBackButton', () => ({
-  GlassBackButton: ({ fallbackRoute }: { fallbackRoute?: string }) =>
-    (() => {
-      const { Text: MockText } = require('react-native');
-      return <MockText testID="back-button">{fallbackRoute}</MockText>;
-    })(),
 }));
 
 // The cloud question's latest props, so a test can answer it after the screen has changed.
@@ -855,14 +849,22 @@ describe('NoteEditorScreen missing note', () => {
   it('keeps a way back when the note is gone, on either stack', () => {
     mockNotesState.notes = [];
     mockRouteNoteId = '99';
-    const { getByText, getByTestId, rerender } = render(<NoteEditorScreen />);
-    expect(getByText('Note not found')).toBeTruthy();
-    expect(getByTestId('back-button').props.children).toBe('/(tabs)/(notes)');
+    mockCanGoBack = false;
+    mockReplace.mockClear();
+    try {
+      const { getByText, getByLabelText, rerender } = render(<NoteEditorScreen />);
+      expect(getByText('Note not found')).toBeTruthy();
+      fireEvent.press(getByLabelText('Back'));
+      expect(mockReplace).toHaveBeenLastCalledWith('/(tabs)/(notes)');
 
-    rerender(
-      <NoteEditorScreen stack={{ root: '/(tabs)/(chat)', routePrefix: '/(tabs)/(chat)/note' }} />,
-    );
-    expect(getByTestId('back-button').props.children).toBe('/(tabs)/(chat)');
+      rerender(
+        <NoteEditorScreen stack={{ root: '/(tabs)/(chat)', routePrefix: '/(tabs)/(chat)/note' }} />,
+      );
+      fireEvent.press(getByLabelText('Back'));
+      expect(mockReplace).toHaveBeenLastCalledWith('/(tabs)/(chat)');
+    } finally {
+      mockCanGoBack = true;
+    }
   });
 });
 

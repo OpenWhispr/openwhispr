@@ -1,19 +1,19 @@
 import type { TextStyle, ViewStyle } from 'react-native';
-import { glassEdge, home, TILE_FILL, type } from '../home/kit';
+import { glassEdge, home, type } from '../home/kit';
+import { theme } from '../theme';
 
 /**
- * Settings in OpenWhispr's design language (Figma "Settings · Fable reskin", the look of Fable's
- * Processing section 8): the desktop's glass edge on cards, fields and white buttons, grey icon
- * tiles, square badges. Processing's `processingFable/look.tsx` builds on these.
+ * Settings in OpenWhispr's glossy white design language (`../theme`): flat cards and fields,
+ * raised white buttons, grey icon tiles, square badges. Processing's `processingFable/look.tsx` builds on these.
  */
 export const look = {
-  canvas: '#F2F1EF',
-  selFill: 'rgba(21,75,212,0.12)',
-  idleFill: TILE_FILL,
-  track: '#E8E7E4',
-  error: '#D70015',
+  canvas: theme.canvas,
+  selFill: theme.selFill,
+  idleFill: theme.tile,
+  track: theme.track,
+  error: theme.error,
   hairline: glassEdge.borderColor,
-  fieldHairline: 'rgba(0,0,0,0.10)',
+  fieldHairline: theme.fieldHairline,
   edgeShadow: glassEdge.boxShadow,
 };
 

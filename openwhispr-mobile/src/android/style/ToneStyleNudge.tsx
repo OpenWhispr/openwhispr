@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useConfigStore } from '@/store/useConfigStore';
-import { glassEdge, home } from '../home/kit';
+import { flat, glass, glassPressed, raised, raisedPressed, theme } from '../theme';
 import { showToast } from '../settings/kit';
 import { useStyleT } from './strings';
 import { TONE_STYLE_NUDGE_MIN_WORDS, saveToneStyle, useToneStyle } from './toneStyle';
@@ -24,34 +24,34 @@ export function ToneStyleNudge({ words }: { words: number | undefined }) {
     );
   };
   return (
-    <View style={[glassEdge, { borderRadius: 20, padding: 16, gap: 14 }]}>
+    <View style={[flat, { borderRadius: 20, padding: 16, gap: 14 }]}>
       <View style={{ flexDirection: 'row', gap: 12 }}>
         <View
           style={{
             width: 36,
             height: 36,
             borderRadius: 10,
-            backgroundColor: home.tint,
+            backgroundColor: theme.selFill,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <SystemIcon name="sparkles" mdName="Sparkles" size={18} color={home.accent} />
+          <SystemIcon name="sparkles" mdName="Sparkles" size={18} color={theme.accent} />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '500', color: home.text }}>
+          <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '500', color: theme.ink }}>
             {t('nudgeTitle')}
           </Text>
-          <Text style={{ fontSize: 15, lineHeight: 20, color: home.secondary }}>
+          <Text style={{ fontSize: 15, lineHeight: 20, color: theme.secondary }}>
             {t('nudgeBody')}
           </Text>
         </View>
       </View>
       <View style={{ flexDirection: 'row', gap: 8, paddingLeft: 48 }}>
-        <FlatPill label={t('notNow')} color={home.secondary} onPress={dismiss} />
-        <FlatPill
+        <NudgePill label={t('notNow')} onPress={dismiss} />
+        <NudgePill
+          primary
           label={t('startNow')}
-          color={home.accent}
           onPress={() => router.push('/android-tone-setup')}
         />
       </View>
@@ -59,14 +59,14 @@ export function ToneStyleNudge({ words }: { words: number | undefined }) {
   );
 }
 
-/** A flat outline pill, since it sits inside a card. */
-function FlatPill({
+/** A 44 pill inside the card: raised white with an ink label, or the brand glass for the ask. */
+function NudgePill({
   label,
-  color,
+  primary,
   onPress,
 }: {
   label: string;
-  color: string;
+  primary?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -74,18 +74,28 @@ function FlatPill({
       cssInterop={false}
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: 44,
-        paddingHorizontal: 18,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.12)',
-        backgroundColor: pressed ? '#F1F1F0' : '#FFFFFF',
-        alignItems: 'center',
-        justifyContent: 'center',
-      })}
+      style={({ pressed }) => [
+        {
+          minHeight: 44,
+          paddingHorizontal: 18,
+          borderRadius: 999,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        primary ? glass : raised,
+        pressed && (primary ? glassPressed : raisedPressed),
+      ]}
     >
-      <Text style={{ fontSize: 15, lineHeight: 20, fontWeight: '500', color }}>{label}</Text>
+      <Text
+        style={{
+          fontSize: 15,
+          lineHeight: 20,
+          fontWeight: primary ? '600' : '500',
+          color: primary ? theme.onGlass : theme.ink,
+        }}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }

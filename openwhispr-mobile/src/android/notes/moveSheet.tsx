@@ -12,6 +12,7 @@ import { home } from '../home/kit';
 import { BottomSheet, showToast, TextAction } from '../settings/kit';
 import { edgeField } from '../settings/look';
 import { GlassButton } from '../processingFable/look';
+import { SearchField } from '../controls';
 import { Card, ListRow, SectionLabel, SpaceTile, notesLook, sheetList } from './look';
 import { workspacesOf } from './library';
 import { notesT, useNotesT } from './strings';
@@ -88,7 +89,7 @@ export function moveNoteWithUndo(note: Note, from: Place, to: Place, label: stri
 }
 
 /**
- * N2 / N2b: the #F2F1EF sheet. New folder first, then Private's folders with the current one
+ * N2 / N2b: the canvas sheet. New folder first, then Private's folders with the current one
  * ticked and note counts, then teamspaces. Tapping a folder moves the note; there's no confirm.
  */
 export function MoveToFolderSheet({
@@ -323,36 +324,12 @@ export function MoveToFolderSheet({
         keyboardShouldPersistTaps="handled"
       >
         {folded ? (
-          <View
-            style={[
-              edgeField,
-              {
-                borderRadius: 999,
-                minHeight: 48,
-                paddingHorizontal: 16,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 10,
-              },
-            ]}
-          >
-            <SystemIcon name="magnifyingglass" mdName="Search" size={18} color={home.secondary} />
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              accessibilityLabel={t('searchFolders')}
-              placeholder={t('searchFolders')}
-              placeholderTextColor={home.tertiary}
-              returnKeyType="search"
-              style={{
-                flex: 1,
-                fontSize: 16,
-                color: home.text,
-                fontFamily: AppFont.regular,
-                paddingVertical: 10,
-              }}
-            />
-          </View>
+          <SearchField
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t('searchFolders')}
+            clearLabel={t('clear')}
+          />
         ) : null}
         <Card>
           <ListRow
