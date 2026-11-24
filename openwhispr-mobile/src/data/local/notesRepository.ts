@@ -1702,6 +1702,19 @@ export class LocalNotesRepository implements NotesRepository {
     this.markNoteTranscriptDirty(noteId);
   }
 
+  // Live meeting transcription saves each utterance as it arrives. It leaves the note
+  // clean on purpose: a half-recorded meeting must not be pushed; the final
+  // replaceSegments does that.
+  appendSegments(noteId: number, segments: NewSegment[]): void {
+    this.database.transaction((tx) => {
+      segments.forEach((seg, index) => {
+        tx.insert(transcriptSegments)
+          .values({ ...seg, noteId, sortOrder: seg.sortOrder ?? index, pendingSync: 1 })
+          .run();
+      });
+    });
+  }
+
   // A transcript edit (segments/speakers) must dirty the parent note so the sync
   // engine's note-level `getPendingNotes` picks it up. Gated on privacy: private
   // notes never sync, and marking one would trip pushNotes' private-note guard.

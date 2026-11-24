@@ -30,11 +30,19 @@ export interface MeetingRecoveryDeps {
     removeItem(key: string): void;
   };
   reportError(error: unknown, noteId: number): void;
+  /** True when live transcription already saved segments for the note. */
+  hasTranscript(noteId: number): boolean;
+  /** Reopens the note as done with its saved segments. Synchronous so a short background launch still lands it. */
+  keepTranscript(noteId: number): void;
+  /** Title and AI summary for a note whose transcript was kept. */
+  finishNotes(noteId: number): Promise<void>;
 }
 
 /**
  * Recovers meeting notes whose process died mid-recording or mid-pipeline (e.g. iOS
- * terminated the app after a lock-screen End). Each orphan is marked failed, which
+ * terminated the app after a lock-screen End). A cloud meeting that was still recording
+ * with live-saved segments (and no recording on disk) is reopened as done with that
+ * transcript. Every other orphan is marked failed, which
  * surfaces the note's Retry button; one with its recording still on disk is also
  * resumed, once. The marker is set before the resume and cleared when it settles,
  * so a resume that itself kills the app is not retried on the next launch.
@@ -56,6 +64,31 @@ export async function recoverOrphanedMeetings(deps: MeetingRecoveryDeps): Promis
       note.transcriptionStatus !== 'recording' &&
       isManagedMeetingAudioUri(note.id, note.sourceFile) &&
       !alreadyAttempted;
+
+    if (
+      note.transcriptionStatus === 'recording' &&
+      !isManagedMeetingAudioUri(note.id, note.sourceFile) &&
+      deps.hasTranscript(note.id)
+    ) {
+      let kept = false;
+      try {
+        deps.keepTranscript(note.id);
+        kept = true;
+      } catch (error) {
+        deps.reportError(error, note.id);
+      }
+      if (kept) {
+        // After the keep: the note is already done, so a background launch killed
+        // while waiting loses only the title and summary.
+        await deps.waitUntilActive();
+        try {
+          await deps.finishNotes(note.id);
+        } catch (error) {
+          deps.reportError(error, note.id);
+        }
+        continue;
+      }
+    }
 
     try {
       if (canTransition(note.transcriptionStatus as TranscriptionStatus, 'failed')) {
@@ -182,6 +215,9 @@ export function startMeetingRecoveryOnce(): void {
             .filter((note) => createdBeforeRuntime(note, RUNTIME_STARTED_AT_MS)),
         markFailed: (noteId) => useNotesStore.getState().transitionStatus(noteId, 'failed'),
         waitUntilActive: () => waitForAppActive(AppState),
+        hasTranscript: (noteId) => notesRepository.getSegments(noteId).length > 0,
+        keepTranscript: (noteId) => useNotesStore.getState().keepCloudMeetingTranscript(noteId),
+        finishNotes: (noteId) => useNotesStore.getState().finishRecoveredMeetingNotes(noteId),
         resume: (noteId) => useNotesStore.getState().retryMeetingTranscription(noteId),
         storage: localStorage,
         reportError: (error, noteId) =>

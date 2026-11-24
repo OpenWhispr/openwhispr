@@ -544,6 +544,17 @@ interface NotesStore {
     utterances: RealtimeUtterance[],
     elapsedSeconds: number,
   ) => Promise<void>;
+  /** Saves one live utterance. Never throws: a failed write is reported and the meeting goes on. */
+  appendCloudMeetingUtterance: (
+    noteId: number,
+    utterance: RealtimeUtterance,
+    index: number,
+    capturedMs: number,
+  ) => void;
+  /** recording → transcribing → done, keeping the segments already saved. */
+  keepCloudMeetingTranscript: (noteId: number) => void;
+  /** Title and AI summary for a recovered meeting. */
+  finishRecoveredMeetingNotes: (noteId: number) => Promise<void>;
   isDiarizerAvailable: () => Promise<boolean>;
   isDiarizerModelReady: () => Promise<boolean>;
   isLocalAsrModelReady: () => Promise<boolean>;
@@ -953,6 +964,39 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       if (segments.some((segment) => segment.text?.trim())) {
         logTranscriptionCompleted({ source: 'meeting', provider: 'cloud' });
       }
+      await finalizeMeetingNoteContent(noteId);
+    } finally {
+      get().loadNotes();
+    }
+  },
+
+  appendCloudMeetingUtterance: (noteId, utterance, index, capturedMs) => {
+    try {
+      // The server may send no timing; the capture clock keeps the row ordered and non-null.
+      const startMs = utterance.startMs ?? capturedMs;
+      notesRepository.appendSegments(noteId, [
+        {
+          noteId,
+          text: utterance.text.trim(),
+          startMs,
+          endMs: Math.max(utterance.endMs ?? capturedMs, startMs),
+          speakerLabel: null,
+          sortOrder: index,
+        },
+      ]);
+    } catch (error) {
+      // Never the utterance: it is the user's speech.
+      Sentry.captureException(error, { tags: { feature: 'meeting-live-transcript' } });
+    }
+  },
+
+  keepCloudMeetingTranscript: (noteId) => {
+    get().transitionStatus(noteId, 'transcribing');
+    get().transitionStatus(noteId, 'done');
+  },
+
+  finishRecoveredMeetingNotes: async (noteId) => {
+    try {
       await finalizeMeetingNoteContent(noteId);
     } finally {
       get().loadNotes();

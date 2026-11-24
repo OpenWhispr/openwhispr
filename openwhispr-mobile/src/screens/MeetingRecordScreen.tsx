@@ -58,6 +58,9 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   const [selectedCalendarEventId, setSelectedCalendarEventId] = useState<number | null>(null);
   const lastSavedRawNotesRef = useRef('');
   const recordingStartedAtRef = useRef<number | null>(null);
+  // The utterance callback outlives renders; the note is created just before the phase flips.
+  const noteIdRef = useRef<number | null>(null);
+  noteIdRef.current = noteId;
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   // Only the recording phase has a notes field to keep above the keyboard.
@@ -69,6 +72,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   const transitionStatus = useNotesStore((s) => s.transitionStatus);
   const runMeetingPipeline = useNotesStore((s) => s.runMeetingPipeline);
   const finalizeCloudMeeting = useNotesStore((s) => s.finalizeCloudMeeting);
+  const appendCloudMeetingUtterance = useNotesStore((s) => s.appendCloudMeetingUtterance);
   const isDiarizerAvailable = useNotesStore((s) => s.isDiarizerAvailable);
   const isDiarizerModelReady = useNotesStore((s) => s.isDiarizerModelReady);
   const isLocalAsrModelReady = useNotesStore((s) => s.isLocalAsrModelReady);
@@ -88,6 +92,12 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   const cloudMeeting = useCloudMeeting({
     enabled: phase === 'cloud-recording',
     language: getPreferredTranscriptionLanguage(),
+    onUtterance: (utterance, index, capturedMs) => {
+      const currentNoteId = noteIdRef.current;
+      if (currentNoteId != null) {
+        appendCloudMeetingUtterance(currentNoteId, utterance, index, capturedMs);
+      }
+    },
   });
 
   const accountsById = useMemo(

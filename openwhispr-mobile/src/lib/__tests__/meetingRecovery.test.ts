@@ -58,11 +58,75 @@ function makeDeps(notes: Note[], initialStorage: Record<string, string> = {}): H
       },
     },
     reportError: jest.fn(),
+    hasTranscript: jest.fn(() => false),
+    keepTranscript: jest.fn((id: number) => {
+      calls.push(`keep:${id}`);
+    }),
+    finishNotes: jest.fn(async (id: number) => {
+      calls.push(`finish:${id}`);
+    }),
   };
   return { deps, store, calls };
 }
 
 const marker = (id: number): string => `${MEETING_RESUME_MARKER_PREFIX}${id}`;
+
+describe('recoverOrphanedMeetings with a saved live transcript', () => {
+  const recordingNote = (id: number): Note =>
+    note({ id, transcriptionStatus: 'recording', sourceFile: null });
+
+  it('keeps the transcript of a recording orphan that has segments', async () => {
+    const { deps, calls } = makeDeps([recordingNote(5)]);
+    (deps.hasTranscript as jest.Mock).mockReturnValue(true);
+    (deps.waitUntilActive as jest.Mock).mockImplementation(async () => {
+      calls.push('active');
+    });
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(deps.markFailed).not.toHaveBeenCalled();
+    expect(deps.resume).not.toHaveBeenCalled();
+    expect(calls).toEqual(['keep:5', 'active', 'finish:5']);
+  });
+
+  it('still fails a recording orphan with no segments', async () => {
+    const { deps, calls } = makeDeps([recordingNote(6)]);
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(deps.keepTranscript).not.toHaveBeenCalled();
+    expect(calls).toEqual(['failed:6']);
+  });
+
+  it('falls back to failed when keeping the transcript throws', async () => {
+    const { deps, calls } = makeDeps([recordingNote(7)]);
+    (deps.hasTranscript as jest.Mock).mockReturnValue(true);
+    const failure = new Error('cannot transition');
+    (deps.keepTranscript as jest.Mock).mockImplementation(() => {
+      throw failure;
+    });
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(deps.reportError).toHaveBeenCalledWith(failure, 7);
+    expect(calls).toEqual(['failed:7']);
+    expect(deps.finishNotes).not.toHaveBeenCalled();
+  });
+
+  it('reports and continues when finishing the notes throws', async () => {
+    const { deps } = makeDeps([recordingNote(8), recordingNote(9)]);
+    (deps.hasTranscript as jest.Mock).mockReturnValue(true);
+    const failure = new Error('summary failed');
+    (deps.finishNotes as jest.Mock).mockRejectedValueOnce(failure);
+
+    await recoverOrphanedMeetings(deps);
+
+    expect(deps.reportError).toHaveBeenCalledWith(failure, 8);
+    expect(deps.markFailed).not.toHaveBeenCalled();
+    expect(deps.keepTranscript).toHaveBeenCalledWith(9);
+    expect(deps.finishNotes).toHaveBeenCalledWith(9);
+  });
+});
 
 describe('recoverOrphanedMeetings', () => {
   it.each(['transcribing', 'diarizing'])(

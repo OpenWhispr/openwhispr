@@ -55,6 +55,7 @@ jest.mock('@/data', () => ({
     setTranscriptionStatus: jest.fn(),
     getSegments: jest.fn(() => []),
     replaceSegments: jest.fn(),
+    appendSegments: jest.fn(),
     getSpeakers: jest.fn(() => []),
     getActions: jest.fn(() => []),
     updateSpeaker: jest.fn(),
@@ -473,6 +474,78 @@ describe('finalizeCloudMeeting', () => {
     ).rejects.toThrow('database unavailable');
 
     expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
+  });
+});
+
+describe('live cloud meeting transcript', () => {
+  it('saves a live utterance with its own timing', () => {
+    useNotesStore
+      .getState()
+      .appendCloudMeetingUtterance(
+        7,
+        { itemId: 'u-3', text: '  Ship it. ', startMs: 4000, endMs: 6500 },
+        2,
+        9000,
+      );
+
+    expect(notesRepository.appendSegments).toHaveBeenCalledWith(7, [
+      expect.objectContaining({
+        noteId: 7,
+        text: 'Ship it.',
+        startMs: 4000,
+        endMs: 6500,
+        sortOrder: 2,
+        speakerLabel: null,
+      }),
+    ]);
+  });
+
+  it('falls back to the captured clock when the server sent no timing', () => {
+    useNotesStore
+      .getState()
+      .appendCloudMeetingUtterance(
+        7,
+        { itemId: 'u-1', text: 'No timing.', startMs: null, endMs: null },
+        0,
+        61_000,
+      );
+
+    expect(notesRepository.appendSegments).toHaveBeenCalledWith(7, [
+      expect.objectContaining({ startMs: 61_000, endMs: 61_000, sortOrder: 0 }),
+    ]);
+  });
+
+  it('reports a failed write and does not throw', () => {
+    (notesRepository.appendSegments as jest.Mock).mockImplementationOnce(() => {
+      throw new Error('disk full');
+    });
+
+    expect(() =>
+      useNotesStore
+        .getState()
+        .appendCloudMeetingUtterance(
+          7,
+          { itemId: 'u-1', text: 'Secret words.', startMs: 0, endMs: 1 },
+          0,
+          0,
+        ),
+    ).not.toThrow();
+
+    expect(Sentry.captureException).toHaveBeenCalledWith(expect.any(Error), {
+      tags: { feature: 'meeting-live-transcript' },
+    });
+  });
+
+  it('keeps a recovered transcript and marks the note done', () => {
+    (notesRepository.getTranscriptionStatus as jest.Mock)
+      .mockReturnValueOnce('recording')
+      .mockReturnValueOnce('transcribing');
+
+    useNotesStore.getState().keepCloudMeetingTranscript(7);
+
+    expect(notesRepository.setTranscriptionStatus).toHaveBeenNthCalledWith(1, 7, 'transcribing');
+    expect(notesRepository.setTranscriptionStatus).toHaveBeenNthCalledWith(2, 7, 'done');
+    expect(notesRepository.replaceSegments).not.toHaveBeenCalled();
   });
 });
 
