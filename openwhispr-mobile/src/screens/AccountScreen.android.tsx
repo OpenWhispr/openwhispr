@@ -19,10 +19,10 @@ import { safeHaptics } from '@/lib/utils';
 import { AndroidDictation } from '../../modules/android-dictation/src';
 import { useHome } from '@/android/home/kit';
 import { useSettingsLook } from '@/android/settings/look';
-import { LinkText, WordsMeter } from '@/android/plan/parts';
+import { LinkText, WordsMeter, openUpgrade } from '@/android/plan/parts';
 import { usePlanT } from '@/android/plan/strings';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
-import { SUPERWALL_PLACEMENTS, buildUsageGateParams } from '@/lib/superwall';
+import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import {
   Badge,
   Group,
@@ -224,10 +224,7 @@ export default function SettingsScreen() {
                   small
                   label={planT('goUnlimited')}
                   onPress={() => {
-                    void register({
-                      placement: SUPERWALL_PLACEMENTS.accountBillingOpen,
-                      params: buildUsageGateParams(usage),
-                    });
+                    void openUpgrade(usage, register, SUPERWALL_PLACEMENTS.accountBillingOpen);
                   }}
                 />
               ) : undefined
@@ -371,7 +368,6 @@ export default function SettingsScreen() {
         <ListRow
           icon="CreditCard"
           title={t('plan')}
-          subtitle={usage && !usage.isSubscribed ? planT('settingsPlanBody') : undefined}
           trailing={
             planLabel ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

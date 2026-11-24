@@ -97,8 +97,6 @@ export const planEnglish = {
   restored: 'Purchase restored',
   checkingPlan: 'Checking your plan…',
   planUnavailable: 'Couldn’t load your plan. Check your connection and try again.',
-  // Settings' Plan & billing row
-  settingsPlanBody: 'Unlimited cloud words with Pro',
 };
 
 export type PlanKey = keyof typeof planEnglish;

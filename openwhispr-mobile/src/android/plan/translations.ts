@@ -93,7 +93,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     restored: 'Compra restaurada',
     checkingPlan: 'Comprobando tu plan…',
     planUnavailable: 'No se pudo cargar tu plan. Revisa tu conexión e inténtalo de nuevo.',
-    settingsPlanBody: 'Palabras en la nube ilimitadas con Pro',
   },
   fr: {
     chipYourPlan: 'Votre offre',
@@ -185,7 +184,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     restored: 'Achat restauré',
     checkingPlan: 'Vérification de votre offre…',
     planUnavailable: 'Impossible de charger votre offre. Vérifiez votre connexion et réessayez.',
-    settingsPlanBody: 'Mots cloud illimités avec Pro',
   },
   de: {
     chipYourPlan: 'Dein Tarif',
@@ -279,7 +277,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     checkingPlan: 'Dein Tarif wird geprüft…',
     planUnavailable:
       'Dein Tarif konnte nicht geladen werden. Prüfe deine Verbindung und versuche es erneut.',
-    settingsPlanBody: 'Unbegrenzte Cloud-Wörter mit Pro',
   },
   pt: {
     chipYourPlan: 'Seu plano',
@@ -371,7 +368,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     restored: 'Compra restaurada',
     checkingPlan: 'Verificando seu plano…',
     planUnavailable: 'Não foi possível carregar seu plano. Verifique sua conexão e tente de novo.',
-    settingsPlanBody: 'Palavras na nuvem ilimitadas com o Pro',
   },
   it: {
     chipYourPlan: 'Il tuo piano',
@@ -462,7 +458,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     restored: 'Acquisto ripristinato',
     checkingPlan: 'Controllo del tuo piano…',
     planUnavailable: 'Impossibile caricare il tuo piano. Controlla la connessione e riprova.',
-    settingsPlanBody: 'Parole cloud illimitate con Pro',
   },
   ru: {
     chipYourPlan: 'Ваш тариф',
@@ -553,7 +548,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     restored: 'Покупка восстановлена',
     checkingPlan: 'Проверяем ваш тариф…',
     planUnavailable: 'Не удалось загрузить тариф. Проверьте подключение и повторите попытку.',
-    settingsPlanBody: 'Облачные слова без ограничений с Pro',
   },
   'zh-CN': {
     chipYourPlan: '你的方案',
@@ -636,7 +630,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     restored: '购买已恢复',
     checkingPlan: '正在检查你的方案…',
     planUnavailable: '无法加载你的方案。请检查网络后重试。',
-    settingsPlanBody: 'Pro 云端字数不限',
   },
   'zh-TW': {
     chipYourPlan: '你的方案',
@@ -719,7 +712,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     restored: '購買已恢復',
     checkingPlan: '正在檢查你的方案…',
     planUnavailable: '無法載入你的方案。請檢查網路後再試一次。',
-    settingsPlanBody: 'Pro 雲端字數不限',
   },
   ja: {
     chipYourPlan: 'ご利用中のプラン',
@@ -810,7 +802,6 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     restored: '購入を復元しました',
     checkingPlan: 'プランを確認しています…',
     planUnavailable: 'プランを読み込めませんでした。接続を確認してもう一度お試しください。',
-    settingsPlanBody: 'Pro ならクラウド単語数が無制限',
   },
   ar: {
     chipYourPlan: 'خطتك',
@@ -897,6 +888,5 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     restored: 'تمت استعادة الشراء',
     checkingPlan: 'جارٍ التحقق من خطتك…',
     planUnavailable: 'تعذّر تحميل خطتك. تحقق من اتصالك وحاول مرة أخرى.',
-    settingsPlanBody: 'كلمات سحابية غير محدودة مع Pro',
   },
 };

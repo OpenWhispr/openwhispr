@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
+import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import type { UsageInfo } from '@/data/remote/usageApi';
 import { ProgressBar } from '../controls';
@@ -7,6 +8,31 @@ import { useHome } from '../home/kit';
 import { useSettingsLook } from '../settings/look';
 import { useTheme } from '../ThemeProvider';
 import { usePlanT } from './strings';
+import { buildUsageGateParams } from '@/lib/superwall';
+import type { SuperwallPlacement } from '@/lib/superwall';
+import type { useSuperwallGate } from '@/hooks/useSuperwallGate';
+
+/**
+ * A "Go unlimited" door (Settings, Home's low-words card). While a purchase is still on its way
+ * it opens Plan & billing, which shows that wait, rather than a paywall that offers a second
+ * checkout.
+ */
+export function openUpgrade(
+  usage: UsageInfo,
+  register: ReturnType<typeof useSuperwallGate>['register'],
+  placement: SuperwallPlacement,
+): Promise<unknown> {
+  // Loaded on tap, not at import: screens that only show a meter never load the store.
+  const { useAndroidBillingStatus } = require('../billing') as typeof import('../billing');
+  const status = usage.billingUserId
+    ? useAndroidBillingStatus.getState().accounts[usage.billingUserId]
+    : undefined;
+  if (status && status !== 'idle') {
+    router.push('/android-pro');
+    return Promise.resolve();
+  }
+  return register({ placement, params: buildUsageGateParams(usage) });
+}
 
 export type ChipTone = 'neutral' | 'accent' | 'amber';
 

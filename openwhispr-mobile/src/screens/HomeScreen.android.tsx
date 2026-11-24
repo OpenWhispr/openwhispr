@@ -37,7 +37,7 @@ import { getTranscriptionProvider } from '@/lib/inferenceRouting';
 import { accountRequiredForCloud, showAccountRequiredAlert } from '@/lib/accountAccess';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore';
-import { GlassPill, WordsMeter } from '@/android/plan/parts';
+import { GlassPill, WordsMeter, openUpgrade } from '@/android/plan/parts';
 import { isLowOnWords } from '@/android/plan/planState';
 import { usePlanT } from '@/android/plan/strings';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
@@ -464,10 +464,11 @@ export default function AndroidHome() {
                 <GlassPill
                   label={planT('goUnlimited')}
                   onPress={() => {
-                    register({
-                      placement: SUPERWALL_PLACEMENTS.cloudUsageWarningTapped,
-                      params: buildUsageGateParams(usage),
-                    }).catch((error: Error) => Alert.alert(t('errorTitle'), error.message));
+                    openUpgrade(
+                      usage,
+                      register,
+                      SUPERWALL_PLACEMENTS.cloudUsageWarningTapped,
+                    ).catch((error: Error) => Alert.alert(t('errorTitle'), error.message));
                   }}
                 />
               }

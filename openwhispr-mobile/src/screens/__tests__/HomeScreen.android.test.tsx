@@ -1,3 +1,6 @@
+jest.mock('@/android/billing', () => ({
+  useAndroidBillingStatus: { getState: () => ({ accounts: {} }) },
+}));
 jest.mock('@/store/useTranscriptStore.android', () =>
   jest.requireMock('@/store/useTranscriptStore'),
 );
