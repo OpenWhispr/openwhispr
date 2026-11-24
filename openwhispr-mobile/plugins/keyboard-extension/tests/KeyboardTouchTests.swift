@@ -53,13 +53,18 @@ private final class FakeDirectDictation: DirectDictationControlling {
   var onStateChange: ((DirectDictationState) -> Void)?
   var onLevel: ((Float) -> Void)?
   var onText: ((String) -> Void)?
+  var onLocalModelLog: ((String) -> Void)?
   var starts = 0
   var confirms = 0
   var cancels = 0
   var appears = 0
   var disappears = 0
+  var warmUps = 0
+  var releases = 0
 
   func attach(to view: UIView) {}
+  func warmUp() { warmUps += 1 }
+  func releaseLocalModelWhenIdle() { releases += 1 }
   func start() { starts += 1 }
   func confirm() { confirms += 1 }
   func cancel() { cancels += 1 }

@@ -97,3 +97,42 @@ struct KeyboardParakeetBudget {
     return available >= transcriptionHeadroom
   }
 }
+
+/// When the keyboard lets go of a loaded Parakeet model. A memory warning releases it, but never
+/// under a running transcription, which still holds the model: then it goes when that ends.
+/// After a warning, nothing loads for a while, so a keyboard near its limit isn't reloaded
+/// straight into the next warning.
+struct ParakeetResidency {
+  static let cooldownAfterWarning: TimeInterval = 300
+
+  private var transcriptions = 0
+  private var releasePending = false
+  private var lastWarning: TimeInterval?
+
+  var isTranscribing: Bool { transcriptions > 0 }
+
+  /// Whether to release now. `now` is the system uptime.
+  mutating func memoryWarning(now: TimeInterval) -> Bool {
+    lastWarning = now
+    guard isTranscribing else { return true }
+    releasePending = true
+    return false
+  }
+
+  mutating func transcriptionStarted() {
+    transcriptions += 1
+  }
+
+  /// Whether to release now, for a warning that arrived during the transcription.
+  mutating func transcriptionEnded() -> Bool {
+    transcriptions = max(0, transcriptions - 1)
+    guard !isTranscribing, releasePending else { return false }
+    releasePending = false
+    return true
+  }
+
+  func mayLoad(now: TimeInterval) -> Bool {
+    guard let lastWarning else { return true }
+    return now - lastWarning >= Self.cooldownAfterWarning
+  }
+}

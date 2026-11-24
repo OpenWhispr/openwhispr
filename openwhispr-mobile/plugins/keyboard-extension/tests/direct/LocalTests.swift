@@ -4,6 +4,7 @@ extension DirectDictationTests {
   static func testLocal() {
     testWavHeader()
     testBudget()
+    testResidency()
   }
 
   static func testWavHeader() {
@@ -53,5 +54,32 @@ extension DirectDictationTests {
     expect(B.allowsLoad(footprint: 30 * mb, available: 0), true, "budget: no limit reported loads")
     expect(B.allowsTranscription(footprint: 30 * mb, available: 0), true, "budget: no limit reported transcribes")
     expect(B.allowsLoad(footprint: 56 * mb, available: 64 * mb), true, "budget: exactly 120 MB and 64 MB loads")
+  }
+
+  static func testResidency() {
+    var idle = ParakeetResidency()
+    expect(idle.mayLoad(now: 0), true, "residency: loads before any warning")
+    expect(idle.memoryWarning(now: 100), true, "residency: a warning while idle releases now")
+    expect(idle.isTranscribing, false, "residency: idle is not transcribing")
+
+    var busy = ParakeetResidency()
+    busy.transcriptionStarted()
+    expect(busy.isTranscribing, true, "residency: transcribing after start")
+    expect(busy.memoryWarning(now: 100), false, "residency: a warning while transcribing waits")
+    expect(busy.transcriptionEnded(), true, "residency: released when the transcription ends")
+    busy.transcriptionStarted()
+    expect(busy.transcriptionEnded(), false, "residency: a later transcription releases nothing")
+
+    var quiet = ParakeetResidency()
+    quiet.transcriptionStarted()
+    expect(quiet.transcriptionEnded(), false, "residency: no warning, nothing to release")
+
+    var cooling = ParakeetResidency()
+    _ = cooling.memoryWarning(now: 1_000)
+    expect(cooling.mayLoad(now: 1_000), false, "residency: no load right after a warning")
+    expect(cooling.mayLoad(now: 1_299), false, "residency: no load 299 s after a warning")
+    expect(cooling.mayLoad(now: 1_300), true, "residency: loads 300 s after a warning")
+    _ = cooling.memoryWarning(now: 1_400)
+    expect(cooling.mayLoad(now: 1_500), false, "residency: a second warning restarts the wait")
   }
 }

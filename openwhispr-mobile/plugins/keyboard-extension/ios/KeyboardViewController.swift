@@ -1498,6 +1498,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // The field's traits can arrive after viewWillAppear with no textDidChange to announce
     // them (an empty number field): the pad, the bottom row and the return key follow here.
     refreshFieldAwareKeys()
+    // A Local snapshot's model takes seconds to load, so start before the first tap.
+    directDictation?.warmUp()
     // Without Full Access every write below is a no-op and every resume gate
     // reads a dead App Group. Today this method reaches refreshRecordButton()
     // anyway, but only because four separate resume gates each happen to fail
@@ -1538,6 +1540,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     logRecordMarker("viewDidAppear", extra: "consumedPending=\(consumedPendingTranscript)")
     startHandoffObservers()
     startRecordingPoll()
+  }
+
+  override func didReceiveMemoryWarning() {
+    super.didReceiveMemoryWarning()
+    directDictation?.releaseLocalModelWhenIdle()
   }
 
   override func viewWillDisappear(_ animated: Bool) {
@@ -5500,6 +5507,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     Self.directOwner = self
     direct.readDocumentID = { [weak self] in self?.currentDocumentID }
     direct.attach(to: view)
+    direct.onLocalModelLog = { [weak self] line in self?.logRecordMarker("direct.local", extra: line) }
     direct.onStateChange = { [weak self] state in self?.renderDirectState(state) }
     direct.onLevel = { [weak self] level in
       guard let self, self.directDictation?.state == .recording else { return }

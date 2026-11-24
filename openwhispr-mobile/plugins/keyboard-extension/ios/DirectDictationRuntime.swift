@@ -11,7 +11,13 @@ protocol DirectDictationControlling: AnyObject {
   var onStateChange: ((DirectDictationState) -> Void)? { get set }
   var onLevel: ((Float) -> Void)? { get set }
   var onText: ((String) -> Void)? { get set }
+  /// One line per on-device model load or transcription (timings and MB, never text).
+  var onLocalModelLog: ((String) -> Void)? { get set }
   func attach(to view: UIView)
+  /// Starts loading the on-device model a Local snapshot names, so the next tap can use it.
+  func warmUp()
+  /// A memory warning: lets go of the on-device model once no transcription needs it.
+  func releaseLocalModelWhenIdle()
   func start()
   func confirm()
   func cancel()
@@ -29,6 +35,9 @@ final class DirectDictationRuntime {
   let dictation: DirectDictation
   private let capture = WebAudioCapture()
   private let hasContainer: Bool
+  #if canImport(FluidAudio)
+  private let parakeet: KeyboardParakeetTranscriber
+  #endif
 
   private init() {
     let appGroupId = "group.\(Self.containingAppBundleIdentifier)"
@@ -39,6 +48,13 @@ final class DirectDictationRuntime {
       .appendingPathComponent(DirectDictationStore.folderName, isDirectory: true)
     let store = DirectDictationStore(directory: folder, now: { Int64(Date().timeIntervalSince1970 * 1000) })
     store.prune()
+    #if canImport(FluidAudio)
+    let parakeet = KeyboardParakeetTranscriber(appGroupContainer: container)
+    self.parakeet = parakeet
+    let localTranscriber: DirectLocalTranscriber? = parakeet
+    #else
+    let localTranscriber: DirectLocalTranscriber? = nil
+    #endif
 
     dictation = DirectDictation(DirectDependencies(
       capture: capture,
@@ -52,8 +68,7 @@ final class DirectDictationRuntime {
       // The job id format the keyboard already uses: <ms>-<UUID>.
       makeJobId: { "\(Int64(Date().timeIntervalSince1970 * 1000))-\(UUID().uuidString)" },
       makeBoundary: { "OpenWhispr-\(UUID().uuidString)" },
-      // Parakeet in the keyboard comes next; until then Local snapshots hand off to the app.
-      localTranscriber: nil
+      localTranscriber: localTranscriber
     ))
   }
 
@@ -112,6 +127,30 @@ extension DirectDictationRuntime: DirectDictationControlling {
   var onText: ((String) -> Void)? {
     get { dictation.onText }
     set { dictation.onText = newValue }
+  }
+
+  var onLocalModelLog: ((String) -> Void)? {
+    get {
+      #if canImport(FluidAudio)
+      return parakeet.log
+      #else
+      return nil
+      #endif
+    }
+    set {
+      #if canImport(FluidAudio)
+      parakeet.log = newValue
+      #endif
+    }
+  }
+
+  // Reading eligibility asks the transcriber to prepare a Local snapshot's model.
+  func warmUp() { _ = dictation.isEligible }
+
+  func releaseLocalModelWhenIdle() {
+    #if canImport(FluidAudio)
+    parakeet.releaseWhenIdle()
+    #endif
   }
 
   func start() { dictation.start() }
