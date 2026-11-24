@@ -169,8 +169,9 @@ export function BubbleCard({
           }}
         />
       </View>
+      {/* Keyed, so the ask's glass button is never re-rendered into Dictate (see PillButton). */}
       {needsPermission ? (
-        <View style={{ gap: 10 }}>
+        <View key="permission" style={{ gap: 10 }}>
           <PillButton
             primary
             icon={PERMISSION_ICON[missing[0]]}
@@ -192,6 +193,7 @@ export function BubbleCard({
         </View>
       ) : (
         <View
+          key="actions"
           onLayout={({ nativeEvent }) => setRowWidth(Math.round(nativeEvent.layout.width))}
           style={{ flexDirection: stacked ? 'column' : 'row', gap: stacked ? 10 : 8 }}
         >

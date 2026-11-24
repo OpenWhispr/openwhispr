@@ -143,7 +143,10 @@ export function PillButton({
           gap: compact ? 4 : 8,
           opacity: disabled ? (primary ? 0.5 : 0.4) : 1,
         },
-        primary ? gloss : raised,
+        // Primary keeps an explicit zero border: a gradient view whose border goes from unset to
+        // 1 as it re-renders crashed Android's gradient drawing (LinearGradient
+        // IllegalArgumentException).
+        primary ? [gloss, { borderWidth: 0 }] : raised,
         !primary && pressed && !disabled && raisedPressed,
         primary && pressed && !disabled && glossPressed,
         style,
