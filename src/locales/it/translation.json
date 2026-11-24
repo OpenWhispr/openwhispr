@@ -640,6 +640,7 @@
       "failed": "Impossibile verificare l’accesso.",
       "microphone": "Attiva OpenWhispr in Microfono.",
       "accessibility": "Trascina OpenWhispr in Accessibilità e attivalo.",
+      "selectApp": "In Privacy e sicurezza, apri System & App Protection Override e seleziona OpenWhispr.",
       "systemAudio": "Attiva OpenWhispr in Solo registrazione audio di sistema.",
       "screenContext": "Trascina OpenWhispr in Registrazione schermo e audio di sistema e attivalo.",
       "settings": "Impostazioni",

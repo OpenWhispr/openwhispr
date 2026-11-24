@@ -640,6 +640,7 @@
       "failed": "Could not check access.",
       "microphone": "Turn on OpenWhispr in Microphone.",
       "accessibility": "Drag OpenWhispr into Accessibility, then turn it on.",
+      "selectApp": "In Privacy & Security, open System & App Protection Override and select OpenWhispr.",
       "systemAudio": "Turn on OpenWhispr under System Audio Recording Only.",
       "screenContext": "Drag OpenWhispr into Screen & System Audio Recording, then turn it on.",
       "settings": "Open Settings",

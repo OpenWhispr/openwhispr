@@ -640,6 +640,7 @@
       "failed": "Zugriff konnte nicht geprüft werden.",
       "microphone": "Aktiviere OpenWhispr unter Mikrofon.",
       "accessibility": "Ziehe OpenWhispr in Bedienungshilfen und aktiviere es.",
+      "selectApp": "Öffne in „Datenschutz & Sicherheit“ den Bereich „System & App Protection Override“ und wähle OpenWhispr aus.",
       "systemAudio": "Aktiviere OpenWhispr unter „Nur Systemaudioaufnahme“.",
       "screenContext": "Ziehe OpenWhispr in „Bildschirm- & Systemaudioaufnahme“ und aktiviere es.",
       "settings": "Einstellungen",

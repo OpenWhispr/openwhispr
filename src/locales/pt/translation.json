@@ -619,6 +619,7 @@
       "failed": "Não foi possível verificar o acesso.",
       "microphone": "Ative o OpenWhispr em Microfone.",
       "accessibility": "Arraste o OpenWhispr para Acessibilidade e ative-o.",
+      "selectApp": "Em Privacidade e Segurança, abra System & App Protection Override e selecione o OpenWhispr.",
       "systemAudio": "Ative o OpenWhispr em Apenas gravação de áudio do sistema.",
       "screenContext": "Arraste o OpenWhispr para Gravação de tela e áudio do sistema e ative-o.",
       "settings": "Abrir Ajustes",
