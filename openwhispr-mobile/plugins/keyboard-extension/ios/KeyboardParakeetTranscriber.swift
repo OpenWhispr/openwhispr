@@ -95,6 +95,12 @@ final class KeyboardParakeetTranscriber: @preconcurrency DirectLocalTranscriber 
           outcome = .success((asr, true, String(format: "neural +%.0f MB", Self.mb(rise))))
         } else {
           let share = await Task.detached(priority: .utility) { await Self.encoderNeuralShare(in: directory) }.value
+          // A plan that can't be read says nothing about where the model runs: treat it as a
+          // failed load (retried later), never as proof that the model is off the Neural Engine.
+          guard let share else {
+            await asr.cleanup()
+            throw TranscriberError.computePlanUnreadable
+          }
           outcome = .success((asr, share >= Self.neuralShareThreshold,
                               String(format: "neural +%.0f MB, encoder plan %.0f%% Neural Engine", Self.mb(rise), share * 100)))
         }
@@ -175,6 +181,7 @@ final class KeyboardParakeetTranscriber: @preconcurrency DirectLocalTranscriber 
     case notReady
     case noRoom
     case emptyText
+    case computePlanUnreadable
   }
 
   private func loadFinished(
@@ -304,14 +311,15 @@ final class KeyboardParakeetTranscriber: @preconcurrency DirectLocalTranscriber 
     return vocabulary
   }
 
-  /// The share of the encoder's estimated cost Core ML plans on the Neural Engine.
-  nonisolated private static func encoderNeuralShare(in directory: URL) async -> Double {
+  /// The share of the encoder's estimated cost Core ML plans on the Neural Engine; nil when the
+  /// plan can't be read or carries no costs.
+  nonisolated private static func encoderNeuralShare(in directory: URL) async -> Double? {
     let configuration = AsrModels.defaultConfiguration()
     configuration.computeUnits = .cpuAndNeuralEngine
     let encoder = directory.appendingPathComponent(ModelNames.ASR.encoderFile)
     guard let plan = try? await MLComputePlan.load(contentsOf: encoder, configuration: configuration),
       case let .program(program) = plan.modelStructure
-    else { return 0 }
+    else { return nil }
     var neural = 0.0
     var total = 0.0
     func visit(_ block: MLModelStructure.Program.Block) {
@@ -323,7 +331,7 @@ final class KeyboardParakeetTranscriber: @preconcurrency DirectLocalTranscriber 
       }
     }
     program.functions.values.forEach { visit($0.block) }
-    return total > 0 ? neural / total : 0
+    return total > 0 ? neural / total : nil
   }
 
   nonisolated private static var uptime: TimeInterval { ProcessInfo.processInfo.systemUptime }
@@ -335,4 +343,9 @@ private struct TaskCancellable: DirectCancellable {
   let task: Task<Void, Never>?
   func cancel() { task?.cancel() }
 }
+#elseif OPENWHISPR_KEYBOARD_EXTENSION
+// The keyboard target sets OPENWHISPR_KEYBOARD_EXTENSION (withKeyboardExtension.js), and the
+// swiftc test harnesses don't. Without this, a keyboard built with FluidAudio unlinked would
+// still succeed, with no transcriber, and every Local snapshot would hand off forever.
+#error("FluidAudio must be linked into the keyboard target")
 #endif

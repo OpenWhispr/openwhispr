@@ -587,6 +587,9 @@ function withKeyboardExtension(config) {
       // FastClusterWrapper is C++.
       OTHER_LDFLAGS: '"$(inherited) -lc++"',
       OTHER_SWIFT_FLAGS: `"$(inherited) ${FLUIDAUDIO_SWIFT_FLAGS}"`,
+      // Marks the real keyboard target, so KeyboardParakeetTranscriber.swift fails the build when
+      // FluidAudio isn't linked; the swiftc test harnesses compile the same sources without it.
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: '"$(inherited) OPENWHISPR_KEYBOARD_EXTENSION"',
       ...DERIVED_DATA_SETTINGS,
       SKIP_INSTALL: 'YES',
       CODE_SIGN_STYLE: 'Manual',

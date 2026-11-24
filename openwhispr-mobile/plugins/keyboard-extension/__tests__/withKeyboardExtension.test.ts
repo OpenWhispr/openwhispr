@@ -689,6 +689,9 @@ describe('withKeyboardExtension mods', () => {
       expect(unquote(settings.BUILD_ROOT_TO_DERIVED_DATA_SUFFIX_archive)).toBe('/../../..');
       expect(unquote(settings.BUILD_ROOT_TO_DERIVED_DATA_SUFFIX_install)).toBe('/../../..');
       expect(String(settings.OTHER_LDFLAGS)).toContain('-lc++');
+      expect(unquote(settings.SWIFT_ACTIVE_COMPILATION_CONDITIONS)).toBe(
+        '$(inherited) OPENWHISPR_KEYBOARD_EXTENSION',
+      );
       expect(String(settings.OTHER_SWIFT_FLAGS)).toContain(
         `-Xcc -fmodule-map-file=${checkouts}/FastClusterWrapper/include/module.modulemap`,
       );
