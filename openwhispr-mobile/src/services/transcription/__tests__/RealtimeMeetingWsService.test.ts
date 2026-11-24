@@ -1180,6 +1180,50 @@ describe('startRealtimeMeetingWs — audio a dead leg never transcribed', () => 
     expect(session.droppedWindows()).toEqual([]);
   });
 
+  it('settles on the committed turn our commit cut short mid-speech', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    await sendSeconds(2); // 0–2000 ms sent
+    leg1.emit(speechStarted('m', 1000)); // still being spoken: no speech_stopped
+
+    const progress = track(session.stop()); // our commit is sent mid-speech
+    leg1.emit(committed('m')); // the server reuses the id it announced at speech_started
+    await flushMicro();
+    expect(progress.done()).toBe(false); // m is still being transcribed
+    expect(leg1.closed).toBe(false);
+
+    leg1.emit(completed('m', 'last words'));
+    await flushMicro();
+
+    // Settled on m itself, without waiting out STOP_FLUSH_TIMEOUT_MS, and m (no end time,
+    // our commit's turn) credits everything sent before the commit: nothing lost.
+    expect(progress.done()).toBe(true);
+    expect(leg1.closed).toBe(true);
+    expect(session.droppedWindows()).toEqual([]);
+  });
+
+  it('does not settle on a VAD turn that had already stopped before our commit', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    await sendSeconds(2); // 0–2000 ms sent
+    completeTurn(leg1, 'a', 0, 1000); // transcribed up to 1000 ms
+    leg1.emit(speechStarted('v', 1000));
+    leg1.emit(speechStopped('v', 1800)); // VAD closed v before our commit
+
+    const progress = track(session.stop());
+    leg1.emit(committed('v')); // VAD's own commit, not our reply
+    leg1.emit(completed('v', 'vad words'));
+    await flushMicro();
+    expect(progress.done()).toBe(false);
+    expect(leg1.closed).toBe(false);
+
+    await jest.advanceTimersByTimeAsync(STOP_FLUSH_TIMEOUT_MS);
+    await flushMicro();
+
+    // No reply ever came: the drain ran to its timeout and the leg counts as lost from v's
+    // end (1800 ms) to what was sent (2000 ms).
+    expect(progress.done()).toBe(true);
+    expect(session.droppedWindows()).toEqual([{ startMs: 1800, endMs: 2000 }]);
+  });
+
   it('records a failed turn by its own span even when the leg drains clean afterwards', async () => {
     const { session, leg1 } = await boot({}, { sampleRate: 100 });
     await sendSeconds(3); // 0–3000 ms sent

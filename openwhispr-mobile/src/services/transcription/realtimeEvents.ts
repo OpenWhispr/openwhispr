@@ -79,6 +79,11 @@ export interface RealtimeEventReducer {
   ) => { itemId: string; startMs: number | null; endMs: number | null }[];
   /** Whether server VAD started this item (a `speech_started` was seen and it hasn't finished). */
   isSpeechStarted: (itemId: string) => boolean;
+  /**
+   * Items under `prefix` whose speech has started and not yet stopped. A manual commit sent
+   * now cuts such a turn short, so the server answers it under that turn's id.
+   */
+  openSpeechItemIds: (prefix: string) => string[];
   /** Forget pending items whose id starts with `prefix` (a leg that closed won't finish them). */
   dropPendingItems: (prefix: string) => void;
 }
@@ -92,6 +97,8 @@ export function createRealtimeEventReducer(callbacks: RealtimeCallbacks): Realti
   const pending = new Set<string>();
   // Items server VAD opened; a manual commit's item never gets a speech_started.
   const speechStarted = new Set<string>();
+  // Of those, the ones with no speech_stopped yet: server VAD hasn't committed them.
+  const speechOpen = new Set<string>();
 
   const handleEvent = (raw: unknown): void => {
     callbacks.onDebug?.(raw);
@@ -102,6 +109,7 @@ export function createRealtimeEventReducer(callbacks: RealtimeCallbacks): Realti
       case 'input_audio_buffer.speech_started': {
         if (!itemId) break;
         speechStarted.add(itemId);
+        speechOpen.add(itemId);
         const t = timing.get(itemId) ?? { startMs: null, endMs: null };
         if (typeof event.audio_start_ms === 'number') t.startMs = event.audio_start_ms;
         timing.set(itemId, t);
@@ -109,6 +117,7 @@ export function createRealtimeEventReducer(callbacks: RealtimeCallbacks): Realti
       }
       case 'input_audio_buffer.speech_stopped': {
         if (!itemId) break;
+        speechOpen.delete(itemId);
         const t = timing.get(itemId) ?? { startMs: null, endMs: null };
         if (typeof event.audio_end_ms === 'number') t.endMs = event.audio_end_ms;
         timing.set(itemId, t);
@@ -129,6 +138,7 @@ export function createRealtimeEventReducer(callbacks: RealtimeCallbacks): Realti
         if (!itemId) break;
         pending.delete(itemId);
         speechStarted.delete(itemId);
+        speechOpen.delete(itemId);
         const t = timing.get(itemId) ?? { startMs: null, endMs: null };
         callbacks.onTranscriptionFailed?.({ itemId, startMs: t.startMs, endMs: t.endMs });
         break;
@@ -137,6 +147,7 @@ export function createRealtimeEventReducer(callbacks: RealtimeCallbacks): Realti
         if (!itemId) break;
         pending.delete(itemId);
         speechStarted.delete(itemId);
+        speechOpen.delete(itemId);
         const t = timing.get(itemId) ?? { startMs: null, endMs: null };
         const utterance: RealtimeUtterance = {
           itemId,
@@ -175,6 +186,8 @@ export function createRealtimeEventReducer(callbacks: RealtimeCallbacks): Realti
       return out;
     },
     isSpeechStarted: (itemId: string): boolean => speechStarted.has(itemId),
+    openSpeechItemIds: (prefix: string): string[] =>
+      [...speechOpen].filter((itemId) => itemId.startsWith(prefix)),
     pendingItemCountWithPrefix: (prefix: string): number => {
       let count = 0;
       for (const itemId of pending) {
@@ -188,6 +201,9 @@ export function createRealtimeEventReducer(callbacks: RealtimeCallbacks): Realti
       }
       for (const itemId of speechStarted) {
         if (itemId.startsWith(prefix)) speechStarted.delete(itemId);
+      }
+      for (const itemId of speechOpen) {
+        if (itemId.startsWith(prefix)) speechOpen.delete(itemId);
       }
     },
   };

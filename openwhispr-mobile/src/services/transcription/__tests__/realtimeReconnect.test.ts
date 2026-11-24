@@ -239,6 +239,27 @@ describe('createRealtimeEventReducer failed turns and per-leg pending', () => {
     expect(reducer.isSpeechStarted('L1:m')).toBe(false);
   });
 
+  it('lists the turns under a prefix whose speech has started and not stopped', () => {
+    const reducer = createRealtimeEventReducer({});
+    const started = (itemId: string): void =>
+      reducer.handleEvent({ type: 'input_audio_buffer.speech_started', item_id: itemId });
+    started('L1:open');
+    started('L1:stopped');
+    started('L2:open');
+    reducer.handleEvent({ type: 'input_audio_buffer.speech_stopped', item_id: 'L1:stopped' });
+
+    expect(reducer.openSpeechItemIds('L1:')).toEqual(['L1:open']);
+
+    reducer.handleEvent({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'L1:open',
+      transcript: 'words',
+    });
+    expect(reducer.openSpeechItemIds('L1:')).toEqual([]);
+    reducer.dropPendingItems('L2:');
+    expect(reducer.openSpeechItemIds('L2:')).toEqual([]);
+  });
+
   it('reports a failed turn it has no timing for with null times', () => {
     const onTranscriptionFailed = jest.fn();
     const reducer = createRealtimeEventReducer({ onTranscriptionFailed });

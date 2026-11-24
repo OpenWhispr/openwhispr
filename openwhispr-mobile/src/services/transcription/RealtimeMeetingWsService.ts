@@ -234,10 +234,12 @@ export async function startRealtimeMeetingWs(
   // Flips false on the first release so every exit path can call releaseLease safely.
   let leaseHeld = false;
   // Legs committed and waiting for their last turn; `sawReply` is set once the server
-  // answered our commit (committed or commit_empty) on that leg.
+  // answered our commit (committed or commit_empty) on that leg. `openAtCommit` holds the
+  // turns still being spoken when the commit went out.
   const drains = new Set<{
     ws: WebSocketLike;
     sawReply: boolean;
+    openAtCommit: ReadonlySet<string>;
     finish: (clean: boolean) => void;
   }>();
   const drainPromises = new Set<Promise<void>>();
@@ -319,6 +321,20 @@ export async function startRealtimeMeetingWs(
     }
   };
 
+  // Server VAD commits a turn only after its speech_stopped. So a `committed` answers our
+  // commit when VAD never started the item, or when the item was still being spoken as the
+  // commit went out: the server may cut that turn short under the id it already announced.
+  // A turn VAD had already stopped is its own commit, and ours is still to come.
+  const markDrainReplyForCommitted = (ws: WebSocketLike, itemId: string | null): void => {
+    const vadStarted = itemId !== null && reducer.isSpeechStarted(itemId);
+    for (const drain of drains) {
+      if (drain.ws !== ws) continue;
+      if (!vadStarted || (itemId !== null && drain.openAtCommit.has(itemId))) {
+        drain.sawReply = true;
+      }
+    }
+  };
+
   // A closed leg never finishes its pending turns; left in place they would hold every
   // later drain to its full timeout.
   const forgetLegTurns = (ws: WebSocketLike): void => {
@@ -349,10 +365,14 @@ export async function startRealtimeMeetingWs(
       closeWs(ws);
       return Promise.resolve();
     }
+    const commitMeta = legMeta.get(ws);
+    // Read before the send: replies can only arrive after it.
+    const openAtCommit = new Set(
+      commitMeta ? reducer.openSpeechItemIds(legItemPrefix(commitMeta.legIndex)) : [],
+    );
     try {
       ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-      const meta = legMeta.get(ws);
-      if (meta) meta.commitSentUpToMs = meta.sentUpToMs;
+      if (commitMeta) commitMeta.commitSentUpToMs = commitMeta.sentUpToMs;
     } catch {
       recordLegLoss(ws);
       closeWs(ws);
@@ -363,6 +383,7 @@ export async function startRealtimeMeetingWs(
       const drain = {
         ws,
         sawReply: false,
+        openAtCommit,
         // `clean`: the reply came and none of this leg's own turns are still pending.
         finish: (clean: boolean): void => {
           if (!drains.delete(drain)) return;
@@ -458,13 +479,13 @@ export async function startRealtimeMeetingWs(
     } finally {
       eventLeg = null;
     }
-    // Only a commit VAD didn't start answers ours; a VAD turn landing just after our commit
-    // must not settle the leg before our own turn is transcribed.
-    if (
-      evt.type === 'input_audio_buffer.committed' &&
-      !(typeof rewritten.item_id === 'string' && reducer.isSpeechStarted(rewritten.item_id))
-    ) {
-      markDrainReply(ws);
+    // A VAD turn landing just after our commit must not settle the leg before our own turn
+    // is transcribed.
+    if (evt.type === 'input_audio_buffer.committed') {
+      markDrainReplyForCommitted(
+        ws,
+        typeof rewritten.item_id === 'string' ? rewritten.item_id : null,
+      );
     }
     if (drains.size > 0) settleDrains();
   };
