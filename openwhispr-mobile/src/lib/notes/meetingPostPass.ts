@@ -29,16 +29,28 @@ const transcribeWithOneRetry = async (deps: PostPassDeps, uri: string): Promise<
   return null;
 };
 
-/** Transcribes each dropped stretch and returns segments for the text it got. Never rejects: a failed stretch is skipped and counted. */
+export interface BackfillResult {
+  segments: CloudMeetingSegment[];
+  /** Pieces not transcribed: the one that failed both tries and every piece after it. */
+  failed: number;
+  /** Those pieces' windows on the recording's clock, for a later attempt. */
+  failedWindows: AudioWindow[];
+}
+
+/**
+ * Transcribes each dropped stretch and returns segments for the text it got. Never rejects.
+ * Stops at the first piece that fails twice: offline, every later piece would wait out the
+ * same upload timeouts while the user watches the processing screen.
+ */
 export async function backfillDroppedAudio(
   recordingUri: string,
   windows: AudioWindow[],
   deps: PostPassDeps,
-): Promise<{ segments: CloudMeetingSegment[]; failed: number }> {
+): Promise<BackfillResult> {
   const segments: CloudMeetingSegment[] = [];
-  let failed = 0;
+  const pieces = splitWindows(windows, BACKFILL_CHUNK_MS, BACKFILL_MIN_MS);
   // One piece at a time keeps memory and upload bandwidth bounded on a long outage.
-  for (const piece of splitWindows(windows, BACKFILL_CHUNK_MS, BACKFILL_MIN_MS)) {
+  for (const [index, piece] of pieces.entries()) {
     let pieceUri: string;
     try {
       pieceUri = await deps.extract(recordingUri, piece.startMs, piece.endMs);
@@ -46,27 +58,30 @@ export async function backfillDroppedAudio(
       // The recording may not reach this far (it stopped early): nothing to transcribe.
       continue;
     }
+    let text: string | null;
     try {
-      const text = await transcribeWithOneRetry(deps, pieceUri);
-      if (text === null) {
-        failed += 1;
-      } else if (text.trim()) {
-        segments.push({
-          text: text.trim(),
-          startMs: piece.startMs,
-          endMs: piece.endMs,
-          speakerLabel: null,
-          sortOrder: segments.length,
-        });
-      }
+      text = await transcribeWithOneRetry(deps, pieceUri);
     } finally {
       const extracted = pieceUri;
       await Promise.resolve()
         .then(() => deps.cleanup(extracted))
         .catch(() => undefined);
     }
+    if (text === null) {
+      const failedWindows = pieces.slice(index);
+      return { segments, failed: failedWindows.length, failedWindows };
+    }
+    if (text.trim()) {
+      segments.push({
+        text: text.trim(),
+        startMs: piece.startMs,
+        endMs: piece.endMs,
+        speakerLabel: null,
+        sortOrder: segments.length,
+      });
+    }
   }
-  return { segments, failed };
+  return { segments, failed: 0, failedWindows: [] };
 }
 
 /** Live and backfilled segments in time order, sortOrder renumbered. */

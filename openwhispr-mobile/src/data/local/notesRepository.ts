@@ -1,4 +1,4 @@
-import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
+import { clearPendingBackfill, isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
 import {
   eq,
   ne,
@@ -670,6 +670,8 @@ export class LocalNotesRepository implements NotesRepository {
       .get();
     if (row?.sourceFile && isManagedMeetingAudioUri(id, row.sourceFile)) {
       FileSystem.deleteAsync(row.sourceFile, { idempotent: true }).catch(() => {});
+      // What the recording still owed the transcript goes with it.
+      clearPendingBackfill(id).catch(() => {});
     }
     this.database.delete(transcriptSegments).where(eq(transcriptSegments.noteId, id)).run();
     this.database.delete(speakers).where(eq(speakers.noteId, id)).run();
@@ -1656,6 +1658,7 @@ export class LocalNotesRepository implements NotesRepository {
     for (const row of rows) {
       if (row.sourceFile && isManagedMeetingAudioUri(row.id, row.sourceFile)) {
         FileSystem.deleteAsync(row.sourceFile, { idempotent: true }).catch(() => {});
+        clearPendingBackfill(row.id).catch(() => {});
       }
     }
     this.database.delete(transcriptSegments).run();

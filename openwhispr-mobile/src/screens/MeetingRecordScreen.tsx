@@ -403,10 +403,15 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
       const captured = cloudMeeting.capturedSeconds;
       // From when capture began, not note creation: the first-run mic prompt and the connect
       // come in between and would read as missed meeting time.
+      const elapsedMs =
+        cloudMeeting.liveSinceMs == null ? 0 : Date.now() - cloudMeeting.liveSinceMs;
       const coverage = captureCoverage(
         (cloudMeeting.capturedSeconds - cloudMeeting.droppedSeconds) * 1000,
-        cloudMeeting.liveSinceMs == null ? 0 : Date.now() - cloudMeeting.liveSinceMs,
+        elapsedMs,
       );
+      // With a recording, audio the stream dropped is transcribed from the file afterwards,
+      // so only audio the mic never delivered is missing from the note.
+      const recordedCoverage = captureCoverage(cloudMeeting.capturedSeconds * 1000, elapsedMs);
       const hadError = cloudMeeting.status === 'error';
       const { interruptions, reconnects, droppedSeconds } = cloudMeeting;
       setPhase('processing');
@@ -438,7 +443,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
           reconnects,
           droppedSeconds,
         });
-        alertIfPartialCapture(coverage);
+        alertIfPartialCapture(result.recordingUri ? recordedCoverage : coverage);
       } catch (error) {
         markNoteFailed(noteId);
         Sentry.captureException(error);

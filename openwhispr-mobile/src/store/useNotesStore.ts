@@ -1,4 +1,8 @@
-import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
+import {
+  clearPendingBackfill,
+  isManagedMeetingAudioUri,
+  savePendingBackfill,
+} from '@/lib/transcriptAudio';
 import { create } from 'zustand';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sentry from '@sentry/react-native';
@@ -26,6 +30,7 @@ import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
 import type { TranscriptionStatus } from '@/types';
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
 import type { CloudMeetingResult } from '@/hooks/useCloudMeeting';
+import type { AudioWindow } from '@/services/transcription/realtimeReconnect';
 import { assertTransition, canTransition } from '@/lib/diarization/transcriptionStatus';
 import { formatTranscriptForExport } from '@/lib/diarization/transcriptDisplay';
 import { buildMergeTargetPatch, buildRenameSpeakerPatch } from '@/lib/diarization/speakerEdits';
@@ -485,31 +490,68 @@ const errorCode = (error: unknown): string => {
   return typeof code === 'string' ? code : 'unknown';
 };
 
-/** Fills the stretches the live stream missed. Best effort: on any failure the live transcript stands. */
+/**
+ * Fills the stretches the live stream missed. Best effort: on any failure the live transcript
+ * stands, and the windows not transcribed come back so the recording can be kept for them.
+ */
 const backfillCloudMeeting = async (
   noteId: number,
   recordingUri: string,
   live: CloudMeetingSegment[],
   droppedWindows: CloudMeetingResult['droppedWindows'],
-): Promise<CloudMeetingSegment[]> => {
+): Promise<{ transcript: CloudMeetingSegment[]; failedWindows: AudioWindow[] }> => {
   try {
-    const { segments } = await backfillDroppedAudio(
+    const { segments, failedWindows } = await backfillDroppedAudio(
       recordingUri,
       droppedWindows,
       createCloudPostPassDeps(getPreferredTranscriptionLanguage()),
     );
     // A note deleted meanwhile has lost its segments; writing would bring them back.
-    if (segments.length === 0 || !isLiveNote(noteId)) return live;
+    if (segments.length === 0 || !isLiveNote(noteId)) return { transcript: live, failedWindows };
     const merged = mergeTranscript(live, segments);
     notesRepository.replaceSegments(noteId, withNoteId(noteId, merged));
-    return merged;
+    return { transcript: merged, failedWindows };
   } catch (error) {
     Sentry.captureMessage('meeting-post-pass-backfill-failed', {
       level: 'warning',
       tags: { feature: 'meeting-post-pass', error_code: errorCode(error) },
       extra: { windows: droppedWindows.length },
     });
-    return live;
+    // Nothing is known to be transcribed, so every gap is still owed.
+    return { transcript: live, failedWindows: droppedWindows };
+  }
+};
+
+/**
+ * Keeps the recording and records what it still owes when a backfill fell short; otherwise
+ * deletes it. A sidecar that can't be written leaves nothing to resume from, so the
+ * recording goes too.
+ */
+const settleMeetingRecording = async (
+  noteId: number,
+  failedWindows: AudioWindow[],
+  discard: (noteId: number) => Promise<void>,
+): Promise<void> => {
+  if (failedWindows.length === 0 || !isLiveNote(noteId)) {
+    await discard(noteId);
+    return;
+  }
+  Sentry.captureMessage('meeting-post-pass-incomplete', {
+    level: 'warning',
+    tags: { feature: 'meeting-post-pass' },
+    extra: {
+      failedPieces: failedWindows.length,
+      failedMs: failedWindows.reduce((sum, w) => sum + (w.endMs - w.startMs), 0),
+    },
+  });
+  try {
+    await savePendingBackfill(noteId, failedWindows);
+  } catch (error) {
+    Sentry.captureMessage('meeting-backfill-sidecar-failed', {
+      level: 'warning',
+      tags: { feature: 'meeting-post-pass', error_code: errorCode(error) },
+    });
+    await discard(noteId);
   }
 };
 
@@ -1030,8 +1072,17 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
         ? result.recordingUri
         : null;
       let transcript = live;
-      if (recordingUri && result.droppedWindows.length > 0) {
-        transcript = await backfillCloudMeeting(noteId, recordingUri, live, result.droppedWindows);
+      let failedWindows: AudioWindow[] = [];
+      const heardLive = live.some((segment) => segment.text?.trim());
+      // With no live text the whole file is transcribed anyway; backfilling first would only
+      // add a wait (offline, a long one).
+      if (recordingUri && heardLive && result.droppedWindows.length > 0) {
+        ({ transcript, failedWindows } = await backfillCloudMeeting(
+          noteId,
+          recordingUri,
+          live,
+          result.droppedWindows,
+        ));
       }
       if (recordingUri && !transcript.some((segment) => segment.text?.trim())) {
         if (notesRepository.getNoteById(noteId)?.sourceFile !== recordingUri) {
@@ -1049,7 +1100,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       if (transcript.some((segment) => segment.text?.trim())) {
         logTranscriptionCompleted({ source: 'meeting', provider: 'cloud' });
       }
-      await get().discardMeetingRecording(noteId);
+      await settleMeetingRecording(noteId, failedWindows, get().discardMeetingRecording);
       await finalizeMeetingNoteContent(noteId);
     } finally {
       get().loadNotes();
@@ -1076,6 +1127,10 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
           getPreferredTranscriptionLanguage(),
         );
       } catch (error) {
+        Sentry.captureMessage('meeting-post-pass-whole-file-failed', {
+          level: 'warning',
+          tags: { feature: 'meeting-post-pass', error_code: errorCode(error) },
+        });
         const status = notesRepository.getTranscriptionStatus(noteId);
         if (isLiveNote(noteId) && canTransition(status, 'failed')) {
           get().transitionStatus(noteId, 'failed');
@@ -1113,13 +1168,18 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   discardMeetingRecording: async (noteId) => {
     try {
       const uri = notesRepository.getNoteById(noteId)?.sourceFile;
-      if (!uri || !isManagedMeetingAudioUri(noteId, uri)) return;
+      if (!uri || !isManagedMeetingAudioUri(noteId, uri)) {
+        // Without the recording, what it still owed can never be transcribed.
+        await clearPendingBackfill(noteId);
+        return;
+      }
       await FileSystem.deleteAsync(uri, { idempotent: true });
       // The launch repair re-links a recording whose note has no sourceFile, so the link
       // goes only once the file is really gone.
       if ((await FileSystem.getInfoAsync(uri)).exists) {
         throw Object.assign(new Error('Recording still on disk'), { code: 'still_exists' });
       }
+      await clearPendingBackfill(noteId);
       if (notesRepository.getNoteById(noteId)?.sourceFile === uri) {
         notesRepository.updateNoteMeta(noteId, { sourceFile: null });
       }

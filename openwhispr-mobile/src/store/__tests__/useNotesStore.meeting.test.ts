@@ -4,6 +4,9 @@ const mockDeleteAsync = jest.fn(
 const mockGetInfoAsync = jest.fn(
   async (_uri: string): Promise<{ exists: boolean; size?: number }> => ({ exists: false }),
 );
+const mockWriteAsStringAsync = jest.fn(
+  async (_uri: string, _content: string): Promise<void> => undefined,
+);
 const mockCloudTranscribe = jest.fn();
 const mockExtractWavRange = jest.fn();
 jest.mock('expo-file-system/legacy', () => ({
@@ -11,6 +14,7 @@ jest.mock('expo-file-system/legacy', () => ({
   cacheDirectory: 'file:///app/cache/',
   deleteAsync: (uri: string, options?: object) => mockDeleteAsync(uri, options),
   getInfoAsync: (uri: string) => mockGetInfoAsync(uri),
+  writeAsStringAsync: (uri: string, content: string) => mockWriteAsStringAsync(uri, content),
 }));
 jest.mock('@/services/transcription/TranscriptionService', () => ({
   TranscriptionService: { transcribe: (...args: unknown[]) => mockCloudTranscribe(...args) },
@@ -514,7 +518,13 @@ describe('meeting post-pass', () => {
   const RECORDING = 'file:///app/documents/meeting-7.wav';
   let status: string;
   let note: Record<string, unknown> | null;
+  const SIDECAR = 'file:///app/documents/meeting-7.backfill.json';
   let filesOnDisk: Set<string>;
+  let fileContents: Map<string, string>;
+  const sidecarWindows = (): unknown =>
+    fileContents.has(SIDECAR) && filesOnDisk.has(SIDECAR)
+      ? JSON.parse(fileContents.get(SIDECAR) ?? '').windows
+      : null;
 
   const utterance = (text: string, startMs: number, endMs: number) => ({
     itemId: `u-${startMs}`,
@@ -546,6 +556,11 @@ describe('meeting post-pass', () => {
     mockAuthState.user = signedInUser;
     status = 'recording';
     filesOnDisk = new Set([RECORDING]);
+    fileContents = new Map();
+    mockWriteAsStringAsync.mockImplementation(async (uri: string, content: string) => {
+      filesOnDisk.add(uri);
+      fileContents.set(uri, content);
+    });
     note = {
       id: 7,
       title: 'Untitled meeting',
@@ -607,6 +622,10 @@ describe('meeting post-pass', () => {
       ),
     ).toEqual([0, 1, 2]);
     expect(status).toBe('done');
+    // Every gap transcribed: nothing left for the recording to give.
+    expect(filesOnDisk.has(RECORDING)).toBe(false);
+    expect(note?.sourceFile).toBeNull();
+    expect(sidecarWindows()).toBeNull();
   });
 
   it('does not backfill or touch the file when nothing was dropped', async () => {
@@ -631,6 +650,8 @@ describe('meeting post-pass', () => {
     expect(notesRepository.replaceSegments).toHaveBeenCalledTimes(1);
     expect(savedTexts(0)).toEqual(['Kept.']);
     expect(status).toBe('done');
+    expect(filesOnDisk.has(RECORDING)).toBe(true);
+    expect(sidecarWindows()).toEqual([{ startMs: 10_000, endMs: 20_000 }]);
     expect(Sentry.captureMessage).toHaveBeenCalledWith(
       'meeting-post-pass-backfill-failed',
       expect.objectContaining({ tags: expect.objectContaining({ feature: 'meeting-post-pass' }) }),
@@ -646,20 +667,94 @@ describe('meeting post-pass', () => {
     expect(notesRepository.updateNoteMeta).toHaveBeenCalledWith(7, { sourceFile: null });
   });
 
-  it('deletes the recording even when the backfill or the speaker pass failed', async () => {
+  it('keeps the recording and records what it still owes when backfill pieces failed', async () => {
+    mockCloudTranscribe.mockImplementation(async ({ audioUri }: { audioUri: string }) => {
+      if (audioUri.endsWith('range-10000.wav')) return { text: 'Recovered.', duration: 0 };
+      throw new Error('Network request failed');
+    });
+
+    await finalize({
+      utterances: [utterance('Live.', 0, 1000)],
+      droppedWindows: [
+        { startMs: 10_000, endMs: 20_000 },
+        { startMs: 30_000, endMs: 40_000 },
+        { startMs: 50_000, endMs: 60_000 },
+      ],
+    });
+
+    // The second piece fails twice; the third is not tried.
+    expect(mockCloudTranscribe).toHaveBeenCalledTimes(3);
+    expect(savedTexts(1)).toEqual(['Live.', 'Recovered.']);
+    expect(status).toBe('done');
+    expect(filesOnDisk.has(RECORDING)).toBe(true);
+    expect(note?.sourceFile).toBe(RECORDING);
+    expect(sidecarWindows()).toEqual([
+      { startMs: 30_000, endMs: 40_000 },
+      { startMs: 50_000, endMs: 60_000 },
+    ]);
+    expect(Sentry.captureMessage).toHaveBeenCalledWith('meeting-post-pass-incomplete', {
+      level: 'warning',
+      tags: { feature: 'meeting-post-pass' },
+      extra: { failedPieces: 2, failedMs: 20_000 },
+    });
+  });
+
+  it('deletes the recording when what it still owes cannot be recorded', async () => {
     mockCloudTranscribe.mockRejectedValue(new Error('Network request failed'));
+    mockWriteAsStringAsync.mockRejectedValueOnce(new Error('disk full'));
 
     await finalize({
       utterances: [utterance('Live.', 0, 1000)],
       droppedWindows: [{ startMs: 10_000, endMs: 20_000 }],
     });
 
-    // One piece, tried twice, then skipped.
-    expect(mockCloudTranscribe).toHaveBeenCalledTimes(2);
-    expect(savedTexts(0)).toEqual(['Live.']);
     expect(status).toBe('done');
     expect(filesOnDisk.has(RECORDING)).toBe(false);
     expect(note?.sourceFile).toBeNull();
+    expect(Sentry.captureMessage).toHaveBeenCalledWith(
+      'meeting-backfill-sidecar-failed',
+      expect.objectContaining({ tags: expect.objectContaining({ feature: 'meeting-post-pass' }) }),
+    );
+  });
+
+  it('goes straight to the whole file when nothing was heard live', async () => {
+    await finalize({ utterances: [], droppedWindows: [{ startMs: 0, endMs: 600_000 }] });
+
+    expect(mockExtractWavRange).not.toHaveBeenCalled();
+    expect(mockCloudTranscribe).toHaveBeenCalledTimes(1);
+    expect(mockCloudTranscribe).toHaveBeenCalledWith(
+      expect.objectContaining({ audioUri: RECORDING }),
+    );
+    expect(status).toBe('done');
+  });
+
+  it('keeps the text of the other chunks when one chunk of the recording is silent', async () => {
+    // As TranscriptionService now answers a recording whose middle chunk heard no speech.
+    mockCloudTranscribe.mockResolvedValue({
+      text: 'First part. Last part.',
+      duration: 0,
+      provider: 'cloud',
+      segments: [
+        { text: 'First part.', t0: 0, t1: 12_000 },
+        { text: 'Last part.', t0: 24_000, t1: 36_000 },
+      ],
+    });
+
+    await finalize({ utterances: [] });
+
+    expect(savedTexts(1)).toEqual(['First part.', 'Last part.']);
+    expect(status).toBe('done');
+    expect(filesOnDisk.has(RECORDING)).toBe(false);
+  });
+
+  it('clears what the recording owed once the recording is deleted', async () => {
+    filesOnDisk.add(SIDECAR);
+    fileContents.set(SIDECAR, JSON.stringify({ version: 1, windows: [] }));
+
+    await useNotesStore.getState().discardMeetingRecording(7);
+
+    expect(filesOnDisk.has(RECORDING)).toBe(false);
+    expect(filesOnDisk.has(SIDECAR)).toBe(false);
   });
 
   it('keeps the link when the recording could not be deleted', async () => {
@@ -721,7 +816,7 @@ describe('meeting post-pass', () => {
 
     expect(mockCloudTranscribe).not.toHaveBeenCalled();
     expect(mockExtractWavRange).not.toHaveBeenCalled();
-    expect(mockDeleteAsync).not.toHaveBeenCalled();
+    expect(mockDeleteAsync).not.toHaveBeenCalledWith(RECORDING, expect.anything());
     expect(status).toBe('done');
   });
 

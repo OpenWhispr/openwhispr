@@ -200,6 +200,54 @@ describe('chunked transcription timing', (): void => {
     ]);
   });
 
+  it.each([
+    { status: 422, body: { error: 'No speech detected in audio', code: 'NO_SPEECH_DETECTED' } },
+    { status: 400, body: { error: 'Bad audio' } },
+  ])(
+    'treats a silent chunk as empty text and fails on any other chunk error ($status)',
+    async ({ status, body }): Promise<void> => {
+      jest.mocked(FileSystem.getInfoAsync).mockResolvedValueOnce({
+        exists: true,
+        isDirectory: false,
+        uri: 'file:///recording.wav',
+        size: 8 * 1024 * 1024,
+        modificationTime: 0,
+      });
+      jest.mocked(AudioTools.splitToChunks).mockResolvedValue({
+        chunks: ['file:///c0.wav', 'file:///c1.wav', 'file:///c2.wav'],
+        durationMs: 360_000,
+      });
+      jest.mocked(FileSystem.uploadAsync).mockImplementation(
+        async (_url, fileUri) =>
+          (fileUri === 'file:///c1.wav'
+            ? { status, body: JSON.stringify(body), headers: {}, mimeType: null }
+            : {
+                status: 200,
+                body: JSON.stringify({ text: fileUri === 'file:///c0.wav' ? 'First.' : 'Last.' }),
+                headers: {},
+                mimeType: null,
+              }) as Awaited<ReturnType<typeof FileSystem.uploadAsync>>,
+      );
+
+      const transcription = TranscriptionService.transcribe({
+        audioUri: 'file:///recording.wav',
+        provider: 'cloud',
+        requestContext: 'keyboard',
+      });
+
+      if (status !== 422) {
+        await expect(transcription).rejects.toThrow();
+        return;
+      }
+      const result = await transcription;
+      expect(result.text).toBe('First. Last.');
+      expect(result.segments).toEqual([
+        { text: 'First.', t0: 0, t1: 12_000 },
+        { text: 'Last.', t0: 24_000, t1: 36_000 },
+      ]);
+    },
+  );
+
   it('returns no segments for ogg chunks, which are cut by size', async (): Promise<void> => {
     jest.mocked(FileSystem.getInfoAsync).mockResolvedValueOnce({
       exists: true,

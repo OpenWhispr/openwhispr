@@ -6,7 +6,7 @@ import { notesRepository } from '@/data';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
 import { tryParseNoteTimestamp } from '@/lib/parseNoteTimestamp';
 import { Sentry } from '@/lib/sentry';
-import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
+import { clearPendingBackfill, isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
 import { useNotesStore } from '@/store/useNotesStore';
 import type { TranscriptionStatus } from '@/types';
 
@@ -201,6 +201,9 @@ export function startMeetingRecoveryOnce(): void {
         restorePath: (noteId, uri) => notesRepository.restoreMeetingRecordingPath(noteId, uri),
         deleteFile: (uri) => {
           FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
+          // A note gone for good takes its pending-backfill sidecar with its recording.
+          const noteId = Number(/meeting-(\d+)\.wav$/.exec(uri)?.[1]);
+          if (noteId) clearPendingBackfill(noteId).catch(() => undefined);
         },
       }).catch((error) => {
         Sentry.captureException(error, { tags: { feature: 'meeting-recovery' } });

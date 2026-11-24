@@ -1,4 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import type { AudioWindow } from '@/services/transcription/realtimeReconnect';
 
 // Retained under the cache dir, not documents: it's transient best-effort retry
 // material, so it must never ride along in the user's iCloud/device backup (the
@@ -39,6 +40,60 @@ export function meetingRecordingUri(noteId: number): string {
 /** source_file is synced metadata, not authority to read or delete a local path. */
 export function isManagedMeetingAudioUri(noteId: number, uri?: string | null): boolean {
   return !!FileSystem.documentDirectory && uri === meetingRecordingUri(noteId);
+}
+
+/** Audio a meeting's recording still holds that no transcription reached yet; lives beside it. */
+export function meetingBackfillUri(noteId: number): string {
+  return `${FileSystem.documentDirectory ?? ''}meeting-${noteId}.backfill.json`;
+}
+
+const PENDING_BACKFILL_VERSION = 1;
+
+/** Rejects when it cannot be written, so the caller can choose not to keep the recording. */
+export async function savePendingBackfill(noteId: number, windows: AudioWindow[]): Promise<void> {
+  await FileSystem.writeAsStringAsync(
+    meetingBackfillUri(noteId),
+    JSON.stringify({
+      version: PENDING_BACKFILL_VERSION,
+      windows: windows.map(({ startMs, endMs }) => ({ startMs, endMs })),
+    }),
+  );
+}
+
+const isWindow = (value: unknown): value is AudioWindow => {
+  const window = value as { startMs?: unknown; endMs?: unknown } | null;
+  return (
+    typeof window === 'object' &&
+    window !== null &&
+    typeof window.startMs === 'number' &&
+    typeof window.endMs === 'number' &&
+    Number.isFinite(window.startMs) &&
+    Number.isFinite(window.endMs)
+  );
+};
+
+/** The saved windows, or null when there is no sidecar or it can't be trusted. */
+export async function readPendingBackfill(noteId: number): Promise<AudioWindow[] | null> {
+  try {
+    const uri = meetingBackfillUri(noteId);
+    if (!(await FileSystem.getInfoAsync(uri)).exists) return null;
+    const parsed = JSON.parse(await FileSystem.readAsStringAsync(uri)) as {
+      version?: unknown;
+      windows?: unknown;
+    } | null;
+    if (parsed?.version !== PENDING_BACKFILL_VERSION || !Array.isArray(parsed.windows)) return null;
+    if (!parsed.windows.every(isWindow)) return null;
+    return parsed.windows.map(({ startMs, endMs }) => ({ startMs, endMs }));
+  } catch {
+    return null;
+  }
+}
+
+/** Idempotent; never throws. */
+export async function clearPendingBackfill(noteId: number): Promise<void> {
+  await FileSystem.deleteAsync(meetingBackfillUri(noteId), { idempotent: true }).catch(
+    () => undefined,
+  );
 }
 
 export function isWavAudioFile(input: {

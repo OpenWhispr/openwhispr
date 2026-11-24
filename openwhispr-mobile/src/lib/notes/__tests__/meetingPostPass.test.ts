@@ -90,17 +90,44 @@ describe('backfillDroppedAudio', () => {
     });
   });
 
-  it('tries a failed stretch once more, then skips and counts it', async () => {
+  it('tries a failed stretch once more, then stops and returns it with the rest as failed', async () => {
     const deps = makeDeps({ 120_000: new Error('offline') });
-    const { segments, failed } = await backfillDroppedAudio(
+    const { segments, failed, failedWindows } = await backfillDroppedAudio(
       RECORDING,
-      [{ startMs: 0, endMs: 250_000 }],
+      [
+        { startMs: 0, endMs: 250_000 },
+        { startMs: 400_000, endMs: 401_000 },
+        { startMs: 500_000, endMs: 510_000 },
+      ],
       deps,
     );
     const calls = (deps.transcribe as jest.Mock).mock.calls.map(([uri]) => uri);
     expect(calls.filter((uri) => uri.endsWith('range-120000.wav'))).toHaveLength(2);
-    expect(failed).toBe(1);
-    expect(segments.map((s) => s.startMs)).toEqual([0, 240_000]);
+    // Offline, every later piece would wait out the same timeouts: none is tried.
+    expect(deps.extract).toHaveBeenCalledTimes(2);
+    expect(failed).toBe(3);
+    expect(failedWindows).toEqual([
+      { startMs: 120_000, endMs: 240_000 },
+      { startMs: 240_000, endMs: 250_000 },
+      { startMs: 500_000, endMs: 510_000 },
+    ]);
+    expect(segments.map((s) => s.startMs)).toEqual([0]);
+  });
+
+  it('does not stop at a stretch the recording cannot give', async () => {
+    const deps = makeDeps();
+    (deps.extract as jest.Mock).mockRejectedValueOnce(new Error('Recording has no audio'));
+    const { segments, failed, failedWindows } = await backfillDroppedAudio(
+      RECORDING,
+      [
+        { startMs: 0, endMs: 10_000 },
+        { startMs: 20_000, endMs: 30_000 },
+      ],
+      deps,
+    );
+    expect(failed).toBe(0);
+    expect(failedWindows).toEqual([]);
+    expect(segments.map((s) => s.startMs)).toEqual([20_000]);
   });
 
   it('keeps a stretch whose second try succeeds', async () => {
@@ -146,7 +173,7 @@ describe('backfillDroppedAudio', () => {
   });
 
   it('always cleans up the extracted file', async () => {
-    const deps = makeDeps({ 0: new Error('offline'), 120_000: '' });
+    const deps = makeDeps({ 120_000: '', 240_000: new Error('offline') });
     await backfillDroppedAudio(RECORDING, [{ startMs: 0, endMs: 250_000 }], deps);
     expect((deps.cleanup as jest.Mock).mock.calls).toEqual([
       ['file:///app/cache/range-0.wav'],
@@ -163,6 +190,7 @@ describe('backfillDroppedAudio', () => {
     ).resolves.toEqual({
       segments: [expect.objectContaining({ text: 'text at 0' })],
       failed: 0,
+      failedWindows: [],
     });
   });
 });

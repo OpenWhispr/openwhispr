@@ -300,6 +300,15 @@ const uploadWithRetry = async (
 // transcribe endpoint and only need the raw text back (no fused cleanup or
 // server-timing parsing — those are single-shot concerns).
 const parseChunkTranscriptionText = (response: { status: number; body: string }): string => {
+  // One silent stretch of a long recording is no words, not a failed transcription;
+  // throwing here would discard every other chunk's text.
+  if (
+    response.status === 422 &&
+    typeof response.body === 'string' &&
+    /NO_SPEECH_DETECTED|no speech/i.test(response.body)
+  ) {
+    return '';
+  }
   if (response.status === 401) {
     throw new Error('Session expired. Please sign in again.');
   }
