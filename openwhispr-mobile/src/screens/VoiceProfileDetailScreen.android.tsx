@@ -13,7 +13,7 @@ import {
   supportsVoiceEnrollment,
   VOICE_ENROLLMENT_UNAVAILABLE,
 } from '@/lib/voiceEnrollmentCapability';
-import { theme } from '@/android/theme';
+import { useTheme } from '@/android/ThemeProvider';
 
 const formatDate = (value: string | null): string => {
   if (!value) return 'On this device';
@@ -41,9 +41,10 @@ function FieldRow({
   onBlur: () => void;
   testID?: string;
 }) {
+  const { tokens: t } = useTheme();
   return (
     <View className="min-h-[50px] flex-row items-center px-4">
-      <Text className="w-[84px] text-[16px]" style={{ color: theme.secondary }}>
+      <Text className="w-[84px] text-[16px]" style={{ color: t.secondary }}>
         {label}
       </Text>
       <TextInput
@@ -52,20 +53,21 @@ function FieldRow({
         onBlur={onBlur}
         onSubmitEditing={onBlur}
         placeholder={placeholder}
-        placeholderTextColor={theme.tertiary}
+        placeholderTextColor={t.tertiary}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
         autoCorrect={false}
         returnKeyType="done"
         testID={testID}
         className="flex-1 py-3 text-[17px]"
-        style={{ fontFamily: AppFont.regular, color: theme.ink }}
+        style={{ fontFamily: AppFont.regular, color: t.ink }}
       />
     </View>
   );
 }
 
 export default function VoiceProfileDetailScreen() {
+  const { tokens: t } = useTheme();
   const params = useLocalSearchParams<{ profileId?: string }>();
   const router = useRouter();
   const profileId = params.profileId ? Number(params.profileId) : null;
@@ -144,13 +146,13 @@ export default function VoiceProfileDetailScreen() {
   }, [profile, deleteVoiceProfile]);
 
   if (!profile) {
-    return <View className="flex-1" style={{ backgroundColor: theme.canvas }} />;
+    return <View className="flex-1" style={{ backgroundColor: t.canvas }} />;
   }
 
   const isOwner = profile.isOwner === 1;
 
   return (
-    <View className="flex-1" style={{ backgroundColor: theme.canvas }}>
+    <View className="flex-1" style={{ backgroundColor: t.canvas }}>
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
@@ -162,13 +164,13 @@ export default function VoiceProfileDetailScreen() {
             <Text
               accessibilityRole="header"
               className="text-[22px] font-bold"
-              style={{ color: theme.ink }}
+              style={{ color: t.ink }}
             >
               {profile.displayName}
             </Text>
             {isOwner ? (
-              <View className="rounded-md px-2 py-0.5" style={{ backgroundColor: theme.track }}>
-                <Text className="text-[12px] font-semibold" style={{ color: theme.secondary }}>
+              <View className="rounded-md px-2 py-0.5" style={{ backgroundColor: t.track }}>
+                <Text className="text-[12px] font-semibold" style={{ color: t.secondary }}>
                   You
                 </Text>
               </View>
@@ -197,25 +199,25 @@ export default function VoiceProfileDetailScreen() {
             testID="voice-profile-email-input"
           />
         </GroupedList>
-        <Text className="mt-2 px-4 text-[13px] leading-5" style={{ color: theme.secondary }}>
+        <Text className="mt-2 px-4 text-[13px] leading-5" style={{ color: t.secondary }}>
           Adding an email lets meeting notes link this speaker to calendar invites later.
         </Text>
 
         <SectionHeader label="Voice sample" />
         <GroupedList dividerInset={16}>
           <View className="min-h-[46px] flex-row items-center justify-between px-4 py-3">
-            <Text className="text-[16px]" style={{ color: theme.secondary }}>
+            <Text className="text-[16px]" style={{ color: t.secondary }}>
               Samples
             </Text>
-            <Text className="text-[16px] font-medium" style={{ color: theme.ink }}>
+            <Text className="text-[16px] font-medium" style={{ color: t.ink }}>
               {profile.sampleCount}
             </Text>
           </View>
           <View className="min-h-[46px] flex-row items-center justify-between px-4 py-3">
-            <Text className="text-[16px]" style={{ color: theme.secondary }}>
+            <Text className="text-[16px]" style={{ color: t.secondary }}>
               Added
             </Text>
-            <Text className="text-[16px] font-medium" style={{ color: theme.ink }}>
+            <Text className="text-[16px] font-medium" style={{ color: t.ink }}>
               {formatDate(profile.createdAt)}
             </Text>
           </View>
@@ -227,13 +229,13 @@ export default function VoiceProfileDetailScreen() {
               testID="voice-profile-reenroll"
               contentInsetLeft={16}
             >
-              <Text className="text-[17px] font-medium" style={{ color: theme.accent }}>
+              <Text className="text-[17px] font-medium" style={{ color: t.accent }}>
                 Retrain Voice
               </Text>
             </GroupedList.Row>
           ) : null}
         </GroupedList>
-        <Text className="mt-2 px-4 text-[13px] leading-5" style={{ color: theme.secondary }}>
+        <Text className="mt-2 px-4 text-[13px] leading-5" style={{ color: t.secondary }}>
           {supportsVoiceEnrollment()
             ? 'Retraining replaces this voice sample. Past transcripts keep their existing labels.'
             : VOICE_ENROLLMENT_UNAVAILABLE}
@@ -248,7 +250,7 @@ export default function VoiceProfileDetailScreen() {
               testID="voice-profile-delete"
               contentInsetLeft={16}
             >
-              <Text className="text-center text-[17px] font-medium" style={{ color: theme.error }}>
+              <Text className="text-center text-[17px] font-medium" style={{ color: t.error }}>
                 Delete Profile
               </Text>
             </GroupedList.Row>

@@ -5,11 +5,8 @@ import { safeHaptics } from '@/lib/utils';
 import { SegmentedControl } from '@/components/ui/SegmentedControl.android';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import type { TranscriptBlock } from '@/lib/diarization/transcriptDisplay';
-import { gloss, glossPressed, home } from '../home/kit';
-import { edge, edgeCard, look } from '../settings/look';
 import { useReduceMotion } from '../settings/kit';
-import { BackButton, IconButton, notesLook } from './look';
-import { raised, raisedPressed } from '../theme';
+import { BackButton, IconButton, useNotesLook } from './look';
 import { initialsOf } from './initials';
 import { useNotesT } from './strings';
 import { wordAtPoint, type TextLine } from './wordAtPoint';
@@ -52,6 +49,7 @@ export function MetaChip({
   /** N1b: a missing chip ("Add to folder") in grey, which is also where you fill it in. */
   quiet?: boolean;
 }) {
+  const n = useNotesLook();
   return (
     <Pressable
       cssInterop={false}
@@ -60,7 +58,7 @@ export function MetaChip({
       disabled={!onPress}
       onPress={onPress}
       style={({ pressed }) => [
-        edge,
+        n.edge,
         {
           minHeight: 30,
           paddingHorizontal: 10,
@@ -72,12 +70,7 @@ export function MetaChip({
         },
       ]}
     >
-      <SystemIcon
-        name="circle"
-        mdName={icon}
-        size={13}
-        color={quiet ? home.tertiary : home.secondary}
-      />
+      <SystemIcon name="circle" mdName={icon} size={13} color={quiet ? n.tertiary : n.secondary} />
       <Text
         numberOfLines={1}
         style={{
@@ -85,7 +78,7 @@ export function MetaChip({
           fontSize: 13,
           lineHeight: 18,
           fontWeight: '500',
-          color: quiet ? home.secondary : home.text,
+          color: quiet ? n.secondary : n.text,
         }}
       >
         {label}
@@ -105,6 +98,7 @@ export function AttendeeCircles({
   limit?: number;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
   if (people.length === 0) return null;
   const shown = people.slice(0, limit);
   const more = people.length - shown.length;
@@ -116,9 +110,7 @@ export function AttendeeCircles({
     <View
       key={index}
       style={[
-        grey
-          ? { backgroundColor: look.idleFill, borderWidth: 1, borderColor: look.hairline }
-          : edge,
+        grey ? { backgroundColor: n.idleFill, borderWidth: 1, borderColor: n.hairline } : n.edge,
         {
           width: 30,
           height: 30,
@@ -134,7 +126,7 @@ export function AttendeeCircles({
           fontSize: 11,
           lineHeight: 14,
           fontWeight: '600',
-          color: grey ? home.secondary : home.text,
+          color: grey ? n.secondary : n.text,
         }}
       >
         {text}
@@ -207,6 +199,7 @@ export function SoftChip({
   disabled?: boolean;
   testID?: string;
 }) {
+  const n = useNotesLook();
   return (
     <Pressable
       cssInterop={false}
@@ -216,7 +209,7 @@ export function SoftChip({
       disabled={disabled || !onPress}
       onPress={onPress}
       style={({ pressed }) => [
-        raised,
+        n.raised,
         {
           minHeight: 32,
           paddingHorizontal: 10,
@@ -226,15 +219,15 @@ export function SoftChip({
           gap: 6,
           opacity: disabled ? 0.5 : 1,
         },
-        pressed && raisedPressed,
+        pressed && n.raisedPressed,
       ]}
     >
-      {icon ? <SystemIcon name="circle" mdName={icon} size={14} color={home.text} /> : null}
-      <Text style={{ fontSize: 13, lineHeight: 18, fontWeight: '500', color: home.text }}>
+      {icon ? <SystemIcon name="circle" mdName={icon} size={14} color={n.text} /> : null}
+      <Text style={{ fontSize: 13, lineHeight: 18, fontWeight: '500', color: n.text }}>
         {label}
       </Text>
       {trailing ? (
-        <SystemIcon name="circle" mdName={trailing} size={14} color={home.secondary} />
+        <SystemIcon name="circle" mdName={trailing} size={14} color={n.secondary} />
       ) : null}
     </Pressable>
   );
@@ -243,6 +236,7 @@ export function SoftChip({
 /** E5 while a summary is being written: grey lines that breathe (still under reduced motion). */
 export function Shimmer({ lines = 6 }: { lines?: number }) {
   const reduce = useReduceMotion();
+  const n = useNotesLook();
   const opacity = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (reduce) return;
@@ -265,7 +259,7 @@ export function Shimmer({ lines = 6 }: { lines?: number }) {
             height: 10,
             borderRadius: 5,
             width: widths[index % widths.length] as `${number}%`,
-            backgroundColor: look.track,
+            backgroundColor: n.track,
           }}
         />
       ))}
@@ -290,8 +284,9 @@ export function NoSummaryCard({
   hint?: string;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
   return (
-    <View style={[edgeCard, { padding: 20, alignItems: 'center', gap: 12 }]}>
+    <View style={[n.edgeCard, { padding: 20, alignItems: 'center', gap: 12 }]}>
       <View
         style={[
           {
@@ -301,17 +296,17 @@ export function NoSummaryCard({
             alignItems: 'center',
             justifyContent: 'center',
           },
-          gloss,
+          n.gloss,
         ]}
       >
-        <SystemIcon name="sparkles" mdName="Sparkles" size={22} color="#FFFFFF" />
+        <SystemIcon name="sparkles" mdName="Sparkles" size={22} color={n.onGlass} />
       </View>
-      <Text style={[notesLook.rowTitle, { textAlign: 'center' }]}>{t('noSummary')}</Text>
+      <Text style={[n.rowTitle, { textAlign: 'center' }]}>{t('noSummary')}</Text>
       <Text
         style={{
           fontSize: 15,
           lineHeight: 21,
-          color: home.secondary,
+          color: n.secondary,
           textAlign: 'center',
         }}
       >
@@ -335,17 +330,17 @@ export function NoSummaryCard({
             gap: 8,
             opacity: disabled ? 0.5 : 1,
           },
-          gloss,
-          pressed && !disabled && glossPressed,
+          n.gloss,
+          pressed && !disabled && n.glossPressed,
         ]}
       >
-        <SystemIcon name="sparkles" mdName="Sparkles" size={18} color="#FFFFFF" />
-        <Text style={{ color: '#FFFFFF', fontSize: 17, lineHeight: 22, fontWeight: '600' }}>
+        <SystemIcon name="sparkles" mdName="Sparkles" size={18} color={n.onGlass} />
+        <Text style={{ color: n.onGlass, fontSize: 17, lineHeight: 22, fontWeight: '600' }}>
           {t('writeSummary')}
         </Text>
       </Pressable>
       {hint ? (
-        <Text style={{ fontSize: 13, lineHeight: 18, color: home.secondary, textAlign: 'center' }}>
+        <Text style={{ fontSize: 13, lineHeight: 18, color: n.secondary, textAlign: 'center' }}>
           {hint}
         </Text>
       ) : (
@@ -366,11 +361,11 @@ export function NoSummaryCard({
           <Text
             key={templateName}
             numberOfLines={1}
-            style={{ color: home.accent, fontSize: 14, lineHeight: 20, fontWeight: '500' }}
+            style={{ color: n.accent, fontSize: 14, lineHeight: 20, fontWeight: '500' }}
           >
             {t('templateLabel', { name: templateName })}
           </Text>
-          <SystemIcon name="chevron.down" mdName="ChevronDown" size={14} color={home.accent} />
+          <SystemIcon name="chevron.down" mdName="ChevronDown" size={14} color={n.accent} />
         </Pressable>
       )}
     </View>
@@ -395,8 +390,9 @@ function TranscriptText({
   onWordLongPress?: (word: string, x: number, y: number) => void;
   highlight?: string | null;
 }) {
+  const n = useNotesLook();
   const lines = useRef<TextLine[]>([]);
-  const style = { fontSize: 16, lineHeight: 23, color: home.text };
+  const style = { fontSize: 16, lineHeight: 23, color: n.text };
   if (!onWordLongPress)
     return (
       <Text selectable style={style}>
@@ -423,7 +419,7 @@ function TranscriptText({
         ? // Only the word being fixed is its own span, and it takes no touches.
           text.split(/(\p{L}[\p{L}\p{N}'’-]*)/u).map((part, index) =>
             index % 2 === 1 && part.toLowerCase() === wanted ? (
-              <Text key={index} style={{ backgroundColor: look.selFill, color: home.accent }}>
+              <Text key={index} style={{ backgroundColor: n.selFill, color: n.accent }}>
                 {part}
               </Text>
             ) : (
@@ -451,9 +447,10 @@ export function TranscriptCard({
   highlight?: string | null;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
   return (
     <View style={{ gap: 8 }}>
-      <View style={[edgeCard, { padding: 16, gap: 16 }]} testID="speaker-transcript">
+      <View style={[n.edgeCard, { padding: 16, gap: 16 }]} testID="speaker-transcript">
         {onCopy && blocks.length > 0 ? (
           // Copy sits top right, as on the summary card, on the first speaker's name line.
           <View style={{ position: 'absolute', top: 12, right: 12, zIndex: 1 }}>
@@ -466,12 +463,12 @@ export function TranscriptCard({
               testID="copy-transcript"
               style={({ pressed }) => ({ padding: 4, opacity: pressed ? 0.5 : 1 })}
             >
-              <SystemIcon name="doc.on.doc" mdName="Copy" size={18} color={home.secondary} />
+              <SystemIcon name="doc.on.doc" mdName="Copy" size={18} color={n.secondary} />
             </Pressable>
           </View>
         ) : null}
         {blocks.length === 0 ? (
-          <Text style={{ fontSize: 15, color: home.tertiary }}>{t('noTranscript')}</Text>
+          <Text style={{ fontSize: 15, color: n.tertiary }}>{t('noTranscript')}</Text>
         ) : (
           blocks.map((block) => {
             const suggested = block.speakerStatus === 'suggested';
@@ -490,12 +487,12 @@ export function TranscriptCard({
                       fontSize: 13,
                       lineHeight: 18,
                       fontWeight: '600',
-                      color: block.speakerColor || home.accent,
+                      color: block.speakerColor || n.accent,
                     }}
                   >
                     {suggested ? block.speakerLabel || name : name}
                   </Text>
-                  <Text style={{ fontSize: 12, lineHeight: 16, color: home.tertiary }}>
+                  <Text style={{ fontSize: 12, lineHeight: 16, color: n.tertiary }}>
                     {block.timestamp}
                   </Text>
                   {suggested ? (
@@ -504,10 +501,10 @@ export function TranscriptCard({
                         paddingHorizontal: 6,
                         paddingVertical: 1,
                         borderRadius: 6,
-                        backgroundColor: look.selFill,
+                        backgroundColor: n.selFill,
                       }}
                     >
-                      <Text style={{ fontSize: 12, lineHeight: 16, color: home.accent }}>
+                      <Text style={{ fontSize: 12, lineHeight: 16, color: n.accent }}>
                         {t('isThis', { name })}
                       </Text>
                     </View>
@@ -536,6 +533,7 @@ export function FormatBar({
   onDone: () => void;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
   const item = (
     kind: 'bold' | 'italic' | 'bullet' | 'check' | 'heading',
     icon: LucideIconName,
@@ -555,7 +553,7 @@ export function FormatBar({
         opacity: pressed ? 0.5 : 1,
       })}
     >
-      <SystemIcon name="circle" mdName={icon} size={20} color={home.text} />
+      <SystemIcon name="circle" mdName={icon} size={20} color={n.text} />
     </Pressable>
   );
   return (
@@ -564,9 +562,9 @@ export function FormatBar({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 8,
-        backgroundColor: home.surface,
+        backgroundColor: n.surface,
         borderTopWidth: 1,
-        borderTopColor: look.hairline,
+        borderTopColor: n.hairline,
       }}
     >
       <ScrollView
@@ -591,7 +589,7 @@ export function FormatBar({
           opacity: pressed ? 0.6 : 1,
         })}
       >
-        <Text style={{ color: home.accent, fontSize: 16, fontWeight: '600' }}>{t('done')}</Text>
+        <Text style={{ color: n.accent, fontSize: 16, fontWeight: '600' }}>{t('done')}</Text>
       </Pressable>
     </View>
   );

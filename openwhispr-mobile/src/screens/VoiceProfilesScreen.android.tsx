@@ -13,11 +13,12 @@ import {
   supportsVoiceEnrollment,
   VOICE_ENROLLMENT_UNAVAILABLE,
 } from '@/lib/voiceEnrollmentCapability';
-import { theme } from '@/android/theme';
+import { useTheme } from '@/android/ThemeProvider';
 
 const notesPath = (path: string): string => `/(tabs)/(notes)/${path}`;
 
 export default function VoiceProfilesScreen() {
+  const { tokens: t } = useTheme();
   const profiles = useNotesStore((state) => state.voiceProfiles);
   const loadVoiceProfiles = useNotesStore((state) => state.loadVoiceProfiles);
   const deleteVoiceProfile = useNotesStore((state) => state.deleteVoiceProfile);
@@ -76,7 +77,7 @@ export default function VoiceProfilesScreen() {
   }, [deleteAllVoiceProfiles]);
 
   return (
-    <View className="flex-1" style={{ backgroundColor: theme.canvas }}>
+    <View className="flex-1" style={{ backgroundColor: t.canvas }}>
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}

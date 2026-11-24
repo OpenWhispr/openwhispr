@@ -19,20 +19,21 @@ import {
   supportsVoiceEnrollment,
   VOICE_ENROLLMENT_UNAVAILABLE,
 } from '@/lib/voiceEnrollmentCapability';
-import { theme } from '@/android/theme';
+import { useTheme } from '@/android/ThemeProvider';
 
 type SubmitInput = EnrollVoiceProfileInput | ReenrollVoiceProfileInput;
 
 export default function VoiceEnrollmentScreen() {
   const router = useRouter();
+  const { tokens: t } = useTheme();
   if (supportsVoiceEnrollment()) return <SupportedVoiceEnrollmentScreen />;
   return (
     <View
       className="flex-1 gap-4 p-4"
-      style={{ backgroundColor: theme.canvas }}
+      style={{ backgroundColor: t.canvas }}
       testID="voice-enrollment-unavailable"
     >
-      <Text className="text-[15px] leading-5" style={{ color: theme.secondary }}>
+      <Text className="text-[15px] leading-5" style={{ color: t.secondary }}>
         {VOICE_ENROLLMENT_UNAVAILABLE}
       </Text>
       <PillAction
@@ -46,6 +47,7 @@ export default function VoiceEnrollmentScreen() {
 }
 
 function SupportedVoiceEnrollmentScreen() {
+  const { tokens: t } = useTheme();
   const params = useLocalSearchParams<{ owner?: string; profileId?: string; noteId?: string }>();
   const router = useRouter();
   const profiles = useNotesStore((state) => state.voiceProfiles);
@@ -134,15 +136,14 @@ function SupportedVoiceEnrollmentScreen() {
 
   if (profileId != null && !existingProfile) {
     // Profiles load in the first effect; after that a missing one was deleted.
-    if (!profilesLoaded)
-      return <View className="flex-1" style={{ backgroundColor: theme.canvas }} />;
+    if (!profilesLoaded) return <View className="flex-1" style={{ backgroundColor: t.canvas }} />;
     return (
       <View
         className="flex-1 gap-4 p-4"
-        style={{ backgroundColor: theme.canvas }}
+        style={{ backgroundColor: t.canvas }}
         testID="voice-enrollment-missing"
       >
-        <Text className="text-[15px] leading-5" style={{ color: theme.secondary }}>
+        <Text className="text-[15px] leading-5" style={{ color: t.secondary }}>
           This voice profile no longer exists.
         </Text>
         <PillAction label="Back" onPress={leave} />
@@ -151,7 +152,7 @@ function SupportedVoiceEnrollmentScreen() {
   }
 
   return (
-    <View className="flex-1" style={{ backgroundColor: theme.canvas }}>
+    <View className="flex-1" style={{ backgroundColor: t.canvas }}>
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
@@ -160,7 +161,7 @@ function SupportedVoiceEnrollmentScreen() {
         <Text
           accessibilityRole="header"
           className="mb-5 text-2xl font-bold"
-          style={{ color: theme.ink }}
+          style={{ color: t.ink }}
         >
           {title}
         </Text>

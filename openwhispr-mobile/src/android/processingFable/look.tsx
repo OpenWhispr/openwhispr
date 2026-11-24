@@ -2,12 +2,13 @@ import { Pressable, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
-import { gloss, glossPressed, home, type } from '../home/kit';
+import { gloss, glossPressed, home, type, useHome } from '../home/kit';
 import type { SheetTask } from '../settings/ownKey';
 import type { Place, Source } from './places';
 import { PROVIDER_LOGOS } from './providerLogos';
 import { look as settingsLook } from '../settings/look';
 import { raised, raisedPressed, theme } from '../theme';
+import { useTheme } from '../ThemeProvider';
 
 /**
  * Processing in OpenWhispr's design language (Figma sections 8 and 9): the desktop's glass edge
@@ -146,6 +147,8 @@ export function OutlineButton({
   disabled?: boolean;
   testID?: string;
 }) {
+  const th = useTheme();
+  const h = useHome();
   return (
     <Pressable
       cssInterop={false}
@@ -155,7 +158,7 @@ export function OutlineButton({
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
-        raised,
+        th.raised,
         {
           minHeight: 44,
           paddingVertical: 10,
@@ -166,11 +169,11 @@ export function OutlineButton({
           gap: 6,
           opacity: disabled ? 0.5 : 1,
         },
-        pressed && !disabled && raisedPressed,
+        pressed && !disabled && th.raisedPressed,
       ]}
     >
-      {icon && <SystemIcon name="plus" mdName={icon} size={18} color={home.text} />}
-      <Text style={[type.subhead, { fontWeight: '500' }]}>{label}</Text>
+      {icon && <SystemIcon name="plus" mdName={icon} size={18} color={h.c.text} />}
+      <Text style={[h.type.subhead, { fontWeight: '500' }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -187,6 +190,8 @@ export function GlassButton({
   disabled?: boolean;
   testID?: string;
 }) {
+  const th = useTheme();
+  const h = useHome();
   return (
     <Pressable
       cssInterop={false}
@@ -204,11 +209,11 @@ export function GlassButton({
           paddingHorizontal: 16,
           opacity: disabled ? 0.5 : 1,
         },
-        gloss,
-        pressed && !disabled && glossPressed,
+        th.glass,
+        pressed && !disabled && th.glassPressed,
       ]}
     >
-      <Text style={[type.subhead, { color: theme.onGlass, fontWeight: '500' }]}>{label}</Text>
+      <Text style={[h.type.subhead, { color: th.tokens.onGlass, fontWeight: '500' }]}>{label}</Text>
     </Pressable>
   );
 }

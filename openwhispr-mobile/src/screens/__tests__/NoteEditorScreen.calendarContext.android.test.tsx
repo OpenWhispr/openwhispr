@@ -42,6 +42,7 @@ import { learnCorrections } from '@/android/dictionary/learned';
 import { showLearnedToast } from '@/android/dictionary/learnedToast';
 import { showToast } from '@/android/settings/kit';
 import { deleteNotesWithUndo } from '@/android/notes/pendingDeletes';
+import { lightTheme } from '@/android/theme';
 import type { Action, Note, Segment, Speaker, SpeakerProfile } from '@/data/types';
 import type { Folder, Space } from '@/data';
 import type { UserConfig } from '@/types';
@@ -817,7 +818,7 @@ describe('NoteEditorScreen generated meeting context', () => {
       .getByTestId('note-tab-enhanced')
       .findAll(
         (node: { type: unknown; props: { style?: { backgroundColor?: string } } }) =>
-          typeof node.type === 'string' && node.props.style?.backgroundColor === '#FF9500',
+          typeof node.type === 'string' && node.props.style?.backgroundColor === lightTheme.warning,
       );
 
   it('does not mark a freshly generated calendar-context note stale before actions load', () => {

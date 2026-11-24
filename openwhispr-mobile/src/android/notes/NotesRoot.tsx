@@ -11,8 +11,8 @@ import { useNotesStore } from '@/store/useNotesStore';
 import { useManualSyncRefresh } from '@/hooks/useManualSyncRefresh';
 import { withNotesRouteOwner } from '@/lib/notes/noteRouteOwner';
 import { safeHaptics } from '@/lib/utils';
-import { gloss, glossPressed, home } from '../home/kit';
 import { useNavigationBarCanvas } from '../navigationBar';
+import { useTheme } from '../ThemeProvider';
 import { useTabColors } from '../tabBar';
 import { useSettingsToast } from '../settings/kit';
 import {
@@ -25,8 +25,7 @@ import {
   NotesHeader,
   SectionLabel,
   SpaceTile,
-  edgeCard,
-  notesLook,
+  useNotesLook,
 } from './look';
 import {
   defaultFolderFor,
@@ -50,6 +49,7 @@ import { useNotesT } from './strings';
  */
 export default function NotesRoot() {
   const t = useNotesT();
+  const n = useNotesLook();
   const scroll = useRef<ScrollView>(null);
   useScrollToTop(scroll);
   useNavigationBarCanvas(useTabColors().bar);
@@ -136,7 +136,15 @@ export default function NotesRoot() {
       <ScrollView
         ref={scroll}
         contentContainerStyle={{ padding: 16, paddingBottom: 104, gap: 12 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[n.accent]}
+            progressBackgroundColor={n.surface}
+            tintColor={n.accent}
+          />
+        }
       >
         <NotesHeader
           title={t('notes')}
@@ -250,11 +258,9 @@ export default function NotesRoot() {
 }
 
 function Page({ children }: { children: React.ReactNode }) {
+  const n = useNotesLook();
   return (
-    <SafeAreaView
-      edges={['top', 'left', 'right']}
-      style={{ flex: 1, backgroundColor: notesLook.canvas }}
-    >
+    <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: n.canvas }}>
       {children}
     </SafeAreaView>
   );
@@ -270,20 +276,21 @@ const EMPTY_TEAMSPACES = require('./assets/empty-teamspaces.png');
  */
 function EmptyTeamspaces() {
   const t = useNotesT();
+  const n = useNotesLook();
   return (
-    <View style={[edgeCard, { alignItems: 'center', paddingHorizontal: 24, paddingVertical: 24 }]}>
+    <View
+      style={[n.edgeCard, { alignItems: 'center', paddingHorizontal: 24, paddingVertical: 24 }]}
+    >
       <Image
         source={EMPTY_TEAMSPACES}
         style={{ width: 134, height: 139 }}
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
       />
-      <Text style={[notesLook.rowTitle, { marginTop: 8, textAlign: 'center' }]}>
+      <Text style={[n.rowTitle, { marginTop: 8, textAlign: 'center' }]}>
         {t('noTeamspacesTitle')}
       </Text>
-      <Text style={[notesLook.rowSub, { marginTop: 4, textAlign: 'center' }]}>
-        {t('noTeamspacesBody')}
-      </Text>
+      <Text style={[n.rowSub, { marginTop: 4, textAlign: 'center' }]}>{t('noTeamspacesBody')}</Text>
     </View>
   );
 }
@@ -299,6 +306,8 @@ function EmptyNotes({
   onUpload: () => void;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
+  const { glass, glassPressed } = useTheme();
   return (
     <View
       style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}
@@ -308,7 +317,7 @@ function EmptyNotes({
           width: 168,
           height: 168,
           borderRadius: 84,
-          backgroundColor: notesLook.selectedRow,
+          backgroundColor: n.selectedRow,
           alignItems: 'center',
           justifyContent: 'center',
         }}
@@ -326,11 +335,11 @@ function EmptyNotes({
               alignItems: 'center',
               justifyContent: 'center',
             },
-            gloss,
-            pressed && glossPressed,
+            glass,
+            pressed && glassPressed,
           ]}
         >
-          <SystemIcon name="mic" mdName="Mic" size={40} color="#FFFFFF" />
+          <SystemIcon name="mic" mdName="Mic" size={40} color={n.onGlass} />
         </Pressable>
       </View>
       <Text
@@ -339,7 +348,7 @@ function EmptyNotes({
           fontSize: 20,
           lineHeight: 26,
           fontWeight: '500',
-          color: home.text,
+          color: n.text,
           textAlign: 'center',
         }}
       >
@@ -350,7 +359,7 @@ function EmptyNotes({
           marginTop: 12,
           fontSize: 15,
           lineHeight: 21,
-          color: home.secondary,
+          color: n.secondary,
           textAlign: 'center',
         }}
       >
@@ -381,13 +390,15 @@ function UpNextCard({
   onHide: () => void;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
+  const { glass, glassPressed } = useTheme();
   const label = eventIsNow(event, now)
     ? `${t('upNext')} · ${t('now')}`
     : `${t('upNext')} · ${t('inMinutes', { count: minutesUntil(event, now) })}`;
   return (
     <View
       style={[
-        edgeCard,
+        n.edgeCard,
         { flexDirection: 'row', gap: 12, paddingLeft: 14, paddingRight: 12, paddingVertical: 12 },
       ]}
     >
@@ -399,12 +410,12 @@ function UpNextCard({
             lineHeight: 15,
             fontWeight: '500',
             letterSpacing: 0.66,
-            color: home.accent,
+            color: n.accent,
           }}
         >
           {label.toUpperCase()}
         </Text>
-        <Text numberOfLines={1} style={notesLook.rowTitle}>
+        <Text numberOfLines={1} style={n.rowTitle}>
           {event.summary?.trim() || t('recordMeeting')}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
@@ -421,15 +432,10 @@ function UpNextCard({
                 opacity: pressed ? 0.6 : 1,
               })}
             >
-              <Text style={{ fontSize: 13, lineHeight: 18, color: home.accent }}>
+              <Text style={{ fontSize: 13, lineHeight: 18, color: n.accent }}>
                 {t('moreToday', { count: more })}
               </Text>
-              <SystemIcon
-                name="chevron.right"
-                mdName="ChevronRight"
-                size={14}
-                color={home.accent}
-              />
+              <SystemIcon name="chevron.right" mdName="ChevronRight" size={14} color={n.accent} />
             </Pressable>
           ) : null}
         </View>
@@ -443,7 +449,7 @@ function UpNextCard({
           hitSlop={10}
           style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
         >
-          <SystemIcon name="xmark" mdName="X" size={16} color={home.tertiary} />
+          <SystemIcon name="xmark" mdName="X" size={16} color={n.tertiary} />
         </Pressable>
         <Pressable
           cssInterop={false}
@@ -458,12 +464,12 @@ function UpNextCard({
               alignItems: 'center',
               gap: 6,
             },
-            gloss,
-            pressed && glossPressed,
+            glass,
+            pressed && glassPressed,
           ]}
         >
-          <SystemIcon name="mic" mdName="Mic" size={16} color="#FFFFFF" />
-          <Text style={{ color: '#FFFFFF', fontSize: 15, lineHeight: 20, fontWeight: '600' }}>
+          <SystemIcon name="mic" mdName="Mic" size={16} color={n.onGlass} />
+          <Text style={{ color: n.onGlass, fontSize: 15, lineHeight: 20, fontWeight: '600' }}>
             {t('record')}
           </Text>
         </Pressable>

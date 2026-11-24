@@ -4,29 +4,6 @@
  * it's clean; the guard fails on an entry that no longer needs to be here.
  */
 export const PENDING: string[] = [
-  // 2 · Notes
-  'src/android/CloudMeetingScreen.tsx',
-  'src/android/MeetingRecordScreen.tsx',
-  'src/android/notes/CalendarPrompt.tsx',
-  'src/android/notes/FolderNotes.tsx',
-  'src/android/notes/NotesRoot.tsx',
-  'src/android/notes/RecordingView.tsx',
-  'src/android/notes/SearchScreen.tsx',
-  'src/android/notes/SummaryEditor.tsx',
-  'src/android/notes/chipSheets.tsx',
-  'src/android/notes/cloudFinish.tsx',
-  'src/android/notes/liveMarkdown.tsx',
-  'src/android/notes/look.tsx',
-  'src/android/notes/moveSheet.tsx',
-  'src/android/notes/noteParts.tsx',
-  'src/android/notes/noteSheets.tsx',
-  'src/android/notes/rows.tsx',
-  'src/android/notes/sheets.tsx',
-  'src/screens/NoteEditorCore.android.tsx',
-  'src/screens/VoiceEnrollmentScreen.android.tsx',
-  'src/screens/VoiceProfileDetailScreen.android.tsx',
-  'src/screens/VoiceProfilesScreen.android.tsx',
-  'src/screens/WorkflowSettingsScreen.android.tsx',
   // 3 · Dictionary
   'src/android/dictionary/DictionaryRoot.tsx',
   'src/android/dictionary/Empty.tsx',
@@ -92,7 +69,12 @@ export const PENDING: string[] = [
   'src/components/ui/Fab.android.tsx',
   'src/components/ui/FabCore.android.tsx',
   'src/components/ui/FormSheetCore.android.tsx',
-  'src/components/ui/SegmentedControl.android.tsx',
   'src/components/ui/SwipeableCardCore.android.tsx',
   'src/config/colors.android.ts',
+  // Found once the guard walked every src/components/**/*.android.* override: module-level
+  // StyleSheets (layout only in MarkdownRenderer and VoiceprintSuggestionSheet; the rename sheet's
+  // scrim is a colour).
+  'src/components/notes/MarkdownRenderer.android.tsx',
+  'src/components/notes/VoiceprintSuggestionSheet.android.tsx',
+  'src/components/notes/speakerRenameLayout.android.ts',
 ];

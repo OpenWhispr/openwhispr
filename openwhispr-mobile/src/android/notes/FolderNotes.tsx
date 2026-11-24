@@ -10,8 +10,6 @@ import { useNoteBuckets } from '@/hooks/useNoteBuckets';
 import { useManualSyncRefresh } from '@/hooks/useManualSyncRefresh';
 import { safeHaptics } from '@/lib/utils';
 import { getNotesRouteOwner, withNotesRouteOwner } from '@/lib/notes/noteRouteOwner';
-import { home } from '../home/kit';
-import { look } from '../settings/look';
 import { BottomSheet, useSettingsToast } from '../settings/kit';
 import { useNavigationBar } from '../navigationBar';
 import {
@@ -23,7 +21,7 @@ import {
   NotesHeader,
   SectionLabel,
   goBack,
-  notesLook,
+  useNotesLook,
 } from './look';
 import {
   notesInWorkspace,
@@ -47,6 +45,7 @@ import { useNotesT } from './strings';
  */
 export default function FolderNotes() {
   const t = useNotesT();
+  const n = useNotesLook();
   const params = useLocalSearchParams<{
     folderId?: string;
     spaceId?: string;
@@ -179,10 +178,7 @@ export default function FolderNotes() {
   };
 
   return (
-    <SafeAreaView
-      edges={['top', 'left', 'right']}
-      style={{ flex: 1, backgroundColor: notesLook.canvas }}
-    >
+    <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: n.canvas }}>
       <ScrollView
         contentContainerStyle={{
           padding: 16,
@@ -190,7 +186,15 @@ export default function FolderNotes() {
           gap: 12,
           flexGrow: 1,
         }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[n.accent]}
+            progressBackgroundColor={n.surface}
+            tintColor={n.accent}
+          />
+        }
       >
         {selecting ? (
           <SelectHeader count={selected.length} onClose={() => setSelected(null)} />
@@ -311,13 +315,14 @@ export default function FolderNotes() {
 
 function SelectHeader({ count, onClose }: { count: number; onClose: () => void }) {
   const t = useNotesT();
+  const n = useNotesLook();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 47 }}>
       <IconButton icon="X" label={t('close')} onPress={onClose} />
       <Text
         accessibilityRole="header"
         accessibilityLiveRegion="polite"
-        style={[notesLook.rowTitle, { flex: 1, textAlign: 'center', marginRight: 36 }]}
+        style={[n.rowTitle, { flex: 1, textAlign: 'center', marginRight: 36 }]}
       >
         {t('selected', { count })}
       </Text>
@@ -336,12 +341,13 @@ function ActionBar({
   onDelete: () => void;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
   const { inset } = useNavigationBar();
   const item = (
     icon: LucideIconName,
     label: string,
     onPress: () => void,
-    color: string = home.text,
+    color: string = n.text,
   ) => (
     <Pressable
       cssInterop={false}
@@ -366,16 +372,16 @@ function ActionBar({
         flexDirection: 'row',
         paddingTop: 8,
         paddingBottom: 8 + inset,
-        backgroundColor: home.surface,
+        backgroundColor: n.surface,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         borderTopWidth: 1,
-        borderColor: look.hairline,
+        borderColor: n.hairline,
       }}
     >
       {item('Folder', t('move'), onMove)}
       {item('Share', t('share'), onShare)}
-      {item('Trash2', t('delete'), onDelete, look.error)}
+      {item('Trash2', t('delete'), onDelete, n.error)}
     </View>
   );
 }
@@ -433,12 +439,13 @@ function EmptyFolder({
   onUpload: () => void;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 24 }}>
-      <Text style={[notesLook.rowTitle, { textAlign: 'center' }]}>
+      <Text style={[n.rowTitle, { textAlign: 'center' }]}>
         {t('emptyFolder', { folder: name })}
       </Text>
-      <Text style={[notesLook.rowSub, { textAlign: 'center', fontSize: 15, lineHeight: 21 }]}>
+      <Text style={[n.rowSub, { textAlign: 'center', fontSize: 15, lineHeight: 21 }]}>
         {t('emptyFolderBody')}
       </Text>
       <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>

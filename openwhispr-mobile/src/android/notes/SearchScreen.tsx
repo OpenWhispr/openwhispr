@@ -9,10 +9,8 @@ import type { Note } from '@/data';
 import { useNotesStore } from '@/store/useNotesStore';
 import { SearchField } from '../controls';
 import { safeHaptics } from '@/lib/utils';
-import { home } from '../home/kit';
-import { edge } from '../settings/look';
 import { useNavigationBarCanvas } from '../navigationBar';
-import { BackButton, Card, Chip, SectionLabel, notesLook } from './look';
+import { BackButton, Card, Chip, SectionLabel, useNotesLook } from './look';
 import {
   notesInWorkspace,
   privateSpaceId,
@@ -42,7 +40,8 @@ const PLACE_LABEL: Record<MatchPlace, NotesKey> = {
 /** Figma 3e: S1 recent searches, S2 results with folder chips, S3 nothing found. */
 export default function SearchScreen() {
   const t = useNotesT();
-  useNavigationBarCanvas(notesLook.canvas);
+  const n = useNotesLook();
+  useNavigationBarCanvas(n.canvas);
   const params = useLocalSearchParams<{ folderId?: string }>();
   const startFolder = params.folderId ? Number(params.folderId) : null;
   const [query, setQuery] = useState('');
@@ -129,7 +128,7 @@ export default function SearchScreen() {
   return (
     <SafeAreaView
       edges={['top', 'left', 'right', 'bottom']}
-      style={{ flex: 1, backgroundColor: notesLook.canvas }}
+      style={{ flex: 1, backgroundColor: n.canvas }}
     >
       <View
         style={{
@@ -177,11 +176,11 @@ export default function SearchScreen() {
           <View
             style={{ flex: 1, alignItems: 'center', paddingTop: 96, paddingHorizontal: 24, gap: 8 }}
           >
-            <SystemIcon name="magnifyingglass" mdName="Search" size={28} color={home.tertiary} />
-            <Text style={[notesLook.rowTitle, { textAlign: 'center', marginTop: 8 }]}>
+            <SystemIcon name="magnifyingglass" mdName="Search" size={28} color={n.tertiary} />
+            <Text style={[n.rowTitle, { textAlign: 'center', marginTop: 8 }]}>
               {t('noMatch', { query: settled })}
             </Text>
-            <Text style={[notesLook.rowSub, { textAlign: 'center', fontSize: 14, lineHeight: 20 }]}>
+            <Text style={[n.rowSub, { textAlign: 'center', fontSize: 14, lineHeight: 20 }]}>
               {t('noMatchBody', { place })}
             </Text>
           </View>
@@ -240,11 +239,12 @@ export default function SearchScreen() {
 /** "Summary · Ship the video before the **pricing** page." */
 function HitLine({ hit }: { hit: SearchHit }) {
   const t = useNotesT();
+  const n = useNotesLook();
   const label = t(PLACE_LABEL[hit.place]);
   if (hit.place === 'title') {
     const preview = (hit.note.enhancedContent || hit.note.content || '').replace(/\s+/g, ' ');
     return (
-      <Text numberOfLines={1} style={notesLook.rowSub}>
+      <Text numberOfLines={1} style={n.rowSub}>
         {label}
         {preview ? ` · ${preview.slice(0, 80)}` : ''}
       </Text>
@@ -254,9 +254,9 @@ function HitLine({ hit }: { hit: SearchHit }) {
   const match = hit.snippet.slice(hit.start, hit.start + hit.length);
   const after = hit.snippet.slice(hit.start + hit.length);
   return (
-    <Text numberOfLines={2} style={notesLook.rowSub}>
+    <Text numberOfLines={2} style={n.rowSub}>
       {label} · {before}
-      <Text style={[notesLook.rowSub, { color: home.text, fontWeight: '700' }]}>{match}</Text>
+      <Text style={[n.rowSub, { color: n.text, fontWeight: '700' }]}>{match}</Text>
       {after}
     </Text>
   );
@@ -272,6 +272,7 @@ function RecentRow({
   onRemove: () => void;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 48 }}>
       <Pressable
@@ -288,8 +289,8 @@ function RecentRow({
           opacity: pressed ? 0.6 : 1,
         })}
       >
-        <SystemIcon name="clock" mdName="RotateCcw" size={18} color={home.secondary} />
-        <Text numberOfLines={1} style={{ fontSize: 17, lineHeight: 22, color: home.text }}>
+        <SystemIcon name="clock" mdName="RotateCcw" size={18} color={n.secondary} />
+        <Text numberOfLines={1} style={{ fontSize: 17, lineHeight: 22, color: n.text }}>
           {label}
         </Text>
       </Pressable>
@@ -300,7 +301,7 @@ function RecentRow({
         onPress={onRemove}
         style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}
       >
-        <SystemIcon name="xmark" mdName="X" size={16} color={home.tertiary} />
+        <SystemIcon name="xmark" mdName="X" size={16} color={n.tertiary} />
       </Pressable>
     </View>
   );

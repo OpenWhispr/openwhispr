@@ -6,7 +6,7 @@ import { SectionHeader } from './SectionHeader';
 import { SpeakerAvatar } from './SpeakerAvatar';
 import { SwipeableCard, type RestoreRow } from '@/components/ui/SwipeableCard';
 import type { SpeakerProfile } from '@/data/types';
-import { glass, theme } from '@/android/theme';
+import { useTheme } from '@/android/ThemeProvider';
 
 interface VoiceProfileListProps {
   profiles: SpeakerProfile[];
@@ -43,6 +43,7 @@ export function VoiceProfileList({
   onDeleteAll,
   unavailableMessage,
 }: VoiceProfileListProps) {
+  const { tokens: theme, glass } = useTheme();
   if (profiles.length === 0) {
     return (
       <GroupedList>
@@ -52,7 +53,7 @@ export function VoiceProfileList({
               name="waveform.circle"
               mdName="AudioLines"
               size={36}
-              color="quaternaryLabel"
+              color={theme.disabled}
             />
             <View className="items-center gap-1">
               <Text className="text-[17px] font-semibold" style={{ color: theme.ink }}>
@@ -134,7 +135,7 @@ export function VoiceProfileList({
                   name="chevron.right"
                   mdName="ChevronRight"
                   size={14}
-                  color="tertiaryLabel"
+                  color={theme.tertiary}
                 />
               </View>
             </GroupedList.Row>
@@ -167,7 +168,7 @@ export function VoiceProfileList({
                 contentInsetLeft={16}
               >
                 <View className="flex-row items-center gap-2">
-                  <SystemIcon name="plus" mdName="Plus" size={17} color="brand" />
+                  <SystemIcon name="plus" mdName="Plus" size={17} color={theme.accent} />
                   <Text className="text-[17px] font-medium" style={{ color: theme.accent }}>
                     Add Someone's Voice
                   </Text>

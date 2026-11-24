@@ -67,7 +67,17 @@ export function screenFiles(): string[] {
     }
   };
   walk('src/android');
-  for (const dir of ['src/components/ui', 'src/screens', 'src/config'])
+  // Android overrides of shared components, anywhere under src/components.
+  const walkAndroid = (dir: string) => {
+    for (const entry of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = path.posix.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== '__tests__') walkAndroid(rel);
+      } else if (/\.android\.tsx?$/.test(entry.name)) out.push(rel);
+    }
+  };
+  walkAndroid('src/components');
+  for (const dir of ['src/screens', 'src/config'])
     for (const name of fs.readdirSync(path.join(ROOT, dir)))
       if (/\.android\.tsx?$/.test(name)) out.push(path.posix.join(dir, name));
   for (const name of fs.readdirSync(path.join(ROOT, 'app')))

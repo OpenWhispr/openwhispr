@@ -3,11 +3,9 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import type { Action } from '@/data';
-import { home } from '../home/kit';
-import { look } from '../settings/look';
 import { BottomSheet, Toggle } from '../settings/kit';
 import { GlassButton, OutlineButton } from '../processingFable/look';
-import { Card, Chip, ListRow, SectionLabel, notesLook } from './look';
+import { Card, Chip, ListRow, SectionLabel, useNotesLook } from './look';
 import { BUILT_IN_TEMPLATES } from './templates';
 import { useNotesT } from './strings';
 
@@ -28,6 +26,7 @@ export function TemplateSheet({
   onPick: (key: string) => void;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
   const [picked, setPicked] = useState(current);
   useEffect(() => {
     if (visible) setPicked(current);
@@ -66,12 +65,12 @@ export function TemplateSheet({
                   paddingRight: 14,
                   paddingVertical: 12,
                   minHeight: 64,
-                  backgroundColor: selected ? notesLook.selectedRow : 'transparent',
+                  backgroundColor: selected ? n.selectedRow : 'transparent',
                 }}
               >
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={notesLook.rowTitle}>{row.name}</Text>
-                  {row.description ? <Text style={notesLook.rowSub}>{row.description}</Text> : null}
+                  <Text style={n.rowTitle}>{row.name}</Text>
+                  {row.description ? <Text style={n.rowSub}>{row.description}</Text> : null}
                 </View>
                 <View
                   style={{
@@ -79,8 +78,12 @@ export function TemplateSheet({
                     height: 22,
                     borderRadius: 11,
                     borderWidth: selected ? 6 : 1.5,
-                    borderColor: selected ? home.accent : 'rgba(0,0,0,0.25)',
-                    backgroundColor: home.surface,
+                    borderColor: selected
+                      ? n.accent
+                      : n.theme.scheme === 'dark'
+                        ? 'rgba(255,255,255,0.3)'
+                        : 'rgba(0,0,0,0.25)',
+                    backgroundColor: n.surface,
                   }}
                 />
               </Pressable>
@@ -88,7 +91,7 @@ export function TemplateSheet({
           })}
         </Card>
       </ScrollView>
-      <Text style={{ fontSize: 13, lineHeight: 18, color: home.secondary }}>
+      <Text style={{ fontSize: 13, lineHeight: 18, color: n.secondary }}>
         {t('templatesFooter')}
       </Text>
       <GlassButton
@@ -131,12 +134,13 @@ export function NoteMenuSheet({
   onDelete: () => void;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
   return (
     <BottomSheet visible={visible} onClose={onClose} title={title}>
       <Card>
         <ListRow
           icon="Share"
-          iconColor={home.text}
+          iconColor={n.text}
           title={t('shareNote')}
           subtitle={t('linkAndPeople')}
           chevron={false}
@@ -144,7 +148,7 @@ export function NoteMenuSheet({
         />
         <ListRow
           icon="Download"
-          iconColor={home.text}
+          iconColor={n.text}
           title={t('export')}
           subtitle={t('exportBody')}
           chevron={false}
@@ -153,7 +157,7 @@ export function NoteMenuSheet({
         {hasSummary ? (
           <ListRow
             icon="Copy"
-            iconColor={home.text}
+            iconColor={n.text}
             title={t('copySummary')}
             chevron={false}
             onPress={onCopySummary}
@@ -164,11 +168,11 @@ export function NoteMenuSheet({
         {onMove ? (
           <ListRow
             icon="Folder"
-            iconColor={home.text}
+            iconColor={n.text}
             title={t('moveToFolder')}
             right={
               folderName ? (
-                <Text numberOfLines={1} style={[notesLook.count, { maxWidth: 140 }]}>
+                <Text numberOfLines={1} style={[n.count, { maxWidth: 140 }]}>
                   {folderName}
                 </Text>
               ) : undefined
@@ -193,14 +197,14 @@ export function NoteMenuSheet({
               width: 36,
               height: 36,
               borderRadius: 10,
-              backgroundColor: look.idleFill,
+              backgroundColor: n.idleFill,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <SystemIcon name="icloud" mdName="Cloud" size={20} color={home.text} />
+            <SystemIcon name="icloud" mdName="Cloud" size={20} color={n.text} />
           </View>
-          <Text style={[notesLook.rowTitle, { flex: 1 }]}>{t('backUpNote')}</Text>
+          <Text style={[n.rowTitle, { flex: 1 }]}>{t('backUpNote')}</Text>
           <Toggle
             value={backedUp}
             disabled={!canBackUp}
@@ -248,6 +252,7 @@ export function ShareExportSheet({
   onSaveMarkdown: (parts: ExportPart[]) => void;
 }) {
   const t = useNotesT();
+  const n = useNotesLook();
   const [picked, setPicked] = useState<ExportPart[]>(parts.slice(0, 2));
   useEffect(() => {
     if (visible) setPicked(parts.slice(0, 2));
@@ -271,7 +276,7 @@ export function ShareExportSheet({
       <Card>
         <ListRow
           icon="Link"
-          iconColor={home.text}
+          iconColor={n.text}
           title={linkRow.title}
           subtitle={linkRow.subtitle}
           chevron={!linkRow.action}
@@ -285,7 +290,7 @@ export function ShareExportSheet({
                 hitSlop={8}
                 style={({ pressed }) => ({ paddingHorizontal: 4, opacity: pressed ? 0.6 : 1 })}
               >
-                <Text style={{ color: home.accent, fontSize: 16, fontWeight: '600' }}>
+                <Text style={{ color: n.accent, fontSize: 16, fontWeight: '600' }}>
                   {linkRow.action.label}
                 </Text>
               </Pressable>
@@ -295,7 +300,7 @@ export function ShareExportSheet({
         {onPeople ? (
           <ListRow
             icon="Users"
-            iconColor={home.text}
+            iconColor={n.text}
             title={t('peopleWithAccess')}
             subtitle={t('peopleBody')}
             onPress={onPeople}
@@ -316,7 +321,7 @@ export function ShareExportSheet({
       <Card>
         <ListRow
           icon="Share"
-          iconColor={home.text}
+          iconColor={n.text}
           title={t('sendToApp')}
           subtitle={t('sendToAppBody')}
           chevron={false}
@@ -324,7 +329,7 @@ export function ShareExportSheet({
         />
         <ListRow
           icon="FileText"
-          iconColor={home.text}
+          iconColor={n.text}
           title={t('saveMarkdown')}
           subtitle={t('saveMarkdownBody')}
           chevron={false}

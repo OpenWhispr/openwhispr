@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/useToast';
 import { confirmDestructive } from '@/lib/alerts';
 // The Android design's blue switch, not the iOS system-green one.
 import { Toggle } from '@/android/settings/kit';
-import { glass, glassPressed, theme } from '@/android/theme';
+import { useTheme } from '@/android/ThemeProvider';
 import { OnDeviceModelSection } from '@/components/settings/OnDeviceModelSection';
 import { useConfigToggle } from '@/hooks/useConfigToggle';
 import { useCustomPromptsStore } from '@/store/useCustomPromptsStore';
@@ -89,9 +89,10 @@ const PROVIDER_SETUP_URLS: Record<string, string> = {
 };
 
 function SectionFooter({ children }: { children: string }): React.JSX.Element {
+  const { tokens: t } = useTheme();
   return (
     <View className="mx-4 -mt-5 mb-7 px-4">
-      <Text className="text-[13px]" style={{ color: theme.secondary }}>
+      <Text className="text-[13px]" style={{ color: t.secondary }}>
         {children}
       </Text>
     </View>
@@ -281,12 +282,13 @@ function NoteTitleSettings(): React.JSX.Element {
 }
 
 export function WorkflowSettingsScreen(): React.JSX.Element {
+  const { tokens: t } = useTheme();
   const { copy } = workflowSettingsPlatform.useCopy();
   const scope = parseWorkflow(useLocalSearchParams<{ scope?: string }>().scope);
   if (!scope) {
     return (
       <SettingsScreen>
-        <Text className="px-8 text-[15px]" style={{ color: theme.secondary }}>
+        <Text className="px-8 text-[15px]" style={{ color: t.secondary }}>
           {copy('workflowSettings.unavailable', 'This workflow is not available.')}
         </Text>
       </SettingsScreen>
@@ -314,6 +316,7 @@ function providerSelection(
 }
 
 function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX.Element {
+  const { tokens: t, glass, glassPressed } = useTheme();
   const LocalModelSettings = workflowSettingsPlatform.LocalModelSettings;
   const { copy } = workflowSettingsPlatform.useCopy();
   const config = useConfigStore((state) => state.config);
@@ -936,7 +939,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   }
 
   return (
-    <Container className="flex-1" style={{ backgroundColor: theme.canvas }} {...containerProps}>
+    <Container className="flex-1" style={{ backgroundColor: t.canvas }} {...containerProps}>
       <SettingsScreen
         {...screenProps}
         automaticallyAdjustKeyboardInsets
@@ -1094,9 +1097,9 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
                             name="checkmark.circle.fill"
                             mdName="CircleCheck"
                             size={15}
-                            color="systemGreen"
+                            color={t.success}
                           />
-                          <Text className="text-[15px] text-systemGreen">
+                          <Text className="text-[15px]" style={{ color: t.success }}>
                             {copy('workflowSettings.saved', 'Saved')}
                           </Text>
                         </View>
@@ -1136,7 +1139,9 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
                     mdIcon="ShieldCheck"
                     title={copy('workflowSettings.checkConnection', 'Check Connection')}
                     showChevron={false}
-                    rightElement={checking === 'test' ? <ActivityIndicator /> : undefined}
+                    rightElement={
+                      checking === 'test' ? <ActivityIndicator color={t.secondary} /> : undefined
+                    }
                     onPress={busy ? undefined : () => diagnose('test')}
                   />
                   {provider.id === 'custom' || provider.id === 'openrouter' ? (
@@ -1146,7 +1151,11 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
                       mdIcon="Search"
                       title={copy('workflowSettings.discoverModels', 'Discover Models')}
                       showChevron={false}
-                      rightElement={checking === 'discover' ? <ActivityIndicator /> : undefined}
+                      rightElement={
+                        checking === 'discover' ? (
+                          <ActivityIndicator color={t.secondary} />
+                        ) : undefined
+                      }
                       onPress={busy ? undefined : () => diagnose('discover')}
                     />
                   ) : null}
@@ -1177,9 +1186,9 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
                     ]}
                   >
                     {busy && !checking ? (
-                      <ActivityIndicator color={theme.onGlass} />
+                      <ActivityIndicator color={t.onGlass} />
                     ) : (
-                      <Text className="text-[15px] font-semibold" style={{ color: theme.onGlass }}>
+                      <Text className="text-[15px] font-semibold" style={{ color: t.onGlass }}>
                         {copy('save', 'Save')}
                       </Text>
                     )}

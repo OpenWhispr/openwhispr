@@ -4,6 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
 import { getSpeakerDisplayColor, getSpeakerDisplayName } from '@/lib/diarization/transcriptDisplay';
+import { useTheme } from '@/android/ThemeProvider';
 
 export interface LiveTranscriptListProps {
   utterances: RealtimeUtterance[];
@@ -31,6 +32,7 @@ export function LiveTranscriptListView({
   active,
   selectable,
 }: LiveTranscriptListViewProps): React.JSX.Element {
+  const k = useTheme().tokens;
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -53,7 +55,7 @@ export function LiveTranscriptListView({
       showsVerticalScrollIndicator={false}
     >
       {isEmpty && active ? (
-        <Text className="text-[15px] text-tertiaryLabel">
+        <Text className="text-[15px]" style={{ color: k.tertiary }}>
           Listening… speak to see the transcript.
         </Text>
       ) : null}
@@ -78,7 +80,8 @@ export function LiveTranscriptListView({
             ) : null}
             <Text
               {...(selectable ? { selectable: true } : {})}
-              className="text-[16px] leading-[23px] text-label"
+              className="text-[16px] leading-[23px]"
+              style={{ color: k.ink }}
             >
               {utterance.text}
             </Text>
@@ -86,7 +89,9 @@ export function LiveTranscriptListView({
         );
       })}
       {partialText ? (
-        <Text className="text-[16px] leading-6 text-tertiaryLabel">{partialText}</Text>
+        <Text className="text-[16px] leading-6" style={{ color: k.tertiary }}>
+          {partialText}
+        </Text>
       ) : null}
     </ScrollView>
   );

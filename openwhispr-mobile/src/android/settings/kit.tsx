@@ -1003,6 +1003,7 @@ export function TextAction({
   onPress: () => void;
   destructive?: boolean;
 }) {
+  const { tokens: k } = useTheme();
   return (
     <Pressable
       cssInterop={false}
@@ -1017,7 +1018,7 @@ export function TextAction({
     >
       <Text
         style={{
-          color: destructive ? look.error : home.accent,
+          color: destructive ? k.error : k.accent,
           fontSize: 17,
           lineHeight: 22,
           fontWeight: '500',

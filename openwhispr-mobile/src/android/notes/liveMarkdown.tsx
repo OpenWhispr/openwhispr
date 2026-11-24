@@ -2,10 +2,12 @@ import React from 'react';
 import { Pressable, Text, View, type TextStyle } from 'react-native';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { AppFont } from '@/lib/fonts';
-import { home } from '../home/kit';
+import { useTheme } from '../ThemeProvider';
+import type { ThemeTokens } from '../theme';
 import { lineAt, parseNoteLines, type LiveSpan, type NoteLine } from './liveMarkdownSpans';
 
-const BODY = { fontFamily: AppFont.regular, fontSize: 16, lineHeight: 26, color: home.text };
+const BODY_TYPE = { fontFamily: AppFont.regular, fontSize: 16, lineHeight: 26 } as const;
+const bodyStyle = (k: ThemeTokens): TextStyle => ({ ...BODY_TYPE, color: k.ink });
 const HEADING_SIZE = { 1: 22, 2: 19, 3: 17 } as const;
 // Every list marker sits in the same column, so bullet, checkbox and number text line up.
 const MARKER = { width: 22, height: 26, alignItems: 'center', justifyContent: 'center' } as const;
@@ -13,7 +15,7 @@ const MARKER = { width: 22, height: 26, alignItems: 'center', justifyContent: 'c
 // what's saved are unchanged) but draws at a pixel's height in no colour.
 const HIDDEN: TextStyle = { fontSize: 0.1, color: 'transparent' };
 
-function spanStyle(span: LiveSpan): TextStyle {
+function spanStyle(span: LiveSpan, k: ThemeTokens): TextStyle {
   const style: TextStyle = {};
   if (span.heading) {
     style.fontSize = HEADING_SIZE[span.heading];
@@ -21,7 +23,7 @@ function spanStyle(span: LiveSpan): TextStyle {
   }
   switch (span.kind) {
     case 'mark':
-      style.color = home.tertiary;
+      style.color = k.tertiary;
       break;
     case 'bold':
       style.fontFamily = AppFont.semibold;
@@ -38,7 +40,7 @@ function spanStyle(span: LiveSpan): TextStyle {
       style.fontSize = 15;
       break;
     case 'mention':
-      style.color = home.accent;
+      style.color = k.accent;
       style.fontFamily = AppFont.medium;
       break;
     default:
@@ -53,6 +55,7 @@ function spanStyle(span: LiveSpan): TextStyle {
  * heading marks and keeps only the list marks that say it's a list.
  */
 export function LiveMarkdown({ text, caret }: { text: string; caret: number }): React.JSX.Element {
+  const k = useTheme().tokens;
   const caretLine = lineAt(text, caret);
   const lines = parseNoteLines(text);
   const pieces: React.JSX.Element[] = [];
@@ -60,7 +63,7 @@ export function LiveMarkdown({ text, caret }: { text: string; caret: number }): 
     const onCaretLine = index === caretLine;
     if (line.mark) {
       const mark: LiveSpan = { text: line.mark, kind: 'mark', heading: line.heading };
-      const style = line.kind === 'heading' && !onCaretLine ? HIDDEN : spanStyle(mark);
+      const style = line.kind === 'heading' && !onCaretLine ? HIDDEN : spanStyle(mark, k);
       pieces.push(
         <Text key={`${index}m`} style={style}>
           {line.mark}
@@ -70,7 +73,7 @@ export function LiveMarkdown({ text, caret }: { text: string; caret: number }): 
     line.inline.forEach((span, spanIndex) => {
       const hidden = span.kind === 'mark' && !onCaretLine;
       pieces.push(
-        <Text key={`${index}-${spanIndex}`} style={hidden ? HIDDEN : spanStyle(span)}>
+        <Text key={`${index}-${spanIndex}`} style={hidden ? HIDDEN : spanStyle(span, k)}>
           {span.text}
         </Text>,
       );
@@ -81,12 +84,13 @@ export function LiveMarkdown({ text, caret }: { text: string; caret: number }): 
 }
 
 function Inline({ line, style }: { line: NoteLine; style?: TextStyle }) {
+  const k = useTheme().tokens;
   return (
-    <Text style={[BODY, style]}>
+    <Text style={[bodyStyle(k), style]}>
       {line.inline
         .filter((span) => span.kind !== 'mark')
         .map((span, index) => (
-          <Text key={index} style={spanStyle(span)}>
+          <Text key={index} style={spanStyle(span, k)}>
             {span.text}
           </Text>
         ))}
@@ -116,6 +120,7 @@ export function NotesReadView({
   onEdit: (caret: number) => void;
   onToggle: (line: NoteLine) => void;
 }): React.JSX.Element {
+  const k = useTheme().tokens;
   const lines = parseNoteLines(text);
   return (
     <View testID="note-content-read" style={{ minHeight: 160 }}>
@@ -153,15 +158,15 @@ export function NotesReadView({
                   name={line.checked ? 'checkmark.square' : 'square'}
                   mdName={line.checked ? 'SquareCheck' : 'Square'}
                   size={18}
-                  color={line.checked ? home.accent : home.secondary}
+                  color={line.checked ? k.accent : k.secondary}
                 />
               </Pressable>
             ) : (
               <View style={MARKER}>
                 <Text
                   style={[
-                    BODY,
-                    { color: home.secondary },
+                    bodyStyle(k),
+                    { color: k.secondary },
                     line.kind === 'bullet' && { fontSize: 22, lineHeight: 26 },
                   ]}
                 >
@@ -177,7 +182,7 @@ export function NotesReadView({
                   line={line}
                   style={
                     line.checked
-                      ? { color: home.secondary, textDecorationLine: 'line-through' }
+                      ? { color: k.secondary, textDecorationLine: 'line-through' }
                       : undefined
                   }
                 />
