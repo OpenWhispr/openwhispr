@@ -9,6 +9,7 @@ import { AuthBackground, AuthHeader, AuthLine, AuthTitle, WhiteButton, authLayou
 import { readVerified, tokenEmail, verifyEmailToken } from './emailVerification';
 import { requestVerificationEmail } from '@/lib/authClient.android';
 import { useAuthT } from './strings';
+import { theme } from '../theme';
 
 type Stage = 'checking' | 'verified' | 'expired' | 'offline' | 'sent';
 
@@ -70,7 +71,7 @@ export function VerifyLinkScreen({
     body = (
       <View style={authLayout.content}>
         <AuthTitle>{t('verifying')}</AuthTitle>
-        <ActivityIndicator color="#FFFFFF" />
+        <ActivityIndicator color={theme.onGlass} />
       </View>
     );
   } else if (stage === 'verified') {

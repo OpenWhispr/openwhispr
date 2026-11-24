@@ -54,16 +54,6 @@ const LOGOS = new Set([
   'src/android/style/appLogos.ts',
 ]);
 
-/**
- * Files the later segments of the glossy white build still sweep (build plan, segments 2–7).
- * Each segment takes its files off this list; an entry whose file is already clean fails too,
- * so the list only shrinks.
- */
-const PENDING = new Set([
-  // 7 · Account flows
-  'src/android/launch/LaunchScreens.tsx',
-]);
-
 function androidFiles(): string[] {
   const out: string[] = [];
   const walk = (dir: string) => {
@@ -103,12 +93,7 @@ describe('glossy white colour guard', () => {
   });
 
   it('leaves no retired warm colour outside the theme', () => {
-    const hits = files.filter((file) => !LOGOS.has(file) && !PENDING.has(file)).flatMap(offends);
+    const hits = files.filter((file) => !LOGOS.has(file)).flatMap(offends);
     expect(hits).toEqual([]);
-  });
-
-  it('keeps the pending list to files that still need their sweep', () => {
-    const clean = [...PENDING].filter((file) => !offends(file).length);
-    expect(clean).toEqual([]);
   });
 });
