@@ -63,7 +63,9 @@ jest.mock('@/store/useAuthStore', () => {
   const { create } = jest.requireActual('zustand');
   return { useAuthStore: create(() => ({ user: null })) };
 });
-jest.mock('@/lib/accountAccess', () => ({ requiresRealAccount: () => mockGuest() }));
+jest.mock('@/lib/accountAccess', () => ({
+  requiresRealAccount: (user: unknown) => mockGuest(user),
+}));
 jest.mock('@/lib/appleLLM', () => ({
   AppleLLM: { getSupportedLanguages: () => mockGetSupportedLanguages() },
 }));
@@ -88,6 +90,13 @@ beforeEach(() => {
   });
 });
 
+const CACHED_ACCOUNT = {
+  id: 'cached',
+  email: 'person@example.com',
+  emailVerified: true,
+  isAnonymous: false,
+};
+
 describe('keyboardTranslationSync snapshot', () => {
   it('returns the frozen target only for its own job', () => {
     store[KEYS.KEYBOARD_TRANSLATION_TARGET] = 'es';
@@ -109,6 +118,15 @@ describe('keyboardTranslationSync snapshot', () => {
     store[KEYS.KEYBOARD_TRANSLATION_TARGET] = 'es';
     expect(snapshotKeyboardTranslation('job-1')).toBeNull();
     expect(readKeyboardTranslationSnapshot('job-1')).toBeNull();
+  });
+
+  it('uses the account it is given while sign-in is still being restored', () => {
+    // The auth store is empty at a cold launch; the handoff passes the cached account.
+    mockGuest.mockImplementation((user: unknown) => !user);
+    store[KEYS.KEYBOARD_TRANSLATION_TARGET] = 'es';
+    expect(snapshotKeyboardTranslation('job-1')).toBeNull();
+    expect(snapshotKeyboardTranslation('job-2', CACHED_ACCOUNT)).toBe('es');
+    expect(readKeyboardTranslationSnapshot('job-2')).toBe('es');
   });
 
   it('snapshots Off when the stored code is not in the current language list', () => {

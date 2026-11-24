@@ -1,6 +1,7 @@
 import { AppState } from 'react-native';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { AppleLLM } from '@/lib/appleLLM';
+import type { AuthUser } from '@/lib/authClient';
 import { dictationRoute } from '@/lib/keyboardDirectInputs';
 import {
   coerceTranslationTarget,
@@ -29,8 +30,13 @@ function writeTarget(code: string | null): void {
 // Freezes the effective target for the in-flight job, tagged with the job id, so a later
 // change in the keyboard can't alter a dictation that is already recording. It is the target
 // the keyboard shows: Off when translation isn't applicable or the stored code isn't listed.
-export function snapshotKeyboardTranslation(jobId: string): string | null {
-  const { languages, applicable } = translationState();
+// `user` is the account the job runs under: at a cold launch the handoff starts before sign-in
+// is restored, so it passes the cached account in place of the still-empty auth store.
+export function snapshotKeyboardTranslation(
+  jobId: string,
+  user: AuthUser | null = useAuthStore.getState().user,
+): string | null {
+  const { languages, applicable } = translationState(user);
   const target = applicable ? coerceTranslationTarget(readTarget(), languages) : null;
   AppGroupStorage.setItem(APP_GROUP_KEYS.KEYBOARD_RECORDING_TRANSLATION, target ?? '');
   AppGroupStorage.setItem(APP_GROUP_KEYS.KEYBOARD_RECORDING_TRANSLATION_JOB_ID, jobId);
@@ -94,13 +100,16 @@ export async function reconcileKeyboardTranslationFromAppGroup(): Promise<void> 
   }
 }
 
-function translationState(): { languages: TranslationLanguage[]; applicable: boolean } {
+function translationState(user: AuthUser | null = useAuthStore.getState().user): {
+  languages: TranslationLanguage[];
+  applicable: boolean;
+} {
   const route = dictationRoute();
   const languages = translationLanguagesFor(route?.cleanupMode ?? null, onDeviceCodes);
   const applicable = isTranslationApplicable({
     mode: route?.cleanupMode ?? null,
     cleanupUnavailable: route?.cleanupUnavailable ?? false,
-    guest: requiresRealAccount(useAuthStore.getState().user),
+    guest: requiresRealAccount(user),
   });
   return { languages, applicable };
 }

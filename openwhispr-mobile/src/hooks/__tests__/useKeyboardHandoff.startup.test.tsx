@@ -133,11 +133,12 @@ jest.mock('@/lib/keyboardToneSync', () => ({
   snapshotKeyboardTone: jest.fn(),
   readKeyboardToneSnapshot: jest.fn(() => null),
 }));
+const mockSnapshotKeyboardTranslation = jest.fn((..._args: unknown[]) => null);
 // The translation sync reads the dictionary store through the direct-dictation inputs, which
 // opens the notes database; translateTranscript pulls in the router through accountAccess.
 jest.mock('@/lib/keyboardTranslationSync', () => ({
   startKeyboardTranslationSync: () => () => undefined,
-  snapshotKeyboardTranslation: jest.fn(() => null),
+  snapshotKeyboardTranslation: (...args: unknown[]) => mockSnapshotKeyboardTranslation(...args),
   readKeyboardTranslationSnapshot: jest.fn(() => null),
 }));
 jest.mock('@/lib/translateTranscript', () => ({
@@ -418,6 +419,8 @@ it('restores local startup before cold capture without waiting for account netwo
   expect(useAuthStore.getState().isInitialized).toBe(false);
   expect(storage.startNativeRecording).toHaveBeenCalledTimes(1);
   expect(storage.markHotkeyJsReady).toHaveBeenCalledTimes(1);
+  // Sign-in isn't restored yet, so translation is decided for the cached account.
+  expect(mockSnapshotKeyboardTranslation).toHaveBeenCalledWith(expect.any(String), ACCOUNT);
   await restoreAccount();
   await stopRecording();
   expect(dictations()).toEqual([

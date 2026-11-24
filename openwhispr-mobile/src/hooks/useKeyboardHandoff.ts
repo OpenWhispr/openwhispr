@@ -14,7 +14,7 @@ import { useKeyboardRecoveryStore } from '@/store/useKeyboardRecoveryStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useTranscriptStore } from '@/store/useTranscriptStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import type { CachedSession } from '@/lib/authClient';
+import type { AuthUser, CachedSession } from '@/lib/authClient';
 import {
   TranscriptionService,
   isLocalModelMissingError,
@@ -222,6 +222,14 @@ export function useKeyboardHandoff(
                 : null,
             );
       dictationCaptureRef.current = { jobId, context };
+    };
+
+    // The account a job starts under. Before sign-in is restored the auth store is empty, so a
+    // signed-in user would read as nobody; the cached session says who they are.
+    const accountForJob = (): AuthUser | null => {
+      const { isInitialized, isGuest, user } = useAuthStore.getState();
+      if (user || isInitialized || isGuest) return user;
+      return cachedSessionRef.current?.user ?? null;
     };
 
     const begin = (jobId?: string | null) => {
@@ -676,7 +684,7 @@ export function useKeyboardHandoff(
       setCurrentJobId(jobId);
       begin(jobId);
       snapshotKeyboardTone(jobId);
-      snapshotKeyboardTranslation(jobId);
+      snapshotKeyboardTranslation(jobId, accountForJob());
       // Snapshot any pending keyboard_agent_request into a per-job record.
       // Returns null (no-op) for normal dictation; idempotent per jobId.
       snapshotKeyboardAgentRequest(jobId);
@@ -1236,7 +1244,7 @@ export function useKeyboardHandoff(
       if (bgJobId) {
         captureDictationForJob(bgJobId);
         snapshotKeyboardTone(bgJobId);
-        snapshotKeyboardTranslation(bgJobId);
+        snapshotKeyboardTranslation(bgJobId, accountForJob());
         // Mirror the tone snapshot: capture a pending agent request for this
         // job. No-op (null) when none is pending; idempotent per jobId.
         snapshotKeyboardAgentRequest(bgJobId);
