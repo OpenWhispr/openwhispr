@@ -42,7 +42,8 @@ const app = (name: string) => {
 export const appIcon = app;
 
 // The v3 graphic (Figma 4860:90) exported at 3x, its drop shadow included: 393 x 448 around the
-// 345 x 400 card, which sits 24 in and 6 down. Glows, logos and the two rings at rest are the export;
+// 345 x 400 card, which sits 24 in and 6 down. Everything outside the card is transparent (only the
+// shadow has alpha), so the page's canvas shows around it in both themes. Glows, logos and the two rings at rest are the export;
 // the rings' pulse is drawn on top, centred on the bubble at (172.5, 202).
 const EVERYWHERE = require('./assets/everywhere.png');
 const CARD = { width: 345, height: 400, left: 24, top: 6, imageWidth: 393, imageHeight: 448 };
