@@ -111,10 +111,16 @@ function createMeetingAuditLog({
     logger.warn(message, meta);
   };
 
+  // Settles true once the task's lines are written, false when they aren't.
   const enqueue = (task) => {
-    queue = queue
-      .then(task)
-      .catch((error) => warnOnce("Meeting audit log write failed", { error: error.message }));
+    queue = queue.then(task).then(
+      () => true,
+      (error) => {
+        warnOnce("Meeting audit log write failed", { error: error.message });
+        return false;
+      }
+    );
+    return queue;
   };
 
   // Callers sit on a recording's start, stop and quit paths, so a throw in here
@@ -123,7 +129,7 @@ function createMeetingAuditLog({
     (record) =>
     (...args) => {
       try {
-        record(...args);
+        return record(...args);
       } catch (error) {
         warnOnce("Meeting audit log failed", { error: error.message });
       }
@@ -318,11 +324,11 @@ function createMeetingAuditLog({
   // trigger is the device policy's token, a removal from the managing
   // workspace or the marker of an MDM script that couldn't finish; "incomplete"
   // means some store could not be deleted. A line written after the wipe keeps
-  // the time the wipe happened (at).
+  // the time the wipe happened (at). Settles true once the line is written.
   function localDataWiped({ trigger, incomplete, at = now() }) {
     if (!isEnabled()) return;
     const dir = directory();
-    enqueue(() =>
+    return enqueue(() =>
       append(dir, at, {
         event: "local-data.wiped",
         trigger: allowed(WIPE_TRIGGERS, trigger),

@@ -32,7 +32,7 @@ if ($mode -ne "FullLanguage") {
 
 # The same lists as KEPT_USER_DATA_ENTRIES, MODEL_USER_DATA_ENTRIES,
 # MODEL_CACHE_ENTRIES and TEMP_PREFIXES in src/helpers/localDataWipe.js.
-$keptUserData = @("audit", "meeting-audit-session.json", "meeting-audit-session.json.tmp", "local-data-wipe.json", "local-data-wipe.pending", "globe-preference-state.json")
+$keptUserData = @("audit", "meeting-audit-session.json", "meeting-audit-session.json.tmp", "local-data-wipe.json", "local-data-wipe.json.tmp", "local-data-wipe.pending", "globe-preference-state.json")
 $modelUserData = @("installed-models.json")
 $modelCache = @("whisper-models", "parakeet-models", "diarization-models", "models", "whisper-vad", "embedding-models")
 $tempPrefixes = @("ow-", "openwhispr-", "whisper-input-", "whisper-output-", "parakeet-", "enterprise-buffer-", "enterprise-chunks-", "kwin-active-class-")
@@ -196,8 +196,9 @@ function Remove-IfEmptied([string]$Dir) {
 # reached through a junction or link. The database is read from a copy only
 # SYSTEM and Administrators can open, so a row still in its write-ahead log
 # counts and a journal left beside it is replayed into the copy, never into a
-# file it is a hard link to. Returns whether a recorded file was left behind,
-# so the database that lists it stays for a run again.
+# file it is a hard link to. Returns whether a recorded file was left behind or
+# the record couldn't be read, so the database that lists them stays for a run
+# again.
 function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
   $database = Join-Path $UserData "transcriptions.db"
   $source = Get-Item -LiteralPath $database -Force -ErrorAction SilentlyContinue
@@ -229,7 +230,7 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
   } catch {
     Write-Warning "Could not read the notes mirror's record in $($database): $($_.Exception.Message)"
     $script:failed = $true
-    return $false
+    return $true
   }
 
   $profileRoot = & $fullPath $ProfilePath
@@ -408,6 +409,25 @@ function Write-WipeRecord([string]$User, [string]$Audit, [string]$UserData, [str
   $script:failed = $true
 }
 
+# The ASCII-only fallbacks the app uses when a profile path has spaces or
+# non-ASCII characters; they are shared by every user of the device, so any
+# signed-in user could swap a folder there for a junction. Cleaned first: any
+# profile's data may be in them, so a profile's wipe is finished only once
+# they are.
+$sharedRoots = @($env:ProgramData, "$env:SystemDrive\")
+$sharedExists = @($sharedRoots | Where-Object { Test-Path -LiteralPath (Join-Path $_ "OpenWhispr") }).Count -gt 0
+if ($sharedExists -and $someoneSignedIn) {
+  Write-Warning "Skipped the shared folders in $env:ProgramData\OpenWhispr and $env:SystemDrive\OpenWhispr while a user is signed in. Run again when no one is."
+  $failed = $true
+} else {
+  foreach ($root in $sharedRoots) {
+    $app = Join-Path $root "OpenWhispr"
+    Remove-TempFiles (Join-Path $app "temp") $root
+    Remove-AllExcept (Join-Path $app "cache") $root $cacheKept (Get-AuditLogPath)
+  }
+}
+$sharedFailed = $failed
+
 foreach ($profilePath in $profilePaths) {
   $sid = $profileSids[(& $fullPath $profilePath)]
   if ($sid -and $signedIn -contains $sid) {
@@ -417,8 +437,25 @@ foreach ($profilePath in $profilePaths) {
   }
   # Counted per profile, so "Removed" names only profiles where nothing failed.
   $failedBefore = $failed
-  $failed = $false
+  $failed = $sharedFailed
   $userData = Join-Path $profilePath "AppData\Roaming\OpenWhispr"
+  # Marked before anything goes, so a run cut short leaves the app to finish the
+  # wipe before it opens (SCRIPT_WIPE_MARKER in localDataWipe.js); a run that
+  # finishes takes the mark. One that can't be marked is left as it is.
+  $hadData = Test-Path -LiteralPath $userData
+  $marker = Join-Path $userData "local-data-wipe.pending"
+  if ($hadData) {
+    try {
+      if (-not (Test-RealFolder $userData $profilePath)) { throw "it is a link or leads out of the profile" }
+      $existing = Get-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+      if ($existing) { Remove-Entry $existing }
+      [IO.File]::Open($marker, "CreateNew").Dispose()
+    } catch {
+      Write-Warning "Skipped $($profilePath): it can't be marked for OpenWhispr to finish the wipe ($_)"
+      $failed = $true
+      continue
+    }
+  }
   $user = Get-ProfileUser $sid
   $audit = Get-AuditLogPath $profilePath $user
   $keptHere = $kept
@@ -434,36 +471,13 @@ foreach ($profilePath in $profilePaths) {
     Remove-Entry (Get-Item -LiteralPath $bridgeFile -Force)
   }
   Remove-TempFiles (Join-Path $profilePath "AppData\Local\Temp") $profilePath
-  $hadData = Test-Path -LiteralPath $userData
-  if ($hadData) { Write-WipeRecord $user $audit $userData $profilePath $failed }
-  # A profile it couldn't finish is marked, so the app finishes the wipe there
-  # before it opens (SCRIPT_WIPE_MARKER in localDataWipe.js).
-  if ($hadData -and (Test-RealFolder $userData $profilePath)) {
-    $marker = Join-Path $userData "local-data-wipe.pending"
+  if ($hadData) {
+    Write-WipeRecord $user $audit $userData $profilePath $failed
     $existing = Get-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
-    if ($existing) { Remove-Entry $existing }
-    if ($failed) {
-      try { [IO.File]::Open($marker, "CreateNew").Dispose() } catch { Write-Warning "Could not mark $profilePath for OpenWhispr to finish the wipe" }
-    }
+    if (-not $failed -and $existing) { Remove-Entry $existing }
   }
   if (-not $failed -and $hadData) { Write-Output "Removed OpenWhispr local data from $profilePath" }
   $failed = $failed -or $failedBefore
-}
-
-# The ASCII-only fallbacks the app uses when a profile path has spaces or
-# non-ASCII characters; they are shared by every user of the device, so any
-# signed-in user could swap a folder there for a junction.
-$sharedRoots = @($env:ProgramData, "$env:SystemDrive\")
-$sharedExists = @($sharedRoots | Where-Object { Test-Path -LiteralPath (Join-Path $_ "OpenWhispr") }).Count -gt 0
-if ($sharedExists -and $someoneSignedIn) {
-  Write-Warning "Skipped the shared folders in $env:ProgramData\OpenWhispr and $env:SystemDrive\OpenWhispr while a user is signed in. Run again when no one is."
-  $script:failed = $true
-} else {
-  foreach ($root in $sharedRoots) {
-    $app = Join-Path $root "OpenWhispr"
-    Remove-TempFiles (Join-Path $app "temp") $root
-    Remove-AllExcept (Join-Path $app "cache") $root $cacheKept (Get-AuditLogPath)
-  }
 }
 
 if ($failed) { exit 1 }

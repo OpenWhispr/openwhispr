@@ -68,6 +68,7 @@ const KEPT_USER_DATA_ENTRIES = [
   "meeting-audit-session.json",
   "meeting-audit-session.json.tmp",
   WIPE_STATE_FILE,
+  `${WIPE_STATE_FILE}.tmp`,
   SCRIPT_WIPE_MARKER,
   "globe-preference-state.json",
 ];
@@ -97,20 +98,21 @@ const TEMP_PREFIXES = [
   "kwin-active-class-",
 ];
 
-const unique = (paths) => [...new Set(paths.map((entry) => path.resolve(entry)))];
-
 function defaultRoots() {
   const { app } = require("electron");
   const { getCacheRoot } = require("./modelDirUtils");
   const { getSafeTempDir } = require("./safeTempDir");
   const { getBridgeFilePath } = require("./cliBridge");
+  const safeTemp = getSafeTempDir();
   return {
     userData: app.getPath("userData"),
     // OpenWhispr's own cache folder, which also keeps search data and yt-dlp;
     // models follow getCacheRoot().
     homeCache: path.join(os.homedir(), ".cache", "openwhispr"),
     cacheRoot: getCacheRoot(),
-    temp: unique([os.tmpdir(), getSafeTempDir()]),
+    temp: [os.tmpdir()],
+    // getSafeTempDir()'s fallback on Windows, which every account there writes in.
+    sharedTemp: path.resolve(safeTemp) === path.resolve(os.tmpdir()) ? [] : [safeTemp],
     bridgeFile: getBridgeFilePath(),
     // Where clipboard.js keeps the Linux portal's paste permission.
     portalTokenFile: path.join(
@@ -119,6 +121,14 @@ function defaultRoots() {
       "portal-paste-token"
     ),
   };
+}
+
+// Replaced whole, and on disk before it replaces the last one, so a crash or
+// power cut never leaves a torn or empty record.
+function writeState(statePath, state) {
+  const pending = `${statePath}.tmp`;
+  fs.writeFileSync(pending, JSON.stringify(state), { flush: true });
+  fs.renameSync(pending, statePath);
 }
 
 function readJson(filePath) {
@@ -154,17 +164,17 @@ function recordedMirrorFiles(userDataPath) {
   }
 }
 
-async function removeTempFiles(directory, remove) {
+async function removeTempFiles(directory, remove, { shared = false } = {}) {
   const names = await fs.promises.readdir(directory).catch(() => []);
   const ours = names.filter((name) => TEMP_PREFIXES.some((prefix) => name.startsWith(prefix)));
   for (const name of ours) {
     const target = path.join(directory, name);
     const stat = await fs.promises.lstat(target).catch(() => null);
     // A shared temp folder (Linux /tmp, or getSafeTempDir()'s on Windows) holds
-    // other users' files too. Windows can't say whose a file is, so there one
-    // this user may not delete is another's.
+    // other users' files too. Windows can't say whose a file is, so in its
+    // shared folder one this user may not delete is another's.
     if (stat && (!process.getuid || stat.uid === process.getuid()))
-      await remove(name, target, { othersMayOwn: !process.getuid });
+      await remove(name, target, { othersMayOwn: shared && !process.getuid });
   }
 }
 
@@ -202,14 +212,15 @@ async function removeLocalData({ includeModels, roots = defaultRoots(), auditLog
   };
 
   // Before the database that records them is deleted below. A recorded file
-  // that didn't go keeps the database, so the next launch's retry still knows
-  // it is the mirror's; one that can't be read at all can't tell it, so it goes.
+  // that didn't go, or a record that can't be read, keeps the database, so the
+  // next launch's retry still knows which files are the mirror's.
   let mirrored = new Map();
   let keepDatabase = false;
   try {
     mirrored = recordedMirrorFiles(roots.userData);
   } catch (error) {
     errors.push(`notes mirror: ${error.message}`);
+    keepDatabase = true;
   }
   for (const [basePath, entries] of mirrored) {
     try {
@@ -243,6 +254,7 @@ async function removeLocalData({ includeModels, roots = defaultRoots(), auditLog
     remove("cli-bridge.json", roots.bridgeFile),
     remove("portal-paste-token", roots.portalTokenFile),
     ...roots.temp.map((directory) => removeTempFiles(directory, remove)),
+    ...roots.sharedTemp.map((directory) => removeTempFiles(directory, remove, { shared: true })),
   ]);
   try {
     // The queue's interrupted writes, which carry the writer's pid.
@@ -266,10 +278,7 @@ async function readDeviceSnapshot() {
 function requestWorkspaceRemovalWipe(userDataPath, removal) {
   const statePath = path.join(userDataPath, WIPE_STATE_FILE);
   try {
-    fs.writeFileSync(
-      statePath,
-      JSON.stringify({ ...readJson(statePath), pendingRemoval: removal })
-    );
+    writeState(statePath, { ...readJson(statePath), pendingRemoval: removal });
     return true;
   } catch (error) {
     require("./debugLogger").error("Could not record the workspace removal wipe", {
@@ -285,7 +294,7 @@ function takeWipeNotice(userDataPath) {
   const { notice, ...state } = readJson(statePath) ?? {};
   if (!notice) return null;
   try {
-    fs.writeFileSync(statePath, JSON.stringify(state));
+    writeState(statePath, state);
   } catch {
     /* Shown again next launch rather than never. */
   }
@@ -294,9 +303,10 @@ function takeWipeNotice(userDataPath) {
 
 const pendingWipes = (state) => (Array.isArray(state?.pendingAudit) ? state.pendingAudit : []);
 
-// Writes the record's wipe lines to the audit log, then drops them from the
-// record. A network AuditLogPath that stalls is waited on only so long; what it
-// hasn't taken stays for a later launch.
+// Writes the record's wipe lines to the audit log, then drops the ones written
+// from the record. A line no folder took, or one a network AuditLogPath that
+// stalls hasn't taken yet (it is waited on only so long), stays for a later
+// launch.
 async function writeWipeAudit(
   { statePath, auditLogPath, userDataPath, appVersion, logger },
   entries
@@ -310,13 +320,13 @@ async function writeWipeAudit(
     appVersion,
     logger,
   });
-  for (const entry of entries) audit.localDataWiped(entry);
-  const written = audit
-    .flush()
-    .then(() => {
+  const written = Promise.all(entries.map((entry) => audit.localDataWiped(entry)))
+    .then((delivered) => {
       // A record it can't read is left as it is, token and all.
       const state = readJson(statePath);
-      if (state) fs.writeFileSync(statePath, JSON.stringify({ ...state, pendingAudit: undefined }));
+      const left = entries.filter((_, index) => delivered[index] !== true);
+      if (state)
+        writeState(statePath, { ...state, pendingAudit: left.length > 0 ? left : undefined });
     })
     .catch((error) =>
       logger.error("Could not update the local data wipe record", { error: error.message })
@@ -327,9 +337,10 @@ async function writeWipeAudit(
 // Runs at launch, before the logger, database or any sidecar opens a file it
 // removes. Three things ask for it: a WipeLocalDataOnLaunch token this device
 // hasn't acted on, a recorded workspace removal, and the marker of a script
-// that couldn't finish. Each wipes until nothing is left behind. Resolves true
+// that couldn't finish. Each wipes until nothing is left behind, and a wipe
+// that started finishes as it began, with the settings it saved. Resolves true
 // when the app should relaunch into its fresh state; rejects when something
-// stayed, and the app must not open it.
+// stayed or the wipe isn't on record, and the app must not open.
 async function wipeLocalDataOnLaunch({
   userDataPath,
   appVersion,
@@ -370,14 +381,35 @@ async function wipeLocalDataOnLaunch({
   const removal = state.pendingRemoval ?? null;
   const markerPath = path.join(userDataPath, SCRIPT_WIPE_MARKER);
   const scriptWipe = fs.existsSync(markerPath);
-  if (!wipeToken && !removal && !scriptWipe) {
+  const started = state.pendingSettings ?? null;
+  if (!wipeToken && !removal && !scriptWipe && !started) {
     // The app opens meanwhile, however long the audit log takes.
     void writeWipeAudit(auditRecord, pendingWipes(state));
     return false;
   }
 
+  // A started wipe with nothing else pending was a marker's, which a script that
+  // finished has taken since.
   const trigger = removal ? "workspace-removal" : wipeToken ? "device-policy" : "script";
-  logger.warn("Wiping local data", { trigger, includeModels });
+  // On record before anything goes, so a wipe cut short by a crash or a failure
+  // is tried again at every launch, taking what it was asked to and keeping its
+  // audit files, even once the policy can't be read. A new token is a new
+  // request, with the settings deployed beside it.
+  const newToken = token !== null && token !== state.token && token !== state.pendingToken;
+  const settings = (!newToken && started) || {
+    includeModels,
+    auditLogPath: device?.auditLogPath ?? null,
+  };
+  const intent = { ...state, pendingToken: wipeToken ?? undefined, pendingSettings: settings };
+  try {
+    writeState(statePath, intent);
+  } catch (error) {
+    logger.error("Could not record the local data wipe", { error: error.message });
+    throw Object.assign(new Error("Local data wipe not started"), {
+      errors: [`wipe record: ${error.message}`],
+    });
+  }
+  logger.warn("Wiping local data", { trigger, includeModels: settings.includeModels });
   // main.js loaded .env into this process, and the relaunch inherits its
   // environment: what came from the file goes with the file. So do the saved
   // keys a relaunch or update restart carried in from the app that decrypted them.
@@ -390,9 +422,9 @@ async function wipeLocalDataOnLaunch({
   // The open log file is in the wipe, and Windows can't delete an open file.
   logger.close();
   const errors = await removeLocalData({
-    includeModels,
+    includeModels: settings.includeModels,
     roots,
-    auditLogPath: device?.auditLogPath,
+    auditLogPath: settings.auditLogPath,
   });
   for (const [key, value] of Object.entries(loaded)) if (env[key] === value) delete env[key];
   for (const key of require("./environment").SECRET_KEYS) delete env[key];
@@ -414,34 +446,32 @@ async function wipeLocalDataOnLaunch({
   const incomplete = errors.length > 0;
   if (incomplete) logger.warn("Local data wipe incomplete", { errors });
 
-  // A complete wipe goes on record, or a relaunch would wipe again (this launch
-  // carries on instead, and the next one retries), and a removal leaves the
-  // fresh install its notice. An incomplete one leaves what asked for it
-  // pending, so the next launch tries again. Either way its audit line waits in
-  // the record until the audit log has it.
+  // A complete wipe goes on record, and a removal leaves the fresh install its
+  // notice. An incomplete one leaves what asked for it pending, so the next
+  // launch tries again; so does one whose completion isn't on record, before
+  // the app opens anything a retry would remove. Either way its audit line
+  // waits in the record until the audit log has it.
   const pendingAudit = [...pendingWipes(state), { trigger, incomplete, at: Date.now() }];
-  let recorded = true;
   try {
-    fs.writeFileSync(
+    writeState(
       statePath,
-      JSON.stringify(
-        incomplete
-          ? { ...state, pendingToken: wipeToken ?? undefined, pendingAudit }
-          : {
-              token: wipeToken ?? state.token,
-              notice: removal ? "workspace-removal" : state.notice,
-              pendingAudit,
-            }
-      )
+      incomplete
+        ? { ...intent, pendingAudit }
+        : {
+            token: wipeToken ?? state.token,
+            notice: removal ? "workspace-removal" : state.notice,
+            pendingAudit,
+          }
     );
     if (!incomplete) fs.rmSync(markerPath, { force: true });
   } catch (error) {
     logger.error("Could not record the local data wipe", { error: error.message });
-    recorded = false;
+    errors.push(`wipe record: ${error.message}`);
+    pendingAudit.at(-1).incomplete = true;
   }
-  await writeWipeAudit(auditRecord, pendingAudit);
-  if (incomplete) throw Object.assign(new Error("Local data wipe incomplete"), { errors });
-  return recorded;
+  await writeWipeAudit({ ...auditRecord, auditLogPath: settings.auditLogPath }, pendingAudit);
+  if (errors.length > 0) throw Object.assign(new Error("Local data wipe incomplete"), { errors });
+  return true;
 }
 
 module.exports = {

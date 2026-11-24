@@ -16,7 +16,7 @@ set -eo pipefail
 
 # The same lists as KEPT_USER_DATA_ENTRIES, MODEL_USER_DATA_ENTRIES,
 # MODEL_CACHE_ENTRIES and TEMP_PREFIXES in src/helpers/localDataWipe.js.
-kept_user_data=(audit meeting-audit-session.json meeting-audit-session.json.tmp local-data-wipe.json local-data-wipe.pending globe-preference-state.json)
+kept_user_data=(audit meeting-audit-session.json meeting-audit-session.json.tmp local-data-wipe.json local-data-wipe.json.tmp local-data-wipe.pending globe-preference-state.json)
 model_user_data=(installed-models.json)
 model_cache=(whisper-models parakeet-models diarization-models models whisper-vad embedding-models)
 temp_prefixes=(ow- openwhispr- whisper-input- whisper-output- parakeet- enterprise-buffer- enterprise-chunks- kwin-active-class-)
@@ -139,9 +139,9 @@ read_as_owner() { printf '%s\0' "$1" | as_owner cat; }
 # planted. Without one, root reads a copy of the database with its write-ahead
 # log, so the rows still in that log count and a journal left beside it is
 # replayed only into the copy, never into a file it is a hard link to. A
-# recorded file that didn't go keeps the database (keep_database), so a run
-# again still knows it is the mirror's; one that can't be read at all can't
-# tell it, so it goes.
+# recorded file that didn't go, or a record that can't be read, keeps the
+# database (keep_database), so a run again still knows which files are the
+# mirror's.
 remove_mirrored_files() {
   local database="$user_data/transcriptions.db" db snapshot="" suffix read_failed="" before="$failed"
   local rows base rel hash file folder real_base real_dir raw plain
@@ -169,6 +169,7 @@ remove_mirrored_files() {
   if [[ -n "$read_failed" ]]; then
     echo "Could not read the notes mirror's record in $database" >&2
     failed=1
+    keep_database=1
     return 0
   fi
   while IFS=$'\x1f' read -r -d $'\x1e' base rel hash; do
@@ -306,6 +307,21 @@ for home in "${homes[@]}"; do
   user="$(id -un "$owner_uid" 2>/dev/null)" || user=""
   quit_app "$owner_uid"
   user_data="$home/Library/Application Support/OpenWhispr"
+  # Marked before anything goes, so a run cut short leaves the app to finish
+  # the wipe before it opens (SCRIPT_WIPE_MARKER in localDataWipe.js); a run
+  # that finishes takes the mark. A home whose account is gone has no one to
+  # open it. One that can't be marked is left as it is.
+  marked=0
+  if [[ (-n "$run_as" || $EUID -ne 0) && (-e "$user_data" || -L "$user_data") ]]; then
+    if [[ -d "$user_data" && ! -L "$user_data" ]] && inside_home "$user_data" &&
+      printf '%s\0' "$user_data/local-data-wipe.pending" | as_owner touch; then
+      marked=1
+    else
+      echo "Skipped $home: it can't be marked for OpenWhispr to finish the wipe" >&2
+      failed=1
+      continue
+    fi
+  fi
   audit_dir="$(configured_audit_dir "$user")"
   audit_real=""
   [[ -z "$audit_dir" ]] || audit_real="$(cd -P "$audit_dir" 2>/dev/null && /bin/pwd -P)" || audit_real=""
@@ -326,17 +342,7 @@ for home in "${homes[@]}"; do
     remove_temp_files "$(launchctl asuser "$uid" sudo -u "$console_user" getconf DARWIN_USER_TEMP_DIR)"
   fi
   [[ ! -d "$user_data" ]] || record_wipe "$user" "$audit_dir"
-  # A home it couldn't finish is marked, so the app finishes the wipe there
-  # before it opens (SCRIPT_WIPE_MARKER in localDataWipe.js). A home whose
-  # account is gone has no one to open it.
-  if [[ (-n "$run_as" || $EUID -ne 0) && -d "$user_data" && ! -L "$user_data" ]] && inside_home "$user_data"; then
-    if [[ "$failed" == 1 ]]; then
-      printf '%s\0' "$user_data/local-data-wipe.pending" | as_owner touch ||
-        echo "Could not mark $home for OpenWhispr to finish the wipe" >&2
-    else
-      remove "$user_data/local-data-wipe.pending"
-    fi
-  fi
+  [[ "$marked" == 0 || "$failed" == 1 ]] || remove "$user_data/local-data-wipe.pending"
   [[ "$failed" == 1 ]] || echo "Removed OpenWhispr local data from $home"
   [[ "$failed_before" == 0 ]] || failed=1
 done

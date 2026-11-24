@@ -191,18 +191,21 @@ function createWorkspacePolicyManager({
   // #3030: the server says this account was removed from a managed workspace.
   // Only a device whose last managed verdict for this credential (or account)
   // named that workspace acts on it: a removal from some other workspace, or a
-  // sign-in on another device, wipes nothing. The credential's own verdict
-  // still counts once a rejected session has cleared the account label, and so
-  // does the one this run enforces, which a failed cache write left off disk. A
-  // removal the app couldn't record throws, so the verdict that names its
-  // workspace isn't replaced and the next lookup reports it again.
+  // sign-in on another device, wipes nothing. That verdict is the one this run
+  // enforces, which a failed cache write may have left off disk; only without
+  // one do the cached verdicts count, the credential's own still counting once
+  // a rejected session has cleared the account label. A removal the app
+  // couldn't record throws, so the verdict that names its workspace isn't
+  // replaced and the next lookup reports it again.
   function reportRemoval(identity, removal) {
     if (typeof removal?.workspaceId !== "string" || !validTimestamp(removal.removedAt)) return;
-    const verdicts = [
-      snapshots.get(identityKey(identity))?.data,
-      readWorkspacePolicyCache(cachePath, cacheIdentity(identity)),
-      isValidatedAccount(identity) && readAccountPolicyCache(cachePath, identity),
-    ];
+    const live = snapshots.get(identityKey(identity))?.data;
+    const verdicts = live
+      ? [live]
+      : [
+          readWorkspacePolicyCache(cachePath, cacheIdentity(identity)),
+          isValidatedAccount(identity) && readAccountPolicyCache(cachePath, identity),
+        ];
     const managedBy = verdicts.flatMap((verdict) =>
       verdict?.managed && Array.isArray(verdict.managedBy) ? verdict.managedBy : []
     );

@@ -1556,6 +1556,25 @@ test("the verdict this run enforces hears its removal when the cache couldn't sa
   assert.deepEqual(context.removals, [{ accountId: "account-a", ...removal }]);
 });
 
+test(
+  "an older cached verdict can't authorize a removal the verdict this run enforces doesn't name",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async (t) => {
+    const context = removalSetup([
+      managedBy("workspace-1"),
+      managedBy("workspace-9"),
+      () => unmanagedWith(removedFrom),
+    ]);
+    t.after(context.cleanup);
+    await context.lookup();
+    // Only workspace-1's verdict is on disk: the next one can't be saved.
+    fs.chmodSync(context.cachePath, 0o444);
+    await context.lookup();
+    await context.lookup();
+    assert.deepEqual(context.removals, []);
+  }
+);
+
 test("a removal the app couldn't record is heard again at the next lookup", async (t) => {
   let recording = false;
   const context = removalSetup(
