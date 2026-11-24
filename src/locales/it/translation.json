@@ -4520,6 +4520,7 @@
       "triggerPlaceholder": "es. mio calendario",
       "replacementLabel": "Sostituzione",
       "replacementPlaceholder": "Testo da inserire quando pronunci il trigger…",
+      "variablesLabel": "Inserisci",
       "create": "Crea snippet",
       "duplicate": "Esiste già uno snippet con questo trigger",
       "emptyTitle": "Quello che non dovresti dover dire",

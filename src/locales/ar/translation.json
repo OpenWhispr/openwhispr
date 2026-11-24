@@ -2258,6 +2258,7 @@
       "triggerPlaceholder": "مثال: رابط التقويم",
       "replacementLabel": "الاستبدال",
       "replacementPlaceholder": "النص المراد إدراجه عندما تنطق العبارة المفتاحية…",
+      "variablesLabel": "إدراج",
       "create": "إنشاء مقتطف",
       "duplicate": "يوجد مقتطف بهذه العبارة المفتاحية بالفعل",
       "emptyTitle": "الأشياء التي لا ينبغي أن تضطر إلى قولها",

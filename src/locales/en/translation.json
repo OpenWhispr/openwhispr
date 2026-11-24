@@ -5077,6 +5077,7 @@
       "triggerPlaceholder": "e.g. cal link",
       "replacementLabel": "Replacement",
       "replacementPlaceholder": "Text to insert when you say the trigger…",
+      "variablesLabel": "Insert",
       "create": "Create snippet",
       "duplicate": "A snippet with this trigger already exists",
       "emptyTitle": "Stuff you shouldn't have to say",

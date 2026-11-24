@@ -4518,6 +4518,7 @@
       "triggerPlaceholder": "例如：我的行事曆連結",
       "replacementLabel": "替換文字",
       "replacementPlaceholder": "說出觸發詞時插入的文字…",
+      "variablesLabel": "插入",
       "create": "建立片段",
       "duplicate": "已存在使用此觸發詞的片段",
       "emptyTitle": "同樣的話，只說",
