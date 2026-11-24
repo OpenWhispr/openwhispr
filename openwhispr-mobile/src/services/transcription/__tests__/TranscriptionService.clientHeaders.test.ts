@@ -30,7 +30,12 @@ jest.mock('../../../../modules/background-uploader/src', () => ({
   BackgroundUploader: { isAvailable: () => true, upload: jest.fn() },
 }));
 jest.mock('../../../../modules/audio-tools/src', () => ({
-  AudioTools: { isAvailable: () => true, splitToChunks: jest.fn(), cleanup: jest.fn() },
+  AudioTools: {
+    isAvailable: () => true,
+    splitToChunks: jest.fn(),
+    splitOggOpus: jest.fn(),
+    cleanup: jest.fn(),
+  },
 }));
 jest.mock('../../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: {},
@@ -193,5 +198,41 @@ describe('chunked transcription timing', (): void => {
       { text: 'First part.', t0: 0, t1: 12_000 },
       { text: 'Last part.', t0: 24_000, t1: 36_000 },
     ]);
+  });
+
+  it('returns no segments for ogg chunks, which are cut by size', async (): Promise<void> => {
+    jest.mocked(FileSystem.getInfoAsync).mockResolvedValueOnce({
+      exists: true,
+      isDirectory: false,
+      uri: 'file:///recording.ogg',
+      size: 8 * 1024 * 1024,
+      modificationTime: 0,
+    });
+    jest.mocked(AudioTools.splitOggOpus).mockResolvedValue({
+      chunks: ['file:///o0.ogg', 'file:///o1.ogg'],
+      durationMs: 0,
+    });
+    const textByChunk: Record<string, string> = {
+      'file:///o0.ogg': 'One.',
+      'file:///o1.ogg': 'Two.',
+    };
+    jest.mocked(FileSystem.uploadAsync).mockImplementation(
+      async (_url, fileUri) =>
+        ({
+          status: 200,
+          body: JSON.stringify({ text: textByChunk[fileUri] }),
+          headers: {},
+          mimeType: null,
+        }) as Awaited<ReturnType<typeof FileSystem.uploadAsync>>,
+    );
+
+    const result = await TranscriptionService.transcribe({
+      audioUri: 'file:///recording.ogg',
+      provider: 'cloud',
+      requestContext: 'keyboard',
+    });
+
+    expect(result.text).toBe('One. Two.');
+    expect(result.segments).toBeUndefined();
   });
 });

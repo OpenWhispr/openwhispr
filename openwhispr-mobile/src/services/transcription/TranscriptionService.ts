@@ -568,11 +568,18 @@ export class TranscriptionService {
       );
       if (plan === 'ogg') {
         const { chunks } = await AudioTools.splitOggOpus(audioUri, CLOUD_INLINE_LIMIT);
-        return this.transcribeChunked(chunks, 'audio/ogg', parameters, sessionCookie);
+        // Ogg chunks are cut by size, so their lengths in time are unknown.
+        return this.transcribeChunked(chunks, 'audio/ogg', parameters, sessionCookie, null);
       }
       if (plan === 'wav') {
         const { chunks } = await AudioTools.splitToChunks(audioUri, CLOUD_CHUNK_SECONDS);
-        return this.transcribeChunked(chunks, 'audio/wav', parameters, sessionCookie);
+        return this.transcribeChunked(
+          chunks,
+          'audio/wav',
+          parameters,
+          sessionCookie,
+          CLOUD_CHUNK_SECONDS,
+        );
       }
     }
 
@@ -775,6 +782,7 @@ export class TranscriptionService {
     chunkMimeType: string,
     parameters: Record<string, string>,
     sessionCookie: string,
+    chunkSeconds: number | null,
   ): Promise<TranscriptionResponse> {
     try {
       const texts: string[] = new Array(chunkUris.length);
@@ -817,17 +825,19 @@ export class TranscriptionService {
       const workerCount = Math.min(CLOUD_CHUNK_CONCURRENCY, chunkUris.length);
       await Promise.all(Array.from({ length: workerCount }, () => worker()));
       if (firstError !== null) throw firstError;
+      const text = stitchChunkTexts(texts);
+      if (chunkSeconds === null) return { text, duration: 0, provider: 'cloud' };
       // Per-chunk times let a meeting place this text on its recording's clock.
       const segments: WhisperSegment[] = [];
-      texts.forEach((text, index) => {
-        if (!text.trim()) return;
+      texts.forEach((chunkText, index) => {
+        if (!chunkText.trim()) return;
         segments.push({
-          text,
-          t0: index * CLOUD_CHUNK_SECONDS * 100,
-          t1: (index + 1) * CLOUD_CHUNK_SECONDS * 100,
+          text: chunkText,
+          t0: index * chunkSeconds * 100,
+          t1: (index + 1) * chunkSeconds * 100,
         });
       });
-      return { text: stitchChunkTexts(texts), duration: 0, provider: 'cloud', segments };
+      return { text, duration: 0, provider: 'cloud', segments };
     } finally {
       await AudioTools.cleanup(chunkUris);
     }
