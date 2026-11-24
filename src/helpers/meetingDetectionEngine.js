@@ -247,6 +247,7 @@ class MeetingDetectionEngine {
       eligible: true,
       reliable: externalMicState.reliable,
       externalMicActive: externalMicState.externalMicActive,
+      micMuted: this._recordingSession.micMuted,
       ...this._audioActivityMonitor.getState(),
     });
     this._autoEndActive = true;
@@ -269,6 +270,7 @@ class MeetingDetectionEngine {
     this._recordingSession = {
       sessionId,
       autoEndEligible: autoEndEligible === true,
+      micMuted: false,
       ownerWebContents,
       systemAudioAvailable: systemAudioAvailable === true,
       // Lets a second manual start surface this recording instead of opening a
@@ -307,6 +309,27 @@ class MeetingDetectionEngine {
 
     this._syncMeetingProcessDetector();
     this._syncAudioActivityDetector();
+    return true;
+  }
+
+  setRecordingMicMuted(sessionId, muted, ownerWebContents) {
+    const session = this._recordingSession;
+    if (
+      !session ||
+      session.sessionId !== sessionId ||
+      (ownerWebContents && session.ownerWebContents !== ownerWebContents)
+    ) {
+      return false;
+    }
+    session.micMuted = muted === true;
+    if (this._autoEndActive) {
+      this._autoEndController.handleMicMuteChanged({ sessionId, micMuted: session.micMuted });
+    }
+    debugLogger.debug(
+      "Recording mic mute changed",
+      { sessionId, muted: session.micMuted },
+      "meeting"
+    );
     return true;
   }
 

@@ -3559,7 +3559,10 @@
           "title": "المحتويات",
           "empty": "أضف عناوين لإنشاء جدول المحتويات."
         }
-      }
+      },
+      "muteMic": "كتم الميكروفون",
+      "unmuteMic": "إلغاء كتم الميكروفون",
+      "micMuted": "الميكروفون مكتوم"
     },
     "participants": {
       "attendee": "حاضر",
@@ -3711,7 +3714,8 @@
     },
     "meetingPill": {
       "returnToNote": "العودة إلى التسجيل",
-      "waitingForMicrophone": "في انتظار الميكروفون"
+      "waitingForMicrophone": "في انتظار الميكروفون",
+      "micMuted": "الميكروفون مكتوم"
     },
     "empty": {
       "title": "لا توجد ملاحظات هنا بعد",

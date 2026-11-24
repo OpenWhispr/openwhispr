@@ -89,6 +89,14 @@ test("live partials render alongside the settled rows", async () => {
   assert.ok(html.includes("hello from mic"));
 });
 
+test("an empty live transcript keeps its placeholder and reports a muted microphone", async () => {
+  const empty = { segments: [], isRecording: true };
+  const muted = await renderChat({ ...empty, micMuted: true });
+  assert.match(muted, /Conversation will appear here/);
+  assert.match(muted, /role="status"[^>]*>.*?Microphone muted<\/span>/);
+  assert.doesNotMatch(await renderChat(empty), /Microphone muted/);
+});
+
 test("an in-person meeting draws numbered mic speakers on the other side", async () => {
   const html = await renderChat({
     segments: [

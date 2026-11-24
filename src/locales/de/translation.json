@@ -4611,7 +4611,10 @@
           "title": "Inhalt",
           "empty": "Füge Überschriften hinzu, um das Inhaltsverzeichnis zu erstellen."
         }
-      }
+      },
+      "muteMic": "Mikrofon stummschalten",
+      "unmuteMic": "Mikrofon einschalten",
+      "micMuted": "Mikrofon stummgeschaltet"
     },
     "participants": {
       "attendee": "Teilnehmer",
@@ -4763,7 +4766,8 @@
     },
     "meetingPill": {
       "returnToNote": "Zurück zur Aufnahme",
-      "waitingForMicrophone": "Warte auf Mikrofon"
+      "waitingForMicrophone": "Warte auf Mikrofon",
+      "micMuted": "Mikrofon stummgeschaltet"
     },
     "empty": {
       "title": "Noch keine Notizen hier",

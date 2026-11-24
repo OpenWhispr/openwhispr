@@ -4053,7 +4053,10 @@
           "title": "Indice",
           "empty": "Aggiungi titoli per creare l'indice."
         }
-      }
+      },
+      "muteMic": "Disattiva microfono",
+      "unmuteMic": "Riattiva microfono",
+      "micMuted": "Microfono disattivato"
     },
     "participants": {
       "attendee": "partecipante",
@@ -4205,7 +4208,8 @@
     },
     "meetingPill": {
       "returnToNote": "Torna alla registrazione",
-      "waitingForMicrophone": "In attesa del microfono"
+      "waitingForMicrophone": "In attesa del microfono",
+      "micMuted": "Microfono disattivato"
     },
     "context": {
       "moveToFolder": "Sposta nella cartella",
