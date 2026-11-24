@@ -1702,14 +1702,15 @@ export class LocalNotesRepository implements NotesRepository {
     this.markNoteTranscriptDirty(noteId);
   }
 
-  // Live meeting transcription saves each utterance as it arrives. It leaves the note
-  // clean on purpose: a half-recorded meeting must not be pushed; the final
+  // Live meeting transcription saves each utterance as it arrives. The rows stay
+  // clean (pendingSync 0) because getPendingNotes admits any note with a pending
+  // segment, and a half-recorded meeting must not be pushed; the final
   // replaceSegments does that.
   appendSegments(noteId: number, segments: NewSegment[]): void {
     this.database.transaction((tx) => {
       segments.forEach((seg, index) => {
         tx.insert(transcriptSegments)
-          .values({ ...seg, noteId, sortOrder: seg.sortOrder ?? index, pendingSync: 1 })
+          .values({ ...seg, noteId, sortOrder: seg.sortOrder ?? index, pendingSync: 0 })
           .run();
       });
     });

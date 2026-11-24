@@ -36,19 +36,21 @@ describe('LocalNotesRepository.appendSegments', () => {
 
     const rows = repo.getSegments(note.id);
     expect(rows.map((row) => row.text)).toEqual(['First.', 'Second.']);
-    expect(rows.every((row) => row.pendingSync === 1)).toBe(true);
+    expect(rows.every((row) => row.pendingSync === 0)).toBe(true);
   });
 
-  it('does not mark the note for sync', () => {
+  it('keeps the note out of the push queue and the rows clean until the meeting ends', () => {
     const { repo, db } = createMemoryRepository();
     const note = createMeeting(db);
 
     repo.appendSegments(note.id, [segment('First.', 0)]);
 
     expect(notePendingSync(db, note.id)).toBe(0);
+    expect(repo.getPendingNotes().map((pending) => pending.id)).not.toContain(note.id);
+    expect(repo.hasDirtyTranscript(note.id)).toBe(false);
   });
 
-  it('is replaced by a later replaceSegments', () => {
+  it('becomes syncable once a later replaceSegments writes the final list', () => {
     const { repo, db } = createMemoryRepository();
     const note = createMeeting(db);
     repo.appendSegments(note.id, [segment('Live one.', 0), segment('Live two.', 1)]);
@@ -57,5 +59,7 @@ describe('LocalNotesRepository.appendSegments', () => {
 
     expect(repo.getSegments(note.id).map((row) => row.text)).toEqual(['Final.']);
     expect(notePendingSync(db, note.id)).toBe(1);
+    expect(repo.getPendingNotes().map((pending) => pending.id)).toContain(note.id);
+    expect(repo.hasDirtyTranscript(note.id)).toBe(true);
   });
 });

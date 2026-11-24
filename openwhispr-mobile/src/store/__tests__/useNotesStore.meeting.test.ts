@@ -478,6 +478,25 @@ describe('finalizeCloudMeeting', () => {
 });
 
 describe('live cloud meeting transcript', () => {
+  beforeEach(() => {
+    (notesRepository.getTranscriptionStatus as jest.Mock).mockReturnValue('recording');
+  });
+
+  it('ignores a live utterance once the meeting is no longer recording', () => {
+    (notesRepository.getTranscriptionStatus as jest.Mock).mockReturnValue('done');
+
+    useNotesStore
+      .getState()
+      .appendCloudMeetingUtterance(
+        7,
+        { itemId: 'late', text: 'Too late.', startMs: 0, endMs: 1 },
+        0,
+        0,
+      );
+
+    expect(notesRepository.appendSegments).not.toHaveBeenCalled();
+  });
+
   it('saves a live utterance with its own timing', () => {
     useNotesStore
       .getState()
@@ -538,14 +557,23 @@ describe('live cloud meeting transcript', () => {
 
   it('keeps a recovered transcript and marks the note done', () => {
     (notesRepository.getTranscriptionStatus as jest.Mock)
+      .mockReset()
       .mockReturnValueOnce('recording')
       .mockReturnValueOnce('transcribing');
+    (notesRepository.getSegments as jest.Mock).mockReturnValue([
+      { ...segment('One.'), id: 1, startMs: 0, endMs: 900, speakerLabel: null, sortOrder: 0 },
+      { ...segment('Two.'), id: 2, startMs: 1000, endMs: 2000, speakerLabel: null, sortOrder: 1 },
+    ]);
 
     useNotesStore.getState().keepCloudMeetingTranscript(7);
 
     expect(notesRepository.setTranscriptionStatus).toHaveBeenNthCalledWith(1, 7, 'transcribing');
     expect(notesRepository.setTranscriptionStatus).toHaveBeenNthCalledWith(2, 7, 'done');
-    expect(notesRepository.replaceSegments).not.toHaveBeenCalled();
+    // Re-saved so the kept transcript is marked for sync like a normal Stop.
+    expect(notesRepository.replaceSegments).toHaveBeenCalledWith(7, [
+      { noteId: 7, text: 'One.', startMs: 0, endMs: 900, speakerLabel: null, sortOrder: 0 },
+      { noteId: 7, text: 'Two.', startMs: 1000, endMs: 2000, speakerLabel: null, sortOrder: 1 },
+    ]);
   });
 });
 

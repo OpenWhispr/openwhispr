@@ -972,6 +972,8 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
   appendCloudMeetingUtterance: (noteId, utterance, index, capturedMs) => {
     try {
+      // A late utterance after Stop must not add a row beside the final list.
+      if (notesRepository.getTranscriptionStatus(noteId) !== 'recording') return;
       // The server may send no timing; the capture clock keeps the row ordered and non-null.
       const startMs = utterance.startMs ?? capturedMs;
       notesRepository.appendSegments(noteId, [
@@ -993,6 +995,18 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   keepCloudMeetingTranscript: (noteId) => {
     get().transitionStatus(noteId, 'transcribing');
     get().transitionStatus(noteId, 'done');
+    // Live rows are local drafts; re-saving them makes the kept transcript syncable.
+    notesRepository.replaceSegments(
+      noteId,
+      notesRepository.getSegments(noteId).map((row) => ({
+        noteId,
+        text: row.text,
+        startMs: row.startMs,
+        endMs: row.endMs,
+        speakerLabel: row.speakerLabel,
+        sortOrder: row.sortOrder,
+      })),
+    );
   },
 
   finishRecoveredMeetingNotes: async (noteId) => {
