@@ -89,6 +89,104 @@ test("the typed base that answered is reused without retrying /v1", async (t) =>
   assert.deepEqual(requested, [`POST ${base}/chat/completions`]);
 });
 
+test("a cached typed base can recover through /v1 when the typed route disappears", async (t) => {
+  const base = "https://gateway-recover.example/openai";
+  let servingBase = base;
+  const requested = installFetch(t, (url) =>
+    url === `${servingBase}/chat/completions` ? json(chatReply("Cleaned")) : undefined
+  );
+
+  assert.equal(await callCustom(base), "Cleaned");
+  servingBase = `${base}/v1`;
+  requested.length = 0;
+  assert.equal(await callCustom(base), "Cleaned");
+  assert.deepEqual(requested, [
+    `POST ${base}/chat/completions`,
+    `POST ${base}/v1/chat/completions`,
+  ]);
+
+  requested.length = 0;
+  assert.equal(await callCustom(base), "Cleaned");
+  assert.deepEqual(requested, [`POST ${base}/v1/chat/completions`]);
+});
+
+test("a cached direct Responses route that returns 404 prefers /v1 after recovery", async (t) => {
+  const endpoint = "https://gateway-direct-responses.example/openai/responses";
+  let servingVersionedRoute = false;
+  const requested = installFetch(t, (url) => {
+    if (!servingVersionedRoute && url === endpoint) return json({ output_text: "Cleaned" });
+    if (servingVersionedRoute && url === `${endpoint}/v1/chat/completions`) {
+      return json(chatReply("Cleaned"));
+    }
+  });
+
+  assert.equal(await callCustom(`${endpoint}/`), "Cleaned");
+  servingVersionedRoute = true;
+  requested.length = 0;
+  assert.equal(await callCustom(`${endpoint}/`), "Cleaned");
+  assert.deepEqual(requested, [`POST ${endpoint}`, `POST ${endpoint}/v1/chat/completions`]);
+
+  requested.length = 0;
+  assert.equal(await callCustom(`${endpoint}/`), "Cleaned");
+  assert.deepEqual(requested, [`POST ${endpoint}/v1/chat/completions`]);
+});
+
+test("a cached direct Responses route does not switch bases on an authentication error", async (t) => {
+  const endpoint = "https://gateway-direct-auth.example/openai/responses";
+  let credentialsAccepted = true;
+  const requested = installFetch(t, (url) => {
+    if (url === endpoint) {
+      return credentialsAccepted
+        ? json({ output_text: "Cleaned" })
+        : json({ error: { message: "Unauthorized" } }, 401);
+    }
+  });
+
+  assert.equal(await callCustom(`${endpoint}/`), "Cleaned");
+  credentialsAccepted = false;
+  requested.length = 0;
+  await assert.rejects(callCustom(`${endpoint}/`), { code: "PROVIDER_AUTH_FAILED" });
+  assert.deepEqual(requested, [`POST ${endpoint}`]);
+});
+
+test("an unusable typed-base response does not pin later requests to that base", async (t) => {
+  const base = "https://gateway-invalid-reply.example/openai";
+  let versionedRouteReady = false;
+  const requested = installFetch(t, (url) => {
+    if (versionedRouteReady && url === `${base}/v1/chat/completions`) {
+      return json(chatReply("Cleaned"));
+    }
+    if (url === `${base}/chat/completions`) {
+      return new Response("<html>Gateway landing page</html>", {
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+  });
+
+  await assert.rejects(callCustom(base), SyntaxError);
+  versionedRouteReady = true;
+  requested.length = 0;
+  assert.equal(await callCustom(base), "Cleaned");
+  assert.deepEqual(requested, [`POST ${base}/v1/chat/completions`]);
+});
+
+test("an empty typed-base completion does not establish a preferred base", async (t) => {
+  const base = "https://gateway-empty-reply.example/openai";
+  let versionedRouteReady = false;
+  const requested = installFetch(t, (url) => {
+    if (versionedRouteReady && url === `${base}/v1/chat/completions`) {
+      return json(chatReply("Cleaned"));
+    }
+    if (url === `${base}/chat/completions`) return json(chatReply(""));
+  });
+
+  assert.equal(await callCustom(base), "raw transcript");
+  versionedRouteReady = true;
+  requested.length = 0;
+  assert.equal(await callCustom(base), "Cleaned");
+  assert.deepEqual(requested, [`POST ${base}/v1/chat/completions`]);
+});
+
 test("a bare origin still resolves to /v1 first and never tries the typed base", async (t) => {
   const requested = installFetch(t, (url) =>
     url === "http://localhost:11434/v1/chat/completions" ? json(chatReply("Local")) : undefined
@@ -101,6 +199,25 @@ test("a bare origin still resolves to /v1 first and never tries the typed base",
     "GET http://localhost:11434/v1/models",
     "POST http://localhost:11434/v1/responses",
     "POST http://localhost:11434/v1/chat/completions",
+  ]);
+});
+
+test("a missing model on a bare origin reports the /v1 error without root requests", async (t) => {
+  const base = "http://localhost:12345";
+  const requested = installFetch(t, (url) => {
+    if (url === `${base}/v1/chat/completions`) {
+      return json({ error: { message: "model not found" } }, 404);
+    }
+    if (url === `${base}/chat/completions`) {
+      return json({ error: { message: "Unauthorized" } }, 401);
+    }
+  });
+
+  await assert.rejects(callCustom(base), { code: "PROVIDER_MODEL_NOT_FOUND" });
+  assert.deepEqual(requested, [
+    `GET ${base}/v1/models`,
+    `POST ${base}/v1/responses`,
+    `POST ${base}/v1/chat/completions`,
   ]);
 });
 
@@ -130,3 +247,30 @@ test("when both bases 404, the /v1 base's error is surfaced", async (t) => {
     return true;
   });
 });
+
+test("a generic 404 on a final direct Responses route preserves the /v1 model error", async (t) => {
+  const endpoint = "https://gateway-direct-model.example/openai/responses";
+  installFetch(t, (url) =>
+    url === `${endpoint}/v1/chat/completions`
+      ? json({ error: { message: "model not found" } }, 404)
+      : undefined
+  );
+
+  await assert.rejects(callCustom(`${endpoint}/`), { code: "PROVIDER_MODEL_NOT_FOUND" });
+});
+
+for (const endpoint of ["responses", "chat/completions"]) {
+  test(`a typed-base ${endpoint} model error takes precedence over a generic /v1 404`, async (t) => {
+    const base = `https://gateway-missing-model.example/${endpoint.split("/")[0]}/openai`;
+    installFetch(t, (url) =>
+      url === `${base}/${endpoint}`
+        ? json({ error: { message: "model not found" } }, 404)
+        : undefined
+    );
+
+    await assert.rejects(callCustom(base), {
+      code: "PROVIDER_MODEL_NOT_FOUND",
+      settingsTarget: "llms",
+    });
+  });
+}
