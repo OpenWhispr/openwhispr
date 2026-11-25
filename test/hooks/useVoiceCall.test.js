@@ -623,6 +623,50 @@ test("a reply waits while the user, already talking again, finishes the request"
   );
 });
 
+test("a reply held for the user's speech isn't heard until it plays again", async (t) => {
+  const { act, events, startListening, say, hear, lastTurn } = await mountVoiceCall(t);
+  await startListening();
+  await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 200 }));
+  await say("Write a thank-you note to my team", 100);
+  let heard = false;
+  void lastTurn().heard.then(() => {
+    heard = true;
+  });
+  await act(() => lastTurn().speech.onText("Thanks for everything, team. "));
+  await hear();
+  assert.equal(heard, false, "held, it may yet be joined");
+
+  await say("Ha.", 300);
+  await hear();
+  assert.equal(heard, true, "a noise lets it go on, and it is heard");
+});
+
+test("a reply a joined request replaced is never heard", async (t) => {
+  const { act, events, startListening, say, hear, lastTurn } = await mountVoiceCall(t);
+  await startListening();
+  await act(() => events.emit({ type: "speech-start", sessionId: 7, at: 200 }));
+  await say("Write a thank-you note", 100);
+  const half = lastTurn();
+  let halfHeard = false;
+  void half.heard.then(() => {
+    halfHeard = true;
+  });
+  await act(() => half.speech.onText("Thanks for everything. "));
+  await hear();
+
+  await say("to my team.", 300);
+  const whole = lastTurn();
+  assert.equal(whole.joinedRequest, "Write a thank-you note to my team.");
+  let wholeHeard = false;
+  void whole.heard.then(() => {
+    wholeHeard = true;
+  });
+  await act(() => whole.speech.onText("Thank you, team. "));
+  await hear();
+  assert.equal(wholeHeard, true);
+  assert.equal(halfHeard, false);
+});
+
 test("a reply that writes out an email draft says it is in the chat, never the draft", async (t) => {
   const { calls, act, startListening, say, lastTurn } = await mountVoiceCall(t);
   await startListening();

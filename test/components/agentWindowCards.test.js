@@ -54,6 +54,11 @@ const MOCKS = {
         fork: async () => null,
         regenerate() {},
         settled: async () => {},
+        sendJoined: async (text, options) => {
+          globalThis.__chat.sentOptions.push(options);
+          globalThis.__chat.sent.push(text);
+          return true;
+        },
       };
     }
   `,
@@ -1787,7 +1792,7 @@ test("an answer the field refused stays in the window", async (t) => {
 });
 
 // A spoken turn of a call started from the typing layout.
-async function callTurn(view, text) {
+async function callTurn(view, text, turn = {}) {
   await React.act(async () => view.main.handlers.open({ layout: "typing" }));
   await React.act(async () => view.button("Start Voice Agent").click());
   const ended = [];
@@ -1800,6 +1805,8 @@ async function callTurn(view, text) {
       dryRunWrites: false,
       joinedRequest: null,
       isCurrent: () => true,
+      heard: Promise.resolve(),
+      ...turn,
     })
   );
   return ended;
@@ -1864,6 +1871,63 @@ test("a call turn spoken with no writable field in front is answered as before",
   assert.deepEqual(released, ["selection-1"], "a selection there is left alone");
   assert.equal(options.plainTextResponse, undefined);
   assert.equal(options.onComplete, undefined);
+});
+
+test("a call types its answer only once its reply is heard", async (t) => {
+  const view = await mountWindow(t);
+  const pastes = [];
+  Object.assign(view.happyWindow.electronAPI, {
+    captureSelectedText: async () => ({ status: "editable", sessionId: "caret-1" }),
+    pasteAtCapturedTarget: async (...args) => {
+      pastes.push(args);
+      return { success: true };
+    },
+    cancelSelectionEdit: async () => {},
+  });
+  let hear;
+  await callTurn(view, "Write a thank-you note", {
+    heard: new Promise((resolve) => {
+      hear = resolve;
+    }),
+  });
+  const { onComplete } = globalThis.__chat.sentOptions[0];
+  await React.act(async () =>
+    onComplete({ assistantId: "a1", content: "Thanks!", onlyRead: true })
+  );
+  await view.settle();
+  assert.deepEqual(pastes, [], "held for the user's speech, the request may yet go on");
+  await React.act(async () => hear());
+  await view.settle();
+  assert.deepEqual(pastes, [["caret-1", "Thanks!"]]);
+});
+
+test("a request a pause cut short reads the field again when its first half took the read", async (t) => {
+  const view = await mountWindow(t);
+  const probes = [];
+  Object.assign(view.happyWindow.electronAPI, {
+    captureSelectedText: async (options) => {
+      probes.push(options);
+      return { status: "editable", sessionId: `caret-${probes.length}` };
+    },
+    cancelSelectionEdit: async () => {},
+  });
+  await callTurn(view, "Write a thank-you note");
+  await React.act(async () =>
+    globalThis.__call.options.onUserTurn({
+      text: "to my team",
+      speech: { onEnd() {} },
+      replyLanguage: null,
+      dryRunWrites: false,
+      joinedRequest: "Write a thank-you note to my team",
+      isCurrent: () => true,
+      heard: Promise.resolve(),
+    })
+  );
+  await view.settle();
+
+  assert.equal(probes.length, 2);
+  assert.equal(globalThis.__chat.sent[1], "Write a thank-you note to my team");
+  assert.equal(globalThis.__chat.sentOptions[1].plainTextResponse, true);
 });
 
 test("Call on a take still listening drops it and starts once the take lets go of the microphone", async (t) => {

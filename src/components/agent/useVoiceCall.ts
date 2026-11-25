@@ -52,6 +52,11 @@ export interface VoiceCallTurn {
   joinedRequest: string | null;
   /** False once the turn was dropped (talked over, stopped, the call ended): don't send it. */
   isCurrent: () => boolean;
+  /**
+   * Settles once some of the reply was heard, or it ended with nothing to hear: from
+   * then on nothing said is joined onto this request. A reply dropped first never settles it.
+   */
+  heard: Promise<void>;
 }
 
 interface UseVoiceCallOptions {
@@ -166,6 +171,8 @@ export function useVoiceCall({
   const utteranceRef = useRef<string | null>(null);
   // Whether any of the reply being worked on was heard yet.
   const replyHeardRef = useRef(false);
+  // Settles the latest turn's `heard`.
+  const resolveHeardRef = useRef(() => {});
   // When the user last started speaking, on main's clock (as a transcript's endedAt).
   const lastSpeechStartAtRef = useRef(0);
   const profileRef = useRef<VoiceSpeechProfile | null>(null);
@@ -307,6 +314,7 @@ export function useVoiceCall({
     if (!utteranceRef.current || !responseDoneRef.current) return;
     if (pendingSpeaksRef.current > 0 || playerRef.current?.isPlaying()) return;
     utteranceRef.current = null;
+    resolveHeardRef.current();
     if (heldForSpeechRef.current) {
       holdForSpeech(false);
       playerRef.current?.resume();
@@ -479,7 +487,10 @@ export function useVoiceCall({
     if (!heldForSpeechRef.current) return;
     holdForSpeech(false);
     playerRef.current?.resume();
-    if (playerRef.current?.isPlaying()) replyHeardRef.current = true;
+    if (playerRef.current?.isPlaying()) {
+      replyHeardRef.current = true;
+      resolveHeardRef.current();
+    }
   }, [holdForSpeech]);
 
   const releaseMic = useCallback(async () => {
@@ -696,6 +707,9 @@ export function useVoiceCall({
         const utteranceId = crypto.randomUUID();
         utteranceRef.current = utteranceId;
         replyHeardRef.current = false;
+        const heard = new Promise<void>((resolve) => {
+          resolveHeardRef.current = resolve;
+        });
         // The user is talking again already: the reply waits on what they say.
         if (lastSpeechStartAtRef.current > event.endedAt) {
           holdForSpeech(true);
@@ -734,6 +748,7 @@ export function useVoiceCall({
           dryRunWrites: harnessRef.current,
           joinedRequest,
           isCurrent: () => utteranceRef.current === utteranceId,
+          heard,
         });
       } else if (event.type === "tts-audio") {
         if (event.utteranceId !== utteranceRef.current) return;
@@ -744,7 +759,10 @@ export function useVoiceCall({
             api?.reportTurnEvent({ type: "first-audio", at: turn.firstAudioAt });
           }
         }
-        if (!heldForSpeechRef.current) replyHeardRef.current = true;
+        if (!heldForSpeechRef.current) {
+          replyHeardRef.current = true;
+          resolveHeardRef.current();
+        }
         playerRef.current?.enqueue(event.samples);
       } else if (event.type === "error") {
         logger.warn(

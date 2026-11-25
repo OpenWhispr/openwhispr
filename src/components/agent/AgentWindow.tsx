@@ -698,6 +698,7 @@ export default function AgentWindow() {
       dryRunWrites,
       joinedRequest,
       isCurrent,
+      heard,
     }: VoiceCallTurn) => {
       if (refuseIfRestricted()) {
         speech.onEnd("refused");
@@ -706,9 +707,12 @@ export default function AgentWindow() {
       const interrupts = chatBusyRef.current;
       if (interrupts) cancelTurn();
       cancelCaretDelivery();
-      const caretRead = callCaretRef.current;
+      // A request finished after a pause reads again when its first half took the read.
+      const caretRead =
+        callCaretRef.current?.sessionId ??
+        (joinedRequest && !dryRunWrites ? captureCallCaret() : null);
       callCaretRef.current = null;
-      const [caretSessionId] = await Promise.all([caretRead?.sessionId ?? null, chatSettled()]);
+      const [caretSessionId] = await Promise.all([caretRead, chatSettled()]);
       const current = stateRef.current;
       // Dropped while the old turn stopped (a stop word, another request, New chat): never sent.
       if (!isCurrent() || !current.call || current.call.stopped) {
@@ -732,8 +736,11 @@ export default function AgentWindow() {
             ? {
                 plainTextResponse: true,
                 // Not awaited: the turn ends, and its last sentence is spoken, while the answer is typed.
+                // Typed once the reply is heard: never the first half of a request a pause cut.
                 onComplete: (result) =>
-                  void deliverToCaret(caretSessionId, pressRef.current, false)(result),
+                  void heard.then(() =>
+                    deliverToCaret(caretSessionId, pressRef.current, false)(result)
+                  ),
               }
             : {}),
           voice: { replyLanguage, speech, dryRunWrites, interrupts: interrupts && !joinedRequest },
