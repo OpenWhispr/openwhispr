@@ -30,6 +30,8 @@ const TOO_LARGE_FOR_NAMES =
 const SLACK_ID = /^[CDGUW](?=[A-Z0-9]*\d)[A-Z0-9]{8,}$/;
 // conversations.open takes at most 8 people besides the user.
 const MAX_GROUP_PEOPLE = 8;
+// What a channel name can hold: lowercase or caseless letters, digits, - and _.
+const CHANNEL_NAME = /^[\p{Ll}\p{Lo}\p{Lm}\p{M}\p{Nd}_-]+$/u;
 // A message in a link: p, then its ts without the dot.
 const LINK_MESSAGE = /^p(\d{10})(\d{6})$/;
 const MESSAGE_TS = /^\d{10}\.\d{6}$/;
@@ -428,6 +430,10 @@ function createSlackConnector({ api, auth, directory, credentials }) {
     const found = new Map();
     for (const name of slackTitleNames(title, teamName)) {
       const named = exactly(name);
+      // A name that could be a channel's (lowercase, no spaces) may be a
+      // channel the user isn't in, which the list doesn't hold, so it never
+      // stands for a person.
+      if (named?.kind === "user" && CHANNEL_NAME.test(name)) continue;
       if (named) {
         found.set(named.id, named);
         continue;

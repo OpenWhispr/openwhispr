@@ -1400,6 +1400,57 @@ test("a Slack window title that names no conversation, or more than one, asks wh
   assert.deepEqual(slack.calls, [], "without a Slack window nothing is looked up");
 });
 
+test("a Slack window title whose name could be a channel the user isn't in never picks a person", async () => {
+  const person = (id, name, displayName) => ({
+    id,
+    name,
+    deleted: false,
+    is_bot: false,
+    profile: { real_name: "Dee Sign", display_name: displayName },
+  });
+  const { connector } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [
+      ok({
+        ...FIXTURES.people,
+        members: [...FIXTURES.people.members, person("U0DESIGN1", "design", "")],
+      }),
+    ],
+  });
+  // #design isn't among the user's channels, and @design is a person.
+  const prepared = await connector.prepare(
+    "send_message",
+    { text: "Ship it" },
+    pressedOver("design (Channel) - Acme Test - Slack")
+  );
+  assert.equal(prepared.status, "needs_clarification");
+  // A name no channel can have still finds them.
+  const byName = await connector.prepare(
+    "send_message",
+    { text: "Ship it" },
+    pressedOver("Dee Sign (DM) - Acme Test - Slack")
+  );
+  assert.equal(byName.preview.destinationLabel, "Dee Sign (@design)");
+});
+
+test("a Slack window title asks where when Slack's lists were cut off", async () => {
+  const endless = (key, items) => ({
+    ok: true,
+    [key]: items,
+    response_metadata: { next_cursor: "more" },
+  });
+  const { connector } = await setupSlack({
+    "users.conversations": [ok(endless("channels", FIXTURES.channels.channels))],
+    "users.list": [ok(FIXTURES.people)],
+  });
+  const prepared = await connector.prepare(
+    "send_message",
+    { text: "Ship it" },
+    pressedOver("eng (Channel) - Acme Test - Slack")
+  );
+  assert.equal(prepared.status, "needs_clarification");
+});
+
 test("a destination the model names wins over the open Slack window", async () => {
   const { connector } = await setupSlack(channelsOnly);
   const prepared = await connector.prepare(
