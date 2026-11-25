@@ -53,6 +53,7 @@ const {
   createEnterpriseIdentityManager,
   CONFIG_REFRESH_MS,
 } = require("./enterpriseIdentityManager");
+const { createMeetingRecordingAdmission } = require("./meetingRecordingAdmission");
 const { createEffectivePolicyManager } = require("./effectivePolicyManager");
 const { devicePolicyNetworkAllowed } = require("./devicePolicyNetwork");
 const {
@@ -943,8 +944,8 @@ class IPCHandlers {
     }
   }
 
-  createFolderWithEffects(name, spaceId) {
-    const result = this.databaseManager.createFolder(name, spaceId);
+  createFolderWithEffects(name, spaceId, parentFolderId) {
+    const result = this.databaseManager.createFolder(name, spaceId, parentFolderId);
     if (result?.success && result?.folder) {
       setImmediate(() => {
         broadcastToWindows("folder-created", result.folder);
@@ -1178,6 +1179,7 @@ class IPCHandlers {
   }
 
   _handleAuthTokenChange({ generation, token }) {
+    this._meetingAdmission?.cancelPending();
     this._cancelCalendarAuthorizations();
     // A new bearer may belong to another account, so its policy is fetched
     // before new work; only a sign-out ends the work already running. A real
@@ -1564,6 +1566,15 @@ class IPCHandlers {
       if (!note.deleted_at) this._asyncMirrorWrite(note);
     }
     this.noteFiles.containersChanged();
+  }
+
+  // Deleting a folder deletes its subfolders, and their notes, with it.
+  _captureSubfolderDeletionNotes(folderId, snapshots) {
+    if (!this.noteFiles.enabled) return;
+    for (const subfolder of this.databaseManager.getSubfolders(folderId)) {
+      const subfolderSnapshots = this._captureMirrorDeletionNotes({ folder_id: subfolder.id });
+      for (const [noteId, snapshot] of subfolderSnapshots) snapshots.set(noteId, snapshot);
+    }
   }
 
   _buildSpeakerMappings(noteId) {
@@ -2142,7 +2153,10 @@ class IPCHandlers {
         const operation = { channel, args, remote, accountId: startedPolicy.accountId };
         // Only the pill's live request belongs to its Cancel button. History and file
         // uploads can later use the same provider through their own IPC channels.
-        if (channel === "proxy-assemblyai-transcription")
+        if (
+          channel === "proxy-assemblyai-transcription" ||
+          channel === "proxy-elevenlabs-transcription"
+        )
           operation.liveDictationSenderId = event.sender.id;
         // Retry and file routing can select a different provider. Capture the
         // owner before dispatch waits, then enforce it only on the AssemblyAI route.
@@ -3591,19 +3605,27 @@ class IPCHandlers {
       return { claimed };
     });
 
-    ipcMain.handle("db-create-folder", (_event, name, spaceId, writeGuard) =>
+    ipcMain.handle("db-create-folder", (_event, name, spaceId, writeGuard, parentFolderId) =>
       isStaleNoteWrite(writeGuard)
         ? { success: false, error: "Account changed" }
-        : this.createFolderWithEffects(name, spaceId)
+        : this.createFolderWithEffects(name, spaceId, parentFolderId)
     );
 
     ipcMain.handle("db-delete-folder", async (event, id) => {
       const snapshots = this._captureMirrorDeletionNotes({ folder_id: id });
+      this._captureSubfolderDeletionNotes(id, snapshots);
       const result = this.databaseManager.deleteFolder(id);
       if (result?.success) {
         this.notifyVectorChanges();
         this._mirrorRemovedFolder(result, snapshots);
-        setImmediate(() => broadcastToWindows("folder-deleted", { id }));
+        // Subfolders first, as the database deleted them. Each event names every
+        // note the delete took, so a recording in one of them hears of it.
+        const noteIds = result.noteIds ?? [];
+        setImmediate(() => {
+          for (const folderId of result.folderIds ?? [id]) {
+            broadcastToWindows("folder-deleted", { id: folderId, noteIds });
+          }
+        });
       }
       return result;
     });
@@ -3626,6 +3648,16 @@ class IPCHandlers {
         if (result.folder) {
           setImmediate(() => broadcastToWindows("folder-synced", result.folder));
         }
+      }
+      return result;
+    });
+
+    ipcMain.handle("db-set-folder-parent", async (event, id, parentFolderId, writeGuard) => {
+      if (isStaleNoteWrite(writeGuard)) return { success: false, error: "Account changed" };
+      const result = this.databaseManager.setFolderParent(id, parentFolderId ?? null);
+      if (result?.success && result?.folder) {
+        this.noteFiles.containersChanged();
+        setImmediate(() => broadcastToWindows("folder-synced", result.folder));
       }
       return result;
     });
@@ -3795,6 +3827,7 @@ class IPCHandlers {
       // decides it when it lands. Leaving an account does end its work.
       const leftAccount =
         accountChanged && typeof this.databaseManager.activeAccountId === "string";
+      if (accountChanged) this._meetingAdmission?.cancelPending();
       if (accountChanged && !leftAccount && accountId !== null) {
         for (const operation of this._productRequests.values()) {
           if (operation.guestLocalDictation && operation.accountId === null)
@@ -4400,17 +4433,32 @@ class IPCHandlers {
     ipcMain.handle("db-mark-note-sync-error", (_, id) =>
       this.databaseManager.markNoteSyncError(id)
     );
+    // No broadcast or mirror write: the note stays deleted until its delete is answered.
+    ipcMain.handle("db-keep-deleted-note-transcript", (_, id, transcript, writeGuard) => {
+      if (writeGuard === undefined || isStaleNoteWrite(writeGuard)) {
+        return { success: false, error: "Account changed" };
+      }
+      return this.databaseManager.keepTranscriptOnDeletedNote(id, transcript);
+    });
     ipcMain.handle("db-restore-note-after-denied-delete", (_, id) => {
       const result = this.databaseManager.restoreNoteAfterDeniedDelete(id);
       // Its files went when the delete was made locally.
       if (result?.success) this.noteFiles.queueNote(id);
+      // A synced restore reaches its windows with the snapshot pull that replaces
+      // it. A pending one keeps its own text, which that pull leaves alone.
+      const restored = result?.pending ? this.databaseManager.getNote(id) : null;
+      if (restored) setImmediate(() => broadcastToWindows("note-synced", restored));
       return result;
     });
-    ipcMain.handle("db-hard-delete-note", (_, id, expectedAuthGeneration) => {
+    // A pulled delete names the copy it decided from (options.expected); main
+    // leaves a row written since, so its text is decided again, not deleted.
+    ipcMain.handle("db-hard-delete-note", (_, id, expectedAuthGeneration, options) => {
       if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
         return STALE_SYNC_ACK;
+      const expected =
+        options?.expected && typeof options.expected === "object" ? options.expected : undefined;
       const snapshots = this._captureMirrorDeletionNotes({ id });
-      const result = this.databaseManager.hardDeleteNote(id);
+      const result = this.databaseManager.hardDeleteNote(id, { expected });
       if (result?.success) {
         this.notifyVectorChanges();
         this._asyncMirrorDelete(id, snapshots);
@@ -4501,6 +4549,17 @@ class IPCHandlers {
       });
     });
     ipcMain.handle("db-get-folder-id-map", () => this.databaseManager.getFolderIdMap());
+    ipcMain.handle("db-apply-cloud-folder-parents", (_, links, expectedAuthGeneration) => {
+      if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
+        return STALE_SYNC_ACK;
+      const changed = this.databaseManager.applyCloudFolderParents(links);
+      if (changed.length > 0) this.noteFiles.containersChanged();
+      setImmediate(() => {
+        for (const folder of changed) {
+          broadcastToWindows("folder-synced", folder);
+        }
+      });
+    });
     ipcMain.handle("db-get-pending-folder-deletes", () =>
       this.databaseManager.getPendingFolderDeletes()
     );
@@ -4517,21 +4576,32 @@ class IPCHandlers {
       const notes = (result.notes ?? []).filter((note) => this.databaseManager.getNote(note.id));
       setImmediate(() => {
         if (result.folder) broadcastToWindows("folder-synced", result.folder);
+        for (const subfolder of result.subfolders ?? []) {
+          broadcastToWindows("folder-synced", subfolder);
+        }
         for (const note of notes) {
           broadcastToWindows("note-synced", note);
         }
       });
       return { ...result, notes };
     });
-    ipcMain.handle("db-hard-delete-folder", (_, id, expectedAuthGeneration) => {
+    ipcMain.handle("db-hard-delete-folder", (_, id, expectedAuthGeneration, options) => {
       if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
         return STALE_SYNC_ACK;
       const snapshots = this._captureMirrorDeletionNotes({ folder_id: id });
-      const result = this.databaseManager.hardDeleteFolder(id);
+      const result = this.databaseManager.hardDeleteFolder(id, options);
       if (result?.success) {
         this.notifyVectorChanges();
+        // Notes a pulled delete unfiled to their space's top level are among the
+        // relocated notes, so _mirrorRemovedFolder writes them.
         this._mirrorRemovedFolder(result, snapshots);
-        setImmediate(() => broadcastToWindows("folder-deleted", { id }));
+        setImmediate(() => {
+          // Before the folder goes, so a window showing one of them keeps it open.
+          for (const note of [...(result.preservedNotes ?? []), ...(result.unfiledNotes ?? [])]) {
+            broadcastToWindows("note-updated", note);
+          }
+          broadcastToWindows("folder-deleted", { id, noteIds: result.noteIds ?? [] });
+        });
       }
       return result;
     });
@@ -4548,7 +4618,8 @@ class IPCHandlers {
         // folder, so rewrite the relocated notes and drop the server-owned ones.
         this.notifyVectorChanges();
         this.noteFiles.containersChanged();
-        for (const note of result.relocatedNotes ?? []) {
+        const movedNotes = [...(result.relocatedNotes ?? []), ...(result.unfiledNotes ?? [])];
+        for (const note of movedNotes) {
           this._asyncMirrorWrite(note);
         }
         for (const noteId of result.deletedNoteIds ?? []) {
@@ -4557,7 +4628,7 @@ class IPCHandlers {
         setImmediate(() => {
           if (result.folder) broadcastToWindows("folder-synced", result.folder);
           else broadcastToWindows("folder-deleted", { id });
-          for (const note of result.relocatedNotes ?? []) {
+          for (const note of movedNotes) {
             broadcastToWindows("note-updated", note);
           }
           for (const noteId of result.deletedNoteIds ?? []) {
@@ -6927,40 +6998,21 @@ class IPCHandlers {
 
     // ElevenLabs Scribe authenticates with xi-api-key and takes model_id /
     // language_code, so it has no OpenAI-compatible path either.
-    const elevenLabsDictations = new AgentStreamRequestRegistry();
-    const transcribeElevenLabsDictation = createProductHandler(
+    handleProviderTranscription(
       "proxy-elevenlabs-transcription",
-      serializeIpcError(
-        async (_event, { audioBuffer, model, language, keyterms }, cancelSignal) => {
-          return transcribeElevenLabsSpeech({
-            signal: AbortSignal.any([cancelSignal, this._productRequestContext.getStore().signal]),
-            audioBuffer: Buffer.from(audioBuffer),
-            model,
-            fileName: "audio.webm",
-            contentType: "audio/webm",
-            language,
-            keyterms,
-            apiKey: this.environmentManager.getElevenlabsKey(),
-          });
-        }
-      ),
-      true
+      serializeIpcError(async (event, { audioBuffer, model, language, keyterms }, signal) => {
+        return await transcribeElevenLabsSpeech({
+          signal,
+          audioBuffer: Buffer.from(audioBuffer),
+          model,
+          fileName: "audio.webm",
+          contentType: "audio/webm",
+          language,
+          keyterms,
+          apiKey: this.environmentManager.getElevenlabsKey(),
+        });
+      })
     );
-    ipcMain.handle("proxy-elevenlabs-transcription", async (event, options) => {
-      // Register before the policy lookup can yield so an early Cancel cannot miss the upload.
-      const sender = event.sender;
-      const senderId = sender.id;
-      const requestId = crypto.randomUUID();
-      const controller = elevenLabsDictations.begin(senderId, requestId);
-      const abort = () => controller.abort();
-      sender.once("destroyed", abort);
-      try {
-        return await transcribeElevenLabsDictation(event, options, controller.signal);
-      } finally {
-        sender.removeListener("destroyed", abort);
-        elevenLabsDictations.complete(senderId, requestId, controller);
-      }
-    });
 
     // Headers and redirect mode for a request to the self-hosted speech server of `surface`
     // ("dictation" or "upload"), with the custom key for a route that takes one (Orukeet's).
@@ -7698,12 +7750,20 @@ class IPCHandlers {
           // Claude models from Opus 4.7 onward reject `temperature` with a 400;
           // the renderer derives support from the model registry.
           const useTemperature = config?.supportsTemperature === true;
+          // Thinking counts toward max_tokens; the catalog names the value that turns it off.
+          const thinking =
+            config?.disableThinking === true
+              ? modelRegistryData.cloudProviders
+                  .find((provider) => provider.id === "anthropic")
+                  ?.models.find((model) => model.id === modelId)?.thinkingOff
+              : undefined;
           const requestBody = {
             model: modelId,
             messages: [{ role: "user", content: userContent }],
             system: systemPrompt,
             max_tokens: config?.maxTokens || 4096,
             ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
+            ...(thinking ? { thinking } : {}),
           };
 
           const response = await proxyFetch("https://api.anthropic.com/v1/messages", {
@@ -7744,10 +7804,16 @@ class IPCHandlers {
               messageKey: CLEANUP_TRUNCATED_MESSAGE_KEY,
             });
           }
-          const outputText = extractAnthropicText(data);
+          let outputText = extractAnthropicText(data);
+          // With thinking turned off, Claude can open its text with a <thinking> block.
+          // A reply that is only that block has no answer, like one with no text at all.
+          if (thinking && outputText) {
+            outputText = outputText.replace(/^<thinking>[\s\S]*?<\/thinking>\s*/i, "") || null;
+          }
           if (outputText === null) {
             throw Object.assign(new Error(describeMissingAnthropicText(data)), {
               messageKey: CLEANUP_EMPTY_REPLY_MESSAGE_KEY,
+              code: data?.stop_reason === "max_tokens" ? "OUTPUT_LIMIT_BEFORE_ANSWER" : undefined,
             });
           }
           return { success: true, text: outputText };
@@ -8663,6 +8729,7 @@ class IPCHandlers {
         // Known restrictions still apply while the workspace decision is pending.
         if (snapshot.status !== "loading" || !snapshot.deviceReady || snapshot.policy)
           this._audioFeaturePolicy?.update(snapshot);
+        if (snapshot.success || snapshot.policy) this._meetingAdmission?.recheck();
         if (snapshot.workspaceRequired || snapshot.authGeneration === credentialsGeneration)
           this._localModelPolicy?.update(snapshot);
         // The updater would take a verdict still loading for a failed lookup.
@@ -8743,6 +8810,55 @@ class IPCHandlers {
       onChange: () => this._syncMeetingDetectorPolicy?.(),
       logger: debugLogger,
     });
+    this._meetingAdmission = createMeetingRecordingAdmission({
+      getPolicy: () => this._audioFeaturePolicy.activeMeetingPolicy(),
+      resolveFeature: () =>
+        this.managedMeetingPolicy.isMeetingRecordingDisabled()
+          ? { success: false, code: "POLICY_MEETING_RECORDING_DISABLED" }
+          : this._audioFeaturePolicy.resolve("meeting"),
+      getNote: (id) => this.databaseManager.getNote(id),
+      getEvent: (id) => this.databaseManager.getCalendarEventById(id),
+      generation: () => tokenStore.getState().generation,
+      confirmInternal: async (owner, signal) => {
+        const parent = BrowserWindow.fromWebContents(owner);
+        if (!parent || parent.isDestroyed() || signal.aborted) return false;
+        // A meeting hotkey leaves the panel behind the call; the question must be seen.
+        if (parent === this.windowManager.controlPanelWindow) this.windowManager.showControlPanel();
+        const { response } = await require("electron").dialog.showMessageBox(parent, {
+          type: "question",
+          message: i18nMain.t("notes.meeting.internalAttendeesQuestion"),
+          buttons: [
+            i18nMain.t("notes.meeting.internalAttendeesConfirm"),
+            i18nMain.t("common.cancel"),
+          ],
+          defaultId: 1,
+          cancelId: 1,
+          signal,
+        });
+        return response === 0;
+      },
+      onRevoked: ({ owner, sessionId }, code, active) => {
+        if (active) this._stopMeetingForPolicy(code, sessionId);
+        if (!owner?.isDestroyed?.()) {
+          try {
+            owner?.send?.("meeting-recording-admission-revoked", { sessionId, code });
+          } catch (error) {
+            debugLogger.warn("Meeting admission owner unavailable", { error: error.message });
+          }
+        }
+      },
+    });
+    this.databaseManager.onCalendarEventsUpdated = (noteId) =>
+      this._meetingAdmission.recheck(noteId);
+    ipcMain.handle("check-meeting-recording-start", (event, options) =>
+      this._meetingAdmission.prepare(event.sender, options)
+    );
+    ipcMain.on("release-meeting-recording-start", (event, sessionId) =>
+      this._meetingAdmission.release(event.sender, sessionId)
+    );
+
+    this.windowManager.getMeetingAttendeePolicy = () =>
+      this._audioFeaturePolicy.activeMeetingPolicy();
     this.windowManager.getMeetingRecordingRefusal = () =>
       this._audioFeaturePolicy.failure("meeting");
     this.windowManager.resolveMeetingRecordingRefusal = () =>
@@ -9458,7 +9574,6 @@ class IPCHandlers {
     });
 
     ipcMain.on("cloud-transcribe-cancel", (event) => {
-      elevenLabsDictations.cancelSender(event.sender.id);
       this._cloudTranscriptionRequests.cancelSender(event.sender.id);
       for (const [controller, operation] of this._productRequests) {
         if (
@@ -10661,6 +10776,9 @@ class IPCHandlers {
     const assertMeetingAllowed = () => {
       const denied = this._audioFeaturePolicy.activeFailure("meeting");
       if (denied) throw Object.assign(new Error(denied.error), { code: denied.code });
+      const attendeeRefusal = this._meetingAdmission?.activeRefusal();
+      if (attendeeRefusal)
+        throw Object.assign(new Error(attendeeRefusal), { code: attendeeRefusal });
       if (this._activeLocalMeetingLease)
         this._localModelPolicy.assertCurrent(this._activeLocalMeetingLease);
     };
@@ -11420,6 +11538,7 @@ class IPCHandlers {
     };
 
     const transcribeLocalMeetingChunk = async (source) => {
+      if (this._meetingAdmission?.activeRefusal()) return;
       const chunks = meetingLocalBuffers[source];
       if (!chunks.length) return;
       const lease = this._activeLocalMeetingLease;
@@ -11482,7 +11601,11 @@ class IPCHandlers {
           : transcribeChunk());
         // A decode that outlives a revocation must not deliver its text, as
         // the streaming path's uncommitted disconnect does not.
-        if (this._audioFeaturePolicy.activeFailure("meeting")) return;
+        if (
+          this._audioFeaturePolicy.activeFailure("meeting") ||
+          this._meetingAdmission?.activeRefusal()
+        )
+          return;
         assertMeetingAllowed();
 
         if (result?.success && result.text?.trim()) {
@@ -11611,7 +11734,7 @@ class IPCHandlers {
           error: error.message,
         });
         // The revocation that cut it off has already stopped the meeting, with its reason.
-        if (lease?.signal.aborted) return;
+        if (lease?.signal.aborted || this._meetingAdmission?.activeRefusal()) return;
         if (meetingLocalWin && !meetingLocalWin.isDestroyed()) {
           meetingLocalWin.webContents.send(
             "meeting-transcription-error",
@@ -12450,6 +12573,7 @@ class IPCHandlers {
     };
 
     const sendMeetingAudio = (audioBuffer, source, synthetic = false, capturedAt = null) => {
+      if (this._meetingAdmission?.activeRefusal()) return;
       const effective = this.effectivePolicyManager.getCurrent();
       if (
         this._audioFeaturePolicy.activeFailure("meeting") ||
@@ -12737,7 +12861,8 @@ class IPCHandlers {
       );
     });
 
-    this._stopMeetingForPolicy = (reason = "policyRestricted") => {
+    this._stopMeetingForPolicy = (reason = "policyRestricted", expectedSessionId) => {
+      if (expectedSessionId && policyMeetingStop?.sessionId !== expectedSessionId) return;
       const wasActive =
         meetingConnectionOptions ||
         meetingLocalMode ||
@@ -12755,9 +12880,11 @@ class IPCHandlers {
         clearInterval(meetingLocalTimer);
         meetingLocalTimer = null;
       }
-      if (wasActive) broadcastToWindows("meeting-transcription-error", reason);
+      // An attendee-policy stop has already been sent to the owning renderer by session ID.
+      if (wasActive && !expectedSessionId)
+        broadcastToWindows("meeting-transcription-error", reason);
       const stopped = meetingTranscriptionLifecycle.stopSession(
-        undefined,
+        expectedSessionId,
         reason === "accountChanged" || reason === "workspaceChanged" ? "account-change" : "policy"
       );
       // The renderer still needs this result after its capture cleanup to bind
@@ -12884,16 +13011,26 @@ class IPCHandlers {
         ownerWebContents,
         options: { transcriptionOptions, authGeneration },
       }) => {
+        const admission = this._meetingAdmission.start(ownerWebContents, {
+          ...transcriptionOptions,
+          sessionId,
+        });
+        if (!admission.success) return admission;
         policyMeetingStop = {
           sessionId,
           ownerWebContents,
           authGeneration,
           promise: null,
         };
-        const result = await startMeetingTranscription(
-          { sender: ownerWebContents },
-          { ...transcriptionOptions, sessionId }
-        );
+        let result;
+        try {
+          result = await startMeetingTranscription(
+            { sender: ownerWebContents },
+            { ...transcriptionOptions, sessionId }
+          );
+        } finally {
+          if (!result?.success) this._meetingAdmission.end(sessionId);
+        }
         if (result?.success)
           this.meetingAuditLog?.recordingStarted({
             sessionId,
@@ -12904,7 +13041,9 @@ class IPCHandlers {
       },
       stop: (sessionId, reason) => {
         this.meetingAuditLog?.recordingStopped({ sessionId, reason });
-        return stopMeetingTranscription(sessionId);
+        return stopMeetingTranscription(sessionId).finally(() =>
+          this._meetingAdmission.end(sessionId)
+        );
       },
       onError: (error, sessionId) => {
         debugLogger.error(
@@ -12927,6 +13066,17 @@ class IPCHandlers {
           typeof options.sessionId === "string" && options.sessionId.length > 0
             ? options.sessionId
             : crypto.randomUUID();
+        // A refused start must not replace the owner's current recording in the lifecycle queue.
+        if (
+          (this._audioFeaturePolicy.activeMeetingPolicy()?.externalAttendees ?? "allowed") !==
+          "allowed"
+        ) {
+          const admission = this._meetingAdmission.checkStart(event.sender, {
+            ...options,
+            sessionId,
+          });
+          if (!admission.success) return admission;
+        }
         return meetingTranscriptionLifecycle.startSession({
           sessionId,
           ownerWebContents: event.sender,
@@ -12973,6 +13123,15 @@ class IPCHandlers {
         return updated === true ? { success: true } : { success: false, reason: "stale-session" };
       }
     );
+
+    ipcMain.handle("meeting-transcription-set-mic-muted", (event, sessionId, muted) => {
+      const updated = this.meetingDetectionEngine?.setRecordingMicMuted(
+        sessionId,
+        muted === true,
+        event.sender
+      );
+      return updated === true ? { success: true } : { success: false, reason: "stale-session" };
+    });
 
     const streamingStartFailure = (err) => {
       const result = toPolicyFailure(err);
@@ -16059,14 +16218,18 @@ class IPCHandlers {
       this.meetingDetectionEngine?.closeMeetingNote(id);
     });
 
-    ipcMain.handle("join-calendar-meeting", async (_event, eventId) => {
+    ipcMain.handle("join-calendar-meeting", async (_event, eventId, notesOnly) => {
       try {
         // Sent from the open panel, which may have just opened the meeting
         // link: leave the meeting in front rather than pulling the panel back.
         const refusal = await this.meetingDetectionEngine.joinCalendarMeeting(
           eventId,
           "calendar-join",
-          { activate: false, startSource: "calendar-join" }
+          {
+            activate: false,
+            startSource: "calendar-join",
+            ...(notesOnly === true && { notesOnly: true }),
+          }
         );
         return refusal ?? { success: true };
       } catch (error) {

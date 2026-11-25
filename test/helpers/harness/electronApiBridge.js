@@ -271,11 +271,15 @@ function createElectronApi(db, options = {}) {
     setNoteOwnerFromCloud: async (id, ownerUserId) => db.setNoteOwnerFromCloud(id, ownerUserId),
     countTeamNotesMissingOwner: async () => db.countTeamNotesMissingOwner(),
     countNotesMissingRevision: async (spaceKind) => db.countNotesMissingRevision(spaceKind),
+    keepDeletedNoteTranscript: async (id, transcript, guard) =>
+      guard?.accountId !== db.activeAccountId
+        ? { success: false, error: "Account changed" }
+        : db.keepTranscriptOnDeletedNote(id, transcript),
     restoreNoteAfterDeniedDelete: async (id) => db.restoreNoteAfterDeniedDelete(id),
-    hardDeleteNote: async (id, generation) =>
+    hardDeleteNote: async (id, generation, options) =>
       generation !== undefined && authState.isStale(generation)
         ? STALE_SYNC_ACK
-        : db.hardDeleteNote(id),
+        : db.hardDeleteNote(id, { expected: options?.expected }),
 
     // Folders
     getFolders: async (spaceId) => db.getFolders(spaceId),
@@ -283,6 +287,13 @@ function createElectronApi(db, options = {}) {
     getPendingFolderDeletes: async () => db.getPendingFolderDeletes(),
     getFolderByClientId: async (clientFolderId) => db.getFolderByClientId(clientFolderId),
     getFolderByCloudId: async (cloudId) => db.getFolderByCloudId(cloudId),
+    // Mirrors isStaleNoteWrite: a guard naming another account or sign-in is refused.
+    setFolderParent: async (id, parentFolderId, writeGuard) =>
+      writeGuard !== undefined &&
+      (writeGuard?.accountId !== db.activeAccountId ||
+        writeGuard?.authGeneration !== authState.generation)
+        ? { success: false, error: "Account changed" }
+        : db.setFolderParent(id, parentFolderId),
     upsertFolderFromCloud: async (cloudFolder, localSpaceId, expectedAuthGeneration, options) =>
       expectedAuthGeneration !== undefined && authState.isStale(expectedAuthGeneration)
         ? STALE_SYNC_ACK
@@ -317,10 +328,14 @@ function createElectronApi(db, options = {}) {
       db.relocateRevokedFolder(id, privateSpaceId, preserveFolder),
     forkFolderIdentity: async (id) => db.forkFolderIdentity(id),
     getFolderIdMap: async () => db.getFolderIdMap(),
-    hardDeleteFolder: async (id, generation) =>
+    applyCloudFolderParents: async (links, generation) => {
+      if (generation !== undefined && authState.isStale(generation)) return STALE_SYNC_ACK;
+      db.applyCloudFolderParents(links);
+    },
+    hardDeleteFolder: async (id, generation, options) =>
       generation !== undefined && authState.isStale(generation)
         ? STALE_SYNC_ACK
-        : db.hardDeleteFolder(id),
+        : db.hardDeleteFolder(id, options),
 
     // Spaces
     getSpaces: async () => db.getSpaces(),

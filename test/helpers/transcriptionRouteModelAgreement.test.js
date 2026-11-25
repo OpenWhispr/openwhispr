@@ -106,6 +106,29 @@ test("a model belonging to another provider degrades to the provider default", a
   }
 });
 
+// The catalog sends an offered model as is and moves a retired one to its replacement,
+// and a publication can do both with a realtime model this build has never named.
+test("a realtime model a publication lists degrades to the provider default", async (t) => {
+  const store = require("../../src/models/registryData.js");
+  const { resolveByokModel } = await load();
+  const old = store.getRegistrySnapshot();
+  t.after(() =>
+    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 })
+  );
+  const published = structuredClone(old.data);
+  const { models } = published.transcriptionProviders.find((p) => p.id === "elevenlabs");
+  const live = models.find((m) => m.id === "scribe_v3_live");
+  models.push({ ...live, id: "scribe_v4_live" });
+  Object.assign(live, { retired: true, replacement: "scribe_v4_live" });
+  assert.ok(
+    store.replaceRegistryData({ data: published, manifestVersion: old.manifestVersion + 1 })
+  );
+
+  for (const realtime of ["scribe_v4_live", "scribe_v3_live"]) {
+    assert.equal(resolveByokModel("elevenlabs", realtime), "scribe_v3", realtime);
+  }
+});
+
 // OpenRouter brokers batch HTTP transcription only — it has no realtime socket.
 // A `streaming: true` slipped onto one of its models would put the meeting and
 // Note Recording scopes on a WebSocket that does not exist.

@@ -71,6 +71,7 @@ test("Apple snapshots retain events referenced by meeting notes", (t) => {
   db.replaceAppleCalendarEvents([]);
 
   assert.equal(db.getCalendarEventById("linked-event")?.summary, "linked-event");
+  assert.equal(db.getCalendarEventById("linked-event")?.attendees_omitted, 1);
   assert.equal(db.getCalendarEventById("unlinked-event"), null);
   db.db.close();
 });
@@ -108,6 +109,8 @@ test("full-sync prune drops stale events but keeps fresh, note-linked, and other
   assert.equal(db.getCalendarEventById("fresh")?.summary, "fresh");
   assert.equal(db.getCalendarEventById("stale"), null);
   assert.equal(db.getCalendarEventById("stale-linked")?.summary, "stale-linked");
+  assert.equal(db.getCalendarEventById("stale-linked")?.attendees_omitted, 1);
+  assert.equal(db.getCalendarEventById("fresh")?.attendees_omitted, 0);
   assert.equal(db.getCalendarEventById("other-calendar")?.summary, "other-calendar");
   assert.equal(db.getCalendarEventById("other-provider")?.summary, "other-provider");
   db.db.close();
@@ -823,4 +826,132 @@ test("the week's window, to the end of the sixth day after today, covers that da
     ["day-6"]
   );
   db.db.close();
+});
+
+test("the canonical calendar row persists incomplete rosters and clears the flag on a full invite", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const event = restEvent("google", "cal", "invite");
+  db.upsertCalendarEvents([{ ...event, attendees_omitted: true }]);
+  assert.equal(db.getCalendarEventById(event.id).attendees_omitted, 1);
+  db.upsertCalendarEvents([event]);
+  assert.equal(db.getCalendarEventById(event.id).attendees_omitted, 0);
+  db.db.close();
+});
+
+test("legacy provider rosters must refresh before they count as complete", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  for (const provider of ["google", "microsoft"]) {
+    insertCalendar(db, provider, provider);
+    db.db.prepare(`UPDATE ${provider}_calendars SET sync_token = 'stale'`).run();
+  }
+  db.upsertCalendarEvents([restEvent("google", "google", "legacy"), appleEvent("legacy-apple")]);
+  db.db.exec("ALTER TABLE calendar_events DROP COLUMN attendees_omitted");
+  db.db.close();
+  const migrated = new DatabaseManager();
+  assert.equal(migrated.getCalendarEventById("legacy").attendees_omitted, 1);
+  assert.equal(migrated.getCalendarEventById("legacy-apple").attendees_omitted, 1);
+  for (const provider of ["google", "microsoft"])
+    assert.equal(
+      migrated.db.prepare(`SELECT sync_token FROM ${provider}_calendars WHERE id = ?`).get(provider)
+        .sync_token,
+      null
+    );
+  migrated.upsertCalendarEvents([restEvent("google", "google", "legacy")]);
+  migrated.updateCalendarSyncToken("google", "fresh", Date.now() + 60000);
+  migrated.db.close();
+  const reopened = new DatabaseManager();
+  assert.equal(reopened.getCalendarEventById("legacy").attendees_omitted, 0);
+  assert.equal(
+    reopened.db.prepare("SELECT sync_token FROM google_calendars WHERE id = 'google'").get()
+      .sync_token,
+    "fresh"
+  );
+  reopened.db.close();
+});
+
+test("calendar write notifications see committed rows, including empty snapshots and removals", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const statuses = [];
+  db.onCalendarEventsUpdated = () => {
+    assert.equal(db.db.inTransaction, false);
+    statuses.push(db.getCalendarEventById("event")?.attendees_omitted ?? "missing");
+  };
+  db.replaceAppleCalendarEvents([appleEvent("event")]);
+  db.replaceAppleCalendarEvents([]);
+  db.upsertCalendarEvents([restEvent("google", "g", "event")]);
+  db.removeCalendarEvents(["event"]);
+  db.upsertCalendarEvents([restEvent("google", "g", "event")]);
+  db.removeStaleCalendarEvents("google", "g", []);
+  assert.deepEqual(statuses, [0, "missing", 0, "missing", 0, "missing"]);
+  db.db.close();
+});
+
+test("linking a confirmed in-person recording to a cached external invite stops it at commit", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const {
+    createMeetingRecordingAdmission,
+  } = require("../../src/helpers/meetingRecordingAdmission");
+  const owner = new (require("node:events").EventEmitter)();
+  const note = db.saveNote("Notes by hand", "Keep these notes", "meeting").note;
+  db.upsertCalendarEvents([
+    appleEvent("outside", {
+      attendees: '[{"email":"guest@outside.test"}]',
+      attendees_count: 1,
+    }),
+  ]);
+  const refusals = [];
+  const gate = createMeetingRecordingAdmission({
+    getPolicy: () => ({ externalAttendees: "blocked", internalDomains: ["internal.test"] }),
+    resolveFeature: async () => null,
+    generation: () => 1,
+    getNote: (id) => db.getNote(id),
+    getEvent: (id) => db.getCalendarEventById(id),
+    confirmInternal: async () => true,
+    onRevoked: (attempt, code) => refusals.push([attempt.sessionId, code]),
+  });
+  const args = { noteId: note.id, sessionId: "unlinked-meeting" };
+  assert.equal((await gate.prepare(owner, args)).success, true);
+  assert.equal(gate.start(owner, args).success, true);
+  db.onCalendarEventsUpdated = (noteId) => gate.recheck(noteId);
+  assert.throws(
+    db.db.transaction(() => {
+      db.updateNote(note.id, { calendar_event_id: "outside" });
+      throw new Error("rollback");
+    }),
+    /rollback/
+  );
+  await Promise.resolve();
+  assert.deepEqual(refusals, []);
+  db.updateNote(note.id, { calendar_event_id: "outside" });
+  assert.deepEqual(refusals, [[args.sessionId, "POLICY_EXTERNAL_ATTENDEES"]]);
+  assert.equal(db.getNote(note.id).content, "Keep these notes");
+});
+
+test("Apple organizer identity is refreshed on upgrade and kept out of contacts", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertAppleCalendar(db, "apple-calendar");
+  const event = appleEvent("apple-organizer");
+  db.upsertCalendarEvents([event]);
+  db.db.exec("ALTER TABLE calendar_events DROP COLUMN organizer_self");
+  db.db.close();
+
+  const migrated = new DatabaseManager();
+  try {
+    assert.equal(migrated.getCalendarEventById(event.id).attendees_omitted, 1);
+    migrated.replaceAppleCalendarEvents([
+      { ...event, organizer_email: "me@personal.test", organizer_self: true },
+    ]);
+    const saved = migrated.getCalendarEventById(event.id);
+    assert.equal(saved.organizer_self, 1);
+    assert.equal(saved.organizer_email, "me@personal.test");
+    assert.equal(saved.attendees_omitted, 0);
+    assert.ok(migrated.getContactLookupSources().excludedEmails.includes("me@personal.test"));
+  } finally {
+    migrated.db.close();
+  }
 });

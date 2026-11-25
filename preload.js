@@ -331,11 +331,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getStandInOwnershipCandidates: () => ipcRenderer.invoke("db-get-stand-in-ownership-candidates"),
   resolveStandInOwnership: (request) =>
     ipcRenderer.invoke("db-resolve-stand-in-ownership", request),
-  createFolder: (name, spaceId, writeGuard) =>
-    ipcRenderer.invoke("db-create-folder", name, spaceId, writeGuard),
+  createFolder: (name, spaceId, writeGuard, parentFolderId) =>
+    ipcRenderer.invoke("db-create-folder", name, spaceId, writeGuard, parentFolderId),
   deleteFolder: (id) => ipcRenderer.invoke("db-delete-folder", id),
   renameFolder: (id, name) => ipcRenderer.invoke("db-rename-folder", id, name),
   moveFolderToSpace: (id, spaceId) => ipcRenderer.invoke("db-move-folder-to-space", id, spaceId),
+  setFolderParent: (id, parentFolderId, writeGuard) =>
+    ipcRenderer.invoke("db-set-folder-parent", id, parentFolderId, writeGuard),
   getFolderNoteCounts: () => ipcRenderer.invoke("db-get-folder-note-counts"),
 
   // Space functions
@@ -1079,12 +1081,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-transcription-prepare", options),
   meetingTranscriptionStart: (options) =>
     ipcRenderer.invoke("meeting-transcription-start", options),
+  checkMeetingRecordingStart: (options) =>
+    ipcRenderer.invoke("check-meeting-recording-start", options),
+  releaseMeetingRecordingStart: (sessionId) =>
+    ipcRenderer.send("release-meeting-recording-start", sessionId),
+  onMeetingRecordingAdmissionRevoked: registerListener(
+    "meeting-recording-admission-revoked",
+    (callback) => (_event, data) => callback(data)
+  ),
   isMeetingRecordingDisabled: () => ipcRenderer.invoke("is-meeting-recording-disabled"),
   meetingRecordingRefused: (details) => ipcRenderer.invoke("meeting-recording-refused", details),
   meetingTranscriptionSend: (buffer, source, capturedAt) =>
     ipcRenderer.send("meeting-transcription-send", buffer, source, capturedAt),
   meetingTranscriptionSetSystemAudioAvailable: (sessionId, available) =>
     ipcRenderer.invoke("meeting-transcription-set-system-audio-available", sessionId, available),
+  meetingTranscriptionSetMicMuted: (sessionId, muted) =>
+    ipcRenderer.invoke("meeting-transcription-set-mic-muted", sessionId, muted),
   meetingTranscriptionStop: (expectedSessionId, reason) =>
     ipcRenderer.invoke("meeting-transcription-stop", expectedSessionId, reason),
   meetingTranscriptionCancel: () => ipcRenderer.invoke("meeting-transcription-cancel"),
@@ -1414,10 +1426,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   countNotesMissingRevision: (spaceKind) =>
     ipcRenderer.invoke("db-count-notes-missing-revision", spaceKind),
   markNoteSyncError: (id) => ipcRenderer.invoke("db-mark-note-sync-error", id),
+  keepDeletedNoteTranscript: (id, transcript, writeGuard) =>
+    ipcRenderer.invoke("db-keep-deleted-note-transcript", id, transcript, writeGuard),
   restoreNoteAfterDeniedDelete: (id) =>
     ipcRenderer.invoke("db-restore-note-after-denied-delete", id),
-  hardDeleteNote: (id, authGeneration) =>
-    ipcRenderer.invoke("db-hard-delete-note", id, authGeneration),
+  hardDeleteNote: (id, authGeneration, options) =>
+    ipcRenderer.invoke("db-hard-delete-note", id, authGeneration, options),
 
   getPendingFolders: (spaceKind) => ipcRenderer.invoke("db-get-pending-folders", spaceKind),
   getFolderByClientId: (clientFolderId) =>
@@ -1461,11 +1475,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ensureAccountDefaultFolders: (foreignCloudIds, expectedScope) =>
     ipcRenderer.invoke("db-ensure-account-default-folders", foreignCloudIds, expectedScope),
   getFolderIdMap: () => ipcRenderer.invoke("db-get-folder-id-map"),
+  applyCloudFolderParents: (links, authGeneration) =>
+    ipcRenderer.invoke("db-apply-cloud-folder-parents", links, authGeneration),
   getPendingFolderDeletes: () => ipcRenderer.invoke("db-get-pending-folder-deletes"),
   restoreFolderAfterDeniedDelete: (id) =>
     ipcRenderer.invoke("db-restore-folder-after-denied-delete", id),
-  hardDeleteFolder: (id, authGeneration) =>
-    ipcRenderer.invoke("db-hard-delete-folder", id, authGeneration),
+  hardDeleteFolder: (id, authGeneration, options) =>
+    ipcRenderer.invoke("db-hard-delete-folder", id, authGeneration, options),
   relocateRevokedFolder: (id, privateSpaceId, preserveFolder) =>
     ipcRenderer.invoke("db-relocate-revoked-folder", id, privateSpaceId, preserveFolder),
   forkFolderIdentity: (id) => ipcRenderer.invoke("db-fork-folder-identity", id),
@@ -1765,7 +1781,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-notification-respond", detectionId, action, options),
   confirmMeetingNoteNavigation: (navigationId, status) =>
     ipcRenderer.invoke("confirm-meeting-note-navigation", navigationId, status),
-  joinCalendarMeeting: (eventId) => ipcRenderer.invoke("join-calendar-meeting", eventId),
+  joinCalendarMeeting: (eventId, notesOnly) =>
+    ipcRenderer.invoke("join-calendar-meeting", eventId, notesOnly),
   startManualMeeting: () => ipcRenderer.invoke("start-manual-meeting"),
   getPendingMeetingNoteNavigation: () => ipcRenderer.invoke("get-pending-meeting-note-navigation"),
   onMeetingNoteNavigationPending: registerListener(

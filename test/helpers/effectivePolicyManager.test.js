@@ -543,3 +543,32 @@ test("pending workspace decisions intersect device changes with held account res
     manager.stop();
   }
 });
+
+test("effective attendee policy preserves both sources and reloads legacy cached policy", async () => {
+  const device = defaultDevicePolicy();
+  const workspace = defaultDevicePolicy();
+  device.meetings = { externalAttendees: "future", internalDomains: ["SUB.Example.com"] };
+  workspace.meetings = {
+    externalAttendees: "allowed",
+    internalDomains: ["example.com", "sub.example.com"],
+  };
+  assert.equal(mergePolicies([device]).meetings.externalAttendees, "blocked");
+  assert.equal(mergePolicies([workspace]).meetings.externalAttendees, "allowed");
+  assert.deepEqual(mergePolicies([workspace, device]).meetings, {
+    transcriptionStart: "automatic",
+    externalAttendees: "blocked",
+    internalDomains: ["example.com", "sub.example.com"],
+  });
+  const legacy = defaultDevicePolicy();
+  delete legacy.meetings;
+  const manager = createEffectivePolicyManager({
+    devicePolicy: { getSnapshot: () => absentDevice, subscribe: () => () => {} },
+    workspacePolicyManager: {
+      heldPolicy: () => ({ ...member, success: true, managed: true, policy: legacy }),
+    },
+    getScope: () => member,
+  });
+  const result = await manager.getPolicy({ held: true });
+  assert.equal(result.policy.meetings.externalAttendees, "allowed");
+  assert.deepEqual(result.policy.meetings.internalDomains, []);
+});

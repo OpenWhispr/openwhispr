@@ -91,6 +91,8 @@ const reasoningEffortShape = {
 };
 const thinkingLevelShape = { level: z.enum(["minimal", "low"]) };
 const thinkingBudgetShape = { budget: z.number().int().min(0).max(1000000) };
+// Anthropic's `thinking` value that turns thinking off, for a model that thinks unasked.
+const thinkingOffShape = { type: z.enum(["disabled", "between_tools"]) };
 const organizationShape = { id: z.enum(["oruk", "nvidia", "cohere"]), name: text };
 const cloudModel = {
   ...lifecycle,
@@ -178,6 +180,7 @@ function buildSchemas(strict) {
       ...cloudModel,
       reasoningEffort: object(reasoningEffortShape).optional(),
       thinkingFloor: z.union([object(thinkingLevelShape), object(thinkingBudgetShape)]).optional(),
+      thinkingOff: object(thinkingOffShape).optional(),
     }),
     transcription: object(transcriptionModel),
     local: object(localModel).refine(completeDraft, "Incomplete draft artifact"),
@@ -231,6 +234,7 @@ const CAPABILITY_FIELDS = [
   "supportsTools",
   "reasoningEffort",
   "thinkingFloor",
+  "thinkingOff",
 ];
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const isActive = (model) => !model.retired && !model.legacy;
