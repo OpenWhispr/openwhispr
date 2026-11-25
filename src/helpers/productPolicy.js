@@ -32,6 +32,8 @@ function realtimeSelection(options = {}, provider = options.provider ?? "openai-
   if (provider === "local") return { mode: "local", provider };
   if (provider === "enterprise-realtime")
     return { mode: "enterprise", provider: options.managedContext?.provider };
+  if (provider === "openai-compatible-realtime")
+    return { mode: "self-hosted", provider: "openai-compatible" };
   // These use the saved key whatever the mode says (SAVED_KEY_PROVIDERS).
   const byok =
     options.mode === "byok" ||

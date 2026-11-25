@@ -18,6 +18,11 @@ const BYOK_KEY_BRIDGES = [
   { base: "assemblyai", get: "getAssemblyAIKey", save: "saveAssemblyAIKey" },
   { base: "elevenlabs", get: "getElevenlabsKey", save: "saveElevenlabsKey" },
   {
+    base: "openai-compatible-realtime",
+    get: "getOpenAICompatibleRealtimeKey",
+    save: "saveOpenAICompatibleRealtimeKey",
+  },
+  {
     base: "note-formatting-custom",
     get: "getNoteFormattingCustomKey",
     save: "saveNoteFormattingCustomKey",

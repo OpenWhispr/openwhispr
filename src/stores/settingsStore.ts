@@ -150,8 +150,7 @@ const TRANSCRIPTION_POLICY_CATALOG = {
 };
 
 const MEETING_TRANSCRIPTION_POLICY_CATALOG = {
-  // Self-hosted realtime is not implemented for Note Recording.
-  modes: ["openwhispr", "providers", "local", "enterprise"] as const,
+  modes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"] as const,
   enterpriseProviders: TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   byokProviders: modelRegistryData.transcriptionProviders
     .filter(
@@ -1229,6 +1228,11 @@ export interface SettingsState
   meetingCloudTranscriptionMode: string;
   meetingRemoteTranscriptionType: SelfHostedType;
   meetingRemoteTranscriptionUrl: string;
+  // Note Recording's Self-Hosted server: a WebSocket that speaks the OpenAI
+  // Realtime protocol. Kept apart from meetingRemoteTranscriptionUrl, which
+  // falls back to the dictation HTTP endpoint.
+  meetingRealtimeUrl: string;
+  meetingRealtimeModel: string;
 
   uploadTranscriptionMode: InferenceMode;
   uploadUseLocalWhisper: boolean;
@@ -1350,6 +1354,8 @@ export interface SettingsState
   setMeetingCloudTranscriptionMode: (value: string) => void;
   setMeetingRemoteTranscriptionType: (type: SelfHostedType) => void;
   setMeetingRemoteTranscriptionUrl: (url: string) => void;
+  setMeetingRealtimeUrl: (url: string) => void;
+  setMeetingRealtimeModel: (model: string) => void;
 
   setUploadTranscriptionMode: (mode: InferenceMode) => void;
   setUploadUseLocalWhisper: (value: boolean) => void;
@@ -1448,6 +1454,7 @@ export interface SettingsState
   setDeepgramApiKey: (key: string) => void;
   setAssemblyaiApiKey: (key: string) => void;
   setElevenlabsApiKey: (key: string) => void;
+  setOpenaiCompatibleRealtimeApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
 
@@ -1701,6 +1708,7 @@ const SECRET_IPC_SAVERS = {
   deepgram: "saveDeepgramKey",
   assemblyai: "saveAssemblyAIKey",
   elevenlabs: "saveElevenlabsKey",
+  openaiCompatibleRealtime: "saveOpenAICompatibleRealtimeKey",
   customTranscription: "saveCustomTranscriptionKey",
   selfHostedSttHeaders: "saveSelfHostedSttHeaders",
   cleanupCustom: "saveCleanupCustomKey",
@@ -1753,6 +1761,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "deepgramApiKey",
   "assemblyaiApiKey",
   "elevenlabsApiKey",
+  "openaiCompatibleRealtimeApiKey",
   "customTranscriptionApiKey",
   "selfHostedSttHeaders",
   "customReasoningApiKey",
@@ -1877,6 +1886,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   deepgramApiKey: "",
   assemblyaiApiKey: "",
   elevenlabsApiKey: "",
+  openaiCompatibleRealtimeApiKey: "",
   customTranscriptionApiKey: "",
   cleanupCustomApiKey: "",
 
@@ -2067,6 +2077,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     return v === "openai-compatible" ? "openai-compatible" : ("lan" as SelfHostedType);
   })(),
   meetingRemoteTranscriptionUrl: readString("meetingRemoteTranscriptionUrl", ""),
+  meetingRealtimeUrl: readString("meetingRealtimeUrl", ""),
+  meetingRealtimeModel: readString("meetingRealtimeModel", ""),
 
   uploadTranscriptionMode: (() => {
     const v = readString("uploadTranscriptionMode", "openwhispr");
@@ -2169,6 +2181,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     type: SelfHostedType
   ) => void,
   setMeetingRemoteTranscriptionUrl: createStringSetter("meetingRemoteTranscriptionUrl"),
+  setMeetingRealtimeUrl: createStringSetter("meetingRealtimeUrl"),
+  setMeetingRealtimeModel: createStringSetter("meetingRealtimeModel"),
 
   setUploadTranscriptionMode: createStringSetter("uploadTranscriptionMode") as (
     mode: InferenceMode
@@ -2614,6 +2628,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setDeepgramApiKey: createSecretSetter("deepgramApiKey", "deepgram"),
   setAssemblyaiApiKey: createSecretSetter("assemblyaiApiKey", "assemblyai"),
   setElevenlabsApiKey: createSecretSetter("elevenlabsApiKey", "elevenlabs"),
+  setOpenaiCompatibleRealtimeApiKey: createSecretSetter(
+    "openaiCompatibleRealtimeApiKey",
+    "openaiCompatibleRealtime"
+  ),
   setCustomTranscriptionApiKey: (key: string) => {
     set({ customTranscriptionApiKey: key });
     debouncedSaveSecret("customTranscription", key);
@@ -3128,6 +3146,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.deepgramApiKey !== undefined) s.setDeepgramApiKey(keys.deepgramApiKey);
     if (keys.assemblyaiApiKey !== undefined) s.setAssemblyaiApiKey(keys.assemblyaiApiKey);
     if (keys.elevenlabsApiKey !== undefined) s.setElevenlabsApiKey(keys.elevenlabsApiKey);
+    if (keys.openaiCompatibleRealtimeApiKey !== undefined)
+      s.setOpenaiCompatibleRealtimeApiKey(keys.openaiCompatibleRealtimeApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
     if (keys.cleanupCustomApiKey !== undefined) s.setCleanupCustomApiKey(keys.cleanupCustomApiKey);
@@ -4193,6 +4213,7 @@ export async function initializeSettings(): Promise<void> {
         deepgram,
         assemblyai,
         elevenlabs,
+        openaiCompatibleRealtime,
       ] = await Promise.all([
         window.electronAPI.getOpenAIKey?.(),
         window.electronAPI.getAnthropicKey?.(),
@@ -4221,6 +4242,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getDeepgramKey?.(),
         window.electronAPI.getAssemblyAIKey?.(),
         window.electronAPI.getElevenlabsKey?.(),
+        window.electronAPI.getOpenAICompatibleRealtimeKey?.(),
       ]);
 
       useSettingsStore.setState({
@@ -4257,6 +4279,7 @@ export async function initializeSettings(): Promise<void> {
         deepgramApiKey: deepgram || "",
         assemblyaiApiKey: assemblyai || "",
         elevenlabsApiKey: elevenlabs || "",
+        openaiCompatibleRealtimeApiKey: openaiCompatibleRealtime || "",
       });
 
       if (localStorage.getItem("_dictationAgentSeeded") === "key-pending") {

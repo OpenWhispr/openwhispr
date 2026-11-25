@@ -4,6 +4,7 @@ const DeepgramStreaming = require("./deepgramStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const ElevenLabsStreaming = require("./elevenLabsStreaming");
 const { TinfoilRealtimeStreaming } = require("./tinfoilRealtimeStreaming");
+const { OpenAICompatibleRealtimeStreaming } = require("./openaiCompatibleRealtimeStreaming");
 
 const STREAMING_CLIENT_BY_PROVIDER = {
   "openai-realtime": OpenAIRealtimeStreaming,
@@ -13,6 +14,8 @@ const STREAMING_CLIENT_BY_PROVIDER = {
   "corti-realtime": CortiStreaming,
   "elevenlabs-realtime": ElevenLabsStreaming,
   "tinfoil-realtime": TinfoilRealtimeStreaming,
+  // Note Recording's Self-Hosted mode only.
+  "openai-compatible-realtime": OpenAICompatibleRealtimeStreaming,
 };
 
 // Derived from the registry so an allowed provider can never lack a client
@@ -25,8 +28,15 @@ const getMeetingStreamingClient = (provider) => {
   return StreamingClient;
 };
 
-// These authenticate with saved credentials whatever the mode says.
-const SAVED_KEY_PROVIDERS = new Set(["corti-realtime", "tinfoil-realtime", "elevenlabs-realtime"]);
+// These authenticate with saved credentials whatever the mode says. Membership ties a
+// connection to key saves; productPolicy.js decides the policy mode (Self-Hosted for
+// openai-compatible-realtime, bring-your-own-key for the rest).
+const SAVED_KEY_PROVIDERS = new Set([
+  "corti-realtime",
+  "tinfoil-realtime",
+  "elevenlabs-realtime",
+  "openai-compatible-realtime",
+]);
 
 // A connection that authenticates with a saved key also records the count of key
 // saves it opened under, so a start never reuses one opened before a save.
@@ -34,6 +44,7 @@ const getMeetingConnectionKey = (options = {}, credentialGeneration = null) =>
   JSON.stringify({
     provider: options.provider,
     model: options.model,
+    url: options.url,
     language: options.language,
     mode: options.mode,
     environment: options.environment,

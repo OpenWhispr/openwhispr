@@ -10,6 +10,8 @@ import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
 import { isModeAllowedByPolicy } from "../../stores/policyRules";
 import { requestSignIn } from "../../utils/requestSignIn";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import ApiKeyInput from "../ui/ApiKeyInput";
 import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import { Toggle } from "../ui/toggle";
@@ -19,6 +21,7 @@ import {
   getMeetingStreamingTranscriptionProviders,
   enterpriseProviderName,
 } from "../../models/ModelRegistry";
+import { isSecureWebSocketEndpoint } from "../../utils/urlUtils";
 
 const MEETING_BYOK_PROVIDER_IDS = getMeetingStreamingTranscriptionProviders().map(
   (provider) => provider.id
@@ -55,6 +58,88 @@ function MeetingEchoCancellationRow() {
 }
 
 const noop = () => {};
+
+const urlHasModel = (url: string) => {
+  try {
+    return Boolean(new URL(url).searchParams.get("model")?.trim());
+  } catch {
+    return false;
+  }
+};
+
+function MeetingSelfHostedRealtimePanel() {
+  const { t } = useTranslation();
+  const meetingRealtimeUrl = useSettingsStore((s) => s.meetingRealtimeUrl);
+  const setMeetingRealtimeUrl = useSettingsStore((s) => s.setMeetingRealtimeUrl);
+  const meetingRealtimeModel = useSettingsStore((s) => s.meetingRealtimeModel);
+  const setMeetingRealtimeModel = useSettingsStore((s) => s.setMeetingRealtimeModel);
+  const apiKey = useSettingsStore((s) => s.openaiCompatibleRealtimeApiKey);
+  const setApiKey = useSettingsStore((s) => s.setOpenaiCompatibleRealtimeApiKey);
+  const trimmedUrl = meetingRealtimeUrl.trim();
+  const urlInvalid = trimmedUrl !== "" && !isSecureWebSocketEndpoint(trimmedUrl);
+  // Same rule as the resolver: a model in the URL's query counts.
+  const modelMissing = meetingRealtimeModel.trim() === "" && !urlHasModel(trimmedUrl);
+
+  return (
+    <div className="border border-border rounded-lg p-3 space-y-2.5">
+      <div className="space-y-1.5">
+        <label htmlFor="meeting-realtime-url" className="block text-xs font-medium text-foreground">
+          {t("settingsPage.transcription.selfHostedRealtime.urlLabel")}
+        </label>
+        <Input
+          id="meeting-realtime-url"
+          dir="ltr"
+          className="h-8"
+          value={meetingRealtimeUrl}
+          onChange={(e) => setMeetingRealtimeUrl(e.target.value)}
+          placeholder="ws://192.168.1.20:9000/v1/realtime"
+          aria-invalid={urlInvalid || undefined}
+          aria-describedby={urlInvalid ? "meeting-realtime-url-error" : undefined}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        {urlInvalid && (
+          <p id="meeting-realtime-url-error" className="text-xs text-destructive">
+            {t("settingsPage.transcription.selfHostedRealtime.urlInvalid")}
+          </p>
+        )}
+      </div>
+      <div className="space-y-1.5">
+        <label
+          htmlFor="meeting-realtime-model"
+          className="block text-xs font-medium text-foreground"
+        >
+          {t("common.model")}
+        </label>
+        <Input
+          id="meeting-realtime-model"
+          dir="ltr"
+          className="h-8"
+          value={meetingRealtimeModel}
+          onChange={(e) => setMeetingRealtimeModel(e.target.value)}
+          placeholder="Whisper-Large-v3-Turbo"
+          aria-required={!urlHasModel(trimmedUrl) || undefined}
+          aria-describedby={modelMissing ? "meeting-realtime-model-hint" : undefined}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        {modelMissing && (
+          <p id="meeting-realtime-model-hint" className="text-xs text-muted-foreground">
+            {t("settingsPage.transcription.selfHostedRealtime.modelRequired")}
+          </p>
+        )}
+      </div>
+      <ApiKeyInput
+        apiKey={apiKey}
+        setApiKey={setApiKey}
+        label={t("settingsPage.transcription.selfHostedRealtime.apiKeyLabel")}
+      />
+      <p className="text-xs text-muted-foreground">
+        {t("settingsPage.transcription.selfHostedRealtime.help")}
+      </p>
+    </div>
+  );
+}
 
 export function MeetingTranscriptionPanel() {
   useRegistryVersion();
@@ -134,8 +219,6 @@ export function MeetingTranscriptionPanel() {
         label: t("settingsPage.transcription.modes.selfHosted"),
         description: t("settingsPage.transcription.modes.selfHostedDesc"),
         icon: <Network className="w-4 h-4" />,
-        disabled: true,
-        badge: t("common.comingSoon"),
       },
     ],
     "transcription",
@@ -147,7 +230,6 @@ export function MeetingTranscriptionPanel() {
   );
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
     if (!isModeAllowed(mode)) return;
-    if (mode === "self-hosted") return;
     if (mode === "openwhispr" && !isSignedIn) {
       requestSignIn();
       return;
@@ -279,6 +361,9 @@ export function MeetingTranscriptionPanel() {
       {managed.kind === "manual" &&
         effectiveTranscriptionMode === "local" &&
         renderTranscriptionPicker("local")}
+      {managed.kind === "manual" && effectiveTranscriptionMode === "self-hosted" && (
+        <MeetingSelfHostedRealtimePanel />
+      )}
       <MeetingSpeakerDetectionRow />
       <MeetingEchoCancellationRow />
     </div>

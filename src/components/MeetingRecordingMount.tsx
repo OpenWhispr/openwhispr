@@ -46,7 +46,9 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   accountChanged: "notes.meeting.stoppedAccountChanged",
   // An enterprise recording ended because the active workspace changed.
   workspaceChanged: "notes.meeting.stoppedWorkspaceChanged",
-  unsupportedSelfHosted: "notes.meeting.unsupportedSelfHosted",
+  selfHostedRealtimeUrlMissing: "notes.meeting.selfHostedRealtimeUrlMissing",
+  selfHostedRealtimeUrlInvalid: "notes.meeting.selfHostedRealtimeUrlInvalid",
+  selfHostedRealtimeModelMissing: "notes.meeting.selfHostedRealtimeModelMissing",
   unsupportedProvider: "notes.meeting.unsupportedProvider",
   noProviderSelected: "notes.meeting.noProviderSelected",
   signInRequired: "notes.meeting.signInRequired",

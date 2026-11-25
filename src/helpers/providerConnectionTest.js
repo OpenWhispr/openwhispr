@@ -81,7 +81,8 @@ function isPrivateHost(hostname) {
   }
 
   const isIPv6 = h.includes(":");
-  if (isIPv6 && (h.startsWith("fe80") || h.startsWith("fc") || h.startsWith("fd"))) return true;
+  // Link-local is fe80::/10 (fe80–febf), as in urlUtils.ts and urlAudioDownloader.js.
+  if (isIPv6 && (/^fe[89ab]/.test(h) || h.startsWith("fc") || h.startsWith("fd"))) return true;
   if (h.endsWith(".local")) return true;
   if (h.endsWith(".ts.net")) return true;
 
@@ -646,4 +647,9 @@ function describeCortiTokenFailure(error) {
   };
 }
 
-module.exports = { describeCortiTokenFailure, resolveProviderRequest, testProviderConnection };
+module.exports = {
+  describeCortiTokenFailure,
+  isPrivateHost,
+  resolveProviderRequest,
+  testProviderConnection,
+};
