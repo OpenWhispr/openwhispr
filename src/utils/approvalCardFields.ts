@@ -8,7 +8,7 @@ import { salesforceFieldProblem } from "./salesforceApprovalFields";
  * the card shows, so it waits until the card holds something the provider
  * would accept; the card's button and a spoken yes both ask here.
  */
-export function approvalSendCheck({ preview, draft }: Pick<ApprovalEntry, "preview" | "draft">) {
+export function approvalCardFields({ preview, draft }: Pick<ApprovalEntry, "preview" | "draft">) {
   // An email card lays out its fields; a malformed one without them falls
   // back to the plain layout rather than showing empty fields.
   const emailFields =

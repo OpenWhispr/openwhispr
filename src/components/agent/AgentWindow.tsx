@@ -22,7 +22,7 @@ import {
   updateApprovalDraft,
   useConnectorApprovalStore,
 } from "../../stores/connectorApprovalStore";
-import { approvalSendCheck } from "../../utils/approvalSendCheck";
+import { approvalCardFields } from "../../utils/approvalCardFields";
 import { spokenCardReply } from "../../utils/spokenCardReply";
 import { editSelectedText } from "../../services/editSelectedText";
 import { getSelectionCaptureDisposition } from "../../helpers/selectionEditing";
@@ -134,7 +134,7 @@ function replyToCard(card: PendingCard, text: string, actionId: string | undefin
   const reply = spokenCardReply(text);
   if (!entry || entry.actionId !== actionId || !reply) return false;
   if (reply === "no") cancelApproval(card.key);
-  else if (approvalSendCheck(entry).sendBlocked) return false;
+  else if (approvalCardFields(entry).sendBlocked) return false;
   else void approveAction(card.key);
   return true;
 }
@@ -273,7 +273,7 @@ export default function AgentWindow() {
   const replyCard = voiceReplyCard(pendingCards, approvals);
   const replyCardRef = useRef(replyCard);
   replyCardRef.current = replyCard;
-  const replyTakeRef = useRef<{ take: number; cardId: string; actionId?: string } | null>(null);
+  const replyTakeRef = useRef<{ cardId: string; actionId?: string } | null>(null);
   const cardFrameRef = useRef<HTMLDivElement>(null);
   const [cardHeight, setCardHeight] = useState(0);
   const standalone = state.layout === "standalone";
@@ -519,7 +519,7 @@ export default function AgentWindow() {
       editTargetRef.current = null;
       const caret = caretRef.current?.press === press ? caretRef.current : null;
       caretRef.current = null;
-      const replyTake = replyTakeRef.current?.take === take ? replyTakeRef.current : null;
+      const replyTake = replyTakeRef.current;
       if (!target && replyTake) {
         const card = replyCardRef.current;
         // A card minimized meanwhile is never answered unseen.
@@ -789,7 +789,6 @@ export default function AgentWindow() {
       takeRef.current += 1;
       replyTakeRef.current = replyTo
         ? {
-            take: takeRef.current,
             cardId: replyTo.id,
             actionId: useConnectorApprovalStore.getState().entries[replyTo.key]?.actionId,
           }

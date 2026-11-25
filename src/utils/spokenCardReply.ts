@@ -51,6 +51,7 @@ const FILLER = words({
   it: "per favore il messaggio pure adesso ora",
   ru: "его её это сообщение пожалуйста сейчас",
   zh: "吧 的 了 啊 呀 嗯 请 請 就 去",
+  // ICU splits verb endings into pieces: ください → くだ さい, して → し て, 送らない → 送 ら ない.
   ja: "し て って ます ください くだ さい 下さい で ら よ ね を",
   ar: "من فضلك الرسالة",
 });

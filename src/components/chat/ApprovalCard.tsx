@@ -20,7 +20,7 @@ import {
   MAX_EMAIL_SUBJECT_LENGTH,
   recipientsLabel,
 } from "../../helpers/connectors/emailCompose";
-import { approvalSendCheck } from "../../utils/approvalSendCheck";
+import { approvalCardFields } from "../../utils/approvalCardFields";
 import { issueProblemCopy, issueSentCopy, issueUnknownCopy } from "../../utils/issueApprovalFields";
 import {
   salesforceFieldsCopyText,
@@ -95,7 +95,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   // failure while Retry waits.
   const editing = (pending && !entry.reconnect) || waitingForRetry;
   const { emailFields, verb, issueFields, problems, issueProblem, salesforceProblem, sendBlocked } =
-    approvalSendCheck(entry);
+    approvalCardFields(entry);
   const slack = preview.verbKey === "slackPost";
   // Who it goes to follows the user's edits: main's answer once sent,
   // otherwise the card's own To and Cc.
