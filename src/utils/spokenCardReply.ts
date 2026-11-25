@@ -15,10 +15,13 @@ const YES = words({
   ar: "نعم أرسل ارسل أرسله ارسله أرسلها ارسلها موافق حسنا تمام",
 });
 
+// Spanish no words, which a bare "no" before them negates ("no cancelar", don't cancel).
+const SPANISH_NO = "cancela cancelar para";
+
 // A no on its own.
 const NO = words({
   en: "no nope nah cancel stop never mind",
-  es: "cancela cancelar para envíes envies mandes",
+  es: SPANISH_NO,
   fr: "non annule annuler arrête",
   de: "nein abbrechen stopp halt",
   it: "annulla ferma",
@@ -27,6 +30,11 @@ const NO = words({
   ja: "いいえ いや キャンセル やめ やめて 中止",
   ar: "إلغاء الغاء",
 });
+
+const NEGATED_BY_NO = words({ es: SPANISH_NO });
+
+// A send word that says no only right after a no ("no envíes", don't send).
+const SEND_AFTER_NO = words({ es: "envíes envies mandes" });
 
 // A no that negates the yes word after it in its clause ("don't send"); on its own, a no.
 const NOT_BEFORE = words({
@@ -61,7 +69,7 @@ const FILLER = words({
  * word is a yes, no, negation or filler word in one of the app's languages
  * (the take's language need not be the UI's), and the reply says only yes
  * ("send it", "yes please") or only no ("no", "don't send it"). A reply that
- * says both ("no, send it"), negates a no ("don't cancel"), asks a question
+ * says both ("no, send it"), negates a no ("don't cancel", "no cancelar"), asks a question
  * ("send it?") or says anything else ("send it to Sam") is no answer.
  */
 export function spokenCardReply(text: string): "yes" | "no" | null {
@@ -71,10 +79,13 @@ export function spokenCardReply(text: string): "yes" | "no" | null {
   // A negation waiting for the word after it, and what this clause's last word said.
   let notBefore = false;
   let last: "yes" | "no" | null = null;
+  // The clause's last word was a bare "no", which Spanish puts before the verb it negates.
+  let afterNo = false;
   const endClause = () => {
     if (notBefore) no = true;
     notBefore = false;
     last = null;
+    afterNo = false;
   };
   for (const { segment, isWordLike } of segmenter.segment(
     text.normalize("NFKC").toLowerCase().replace(/[‘’]/g, "'")
@@ -90,6 +101,8 @@ export function spokenCardReply(text: string): "yes" | "no" | null {
     const word = elided ? segment.slice(2) : segment;
     if (elided) notBefore = true;
     if (FILLER.has(word)) continue;
+    const followsNo = afterNo;
+    afterNo = word === "no";
     if (YES.has(word)) {
       if (notBefore) no = true;
       else yes += 1;
@@ -104,9 +117,12 @@ export function spokenCardReply(text: string): "yes" | "no" | null {
       if (last === "yes") yes -= 1;
       no = true;
       last = null;
+    } else if (SEND_AFTER_NO.has(word)) {
+      if (!followsNo) return null;
+      last = null;
     } else if (NO.has(word)) {
-      // "Don't cancel" says neither.
-      if (notBefore) return null;
+      // "Don't cancel" and "no cancelar" say neither.
+      if (notBefore || (followsNo && NEGATED_BY_NO.has(word))) return null;
       no = true;
       last = "no";
     } else {

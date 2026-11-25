@@ -961,6 +961,34 @@ test("a spoken reply answers the question the turn waits on", async (t) => {
   assert.deepEqual(globalThis.__chat.sent, []);
 });
 
+test("a spoken answer for a question the card moved past asks the one on screen again", async (t) => {
+  const view = await mountWindow(t);
+  const questions = [
+    ...TEXT_QUESTION.questions,
+    { id: "owner", kind: "text", prompt: "Who owns it?" },
+  ];
+  const results = await askWhileCompact(view, { kind: "questions", questions });
+  const store = await view.vite.ssrLoadModule("/stores/agentInteractionStore.ts");
+  const [key] = Object.keys(store.useAgentInteractionStore.getState().entries);
+  const draft = () => store.useAgentInteractionStore.getState().entries[key].draft;
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  // The user moves the card on while still speaking.
+  await React.act(async () => store.goToQuestion(key, 1));
+  await React.act(async () => globalThis.__voice.callbacks.onTranscript("Friday", "submit"));
+  await view.settle();
+  assert.deepEqual(draft(), {}, "the next question doesn't take the words");
+  assert.match(view.host.textContent, /Who owns it\?/);
+  assert.match(view.host.textContent, /Answer this question again/);
+  assert.equal(view.host.querySelector("textarea")?.value ?? "", "", "nor does the composer");
+  // Asked again, the answer goes to the question on screen.
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () => globalThis.__voice.callbacks.onTranscript("Sam", "submit"));
+  await view.settle();
+  assert.deepEqual(draft(), { owner: "Sam" });
+  assert.deepEqual(results, []);
+  assert.deepEqual(globalThis.__chat.sent, []);
+});
+
 test("the modal's glow is full on an empty chat, faint while speaking or working in one, gone at rest or while a card waits", async (t) => {
   const view = await mountWindow(t);
   const glow = () => view.host.querySelector(".agent-modal-glow").getAttribute("data-glow");

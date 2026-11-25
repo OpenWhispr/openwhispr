@@ -5639,7 +5639,8 @@
       "transcriptionFailed": "Transcription impossible",
       "micUnavailable": "Micro inaccessible",
       "regenerateFailed": "Impossible de régénérer la réponse",
-      "dictationActive": "La dictée utilise le micro"
+      "dictationActive": "La dictée utilise le micro",
+      "answerAgain": "Répondez de nouveau à cette question"
     },
     "composer": {
       "placeholder": "Dictez ou tapez votre question…",

@@ -5251,7 +5251,8 @@
       "transcriptionFailed": "文字起こしできませんでした",
       "micUnavailable": "マイクを開けませんでした",
       "regenerateFailed": "回答を再生成できませんでした",
-      "dictationActive": "音声入力がマイクを使用中です"
+      "dictationActive": "音声入力がマイクを使用中です",
+      "answerAgain": "この質問にもう一度答えてください"
     },
     "composer": {
       "placeholder": "質問を話すか入力してください…",

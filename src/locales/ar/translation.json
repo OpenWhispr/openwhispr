@@ -3009,7 +3009,8 @@
       "transcriptionFailed": "تعذّر التفريغ النصي",
       "micUnavailable": "تعذّر فتح الميكروفون",
       "regenerateFailed": "تعذّرت إعادة إنشاء الإجابة",
-      "dictationActive": "الإملاء يستخدم الميكروفون"
+      "dictationActive": "الإملاء يستخدم الميكروفون",
+      "answerAgain": "أجب عن هذا السؤال مرة أخرى"
     },
     "composer": {
       "placeholder": "أملِ سؤالك أو اكتبه…",

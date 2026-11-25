@@ -5273,7 +5273,8 @@
       "transcriptionFailed": "Impossibile trascrivere",
       "micUnavailable": "Microfono non disponibile",
       "regenerateFailed": "Impossibile rigenerare la risposta",
-      "dictationActive": "La dettatura sta usando il microfono"
+      "dictationActive": "La dettatura sta usando il microfono",
+      "answerAgain": "Rispondi di nuovo a questa domanda"
     },
     "composer": {
       "placeholder": "Detta o scrivi la tua domanda…",

@@ -273,7 +273,7 @@ export default function AgentWindow() {
   const replyCard = voiceReplyCard(pendingCards, approvals);
   const replyCardRef = useRef(replyCard);
   replyCardRef.current = replyCard;
-  const replyTakeRef = useRef<{ cardId: string; actionId?: string } | null>(null);
+  const replyTakeRef = useRef<{ cardId: string; actionId?: string; step?: number } | null>(null);
   const cardFrameRef = useRef<HTMLDivElement>(null);
   const [cardHeight, setCardHeight] = useState(0);
   const standalone = state.layout === "standalone";
@@ -521,16 +521,20 @@ export default function AgentWindow() {
       caretRef.current = null;
       const replyTake = replyTakeRef.current;
       if (!target && replyTake) {
-        const card = replyCardRef.current;
+        const card = replyCardRef.current?.id === replyTake.cardId ? replyCardRef.current : null;
+        // The card moved to another question while the user spoke: the words
+        // were for the one before, so the question it shows is asked again.
+        if (
+          card?.interaction === "questions" &&
+          useAgentInteractionStore.getState().entries[card.key]?.step !== replyTake.step
+        ) {
+          dispatch({ type: "notice", notice: "agentWindow.notices.answerAgain" });
+          return;
+        }
         // A card minimized meanwhile is never answered unseen.
         const { visible, layout } = stateRef.current;
         const onScreen = visible && (layout === "modal" || layout === "standalone");
-        if (
-          card?.id === replyTake.cardId &&
-          onScreen &&
-          replyToCard(card, text, replyTake.actionId)
-        )
-          return;
+        if (card && onScreen && replyToCard(card, text, replyTake.actionId)) return;
         // Not a clear answer, or its card is gone or prepared again: the words
         // wait in the composer.
         dispatch({ type: "held", text, context: null, attachment: null });
@@ -667,7 +671,10 @@ export default function AgentWindow() {
   const micBlocked = (busy && (!replyCard || editingSelection)) || transcribing;
 
   useEffect(() => {
-    if (!state.notice || listening || transcribing || busy) return;
+    // A notice waits for the turn to end, except asking a question again, which
+    // goes while its card still waits.
+    const waitsForTurn = busy && state.notice !== "agentWindow.notices.answerAgain";
+    if (!state.notice || listening || transcribing || waitsForTurn) return;
     const timer = setTimeout(() => dispatch({ type: "notice", notice: null }), NOTICE_MS);
     return () => clearTimeout(timer);
   }, [busy, dispatch, listening, state.notice, transcribing]);
@@ -791,6 +798,7 @@ export default function AgentWindow() {
         ? {
             cardId: replyTo.id,
             actionId: useConnectorApprovalStore.getState().entries[replyTo.key]?.actionId,
+            step: useAgentInteractionStore.getState().entries[replyTo.key]?.step,
           }
         : null;
       dispatch({ type: "useVoice" });
