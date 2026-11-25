@@ -94,6 +94,12 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
+// useMeetingSession throws outside the provider, so the editor gets a controllable stand-in.
+jest.mock('@/lib/captureLease', () => ({ isCaptureLeaseHeld: () => false }));
+jest.mock('@/components/notes/MeetingSessionProvider', () => ({
+  useLiveMeetingNoteId: () => null,
+}));
+
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: '7' }),
   useRouter: () => ({

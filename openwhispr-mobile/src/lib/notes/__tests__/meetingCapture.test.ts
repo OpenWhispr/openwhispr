@@ -5,6 +5,8 @@ import {
   isCaptureStalled,
   isCloudMeetingCapturing,
   isCloudMeetingRecordingAudio,
+  formatClock,
+  meetingBarState,
   meetingCaptureAlert,
   partialCaptureMessage,
   trackCaptureGrowth,
@@ -316,5 +318,57 @@ describe('meetingCaptureAlert', () => {
       message:
         'OpenWhispr recorded 9 min of this 61 min meeting. The rest was missed while the microphone or the connection was interrupted.',
     });
+  });
+});
+
+describe('meetingBarState', () => {
+  const base = { phase: 'recording', path: 'local', capturing: true, cloudStatus: 'live' } as const;
+
+  it('labels the local path by capture', () => {
+    expect(meetingBarState(base)).toEqual({
+      label: 'RECORDING',
+      recordingAudio: true,
+      showClock: true,
+      showStop: true,
+    });
+    expect(meetingBarState({ ...base, capturing: false })).toMatchObject({
+      label: 'NOT RECORDING',
+      recordingAudio: false,
+    });
+  });
+
+  it('uses the existing cloud status labels and recording dot', () => {
+    const cloud = { ...base, phase: 'cloud-recording', path: 'cloud' } as const;
+    expect(meetingBarState({ ...cloud, cloudStatus: 'reconnecting' })).toMatchObject({
+      label: 'RECONNECTING',
+      recordingAudio: true,
+    });
+    expect(meetingBarState({ ...cloud, cloudStatus: 'connecting' })).toMatchObject({
+      label: 'CONNECTING',
+      recordingAudio: false,
+    });
+    expect(
+      meetingBarState({ ...cloud, cloudStatus: 'connecting', captureStarted: true }),
+    ).toMatchObject({ recordingAudio: true });
+    expect(meetingBarState({ ...cloud, cloudStatus: 'interrupted' }).label).toBe('NOT RECORDING');
+    expect(meetingBarState({ ...cloud, cloudStatus: 'error' }).label).toBe('DISCONNECTED');
+  });
+
+  it('has no clock or Stop while processing', () => {
+    expect(meetingBarState({ ...base, phase: 'processing' })).toEqual({
+      label: 'FINISHING…',
+      recordingAudio: false,
+      showClock: false,
+      showStop: false,
+    });
+  });
+});
+
+describe('formatClock', () => {
+  it('formats mm:ss and h:mm:ss', () => {
+    expect(formatClock(65)).toBe('01:05');
+    expect(formatClock(3599)).toBe('59:59');
+    expect(formatClock(3600)).toBe('1:00:00');
+    expect(formatClock(3725)).toBe('1:02:05');
   });
 });

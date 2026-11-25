@@ -495,6 +495,20 @@ describe('VoiceEnrollmentRecorder', () => {
     expect(Sentry.captureException).toHaveBeenCalledTimes(1);
   });
 
+  it('shows the refusal copy when a meeting is recording and reports nothing', async () => {
+    startRecording.mockRejectedValueOnce(
+      new Error('A meeting is being recorded. End it to dictate.'),
+    );
+    const utils = renderRecorder();
+    await waitFor(() => expect(utils.getByTestId('voice-enrollment-record')).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(utils.getByTestId('voice-enrollment-record'));
+    });
+
+    expect(utils.getByText('A meeting is being recorded. End it to dictate.')).toBeTruthy();
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
   it('says a call interrupted the read as soon as the recorder pauses', async () => {
     const recorder = {
       uri: 'file://partial.wav',

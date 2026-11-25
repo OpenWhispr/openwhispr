@@ -17,6 +17,7 @@ jest.mock('expo-file-system/legacy', () => ({
 jest.mock('@/lib/captureLease', () => ({
   acquireCaptureLease: jest.fn(),
   releaseCaptureLease: jest.fn(),
+  isCaptureLeaseHeld: jest.fn(() => false),
 }));
 
 // permissions.ts re-exports the alert helper, which reaches nativewind through

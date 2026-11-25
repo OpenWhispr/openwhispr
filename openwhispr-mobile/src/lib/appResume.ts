@@ -3,6 +3,7 @@ import { useHandoffStore } from '@/store/useHandoffStore';
 import { isRecoveryDeepLinkFresh, isRecoveryHolding } from '@/store/useKeyboardRecoveryStore';
 import { useUsageStore } from '@/store/useUsageStore';
 import { isAffiliateArrivalFresh } from './affiliateLink';
+import { isMeetingActive } from './notes/activeMeeting';
 import { isKeyboardSettingsLinkFresh } from './keyboardSettingsLink';
 
 export interface ResumeDecision {
@@ -50,6 +51,10 @@ export function resolveResumeAction(alreadyOnHome: boolean): ResumeDecision {
 
   // A creator link just arrived: the app opened for it, so leave the screen alone.
   if (isAffiliateArrivalFresh()) return STAY;
+
+  // A meeting runs from anywhere in the app; Home would hide the recording the user is relying on.
+  // Last, so every other guard keeps its exact result.
+  if (isMeetingActive()) return STAY;
 
   // Already on Home → skip the redundant replace that would slide Home over itself.
   return { resetToHome: !alreadyOnHome, refreshUsage: false };

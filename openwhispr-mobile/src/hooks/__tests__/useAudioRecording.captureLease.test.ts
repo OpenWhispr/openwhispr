@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react-native';
 import { useAudioRecording } from '../useAudioRecording';
-import { acquireCaptureLease, releaseCaptureLease } from '@/lib/captureLease';
+import { acquireCaptureLease, isCaptureLeaseHeld, releaseCaptureLease } from '@/lib/captureLease';
 
 // The recording path pulls in expo-sqlite-backed stores and the whole transcription pipeline;
 // mock it away so these tests stay on the capture lease.
@@ -12,6 +12,7 @@ jest.mock('expo-file-system/legacy', () => ({
 jest.mock('@/lib/captureLease', () => ({
   acquireCaptureLease: jest.fn(),
   releaseCaptureLease: jest.fn(),
+  isCaptureLeaseHeld: jest.fn(() => false),
 }));
 
 // permissions.ts re-exports the alert helper, which reaches nativewind through
@@ -114,6 +115,51 @@ describe('useAudioRecording capture lease', () => {
 
     expect(order).toEqual(['acquire', 'audioMode']);
     expect(acquireCaptureLease).toHaveBeenCalledWith('meeting-local');
+  });
+
+  describe('while a meeting holds the lease', () => {
+    const REFUSAL = 'A meeting is being recorded. End it to dictate.';
+
+    beforeEach(() => {
+      (isCaptureLeaseHeld as jest.Mock).mockReturnValue(true);
+    });
+    afterEach(() => {
+      (isCaptureLeaseHeld as jest.Mock).mockReturnValue(false);
+    });
+
+    it('refuses a dictation while a meeting holds the lease', async () => {
+      jest.spyOn(console, 'error').mockImplementation(() => undefined);
+      const onError = jest.fn();
+      const { result } = renderHook(() => useAudioRecording({ onError }));
+
+      let rejection: unknown;
+      await act(async () => {
+        await result.current.startRecording().catch((error: unknown) => {
+          rejection = error;
+        });
+      });
+
+      expect((rejection as Error).message).toBe(REFUSAL);
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: REFUSAL }));
+      expect(mockAudioModule.getRecordingPermissionsAsync).not.toHaveBeenCalled();
+      expect(mockAudioModule.requestRecordingPermissionsAsync).not.toHaveBeenCalled();
+      expect(mockAudioModule.setAudioModeAsync).not.toHaveBeenCalled();
+      expect(mockRecorder.prepareToRecordAsync).not.toHaveBeenCalled();
+    });
+
+    it('a meeting start is not refused', async () => {
+      const onError = jest.fn();
+      const { result } = renderHook(() =>
+        useAudioRecording({ allowsBackgroundRecording: true, onError }),
+      );
+
+      await act(async () => {
+        await result.current.startRecording();
+      });
+
+      expect(onError).not.toHaveBeenCalled();
+      expect(mockRecorder.record).toHaveBeenCalled();
+    });
   });
 
   it('does not acquire for dictation', async () => {

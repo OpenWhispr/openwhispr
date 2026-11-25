@@ -17,7 +17,11 @@ import {
   NO_SPEECH_ERROR_MESSAGE,
 } from '../lib/permissions';
 import { getPreferredTranscriptionLanguage } from '../lib/transcriptionLanguage';
-import { acquireCaptureLease, releaseCaptureLease } from '../lib/captureLease';
+import {
+  isMeetingRecordingRefusal,
+  MEETING_RECORDING_REFUSAL,
+} from '../lib/meetingRecordingRefusal';
+import { acquireCaptureLease, isCaptureLeaseHeld, releaseCaptureLease } from '../lib/captureLease';
 import { toFriendlyTranscriptionErrorMessage } from '../lib/transcriptionErrors';
 import { deleteManagedTranscriptAudio, retainTranscriptAudio } from '../lib/transcriptAudio';
 import { isUsageLimitError, type UsageLimitError } from '../lib/usageLimitError';
@@ -154,6 +158,11 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
     // may release it when it fails.
     let acquiredHere = false;
     try {
+      // Before any audio-session call. The meeting recorder holds this lease itself, so only
+      // hooks that are not the meeting recorder are refused.
+      if (!allowsBackgroundRecording && isCaptureLeaseHeld()) {
+        throw new Error(MEETING_RECORDING_REFUSAL);
+      }
       const { expoAudio: audioModule, audioRecorder: recorder } = ensureAudioSupport();
 
       // Check status before requesting: iOS shows its system dialog only on
@@ -227,7 +236,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       if (acquiredHere) releaseLease();
       // Permission denial is a normal user state — surfaced by onError as a
       // friendly alert. Skip console.error so dev LogBox doesn't show a red toast.
-      if (!isMicPermissionError(error)) {
+      if (!isMicPermissionError(error) && !isMeetingRecordingRefusal(error)) {
         console.error('[audio] Start recording error:', error);
       }
       if (error instanceof Error) {

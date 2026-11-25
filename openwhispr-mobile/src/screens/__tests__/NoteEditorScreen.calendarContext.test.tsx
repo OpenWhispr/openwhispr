@@ -97,6 +97,19 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 const mockPush = jest.fn();
+// useMeetingSession throws outside the provider, so the editor gets a controllable stand-in.
+const mockMeetingSession: { liveNoteId: number | null } = { liveNoteId: null };
+jest.mock('@/components/notes/MeetingSessionProvider', () => ({
+  useLiveMeetingNoteId: () => mockMeetingSession.liveNoteId,
+}));
+let mockLeaseHeld = false;
+jest.mock('@/lib/captureLease', () => ({ isCaptureLeaseHeld: () => mockLeaseHeld }));
+const mockSafeHaptics = jest.fn();
+jest.mock('@/lib/utils', () => ({
+  ...jest.requireActual<typeof import('@/lib/utils')>('@/lib/utils'),
+  safeHaptics: (...args: unknown[]) => mockSafeHaptics(...args),
+}));
+
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: mockRouteNoteId }),
   useRouter: () => ({
@@ -921,6 +934,63 @@ describe('NoteEditorScreen note chat errors', () => {
       fireEvent.press(getByTestId('chat-suggestion-List action items'));
     });
     expect((await findByTestId('chat-error')).props.children).toBe('offline');
+  });
+});
+
+describe('NoteEditorScreen recording note', () => {
+  beforeEach(() => {
+    mockMeetingSession.liveNoteId = null;
+    mockLeaseHeld = false;
+  });
+
+  it('points a note the live session is recording back to the meeting', () => {
+    mockNote = note({ transcriptionStatus: 'recording' });
+    mockNotesState.notes = [mockNote];
+    mockSegments = [];
+    mockMeetingSession.liveNoteId = 7;
+    const { getByText, getByTestId, queryByText } = render(<NoteEditorScreen />);
+
+    // A recording note opens on its transcript, which shows the status.
+    expect(getByText('This meeting is still recording.')).toBeTruthy();
+    fireEvent.press(getByText('Open meeting'));
+    expect(mockPush).toHaveBeenCalledWith('/(tabs)/(notes)/meeting-record');
+
+    fireEvent.press(getByTestId('note-tab-notes'));
+    expect(getByText('This meeting is still recording.')).toBeTruthy();
+    expect(queryByText('You can edit these notes once the recording stops.')).toBeNull();
+    mockPush.mockClear();
+    fireEvent.press(getByText('Open meeting'));
+    expect(mockPush).toHaveBeenCalledWith('/(tabs)/(notes)/meeting-record');
+  });
+
+  it('refuses Dictate while a meeting holds the lease, before the haptic or the paywall', () => {
+    mockNote = note({ noteType: 'note', transcriptionStatus: 'idle' });
+    mockNotesState.notes = [mockNote];
+    mockSegments = [];
+    mockLeaseHeld = true;
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const { getByLabelText } = render(<NoteEditorScreen />);
+
+    fireEvent.press(getByLabelText('Start dictation'));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Dictation failed',
+      'A meeting is being recorded. End it to dictate.',
+    );
+    expect(mockSafeHaptics).not.toHaveBeenCalled();
+    expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
+  });
+
+  it('keeps today’s text for a stuck recording note the session does not own', () => {
+    mockNote = note({ transcriptionStatus: 'recording' });
+    mockNotesState.notes = [mockNote];
+    mockSegments = [];
+    const { getByText, getByTestId, queryByText } = render(<NoteEditorScreen />);
+
+    expect(getByText('Recording audio...')).toBeTruthy();
+    fireEvent.press(getByTestId('note-tab-notes'));
+    expect(getByText('You can edit these notes once the recording stops.')).toBeTruthy();
+    expect(queryByText('Open meeting')).toBeNull();
   });
 });
 

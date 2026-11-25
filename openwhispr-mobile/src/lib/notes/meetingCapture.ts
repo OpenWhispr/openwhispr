@@ -3,6 +3,7 @@
  * so they can be unit-tested without React.
  */
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
+import type { MeetingSessionPhase } from '@/components/notes/MeetingSessionProvider';
 
 export type CloudMeetingStatus = 'connecting' | 'live' | 'reconnecting' | 'interrupted' | 'error';
 
@@ -231,5 +232,60 @@ export function meetingCaptureAlert(
   return {
     title: kept.isPartial ? PARTIAL_CAPTURE_TITLE : UNTRANSCRIBED_CAPTURE_TITLE,
     message: sentences.join(' '),
+  };
+}
+
+export const STATUS_LABEL: Record<CloudMeetingStatus, string> = {
+  connecting: 'CONNECTING',
+  live: 'RECORDING',
+  reconnecting: 'RECONNECTING',
+  interrupted: 'NOT RECORDING',
+  error: 'DISCONNECTED',
+};
+
+/** `mm:ss` of captured time, `h:mm:ss` once it passes an hour. */
+export function formatClock(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(total / 3600);
+  const minutes = String(Math.floor((total % 3600) / 60)).padStart(2, '0');
+  const secs = String(total % 60).padStart(2, '0');
+  return hours > 0 ? `${hours}:${minutes}:${secs}` : `${minutes}:${secs}`;
+}
+
+export interface MeetingBarState {
+  label: string;
+  recordingAudio: boolean;
+  showClock: boolean;
+  showStop: boolean;
+}
+
+/** What the in-app "meeting in progress" bar shows for the session's current state. */
+export function meetingBarState(input: {
+  phase: MeetingSessionPhase;
+  path: 'local' | 'cloud';
+  capturing: boolean;
+  cloudStatus: CloudMeetingStatus;
+  /** Cloud only: capture has begun, so a still-connecting meeting is already recording. */
+  captureStarted?: boolean;
+}): MeetingBarState {
+  if (input.phase === 'processing') {
+    return { label: 'FINISHING…', recordingAudio: false, showClock: false, showStop: false };
+  }
+  if (input.path === 'cloud') {
+    return {
+      label: STATUS_LABEL[input.cloudStatus],
+      recordingAudio: isCloudMeetingRecordingAudio(
+        input.cloudStatus,
+        input.captureStarted ?? false,
+      ),
+      showClock: true,
+      showStop: true,
+    };
+  }
+  return {
+    label: input.capturing ? 'RECORDING' : 'NOT RECORDING',
+    recordingAudio: input.capturing,
+    showClock: true,
+    showStop: true,
   };
 }

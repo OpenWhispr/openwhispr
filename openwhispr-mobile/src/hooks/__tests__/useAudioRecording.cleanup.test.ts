@@ -18,6 +18,7 @@ jest.mock('expo-file-system/legacy', () => ({
 jest.mock('@/lib/captureLease', () => ({
   acquireCaptureLease: jest.fn(),
   releaseCaptureLease: jest.fn(),
+  isCaptureLeaseHeld: jest.fn(() => false),
 }));
 
 jest.mock('@/components/ui/PermissionAlert', () => ({ showPermissionAlert: jest.fn() }));

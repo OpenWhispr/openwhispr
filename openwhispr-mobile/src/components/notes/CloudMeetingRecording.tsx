@@ -11,18 +11,11 @@ import { MeetingTabs, type MeetingTab } from './MeetingTabs';
 import { LiveTranscriptList } from './LiveTranscriptList';
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
 import type { CloudMeetingStatus } from '@/hooks/useCloudMeeting';
-import { isCloudMeetingRecordingAudio } from '@/lib/notes/meetingCapture';
-
-const formatClock = (seconds: number): string =>
-  `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
-
-const STATUS_LABEL: Record<CloudMeetingStatus, string> = {
-  connecting: 'CONNECTING',
-  live: 'RECORDING',
-  reconnecting: 'RECONNECTING',
-  interrupted: 'NOT RECORDING',
-  error: 'DISCONNECTED',
-};
+import {
+  STATUS_LABEL,
+  formatClock,
+  isCloudMeetingRecordingAudio,
+} from '@/lib/notes/meetingCapture';
 
 const stoppedMessage = (error: string | null): string => {
   const reason = error?.trim();

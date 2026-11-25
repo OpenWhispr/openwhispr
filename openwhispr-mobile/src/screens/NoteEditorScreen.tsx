@@ -14,6 +14,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { isMicPermissionError, showMicPermissionAlert } from '@/lib/permissions';
 import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
+import { useLiveMeetingNoteId } from '@/components/notes/MeetingSessionProvider';
+import { isCaptureLeaseHeld } from '@/lib/captureLease';
+import { MEETING_RECORDING_REFUSAL } from '@/lib/meetingRecordingRefusal';
 import { useNotesStore } from '@/store/useNotesStore';
 import { useActionsStore } from '@/store/useActionsStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -119,6 +122,20 @@ const NOTE_EDITOR_KEYBOARD_BOTTOM_PADDING = 8;
 export const isAudioTranscriptNote = (note: Note | null | undefined): boolean =>
   note?.diarizationEnabled === 1 || note?.noteType === 'meeting' || note?.noteType === 'upload';
 
+function OpenMeetingButton({ onPress }: { onPress: () => void }): React.JSX.Element {
+  return (
+    <Pressable
+      testID="open-meeting-button"
+      accessibilityRole="button"
+      onPress={onPress}
+      hitSlop={8}
+      className="rounded-full bg-link/10 px-3 py-1.5"
+    >
+      <Text className="text-[13px] font-medium text-link">Open meeting</Text>
+    </Pressable>
+  );
+}
+
 const transcriptStatusText = (status: string): string => {
   switch (status) {
     case 'recording':
@@ -153,6 +170,7 @@ export default function NoteEditorScreen({
   const { id } = useLocalSearchParams<{ id: string }>();
   const noteId = parseInt(id ?? '', 10);
   const router = useRouter();
+  const liveMeetingNoteId = useLiveMeetingNoteId();
 
   const { notes, updateNote, deleteNote, getNoteById } = useNotesStore();
   const transcriptRevision = useNotesStore((s) => s.transcriptRevision);
@@ -328,6 +346,12 @@ export default function NoteEditorScreen({
 
   const isAudioTranscript = isAudioTranscriptNote(note);
   const transcriptStatus = note?.transcriptionStatus ?? 'idle';
+  // Only the note the live session is recording has a meeting to go back to; a note stuck in
+  // "recording" after a crash is waiting for recovery and keeps the plain wording.
+  const isLiveMeetingNote = transcriptStatus === 'recording' && liveMeetingNoteId === noteId;
+  const openMeeting = useCallback((): void => {
+    router.push('/(tabs)/(notes)/meeting-record' as Href);
+  }, [router]);
   // transcriptRevision is an intentional cache-bust dep: it bumps on local speaker/segment writes
   // (which don't change note identity) to force these reads to re-run.
   const transcriptSegments = useMemo(
@@ -797,6 +821,11 @@ export default function NoteEditorScreen({
     });
 
   const handleDictate = useCallback(async () => {
+    // First, so a refused press gives no haptic and never reaches the paywall.
+    if (!isRecording && isCaptureLeaseHeld()) {
+      Alert.alert('Dictation failed', MEETING_RECORDING_REFUSAL);
+      return;
+    }
     safeHaptics('medium');
     if (isRecording) {
       await stopRecording();
@@ -1461,7 +1490,14 @@ export default function NoteEditorScreen({
               />
             ) : bodyView === 'notes' ? (
               <>
-                {transcriptStatus === 'recording' ? (
+                {isLiveMeetingNote ? (
+                  <View className="mb-2 flex-row items-center justify-between gap-3">
+                    <Text className="flex-1 text-[13px] text-secondaryLabel">
+                      This meeting is still recording.
+                    </Text>
+                    <OpenMeetingButton onPress={openMeeting} />
+                  </View>
+                ) : transcriptStatus === 'recording' ? (
                   <Text className="mb-2 text-[13px] text-secondaryLabel">
                     You can edit these notes once the recording stops.
                   </Text>
@@ -1486,8 +1522,11 @@ export default function NoteEditorScreen({
               <View className="min-h-[180px] flex-row items-center gap-3">
                 <ActivityIndicator size="small" color={BRAND} />
                 <Text className="text-[15px] text-secondaryLabel">
-                  {transcriptStatusText(transcriptStatus)}
+                  {isLiveMeetingNote
+                    ? 'This meeting is still recording.'
+                    : transcriptStatusText(transcriptStatus)}
                 </Text>
+                {isLiveMeetingNote ? <OpenMeetingButton onPress={openMeeting} /> : null}
               </View>
             ) : shouldShowTranscriptFailed ? (
               <View className="min-h-[180px] justify-center">

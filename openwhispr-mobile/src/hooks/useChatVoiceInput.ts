@@ -1,3 +1,4 @@
+import { isMeetingRecordingRefusal } from '@/lib/meetingRecordingRefusal';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Alert } from 'react-native';
 import type { AudioRecorder } from 'expo-audio';
@@ -226,7 +227,8 @@ export function useChatVoiceInput({
         }
         return;
       }
-      Alert.alert('Couldn’t hear that', error.message);
+      // A refused start isn't a hearing problem; Home and the editor title it the same neutral way.
+      Alert.alert(isMeetingRecordingRefusal(error) ? 'Error' : 'Couldn’t hear that', error.message);
     },
     // Keep the same slot through consent: a late approval cannot revive a cancelled question.
     onLocalModelMissing: (retryWithCloud, discard) => {
