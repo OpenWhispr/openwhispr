@@ -850,6 +850,7 @@ export default function AgentWindow() {
   const startCall = useCallback(async () => {
     if (refuseIfRestricted()) return;
     if (callSession !== "off" || transcribing) return;
+    openedByTakeRef.current = false;
     if (listening) {
       cancelCaretDelivery();
       cancelTake();

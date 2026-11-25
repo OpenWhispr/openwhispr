@@ -1868,6 +1868,18 @@ test("Call on a take still listening drops it and starts once the take lets go o
   assert.equal(globalThis.__call.starts, 1);
   assert.ok(view.button("End call"));
   assert.deepEqual(globalThis.__chat.sent, [], "what the take heard is never sent");
+
+  // The press no longer owns the window: Esc on a later take only drops it.
+  await React.act(async () => view.button("End call").click());
+  await React.act(async () => view.button("Speak").click());
+  await React.act(async () => globalThis.__voice.set("recording"));
+  await React.act(async () =>
+    view.happyWindow.document.dispatchEvent(
+      new view.happyWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    )
+  );
+  await view.settle();
+  assert.equal(globalThis.__chat.newChats, 0, "the chat stays");
 });
 
 for (const action of ["dismiss", "Stop", "account change", "unmount", "newer request"]) {
