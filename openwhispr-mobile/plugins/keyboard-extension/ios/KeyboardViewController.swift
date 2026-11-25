@@ -1476,8 +1476,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   override func textWillChange(_ textInput: UITextInput?) {
     super.textWillChange(textInput)
     // Moving to another field: its keyboard type may differ (a number pad, a URL row).
-    DispatchQueue.main.async { [weak self] in self?.refreshFieldAwareKeys() }
+    DispatchQueue.main.async { [weak self] in
+      // iOS sends this as the host is covered (Notification Centre, the app switcher) and then
+      // detaches the field: reading its traits after that crashes inside UIKit. viewWillAppear
+      // refreshes the keys when the keyboard comes back.
+      guard let self, self.isKeyboardOnScreen, self.view.window != nil else { return }
+      self.refreshFieldAwareKeys()
+    }
   }
+
+  // Between viewWillAppear and viewWillDisappear: the only time the field may be read from a
+  // deferred block.
+  private var isKeyboardOnScreen = false
 
   override func textDidChange(_ textInput: UITextInput?) {
     super.textDidChange(textInput)
@@ -1492,6 +1502,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // textDidChange when the keyboard opens: shift and the return key follow the field here.
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
+    isKeyboardOnScreen = true
     reloadTypingSettings()
     noteFieldReport()
     syncTypingSessionWithField()
@@ -1555,6 +1566,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   override func viewWillDisappear(_ animated: Bool) {
     super.viewWillDisappear(animated)
+    isKeyboardOnScreen = false
     logRecordMarker("viewWillDisappear")
     directKeyboardWillDisappear()
     stopDeleteRepeating()
