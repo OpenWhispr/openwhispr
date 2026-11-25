@@ -392,8 +392,10 @@ export function RemoveMembersDialog({
           ) : null}
         </div>
       ) : null}
-      {canWipeDevices ? (
-        <div className="flex flex-col gap-1">
+      {/* Its room is held while the preview loads, so Remove can't move under a click meant
+          for Cancel when the box appears. */}
+      {checking || canWipeDevices ? (
+        <div className={cn("flex flex-col gap-1", checking && "invisible")}>
           <Checkbox
             checked={wipeDevices}
             disabled={!canChangeWipeChoice(state) || managedRefusal}

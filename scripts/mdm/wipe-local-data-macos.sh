@@ -126,8 +126,14 @@ remove_if_emptied() {
   printf '%s\0' "$dir" | as_owner rmdir 2>/dev/null
 }
 
-# A file's bytes, read as the home's owner.
-read_as_owner() { printf '%s\0' "$1" | as_owner cat; }
+# A file's bytes, read as the home's owner. It is opened without waiting and
+# read only as a regular file, as the audit writer below opens its file, so a
+# FIFO the user swaps in after the checks can't hold the run.
+read_regular_file='
+  zmodload zsh/system zsh/stat && IFS= read -r -d "" file &&
+  sysopen -r -o nofollow,nonblock -u fd -- "$file" && zstat -H st -f $fd &&
+  (( (st[mode] & 8#170000) == 8#100000 )) && cat <&$fd'
+read_as_owner() { printf '%s\0' "$1" | as_owner_run /bin/zsh -fc "$read_regular_file"; }
 
 # In each folder of the home the notes mirror wrote to, the user's chosen ones
 # included, removes only the files the app's database records it writing there
@@ -136,36 +142,47 @@ read_as_owner() { printf '%s\0' "$1" | as_owner cat; }
 # included, is the user's. The chosen folder itself stays, and nothing is
 # reached through a link out of it. While the home's account exists, the
 # database and the files are read as its owner, so root never opens one they
-# planted. Without one, root reads a copy of the database with its write-ahead
-# log, so the rows still in that log count and a journal left beside it is
-# replayed only into the copy, never into a file it is a hard link to. A
-# recorded file that didn't go, or a record that can't be read, keeps the
+# planted. The database is read from a copy with its write-ahead log, so the
+# rows still in that log count. The copy sits in a folder only root can change,
+# so its reader can't swap in a FIFO there either; the log and its index are
+# made beforehand, since the reader can't make them. A rollback journal beside
+# it can't be replayed there, so with one only a database that keeps no record
+# at all reads: one from before the mirror, which the app hasn't opened since
+# it moved to a write-ahead log. Any other counts as one it can't read.
+# A recorded file that didn't go, or a record that can't be read, keeps the
 # database (keep_database), so a run again still knows which files are the
 # mirror's.
 remove_mirrored_files() {
-  local database="$user_data/transcriptions.db" db snapshot="" suffix read_failed="" before="$failed"
+  local database="$user_data/transcriptions.db" db snapshot suffix journal="" read_failed="" before="$failed"
   local rows base rel kind hash file folder real_base real_dir raw plain skipped="" outside=""
   [[ -f "$database" && ! -L "$database" ]] || return 0
-  db="$database"
-  if [[ -z "$run_as" && $EUID -eq 0 ]]; then
-    snapshot="$(mktemp -d)"
+  [[ ! -e "$database-journal" && ! -L "$database-journal" ]] || journal=1
+  # In /tmp, where the reader can reach it: without a template, macOS's mktemp
+  # makes it in root's own temp folder, which only root can enter.
+  if snapshot="$(mktemp -d /tmp/openwhispr-wipe.XXXXXXXX)"; then
     # Never left behind, even by a run that is stopped.
     trap 'rm -rf "$snapshot"' EXIT
     db="$snapshot/transcriptions.db"
-    for suffix in "" -wal -journal; do
+    : >"$db-wal" && : >"$db-shm" || read_failed=1
+    for suffix in "" -wal; do
       [[ -f "$database$suffix" && ! -L "$database$suffix" ]] || continue
-      cp "$database$suffix" "$db$suffix" || read_failed=1
+      read_as_owner "$database$suffix" >"$db$suffix" || read_failed=1
     done
-  fi
-  # A version from before the mirror kept its record names no file. Not
-  # read-only: macOS's sqlite3 can't open a WAL database that way once its app
-  # has closed it.
-  [[ -z "$read_failed" ]] && rows="$(as_owner_run sqlite3 "$db" \
-    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'note_mirror_files'")" &&
-    { [[ -z "$rows" ]] || rows="$(as_owner_run sqlite3 -ascii "$db" \
-      "SELECT base_path, rel_path, kind, content_hash FROM note_mirror_files ORDER BY base_path")"; } ||
+    # Only then can the reader reach the folder, and no one else the copy.
+    chmod 600 "$snapshot"/* && chmod 711 "$snapshot" || read_failed=1
+    [[ -z "$run_as" ]] || chown "$owner_uid" "$snapshot"/* || read_failed=1
+    # A version from before the mirror kept its record names no file. Opened
+    # read-write, since macOS's sqlite3 can't open a WAL database read-only once
+    # its app has closed it, but never created, so a copy gone missing fails.
+    [[ -z "$read_failed" ]] && rows="$(as_owner_run sqlite3 -init /dev/null "file:$db?mode=rw" \
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'note_mirror_files'")" &&
+      { [[ -z "$rows" ]] || { [[ -z "$journal" ]] && rows="$(as_owner_run sqlite3 -init /dev/null -ascii "file:$db?mode=rw" \
+        "SELECT base_path, rel_path, kind, content_hash FROM note_mirror_files ORDER BY base_path")"; }; } ||
+      read_failed=1
+    rm -rf "$snapshot" && trap - EXIT
+  else
     read_failed=1
-  [[ -z "$snapshot" ]] || { rm -rf "$snapshot" && trap - EXIT; }
+  fi
   if [[ -n "$read_failed" ]]; then
     echo "Could not read the notes mirror's record in $database" >&2
     failed=1
@@ -292,6 +309,12 @@ record_wipe() {
 
 console_user=""
 [[ $EUID -eq 0 ]] && console_user="$(stat -f %Su /dev/console)"
+
+# Copies of a database left by a run killed while reading it (see
+# remove_mirrored_files).
+for leftover in /tmp/openwhispr-wipe.*; do
+  if [[ -d "$leftover" && ! -L "$leftover" && -O "$leftover" ]]; then rm -rf "$leftover" 2>/dev/null || true; fi
+done
 
 kept=("${kept_user_data[@]}")
 cache_kept=()

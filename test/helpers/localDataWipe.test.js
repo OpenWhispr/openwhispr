@@ -30,6 +30,7 @@ test.beforeEach(() => {
     cacheRoot: path.join(root, "cache-root"),
     temp: [path.join(root, "temp")],
     sharedTemp: [path.join(root, "shared-temp")],
+    mounts: [],
     bridgeFile: path.join(root, "home", ".openwhispr", "cli-bridge.json"),
     // XDG_CACHE_HOME's folder, outside the home cache.
     portalTokenFile: path.join(root, "xdg-cache", "openwhispr", "portal-paste-token"),
@@ -228,6 +229,73 @@ test(
   }
 );
 
+// A notes folder the user deleted, its parent too, took its notes with it. One
+// on a drive that isn't connected still holds them: it is reported, and the
+// database still goes, since keeping it would keep every note on the device.
+test("a deleted notes folder wipes, and one on a drive that isn't connected is reported", async () => {
+  const deleted = path.join(root, "Dropbox", "Vault");
+  mirrorWrote(roots.userData, deleted, "Personal/1-a.md", mirrored(1));
+  fs.rmSync(path.join(root, "Dropbox"), { recursive: true });
+  assert.deepEqual(await removeLocalData({ includeModels: false, roots }), []);
+  assert.equal(exists(roots.userData, "transcriptions.db"), false);
+
+  // A vault at the root of a drive, ejected.
+  const volumes = path.join(root, "Volumes");
+  const drive = path.join(volumes, "USB");
+  mirrorWrote(roots.userData, drive, "Personal/2-b.md", mirrored(2));
+  const recorded = fs.realpathSync(drive);
+  roots.mounts = [fs.realpathSync(volumes)];
+  fs.renameSync(drive, path.join(root, "ejected"));
+  assert.deepEqual(await removeLocalData({ includeModels: false, roots }), [
+    `notes mirror: The notes folder ${recorded} can't be reached`,
+  ]);
+  assert.equal(exists(roots.userData, "transcriptions.db"), false);
+  assert.deepEqual(await removeLocalData({ includeModels: false, roots }), []);
+});
+
+// Not every unreachable drive says "not found": Windows answers UNKNOWN for a
+// share it can't reach.
+test(
+  "a notes folder on a drive that fails another way is reported the same",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async () => {
+    const volumes = path.join(root, "Volumes");
+    const share = path.join(volumes, "Share");
+    mirrorWrote(roots.userData, path.join(share, "Vault"), "3-c.md", mirrored(3));
+    const recorded = fs.realpathSync(path.join(share, "Vault"));
+    roots.mounts = [fs.realpathSync(volumes)];
+    fs.chmodSync(share, 0o000);
+    try {
+      assert.deepEqual(await removeLocalData({ includeModels: false, roots }), [
+        `notes mirror: The notes folder ${recorded} can't be reached`,
+      ]);
+      assert.equal(exists(roots.userData, "transcriptions.db"), false);
+    } finally {
+      fs.chmodSync(share, 0o755);
+    }
+  }
+);
+
+// getCacheRoot() falls back on Windows to a folder every account there writes in.
+test(
+  "on Windows, a model this user may not delete in the separate model cache root is another account's",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async () => {
+    const models = path.join(roots.cacheRoot, "whisper-models");
+    seed(path.join(models, "other.bin"));
+    fs.chmodSync(models, 0o555);
+    const { getuid } = process;
+    process.getuid = undefined;
+    try {
+      assert.deepEqual(await removeLocalData({ includeModels: true, roots }), []);
+      assert.equal(exists(models, "other.bin"), true);
+    } finally {
+      process.getuid = getuid;
+      fs.chmodSync(models, 0o755);
+    }
+  }
+);
+
 function launchHarness({ snapshot, readError, clearBrowserData = async () => {}, env = {} } = {}) {
   const calls = [];
   const options = {
@@ -366,6 +434,17 @@ test("only a production build deletes the keyring master key every channel share
   assert.equal(await staging.wipe(), true);
   assert.equal(staging.calls.includes("master key"), false);
   assert.equal(exists(roots.userData, "transcriptions.db"), false);
+
+  // .env may name the channel too, and its values are dropped before the relaunch.
+  seedDevice();
+  fs.rmSync(path.join(roots.userData, ".env"), { recursive: true });
+  seed(path.join(roots.userData, ".env"), "OPENWHISPR_CHANNEL=staging\n");
+  const named = launchHarness({
+    snapshot: managed("offboard-2"),
+    env: { OPENWHISPR_CHANNEL: "staging" },
+  });
+  assert.equal(await named.wipe(), true);
+  assert.equal(named.calls.includes("master key"), false);
 });
 
 test("an unreadable or rejected policy, or one without a token, never wipes", async () => {
@@ -997,6 +1076,9 @@ test(
     new (require("better-sqlite3"))(path.join(olderData, "transcriptions.db"))
       .exec("CREATE TABLE notes (id INTEGER)")
       .close();
+    // A rollback journal beside it can't be replayed into the copy the record
+    // is read from, which matters only to a database that keeps one.
+    seed(path.join(olderData, "transcriptions.db-journal"), "journal");
     run(older);
     // Each wipe is recorded in the home's audit log, as the app records its own.
     const recorded = (data) =>
@@ -1035,6 +1117,17 @@ test(
       "transcriptions.db",
     ]);
     assert.equal(recorded(corruptData)[0].reason, "incomplete");
+    const journaled = path.join(root, "journaled-home");
+    const journaledData = path.join(journaled, "Library", "Application Support", "OpenWhispr");
+    mirrorWrote(journaledData, path.join(journaled, "Vault"), "1-a.md", mirrored(1));
+    seed(path.join(journaledData, "transcriptions.db-journal"), "journal");
+    assert.throws(
+      () => run(journaled),
+      (error) =>
+        error.status === 1 && error.stderr.includes("Could not read the notes mirror's record")
+    );
+    assert.equal(exists(journaled, "Vault", "1-a.md"), true);
+    assert.equal(exists(journaledData, "transcriptions.db"), true);
     assert.deepEqual(
       recorded(userData).map((line) => line.trigger),
       ["script"]

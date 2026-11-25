@@ -346,6 +346,9 @@ test("checking shows a disabled primary", async (t) => {
   assert.equal(props.primary.disabled, true);
   assert.equal(props.primary.pending, true);
   assert.match(view.text(), /workspaces\.removeMembers\.body/);
+  // The wipe box's room is held, unseen, so the buttons don't move once it can show.
+  const hint = findById(view.container, globalThis.__checkboxProps.describedBy);
+  assert.ok(hint.parentNode.attributes.class.split(" ").includes("invisible"));
 });
 
 test("a failed preview offers the plain confirm", async (t) => {

@@ -4803,7 +4803,7 @@
       },
       "localDataWiped": {
         "title": "La tua organizzazione ha rimosso i dati di OpenWhispr da questo dispositivo",
-        "description": "Sei stato rimosso dallo spazio di lavoro della tua organizzazione, quindi OpenWhispr ha eliminato ciò che conservava su questo dispositivo ed è ripartito da zero."
+        "description": "Sei stato rimosso dall'area di lavoro della tua organizzazione, quindi OpenWhispr ha eliminato ciò che conservava su questo dispositivo ed è ripartito da zero."
       },
       "cleanupFailed": {
         "title": "Pulizia non riuscita",

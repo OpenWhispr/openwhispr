@@ -222,8 +222,9 @@ function createWorkspacePolicyManager({
   }
 
   // The removals a verdict lists, less any from a workspace the same verdict
-  // says manages the account: the API reads the two apart, so a rejoin between
-  // the reads can name a workspace in both, and the next lookup settles it.
+  // says manages the account: the API reads the two apart, so a removal (or,
+  // read side by side by an older API, a rejoin) between the reads can name a
+  // workspace in both, and the next lookup settles it.
   function listedRemovals(data) {
     const managing = data.managed && Array.isArray(data.managedBy) ? data.managedBy : [];
     return Array.isArray(data.workspaceRemovals)

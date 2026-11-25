@@ -37,17 +37,36 @@ $modelUserData = @("installed-models.json")
 $modelCache = @("whisper-models", "parakeet-models", "diarization-models", "models", "whisper-vad", "embedding-models")
 $tempPrefixes = @("ow-", "openwhispr-", "whisper-input-", "whisper-output-", "parakeet-", "enterprise-buffer-", "enterprise-chunks-", "kwin-active-class-")
 
+# A name ending in a character Windows can drop from a name (a dot or space)
+# or Windows PowerShell's .NET from the end of a path (a no-break space, U+0085
+# too). The script could look at such a name as one entry and go through it as
+# another, say a junction beside it, so it never does either.
+$trimmable = '[. \u0085\u00A0]$'
+
 # Whether Path is inside Root with no junction or symbolic link on the way:
 # running as SYSTEM, a link a user made must never lead the script elsewhere.
+# So each folder is looked at from Root down, one name at a time, before
+# anything goes through it (resolving Path whole would first read every folder
+# of a path with a "~" in it), and Root, which every caller gives in full, isn't
+# resolved. A $trimmable name is refused, as are "." and "..". $null when no
+# folder is at Path and no link is on the way to it.
 function Test-RealFolder([string]$Path, [string]$Root) {
-  $full = [IO.Path]::GetFullPath($Path)
-  $top = [IO.Path]::GetFullPath($Root).TrimEnd("\")
-  if (-not $full.StartsWith("$top\", [StringComparison]::OrdinalIgnoreCase)) { return $false }
-  $item = Get-Item -LiteralPath $full -Force -ErrorAction SilentlyContinue
-  if (-not ($item -is [IO.DirectoryInfo])) { return $false }
-  while ($item -and $item.FullName.TrimEnd("\").Length -gt $top.Length) {
-    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { return $false }
-    $item = $item.Parent
+  $at = $Root.Replace("/", "\").TrimEnd("\")
+  $target = $Path.Replace("/", "\").TrimEnd("\")
+  if (-not $target.StartsWith("$at\", [StringComparison]::OrdinalIgnoreCase)) { return $false }
+  try {
+    foreach ($name in $target.Substring($at.Length + 1).Split("\")) {
+      if ($name -eq "" -or $name -match $trimmable) { return $false }
+      $at = "$at\$name"
+      $folder = New-Object IO.DirectoryInfo $at
+      # Read before Exists, which is false for a link to a file, one Windows
+      # still goes through; -1, every bit set, is nothing there.
+      $attributes = [int]$folder.Attributes
+      if ($attributes -ne -1 -and ($attributes -band [int][IO.FileAttributes]::ReparsePoint)) { return $false }
+      if (-not $folder.Exists) { return $null }
+    }
+  } catch {
+    return $false
   }
   return $true
 }
@@ -73,6 +92,7 @@ function Remove-Tree([IO.FileSystemInfo]$Item) {
 $failed = $false
 function Remove-Entry([IO.FileSystemInfo]$Item) {
   try {
+    if ($Item.Name -match $trimmable) { throw "its name ends in a dot or space" }
     Remove-Tree $Item
   } catch {
     Write-Warning "Could not remove $($Item.FullName): $($_.Exception.Message)"
@@ -88,8 +108,9 @@ $auditFile = '^meeting-audit-.+-\d{4}-\d{2}-\d{2}\.jsonl$'
 # way to it; everything else in that folder goes. One reached through a
 # junction or link is skipped and reported.
 function Remove-AllExcept([string]$Dir, [string]$Root, [string[]]$Keep, [string]$Audit) {
-  if (-not (Test-RealFolder $Dir $Root)) {
-    if (Test-Path -LiteralPath $Dir) {
+  $real = Test-RealFolder $Dir $Root
+  if (-not $real) {
+    if ($null -ne $real) {
       Write-Warning "Skipped $($Dir): it is reached through a junction or link"
       $script:failed = $true
     }
@@ -201,9 +222,9 @@ function Remove-IfEmptied([string]$Dir) {
 # again.
 function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
   $database = Join-Path $UserData "transcriptions.db"
+  if (-not (Test-RealFolder $UserData $ProfilePath)) { return $false }
   $source = Get-Item -LiteralPath $database -Force -ErrorAction SilentlyContinue
-  if (-not (Test-RealFolder $UserData $ProfilePath) -or -not ($source -is [IO.FileInfo]) -or
-    ($source.Attributes -band [IO.FileAttributes]::ReparsePoint)) { return $false }
+  if (-not ($source -is [IO.FileInfo]) -or ($source.Attributes -band [IO.FileAttributes]::ReparsePoint)) { return $false }
   $security = New-Object Security.AccessControl.DirectorySecurity
   $security.SetAccessRuleProtection($true, $false)
   foreach ($sid in "S-1-5-18", "S-1-5-32-544") {
@@ -240,28 +261,41 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
   $vacated = @{}
   $skipped = $null
   $outside = $null
+  $unsafe = $false
   foreach ($row in $rows) {
     $base, $rel, $kind, $hash = $row
+    $base = $base.Replace("/", "\").TrimEnd("\")
     # As SYSTEM the script never leaves the profile, not even to look (a share
     # would get the device's credentials), so this is decided from the path as
-    # recorded, before anything resolves it, and again once ".." is resolved. A
-    # notes folder outside the profile is reported for you to clean, and the
-    # database still goes, since keeping it would keep every note.
-    if ($base.StartsWith("$profileRoot\", [StringComparison]::OrdinalIgnoreCase)) { $base = & $fullPath $base }
-    if (-not $base.StartsWith("$profileRoot\", [StringComparison]::OrdinalIgnoreCase)) {
+    # recorded (a real path, so with no "." or ".." in it), before anything
+    # reads or resolves it. A notes folder outside the profile is reported for
+    # you to clean, and the database still goes, since keeping it would keep
+    # every note.
+    $names = $base.Split("\")
+    if (-not $base.StartsWith("$profileRoot\", [StringComparison]::OrdinalIgnoreCase) -or
+      $names -contains "." -or $names -contains "..") {
       if ($base -ne $outside) { Write-Warning "Skipped $($base): it is outside $ProfilePath" }
       $outside = $base
       continue
     }
-    if (-not (Test-Path -LiteralPath $base -PathType Container)) { continue }
+    $file = "$base\$($rel.Replace("/", "\"))"
+    # One under a $trimmable name, the notes folder's own included, can't be
+    # reached safely: reported and left, like a notes folder outside the profile.
+    if (@($file.Substring($profileRoot.Length + 1).Split("\") | Where-Object { $_ -notmatch '^\.\.?$' -and $_ -match $trimmable }).Count) {
+      Write-Warning "Skipped $($file): a name on its way ends in a dot or space"
+      $unsafe = $true
+      continue
+    }
+    $real = Test-RealFolder $base $ProfilePath
+    # Gone: the user deleted it.
+    if ($null -eq $real) { continue }
     # A junction or link put on its way isn't the folder the mirror wrote to.
-    if (-not (Test-RealFolder $base $ProfilePath)) {
+    if (-not $real) {
       if ($base -ne $skipped) { Write-Warning "Skipped $($base): it now leads elsewhere" }
       $skipped = $base
       $leftBehind = $true
       continue
     }
-    $file = [IO.Path]::GetFullPath((Join-Path $base ($rel -replace "/", "\")))
     # A folder directory it made, gone with the folders below once empty; never
     # the notes folder itself.
     if ($kind -eq "dir") {
@@ -270,8 +304,7 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
       continue
     }
     $dir = Split-Path $file
-    if (-not $file.StartsWith("$base\", [StringComparison]::OrdinalIgnoreCase) -or
-      ($dir -ne $base -and -not (Test-RealFolder $dir $base))) { continue }
+    if ($dir -ne $base -and -not (Test-RealFolder $dir $base)) { continue }
     $item = Get-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
     if (-not ($item -is [IO.FileInfo])) { continue }
     # A link put in its place, or a sync client's placeholder (OneDrive Files
@@ -307,7 +340,7 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
       # Gone already, or not ours to remove.
     }
   }
-  if ($leftBehind -or $outside) { $script:failed = $true }
+  if ($leftBehind -or $outside -or $unsafe) { $script:failed = $true }
   return $leftBehind
 }
 
@@ -400,7 +433,7 @@ function Write-WipeRecord([string]$User, [string]$Audit, [string]$UserData, [str
     appVersion = $null; deviceUser = $User
   } | ConvertTo-Json -Compress
   $default = Join-Path $UserData "audit"
-  $dirs = @(if ($Audit -and -not $someoneSignedIn) { $Audit }) + $default
+  $dirs = @(if ($Audit -and -not $someoneSignedIn) { & $fullPath $Audit }) + $default
   foreach ($dir in $dirs) {
     try {
       if ($dir -ne $default -and -not (Test-RealFolder $dir ([IO.Path]::GetPathRoot($dir)))) { continue }
@@ -450,7 +483,9 @@ if ($sharedExists -and $someoneSignedIn) {
 $sharedFailed = $failed
 
 foreach ($profilePath in $profilePaths) {
-  $sid = $profileSids[(& $fullPath $profilePath)]
+  # As Test-RealFolder compares it with paths built on it.
+  $profilePath = & $fullPath $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($profilePath)
+  $sid = $profileSids[$profilePath]
   if ($sid -and $signedIn -contains $sid) {
     Write-Warning "Skipped $($profilePath): its user is signed in. Run again after they sign out."
     $script:failed = $true
@@ -465,11 +500,12 @@ foreach ($profilePath in $profilePaths) {
   # Marked before anything goes, so a run cut short leaves the app to finish the
   # wipe before it opens (SCRIPT_WIPE_MARKER in localDataWipe.js); a run that
   # finishes takes the mark. One that can't be marked is left as it is.
-  $hadData = Test-Path -LiteralPath $userData
+  $dataFolder = Test-RealFolder $userData $profilePath
+  $hadData = $null -ne $dataFolder
   $marker = Join-Path $userData "local-data-wipe.pending"
   if ($hadData) {
     try {
-      if (-not (Test-RealFolder $userData $profilePath)) { throw "it is a link or leads out of the profile" }
+      if (-not $dataFolder) { throw "it is a link or leads out of the profile" }
       # One an earlier run left stays; anything else at its name goes.
       $existing = Get-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
       if ($existing -and ($existing -isnot [IO.FileInfo] -or ($existing.Attributes -band [IO.FileAttributes]::ReparsePoint))) {

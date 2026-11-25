@@ -5144,7 +5144,7 @@
       },
       "localDataWiped": {
         "title": "Deine Organisation hat die OpenWhispr-Daten auf diesem Gerät entfernt",
-        "description": "Du wurdest aus dem Arbeitsbereich deiner Organisation entfernt. Deshalb hat OpenWhispr alles gelöscht, was auf diesem Gerät gespeichert war, und startet neu."
+        "description": "Du wurdest aus dem Workspace deiner Organisation entfernt. Deshalb hat OpenWhispr alles gelöscht, was auf diesem Gerät gespeichert war, und startet neu."
       },
       "cleanupFailed": {
         "title": "Bereinigung fehlgeschlagen",

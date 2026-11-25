@@ -113,6 +113,10 @@ function defaultRoots() {
     temp: [os.tmpdir()],
     // getSafeTempDir()'s fallback on Windows, which every account there writes in.
     sharedTemp: path.resolve(safeTemp) === path.resolve(os.tmpdir()) ? [] : [safeTemp],
+    // Where macOS and Linux mount removable and network drives (GNOME's under
+    // /run/user/<uid>/gvfs).
+    mounts:
+      process.platform === "win32" ? [] : ["/Volumes", "/media", "/run/media", "/mnt", "/run/user"],
     bridgeFile: getBridgeFilePath(),
     // Where clipboard.js keeps the Linux portal's paste permission.
     portalTokenFile: path.join(
@@ -229,7 +233,20 @@ async function removeLocalData({ includeModels, roots = defaultRoots(), auditLog
     try {
       require("./markdownMirror").removeMirroredFiles(basePath, entries);
     } catch (error) {
-      if (error.code === "ENOENT") continue;
+      // One on a drive or share that isn't connected, whatever error that
+      // gives (an unreachable Windows share isn't ENOENT), still holds its
+      // notes, so it is reported, but the database still goes: kept until the
+      // drive is back, which it may never be, it would keep every note here.
+      // Any other notes folder that is gone took its notes with it.
+      const unplugged =
+        !fs.existsSync(path.parse(basePath).root) ||
+        (roots.mounts.some((mount) => basePath.startsWith(`${mount}${path.sep}`)) &&
+          !fs.existsSync(basePath));
+      if (unplugged) {
+        errors.push(`notes mirror: The notes folder ${basePath} can't be reached`);
+        continue;
+      }
+      if (error.code === "ENOENT" && !fs.existsSync(basePath)) continue;
       errors.push(`notes mirror: ${error.message}`);
       keepDatabase = true;
     }
@@ -253,7 +270,12 @@ async function removeLocalData({ includeModels, roots = defaultRoots(), auditLog
   await Promise.all([
     ...userDataEntries.map((name) => remove(name, path.join(roots.userData, name))),
     ...homeCacheEntries.map((name) => remove(name, path.join(roots.homeCache, name))),
-    ...cacheRootEntries.map((name) => remove(name, path.join(roots.cacheRoot, name))),
+    // On Windows that root is getCacheRoot()'s fallback, which every account
+    // there writes in, or OPENWHISPR_CACHE_ROOT's: as in the shared temp folder,
+    // a model this user may not delete is another's.
+    ...cacheRootEntries.map((name) =>
+      remove(name, path.join(roots.cacheRoot, name), { othersMayOwn: !process.getuid })
+    ),
     remove("cli-bridge.json", roots.bridgeFile),
     remove("portal-paste-token", roots.portalTokenFile),
     ...roots.temp.map((directory) => removeTempFiles(directory, remove)),
@@ -413,6 +435,11 @@ async function wipeLocalDataOnLaunch({
   } catch {
     /* No settings saved yet. */
   }
+  // Every channel on the device shares the keyring key, but only production is
+  // the app IT manages: a staging or dev build acting on the same token later
+  // must not delete the key the next production user's saved keys now depend
+  // on. Read before the .env values go, since .env may name the channel too.
+  const production = (env.OPENWHISPR_CHANNEL ?? "production") === "production";
   // The open log file is in the wipe, and Windows can't delete an open file.
   logger.close();
   const errors = await removeLocalData({
@@ -432,10 +459,7 @@ async function wipeLocalDataOnLaunch({
       errors.push(`${name}: ${error.message}`);
     }
   }
-  // Every channel on the device shares the key, but only production is the app
-  // IT manages: a staging or dev build acting on the same token later must not
-  // delete the key the next production user's saved keys now depend on.
-  if ((env.OPENWHISPR_CHANNEL ?? "production") === "production") deleteMasterKey();
+  if (production) deleteMasterKey();
   // The marker goes before the end record, so a crash between the two leaves
   // the saved settings for the retry.
   if (errors.length === 0) {
