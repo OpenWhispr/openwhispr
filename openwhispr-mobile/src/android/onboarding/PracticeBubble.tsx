@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path } from 'react-native-svg';
 import Animated, {
@@ -53,7 +53,8 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 /**
  * The practice bubble, drawn to match the real one (Variant 1): the app icon when idle; brand glass
- * with bars that follow the voice while listening, and a ✕ beside it; three dots while writing.
+ * with bars that follow the voice while listening, and a ✕ beside it; three dots under a turning rim
+ * arc while writing.
  * a ✓ once the words are in. Tapping the listening bubble stops and inserts. With [onHold], holding
  * fills a brand-blue ring (V3) and opens the menu after 400 ms, as on the real bubble; [onHoldStart]
  * and [onHoldCancel] let the screen say "Keep holding…" while the ring fills.
@@ -232,6 +233,13 @@ export function PracticeBubble({
 // the microphone level every frame with a gentle wobble, never flat. Same -60…-20 dBFS level.
 const BAR_SHAPE = [0.55, 0.85, 1, 0.85, 0.55];
 const BAR_MAX = SIZE * 0.39;
+// Writing, as on the real bubble (BubbleFace): the logo's three bars (5 dp wide, 10 apart on a 52 dp
+// bubble) as dots 1.15x their width, under a rim arc 0.58x their width.
+const UNIT = SIZE / 52;
+const LOGO_BAR_WIDTH = 5 * UNIT;
+const LOGO_BAR_SPACING = 10 * UNIT;
+const DOT_SIZE = LOGO_BAR_WIDTH * 1.15;
+const ARC_WIDTH = LOGO_BAR_WIDTH * 0.58;
 
 function useLevel() {
   const target = useSharedValue(0);
@@ -294,19 +302,42 @@ function Bar({
   return <Animated.View style={[b.bar, style]} />;
 }
 
-// Three white dots that ripple, 900 ms a cycle, 120 ms apart.
+// Writing: the three bars as dots rippling 900 ms a cycle, 120 ms apart, and a 70° rim arc that
+// turns every 1.2 s, as on the real bubble.
 function Dots({ still }: { still: boolean }) {
   const b = useStyles();
   const clock = useSharedValue(0);
   useFrameCallback((frame) => {
     if (!still) clock.value = frame.timeSinceFirstFrame;
   });
+  const arcStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${((clock.value % 1200) / 1200) * 360 - 90}deg` }],
+  }));
+  const radius = SIZE / 2 - ARC_WIDTH;
+  const circumference = 2 * Math.PI * radius;
   return (
-    <View style={b.dots} accessible={false}>
-      {[0, 1, 2].map((index) => (
-        <Dot key={index} index={index} clock={clock} />
-      ))}
-    </View>
+    <>
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, arcStyle]}>
+        <Svg width={SIZE} height={SIZE}>
+          <Circle
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={radius}
+            stroke={bubble.onGlass}
+            strokeOpacity={0.85}
+            strokeWidth={ARC_WIDTH}
+            strokeLinecap="round"
+            strokeDasharray={`${(circumference * 70) / 360} ${circumference}`}
+            fill="none"
+          />
+        </Svg>
+      </Animated.View>
+      <View style={b.dots} accessible={false}>
+        {[0, 1, 2].map((index) => (
+          <Dot key={index} index={index} clock={clock} />
+        ))}
+      </View>
+    </>
   );
 }
 
@@ -315,7 +346,7 @@ function Dot({ index, clock }: { index: number; clock: SharedValue<number> }) {
   const style = useAnimatedStyle(() => {
     const t = (((clock.value - index * 120) % 900) + 900) % 900;
     const lift = Math.max(0, Math.sin((t / 900) * 2 * Math.PI));
-    return { transform: [{ translateY: -lift * 3 }] };
+    return { transform: [{ translateY: -lift * SIZE * 0.06 }] };
   });
   return <Animated.View style={[b.dot, style]} />;
 }
@@ -362,6 +393,11 @@ const useStyles = makeStyles((t) => ({
   },
   bars: { flexDirection: 'row', alignItems: 'center', gap: 3, height: BAR_MAX },
   bar: { width: 3.4, borderRadius: 2, backgroundColor: bubble.onGlass },
-  dots: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: bubble.onGlass },
+  dots: { flexDirection: 'row', alignItems: 'center', gap: LOGO_BAR_SPACING - DOT_SIZE },
+  dot: {
+    width: DOT_SIZE,
+    height: DOT_SIZE,
+    borderRadius: DOT_SIZE / 2,
+    backgroundColor: bubble.onGlass,
+  },
 }));
