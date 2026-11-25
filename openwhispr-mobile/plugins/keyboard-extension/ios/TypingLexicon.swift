@@ -42,6 +42,14 @@ final class TypingLexicon {
     pairs = (base + offsets[5] + 4 * (wordCount + 1)).assumingMemoryBound(to: UInt32.self)
   }
 
+  /// Asks the kernel to read the whole file ahead, so the first lookups after the keyboard
+  /// opens don't each wait on the disk. Only a hint: false when it was refused, and lookups
+  /// work the same either way. Safe off the main thread (the mapping is read-only).
+  @discardableResult
+  func prefetch() -> Bool {
+    madvise(UnsafeMutableRawPointer(mutating: base), data.length, MADV_WILLNEED) == 0
+  }
+
   /// A word's key: lower case, apostrophes dropped ("Don't" → "dont").
   static func key(of word: String) -> [UInt16] {
     var key: [UInt16] = []

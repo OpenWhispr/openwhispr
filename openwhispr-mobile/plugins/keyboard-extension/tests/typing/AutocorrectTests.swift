@@ -9,6 +9,12 @@ extension TypingTests {
     runGermanAutocorrectTests(BenchEnvironment(plugin: plugin, language: .german, layout: .qwertz, split: "dev"))
     runDocumentAndLearningTests(plugin: plugin)
     runSessionTests(BenchEnvironment(plugin: plugin, language: .english, layout: .qwerty, split: "dev"))
+    // The keyboard asks for the word list to be read ahead as it appears.
+    for language in [TypingLanguage.english, .german] {
+      let lexicon = BenchEnvironment(plugin: plugin, language: language, layout: .qwerty, split: "dev").lexicon()
+      check("\(language.rawValue) lexicon accepts the read-ahead hint", lexicon.prefetch())
+      check("\(language.rawValue) lexicon still answers after it", lexicon.id(of: language == .english ? "the" : "der") != nil)
+    }
   }
 
   private static func runDocumentAndLearningTests(plugin: URL) {
