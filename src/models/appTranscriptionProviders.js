@@ -7,7 +7,9 @@ const APP_TRANSCRIPTION_PROVIDERS = [
     name: "ElevenLabs",
     baseUrl: "https://api.elevenlabs.io/v1",
     defaultModel: "scribe_v3",
-    // Upload and Retry use this in place of the Note Recording-only realtime model.
+    // Dictation sends this, and the Upload screen labels it, in place of a realtime or
+    // unlisted selection. Upload and Retry requests go through resolveByokModel instead,
+    // so its ElevenLabs fallback must change with this.
     batchModel: "scribe_v3",
     models: [
       {
@@ -39,11 +41,6 @@ const APP_TRANSCRIPTION_PROVIDERS = [
 // migration, since Retry sends the stored id as-is.
 const UPLOAD_ONLY_MODELS = new Map([["openrouter", ["deepgram/nova-3"]]]);
 
-// Models that stream only in Note Recording, which have no batch endpoint: dictation,
-// onboarding and Audio Upload never offer them. Kept here for the same reason, so the
-// rule holds once a publication lists the model.
-const NOTE_RECORDING_ONLY_MODELS = new Map([["elevenlabs", ["scribe_v3_live"]]]);
-
 export function withAppTranscriptionProviders(catalog) {
   const listed = new Set(catalog.transcriptionProviders.map((provider) => provider.id));
   return {
@@ -61,6 +58,30 @@ export function isUploadOnlyTranscriptionModel(providerId, modelId) {
   return UPLOAD_ONLY_MODELS.get(providerId)?.includes(modelId) ?? false;
 }
 
+// ElevenLabs realtime models stream only in Note Recording and have no batch endpoint:
+// dictation, onboarding and Audio Upload never offer them, and a batch request for one
+// takes the provider default. The catalog has no field for this, so the rule goes by the
+// id, which also holds for a model a publication lists.
 export function isNoteRecordingOnlyTranscriptionModel(providerId, modelId) {
-  return NOTE_RECORDING_ONLY_MODELS.get(providerId)?.includes(modelId) ?? false;
+  return providerId === "elevenlabs" && /_(realtime|live)$/.test(modelId);
+}
+
+/**
+ * The models of one provider that a context lists. Shared by the pickers' lists and the
+ * settings store so neither keeps a model the other hides.
+ *
+ * @template {{ id: string, streaming?: boolean }} Model
+ * @param {string} providerId
+ * @param {readonly Model[]} models
+ * @param {import("../stores/policyRules").TranscriptionPolicyContext} context
+ * @returns {Model[]}
+ */
+export function transcriptionModelsForContext(providerId, models, context) {
+  if (context === "meeting") return models.filter((model) => model.streaming);
+  const batchModels = models.filter(
+    (model) => !isNoteRecordingOnlyTranscriptionModel(providerId, model.id)
+  );
+  if (context === "dictation")
+    return batchModels.filter((model) => !isUploadOnlyTranscriptionModel(providerId, model.id));
+  return batchModels;
 }

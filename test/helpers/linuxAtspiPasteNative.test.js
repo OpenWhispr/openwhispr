@@ -5,12 +5,24 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
-function runNativePasteTest(t, run = spawnSync) {
-  const flags = run(
-    "pkg-config",
-    ["--cflags", "--libs", "atspi-2", "gobject-2.0", "x11", "xtst", "xext"],
-    { encoding: "utf8", timeout: 5000 }
-  );
+const PASTE_FIXTURE = {
+  source: "linuxAtspiPaste.c",
+  packages: ["atspi-2", "gobject-2.0", "x11", "xtst", "xext"],
+  passed: /AT-SPI paste detection and cleanup checks passed/,
+};
+const TEXT_MONITOR_FIXTURE = {
+  source: "linuxTextMonitorAtspi.c",
+  packages: ["atspi-2", "gobject-2.0"],
+  passed: /AT-SPI text monitor connection checks passed/,
+};
+
+// Compiles a test/native fixture, which includes a resources/ helper with libatspi
+// stubbed out, and runs it.
+function runNativeFixture(t, fixture, run) {
+  const flags = run("pkg-config", ["--cflags", "--libs", ...fixture.packages], {
+    encoding: "utf8",
+    timeout: 5000,
+  });
   if (flags.error?.code === "ENOENT") {
     t.skip("pkg-config unavailable");
     return;
@@ -18,16 +30,16 @@ function runNativePasteTest(t, run = spawnSync) {
   assert.ifError(flags.error);
   assert.equal(flags.signal, null, "pkg-config terminated by a signal");
   if (flags.status !== 0) {
-    t.skip("AT-SPI/X11 development libraries unavailable");
+    t.skip(`development libraries unavailable (${fixture.packages.join(", ")})`);
     return;
   }
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-atspi-paste-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-atspi-native-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  const binary = path.join(directory, "linux-atspi-paste");
+  const binary = path.join(directory, "fixture");
   const compiled = run(
     "cc",
     [
-      path.join(__dirname, "../native/linuxAtspiPaste.c"),
+      path.join(__dirname, "../native", fixture.source),
       "-o",
       binary,
       ...flags.stdout.trim().split(/\s+/),
@@ -45,13 +57,24 @@ function runNativePasteTest(t, run = spawnSync) {
   const result = run(binary, [], { encoding: "utf8", timeout: 5000 });
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /AT-SPI paste detection and cleanup checks passed/);
+  assert.match(result.stdout, fixture.passed);
+}
+
+// The default keeps the function's length at 1, so node:test passes no done callback.
+function runNativePasteTest(t, run = spawnSync) {
+  runNativeFixture(t, PASTE_FIXTURE, run);
 }
 
 test(
   "native paste detection skips missing state, preserves classifications, and releases references",
   { skip: process.platform !== "linux", timeout: 30_000 },
   runNativePasteTest
+);
+
+test(
+  "native text monitor starts AT-SPI with direct application connections disabled",
+  { skip: process.platform !== "linux", timeout: 30_000 },
+  (t) => runNativeFixture(t, TEXT_MONITOR_FIXTURE, spawnSync)
 );
 
 for (const code of ["EACCES", "ETIMEDOUT"]) {
