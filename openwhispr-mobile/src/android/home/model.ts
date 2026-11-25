@@ -15,32 +15,6 @@ export function wordSafeLines(text: string): number | undefined {
   return Math.max(1, text.trim().split(/\s+/).length);
 }
 
-/**
- * How far along an upload looks, 0..1. Transcription reports no progress of its own, so this
- * eases towards 90% over a time scaled to the file size, moves into the last stretch once the
- * text is being tidied, and only reaches 100% when the text has arrived.
- */
-export function uploadProgress({
-  elapsedMs,
-  sizeBytes,
-  cleaningMs,
-  done,
-}: {
-  elapsedMs: number;
-  sizeBytes?: number;
-  /** Time since tidying started, or undefined while still transcribing. */
-  cleaningMs?: number;
-  done: boolean;
-}): number {
-  if (done) return 1;
-  const megabytes = (sizeBytes ?? 0) / 1_000_000;
-  const scaleSeconds = Math.min(90, Math.max(4, 3 + megabytes * 2));
-  const transcribing = 0.9 * (1 - Math.exp(-elapsedMs / 1000 / scaleSeconds));
-  if (cleaningMs === undefined) return transcribing;
-  const tidying = 0.75 + 0.2 * (1 - Math.exp(-cleaningMs / 1000 / 3));
-  return Math.max(transcribing, tidying);
-}
-
 export type Permission = 'overlay' | 'accessibility' | 'microphone';
 
 /** Missing permissions in the order the person is asked for them. */

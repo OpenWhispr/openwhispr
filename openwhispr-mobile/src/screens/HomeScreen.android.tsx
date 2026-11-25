@@ -32,8 +32,6 @@ import {
   processAndroidAudio,
   type AndroidJob,
 } from '@/android/pipeline';
-import { useFileUpload } from '@/hooks/useFileUpload.android';
-import { getTranscriptionProvider } from '@/lib/inferenceRouting';
 import { accountRequiredForCloud, showAccountRequiredAlert } from '@/lib/accountAccess';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore';
@@ -41,12 +39,13 @@ import { GlassPill, WordsMeter, openUpgrade } from '@/android/plan/parts';
 import { isLowOnWords } from '@/android/plan/planState';
 import { usePlanT } from '@/android/plan/strings';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
-import { buildUsageGateParams, SUPERWALL_PLACEMENTS } from '@/lib/superwall';
+import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import type { Recording } from '../../modules/android-dictation/src';
 import { useHomeT } from '@/android/home/strings';
 import { AccountAvatar, IconTile, PillButton, SectionHeader, useHome } from '@/android/home/kit';
 import { showToast as showSettingsToast } from '@/android/settings/kit';
 import { BubbleCard } from '@/android/home/BubbleCard';
+import { startUpload } from '@/android/notes/start';
 import { Notch, NOTCH_REACH } from '@/android/home/Notch';
 import { notchAnnouncement, notchStateFor, type NotchModel } from '@/android/home/notchModel';
 import { OlderRecordingsRow, OlderRecordingsSheet } from '@/android/home/OlderRecordings';
@@ -112,7 +111,6 @@ export default function AndroidHome() {
   const action = useRef(false);
   const scroll = useRef<ScrollView>(null);
   useScrollToTop(scroll);
-  const navigationRevision = useRef(0);
   const retryController = useRef<AbortController | null>(null);
   const [working, setWorking] = useState(false);
   // What the processing notch under the bubble card shows, from the moment work starts until
@@ -120,16 +118,13 @@ export default function AndroidHome() {
   const [notch, setNotch] = useState<NotchModel | null>(null);
   const [cardWidth, setCardWidth] = useState(0);
   const [cardHeight, setCardHeight] = useState(0);
-  const [now, setNow] = useState(() => Date.now());
   // Room below the card for the notch: open only while the notch is out, so the sections
   // below move down with it and back up as it leaves.
   const notchSpace = useRef(new Animated.Value(0)).current;
   // Cancelled or failed work slides its notch back; a finished one does after its done state.
   const closeNotch = () =>
     setNotch((current) => current && (current.doneText ? current : { ...current, closing: true }));
-  const uploadDone = useRef(false);
-  const uploadStartedAt = useRef(0);
-  // Set when an upload or dictation finished: take the person to its new History row once
+  // Set when a dictation finished: take the person to its new History row once
   // the progress card has gone. Holds the time the work started, so an older row (history
   // off, nothing saved) is never mistaken for the new one.
   const revealNewest = useRef<number | null>(null);
@@ -142,17 +137,6 @@ export default function AndroidHome() {
     (message: string) => showSettingsToast(message, 'success', undefined, { aboveTabBar: true }),
     [],
   );
-  const { stage, cancel, pickAndTranscribeFile } = useFileUpload({
-    onError: (error) => Alert.alert(t('errorTitle'), error.message),
-    onPicked: (name, size) =>
-      setNotch({ flow: 'upload', name, size, startedAt: Date.now(), doneText: null }),
-    onComplete: () => {
-      uploadDone.current = true;
-      revealNewest.current = uploadStartedAt.current;
-      setNotch((current) => current && { ...current, doneText: h('addedToHistory') });
-    },
-  });
-
   // Try it: record over Home, then transcribe exactly as the bubble does.
   const [recorderOpen, setRecorderOpen] = useState(false);
   const [trying, setTrying] = useState(false);
@@ -213,49 +197,6 @@ export default function AndroidHome() {
   };
   useEffect(() => () => tryController.current?.abort(), []);
 
-  const upload = async () => {
-    if (action.current) return;
-    const startedOnVisit = navigationRevision.current;
-    const provider = getTranscriptionProvider('upload');
-    if (provider === 'cloud' && accountRequiredForCloud(user)) {
-      showAccountRequiredAlert(t('upload'));
-      return;
-    }
-    const begin = async () => {
-      if (action.current || startedOnVisit !== navigationRevision.current) return;
-      action.current = true;
-      setWorking(true);
-      setNotch(null);
-      uploadDone.current = false;
-      uploadStartedAt.current = Date.now();
-      try {
-        await pickAndTranscribeFile();
-      } catch {
-        // The upload hook displayed the error and retained retryable audio.
-      } finally {
-        await applyHistoryRetention().catch(() => undefined);
-        action.current = false;
-        setWorking(false);
-        // A finished upload slides back once its done state has shown; a cancelled or failed
-        // one at once.
-        if (!uploadDone.current) closeNotch();
-      }
-    };
-    if (provider === 'cloud' && user) {
-      try {
-        await register({
-          placement: SUPERWALL_PLACEMENTS.audioUploadStart,
-          params: usage ? buildUsageGateParams(usage) : undefined,
-          requiresAccount: false,
-          feature: () => {
-            void begin();
-          },
-        });
-      } catch (error) {
-        Alert.alert(t('errorTitle'), (error as Error).message);
-      }
-    } else await begin();
-  };
   const retry = async (id: string) => {
     if (action.current) return;
     action.current = true;
@@ -318,11 +259,9 @@ export default function AndroidHome() {
     useCallback(() => {
       void refreshInsights();
       return () => {
-        navigationRevision.current += 1;
-        cancel();
         retryController.current?.abort();
       };
-    }, [cancel, user?.id, syncInsights, historyEnabled]),
+    }, [user?.id, syncInsights, historyEnabled]),
   );
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -360,13 +299,6 @@ export default function AndroidHome() {
   const statsRetry = accountStats && (status === 'offline' || status === 'blocked');
 
   const busy = trying || recorderOpen || working || notch !== null;
-  // The upload ring ticks while the file goes up; nothing else needs a clock.
-  const uploadingNow = notch?.flow === 'upload' && !notch.doneText && stage !== 'cleaning';
-  useEffect(() => {
-    if (!uploadingNow) return;
-    const timer = setInterval(() => setNow(Date.now()), 250);
-    return () => clearInterval(timer);
-  }, [uploadingNow]);
   // If a notch goes without sliding back (new work replacing it), close its room anyway.
   useEffect(() => {
     if (notch !== null) return;
@@ -379,12 +311,8 @@ export default function AndroidHome() {
     animation.start();
     return () => animation.stop();
   }, [notch, notchSpace]);
-  const cancelWork = () => {
-    if (retryController.current) retryController.current.abort();
-    else cancel();
-  };
-  const notchState = notchStateFor(notch, stage, now, h, cancelWork);
-  const announcement = notchAnnouncement(notchState, notch, stage, now, h);
+  const notchState = notchStateFor(notch, h, () => retryController.current?.abort());
+  const announcement = notchAnnouncement(notchState, h);
   useEffect(() => {
     if (announcement) AccessibilityInfo.announceForAccessibility(announcement);
   }, [announcement]);
@@ -501,9 +429,8 @@ export default function AndroidHome() {
               onDictate={() => {
                 void openTryIt();
               }}
-              onUpload={() => {
-                void upload();
-              }}
+              // The same flow as Notes' Upload audio: the file becomes a new note.
+              onUpload={() => startUpload({})}
             />
           </View>
         </Animated.View>
