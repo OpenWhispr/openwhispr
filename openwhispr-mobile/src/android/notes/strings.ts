@@ -240,7 +240,6 @@ export const notesEnglish = {
   reconnecting: 'Reconnecting · {{time}}',
   liveTranscript: 'Live transcript',
   stopAndSave: 'Stop and save',
-  minimise: 'Back to notes',
   notesWhileRecording: 'Jot decisions, follow-ups or context while recording…',
   // Upload (U1)
   transcribing: 'Transcribing',
