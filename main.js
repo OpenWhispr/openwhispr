@@ -343,7 +343,11 @@ const WindowsLoopbackAudioManager = require("./src/helpers/windowsLoopbackAudioM
 const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
 const { createManagedMeetingPolicy } = require("./src/helpers/managedMeetingPolicy");
-const { createManagedDevicePolicy } = require("./src/helpers/managedDevicePolicy");
+const {
+  createManagedDevicePolicy,
+  normalizeDeviceValues,
+  readDeviceValues,
+} = require("./src/helpers/managedDevicePolicy");
 const { createMeetingAuditLog } = require("./src/helpers/meetingAuditLog");
 const { wipeLocalDataOnLaunch } = require("./src/helpers/localDataWipe");
 const { installManagedNetworkGuard } = require("./src/helpers/devicePolicyNetwork");
@@ -368,6 +372,9 @@ let diarizationManager = null;
 let trayManager = null;
 let updateManager = null;
 let managedDevicePolicy = null;
+// The launch's one read of the device policy, for the launch wipe and then the
+// device policy's first snapshot.
+let launchDeviceRead = null;
 let meetingAuditLog = null;
 let globeKeyManager = null;
 let windowsKeyManager = null;
@@ -676,7 +683,13 @@ function initializeCoreManagers() {
   );
   appleCalendarManager = new AppleCalendarManager(databaseManager, calendarReminderScheduler);
   const meetingProcessDetector = new MeetingProcessDetector();
-  managedDevicePolicy = createManagedDevicePolicy();
+  managedDevicePolicy = createManagedDevicePolicy({
+    read: () => {
+      const read = launchDeviceRead ?? readDeviceValues();
+      launchDeviceRead = null;
+      return read;
+    },
+  });
   const managedMeetingPolicy = createManagedMeetingPolicy({
     getSnapshot: () => managedDevicePolicy.getSnapshot(),
   });
@@ -1308,10 +1321,13 @@ async function startApp() {
   // fresh install. One that leaves something behind keeps the app closed, so
   // nothing opens what is left, and the next launch tries again.
   let wiped;
+  launchDeviceRead = readDeviceValues();
+  launchDeviceRead.catch(() => {});
   try {
     wiped = await wipeLocalDataOnLaunch({
       userDataPath: app.getPath("userData"),
       appVersion: app.getVersion(),
+      readDevicePolicy: async () => normalizeDeviceValues(await launchDeviceRead),
       clearBrowserData: () =>
         Promise.all([
           session.defaultSession.clearStorageData(),

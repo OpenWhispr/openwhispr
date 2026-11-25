@@ -144,7 +144,7 @@ read_as_owner() { printf '%s\0' "$1" | as_owner cat; }
 # mirror's.
 remove_mirrored_files() {
   local database="$user_data/transcriptions.db" db snapshot="" suffix read_failed="" before="$failed"
-  local rows base rel hash file folder real_base real_dir raw plain
+  local rows base rel kind hash file folder real_base real_dir raw plain skipped="" outside=""
   [[ -f "$database" && ! -L "$database" ]] || return 0
   db="$database"
   if [[ -z "$run_as" && $EUID -eq 0 ]]; then
@@ -163,7 +163,7 @@ remove_mirrored_files() {
   [[ -z "$read_failed" ]] && rows="$(as_owner_run sqlite3 "$db" \
     "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'note_mirror_files'")" &&
     { [[ -z "$rows" ]] || rows="$(as_owner_run sqlite3 -ascii "$db" \
-      "SELECT base_path, rel_path, content_hash FROM note_mirror_files WHERE kind != 'dir'")"; } ||
+      "SELECT base_path, rel_path, kind, content_hash FROM note_mirror_files ORDER BY base_path")"; } ||
     read_failed=1
   [[ -z "$snapshot" ]] || { rm -rf "$snapshot" && trap - EXIT; }
   if [[ -n "$read_failed" ]]; then
@@ -172,36 +172,52 @@ remove_mirrored_files() {
     keep_database=1
     return 0
   fi
-  while IFS=$'\x1f' read -r -d $'\x1e' base rel hash; do
+  while IFS=$'\x1f' read -r -d $'\x1e' base rel kind hash; do
     [[ "$base" == /* ]] || continue
+    # Run as root, the script never leaves the home, not even to look: a notes
+    # folder outside it, by its path as recorded (a real path, so with no "." or
+    # ".." in it), is reported for you to clean, and the database still goes,
+    # since keeping it would keep every note.
+    if [[ "$base" != "$home_real"/* || "$base/" == */../* || "$base/" == */./* ]]; then
+      [[ "$base" == "$outside" ]] || echo "Skipped $base: it is outside $home" >&2
+      outside="$base"
+      continue
+    fi
     real_base="$(cd -P "$base" 2>/dev/null && pwd)" || continue
     # The record names the folder by its real path: one that now leads
     # elsewhere (a link put in its place) isn't the folder the mirror wrote to.
     if [[ "$real_base" != "$base" ]]; then
-      echo "Skipped $base: it now leads elsewhere" >&2
+      [[ "$base" == "$skipped" ]] || echo "Skipped $base: it now leads elsewhere" >&2
+      skipped="$base"
       failed=1
       continue
     fi
-    [[ "$real_base" == "$home_real"/* ]] || continue
     file="$base/$rel"
-    real_dir="$(cd -P "$(dirname "$file")" 2>/dev/null && pwd)" || continue
-    [[ "$real_dir" == "$real_base" || "$real_dir" == "$real_base"/* ]] || continue
-    [[ -f "$file" && ! -L "$file" ]] || continue
-    # One it can't read may still hold what it wrote: a failure, not an edit.
-    raw="$(read_as_owner "$file" | openssl dgst -sha256 -r)" &&
-      plain="$(read_as_owner "$file" | LC_ALL=C sed $'1s/^\xef\xbb\xbf//; s/\r$//' | openssl dgst -sha256 -r)" || {
-      echo "Could not read $file" >&2
-      failed=1
-      continue
-    }
-    [[ "$hash" == "${raw%% *}" || "$hash" == "${plain%% *}" ]] || continue
-    remove "$file"
-    folder="$(dirname "$file")"
+    if [[ "$kind" == dir ]]; then
+      # A folder directory it made, gone with the folders below once empty.
+      [[ "$(cd -P "$file" 2>/dev/null && pwd)" == "$file" ]] || continue
+      folder="$file"
+    else
+      real_dir="$(cd -P "$(dirname "$file")" 2>/dev/null && pwd)" || continue
+      [[ "$real_dir" == "$real_base" || "$real_dir" == "$real_base"/* ]] || continue
+      [[ -f "$file" && ! -L "$file" ]] || continue
+      # One it can't read may still hold what it wrote: a failure, not an edit.
+      raw="$(read_as_owner "$file" | openssl dgst -sha256 -r)" &&
+        plain="$(read_as_owner "$file" | LC_ALL=C sed $'1s/^\xef\xbb\xbf//; s/\r$//' | openssl dgst -sha256 -r)" || {
+        echo "Could not read $file" >&2
+        failed=1
+        continue
+      }
+      [[ "$hash" == "${raw%% *}" || "$hash" == "${plain%% *}" ]] || continue
+      remove "$file"
+      folder="$(dirname "$file")"
+    fi
     while [[ "$folder" == "$base"/* ]] && remove_if_emptied "$folder"; do
       folder="$(dirname "$folder")"
     done
   done <<<"$rows"
   [[ "$failed" == "$before" ]] || keep_database=1
+  [[ -z "$outside" ]] || failed=1
 }
 
 remove_temp_files() {
@@ -341,9 +357,11 @@ for home in "${homes[@]}"; do
       security delete-generic-password -s OpenWhispr -a secrets-master-key >/dev/null 2>&1 || true
     remove_temp_files "$(launchctl asuser "$uid" sudo -u "$console_user" getconf DARWIN_USER_TEMP_DIR)"
   fi
+  # The mark goes only once the audit line is written: one that isn't leaves
+  # the app to finish the wipe and record it.
   [[ ! -d "$user_data" ]] || record_wipe "$user" "$audit_dir"
   [[ "$marked" == 0 || "$failed" == 1 ]] || remove "$user_data/local-data-wipe.pending"
-  [[ "$failed" == 1 ]] || echo "Removed OpenWhispr local data from $home"
+  [[ "$failed" == 1 || ! -d "$user_data" ]] || echo "Removed OpenWhispr local data from $home"
   [[ "$failed_before" == 0 ]] || failed=1
 done
 

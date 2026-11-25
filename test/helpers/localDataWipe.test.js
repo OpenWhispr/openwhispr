@@ -141,6 +141,10 @@ test("in a notes folder the user chose, only the files the mirror recorded and t
   wrote("Workspaces/Acme/Teamspaces/.NET Platform/6-x.md", mirrored(6));
   wrote("Workspaces/Acme", "", "dir");
   seed(path.join(space, "notes.txt"), "mine");
+  // A folder of notes with none in it yet: its name goes with it, two leading
+  // dots or not.
+  wrote("Workspaces/Acme/Private/Board - layoffs", "", "dir");
+  wrote("..Board", "", "dir");
   // Edited since the mirror wrote it, and a copy it kept aside after an
   // outside edit: both may be the only copy of that edit.
   wrote("Personal/15-retro.md", mirrored(15));
@@ -171,6 +175,7 @@ test("in a notes folder the user chose, only the files the mirror recorded and t
     "readme.md",
   ]);
   assert.deepEqual(fs.readdirSync(path.join(chosen, "Personal")), ["15-retro.md"]);
+  assert.deepEqual(fs.readdirSync(path.join(chosen, "Workspaces", "Acme")), ["Teamspaces"]);
   assert.deepEqual(fs.readdirSync(path.join(chosen, "Workspaces", "Acme", "Teamspaces")), [
     "Sales",
   ]);
@@ -194,7 +199,9 @@ test("a database it can't read is reported and kept for the retry", async () => 
   seed(path.join(roots.userData, "transcriptions.db"), "not a database");
   const errors = await removeLocalData({ includeModels: false, roots });
   assert.equal(errors.length, 1);
-  assert.match(errors[0], /^notes mirror: /);
+  assert.ok(
+    errors[0].startsWith(`notes mirror: ${path.join(roots.userData, "transcriptions.db")}: `)
+  );
   assert.equal(exists(roots.userData, "transcriptions.db"), true);
 });
 
@@ -545,11 +552,12 @@ test(
   async () => {
     const chosen = path.join(root, "Vault");
     mirrorWrote(roots.userData, chosen, "Personal/1-a.md", mirrored(1));
+    const recorded = fs.realpathSync(chosen);
     const backup = path.join(root, "Backup");
     fs.renameSync(chosen, backup);
     fs.symlinkSync(backup, chosen);
     assert.deepEqual(await removeLocalData({ includeModels: false, roots }), [
-      "notes mirror: The notes folder now leads elsewhere",
+      `notes mirror: The notes folder ${recorded} now leads elsewhere`,
     ]);
     assert.equal(exists(backup, "Personal", "1-a.md"), true);
   }
@@ -589,6 +597,12 @@ test("an AuditLogPath that is a store's own folder keeps only the audit files th
     assert.deepEqual(fs.readdirSync(auditLogPath), ["meeting-audit-it-2026-11-01.jsonl"], store);
     fs.rmSync(roots.userData, { recursive: true });
   }
+  // A folder whose name starts with two dots is still inside.
+  seedDevice();
+  const auditLogPath = path.join(roots.userData, "logs", "..audit");
+  seed(path.join(auditLogPath, "meeting-audit-it-2026-11-01.jsonl"), "{}\n");
+  assert.deepEqual(await removeLocalData({ includeModels: false, roots, auditLogPath }), []);
+  assert.deepEqual(fs.readdirSync(auditLogPath), ["meeting-audit-it-2026-11-01.jsonl"]);
 });
 
 test("WipeLocalDataIncludesModels deployed on its own still takes models with a removal's wipe", async () => {
@@ -817,6 +831,9 @@ test("the launch wipe runs before the logger, catalog and core managers, then re
   ])
     assert.ok(wipe < at(later), `the wipe runs before ${later}`);
   assert.ok(wipe < at("autoStart.scheduleRelaunch(OAUTH_PROTOCOL)"));
+  // One read of the device policy serves the wipe and the device policy's first snapshot.
+  at("readDevicePolicy: async () => normalizeDeviceValues(await launchDeviceRead)");
+  assert.ok(main.includes("const read = launchDeviceRead ?? readDeviceValues();"));
 });
 
 // The scripts run without the app, so they carry their own copy of the lists.
@@ -958,9 +975,8 @@ test(
     wrote(vault, "../Elsewhere/3-plan.md", mirrored(3));
     fs.symlinkSync(beside, path.join(vault, "Linked"));
     wrote(vault, "Linked/3-plan.md", mirrored(3));
-    // Run as root, the script never follows a record out of the user's home.
-    const outside = path.join(root, "Shared");
-    wrote(outside, "Team/3-plan.md", mirrored(3));
+    // A folder of notes with none in it yet: its name goes with it.
+    wrote(vault, "Workspaces/Acme/Private/Board - layoffs", "", "dir");
     const run = macosScript();
 
     // A home named by mistake fails the run rather than reporting it wiped.
@@ -971,7 +987,7 @@ test(
     // A home named without OpenWhispr data in it gets nothing written there.
     const bare = path.join(root, "bare-home");
     fs.mkdirSync(bare);
-    run(bare);
+    assert.doesNotMatch(run(bare), /Removed/);
     assert.deepEqual(fs.readdirSync(bare), []);
     run(home);
     // From a version before the mirror kept its record: nothing to name, no failure.
@@ -1035,7 +1051,6 @@ test(
     assert.deepEqual(fs.readdirSync(path.join(vault, "Personal")), ["15-retro.md"]);
     assert.deepEqual(fs.readdirSync(path.join(vault, "Zettel")), ["202311151230-idea.md"]);
     assert.deepEqual(fs.readdirSync(beside), ["3-plan.md"]);
-    assert.deepEqual(fs.readdirSync(path.join(outside, "Team")), ["3-plan.md"]);
 
     // A folder the user replaced with a symlink is not followed out of the home,
     // and the skip fails the device so the MDM tool doesn't show it as wiped.
@@ -1055,6 +1070,24 @@ test(
     const linkedData = path.join(linked, "Library", "Application Support", "OpenWhispr");
     assert.deepEqual(fs.readdirSync(linkedData).sort(), ["audit", "local-data-wipe.pending"]);
     assert.equal(recorded(linkedData)[0].reason, "incomplete");
+
+    // Run as root, the script never leaves the user's home: a notes folder
+    // outside it is reported once and fails the run, and the database still goes.
+    const away = path.join(root, "away-home");
+    const awayData = path.join(away, "Library", "Application Support", "OpenWhispr");
+    const shared = path.join(root, "Shared");
+    mirrorWrote(awayData, shared, "Team/3-plan.md", mirrored(3));
+    mirrorWrote(awayData, shared, "Team/4-plan.md", mirrored(4));
+    assert.throws(
+      () => run(away),
+      (error) =>
+        error.status === 1 &&
+        error.stderr.split(`Skipped ${fs.realpathSync(shared)}: it is outside`).length === 2 &&
+        !error.stdout.includes("Removed OpenWhispr local data")
+    );
+    assert.deepEqual(fs.readdirSync(path.join(shared, "Team")).sort(), ["3-plan.md", "4-plan.md"]);
+    assert.deepEqual(fs.readdirSync(awayData).sort(), ["audit", "local-data-wipe.pending"]);
+    assert.equal(recorded(awayData)[0].reason, "incomplete");
 
     // A folder it can't empty is reported, the rest still goes, and the exit
     // code tells the MDM tool the device failed. (Root ignores the mode.)

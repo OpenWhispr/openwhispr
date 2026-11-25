@@ -222,7 +222,7 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
       $copied = Join-Path $copy.FullName "transcriptions.db"
       # A version from before the mirror kept its record names no file.
       $rows = if ((Read-Sqlite $copied "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'note_mirror_files'" 1).Count) {
-        Read-Sqlite $copied "SELECT base_path, rel_path, content_hash FROM note_mirror_files WHERE kind != 'dir'" 3
+        Read-Sqlite $copied "SELECT base_path, rel_path, kind, content_hash FROM note_mirror_files ORDER BY base_path" 4
       }
     } finally {
       try { Remove-Tree $copy } catch {}
@@ -238,20 +238,37 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
   $hashOf = { param($Text) -join ($sha256.ComputeHash([Text.Encoding]::UTF8.GetBytes($Text)) | ForEach-Object { $_.ToString("x2") }) }
   $leftBehind = $false
   $vacated = @{}
+  $skipped = $null
+  $outside = $null
   foreach ($row in $rows) {
-    $base, $rel, $hash = $row
-    if (-not [IO.Path]::IsPathRooted($base)) { continue }
-    $base = & $fullPath $base
-    # Only a folder inside this profile is this profile's to clean.
-    if (-not $base.StartsWith("$profileRoot\", [StringComparison]::OrdinalIgnoreCase) -or
-      -not (Test-Path -LiteralPath $base -PathType Container)) { continue }
+    $base, $rel, $kind, $hash = $row
+    # As SYSTEM the script never leaves the profile, not even to look (a share
+    # would get the device's credentials), so this is decided from the path as
+    # recorded, before anything resolves it, and again once ".." is resolved. A
+    # notes folder outside the profile is reported for you to clean, and the
+    # database still goes, since keeping it would keep every note.
+    if ($base.StartsWith("$profileRoot\", [StringComparison]::OrdinalIgnoreCase)) { $base = & $fullPath $base }
+    if (-not $base.StartsWith("$profileRoot\", [StringComparison]::OrdinalIgnoreCase)) {
+      if ($base -ne $outside) { Write-Warning "Skipped $($base): it is outside $ProfilePath" }
+      $outside = $base
+      continue
+    }
+    if (-not (Test-Path -LiteralPath $base -PathType Container)) { continue }
     # A junction or link put on its way isn't the folder the mirror wrote to.
     if (-not (Test-RealFolder $base $ProfilePath)) {
-      Write-Warning "Skipped $($base): it now leads elsewhere"
+      if ($base -ne $skipped) { Write-Warning "Skipped $($base): it now leads elsewhere" }
+      $skipped = $base
       $leftBehind = $true
       continue
     }
     $file = [IO.Path]::GetFullPath((Join-Path $base ($rel -replace "/", "\")))
+    # A folder directory it made, gone with the folders below once empty; never
+    # the notes folder itself.
+    if ($kind -eq "dir") {
+      $file = $file.TrimEnd("\")
+      if (Test-RealFolder $file $base) { $vacated[$file] = $base }
+      continue
+    }
     $dir = Split-Path $file
     if (-not $file.StartsWith("$base\", [StringComparison]::OrdinalIgnoreCase) -or
       ($dir -ne $base -and -not (Test-RealFolder $dir $base))) { continue }
@@ -290,7 +307,7 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
       # Gone already, or not ours to remove.
     }
   }
-  if ($leftBehind) { $script:failed = $true }
+  if ($leftBehind -or $outside) { $script:failed = $true }
   return $leftBehind
 }
 

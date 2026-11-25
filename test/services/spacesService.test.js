@@ -96,6 +96,9 @@ test("WorkspacesService previews and runs a removal with the API's field names",
   await WorkspacesService.previewMemberRemoval("ws-1", ["user-2", "user-3"]);
   await WorkspacesService.removeMembers("ws-1", { userIds: ["user-2"], transferTo: "user-1" });
   await WorkspacesService.removeMembers("ws-1", { userIds: ["user-3"] });
+  // The admin's choice (#3030): the API wipes when the request doesn't say.
+  await WorkspacesService.removeMembers("ws-1", { userIds: ["user-3"], wipeDevices: false });
+  await WorkspacesService.removeMembers("ws-1", { userIds: ["user-3"], wipeDevices: true });
 
   assert.deepEqual(
     requests.map(({ method, path, body }) => [method, path, body]),
@@ -111,6 +114,12 @@ test("WorkspacesService previews and runs a removal with the API's field names",
         { user_ids: ["user-2"], transfer_to: "user-1" },
       ],
       ["POST", "/api/workspaces/ws-1/members/remove", { user_ids: ["user-3"] }],
+      [
+        "POST",
+        "/api/workspaces/ws-1/members/remove",
+        { user_ids: ["user-3"], wipe_devices: false },
+      ],
+      ["POST", "/api/workspaces/ws-1/members/remove", { user_ids: ["user-3"], wipe_devices: true }],
     ]
   );
 });

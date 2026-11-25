@@ -183,7 +183,9 @@ async function keptBelow(target, keep) {
   const stat = await fs.promises.lstat(target).catch(() => null);
   if (!stat?.isDirectory()) return null;
   const below = path.relative(await fs.promises.realpath(target), keep);
-  return below.startsWith("..") || path.isAbsolute(below) ? null : below;
+  return below === ".." || below.startsWith(`..${path.sep}`) || path.isAbsolute(below)
+    ? null
+    : below;
 }
 
 // Returns each store that could not be removed, as "<name>: <reason>". An
@@ -219,7 +221,8 @@ async function removeLocalData({ includeModels, roots = defaultRoots(), auditLog
   try {
     mirrored = recordedMirrorFiles(roots.userData);
   } catch (error) {
-    errors.push(`notes mirror: ${error.message}`);
+    // Named, so whoever has to delete a damaged one knows which file it is.
+    errors.push(`notes mirror: ${path.join(roots.userData, databaseName())}: ${error.message}`);
     keepDatabase = true;
   }
   for (const [basePath, entries] of mirrored) {
@@ -265,11 +268,6 @@ async function removeLocalData({ includeModels, roots = defaultRoots(), auditLog
     errors.push(`product events: ${error.message}`);
   }
   return errors;
-}
-
-async function readDeviceSnapshot() {
-  const { normalizeDeviceValues, readDeviceValues } = require("./managedDevicePolicy");
-  return normalizeDeviceValues(await readDeviceValues());
 }
 
 // A running app that learns its account was removed from the workspace that
@@ -346,7 +344,7 @@ async function wipeLocalDataOnLaunch({
   appVersion,
   clearBrowserData,
   roots,
-  readDevicePolicy = readDeviceSnapshot,
+  readDevicePolicy,
   deleteMasterKey = () => require("./secretCrypto").deleteMasterKey(),
   disableAutoStart = () => require("./autoStart").setAutoStartEnabled(false),
   logger = require("./debugLogger"),

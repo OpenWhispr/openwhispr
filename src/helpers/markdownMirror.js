@@ -813,7 +813,12 @@ class MarkdownMirror {
     );
     for (const dirPath of vacated) {
       let relPath = this._relPath(dirPath);
-      while (relPath && !relPath.startsWith("..") && !keepRelPaths.has(relPath)) {
+      while (
+        relPath &&
+        relPath !== ".." &&
+        !relPath.startsWith("../") &&
+        !keepRelPaths.has(relPath)
+      ) {
         try {
           const resolved = this._resolveExistingFolderPath(this._absolutePath(relPath));
           if (keepRelPaths.has(this._relPath(resolved)) || !this._removeDirIfEmpty(resolved)) break;
@@ -913,36 +918,30 @@ class MarkdownMirror {
   }
 
   // Erasing local data (#3030) in a folder the user chose removes only the
-  // files the mirror's record lists there that still hold what it wrote, and the
-  // folders that leaves empty. Anything else, an outside edit included, is the
-  // user's. The chosen folder itself stays, and links are never followed. A file
-  // that can't go, or can't be read to tell, doesn't stop the rest; the first
-  // failure is thrown at the end. The record names the folder by its real path,
-  // so one that now leads elsewhere (a link put in its place) isn't the folder
-  // the mirror wrote to.
+  // files the mirror's record lists there that still hold what it wrote, the
+  // folder directories it recorded, and the folders that leaves empty. Anything
+  // else, an outside edit included, is the user's. The chosen folder itself
+  // stays, and links are never followed. A file that can't go, or can't be read
+  // to tell, doesn't stop the rest; the first failure is thrown at the end. The
+  // record names the folder by its real path, so one that now leads elsewhere
+  // (a link put in its place) isn't the folder the mirror wrote to.
   removeMirroredFiles(basePath, entries) {
     if (fs.realpathSync(basePath) !== basePath) {
-      throw new Error("The notes folder now leads elsewhere");
+      throw new Error(`The notes folder ${basePath} now leads elsewhere`);
     }
     const mirror = new MarkdownMirror();
     mirror._baseRealPath = fs.realpathSync.native(basePath);
     let failure = null;
     for (const entry of entries) {
       try {
-        if (mirror._isPristine(entry, { throwIfUnreadable: true }))
+        if (entry.kind === "dir") mirror._vacatedDirs.add(mirror._absolutePath(entry.relPath));
+        else if (mirror._isPristine(entry, { throwIfUnreadable: true }))
           mirror._removeFile(mirror._absolutePath(entry.relPath));
       } catch (error) {
         failure ??= error;
       }
     }
-    for (let folder of mirror._vacatedDirs) {
-      try {
-        while (folder !== mirror._baseRealPath && mirror._removeDirIfEmpty(folder))
-          folder = path.dirname(folder);
-      } catch {
-        /* Gone already, or not ours to remove. */
-      }
-    }
+    mirror.removeVacatedDirs();
     if (failure) throw failure;
   }
 

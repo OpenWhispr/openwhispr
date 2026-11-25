@@ -15,7 +15,7 @@ export type MemberRemovalState =
       owners: OwnedMemberContent[];
       transferTo: string | null;
       defaultOwnerId: string;
-      /** The preview said this workspace's removal can wipe the members' devices. */
+      /** The dialog asks whether to wipe: the preview said the removal can, or failed. */
       canWipeDevices: boolean;
       wipeDevices: boolean;
       /** An attempt may have gone through, so its choice stands until the dialog is reopened. */
@@ -105,8 +105,8 @@ export function memberRemovalReducer(
     }
     case "previewFailed":
       // The removal itself tells the dialog when someone owns content (transfer_required). The
-      // wipe is still asked about: the server wipes when told nothing, and ignores the choice
-      // where a removal can't wipe.
+      // wipe is still asked about, since the workspace may manage the devices, and the server
+      // ignores the choice where a removal can't wipe.
       return state.kind === "checking"
         ? confirmWith({ ...state, canWipeDevices: true }, [])
         : state;

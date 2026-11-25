@@ -13883,8 +13883,8 @@ class IPCHandlers {
 
     // Answers at once: only the device read gates a window, and the
     // workspace verdict arrives by broadcast.
-    ipcMain.handle("get-effective-policy", (event) => {
-      void this.refreshEffectivePolicy(event);
+    ipcMain.handle("get-effective-policy", (event, options) => {
+      void this.refreshEffectivePolicy(event, { refresh: options?.refresh === true });
       return this.effectivePolicyManager.getCurrent();
     });
 

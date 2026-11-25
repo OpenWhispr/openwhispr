@@ -221,6 +221,16 @@ function createWorkspacePolicyManager({
     if (recorded === false) throw new Error("Could not record the workspace removal");
   }
 
+  // The removals a verdict lists, less any from a workspace the same verdict
+  // says manages the account: the API reads the two apart, so a rejoin between
+  // the reads can name a workspace in both, and the next lookup settles it.
+  function listedRemovals(data) {
+    const managing = data.managed && Array.isArray(data.managedBy) ? data.managedBy : [];
+    return Array.isArray(data.workspaceRemovals)
+      ? data.workspaceRemovals.filter((removal) => !managing.includes(removal?.workspaceId))
+      : [];
+  }
+
   // A bound credential's verdict becomes its account's, so the removals it lists
   // are checked against the verdict it replaces first, whichever read binds it
   // (one heard before the binding, maybe in an earlier run, wasn't). A removal
@@ -228,7 +238,7 @@ function createWorkspacePolicyManager({
   function saveVerdict(identity, data) {
     try {
       if (isValidatedAccount(identity))
-        for (const removal of data.workspaceRemovals ?? []) reportRemoval(identity, removal);
+        for (const removal of listedRemovals(data)) reportRemoval(identity, removal);
       writeWorkspacePolicyCache(cachePath, cacheIdentity(identity), data);
     } catch (error) {
       logger?.error?.("Policy verdict not saved", error);
@@ -425,8 +435,7 @@ function createWorkspacePolicyManager({
         // the one that named the removing workspace. The newest removal may be
         // from a workspace that never managed this device, so every listed one
         // is checked.
-        const removals = Array.isArray(data.workspaceRemovals) ? data.workspaceRemovals : [];
-        for (const removal of removals) reportRemoval(identity, removal);
+        for (const removal of listedRemovals(data)) reportRemoval(identity, removal);
         return acceptSuccessfulResponse(identity, data, "network");
       } finally {
         clearTimeout(timeout);
@@ -494,11 +503,13 @@ function createWorkspacePolicyManager({
       return publicSnapshot(identity, current.data, "current", current.revision);
     }
     if (inFlight.has(key)) {
-      return inFlight
-        .get(key)
-        .then((result) =>
-          result.success ? publicSnapshot(identity, result, result.status, result.revision) : result
-        );
+      // The verdict the lookup left, not its summary: the summary lists no
+      // removals for a joiner bound since to check.
+      return inFlight.get(key).then((result) => {
+        if (!result.success) return result;
+        const settled = snapshots.get(key);
+        return publicSnapshot(identity, settled.data, result.status, settled.revision);
+      });
     }
     const lastAttempt = lastAttempts.get(key);
     const attemptAge = lastAttempt === undefined ? null : now() - lastAttempt.startedAt;
