@@ -9,9 +9,8 @@ import type { DictationTone, ToneKind } from './toneStyle';
 export interface ExampleSet {
   /** The friend's message the personal example answers. */
   question: string;
-  /** The email preview's "To" label and subject line. */
+  /** The email preview's "To" label. */
   to: string;
-  subject: string;
   /** The heading of the notes the "everything else" example lands in. */
   notes: string;
   intro: Record<'formal' | 'casual' | 'very_casual', string>;
@@ -22,7 +21,6 @@ export const EXAMPLE_TRANSLATIONS: Record<string, ExampleSet> = {
   es: {
     question: '¿Qué haces luego?',
     to: 'Para',
-    subject: 'Re: Propuesta',
     notes: 'Notas de la llamada',
     intro: {
       formal: '~eh~ +Hola, ¿+estás libre esta noche+?+',
@@ -67,7 +65,6 @@ export const EXAMPLE_TRANSLATIONS: Record<string, ExampleSet> = {
   fr: {
     question: 'Tu fais quoi plus tard ?',
     to: 'À',
-    subject: 'Re : Proposition',
     notes: 'Notes d’appel',
     intro: {
       formal: '~euh~ +Salut,+ tu es libre ce soir +?+',
@@ -112,7 +109,6 @@ export const EXAMPLE_TRANSLATIONS: Record<string, ExampleSet> = {
   de: {
     question: 'Was machst du später?',
     to: 'An',
-    subject: 'Re: Angebot',
     notes: 'Gesprächsnotizen',
     intro: {
       formal: '~äh~ +Hey,+ hast du heute Abend Zeit+?+',
@@ -157,7 +153,6 @@ export const EXAMPLE_TRANSLATIONS: Record<string, ExampleSet> = {
   pt: {
     question: 'O que vai fazer mais tarde?',
     to: 'Para',
-    subject: 'Re: Proposta',
     notes: 'Notas da call',
     intro: {
       formal: '~hum~ +Oi,+ você ~tá~ +está+ livre hoje à noite+?+',
@@ -202,7 +197,6 @@ export const EXAMPLE_TRANSLATIONS: Record<string, ExampleSet> = {
   it: {
     question: 'Che fai dopo?',
     to: 'A',
-    subject: 'Re: Proposta',
     notes: 'Note della chiamata',
     intro: {
       formal: '~ehm~ +Ciao,+ sei libero stasera+?+',
@@ -247,7 +241,6 @@ export const EXAMPLE_TRANSLATIONS: Record<string, ExampleSet> = {
   ru: {
     question: 'Что делаешь вечером?',
     to: 'Кому',
-    subject: 'Re: Предложение',
     notes: 'Заметки со звонка',
     intro: {
       formal: '~эм~ +Привет,+ ты свободен сегодня вечером+?+',
@@ -292,7 +285,6 @@ export const EXAMPLE_TRANSLATIONS: Record<string, ExampleSet> = {
   'zh-CN': {
     question: '晚点干嘛？',
     to: '收件人',
-    subject: 'Re: 方案',
     notes: '通话记录',
     intro: {
       formal: '~嗯~你今晚有空吗+？+',
@@ -334,7 +326,6 @@ export const EXAMPLE_TRANSLATIONS: Record<string, ExampleSet> = {
   'zh-TW': {
     question: '晚點要幹嘛？',
     to: '收件者',
-    subject: 'Re: 提案',
     notes: '通話紀錄',
     intro: {
       formal: '~嗯~你今晚有空嗎+？+',
@@ -376,7 +367,6 @@ export const EXAMPLE_TRANSLATIONS: Record<string, ExampleSet> = {
   ja: {
     question: 'このあと何してる？',
     to: '宛先',
-    subject: 'Re: ご提案',
     notes: '通話メモ',
     intro: {
       formal: '~えっと~今夜+は+空いて~る~+いますか？+',
@@ -421,7 +411,6 @@ export const EXAMPLE_TRANSLATIONS: Record<string, ExampleSet> = {
   ar: {
     question: 'ماذا ستفعل لاحقًا؟',
     to: 'إلى',
-    subject: 'رد: العرض',
     notes: 'ملاحظات المكالمة',
     intro: {
       formal: '~امم~ +مرحبًا،+ هل أنت متفرغ الليلة+؟+',

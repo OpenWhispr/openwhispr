@@ -216,27 +216,22 @@ function EmailPreview({ example, set }: { example: string; set: ExampleSet }) {
   const k = useTheme().tokens;
   return (
     <>
-      <View style={{ gap: 4 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={{ fontSize: 13, lineHeight: 18, color: k.secondary }}>{set.to}</Text>
-          <View
-            style={{
-              backgroundColor: k.surface,
-              borderWidth: 1,
-              borderColor: k.divider,
-              borderRadius: 999,
-              paddingHorizontal: 10,
-              paddingVertical: 3,
-            }}
-          >
-            <Text style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: k.ink }}>
-              Sarah Chen
-            </Text>
-          </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <Text style={{ fontSize: 13, lineHeight: 18, color: k.secondary }}>{set.to}</Text>
+        <View
+          style={{
+            backgroundColor: k.surface,
+            borderWidth: 1,
+            borderColor: k.divider,
+            borderRadius: 999,
+            paddingHorizontal: 10,
+            paddingVertical: 3,
+          }}
+        >
+          <Text style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: k.ink }}>
+            Sarah Chen
+          </Text>
         </View>
-        <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: k.ink }}>
-          {set.subject}
-        </Text>
       </View>
       <View style={{ height: 1, backgroundColor: k.hairline }} />
       <DiffText example={example} />

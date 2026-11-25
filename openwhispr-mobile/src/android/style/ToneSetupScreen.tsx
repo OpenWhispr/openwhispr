@@ -363,8 +363,8 @@ function KindStep({
               style={[
                 th.flat,
                 {
+                  // Every card stretches to the deck's tallest, so swiping never moves the page.
                   width: cardWidth,
-                  alignSelf: 'flex-start',
                   borderRadius: 24,
                   paddingTop: 18,
                   paddingBottom: 16,
@@ -373,7 +373,15 @@ function KindStep({
                   opacity: picked ? 1 : 0.55,
                   direction: cardDirection,
                 },
-                picked && { borderWidth: 2, borderColor: k.pickedRing },
+                // The ring is a pixel wider than the hairline: the padding gives that pixel back, so
+                // picking a card never rewraps its text.
+                picked && {
+                  borderWidth: 2,
+                  borderColor: k.pickedRing,
+                  paddingTop: 17,
+                  paddingBottom: 15,
+                  paddingHorizontal: 15,
+                },
               ]}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
