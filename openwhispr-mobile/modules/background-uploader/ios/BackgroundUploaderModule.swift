@@ -35,6 +35,9 @@ private enum BackgroundUploaderConstants {
   static let pendingTranscriptJobIdKey = "keyboard_pending_transcript_job_id"
   static let orphanedRawTranscriptKey = "keyboard_orphaned_raw_transcript"
   static let orphanedRawTranscriptJobIdKey = "keyboard_orphaned_raw_transcript_job_id"
+  static let orphanedTranscriptCleanedJobIdKey = "keyboard_orphaned_transcript_cleaned_job_id"
+  static let recordingTranslationKey = "keyboard_recording_translation"
+  static let recordingTranslationJobIdKey = "keyboard_recording_translation_job_id"
   static let recordingJobIdKey = "keyboard_recording_job_id"
   static let transcriptionStatusKey = "keyboard_transcription_status"
   static let transcriptionErrorKey = "keyboard_transcription_error"
@@ -234,14 +237,31 @@ private final class UploadDelegate: NSObject, URLSessionDataDelegate, URLSession
     defaults.set(text, forKey: BackgroundUploaderConstants.pendingTranscriptKey)
     writeJobId(jobId, forKey: BackgroundUploaderConstants.pendingTranscriptJobIdKey)
 
-    if cleanupApplied {
+    // A language picked for this dictation still has to be applied, and only the app's orphan
+    // recovery translates, so text the server already cleaned is kept for it too.
+    let translationPending: Bool = {
+      guard let jobId, !jobId.isEmpty,
+            defaults.string(forKey: BackgroundUploaderConstants.recordingTranslationJobIdKey) == jobId,
+            let target = defaults.string(forKey: BackgroundUploaderConstants.recordingTranslationKey)
+      else { return false }
+      return !target.isEmpty
+    }()
+
+    if cleanupApplied && !translationPending {
       defaults.removeObject(forKey: BackgroundUploaderConstants.orphanedRawTranscriptKey)
       defaults.removeObject(forKey: BackgroundUploaderConstants.orphanedRawTranscriptJobIdKey)
+      defaults.removeObject(forKey: BackgroundUploaderConstants.orphanedTranscriptCleanedJobIdKey)
     } else {
-      // Preserve the raw text so the app, on next launch, can clean it, persist
-      // it to history, and upgrade the pending slot if it hasn't been consumed.
+      // Preserve the text so the app, on next launch, can clean it (unless the server already
+      // did) and translate it, persist it to history, and upgrade the pending slot if it hasn't
+      // been consumed.
       defaults.set(text, forKey: BackgroundUploaderConstants.orphanedRawTranscriptKey)
       writeJobId(jobId, forKey: BackgroundUploaderConstants.orphanedRawTranscriptJobIdKey)
+      if cleanupApplied {
+        writeJobId(jobId, forKey: BackgroundUploaderConstants.orphanedTranscriptCleanedJobIdKey)
+      } else {
+        defaults.removeObject(forKey: BackgroundUploaderConstants.orphanedTranscriptCleanedJobIdKey)
+      }
     }
 
     if !supersededByNewerRecording {

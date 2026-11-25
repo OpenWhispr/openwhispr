@@ -45,12 +45,30 @@ export const CLEANUP_TIMEOUT_MS = 12_000;
 export const CLEANUP_MAX_RETRIES = 1;
 export const CLEANUP_INITIAL_RETRY_DELAY_MS = 750;
 
-function createTimeoutSignal(timeoutMs: number): { signal: AbortSignal; cancel: () => void } {
+const CANCEL_POLL_MS = 250;
+
+// Aborts after `timeoutMs`, or once `shouldCancel` reports the dictation was cancelled (the
+// keyboard's cancel is a flag the app polls, not an event).
+export function createTimeoutSignal(
+  timeoutMs: number,
+  shouldCancel?: () => boolean,
+): {
+  signal: AbortSignal;
+  cancel: () => void;
+} {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const poll = shouldCancel
+    ? setInterval(() => {
+        if (shouldCancel()) controller.abort();
+      }, CANCEL_POLL_MS)
+    : undefined;
   return {
     signal: controller.signal,
-    cancel: () => clearTimeout(timeout),
+    cancel: () => {
+      clearTimeout(timeout);
+      if (poll) clearInterval(poll);
+    },
   };
 }
 
@@ -61,7 +79,7 @@ function createTimeoutSignal(timeoutMs: number): { signal: AbortSignal; cancel: 
 const LOCAL_CLEANUP_TOKENS_PER_SECOND = 25;
 const LOCAL_CLEANUP_STARTUP_MS = 5_000;
 
-function localCleanupTimeoutMs(transcriptTokens: number): number {
+export function localCleanupTimeoutMs(transcriptTokens: number): number {
   return Math.max(
     CLEANUP_TIMEOUT_MS,
     LOCAL_CLEANUP_STARTUP_MS + (transcriptTokens / LOCAL_CLEANUP_TOKENS_PER_SECOND) * 1000,

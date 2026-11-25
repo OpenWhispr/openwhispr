@@ -17,15 +17,17 @@ struct ParakeetTranscribeOptions: Record {
 //
 // Verified against FluidAudio 0.15.4 (the version already pinned by the diarization plugin):
 //   Model download is owned by JS (parakeetModelDownloader.ts); this module only reports
-//   modelSpec/modelsExist/defaultCacheDirectory and loads what is already on disk.
+//   modelSpec/modelsExist and the install directory, and loads what is already on disk.
 //   AsrModels.load(from:version:encoderPrecision:) — loads what JS installed (the ANE-compile
 //     half). Not offline by contract: 0.15.4's DownloadUtils.loadModels deletes the repo directory
 //     and re-downloads over its own foreground session if an MLModel fails to load, unless
 //     DownloadUtils.enforceOffline is set — process-global, so it would also stop the diarization
 //     module's auto-download; left alone for now.
 //   AsrModels.modelsExist(at:version:encoderPrecision:) / defaultCacheDirectory(for:)
-//     -> ~/Library/Application Support/FluidAudio/Models/<repo.folderName> (repo-scoped; safe to
-//        delete per version; never purged by iOS)
+//     -> ~/Library/Application Support/FluidAudio/Models/<repo.folderName>: where earlier builds
+//        kept the weights. They now live in the App Group (SharedSpeechModels) so the keyboard
+//        extension can load them; that old folder is only migrated from, or used without an App
+//        Group container.
 //   Repo.parakeetV2 / .parakeetV3 / .remotePath ; ModelNames.ASR.requiredModels /
 //     requiredModelsV3(precision:) / vocabularyFile — the manifest modelSpec hands to JS
 //   AsrManager() / loadModels(_:) / transcribe(_ url:, decoderState:, language:) / cleanup()
@@ -52,8 +54,9 @@ public class ParakeetASRModule: Module {
 
     AsyncFunction("isModelDownloaded") { (version: String) -> Bool in
       let v = try Self.parseVersion(version)
+      Self.migrateLegacyModels()
       return AsrModels.modelsExist(
-        at: AsrModels.defaultCacheDirectory(for: v), version: v,
+        at: Self.modelDirectory(for: v), version: v,
         encoderPrecision: Self.encoderPrecision)
     }
 
@@ -62,6 +65,7 @@ public class ParakeetASRModule: Module {
     // names come from FluidAudio's own tables so the manifest can never drift from the loader.
     AsyncFunction("modelSpec") { (version: String) -> [String: Any] in
       let v = try Self.parseVersion(version)
+      Self.migrateLegacyModels()
       let repo: Repo = (v == .v3) ? .parakeetV3 : .parakeetV2
       let bundles: Set<String> =
         (v == .v3)
@@ -69,7 +73,7 @@ public class ParakeetASRModule: Module {
         : ModelNames.ASR.requiredModels
       return [
         "repo": repo.remotePath,
-        "directory": AsrModels.defaultCacheDirectory(for: v).path,
+        "directory": Self.modelDirectory(for: v).path,
         "stagingDirectory": Self.stagingDirectory(for: v).path,
         "entries": bundles.sorted() + [ModelNames.ASR.vocabularyFile],
       ]
@@ -79,9 +83,10 @@ public class ParakeetASRModule: Module {
       Task {
         do {
           let v = try Self.parseVersion(version)
-          // Repo-scoped dir (…/Models/parakeet-tdt-0.6b-v{2,3}) — removing it frees only this
-          // version's weights and never touches the diarization models (a different repo folder).
-          let dir = AsrModels.defaultCacheDirectory(for: v)
+          // Repo-scoped dir (…/SpeechModels/parakeet-tdt-0.6b-v{2,3}) — removing it frees
+          // only this version's weights and never touches the diarization models (they stay in
+          // FluidAudio's own cache directory).
+          let dir = Self.modelDirectory(for: v)
           if FileManager.default.fileExists(atPath: dir.path) {
             try FileManager.default.removeItem(at: dir)
           }
@@ -91,6 +96,7 @@ public class ParakeetASRModule: Module {
           if FileManager.default.fileExists(atPath: staging.path) {
             try FileManager.default.removeItem(at: staging)
           }
+          SharedSpeechModels.removeLegacy(version: v)
           if self.loadedVersion == v { await self.releaseManager() }
           promise.resolve(nil)
         } catch {
@@ -106,7 +112,7 @@ public class ParakeetASRModule: Module {
     AsyncFunction("modelSizeBytes") { (version: String) -> Double in
       let v = try Self.parseVersion(version)
       return Double(
-        Self.directorySize(AsrModels.defaultCacheDirectory(for: v))
+        Self.directorySize(Self.modelDirectory(for: v))
           + Self.directorySize(Self.stagingDirectory(for: v)))
     }
 
@@ -129,7 +135,8 @@ public class ParakeetASRModule: Module {
       Task {
         do {
           let v = try Self.parseVersion(version)
-          let dir = AsrModels.defaultCacheDirectory(for: v)
+          Self.migrateLegacyModels()
+          let dir = Self.modelDirectory(for: v)
           guard AsrModels.modelsExist(at: dir, version: v, encoderPrecision: Self.encoderPrecision)
           else {
             throw NSError(
@@ -274,12 +281,31 @@ public class ParakeetASRModule: Module {
     return Double(file.length) / sampleRate
   }
 
-  /// Where the JS downloader stages an in-progress transfer: the install directory's path with
-  /// ".downloading" appended. The only definition of that suffix — JS reads the path from
-  /// `modelSpec` instead of rebuilding it. Staging is kept between attempts so completed files are
-  /// reused, which also means a failed run leaves it behind.
+  /// Same id `AppGroupStorageModule` builds, so the app, its modules and the keyboard extension
+  /// all read one container.
+  private static var appGroupId: String {
+    "group.\(Bundle.main.bundleIdentifier ?? "com.gizmolabs.openwhispr")"
+  }
+
+  /// Where a version's weights are installed and loaded from (see SharedSpeechModels).
+  private static func modelDirectory(for v: AsrModelVersion) -> URL {
+    SharedSpeechModels.resolvedDirectory(for: v, appGroupId: appGroupId)
+  }
+
+  /// Where the JS downloader stages an in-progress transfer: a sibling of the install directory
+  /// (SharedSpeechModels defines the suffix), so its final move is a same-volume rename. JS reads
+  /// the path from `modelSpec` instead of rebuilding it. Staging is kept between attempts so
+  /// completed files are reused, which also means a failed run leaves it behind.
   private static func stagingDirectory(for v: AsrModelVersion) -> URL {
-    URL(fileURLWithPath: AsrModels.defaultCacheDirectory(for: v).path + ".downloading")
+    SharedSpeechModels.resolvedStagingDirectory(for: v, appGroupId: appGroupId)
+  }
+
+  /// Moves weights an earlier build kept in the app's own container into the App Group. Once
+  /// migrated it costs a few file checks per version, so every entry point can call it.
+  private static func migrateLegacyModels() {
+    for v in [AsrModelVersion.v2, .v3] {
+      SharedSpeechModels.migrateLegacy(version: v, appGroupId: appGroupId)
+    }
   }
 
   /// Recursive sum of file sizes under `dir` (`.mlmodelc` are directories of weight files). 0 if absent.

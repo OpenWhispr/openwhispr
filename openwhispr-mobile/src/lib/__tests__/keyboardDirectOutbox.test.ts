@@ -153,8 +153,67 @@ describe('drainKeyboardDirectOutbox', () => {
         createdAt: NOW - 29 * MINUTE,
       },
     ]);
-    expect(h.events).toEqual([{ captureId: 'job-1', words: 5, occurredAt: NOW - 29 * MINUTE }]);
+    expect(h.events).toEqual([
+      { captureId: 'job-1', words: 5, occurredAt: NOW - 29 * MINUTE, provider: 'cloud' },
+    ]);
     expect(h.disk).toEqual({});
+  });
+
+  it('records translatedTo on the History row', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({ text: 'Envíalo a a@b.co.', translationTarget: 'es', translatedTo: 'es' }),
+      ),
+    });
+    await drainKeyboardDirectOutbox(h.deps);
+    expect(h.added).toEqual([
+      expect.objectContaining({
+        text: 'Envíalo a a@b.co.',
+        originalText: 'send it to my email',
+        translatedTo: 'es',
+      }),
+    ]);
+  });
+
+  it('leaves translatedTo off a row the keyboard did not translate', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({ translationTarget: 'es', translatedTo: null, translationFailed: false }),
+      ),
+    });
+    await drainKeyboardDirectOutbox(h.deps);
+    // An unchanged reply was already in the target language: no warning.
+    expect(h.added).toEqual([
+      expect.objectContaining({ translatedTo: undefined, cleanupWarning: undefined }),
+    ]);
+  });
+
+  it('warns on a row the keyboard could not translate', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({ translationTarget: 'es', translatedTo: null, translationFailed: true }),
+      ),
+    });
+    await drainKeyboardDirectOutbox(h.deps);
+    expect(h.added).toEqual([
+      expect.objectContaining({
+        text: 'Send it to a@b.co.',
+        translatedTo: undefined,
+        cleanupWarning: "Couldn't translate to Spanish. The text was left untranslated.",
+      }),
+    ]);
+  });
+
+  it('warns about nothing without a target, or for a record from before the flag', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(record({ translationFailed: true })),
+      'job-2.json': JSON.stringify(record({ jobId: 'job-2', translationTarget: 'es' })),
+    });
+    await drainKeyboardDirectOutbox(h.deps);
+    expect(h.added).toEqual([
+      expect.objectContaining({ id: 'job-1', cleanupWarning: undefined }),
+      expect.objectContaining({ id: 'job-2', cleanupWarning: undefined }),
+    ]);
   });
 
   it('keeps a record if the account changes during the History lookup', async () => {
@@ -235,6 +294,19 @@ describe('drainKeyboardDirectOutbox', () => {
       },
     ]);
     expect(h.disk).toEqual({});
+  });
+
+  it('gives a failed dictation the target it was recorded with, so a retry translates it', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({ status: 'failed', text: null, originalText: null, translationTarget: 'es' }),
+      ),
+      'job-1.m4a': 'audio',
+    });
+    await drainKeyboardDirectOutbox(h.deps);
+    expect(h.failed).toEqual([expect.objectContaining({ translationTarget: 'es' })]);
+    // translatedTo means it was translated; this row wasn't.
+    expect(h.failed[0]).not.toHaveProperty('translatedTo');
   });
 
   it('preserves audio for a later drain when saving the History row fails', async () => {
@@ -350,6 +422,173 @@ describe('drainKeyboardDirectOutbox', () => {
     });
     expect(h.disk['job-1.pcm']).toBe('raw');
     expect(h.disk['job-1.json']).toBeDefined();
+  });
+
+  it('imports a completed Parakeet take as a local transcript', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({
+          engine: 'parakeet-v2',
+          text: 'send it to my email',
+          originalText: null,
+          cleanupApplied: null,
+        }),
+      ),
+    });
+    expect(await drainKeyboardDirectOutbox(h.deps)).toEqual({
+      completed: 1,
+      failed: 0,
+      dropped: 0,
+    });
+    expect(h.added).toEqual([
+      {
+        id: 'job-1',
+        jobId: 'job-1',
+        text: 'send it to my email',
+        originalText: 'send it to my email',
+        provider: 'local',
+        requestContext: 'keyboard',
+        keyboardTone: 'formal',
+        duration: 4,
+        createdAt: NOW - 29 * MINUTE,
+      },
+    ]);
+    expect(h.events).toEqual([
+      { captureId: 'job-1', words: 5, occurredAt: NOW - 29 * MINUTE, provider: 'local' },
+    ]);
+    expect(h.disk).toEqual({});
+  });
+
+  it('a failed Parakeet take becomes a retryable local row', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({ engine: 'parakeet-v3', status: 'failed', text: null, originalText: null }),
+      ),
+      'job-1.pcm': 'raw',
+    });
+    expect(await drainKeyboardDirectOutbox(h.deps)).toEqual({
+      completed: 0,
+      failed: 1,
+      dropped: 0,
+    });
+    expect(h.failed).toEqual([
+      {
+        id: 'job-1',
+        jobId: 'job-1',
+        audioUrl: 'file:///group/direct-dictations/job-1.wav',
+        audioFileName: 'job-1.wav',
+        audioMimeType: 'audio/wav',
+        duration: 4,
+        provider: 'local',
+        localOnly: true,
+        requestContext: 'keyboard',
+        keyboardTone: 'formal',
+        errorMessage: "Couldn't transcribe. Tap to retry.",
+        createdAt: NOW - 30 * MINUTE,
+      },
+    ]);
+    expect(h.disk).toEqual({});
+  });
+
+  it('turns a Parakeet take the keyboard was killed while transcribing into a local row', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({
+          engine: 'parakeet-v2',
+          status: 'pending',
+          startedAtMs: NOW - 11 * MINUTE,
+          text: null,
+          originalText: null,
+        }),
+      ),
+      'job-1.pcm': 'raw',
+      'job-1.wav': 'stale wav the transcriber was reading',
+    });
+    expect((await drainKeyboardDirectOutbox(h.deps)).failed).toBe(1);
+    expect(h.failed).toEqual([
+      expect.objectContaining({
+        provider: 'local',
+        localOnly: true,
+        audioFileName: 'job-1.wav',
+        audioMimeType: 'audio/wav',
+      }),
+    ]);
+    expect(h.disk).toEqual({});
+  });
+
+  it('leaves a recent pending Parakeet take to the keyboard', async () => {
+    const files = {
+      'job-1.json': JSON.stringify(
+        record({ engine: 'parakeet-v2', status: 'pending', startedAtMs: NOW - 5 * MINUTE }),
+      ),
+      'job-1.pcm': 'raw',
+    };
+    const h = harness(files);
+    await drainKeyboardDirectOutbox(h.deps);
+    expect(h.failed).toEqual([]);
+    expect(h.disk).toEqual(files);
+  });
+
+  it('a record without engine still imports as cloud', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(record()),
+      'job-2.json': JSON.stringify(
+        record({ jobId: 'job-2', engine: 'cloud', status: 'failed', text: null }),
+      ),
+      'job-2.m4a': 'audio',
+    });
+    await drainKeyboardDirectOutbox(h.deps);
+    expect(h.added).toEqual([expect.objectContaining({ id: 'job-1', provider: 'cloud' })]);
+    expect(h.events).toEqual([expect.objectContaining({ provider: 'cloud' })]);
+    expect(h.failed).toEqual([expect.objectContaining({ id: 'job-2', provider: 'cloud' })]);
+    expect(h.failed[0]).not.toHaveProperty('localOnly');
+  });
+
+  it('treats an engine it does not know as local, never as cloud', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({ engine: 'whisper-tiny', status: 'failed', text: null, originalText: null }),
+      ),
+      'job-1.pcm': 'raw',
+    });
+    await drainKeyboardDirectOutbox(h.deps);
+    expect(h.failed).toEqual([expect.objectContaining({ provider: 'local', localOnly: true })]);
+  });
+
+  it('never gives a failed local take a translation target, so its retry stays on the device', async () => {
+    // The keyboard never records one for a Local take; a record that claims one anyway (hand-edited,
+    // or a future engine) must not turn its retry into a translate request.
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({
+          engine: 'parakeet-v3',
+          status: 'failed',
+          text: null,
+          originalText: null,
+          translationTarget: 'es',
+        }),
+      ),
+      'job-1.pcm': 'raw',
+    });
+    await drainKeyboardDirectOutbox(h.deps);
+    expect(h.failed).toEqual([
+      expect.objectContaining({ provider: 'local', localOnly: true, translationTarget: undefined }),
+    ]);
+  });
+
+  it("leaves the keyboard's model log alone", async () => {
+    const h = harness({
+      'local-model.log': '2027-01-15T08:00:00Z load parakeet-v2 ready in 0.5 s\n',
+      'job-1.json': JSON.stringify(record()),
+    });
+    expect(await drainKeyboardDirectOutbox(h.deps)).toEqual({
+      completed: 1,
+      failed: 0,
+      dropped: 0,
+    });
+    expect(h.disk).toEqual({
+      'local-model.log': '2027-01-15T08:00:00Z load parakeet-v2 ready in 0.5 s\n',
+    });
   });
 
   it('does nothing without the App Group folder', async () => {
