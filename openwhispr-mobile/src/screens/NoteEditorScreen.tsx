@@ -1372,7 +1372,7 @@ export default function NoteEditorScreen({
             onCopyGeneratedNote={note?.enhancedContent ? handleCopyGeneratedNote : undefined}
             onViewTranscript={usesSegmentTranscript ? handleViewTranscript : undefined}
             onShare={() => setShareVisible(true)}
-            onDelete={handleDelete}
+            onDelete={liveMeetingNoteId === noteId ? undefined : handleDelete}
           />
         }
       />

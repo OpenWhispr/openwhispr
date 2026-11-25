@@ -291,6 +291,32 @@ describe('MeetingRecordScreen', () => {
     expect(router.replace).toHaveBeenCalledTimes(1);
   });
 
+  it('a finish while the screen is mounted but not focused does not navigate', () => {
+    mockSession = createSession({ phase: 'processing', path: 'local', noteId: 42 });
+    render(
+      <StrictMode>
+        <Harness />
+      </StrictMode>,
+    );
+    // The user went to another tab; this screen stays mounted in the Notes stack.
+    blurScreen();
+    const acknowledgeFinished = jest.fn(() => {
+      setSessionAndRerender({ ...mockSession, finishedNoteId: null });
+    });
+    act(() => {
+      setSessionAndRerender(
+        createSession({ phase: 'idle', finishedNoteId: 42, acknowledgeFinished }),
+      );
+    });
+    expect(acknowledgeFinished).toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
+
+    // Coming back shows the normal start prompt.
+    focusScreen();
+    expect(screen.getByTestId('speaker-count-submit')).toBeTruthy();
+    expect(screen.queryByText('Preparing meeting notes…')).toBeNull();
+  });
+
   it('a new meeting after a hand-off is shown, and its failure lands on the prompt', () => {
     mockSession = createSession({ phase: 'processing', path: 'local', noteId: 42 });
     render(<Harness />);

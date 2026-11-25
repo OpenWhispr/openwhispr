@@ -8,7 +8,8 @@ import {
 } from '@/components/notes/MeetingSessionProvider';
 import type { CloudMeetingResult } from '@/hooks/useCloudMeeting';
 import { isMeetingActive, stopActiveMeeting } from '@/lib/notes/activeMeeting';
-import { alertCloudMeetingCapture } from '@/lib/meetingCaptureAlerts';
+import { alertCloudMeetingCapture, alertIfPartialCapture } from '@/lib/meetingCaptureAlerts';
+import { useMeetingLiveActivity } from '@/hooks/useMeetingLiveActivity';
 
 interface MockNote {
   id: number;
@@ -62,10 +63,12 @@ const mockCloud = {
   stop: jest.fn(),
 };
 let mockCloudEnabled = false;
+let mockCloudRetained: boolean | undefined;
 
 jest.mock('@/hooks/useCloudMeeting', () => ({
-  useCloudMeeting: (options: { enabled: boolean }) => {
+  useCloudMeeting: (options: { enabled: boolean; retained?: boolean }) => {
     mockCloudEnabled = options.enabled;
+    mockCloudRetained = options.retained;
     return mockCloud;
   },
 }));
@@ -96,10 +99,12 @@ jest.mock('@/data', () => ({
 
 const mockCopyAsync = jest.fn();
 const mockDeleteAsync = jest.fn();
+const mockGetInfoAsync = jest.fn();
 jest.mock('expo-file-system/legacy', () => ({
   documentDirectory: 'file:///docs/',
   copyAsync: (...args: unknown[]) => mockCopyAsync(...args),
   deleteAsync: (...args: unknown[]) => mockDeleteAsync(...args),
+  getInfoAsync: (...args: unknown[]) => mockGetInfoAsync(...args),
 }));
 
 jest.mock('@/lib/transcriptAudio', () => ({
@@ -113,6 +118,11 @@ jest.mock('@/lib/sentry', () => ({
 
 jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguage: () => 'en',
+}));
+
+const mockAccountLinks = new Set<string>();
+jest.mock('@/sync/syncIdentity', () => ({
+  isAccountLink: (from: string, to: string) => mockAccountLinks.has(`${from}>${to}`),
 }));
 
 jest.mock('@/store/useAuthStore', () => {
@@ -186,6 +196,7 @@ beforeEach(() => {
   mockRecording.cancelRecording.mockResolvedValue(undefined);
   mockCopyAsync.mockResolvedValue(undefined);
   mockDeleteAsync.mockResolvedValue(undefined);
+  mockGetInfoAsync.mockResolvedValue({ exists: false });
   const result: CloudMeetingResult = {
     utterances: [],
     droppedWindows: [],
@@ -195,6 +206,7 @@ beforeEach(() => {
   mockCloud.status = 'live';
   mockCloud.liveSinceMs = null;
   mockAudioOptions = {};
+  mockAccountLinks.clear();
 });
 
 describe('MeetingSessionProvider', () => {
@@ -315,6 +327,8 @@ describe('MeetingSessionProvider', () => {
     expect(alertCloudMeetingCapture).toHaveBeenCalledTimes(1);
     expect(session.finishedNoteId).toBe(42);
     expect(session.phase).toBe('idle');
+    // Back to idle, the cloud hook lets go of the finished meeting's transcript.
+    expect(mockCloudRetained).toBe(false);
     act(() => {
       session.acknowledgeFinished();
     });
@@ -346,27 +360,48 @@ describe('MeetingSessionProvider', () => {
     expect(session.phase).toBe('idle');
   });
 
-  it('a recorder error with a note marks it failed', async () => {
+  it('a recorder error mid-meeting finishes the meeting and keeps the recording', async () => {
     renderProvider();
     await act(async () => {
       await session.startLocal(input);
     });
-    act(() => {
+    await act(async () => {
       mockAudioOptions.onError?.(new Error('recorder died'));
     });
-    expect(mockState.transitionStatus).toHaveBeenCalledWith(42, 'failed');
+    // Cancelling would delete the recorder's file: the meeting goes through the normal finish.
+    expect(mockRecording.cancelRecording).not.toHaveBeenCalled();
+    expect(mockRecording.stopRecordingRaw).toHaveBeenCalledTimes(1);
+    expect(mockState.runMeetingPipeline).toHaveBeenCalledWith(
+      42,
+      'file:///docs/meeting-42.wav',
+      3,
+      expect.anything(),
+    );
     expect(session.phase).toBe('idle');
   });
 
-  it('a recorder error mid-meeting cancels the recorder so the lease is released', async () => {
+  it('a recorder error while the start waits cancels the recorder so the lease is released', async () => {
+    let rejectStart: (error: Error) => void = () => undefined;
+    mockRecording.startRecording.mockReturnValue(
+      new Promise<void>((_resolve, reject) => {
+        rejectStart = reject;
+      }),
+    );
     renderProvider();
-    await act(async () => {
-      await session.startLocal(input);
-    });
+    let pending: Promise<boolean> = Promise.resolve(true);
     act(() => {
-      mockAudioOptions.onError?.(new Error('recorder died'));
+      pending = session.startLocal(input);
     });
+    let started = true;
+    await act(async () => {
+      mockAudioOptions.onError?.(new Error('denied'));
+      rejectStart(new Error('denied'));
+      started = await pending;
+    });
+    expect(started).toBe(false);
     expect(mockRecording.cancelRecording).toHaveBeenCalledTimes(1);
+    expect(mockState.createMeetingNote).not.toHaveBeenCalled();
+    expect(session.phase).toBe('idle');
   });
 
   it('a recorder error during a cloud meeting leaves it running', () => {
@@ -439,6 +474,60 @@ describe('MeetingSessionProvider', () => {
     expect(session.phase).toBe('idle');
   });
 
+  it('a cloud stop that rejects fails the note and returns to idle', async () => {
+    mockCloud.stop.mockRejectedValue(new Error('socket gone'));
+    mockGetInfoAsync.mockResolvedValue({ exists: true, size: 4096 });
+    renderProvider();
+    act(() => {
+      session.startCloud(input);
+    });
+    await act(async () => {
+      await session.stop();
+    });
+    // The recording at its managed path is kept on the note, so Retry has the audio.
+    expect(mockUpdateNoteMeta).toHaveBeenCalledWith(42, {
+      sourceFile: 'file:///docs/meeting-audio/42.wav',
+    });
+    expect(mockState.transitionStatus).toHaveBeenCalledWith(42, 'failed');
+    expect(session.phase).toBe('idle');
+    expect(isMeetingActive()).toBe(false);
+  });
+
+  it('a failure linking the recording still fails the note and returns to idle', async () => {
+    mockCloud.stop.mockRejectedValue(new Error('socket gone'));
+    mockGetInfoAsync.mockRejectedValue(new Error('unreadable'));
+    renderProvider();
+    act(() => {
+      session.startCloud(input);
+    });
+    await act(async () => {
+      await session.stop();
+    });
+    expect(mockUpdateNoteMeta).not.toHaveBeenCalled();
+    expect(mockState.transitionStatus).toHaveBeenCalledWith(42, 'failed');
+    expect(session.phase).toBe('idle');
+  });
+
+  it('after a failed finish a new meeting can start', async () => {
+    mockUpdateNoteMeta.mockImplementationOnce(() => {
+      throw new Error('database locked');
+    });
+    renderProvider();
+    act(() => {
+      session.startCloud(input);
+    });
+    await act(async () => {
+      await session.stop();
+    });
+    expect(session.phase).toBe('idle');
+    let started = false;
+    act(() => {
+      started = session.startCloud(input);
+    });
+    expect(started).toBe(true);
+    expect(session.phase).toBe('cloud-recording');
+  });
+
   it('a start is refused while processing', async () => {
     let resolveStop: (result: CloudMeetingResult) => void = () => undefined;
     mockCloud.stop.mockReturnValue(
@@ -455,6 +544,8 @@ describe('MeetingSessionProvider', () => {
       stopping = session.stop();
     });
     expect(session.phase).toBe('processing');
+    // Still finishing: the transcript stays readable.
+    expect(mockCloudRetained).toBe(true);
     let cloud = true;
     let local = true;
     await act(async () => {
@@ -544,6 +635,25 @@ describe('MeetingSessionProvider', () => {
       await stopping;
     });
     expect(mockState.updateNote).toHaveBeenCalledTimes(1);
+  });
+
+  it('the lock-screen End ends the meeting with no screen mounted', async () => {
+    renderProvider();
+    await act(async () => {
+      await session.startLocal(input);
+    });
+    const calls = jest.mocked(useMeetingLiveActivity).mock.calls;
+    const { onEndRequested } = calls[calls.length - 1][0];
+    await act(async () => {
+      onEndRequested();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockRecording.stopRecordingRaw).toHaveBeenCalledTimes(1);
+    expect(mockState.runMeetingPipeline).toHaveBeenCalledTimes(1);
+    expect(session.phase).toBe('idle');
   });
 
   it('two stops finalize once', async () => {
@@ -664,6 +774,145 @@ describe('MeetingSessionProvider', () => {
       });
       expect(mockCloud.stop).toHaveBeenCalledTimes(1);
       expect(session.phase).toBe('idle');
+    });
+
+    it('an anonymous session linking to an account does not stop the meeting', async () => {
+      setMockUser('anon');
+      renderProvider();
+      act(() => {
+        session.startCloud(input);
+      });
+      mockAccountLinks.add('anon>real');
+      await act(async () => {
+        setMockUser('real');
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(mockCloud.stop).not.toHaveBeenCalled();
+      expect(session.phase).toBe('cloud-recording');
+      // Its processing still runs for the person who recorded it.
+      await act(async () => {
+        await session.stop();
+      });
+      const options = mockState.finalizeCloudMeeting.mock.calls[0][3] as {
+        fence: { isCurrent: () => boolean };
+      };
+      expect(options.fence.isCurrent()).toBe(true);
+    });
+
+    describe('an account change during on-device processing', () => {
+      let resolvePipeline: () => void = () => undefined;
+
+      const startStopping = async (): Promise<void> => {
+        mockState.runMeetingPipeline.mockReturnValue(
+          new Promise<void>((resolve) => {
+            resolvePipeline = resolve;
+          }),
+        );
+        setMockUser('first');
+        renderProvider();
+        await act(async () => {
+          await session.startLocal(input);
+        });
+        act(() => {
+          void session.stop();
+        });
+        await act(async () => {
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        expect(session.phase).toBe('processing');
+        expect(mockState.runMeetingPipeline).toHaveBeenCalledTimes(1);
+        await act(async () => {
+          setMockUser('second');
+        });
+        await act(async () => {
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+      };
+
+      it('returns to idle at once', async () => {
+        await startStopping();
+        expect(session.phase).toBe('idle');
+        expect(session.noteId).toBeNull();
+        expect(isMeetingActive()).toBe(false);
+        await act(async () => {
+          resolvePipeline();
+        });
+      });
+
+      it('the old pipeline finishing afterwards raises no navigation signal and no alert', async () => {
+        await startStopping();
+        await act(async () => {
+          resolvePipeline();
+        });
+        expect(session.finishedNoteId).toBeNull();
+        expect(alertIfPartialCapture).not.toHaveBeenCalled();
+        expect(session.phase).toBe('idle');
+      });
+
+      it('a new meeting started meanwhile is not reset when the old pipeline ends', async () => {
+        await startStopping();
+        mockState.createMeetingNote.mockImplementation(() => {
+          const note = meetingNote(43);
+          mockState.notes = [note];
+          return note;
+        });
+        act(() => {
+          session.startCloud(input);
+        });
+        expect(session.noteId).toBe(43);
+        await act(async () => {
+          resolvePipeline();
+        });
+        expect(session.phase).toBe('cloud-recording');
+        expect(session.noteId).toBe(43);
+        expect(isMeetingActive()).toBe(true);
+        // Its own stop still finishes normally.
+        await act(async () => {
+          await session.stop();
+        });
+        expect(mockState.finalizeCloudMeeting).toHaveBeenCalledWith(
+          43,
+          expect.anything(),
+          expect.any(Number),
+          expect.anything(),
+        );
+        expect(session.finishedNoteId).toBe(43);
+      });
+
+      it('a sign-out that waited only for capture leaves nothing behind', async () => {
+        mockState.runMeetingPipeline.mockReturnValue(
+          new Promise<void>((resolve) => {
+            resolvePipeline = resolve;
+          }),
+        );
+        setMockUser('first');
+        renderProvider();
+        await act(async () => {
+          await session.startLocal(input);
+        });
+        // Sign-out: settle first, then the account goes.
+        await act(async () => {
+          await stopActiveMeeting();
+        });
+        expect(session.phase).toBe('processing');
+        await act(async () => {
+          setMockUser(null);
+        });
+        await act(async () => {
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        expect(session.phase).toBe('idle');
+        await act(async () => {
+          resolvePipeline();
+        });
+        expect(session.finishedNoteId).toBeNull();
+        expect(alertIfPartialCapture).not.toHaveBeenCalled();
+      });
     });
 
     it('stopActiveMeeting during a pending local start settles the note', async () => {

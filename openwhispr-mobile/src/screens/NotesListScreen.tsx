@@ -17,7 +17,8 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { Fab, FAB_BOTTOM_PADDING, type FabAction } from '@/components/ui/Fab';
 import { groupNotesByDate } from '@/lib/groupNotesByDate';
 import { safeHaptics } from '@/lib/utils';
-import { confirmDestructive } from '@/lib/alerts';
+import { alertMeetingNoteNotDeletable, confirmDestructive } from '@/lib/alerts';
+import { useLiveMeetingNoteId } from '@/components/notes/liveMeetingNote';
 import { SyncStatusLabel } from '@/components/notes/SyncStatusLabel';
 import { useManualSyncRefresh } from '@/hooks/useManualSyncRefresh';
 import { useMoveNote } from '@/hooks/useMoveNote';
@@ -131,8 +132,15 @@ export default function NotesListScreen() {
     [setActiveNoteId],
   );
 
+  const liveMeetingNoteId = useLiveMeetingNoteId();
   const handleDeleteNote = useCallback(
     (id: number, restoreRow: RestoreRow) => {
+      // The store refuses it too; answering here keeps the swiped row from staying hidden.
+      if (id === liveMeetingNoteId) {
+        restoreRow();
+        alertMeetingNoteNotDeletable();
+        return;
+      }
       confirmDestructive(
         'Delete Note',
         'This note will be deleted permanently.',
@@ -143,7 +151,7 @@ export default function NotesListScreen() {
         { onCancel: restoreRow },
       );
     },
-    [deleteNote],
+    [deleteNote, liveMeetingNoteId],
   );
 
   const handleCompose = useCallback(() => {

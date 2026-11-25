@@ -72,11 +72,18 @@ export interface CloudMeeting {
  */
 export function useCloudMeeting({
   enabled,
+  retained = true,
   language,
   recordingUri,
   onUtterance,
 }: {
   enabled: boolean;
+  /**
+   * Whether a stopped session's transcript stays readable (while its meeting is finished). When
+   * false and not enabled, the session state is cleared: the hook lives for the app's lifetime and
+   * must not keep a finished meeting, possibly another account's, in memory.
+   */
+  retained?: boolean;
   language?: string;
   /** Where the capture module also writes the meeting's audio; none means no recording. */
   recordingUri?: string;
@@ -98,6 +105,39 @@ export function useCloudMeeting({
   // Only a recorded meeting returns its session before the first socket is accepted.
   const [connected, setConnected] = useState(true);
   const [liveSinceMs, setLiveSinceMs] = useState<number | null>(null);
+
+  // Which session the state above describes. Changed during render, not in an effect, so the
+  // first render of a new session (or of idle) is already empty instead of showing the previous
+  // meeting's transcript, clock and live time for a frame.
+  const shownSession: 'live' | 'kept' | 'cleared' = enabled
+    ? 'live'
+    : retained
+      ? 'kept'
+      : 'cleared';
+  // Starts as no session, so a hook mounted enabled sets up its first session the same way.
+  const [stateSession, setStateSession] = useState<'live' | 'kept' | 'cleared'>('kept');
+  const resetting = stateSession !== shownSession && shownSession !== 'kept';
+  if (stateSession !== shownSession) {
+    setStateSession(shownSession);
+    if (resetting) {
+      const fresh = initialCloudMeetingSession(Date.now());
+      setStarted(fresh.started);
+      setFailed(fresh.failed);
+      setCapturing(fresh.capturing);
+      setStalled(fresh.stalled);
+      setReconnecting(fresh.reconnecting);
+      setError(fresh.error);
+      setPartialText(fresh.partialText);
+      setUtterances(fresh.utterances);
+      setCapturedSeconds(fresh.capturedSeconds);
+      setDroppedSeconds(fresh.droppedSeconds);
+      setInterruptions(fresh.interruptions);
+      setReconnects(fresh.reconnects);
+      // Only a recorded meeting returns its session before the first socket is accepted.
+      setConnected(!(shownSession === 'live' && recordingUri));
+      setLiveSinceMs(null);
+    }
+  }
 
   const sessionRef = useRef<RealtimeSession | null>(null);
   const stoppedRef = useRef(false);
@@ -152,20 +192,7 @@ export function useCloudMeeting({
         capturedSeconds: Math.floor((liveSession?.capturedMs() ?? 0) / 1000),
       });
     };
-    setStarted(fresh.started);
-    setFailed(fresh.failed);
-    setCapturing(fresh.capturing);
-    setStalled(fresh.stalled);
-    setReconnecting(fresh.reconnecting);
-    setError(fresh.error);
-    setPartialText(fresh.partialText);
-    setUtterances(fresh.utterances);
-    setCapturedSeconds(fresh.capturedSeconds);
-    setDroppedSeconds(fresh.droppedSeconds);
-    setInterruptions(fresh.interruptions);
-    setReconnects(fresh.reconnects);
-    setConnected(!recordingUri);
-    setLiveSinceMs(null);
+    // The session state itself was reset during the render that enabled this session.
     const isCurrent = (): boolean => generationRef.current === generation;
     const isLive = (): boolean => isCurrent() && !stoppedRef.current;
     startRealtimeMeetingWs(

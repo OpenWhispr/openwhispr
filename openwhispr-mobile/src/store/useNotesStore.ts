@@ -15,6 +15,8 @@ import type { ConflictedNote, NewSegment, Segment, Speaker, SpeakerProfile } fro
 import type { CalendarParticipant } from '@/data/calendarTypes';
 import type { Diarizer } from '@/lib/diarization/diarizer';
 import { captureMeetingAccount, type MeetingAccountFence } from '@/lib/notes/meetingAccountFence';
+import { activeMeetingNoteId } from '@/lib/notes/activeMeeting';
+import { alertMeetingNoteNotDeletable } from '@/lib/alerts';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useConfigStore } from '@/store/useConfigStore';
@@ -977,6 +979,11 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   },
 
   deleteNote: (id) => {
+    // Refused like a cancelled delete: the live meeting still records into this note.
+    if (activeMeetingNoteId() === id) {
+      alertMeetingNoteNotDeletable();
+      return;
+    }
     notesRepository.deleteNote(id);
     const { activeNoteId, notes, meetingSpeakerEmbeddingsByNoteId } = get();
     if (activeNoteId === id) {
@@ -1024,6 +1031,13 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   },
 
   deleteFolderSafe: (id) => {
+    // Refused whole rather than skipping the live note: keeping one note of a deleted folder would
+    // leave it pointing at a tombstoned folder, and the cascade's journal undoes all or nothing.
+    const liveNoteId = activeMeetingNoteId();
+    if (liveNoteId != null && notesRepository.getNoteById(liveNoteId)?.folderId === id) {
+      alertMeetingNoteNotDeletable();
+      return;
+    }
     // Deleting a folder deletes the notes inside it — the server's own cascade.
     // The repository journals both so a refused push can undo the whole thing.
     notesRepository.deleteFolderCascade(id);

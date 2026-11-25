@@ -1,3 +1,4 @@
+import { useLayoutEffect } from 'react';
 import { act, renderHook, type RenderHookResult } from '@testing-library/react-native';
 import { useCloudMeeting, type CloudMeeting } from '@/hooks/useCloudMeeting';
 import type {
@@ -210,6 +211,67 @@ describe('useCloudMeeting', () => {
     });
     expect(onUtterance).toHaveBeenCalledWith(utterance('fresh'), 0, 0);
     expect(result.current.utterances.map((u) => u.text)).toEqual(['fresh']);
+  });
+
+  it('the first render of a new session shows no utterances from the previous one', async () => {
+    const committed: { enabled: boolean; utterances: number; liveSinceMs: number | null }[] = [];
+    const hook = renderHook(
+      (p: Props) => {
+        const meeting = useCloudMeeting({ enabled: p.enabled });
+        // What reached the screen: a value only seen by a discarded render never commits.
+        useLayoutEffect(() => {
+          committed.push({
+            enabled: p.enabled,
+            utterances: meeting.utterances.length,
+            liveSinceMs: meeting.liveSinceMs,
+          });
+        });
+        return meeting;
+      },
+      { initialProps: { enabled: true } },
+    );
+    const first = latest();
+    await goLive(first);
+    act(() => {
+      first.deliver('previous meeting');
+    });
+    let stopped: Promise<CloudMeetingResult> = Promise.resolve({
+      utterances: [],
+      droppedWindows: [],
+      recordingUri: null,
+    });
+    act(() => {
+      stopped = hook.result.current.stop();
+    });
+    await act(async () => {
+      first.drain.resolve();
+      await stopped;
+    });
+    hook.rerender({ enabled: false });
+    committed.length = 0;
+    hook.rerender({ enabled: true });
+    expect(committed[0]).toEqual({ enabled: true, utterances: 0, liveSinceMs: null });
+  });
+
+  it('returning to idle clears the previous transcript', async () => {
+    const hook = renderHook(
+      (p: { enabled: boolean; retained: boolean }) =>
+        useCloudMeeting({ enabled: p.enabled, retained: p.retained }),
+      { initialProps: { enabled: true, retained: true } },
+    );
+    const first = latest();
+    await goLive(first);
+    act(() => {
+      first.deliver('one');
+    });
+    // Finishing: the session stopped, but its meeting is still being finalized.
+    hook.rerender({ enabled: false, retained: true });
+    expect(hook.result.current.utterances).toHaveLength(1);
+    // Idle: nothing of the finished meeting is kept.
+    hook.rerender({ enabled: false, retained: false });
+    expect(hook.result.current.utterances).toEqual([]);
+    expect(hook.result.current.liveSinceMs).toBeNull();
+    expect(hook.result.current.capturedSeconds).toBe(0);
   });
 
   it('resolves Stop while connecting with nothing and stops the session once it starts', async () => {

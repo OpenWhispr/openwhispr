@@ -7,6 +7,8 @@
 export interface ActiveMeetingHandle {
   isActive: () => boolean;
   stop: () => Promise<void>;
+  /** The note the meeting records into, from creation until the session is idle again. */
+  noteId: () => number | null;
 }
 
 let handle: ActiveMeetingHandle | null = null;
@@ -17,6 +19,12 @@ export function registerActiveMeeting(next: ActiveMeetingHandle | null): void {
 
 export function isMeetingActive(): boolean {
   return handle?.isActive() ?? false;
+}
+
+/** The note of the meeting that is recording or still being finished, or null. */
+export function activeMeetingNoteId(): number | null {
+  if (handle == null || !handle.isActive()) return null;
+  return handle.noteId();
 }
 
 /** No-op when idle; otherwise resolves once the registered handle says the meeting has settled. */

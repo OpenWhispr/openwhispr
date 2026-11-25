@@ -3,6 +3,7 @@ import type React from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
 import { notesRepository } from '@/data';
 import type { Note } from '@/data/types';
+import { LiveMeetingNoteContext, useLiveMeetingNoteId } from '@/components/notes/liveMeetingNote';
 import { useAudioRecording } from '@/hooks/useAudioRecording';
 import { useCloudMeeting, type CloudMeeting } from '@/hooks/useCloudMeeting';
 import { useMeetingLiveActivity, type MeetingActivityPhase } from '@/hooks/useMeetingLiveActivity';
@@ -23,6 +24,7 @@ import { excludeMeetingFileFromBackup, meetingRecordingUri } from '@/lib/transcr
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useNotesStore } from '@/store/useNotesStore';
+import { isAccountLink } from '@/sync/syncIdentity';
 import type { TranscriptionStatus } from '@/types';
 
 export type MeetingSessionPhase = 'idle' | 'recording' | 'cloud-recording' | 'processing';
@@ -55,9 +57,6 @@ export interface MeetingSession {
 }
 
 const MeetingSessionContext = createContext<MeetingSession | null>(null);
-// The session value changes every second (captured time, captions). Surfaces that only need to
-// know which note is recording read this one, whose value changes only when a meeting starts or ends.
-const LiveMeetingNoteContext = createContext<number | null>(null);
 
 /**
  * Owns the meeting recording for the whole app, so leaving the recording screen (Back, a tab
@@ -91,6 +90,10 @@ export function MeetingSessionProvider({
   // The account the meeting was started under, held to the end: processing steps that would use
   // the signed-in account's credentials or data skip themselves once it changes.
   const accountFenceRef = useRef<MeetingAccountFence | null>(null);
+  // Bumped by every start and by a finish left to run detached (an account change while its
+  // on-device processing still runs). A finish only touches the session while its generation is
+  // current, so a detached one can never reset or redirect the meeting that replaced it.
+  const generationRef = useRef(0);
   // Written with the state so two starts in one tick can't both read 'idle'.
   const phaseRef = useRef<MeetingSessionPhase>('idle');
   // Covers the wait for the recorder in startLocal, before the phase leaves 'idle'.
@@ -118,29 +121,33 @@ export function MeetingSessionProvider({
       transitionStatus(id, 'failed');
     }
   };
-  const markNoteFailedRef = useRef(markNoteFailed);
-  markNoteFailedRef.current = markNoteFailed;
-
   // The recorder's onError is built before `recording` exists; this is how it reaches the cancel.
   const cancelRecordingRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const recording = useAudioRecording({
     allowsBackgroundRecording: true,
     onError: () => {
-      // Only a local capture is this recorder's to tear down. A late error while processing or
-      // during a cloud meeting must not reset a meeting that is still being finished.
-      if (phaseRef.current !== 'recording' && !startingRef.current) return;
-      // A start that fails has no note yet; one that fails mid-meeting must not stay "recording".
-      const currentNoteId = noteIdRef.current;
-      if (currentNoteId != null) markNoteFailedRef.current(currentNoteId);
-      // Stops the recorder and releases the meeting-local lease, which would otherwise keep
-      // refusing every dictation until the next meeting.
-      cancelRecordingRef.current().catch((error) => Sentry.captureException(error));
-      returnToIdle();
+      // useAudioRecording calls onError only from startRecording and from the dictation
+      // stopRecording. A meeting stops through stopRecordingRaw, which never calls it, so this
+      // path only handles a failed START. A late error while processing or during a cloud meeting
+      // must not reset a meeting that is still being finished.
+      if (startingRef.current && phaseRef.current === 'idle') {
+        // No note yet. Stops the recorder and releases the meeting-local lease, which would
+        // otherwise keep refusing every dictation until the next meeting.
+        cancelRecordingRef.current().catch((error) => Sentry.captureException(error));
+        return;
+      }
+      // Should a future change ever fire it mid-meeting, keep what was recorded: cancelling
+      // deletes the recorder's file, so the meeting goes through the normal stop and finish.
+      if (phaseRef.current === 'recording' && noteIdRef.current != null) {
+        endMeetingRef.current().catch(Sentry.captureException);
+      }
     },
   });
   cancelRecordingRef.current = recording.cancelRecording;
   const cloudMeeting = useCloudMeeting({
     enabled: phase === 'cloud-recording',
+    // Readable while the meeting is finished; dropped once the session is idle again.
+    retained: phase !== 'idle',
     language: getPreferredTranscriptionLanguage(),
     // The note exists before the session starts, so the recording has its own path from the start.
     recordingUri: noteId != null ? meetingRecordingUri(noteId) : undefined,
@@ -236,6 +243,7 @@ export function MeetingSessionProvider({
     meetingStartedAtRef.current = Date.now();
     expectedSpeakerCountRef.current = input.expectedSpeakerCount;
     accountFenceRef.current = captureMeetingAccount();
+    generationRef.current += 1;
     setTitle(input.context?.title ?? null);
     setExpectedSpeakerCount(input.expectedSpeakerCount);
     setMeetingStartedAt(meetingStartedAtRef.current);
@@ -349,23 +357,48 @@ export function MeetingSessionProvider({
     lastSavedRawNotesRef.current = '';
     setPhase('idle');
   };
+  // For callbacks held across renders; returnToIdle only uses setters and refs, so any render's works.
+  const returnToIdleRef = useRef(returnToIdle);
+  returnToIdleRef.current = returnToIdle;
+
+  // Whether a finish still owns the session: no newer meeting and no detach since it began.
+  const isCurrentGeneration = (generation: number): boolean => generationRef.current === generation;
+  // Whether what a finish produced is still for the signed-in account: navigation and alerts about
+  // another account's meeting must never reach this one.
+  const isOwnAccount = (fence: MeetingAccountFence | null): boolean => fence?.isCurrent() ?? true;
+  // Whether a finish may still write to its note. After a switch away from a real account the
+  // local rows were wiped and a note id may come to name the next account's row; a guest's rows
+  // stay on the device for the account that signs in, so its meeting can still mark its own note.
+  const mayWriteNote = (fence: MeetingAccountFence | null): boolean =>
+    fence == null || fence.accountId == null || fence.isCurrent();
 
   const finish = async (onCaptureStopped: () => void): Promise<void> => {
-    // Measured at Stop: transcription below can take minutes and must not count as missed time.
-    const coverage = captureCoverage(
-      recorderHealth.capturedMs,
-      meetingStartedAtRef.current == null ? 0 : Date.now() - meetingStartedAtRef.current,
-    );
     const noteId = noteIdRef.current;
     const expectedSpeakerCount = expectedSpeakerCountRef.current;
+    const generation = generationRef.current;
+    const fence = accountFenceRef.current;
+    // After any await below, the session may have moved on without this finish.
+    const settleIdle = (): void => {
+      if (isCurrentGeneration(generation)) returnToIdle();
+    };
+    const failNote = (id: number): void => {
+      if (mayWriteNote(fence)) markNoteFailed(id);
+    };
     setPhase('processing');
+    // Everything after the phase change is inside the try: a throw outside it would leave the
+    // session in 'processing' for the rest of the process, refusing every new meeting.
     try {
+      // Measured at Stop: transcription below can take minutes and must not count as missed time.
+      const coverage = captureCoverage(
+        recorderHealth.capturedMs,
+        meetingStartedAtRef.current == null ? 0 : Date.now() - meetingStartedAtRef.current,
+      );
       const uri = await recording.stopRecordingRaw();
       onCaptureStopped();
       if (!uri || noteId == null) {
         saveRawNotesNow();
-        if (noteId != null) markNoteFailed(noteId);
-        returnToIdle();
+        if (noteId != null) failNote(noteId);
+        settleIdle();
         return;
       }
       saveRawNotesNow();
@@ -375,10 +408,8 @@ export function MeetingSessionProvider({
       // The recorder's own file is a second copy of the meeting that nothing else deletes.
       await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
       await runMeetingPipeline(noteId, stableUri, expectedSpeakerCount, {
-        fence: accountFenceRef.current ?? undefined,
+        fence: fence ?? undefined,
       });
-      returnToIdle();
-      setFinishedNoteId(noteId);
       reportMeetingFinished({
         path: 'local',
         coverage,
@@ -386,11 +417,15 @@ export function MeetingSessionProvider({
         reconnects: 0,
         droppedSeconds: 0,
       });
+      if (!isCurrentGeneration(generation)) return;
+      returnToIdle();
+      if (!isOwnAccount(fence)) return;
+      setFinishedNoteId(noteId);
       alertIfPartialCapture(coverage);
     } catch (error) {
-      if (noteId != null) markNoteFailed(noteId);
+      if (noteId != null) failNote(noteId);
       Sentry.captureException(error);
-      returnToIdle();
+      settleIdle();
     }
   };
 
@@ -407,31 +442,40 @@ export function MeetingSessionProvider({
     const noteId = noteIdRef.current;
     const hadError = cloudMeeting.status === 'error';
     const { interruptions, reconnects, droppedSeconds } = cloudMeeting;
+    const generation = generationRef.current;
+    const fence = accountFenceRef.current;
+    const settleIdle = (): void => {
+      if (isCurrentGeneration(generation)) returnToIdle();
+    };
+    const failNote = (id: number): void => {
+      if (mayWriteNote(fence)) markNoteFailed(id);
+    };
     setPhase('processing');
-    const result = await cloudMeeting.stop();
-    if (noteId == null) {
-      returnToIdle();
-      return;
-    }
-    saveRawNotesNow();
-    // Linked before finalizing and before a failure: a failed note keeping its recording is
-    // what Retry needs later.
-    if (result.recordingUri) {
-      notesRepository.updateNoteMeta(noteId, { sourceFile: result.recordingUri });
-    }
-    // A failed session with nothing transcribed and no recording shouldn't become a done,
-    // empty note. With a recording the store tries the file and decides done or failed.
-    if (hadError && result.utterances.length === 0 && !result.recordingUri) {
-      markNoteFailed(noteId);
-      returnToIdle();
-      return;
-    }
+    // Set once the recording is on the note, so a failure afterwards doesn't look for it again.
+    let recordingLinked = false;
     try {
+      const result = await cloudMeeting.stop();
+      if (noteId == null) {
+        settleIdle();
+        return;
+      }
+      saveRawNotesNow();
+      // Linked before finalizing and before a failure: a failed note keeping its recording is
+      // what Retry needs later.
+      if (result.recordingUri) {
+        notesRepository.updateNoteMeta(noteId, { sourceFile: result.recordingUri });
+        recordingLinked = true;
+      }
+      // A failed session with nothing transcribed and no recording shouldn't become a done,
+      // empty note. With a recording the store tries the file and decides done or failed.
+      if (hadError && result.utterances.length === 0 && !result.recordingUri) {
+        failNote(noteId);
+        settleIdle();
+        return;
+      }
       const { owedMs, unsavedOwedMs = 0 } = await finalizeCloudMeeting(noteId, result, captured, {
-        fence: accountFenceRef.current ?? undefined,
+        fence: fence ?? undefined,
       });
-      returnToIdle();
-      setFinishedNoteId(noteId);
       reportMeetingFinished({
         path: 'cloud',
         coverage,
@@ -439,6 +483,10 @@ export function MeetingSessionProvider({
         reconnects,
         droppedSeconds,
       });
+      if (!isCurrentGeneration(generation)) return;
+      returnToIdle();
+      if (!isOwnAccount(fence)) return;
+      setFinishedNoteId(noteId);
       alertCloudMeetingCapture({
         elapsedMs,
         capturedMs: captured * 1000,
@@ -452,7 +500,10 @@ export function MeetingSessionProvider({
         unsavedMs: unsavedOwedMs,
       });
     } catch (error) {
-      markNoteFailed(noteId);
+      if (noteId != null && mayWriteNote(fence)) {
+        if (!recordingLinked) await linkManagedRecording(noteId);
+        failNote(noteId);
+      }
       // A fixed message and a code: the error itself can carry a file path.
       const code = (error as { code?: unknown } | null)?.code;
       Sentry.captureMessage('meeting-finalize-failed', {
@@ -462,7 +513,22 @@ export function MeetingSessionProvider({
           error_code: typeof code === 'string' ? code : 'unknown',
         },
       });
-      returnToIdle();
+      settleIdle();
+    }
+  };
+
+  // A stop that failed before the recording was linked: the file the capture module wrote at the
+  // note's managed path is still the meeting, and a failed note keeping it is what Retry needs.
+  // Never throws, so the failure path that calls it always reaches the idle state.
+  const linkManagedRecording = async (id: number): Promise<void> => {
+    try {
+      const uri = meetingRecordingUri(id);
+      const info = await FileSystem.getInfoAsync(uri);
+      if (info.exists) notesRepository.updateNoteMeta(id, { sourceFile: uri });
+    } catch (linkError) {
+      Sentry.captureException(linkError, {
+        tags: { feature: 'meeting-session', operation: 'link_recording_after_failure' },
+      });
     }
   };
 
@@ -470,6 +536,7 @@ export function MeetingSessionProvider({
     const active = phaseRef.current;
     if ((active !== 'recording' && active !== 'cloud-recording') || finishingRef.current) return;
     finishingRef.current = true;
+    const generation = generationRef.current;
     let markCaptured: () => void = () => undefined;
     const captured = new Promise<void>((resolve) => {
       markCaptured = resolve;
@@ -482,8 +549,11 @@ export function MeetingSessionProvider({
       } finally {
         // Also on failure, so a waiter on the capture never hangs.
         markCaptured();
-        finishingRef.current = false;
-        inFlightFinishRef.current = null;
+        // A detached finish no longer owns these: they may belong to the meeting after it.
+        if (isCurrentGeneration(generation)) {
+          finishingRef.current = false;
+          inFlightFinishRef.current = null;
+        }
       }
     })();
     if (finishingRef.current) {
@@ -512,9 +582,19 @@ export function MeetingSessionProvider({
     // A cloud finalise needs the session, so sign-out waits for all of it. On-device processing
     // can take minutes, so once capture has stopped it carries on alone. That is safe for the next
     // account: the pipeline holds the account it started under (accountFenceRef) and skips cloud
-    // calls and voice-profile matching if the account changed; only on-device work continues.
+    // calls and voice-profile matching if the account changed; only on-device work continues, and
+    // once the account changes the session lets go of it (detachFinish).
     await (inFlight.path === 'local' ? inFlight.captured : inFlight.done);
   }, []);
+  // Lets a running finish carry on without the session: the generation moves on, so none of its
+  // later effects (idle, navigation, alerts) apply, and the session is free for the next meeting.
+  const detachFinish = useCallback((): void => {
+    generationRef.current += 1;
+    finishingRef.current = false;
+    inFlightFinishRef.current = null;
+    returnToIdleRef.current();
+  }, []);
+
   // Nothing is settled when the provider unmounts: it sits above everything, so that only happens
   // on dev Fast Refresh, and a real process death runs no clean-up at all. Launch recovery
   // (meetingRecovery.ts) owns a note left in "recording": it links the file and backfills the tail.
@@ -522,25 +602,33 @@ export function MeetingSessionProvider({
     registerActiveMeeting({
       isActive: () => phaseRef.current !== 'idle' || startingRef.current,
       stop: stopSettled,
+      noteId: () => noteIdRef.current,
     });
     return () => registerActiveMeeting(null);
   }, [stopSettled]);
 
   // A meeting belongs to the account that started it. Only a real change counts: not the first
-  // sign-in at launch, and not a guest session starting (both are null before).
+  // sign-in at launch, not a guest session starting (both are null before), and not an anonymous
+  // session signing up, which sync treats as the same person (isAccountLink).
   const userId = useAuthStore((state) => state.user?.id ?? null);
   const previousUserIdRef = useRef(userId);
   useEffect(() => {
     const previous = previousUserIdRef.current;
     previousUserIdRef.current = userId;
-    if (
-      previous != null &&
-      previous !== userId &&
-      (phaseRef.current !== 'idle' || startingRef.current)
-    ) {
-      stopSettled().catch(Sentry.captureException);
-    }
-  }, [userId, stopSettled]);
+    if (previous == null || previous === userId) return;
+    if (userId != null && isAccountLink(previous, userId)) return;
+    // A finished meeting of the previous account must not open in this one.
+    setFinishedNoteId(null);
+    if (phaseRef.current === 'idle' && !startingRef.current) return;
+    stopSettled()
+      .then(() => {
+        // Capture has stopped; what remains is the previous account's on-device processing, which
+        // must neither hold the session (FINISHING… in the bar, new meetings refused) nor report
+        // into this account when it ends.
+        if (phaseRef.current === 'processing') detachFinish();
+      })
+      .catch(Sentry.captureException);
+  }, [userId, stopSettled, detachFinish]);
 
   const acknowledgeFinished = useCallback((): void => setFinishedNoteId(null), []);
 
@@ -599,10 +687,7 @@ export function MeetingSessionProvider({
   );
 }
 
-/** The note the live meeting is recording, or null. Re-renders only when a meeting starts or ends. */
-export function useLiveMeetingNoteId(): number | null {
-  return useContext(LiveMeetingNoteContext);
-}
+export { useLiveMeetingNoteId };
 
 export function useMeetingSession(): MeetingSession {
   const session = useContext(MeetingSessionContext);

@@ -30,6 +30,12 @@ export function confirmDestructive(
   else Alert.alert(title, message, buttons);
 }
 
+// Capture keeps writing into the note and Stop links its recording to it, so a deleted note would
+// end up with audio uploaded for a row nobody can see.
+export function alertMeetingNoteNotDeletable(): void {
+  Alert.alert('Meeting in progress', 'End the meeting before deleting its note.');
+}
+
 // The store keeps renewing a subscription after the account behind it is gone,
 // and the server cannot cancel it, so the user has to before deleting.
 function storeSubscriptionWarning(): string {

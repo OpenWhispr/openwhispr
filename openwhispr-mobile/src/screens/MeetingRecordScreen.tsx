@@ -103,9 +103,16 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     spaceId: params.spaceId ? Number(params.spaceId) : undefined,
   };
 
+  // Whether the user is looking at this screen. A screen left mounted in the Notes stack while
+  // the user is on another tab must not pull them into the note when a meeting finishes.
+  const focusedRef = useRef(false);
   const { finishedNoteId, acknowledgeFinished } = session;
   useEffect(() => {
     if (finishedNoteId == null) return;
+    if (!focusedRef.current && finishedNoteId !== navigatedNoteRef.current) {
+      // Acknowledged like a finish from before the screen opened: on return, the start prompt.
+      staleFinishRef.current = finishedNoteId;
+    }
     if (finishedNoteId === staleFinishRef.current) {
       acknowledgeFinished();
       return;
@@ -122,11 +129,13 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   const blurredRef = useRef(false);
   useFocusEffect(
     useCallback(() => {
+      focusedRef.current = true;
       if (blurredRef.current) {
         blurredRef.current = false;
         setHandedOff(false);
       }
       return () => {
+        focusedRef.current = false;
         blurredRef.current = true;
       };
     }, []),

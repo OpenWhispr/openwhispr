@@ -3,10 +3,16 @@ jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: mockUser }) },
 }));
 
+const mockLinks = new Set<string>();
+jest.mock('@/sync/syncIdentity', () => ({
+  isAccountLink: (from: string, to: string) => mockLinks.has(`${from}>${to}`),
+}));
+
 import { captureMeetingAccount } from '@/lib/notes/meetingAccountFence';
 
 beforeEach(() => {
   mockUser = null;
+  mockLinks.clear();
 });
 
 describe('captureMeetingAccount', () => {
@@ -36,6 +42,18 @@ describe('captureMeetingAccount', () => {
     expect(fence.accountId).toBeNull();
     expect(fence.isCurrent()).toBe(true);
     mockUser = { id: 'a' };
+    expect(fence.isCurrent()).toBe(false);
+  });
+
+  it('a link from the anonymous id still counts as current', () => {
+    mockUser = { id: 'anon' };
+    const fence = captureMeetingAccount();
+    mockLinks.add('anon>real');
+    mockUser = { id: 'real' };
+    expect(fence.isCurrent()).toBe(true);
+    // The fence now belongs to the linked account: a later switch away from it still counts.
+    expect(fence.accountId).toBe('real');
+    mockUser = { id: 'other' };
     expect(fence.isCurrent()).toBe(false);
   });
 });
