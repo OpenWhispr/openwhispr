@@ -10,7 +10,7 @@ const SLACK_APP = /(?:^|[^a-z0-9])(?:slack|tinyspeck)(?:$|[^a-z0-9])/i;
 const SLACK_HOST = /(?:^|\.)slack\.com$/i;
 // Title parts are separated by a spaced dash, bar or dot.
 const SEPARATOR = /\s[-–—|·•]\s/;
-const ZERO_WIDTH = /[​-‍﻿]/g;
+const ZERO_WIDTH = /[\u200b-\u200d\ufeff]/g;
 // What Slack and browsers put before a title for unread messages: "* ", "! ", "(3) ".
 const UNREAD = /^(?:[*!•]|\(\d+\+?\)|\[\d+\+?\])\s*/;
 // A kind Slack may add after a name, in the user's language: "(Channel)", "(DM)".
