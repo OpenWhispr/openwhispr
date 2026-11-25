@@ -136,3 +136,130 @@ test("the wider check accepts ordinary cleanup, including modest growth", async 
     assert.doesNotThrow(() => assertPlausibleCleanupOutput(raw, output), output);
   }
 });
+
+const OPTIONS =
+  "we looked at three options for the new onboarding flow and the team liked the second one best because it asks for the microphone permission only when it is needed.";
+const QUESTION =
+  "the open question is whether the account step should come before or after the first dictation since signing in early lets us sync the dictionary.";
+const NEXT_STEP =
+  "next week we will build a prototype of both orders and test them with five people from the beta list.";
+const OPTIONS_CLEAN =
+  "We looked at three options for the new onboarding flow, and the team liked the second one best because it asks for the microphone permission only when it is needed.";
+const QUESTION_CLEAN =
+  "The open question is whether the account step should come before or after the first dictation, since signing in early lets us sync the dictionary.";
+const NEXT_STEP_CLEAN =
+  "Next week we will build a prototype of both orders and test them with five people from the beta list.";
+const PASSAGES = `${OPTIONS} ${QUESTION} ${NEXT_STEP}`;
+
+test("the missing-run check finds nothing missing from a faithful answer", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  assert.equal(longestMissingRun(PASSAGES, PASSAGES), 0);
+  assert.equal(
+    longestMissingRun(PASSAGES, `${OPTIONS_CLEAN} ${QUESTION_CLEAN} ${NEXT_STEP_CLEAN}`),
+    0
+  );
+  assert.equal(longestMissingRun(LONG_RAW, LONG_CLEAN), 0);
+});
+
+test("the missing-run check counts a dropped passage word for word", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  // QUESTION is 25 words.
+  assert.equal(longestMissingRun(PASSAGES, `${OPTIONS_CLEAN} ${NEXT_STEP_CLEAN}`), 25);
+});
+
+test("the missing-run check counts what a looping answer never reached", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  // Longer than what was said, yet QUESTION and NEXT_STEP (45 words) are gone.
+  const looping = Array(4).fill(OPTIONS_CLEAN).join(" ");
+  assert.equal(longestMissingRun(PASSAGES, looping), 45);
+});
+
+test("the missing-run check ignores hesitations on the speaker's side only", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  assert.equal(
+    longestMissingRun(
+      "um so uh i think um we should uh move the meeting to uh friday because er the client is hmm out on thursday",
+      "So I think we should move the meeting to Friday because the client is out on Thursday."
+    ),
+    0
+  );
+  // "like" and "so" are words the answer keeps, so they still count.
+  assert.equal(
+    longestMissingRun(
+      "we would like to move the launch to friday so that the support team has time to update the help center articles",
+      "We would like to move the launch to Friday so that the support team has time to update the help center articles."
+    ),
+    0
+  );
+});
+
+test("punctuation, case and apostrophes are not missing words", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  for (const [raw, output] of [
+    [
+      "dont worry its fine we cant ship it on friday because the client isnt ready yet so lets wait until monday",
+      "Don't worry, it's fine. We can't ship it on Friday because the client isn't ready yet, so let's wait until Monday.",
+    ],
+    [
+      "we don’t need the old export step any more because the new one is faster",
+      "We don't need the old export step any more because the new one is faster.",
+    ],
+    [
+      "the follow-up email goes out on MONDAY to everyone on the beta list",
+      "The follow up email goes out on Monday to everyone on the beta list.",
+    ],
+  ]) {
+    assert.equal(longestMissingRun(raw, output), 0, output);
+  }
+});
+
+test("a short edit the cleanup is meant to make stays well under a drop", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  // The false start "can you send the report" is removed.
+  assert.equal(
+    longestMissingRun(
+      "can you send the report can you please send the quarterly report to marie by friday afternoon so she has time to review it before the board meeting on monday",
+      "Can you please send the quarterly report to Marie by Friday afternoon, so she has time to review it before the board meeting on Monday?"
+    ),
+    5
+  );
+});
+
+test("the missing-run check reads languages written without spaces", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  const chinese = [
+    "我们下周要发布新版本，但是测试还没有通过，所以可能要推迟到下下周。",
+    // 24 words.
+    "另外设计团队希望在发布之前再检查一遍新的引导流程，因为上次的反馈说权限请求出现得太早了。",
+    "最后我们还需要更新帮助中心的文章，并且通知所有测试用户。",
+  ];
+  assert.equal(longestMissingRun(chinese.join(""), chinese.join("")), 0);
+  assert.equal(longestMissingRun(chinese.join(""), `${chinese[0]}${chinese[2]}`), 24);
+
+  const russian = [
+    "Мы планируем выпустить новую версию на следующей неделе, если все тесты пройдут успешно.",
+    // 20 words.
+    "Команда дизайна хочет ещё раз проверить новый процесс регистрации, потому что пользователи жаловались на слишком ранний запрос доступа к микрофону.",
+    "После этого мы обновим статьи в справочном центре.",
+  ];
+  assert.equal(longestMissingRun(russian.join(" "), `${russian[0]} ${russian[2]}`), 20);
+});
+
+test("the missing-run check matches the measured reference (guards.py, 4-word phrases)", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  // Expected values from openwhispr-finetune guard/guards.py uncovered_run(). Its
+  // tokens are ASCII only and keep apostrophes, so these vectors avoid both.
+  for (const [raw, output, expected] of [
+    [
+      "um so first we need to finish the migration script and run it against the staging database twice then uh we should write the release notes for the desktop app and send them to the design team for review before thursday and finally we can tag the build and ship it to the beta channel on friday morning",
+      "So first we need to finish the migration script and run it against the staging database twice. Finally, we can tag the build and ship it to the beta channel on Friday morning.",
+      23,
+    ],
+    ["please book a table for six people at the italian place", "Okay.", 11],
+    // Fewer than four words said (hesitations aside): nothing to measure.
+    ["um yes uh please do", "", 0],
+    [LONG_RAW, LONG_CLEAN, 0],
+  ]) {
+    assert.equal(longestMissingRun(raw, output), expected, raw);
+  }
+});

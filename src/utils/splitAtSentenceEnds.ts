@@ -2,7 +2,7 @@
 // brackets in between. "3.5" has no whitespace after its point, so it holds.
 const SENTENCE_BREAK = /(?<=[.!?…]["'”’)\]]*)\s+/u;
 
-const wordsOf = (text: string): string[] => text.split(/\s+/u).filter(Boolean);
+export const wordsOf = (text: string): string[] => text.split(/\s+/u).filter(Boolean);
 
 /**
  * Cuts text into parts of at most `maxWords` words, breaking at sentence ends.

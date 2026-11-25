@@ -109,3 +109,41 @@ export function assertPlausibleCleanupOutput(rawText: string, output: string): v
     ...(messageKey ? { messageKey } : {}),
   });
 }
+
+// Hesitation sounds only, narrower than FILLER_WORDS on purpose: an answer
+// usually keeps a word like "so" or "right", and leaving it out of the speaker's
+// side would break the phrases around it into a false gap. It is also the list
+// the drop thresholds were measured with (openwhispr-finetune guard/guards.py).
+const HESITATIONS = new Set("um uh umm uhh er erm ah hmm mm mhm".split(" "));
+// Words in the phrases matched against the answer. At 3, a measured drop hid
+// behind short phrases that also occur elsewhere in the dictation.
+const KEPT_PHRASE_WORDS = 4;
+
+/**
+ * The longest run of words the speaker said (hesitations aside) that the answer
+ * lost: a word is kept when some 4-word phrase containing it appears anywhere
+ * in the answer. A long run is a dropped passage, even in an answer as long as
+ * the dictation (one paragraph written over and over in place of the rest).
+ */
+export function longestMissingRun(rawText: string, output: string): number {
+  const spoken = comparisonTokens(rawText).filter((token) => !HESITATIONS.has(token));
+  if (spoken.length < KEPT_PHRASE_WORDS) return 0;
+  const answered = comparisonTokens(output);
+  const answerPhrases = new Set<string>();
+  for (let start = 0; start + KEPT_PHRASE_WORDS <= answered.length; start++) {
+    answerPhrases.add(answered.slice(start, start + KEPT_PHRASE_WORDS).join(" "));
+  }
+
+  let keptThrough = -1;
+  let run = 0;
+  let longest = 0;
+  for (let index = 0; index < spoken.length; index++) {
+    const phrase = spoken.slice(index, index + KEPT_PHRASE_WORDS);
+    if (phrase.length === KEPT_PHRASE_WORDS && answerPhrases.has(phrase.join(" "))) {
+      keptThrough = index + KEPT_PHRASE_WORDS - 1;
+    }
+    run = index <= keptThrough ? 0 : run + 1;
+    longest = Math.max(longest, run);
+  }
+  return longest;
+}
