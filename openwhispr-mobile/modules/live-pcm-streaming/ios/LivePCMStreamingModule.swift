@@ -1,6 +1,7 @@
 import AVFoundation
 import ExpoModulesCore
 import Foundation
+import UIKit
 
 private enum LivePCMError: LocalizedError {
   case invalidInputFormat
@@ -67,6 +68,15 @@ public class LivePCMStreamingModule: Module {
   private let captureQueue = DispatchQueue(label: "com.openwhispr.live-pcm-streaming.capture")
   private var watchdog: DispatchSourceTimer?
   private var observers: [NSObjectProtocol] = []
+
+  // Background time held through an interruption's fast retries
+  // (`CaptureHealthPolicy.wantsBackgroundTime`): once another app takes the
+  // microphone the engine is silent, and without this iOS may suspend the app
+  // before the watchdog's retries get the microphone back. The identifier is
+  // only touched on the main thread; the request flag is guarded by stateLock,
+  // and requests are queued to main under it so they apply in order.
+  private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+  private var backgroundTimeRequested = false
 
   public func definition() -> ModuleDefinition {
     Name("LivePCMStreaming")
@@ -260,7 +270,7 @@ public class LivePCMStreamingModule: Module {
       stateLock.unlock()
       return
     }
-    health.restartAttempted(atMs: Self.nowMs())
+    let attempt = health.restartAttempted(atMs: Self.nowMs())
     let oldEngine = audioEngine
     let sampleRate = outputSampleRate
     // Retired before the old engine stops, so a late buffer from it is dropped.
@@ -274,11 +284,18 @@ public class LivePCMStreamingModule: Module {
     oldEngine?.inputNode.removeTap(onBus: 0)
     oldEngine?.stop()
 
+    // Every attempt is logged, so a device log shows whether retries kept
+    // running in the background and what iOS answered each one.
     do {
       try startEngine(sampleRate: sampleRate, reason: reason)
+      NSLog("[LivePCMStreaming] restart (\(reason)) attempt=\(attempt) ok")
     } catch {
-      // Expected while a phone call holds the session: the watchdog retries.
-      NSLog("[LivePCMStreaming] restart (\(reason)) failed: \(error.localizedDescription)")
+      // Expected while a phone call holds the session: the watchdog retries,
+      // a second later while the interruption is young.
+      stateLock.lock()
+      health.restartFailed(atMs: Self.nowMs())
+      stateLock.unlock()
+      NSLog("[LivePCMStreaming] restart (\(reason)) attempt=\(attempt) failed: \(error.localizedDescription)")
     }
   }
 
@@ -368,6 +385,7 @@ public class LivePCMStreamingModule: Module {
     stateLock.unlock()
 
     if changed {
+      requestBackgroundTime(newInterruption: true)
       sendCaptureState(.interrupted, reason: "interruption", capturedMs: capturedMs)
     }
   }
@@ -398,11 +416,74 @@ public class LivePCMStreamingModule: Module {
     let capturedMs = currentCapturedMs()
     stateLock.unlock()
 
+    let stalled = before == .capturing && after == .interrupted
+    // Also where the background time ends once the fast retries' bound passes.
+    requestBackgroundTime(newInterruption: stalled)
     guard action == .restart else { return }
-    if before == .capturing && after == .interrupted {
+    if stalled {
       sendCaptureState(.interrupted, reason: "stalled", capturedMs: capturedMs)
     }
     restartCapture(reason: "watchdog")
+  }
+
+  // Any thread; takes stateLock, so never call it holding the lock. Reads
+  // what the policy wants under the lock, so a request never acts on a stale
+  // answer (capture returning on the render thread meanwhile). Queues the
+  // change to main only when the wanted state changes, or when a new
+  // interruption begins, which swaps any task still held for a fresh one.
+  private func requestBackgroundTime(newInterruption: Bool = false) {
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    let wanted = isStreaming && health.wantsBackgroundTime(atMs: Self.nowMs())
+    let changed = wanted != backgroundTimeRequested
+    backgroundTimeRequested = wanted
+    guard changed || (wanted && newInterruption) else { return }
+    // Queued under the lock, so two threads' requests reach main in the order
+    // they were made.
+    DispatchQueue.main.async {
+      self.applyBackgroundTime(wanted, replacingHeld: newInterruption)
+    }
+  }
+
+  // Main thread. Begins the new task before ending a held one, so the app is
+  // never left without background time in between.
+  private func applyBackgroundTime(_ wanted: Bool, replacingHeld: Bool) {
+    dispatchPrecondition(condition: .onQueue(.main))
+    guard wanted else {
+      endBackgroundTask(backgroundTask)
+      return
+    }
+    let held = backgroundTask
+    if held != .invalid && !replacingHeld { return }
+    var task = UIBackgroundTaskIdentifier.invalid
+    task = UIApplication.shared.beginBackgroundTask(withName: "OpenWhisprMeetingInterruption") {
+      // Main thread. iOS ran out of background time before capture returned.
+      NSLog("[LivePCMStreaming] background time expired during an interruption")
+      self.endBackgroundTask(task)
+    }
+    // iOS can refuse (.invalid); a task already held then stays.
+    guard task != .invalid else {
+      NSLog("[LivePCMStreaming] background time refused during an interruption")
+      return
+    }
+    backgroundTask = task
+    if held != .invalid {
+      UIApplication.shared.endBackgroundTask(held)
+    }
+    // In the foreground the remaining time is DBL_MAX, which Int() would trap on.
+    let remaining = UIApplication.shared.backgroundTimeRemaining
+    let remainingText = remaining < 3_600 ? "\(Int(remaining)) s" : "unlimited (foreground)"
+    NSLog("[LivePCMStreaming] background time held, \(remainingText) remaining")
+  }
+
+  // Main thread. Ends `task` only while it is the one held, so a task is never
+  // ended twice.
+  private func endBackgroundTask(_ task: UIBackgroundTaskIdentifier) {
+    dispatchPrecondition(condition: .onQueue(.main))
+    guard task != .invalid, task == backgroundTask else { return }
+    UIApplication.shared.endBackgroundTask(task)
+    backgroundTask = .invalid
+    NSLog("[LivePCMStreaming] background time released")
   }
 
   private func sendCaptureState(_ state: CaptureHealthState, reason: String, capturedMs: Int) {
@@ -477,6 +558,10 @@ public class LivePCMStreamingModule: Module {
       "frameNumber": number,
       "timestampMs": timestampMs,
     ])
+    if resumed {
+      // Capture is back: the interruption's background time is no longer needed.
+      requestBackgroundTime()
+    }
     if resumed, let resumeReason {
       sendCaptureState(.capturing, reason: resumeReason, capturedMs: capturedMs)
     }
@@ -595,6 +680,8 @@ public class LivePCMStreamingModule: Module {
     recordingConverter = nil
     isStreaming = false
     stateLock.unlock()
+    // After isStreaming is false, so the request releases any task held.
+    requestBackgroundTime()
 
     guard wasStreaming || engine != nil else { return }
 

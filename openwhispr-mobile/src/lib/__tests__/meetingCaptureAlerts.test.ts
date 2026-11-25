@@ -10,6 +10,7 @@ import {
 
 const mockSchedule = jest.fn();
 const mockCancel = jest.fn();
+const mockDismiss = jest.fn();
 const mockGetNotificationStatus = jest.fn();
 const mockRequestNotifications = jest.fn();
 
@@ -17,6 +18,7 @@ jest.mock('expo-notifications', () => ({
   SchedulableTriggerInputTypes: { TIME_INTERVAL: 'timeInterval' },
   scheduleNotificationAsync: (input: unknown) => mockSchedule(input),
   cancelScheduledNotificationAsync: (id: string) => mockCancel(id),
+  dismissNotificationAsync: (id: string) => mockDismiss(id),
 }));
 
 jest.mock('@/lib/notifications', () => ({
@@ -40,6 +42,7 @@ beforeEach(() => {
   appStateListener = undefined;
   mockSchedule.mockResolvedValue('notification-1');
   mockCancel.mockResolvedValue(undefined);
+  mockDismiss.mockResolvedValue(undefined);
   mockGetNotificationStatus.mockResolvedValue('granted');
   setAppState('background');
   setPlatform('ios');
@@ -64,6 +67,17 @@ describe('scheduleCapturePausedNotification', () => {
         body: 'Open OpenWhispr to resume recording.',
       },
       trigger: { type: 'timeInterval', seconds: 20 },
+    });
+  });
+
+  it('notifies at once for a delay of 0', async () => {
+    await expect(scheduleCapturePausedNotification(0)).resolves.toBe('notification-1');
+    expect(mockSchedule).toHaveBeenCalledWith({
+      content: {
+        title: 'Meeting recording paused',
+        body: 'Open OpenWhispr to resume recording.',
+      },
+      trigger: null,
     });
   });
 
@@ -94,9 +108,16 @@ describe('scheduleCapturePausedNotification', () => {
 });
 
 describe('cancelCapturePausedNotification', () => {
-  it('cancels a scheduled notification', async () => {
+  it('cancels a scheduled notification and removes a delivered one', async () => {
     await cancelCapturePausedNotification('notification-1');
     expect(mockCancel).toHaveBeenCalledWith('notification-1');
+    expect(mockDismiss).toHaveBeenCalledWith('notification-1');
+  });
+
+  it('still removes a delivered notification when cancelling fails', async () => {
+    mockCancel.mockRejectedValue(new Error('gone'));
+    await cancelCapturePausedNotification('notification-1');
+    expect(mockDismiss).toHaveBeenCalledWith('notification-1');
   });
 
   it('ignores a null id', async () => {
@@ -159,12 +180,89 @@ describe('useCapturePausedNotification', () => {
     expect(mockSchedule).toHaveBeenCalledTimes(1);
   });
 
-  it('cancels once the app is back in the foreground', async () => {
+  it('cancels a waiting notification once the app is back in the foreground', async () => {
+    setAppState('inactive');
     render({ active: true, capturing: false });
     await act(async () => {});
+    expect(mockSchedule).toHaveBeenCalledTimes(1);
     setAppState('active');
     await act(async () => appStateListener?.('active'));
     expect(mockCancel).toHaveBeenCalledWith('notification-1');
+  });
+
+  it('notifies at once when interrupted in the background', async () => {
+    const hook = render({ active: true, capturing: true });
+    await act(async () => hook.rerender({ active: true, capturing: false }));
+    expect(mockSchedule).toHaveBeenCalledTimes(1);
+    expect(mockSchedule).toHaveBeenCalledWith(expect.objectContaining({ trigger: null }));
+  });
+
+  it('notifies at once when backgrounded 2 s after a pause in the foreground', async () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    setAppState('active');
+    render({ active: true, capturing: false });
+    await act(async () => {});
+    expect(mockSchedule).not.toHaveBeenCalled();
+    now.mockReturnValue(1_002_000);
+    setAppState('background');
+    await act(async () => appStateListener?.('background'));
+    expect(mockSchedule).toHaveBeenCalledTimes(1);
+    expect(mockSchedule).toHaveBeenCalledWith(expect.objectContaining({ trigger: null }));
+  });
+
+  it('raises nothing while a foreground pause stays on screen', async () => {
+    setAppState('active');
+    render({ active: true, capturing: false });
+    await act(async () => {});
+    setAppState('inactive');
+    await act(async () => appStateListener?.('inactive'));
+    expect(mockSchedule).not.toHaveBeenCalled();
+  });
+
+  it('still waits 20 s for a pause that began while inactive', async () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    setAppState('inactive');
+    render({ active: true, capturing: false });
+    await act(async () => {});
+    expect(mockSchedule).toHaveBeenLastCalledWith(
+      expect.objectContaining({ trigger: { type: 'timeInterval', seconds: 20 } }),
+    );
+    // Back on screen before it fired, then into the background: only the rest of the 20 s.
+    now.mockReturnValue(1_002_000);
+    setAppState('active');
+    await act(async () => appStateListener?.('active'));
+    expect(mockCancel).toHaveBeenCalledWith('notification-1');
+    now.mockReturnValue(1_005_000);
+    setAppState('background');
+    await act(async () => appStateListener?.('background'));
+    expect(mockSchedule).toHaveBeenCalledTimes(2);
+    expect(mockSchedule).toHaveBeenLastCalledWith(
+      expect.objectContaining({ trigger: { type: 'timeInterval', seconds: 15 } }),
+    );
+  });
+
+  it('one notification per pause', async () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    render({ active: true, capturing: false });
+    await act(async () => {});
+    expect(mockSchedule).toHaveBeenCalledTimes(1);
+    now.mockReturnValue(1_010_000);
+    setAppState('active');
+    await act(async () => appStateListener?.('active'));
+    // Already shown: coming back leaves it, and leaving again does not raise another.
+    expect(mockCancel).not.toHaveBeenCalled();
+    setAppState('background');
+    await act(async () => appStateListener?.('background'));
+    expect(mockSchedule).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleared when capture resumes', async () => {
+    const hook = render({ active: true, capturing: false });
+    await act(async () => {});
+    expect(mockSchedule).toHaveBeenCalledWith(expect.objectContaining({ trigger: null }));
+    await act(async () => hook.rerender({ active: true, capturing: true }));
+    expect(mockCancel).toHaveBeenCalledWith('notification-1');
+    expect(mockDismiss).toHaveBeenCalledWith('notification-1');
   });
 
   it('does nothing while capturing or not recording', async () => {
