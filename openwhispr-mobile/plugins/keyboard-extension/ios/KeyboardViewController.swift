@@ -458,7 +458,7 @@ private final class KeyButton: UIButton {
 private final class PillBackgroundView: UIView {
   enum Style {
     case adaptive            // grey fill (light) / outlined (dark) — "Tap to speak"
-    case gradient([UIColor]) // brand blue gradient — "Activate"
+    case gradient([UIColor]) // brand blue gradient
     case solid(UIColor)      // flat colour — transient/issue states
   }
 
@@ -1186,7 +1186,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var lastKeystrokeAt: CFTimeInterval = 0
   private var suggestionRestTimer: Timer?
   private var fieldSyncTimer: Timer?
-  /// The pill shows its resting state ("Tap to speak" / "Activate"), not a take in progress.
+  /// The pill shows its resting state ("Tap to speak"), not a take in progress.
   private var isPillIdle = false
   private var pillTitle = ""
   private var pillCenterConstraint: NSLayoutConstraint?
@@ -1484,6 +1484,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       self.refreshFieldAwareKeys()
     }
   }
+
+  /// The resting pill hands the dictation to the app (it reads "Tap to speak" either way).
+  private var pillOpensApp = false
 
   // Between viewWillAppear and viewWillDisappear: the only time the field may be read from a
   // deferred block.
@@ -4961,7 +4964,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // Inside OpenWhispr itself, tapping records in place (the app's URL handler
     // detects the self-hosted case and starts recording without switching apps),
     // so show "Tap to speak" with a mic. Elsewhere, a tap hands off to the app,
-    // so show "Activate" with the brand logo.
+    // which the pill does through its link (opensApp).
     let backgroundReady = KeyboardHandoffProvider.shared.isBackgroundSessionReady()
     // Bundle-id detection (hostIsOwnApp) misses often; the app's foreground
     // heartbeat is the reliable "we're inside OpenWhispr" signal. Either one
@@ -4980,15 +4983,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       recordButton.addTarget(self, action: #selector(handleDirectRecordTapped), for: .touchUpInside)
     }
 
-    if recordsInPlace || recordsDirect {
-      applyRecordButtonStyle(title: "Tap to speak", image: CachedImages.brandLogoMark)
-    } else {
-      applyRecordButtonStyle(
-        title: "Activate",
-        image: CachedImages.brandLogoMark,
-        gradient: [Palette.brandGradientStart, Palette.brandGradientEnd]
-      )
-    }
+    // The pill reads the same either way: when the keyboard can't record here (the on-device
+    // model is still loading, music is playing, a model or route only the app runs), the tap
+    // opens OpenWhispr through the link over the pill and the app takes the dictation.
+    applyRecordButtonStyle(
+      title: "Tap to speak", image: CachedImages.brandLogoMark, opensApp: !(recordsInPlace || recordsDirect)
+    )
     resetVoiceMeterBars()
     refreshAgentButton()
     logRecordMarker(
@@ -5065,8 +5065,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // Tints title and symbol together via baseForegroundColor. Defaults to
     // white so every existing call site is unchanged; only the persistent
     // Full Access state needs dark ink for contrast on amber.
-    foreground: UIColor = .white
+    foreground: UIColor = .white,
+    // "Tap to speak" hands off to the app instead of recording here.
+    opensApp: Bool = false
   ) {
+    pillOpensApp = opensApp
     // The "ellipsis" states (Processing/Starting/Stopping) use the animated dots
     // overlay instead of a static symbol; the image is then a transparent spacer
     // that reserves the dots' space in the layout.
@@ -5095,11 +5098,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
     recordButton.configuration = config
     pillTitle = title
-    isPillIdle = title == "Tap to speak" || title == "Activate"
+    isPillIdle = title == "Tap to speak"
     applyPillCompactness()
     updateSuggestionBarVisibility()
 
-    // "Activate" uses the brand gradient; transient/issue states pass a solid
+    // Transient/issue states pass a solid
     // colour; everything else (incl. "Tap to speak") uses the adaptive pill.
     let pillStyle: PillBackgroundView.Style
     if let gradient {
@@ -5126,7 +5129,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
     recordButton.accessibilityLabel = title
     switch title {
-    case "Activate":
+    case _ where opensApp:
       recordButton.accessibilityHint = "Opens OpenWhispr to dictate"
     case "Turn on Full Access":
       recordButton.accessibilityHint = "Shows how to turn on Full Access"
@@ -5141,7 +5144,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       setRecordButtonPressed(true)
     case .ended:
       setRecordButtonPressed(false)
-      // In "Activate" mode the tap itself is handled by the SwiftUI link
+      // When the pill opens the app, the tap itself is handled by the SwiftUI link
       // overlay, which gives no callback. Stamp the tap in the App Group so
       // the app can recover the handoff when the deep link never reaches JS
       // (cold-launch getInitialURL races deliver null and the tap dies).

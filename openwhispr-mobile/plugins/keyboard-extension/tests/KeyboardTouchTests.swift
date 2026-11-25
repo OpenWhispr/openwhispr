@@ -248,6 +248,7 @@ private extension KeyboardViewController {
   func touchTestRefreshPill() { refreshRecordButton() }
   func touchTestSetHostIsOwnApp(_ value: Bool) { hostIsOwnApp = value }
   var touchTestPillTitle: String? { recordButton.configuration?.title }
+  var touchTestPillOpensApp: Bool { pillOpensApp }
   var touchTestPillActions: [String] { recordButton.actions(forTarget: self, forControlEvent: .touchUpInside) ?? [] }
   var touchTestCanvasShown: Bool { recordingCanvas.isUserInteractionEnabled }
   func touchTestTapDirectPill() { handleDirectRecordTapped() }
@@ -853,18 +854,18 @@ private func checkDirectLocalModelReadiness(_ checks: inout TouchChecks) {
   direct.canRecordHere = false
   keyboard.touchTestUseDirect(direct)
   keyboard.touchTestRefreshPill()
-  checks.check("local ready: loading reads Activate", keyboard.touchTestPillTitle == "Activate")
+  checks.check("local ready: loading reads Activate", (keyboard.touchTestPillTitle == "Tap to speak" && keyboard.touchTestPillOpensApp))
 
   let attachesBefore = direct.attaches
   direct.canRecordHere = true
   direct.onLocalModelReadyChange?()
   checks.check("local ready: the microphone page is attached once the model is ready", direct.attaches == attachesBefore + 1)
-  checks.check("local ready: the pill reads Tap to speak", keyboard.touchTestPillTitle == "Tap to speak")
+  checks.check("local ready: the pill reads Tap to speak", (keyboard.touchTestPillTitle == "Tap to speak" && !keyboard.touchTestPillOpensApp))
   checks.check("local ready: the pill starts a direct take", keyboard.touchTestPillActions == ["handleDirectRecordTapped"])
 
   direct.canRecordHere = false
   direct.onLocalModelReadyChange?()
-  checks.check("local ready: a released model puts the pill back to Activate", keyboard.touchTestPillTitle == "Activate")
+  checks.check("local ready: a released model puts the pill back to Activate", (keyboard.touchTestPillTitle == "Tap to speak" && keyboard.touchTestPillOpensApp))
 
   // A take in progress owns the pill: readiness changing mid-take doesn't redraw it.
   direct.canRecordHere = true
@@ -891,7 +892,7 @@ private func checkDirectHeldDictation(_ checks: inout TouchChecks) {
   let direct = FakeDirectDictation()
   keyboard.touchTestUseDirect(direct)
   keyboard.touchTestRefreshPill()
-  checks.check("held: nothing waiting reads Tap to speak", keyboard.touchTestPillTitle == "Tap to speak")
+  checks.check("held: nothing waiting reads Tap to speak", (keyboard.touchTestPillTitle == "Tap to speak" && !keyboard.touchTestPillOpensApp))
 
   direct.hasHeldDictation = true
   direct.onHeldChange?()
@@ -903,7 +904,7 @@ private func checkDirectHeldDictation(_ checks: inout TouchChecks) {
   checks.check("held: a tap asks for the dictation", direct.heldInserts == 1 && direct.starts == 0)
   direct.hasHeldDictation = false
   direct.onHeldChange?()
-  checks.check("held: once inserted the pill is back to Tap to speak", keyboard.touchTestPillTitle == "Tap to speak")
+  checks.check("held: once inserted the pill is back to Tap to speak", (keyboard.touchTestPillTitle == "Tap to speak" && !keyboard.touchTestPillOpensApp))
   checks.check("held: and the X is gone", !keyboard.touchTestProcessingCancelShown)
 
   direct.hasHeldDictation = true
@@ -1034,18 +1035,18 @@ private func checkTranslationSelectionRefreshesPill(_ checks: inout TouchChecks)
   // Stood down (a snapshot that can't run on its own), then a pick it can run.
   direct.canRecordHere = false
   keyboard.touchTestRefreshPill()
-  checks.check("translate pick: stood down reads Activate", keyboard.touchTestPillTitle == "Activate")
+  checks.check("translate pick: stood down reads Activate", (keyboard.touchTestPillTitle == "Tap to speak" && keyboard.touchTestPillOpensApp))
   direct.canRecordHere = true
   keyboard.touchTestSelectTranslation("es")
   checks.check(
     "translate pick: a language the path can run reads Tap to speak (got \(keyboard.touchTestPillTitle ?? "nil"))",
-    keyboard.touchTestPillTitle == "Tap to speak"
+    (keyboard.touchTestPillTitle == "Tap to speak" && !keyboard.touchTestPillOpensApp)
   )
   checks.check("translate pick: and the pill starts a direct take", keyboard.touchTestPillActions == ["handleDirectRecordTapped"])
 
   direct.canRecordHere = false
   keyboard.touchTestSelectTranslation(nil)
-  checks.check("translate pick: Off that stands it down reads Activate", keyboard.touchTestPillTitle == "Activate")
+  checks.check("translate pick: Off that stands it down reads Activate", (keyboard.touchTestPillTitle == "Tap to speak" && keyboard.touchTestPillOpensApp))
 
   // A timed issue state owns the pill until its timer puts it back.
   direct.canRecordHere = true
@@ -1061,7 +1062,7 @@ private func checkTranslationSelectionRefreshesPill(_ checks: inout TouchChecks)
   keyboard.touchTestSelectTranslation("es")
   checks.check(
     "translate pick: after the keyboard went away mid-issue the pill follows again (got \(keyboard.touchTestPillTitle ?? "nil"))",
-    keyboard.touchTestPillTitle == "Tap to speak"
+    (keyboard.touchTestPillTitle == "Tap to speak" && !keyboard.touchTestPillOpensApp)
   )
   keyboard.touchTestRefreshPill()
 
@@ -1073,14 +1074,14 @@ private func checkTranslationSelectionRefreshesPill(_ checks: inout TouchChecks)
   keyboard.touchTestSelectTranslation("es")
   checks.check(
     "translate pick: a transcript on its way keeps the pill (got \(keyboard.touchTestPillTitle ?? "nil"))",
-    keyboard.touchTestPillTitle == "Activate"
+    (keyboard.touchTestPillTitle == "Tap to speak" && keyboard.touchTestPillOpensApp)
   )
   // Going away ends that wait, so the same controller shown again is back at rest.
   keyboard.viewWillDisappear(false)
   keyboard.touchTestSelectTranslation("es")
   checks.check(
     "translate pick: after the keyboard went away the pill follows again (got \(keyboard.touchTestPillTitle ?? "nil"))",
-    keyboard.touchTestPillTitle == "Tap to speak"
+    (keyboard.touchTestPillTitle == "Tap to speak" && !keyboard.touchTestPillOpensApp)
   )
 }
 
@@ -1147,7 +1148,7 @@ private func checkDirectDictation(_ checks: inout TouchChecks) {
   let direct = FakeDirectDictation()
   keyboard.touchTestUseDirect(direct)
   keyboard.touchTestRefreshPill()
-  checks.check("direct: eligible and the app not alive reads Tap to speak", keyboard.touchTestPillTitle == "Tap to speak")
+  checks.check("direct: eligible and the app not alive reads Tap to speak", (keyboard.touchTestPillTitle == "Tap to speak" && !keyboard.touchTestPillOpensApp))
   checks.check("direct: the pill starts a direct take", keyboard.touchTestPillActions == ["handleDirectRecordTapped"])
   checks.check("direct: the attached field supplies its identifier", direct.readDocumentID?() == TestEnvironment.proxy.documentIdentifier)
   keyboard.touchTestTapDirectPill()
@@ -1155,7 +1156,7 @@ private func checkDirectDictation(_ checks: inout TouchChecks) {
 
   direct.canRecordHere = false
   keyboard.touchTestRefreshPill()
-  checks.check("direct: not eligible reads Activate", keyboard.touchTestPillTitle == "Activate")
+  checks.check("direct: not eligible reads Activate", (keyboard.touchTestPillTitle == "Tap to speak" && keyboard.touchTestPillOpensApp))
   checks.check("direct: not eligible keeps the handoff", !keyboard.touchTestPillActions.contains("handleDirectRecordTapped"))
 
   direct.canRecordHere = true
@@ -1196,7 +1197,7 @@ private func checkDirectDictation(_ checks: inout TouchChecks) {
   let startsBefore = direct.starts
   keyboard.touchTestTapDirectPill()
   checks.check("direct: a tap after audio started doesn't record here", direct.starts == startsBefore)
-  checks.check("direct: and the pill falls back to Activate", keyboard.touchTestPillTitle == "Activate")
+  checks.check("direct: and the pill falls back to Activate", (keyboard.touchTestPillTitle == "Tap to speak" && keyboard.touchTestPillOpensApp))
 
   // start() declined without a state change (still failed): the pill must not be left dead.
   direct.canRecordHere = true
