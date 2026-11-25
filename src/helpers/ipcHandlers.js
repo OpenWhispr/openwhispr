@@ -1522,11 +1522,10 @@ class IPCHandlers {
   }
 
   _flushAccountRepairMirrors() {
-    if (!this.noteFiles.enabled) return;
-    for (const note of this.databaseManager.takeAccountRepairNotes()) {
-      this.noteFiles.writeNote(note);
-    }
-    this.noteFiles.containersChanged();
+    const { noteFiles } = this;
+    if (!noteFiles.enabled) return;
+    noteFiles.queueAccountRepairNotes();
+    noteFiles.containersChanged();
   }
 
   _captureMirrorDeletionNotes(filter) {
@@ -16282,20 +16281,39 @@ class IPCHandlers {
     });
 
     // Note files (markdown mirror) handlers
-    ipcMain.handle("note-files-set-enabled", async (_event, enabled, customPath, options) => {
+    let awaitingNoteFilesStartup = true;
+    let pendingNoteFilesPath;
+    const finishNoteFilesSetup = () => {
+      this._noteFilesSync?.deleteMergedNotes(this.databaseManager.mergedNotes);
+      this._flushAccountRepairMirrors();
+    };
+    ipcMain.handle("note-files-set-enabled", async (event, enabled, customPath, options) => {
+      const startup = options?.startup === true;
+      const fromDictation = startup && isFromWindow(event, this.windowManager?.mainWindow);
+      if (
+        startup &&
+        !fromDictation &&
+        !isFromWindow(event, this.windowManager?.controlPanelWindow)
+      ) {
+        return { success: true };
+      }
       try {
-        if (!enabled) {
-          this.noteFiles.disable();
+        if (startup && (!fromDictation || !awaitingNoteFilesStartup)) {
+          if (await this._noteFilesSync?.retryInitialization()) finishNoteFilesSetup();
           return { success: true };
         }
-        const basePath = customPath || path.join(app.getPath("userData"), "notes");
-        await this.noteFiles.enable(basePath, { skipRebuild: Boolean(options?.skipRebuild) });
-        // Their rows are gone, and an old-layout file is only removed when it
-        // matches one.
-        for (const note of this.databaseManager.mergedNotes.splice(0)) {
-          this.noteFiles.deleteNote(note.id, note, note.speakerMappings);
+        // Later window requests can retry the current destination using main's settings.
+        awaitingNoteFilesStartup = false;
+        if (!enabled) {
+          if (!startup) this.noteFiles.disable();
+          return { success: true };
         }
-        this._flushAccountRepairMirrors();
+        const requestedPath = startup ? (pendingNoteFilesPath ?? customPath) : customPath;
+        const basePath = requestedPath || path.join(app.getPath("userData"), "notes");
+        await this.noteFiles.enable(basePath, {
+          skipRebuild: startup ? pendingNoteFilesPath === undefined : Boolean(options?.skipRebuild),
+        });
+        finishNoteFilesSetup();
         return { success: true };
       } catch (error) {
         debugLogger.error(
@@ -16309,9 +16327,14 @@ class IPCHandlers {
 
     ipcMain.handle("note-files-set-path", async (_event, newPath) => {
       try {
+        // A folder selection can arrive while the dictation renderer is still starting.
+        if (awaitingNoteFilesStartup) {
+          pendingNoteFilesPath = newPath;
+          return { success: true };
+        }
         if (!this.noteFiles.enabled) return { success: false, error: "Note files not enabled" };
         await this.noteFiles.setPath(newPath);
-        this._flushAccountRepairMirrors();
+        finishNoteFilesSetup();
         return { success: true };
       } catch (error) {
         debugLogger.error("Failed to set note-files path", { error: error.message }, "note-files");
@@ -16323,7 +16346,7 @@ class IPCHandlers {
       try {
         if (!this.noteFiles.enabled) return { success: false, error: "Note files not enabled" };
         await this.noteFiles.rebuild();
-        this._flushAccountRepairMirrors();
+        finishNoteFilesSetup();
         return { success: true };
       } catch (error) {
         debugLogger.error("Failed to rebuild note files", { error: error.message }, "note-files");
