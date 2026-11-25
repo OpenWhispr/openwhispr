@@ -260,7 +260,17 @@ private extension KeyboardViewController {
     handleCharacterKeyReleased(characterButtons[index])
   }
   func touchTestLoseLetter(_ index: Int) { handleCharacterKeyReleased(characterButtons[index]) }
-  func touchTestPressDelete() { handleOtherKeyDown() }
+  private var touchTestDeleteKey: KeyButton? {
+    func find(_ view: UIView) -> KeyButton? {
+      if let key = view as? KeyButton, key.accessibilityLabel == "delete" { return key }
+      for subview in view.subviews { if let found = find(subview) { return found } }
+      return nil
+    }
+    return find(keyboardRowsStack)
+  }
+  func touchTestPressDelete() { if let key = touchTestDeleteKey { handleOtherKeyDown(key) } }
+  func touchTestPressReturn() { if let key = returnButton { handleOtherKeyDown(key) } }
+  func touchTestSetFeedback(_ feedback: KeyFeedbackGenerating) { keyFeedback = feedback }
   /// The letter's long press starting, as the accent row would open.
   func touchTestAccentHoldBegins(_ index: Int) {
     let key = characterButtons[index]
@@ -268,7 +278,7 @@ private extension KeyboardViewController {
   }
   var touchTestAccentRowOpen: Bool { accentKey != nil }
   func touchTestTapReturn() { handleReturnTapped() }
-  func touchTestTapDelete() { handleBackspaceTapped() }
+  func touchTestTapDelete() { handleBackspaceTapped(touchTestDeleteKey) }
   func touchTestTapMode() { handleModeKeyTapped() }
   func touchTestQuote(_ character: String) -> String? { smartQuoteSubstitution(for: character) }
   func touchTestUseDirect(_ direct: DirectDictationControlling) {
@@ -877,6 +887,36 @@ private enum KeyboardTouchTests {
     checks.check("rollover: delete going down types the held letter first (\(proxy.inserted))", proxy.inserted == ["H"])
     board.touchTestLiftLetter(15)
     checks.check("rollover: once (\(proxy.inserted))", proxy.inserted == ["H"])
+
+    // Feedback (click and haptic) comes when a key is touched, as on Apple's keyboard: never
+    // again when it types, so taps stay even when rollover types a letter early.
+    let feedback = CountingKeyFeedback()
+    (board, proxy) = keyboard()
+    board.touchTestSetFeedback(feedback)
+    board.touchTestPressLetter(15)
+    checks.check("feedback: a letter taps as it's touched", feedback.taps == 1 && feedback.clicks == 1)
+    board.touchTestLiftLetter(15)
+    checks.check("feedback: and not again as it types (\(feedback.taps))", feedback.taps == 1 && proxy.inserted == ["H"])
+    board.touchTestPressLetter(2)
+    board.touchTestPressLetter(15)
+    checks.check("feedback: rollover taps once per press (\(feedback.taps))", feedback.taps == 3)
+    board.touchTestLiftLetter(2)
+    board.touchTestLiftLetter(15)
+    checks.check("feedback: nothing at the lifts (\(feedback.taps))", feedback.taps == 3)
+    board.touchTestPressDelete()
+    checks.check("feedback: delete taps as it's touched (\(feedback.taps))", feedback.taps == 4)
+    board.touchTestTapDelete()
+    checks.check("feedback: and not again as it deletes (\(feedback.taps))", feedback.taps == 4)
+    board.touchTestTapLetter(0)
+    checks.check("feedback: a key typed with no touch (VoiceOver) still taps (\(feedback.taps))", feedback.taps == 5)
+    let emptyField = TestTextProxy()
+    emptyField.enablesReturnKeyAutomatically = true
+    TestEnvironment.proxy = emptyField
+    let greyed = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+    let greyedFeedback = CountingKeyFeedback()
+    greyed.touchTestSetFeedback(greyedFeedback)
+    greyed.touchTestPressReturn()
+    checks.check("feedback: a greyed return key gives none", greyedFeedback.taps == 0 && greyedFeedback.clicks == 0)
   }
 
   /// iOS holds back touches near the screen's edges while it checks for a system gesture;

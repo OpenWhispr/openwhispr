@@ -1604,18 +1604,22 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   @objc private func handleCharacterKeyTapped(_ sender: KeyButton) {
-    if let index = heldLetters.firstIndex(where: { $0.key === sender }) {
-      let committed = heldLetters[index].committed
-      heldLetters.remove(at: index)
-      // It went in when the next key went down.
-      if committed { return }
+    guard let index = heldLetters.firstIndex(where: { $0.key === sender }) else {
+      // Typed with no touch going down first (VoiceOver): the feedback comes now.
+      typeCharacterKey(sender, playsFeedback: true)
+      return
     }
-    typeCharacterKey(sender)
+    let committed = heldLetters[index].committed
+    heldLetters.remove(at: index)
+    // It went in when the next key went down.
+    if committed { return }
+    typeCharacterKey(sender, playsFeedback: false)
   }
 
-  private func typeCharacterKey(_ sender: KeyButton) {
+  /// `playsFeedback`: false when the click and haptic came as the key was touched.
+  private func typeCharacterKey(_ sender: KeyButton, playsFeedback: Bool) {
     guard let output = sender.output else { return }
-    playKeyClick()
+    if playsFeedback { playKeyClick() }
 
     let insertion = layoutMode == .letters && isShiftEnabled ? output.uppercased() : output
     let text = smartQuoteSubstitution(for: insertion) ?? insertion
@@ -1641,6 +1645,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   @objc private func handleCharacterKeyDown(_ sender: KeyButton) {
     commitHeldLetters()
     heldLetters.append((key: sender, committed: false))
+    // As on Apple's keyboard, the click and haptic come as a key is touched, so they keep an
+    // even beat however the fingers overlap. Typing it later plays nothing more.
+    playKeyClick()
     guard let text = sender.title(for: .normal) else { return }
     keyPopup.show(
       text,
@@ -1664,13 +1671,30 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func commitHeldLetters() {
     for index in heldLetters.indices where !heldLetters[index].committed && heldLetters[index].key !== accentKey {
       heldLetters[index].committed = true
-      typeCharacterKey(heldLetters[index].key)
+      typeCharacterKey(heldLetters[index].key, playsFeedback: false)
     }
   }
 
+  /// Delete, return and shortcut keys whose touch-down already played the feedback.
+  private var keysPlayedOnTouch = Set<ObjectIdentifier>()
+
   /// A key other than a letter went down (delete, return, a shortcut).
-  @objc private func handleOtherKeyDown() {
+  @objc private func handleOtherKeyDown(_ sender: KeyButton) {
     commitHeldLetters()
+    // A greyed return key does nothing, as on Apple's keyboard.
+    if sender === returnButton && isReturnKeyDisabled { return }
+    keysPlayedOnTouch.insert(ObjectIdentifier(sender))
+    playKeyClick()
+  }
+
+  @objc private func handleOtherKeyReleased(_ sender: KeyButton) {
+    keysPlayedOnTouch.remove(ObjectIdentifier(sender))
+  }
+
+  /// The key typed: its feedback, unless its touch already played it (VoiceOver has no touch).
+  private func playTypedKeyFeedback(_ sender: KeyButton?) {
+    if let sender, keysPlayedOnTouch.remove(ObjectIdentifier(sender)) != nil { return }
+    playKeyClick()
   }
 
   @objc private func handleShiftTapped() {
@@ -1700,8 +1724,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     refreshShiftState()
   }
 
-  @objc private func handleBackspaceTapped() {
-    playKeyClick()
+  @objc private func handleBackspaceTapped(_ sender: KeyButton? = nil) {
+    playTypedKeyFeedback(sender)
     deleteBackwardOnce()
     // "Hello. W" ⌫ starts a sentence again.
     syncShiftWithContextIfNeeded()
@@ -1741,8 +1765,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     refreshVisibleKeyboardMode()
   }
 
-  @objc private func handleSpaceTapped() {
-    playKeyClick()
+  /// `playsFeedback`: false for a space typed by a touch, which played it as it began.
+  @objc private func handleSpaceTapped(playsFeedback: Bool = true) {
+    if playsFeedback { playKeyClick() }
     if !applyDoubleSpacePeriod() {
       typeText(" ")
     }
@@ -1763,7 +1788,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   @objc private func handleShortcutTapped(_ sender: KeyButton) {
     guard let output = sender.output else { return }
-    playKeyClick()
+    playTypedKeyFeedback(sender)
     typeText(output)
     syncShiftWithContextIfNeeded()
     refreshAfterEdit()
@@ -1828,10 +1853,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     return false
   }
 
-  @objc private func handleReturnTapped() {
+  @objc private func handleReturnTapped(_ sender: KeyButton? = nil) {
     // Greyed: Apple's does nothing. Asked fresh, as hasText may have changed since the redraw.
     guard !isReturnKeyDisabled else { return }
-    playKeyClick()
+    playTypedKeyFeedback(sender)
     typeText("\n")
     syncShiftWithContextIfNeeded()
     refreshAfterEdit()
@@ -3488,7 +3513,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       if let start = path.first, let key = keyboardRowsStack.hitTest(start, with: nil) as? KeyButton,
         let code = key.output?.utf16.first, letterButtonsByCode[code] === key
       {
-        handleCharacterKeyTapped(key)
+        // The touch that became this short swipe already played the feedback.
+        typeCharacterKey(key, playsFeedback: false)
       }
       return
     }
@@ -3616,6 +3642,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     switch touch.phase {
     case .began:
       commitHeldLetters()
+      playKeyClick()
       trackpadHoldTimer?.invalidate()
       applyTrackpad(trackpadGesture.began(at: point, time: time))
       // A still finger sends no events, so the hold is timed here.
@@ -3641,7 +3668,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     case .none:
       break
     case .typeSpace:
-      handleSpaceTapped()
+      // The touch played the feedback as it began.
+      handleSpaceTapped(playsFeedback: false)
     case .began:
       keyPopup.hide()
       keyFeedback.tick()
@@ -3974,8 +4002,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let backspace = makeKeyButton(display: nil, imageSystemName: "delete.left", role: .utility)
     backspace.imageOffsetY = metrics.keycaps.edgeGlyphOffset
     backspace.accessibilityLabel = "delete"
-    backspace.addTarget(self, action: #selector(handleBackspaceTapped), for: .touchUpInside)
-    backspace.addTarget(self, action: #selector(handleOtherKeyDown), for: .touchDown)
+    backspace.addTarget(self, action: #selector(handleBackspaceTapped(_:)), for: .touchUpInside)
+    backspace.addTarget(self, action: #selector(handleOtherKeyDown(_:)), for: .touchDown)
+    backspace.addTarget(self, action: #selector(handleOtherKeyReleased(_:)), for: [.touchUpOutside, .touchCancel])
     let longPress = UILongPressGestureRecognizer(
       target: self,
       action: #selector(handleBackspaceLongPress(_:))
@@ -4447,14 +4476,16 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let shortcuts = (0..<3).map { _ in
       let button = makeKeyButton(display: nil, role: .utility)
       button.addTarget(self, action: #selector(handleShortcutTapped(_:)), for: .touchUpInside)
-      button.addTarget(self, action: #selector(handleOtherKeyDown), for: .touchDown)
+      button.addTarget(self, action: #selector(handleOtherKeyDown(_:)), for: .touchDown)
+      button.addTarget(self, action: #selector(handleOtherKeyReleased(_:)), for: [.touchUpOutside, .touchCancel])
       return button
     }
     shortcutButtons = shortcuts
 
     let returnButton = makeKeyButton(display: nil, imageSystemName: "return.left", role: .utility)
-    returnButton.addTarget(self, action: #selector(handleReturnTapped), for: .touchUpInside)
-    returnButton.addTarget(self, action: #selector(handleOtherKeyDown), for: .touchDown)
+    returnButton.addTarget(self, action: #selector(handleReturnTapped(_:)), for: .touchUpInside)
+    returnButton.addTarget(self, action: #selector(handleOtherKeyDown(_:)), for: .touchDown)
+    returnButton.addTarget(self, action: #selector(handleOtherKeyReleased(_:)), for: [.touchUpOutside, .touchCancel])
     self.returnButton = returnButton
 
     ([modeButton, globeButton, emojiButton, spaceButton] + shortcuts + [returnButton])
