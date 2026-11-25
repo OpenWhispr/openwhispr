@@ -1,6 +1,6 @@
 <resources>
   <string name="ow_insertion_label">OpenWhispr</string>
-  <string name="ow_insertion_description">Scrive la tua dettatura nella casella di testo in cui scrivi. Cosa legge: la casella di testo in cui scrivi, solo quando usi la bolla. Il testo che selezioni, inviato con la tua voce all’IA che hai scelto per modificarlo. OpenWhispr non lo conserva mai. Quella casella per 45 secondi dopo la scrittura, così le tue correzioni entrano nel dizionario. Resta sul tuo telefono. In quale app ti trovi, così la bolla compare solo mentre scrivi. Non legge mai le password, non tocca né invia nulla e non usa mai il tuo testo per pubblicità né lo vende. Nulla viene salvato nel nostro cloud, a meno che tu non attivi il Backup nel cloud.</string>
+  <string name="ow_insertion_description">Scrive la tua dettatura nella casella di testo in cui scrivi. Cosa legge: La casella di testo in cui scrivi (Solo quando usi la bolla); Il testo che selezioni (Inviato alla tua IA per modificarlo. Mai conservato); Le parole che correggi, per 45 secondi (Aggiunte al tuo dizionario, sul telefono); L’app in cui ti trovi (Così la bolla compare solo mentre scrivi). Non legge mai le password. Non tocca, invia né vende mai il tuo testo. Nulla viene salvato nel nostro cloud, a meno che tu non attivi il Backup nel cloud.</string>
   <string name="ow_bubble_ready">OpenWhispr è pronto</string>
   <string name="ow_bubble_recording">OpenWhispr · In ascolto…</string>
   <string name="ow_bubble_notice">Tocca per aprire. Disattiva il pulsante mobile in Impostazioni.</string>

@@ -1,6 +1,6 @@
 <resources>
   <string name="ow_insertion_label">OpenWhispr</string>
-  <string name="ow_insertion_description">Types your dictation into the text box you’re typing in. What it reads: the text box you’re typing in, only when you use the bubble. Text you select, sent with your voice to the AI you chose to be edited. OpenWhispr never stores it. That box for 45 seconds after typing, so your fixes join your dictionary. This stays on your phone. Which app you’re in, so the bubble shows only while you type. Never reads passwords, taps or sends, and never uses your text for ads or sells it. Nothing is saved to our cloud unless you turn on Cloud backup.</string>
+  <string name="ow_insertion_description">Types your dictation into the text box you’re typing in. What it reads: The text box you’re typing in (Only when you use the bubble); Text you select (Sent to your AI to edit. Never stored); Words you fix, for 45 seconds (Added to your dictionary, on your phone); The app you’re in (So the bubble shows only while you type). Never reads passwords. Never taps, sends or sells your text. Nothing saved to our cloud, unless you turn on Cloud backup.</string>
   <string name="ow_bubble_ready">OpenWhispr is ready</string>
   <string name="ow_bubble_recording">OpenWhispr is recording</string>
   <string name="ow_bubble_notice">Tap to open. Turn off the bubble in Settings.</string>
