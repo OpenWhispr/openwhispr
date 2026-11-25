@@ -361,6 +361,7 @@ const KEYBOARD_SOURCES = [
   'KeyboardOptionsMenu.swift',
   'KeyboardParakeetTranscriber.swift',
   'KeyboardViewController.swift',
+  'MeetingCaptureLease.swift',
   'SnippetExpander.swift',
   'SuggestionBarView.swift',
   'SwipeDecoder.swift',

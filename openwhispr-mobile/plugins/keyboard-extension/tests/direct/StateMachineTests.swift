@@ -166,6 +166,8 @@ final class Harness {
   var translationReads = 0
   /// Runs after each `readTranslation`, to change the target between two reads.
   var afterTranslationRead: (() -> Void)?
+  /// The App Group the capture-lease heartbeat is read from; nil reads as no meeting.
+  var meetingDefaults: UserDefaults?
   var encodeError: Error?
   var encodeGains: [Float] = []
   var texts: [String] = []
@@ -205,7 +207,10 @@ final class Harness {
         return "job-\(self.jobCounter)"
       },
       makeBoundary: { "B" },
-      localTranscriber: transcriberAvailable ? transcriber : nil
+      localTranscriber: transcriberAvailable ? transcriber : nil,
+      isMeetingRecording: { [unowned self] in
+        MeetingCaptureLease.isMeetingRecording(defaults: self.meetingDefaults, nowMs: self.clock.ms)
+      }
     ))
     machine.readDocumentID = { [unowned self] in self.documentID }
     machine.readContextBefore = { [unowned self] in self.contextBefore }
