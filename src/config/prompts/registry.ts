@@ -8,13 +8,13 @@ const DEFAULT_CHAT_AGENT_PROMPT =
   "You may be given a transcription of spoken input, so handle informal phrasing gracefully.";
 
 // Appended per request, not baked into the default: the panel renders markdown.
-// A take's answer never goes out through a tool; a voice call keeps its tools
-// for a request to send or do something.
-export const plainTextResponseSuffix = (keepsTools: boolean): string =>
+// A take's answer never goes out through a tool; a voice call's may, when the
+// user asks to send or do something.
+export const plainTextResponseSuffix = (allowToolActions: boolean): string =>
   "\n\nOUTPUT FORMAT: Your answer will be inserted as plain text exactly where the user is typing, " +
   "inside another application. Answer with the text itself, ready to insert (asked for a reply, " +
   "write the reply), with no introduction or comment around it, " +
-  (keepsTools
+  (allowToolActions
     ? "and when the user asks to send or do something, do it with your tools"
     : "and don't draft or send it with a tool") +
   ". Write plain prose with no markdown: no asterisks, underscores, " +

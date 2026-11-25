@@ -322,7 +322,7 @@ const SPOKEN_REPLY_FORMAT =
  * How a reply read aloud in a voice call is written, and in which language
  * (null: the one spoken). `typedAtCaret`: it is also typed where the user is typing.
  */
-export function getSpokenReplyRule(language: SpokenLanguage | null, typedAtCaret = false): string {
+export function getSpokenReplyRule(language: SpokenLanguage | null, typedAtCaret: boolean): string {
   const name = language ? SPOKEN_LANGUAGE_NAMES[language] : undefined;
   return [
     SPOKEN_REPLY_RULE,

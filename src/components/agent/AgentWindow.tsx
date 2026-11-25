@@ -145,13 +145,13 @@ async function captureRequestScreen(): Promise<ChatImageAttachment | null> {
   return captureScreenNow();
 }
 
-const releaseCapture = (sessionId: string | null) => {
+const releaseCapture = (sessionId: string | null | undefined) => {
   if (sessionId) void window.electronAPI?.cancelSelectionEdit?.(sessionId).catch(() => {});
 };
 
-// A call's turn reads the field the user is in as they speak, wherever its
-// hotkey was pressed: a writable one in another app, with auto-paste on, takes
-// the answer. A selection there is left alone.
+// A call's turn reads the field the user is in as they speak, wherever the
+// window's hotkey was last pressed: a writable one in another app, with
+// auto-paste on, takes the answer. A selection there is left alone.
 async function captureCallCaret(): Promise<string | null> {
   if (!getSettings().autoPasteEnabled) return null;
   const capture = await window.electronAPI
@@ -218,9 +218,7 @@ export default function AgentWindow() {
     const sessionIds = new Set([caretRef.current?.sessionId, caretDeliveryRef.current]);
     caretRef.current = null;
     caretDeliveryRef.current = null;
-    for (const sessionId of sessionIds) {
-      if (sessionId) void window.electronAPI?.cancelSelectionEdit?.(sessionId).catch(() => {});
-    }
+    for (const sessionId of sessionIds) releaseCapture(sessionId);
   }, []);
   // Set once the surface exists, below: a pasted answer hides the window and keeps the chat.
   const hideKeepingChatRef = useRef<() => void>(() => {});
@@ -559,8 +557,7 @@ export default function AgentWindow() {
       }
       const controller = new AbortController();
       const cancelReplacement = () => {
-        if (target.kind === "external")
-          void window.electronAPI?.cancelSelectionEdit?.(target.sessionId).catch(() => {});
+        if (target.kind === "external") releaseCapture(target.sessionId);
       };
       controller.signal.addEventListener("abort", cancelReplacement, { once: true });
       selectionEditRef.current?.abort();
@@ -671,7 +668,8 @@ export default function AgentWindow() {
 
   // A call reads the caret as the user starts to speak, so the read (a copy
   // that can wait a second on Windows and Linux) runs while they talk. One
-  // read at a time; the next turn takes the latest, and one it never takes is let go.
+  // read at a time: a speech start while one runs reads nothing new, so the
+  // next turn takes the last read started; one it never takes is let go.
   const callCaretRef = useRef<{ sessionId: Promise<string | null>; done: boolean } | null>(null);
   const releaseCallCaret = useCallback(() => {
     void callCaretRef.current?.sessionId.then(releaseCapture);
@@ -721,6 +719,7 @@ export default function AgentWindow() {
         return;
       }
       caretDeliveryRef.current = caretSessionId;
+      const press = pressRef.current;
       dispatch({
         type: "submitted",
         typed: false,
@@ -738,9 +737,7 @@ export default function AgentWindow() {
                 // Not awaited: the turn ends, and its last sentence is spoken, while the answer is typed.
                 // Typed once the reply is heard: never the first half of a request a pause cut.
                 onComplete: (result) =>
-                  void heard.then(() =>
-                    deliverToCaret(caretSessionId, pressRef.current, false)(result)
-                  ),
+                  void heard.then(() => deliverToCaret(caretSessionId, press, false)(result)),
               }
             : {}),
           voice: { replyLanguage, speech, dryRunWrites, interrupts: interrupts && !joinedRequest },
@@ -1058,7 +1055,7 @@ export default function AgentWindow() {
             }
           } else if (capture?.status === "editable") {
             if (isCurrent()) caretRef.current = { press, sessionId: capture.sessionId };
-            else void window.electronAPI?.cancelSelectionEdit?.(capture.sessionId).catch(() => {});
+            else releaseCapture(capture.sessionId);
           } else if (
             isCurrent() &&
             capture &&

@@ -57,7 +57,7 @@ async function mountPill(t, props) {
   let root = null;
   t.after(() => root && React.act(async () => root.unmount()));
   const happyWindow = await installHappyDom(t);
-  const { VoicePill, WORKING_DOT_MS } = await loadPill(t);
+  const { VoicePill } = await loadPill(t);
   const { createRoot } = require("react-dom/client");
   const host = happyWindow.document.createElement("div");
   root = createRoot(host);
@@ -67,7 +67,7 @@ async function mountPill(t, props) {
       root.render(React.createElement(VoicePill, { ...PILL_PROPS, waveformActive: false, ...next }))
     );
   await render(props);
-  const tick = () => React.act(async () => t.mock.timers.tick(WORKING_DOT_MS));
+  const tick = () => React.act(async () => t.mock.timers.runAll());
   return { host, render, tick };
 }
 

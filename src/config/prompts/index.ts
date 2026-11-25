@@ -55,12 +55,12 @@ export function appendScreenContextSuffix(prompt: string, uiLanguage?: string): 
 // suffix: trailing instructions are the ones models weight most.
 export function appendPlainTextResponseSuffix(
   prompt: string,
-  requireDisposition = false,
-  keepsTools = false
+  requireDisposition: boolean,
+  allowToolActions: boolean
 ): string {
   return (
     prompt +
-    plainTextResponseSuffix(keepsTools) +
+    plainTextResponseSuffix(allowToolActions) +
     (requireDisposition ? CARET_RESPONSE_DISPOSITION_SUFFIX : "")
   );
 }

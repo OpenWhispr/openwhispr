@@ -1194,16 +1194,16 @@ export function createChatTurnEngine(
         systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
       }
       if (options?.plainTextResponse) {
-        const keepsTools = Boolean(options.voice);
+        const allowToolActions = Boolean(options.voice);
         systemPrompt = appendPlainTextResponseSuffix(
           systemPrompt,
           requireCaretDisposition,
-          keepsTools
+          allowToolActions
         );
         textOnlySystemPrompt = appendPlainTextResponseSuffix(
           textOnlySystemPrompt,
           requireCaretDisposition,
-          keepsTools
+          allowToolActions
         );
       }
       if (attachment) {

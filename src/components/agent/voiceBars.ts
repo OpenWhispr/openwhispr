@@ -34,16 +34,16 @@ export function soundBarLevels(history: readonly number[]): number[] {
 
 // While a turn works, a low swell runs slowly across the bars, once per
 // cycle of the cap's Working dots, rising gently from rest.
-const THINKING_PERIOD_MS = 3600;
-const THINKING_LIFT = 0.35;
-const THINKING_EASE_IN_MS = 800;
+const WORKING_PERIOD_MS = 3600;
+const WORKING_LIFT = 0.35;
+const WORKING_EASE_IN_MS = 800;
 
 /** Each bar's lift `elapsedMs` into a turn's work. */
-export function thinkingBarLevels(elapsedMs: number): number[] {
-  const ease = Math.min(1, elapsedMs / THINKING_EASE_IN_MS);
+export function workingBarLevels(elapsedMs: number): number[] {
+  const ease = Math.min(1, elapsedMs / WORKING_EASE_IN_MS);
   return REST_PX.map((_, index) => {
-    const phase = elapsedMs / THINKING_PERIOD_MS - index / SOUND_BAR_COUNT;
-    return THINKING_LIFT * ease * (0.5 - 0.5 * Math.cos(2 * Math.PI * phase));
+    const phase = elapsedMs / WORKING_PERIOD_MS - index / SOUND_BAR_COUNT;
+    return WORKING_LIFT * ease * (0.5 - 0.5 * Math.cos(2 * Math.PI * phase));
   });
 }
 

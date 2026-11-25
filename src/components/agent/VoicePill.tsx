@@ -11,7 +11,7 @@ import {
   soundBarHeight,
   soundBarLevels,
   soundLevel,
-  thinkingBarLevels,
+  workingBarLevels,
 } from "./voiceBars";
 
 /** What the call's status cap says, from what is actually happening. */
@@ -44,7 +44,7 @@ const STATUS_LABELS: Record<VoiceCallStatus, string> = {
 // While a turn works, the cap reads Working, then one, two and three dots and
 // over again, so a long turn never reads as stuck. Each turn starts with none.
 const WORKING_DOTS = 3;
-export const WORKING_DOT_MS = 900;
+const WORKING_DOT_MS = 900;
 
 function useWorkingDots(active: boolean): number {
   const [dots, setDots] = useState(0);
@@ -73,7 +73,10 @@ interface VoicePillProps {
   notice?: string | null;
   /** The reply's or the microphone's level, for the Sound bars and the speaking glow. */
   readLevel: () => number;
-  /** The Sound bars follow sound; dimmed and still while the microphone is off and nothing plays. */
+  /**
+   * The Sound bars follow sound; dimmed while the microphone is off and nothing
+   * plays, and then still unless a turn works.
+   */
   waveformActive: boolean;
   micMuted: boolean;
   sessionControl: VoiceSessionControl;
@@ -152,7 +155,7 @@ export function VoicePill({
       history.pop();
       history.unshift(barLevel);
       const lifts = soundBarLevels(history);
-      const swell = working ? thinkingBarLevels(now - startedAt) : null;
+      const swell = working ? workingBarLevels(now - startedAt) : null;
       paintBars(swell ? lifts.map((lift, index) => Math.max(lift, swell[index])) : lifts);
       frame = requestAnimationFrame(paint);
     };
