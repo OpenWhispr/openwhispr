@@ -528,6 +528,24 @@ describe('MeetingSessionProvider', () => {
     expect(session.phase).toBe('cloud-recording');
   });
 
+  it('a failure mark that throws still returns the session to idle', async () => {
+    mockUpdateNoteMeta.mockImplementationOnce(() => {
+      throw new Error('database locked');
+    });
+    mockState.transitionStatus.mockImplementationOnce(() => {
+      throw new Error('database locked');
+    });
+    renderProvider();
+    act(() => {
+      session.startCloud(input);
+    });
+    await act(async () => {
+      await session.stop();
+    });
+    expect(mockState.transitionStatus).toHaveBeenCalledWith(42, 'failed');
+    expect(session.phase).toBe('idle');
+  });
+
   it('a start is refused while processing', async () => {
     let resolveStop: (result: CloudMeetingResult) => void = () => undefined;
     mockCloud.stop.mockReturnValue(

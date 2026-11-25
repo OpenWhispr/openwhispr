@@ -366,11 +366,19 @@ export function MeetingSessionProvider({
   // Whether what a finish produced is still for the signed-in account: navigation and alerts about
   // another account's meeting must never reach this one.
   const isOwnAccount = (fence: MeetingAccountFence | null): boolean => fence?.isCurrent() ?? true;
-  // Whether a finish may still write to its note. After a switch away from a real account the
-  // local rows were wiped and a note id may come to name the next account's row; a guest's rows
-  // stay on the device for the account that signs in, so its meeting can still mark its own note.
-  const mayWriteNote = (fence: MeetingAccountFence | null): boolean =>
-    fence == null || fence.accountId == null || fence.isCurrent();
+  // Marks a meeting's note failed on a failure path. Never throws: the status write reads and
+  // writes the database, and a throw here would skip the return to idle and leave the session in
+  // 'processing' for the rest of the process. Safe after an account switch too: note ids are
+  // never reused, so a write to a wiped row changes nothing.
+  const failNoteSafely = (id: number): void => {
+    try {
+      markNoteFailed(id);
+    } catch (markError) {
+      Sentry.captureException(markError, {
+        tags: { feature: 'meeting-session', operation: 'mark_note_failed' },
+      });
+    }
+  };
 
   const finish = async (onCaptureStopped: () => void): Promise<void> => {
     const noteId = noteIdRef.current;
@@ -381,9 +389,7 @@ export function MeetingSessionProvider({
     const settleIdle = (): void => {
       if (isCurrentGeneration(generation)) returnToIdle();
     };
-    const failNote = (id: number): void => {
-      if (mayWriteNote(fence)) markNoteFailed(id);
-    };
+    const failNote = failNoteSafely;
     setPhase('processing');
     // Everything after the phase change is inside the try: a throw outside it would leave the
     // session in 'processing' for the rest of the process, refusing every new meeting.
@@ -447,9 +453,7 @@ export function MeetingSessionProvider({
     const settleIdle = (): void => {
       if (isCurrentGeneration(generation)) returnToIdle();
     };
-    const failNote = (id: number): void => {
-      if (mayWriteNote(fence)) markNoteFailed(id);
-    };
+    const failNote = failNoteSafely;
     setPhase('processing');
     // Set once the recording is on the note, so a failure afterwards doesn't look for it again.
     let recordingLinked = false;
@@ -500,7 +504,7 @@ export function MeetingSessionProvider({
         unsavedMs: unsavedOwedMs,
       });
     } catch (error) {
-      if (noteId != null && mayWriteNote(fence)) {
+      if (noteId != null) {
         if (!recordingLinked) await linkManagedRecording(noteId);
         failNote(noteId);
       }
