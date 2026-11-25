@@ -31,6 +31,53 @@ const APP_TRANSCRIPTION_PROVIDERS = [
       },
     ],
   },
+  {
+    // A broker: ids keep their vendor prefix, and ids outside this shortlist still
+    // pass (acceptsUnlistedTranscriptionModel). Every model here takes WebM/Opus.
+    id: "vercel",
+    name: "Vercel AI Gateway",
+    baseUrl: "https://ai-gateway.vercel.sh/v1",
+    defaultModel: "openai/gpt-transcribe",
+    models: [
+      {
+        id: "openai/gpt-transcribe",
+        name: "GPT Transcribe",
+        description: "OpenAI's most accurate transcription",
+        descriptionKey: "models.descriptions.transcription.vercel_openai_gpt_transcribe",
+      },
+      {
+        id: "openai/gpt-4o-mini-transcribe",
+        name: "GPT-4o mini Transcribe",
+        description: "OpenAI's fast, low-cost transcription",
+        descriptionKey: "models.descriptions.transcription.vercel_openai_gpt_4o_mini_transcribe",
+      },
+      {
+        id: "mistral/voxtral-mini-transcribe-3",
+        name: "Voxtral Mini Transcribe 3",
+        description: "Mistral's fast, accurate multilingual transcription",
+        descriptionKey:
+          "models.descriptions.transcription.vercel_mistral_voxtral_mini_transcribe_3",
+      },
+      {
+        id: "elevenlabs/scribe-v2",
+        name: "Scribe v2",
+        description: "ElevenLabs' accurate transcription in 90+ languages",
+        descriptionKey: "models.descriptions.transcription.vercel_elevenlabs_scribe_v2",
+      },
+      {
+        id: "google/gemini-3.5-transcribe",
+        name: "Gemini 3.5 Transcribe",
+        description: "Google's multilingual transcription",
+        descriptionKey: "models.descriptions.transcription.vercel_google_gemini_3_5_transcribe",
+      },
+      {
+        id: "spacexai/grok-stt",
+        name: "Grok STT",
+        description: "xAI's low-cost transcription in 25 languages",
+        descriptionKey: "models.descriptions.transcription.vercel_spacexai_grok_stt",
+      },
+    ],
+  },
 ];
 
 // Models only Audio Upload offers. The catalog has no field for this, so it lives here,

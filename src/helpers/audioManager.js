@@ -666,6 +666,11 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       keyterms,
     }),
   },
+  vercel: {
+    displayName: "Vercel AI Gateway",
+    ipc: () => window.electronAPI?.proxyVercelTranscription,
+    buildPayload: ({ audioBuffer, model, mimeType }) => ({ audioBuffer, model, mimeType }),
+  },
   xai: {
     displayName: "xAI",
     ipc: () => window.electronAPI?.proxyXaiTranscription,
@@ -3011,6 +3016,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (!apiKey?.trim()) {
         const err = new Error(
           "ElevenLabs API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
+    } else if (provider === "vercel") {
+      apiKey = s.vercelApiKey;
+      if (!apiKey?.trim()) {
+        apiKey = await window.electronAPI.getVercelKey?.();
+      }
+      if (!apiKey?.trim()) {
+        const err = new Error(
+          "Vercel AI Gateway API key not found. Please set your API key in the Control Panel."
         );
         err.code = "API_KEY_MISSING";
         throw err;

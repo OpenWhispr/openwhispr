@@ -70,6 +70,7 @@ export interface TranscriptionApiKeys {
   deepgramApiKey: string;
   assemblyaiApiKey: string;
   elevenlabsApiKey: string;
+  vercelApiKey: string;
   openrouterApiKey: string;
   customTranscriptionApiKey?: string;
 }
@@ -94,6 +95,8 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
       return keys.assemblyaiApiKey;
     case "elevenlabs":
       return keys.elevenlabsApiKey;
+    case "vercel":
+      return keys.vercelApiKey;
     case "openrouter":
       return keys.openrouterApiKey;
     case "custom":

@@ -87,6 +87,13 @@ const BYOK_API_KEYS = [
     save: "saveElevenlabsKey",
     storeKey: "elevenlabsApiKey",
   },
+  {
+    base: "vercel",
+    env: "VERCEL_AI_GATEWAY_API_KEY",
+    get: "getVercelKey",
+    save: "saveVercelKey",
+    storeKey: "vercelApiKey",
+  },
   // Per-scope Custom-endpoint keys. Dictation cleanup's counterpart predates
   // this manifest and keeps its bespoke accessors (CUSTOM_CLEANUP_API_KEY).
   {

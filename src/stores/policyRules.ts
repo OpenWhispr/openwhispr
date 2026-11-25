@@ -906,13 +906,16 @@ interface CloudProviderOption {
   models?: ReadonlyArray<{ id: string }>;
 }
 
-// OpenRouter's speech-to-text catalog moves faster than the shortlist we ship,
-// so a vendor-prefixed id is a real selection even when the registry does not
-// list it; a bare id is another provider's leftover. Shared by the picker, the
+// OpenRouter and Vercel AI Gateway broker other vendors' models, and their
+// speech-to-text catalogs move faster than the shortlists we ship, so a
+// vendor-prefixed id is a real selection even when the registry does not list
+// it; a bare id is another provider's leftover. Shared by the picker, the
 // settings store and the request resolver so none of them resets what another
 // keeps.
+const BROKER_TRANSCRIPTION_PROVIDERS = new Set(["openrouter", "vercel"]);
+
 export function acceptsUnlistedTranscriptionModel(providerId: string, modelId: string): boolean {
-  return providerId === "openrouter" && modelId.includes("/");
+  return BROKER_TRANSCRIPTION_PROVIDERS.has(providerId) && modelId.includes("/");
 }
 
 export function reconcileCloudProviderSelection({

@@ -496,6 +496,7 @@ test("local-only device policy refuses direct remote IPC despite saved keys and 
     "proxy-mistral-transcription",
     "proxy-assemblyai-transcription",
     "proxy-elevenlabs-transcription",
+    "proxy-vercel-transcription",
   ]) {
     assert.equal((await invoke(channel, {})).code, "DEVICE_POLICY_BLOCKED", channel);
   }
@@ -1626,6 +1627,7 @@ test("valid inference restrictions retire active provider streams without disabl
     /^proxy-.+-transcription$/.test(channel)
   );
   assert.ok(proxyChannels.includes("proxy-elevenlabs-transcription"));
+  assert.ok(proxyChannels.includes("proxy-vercel-transcription"));
   assert.ok(proxyChannels.includes("proxy-assemblyai-transcription"));
   for (const channel of proxyChannels)
     assert.equal((await invoke(channel, {})).code, "DEVICE_POLICY_BLOCKED", channel);

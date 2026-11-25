@@ -106,6 +106,7 @@ export interface ApiKeySettings {
   deepgramApiKey: string;
   assemblyaiApiKey: string;
   elevenlabsApiKey: string;
+  vercelApiKey: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;
 }
@@ -343,6 +344,7 @@ function useSettingsInternal() {
     deepgramApiKey: store.deepgramApiKey,
     assemblyaiApiKey: store.assemblyaiApiKey,
     elevenlabsApiKey: store.elevenlabsApiKey,
+    vercelApiKey: store.vercelApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
     voiceAgentKey: store.voiceAgentKey,

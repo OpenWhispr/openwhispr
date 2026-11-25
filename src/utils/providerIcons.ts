@@ -24,6 +24,7 @@ import tinfoilIcon from "@/assets/icons/providers/tinfoil.svg";
 import deepgramIcon from "@/assets/icons/providers/deepgram.svg";
 import assemblyaiIcon from "@/assets/icons/providers/assemblyai.svg";
 import elevenlabsIcon from "@/assets/icons/providers/elevenlabs.svg";
+import vercelIcon from "@/assets/icons/providers/vercel.svg";
 
 export const PROVIDER_ICONS: Record<string, string> = {
   oruk: orukIcon,
@@ -50,6 +51,7 @@ export const PROVIDER_ICONS: Record<string, string> = {
   deepgram: deepgramIcon,
   assemblyai: assemblyaiIcon,
   elevenlabs: elevenlabsIcon,
+  vercel: vercelIcon,
 };
 
 export function getProviderIcon(provider: string): string | undefined {
@@ -68,6 +70,7 @@ export const MONOCHROME_PROVIDERS = [
   "tinfoil",
   "assemblyai",
   "elevenlabs",
+  "vercel",
 ] as const;
 
 export function isMonochromeProvider(provider: string): boolean {
@@ -81,6 +84,7 @@ const REMOTE_PROVIDER_ALIASES: Record<string, string> = {
   meta: "llama",
   mistralai: "mistral",
   "x-ai": "xai",
+  spacexai: "xai",
   amazon: "bedrock",
 };
 

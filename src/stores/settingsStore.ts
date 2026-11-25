@@ -1448,6 +1448,7 @@ export interface SettingsState
   setDeepgramApiKey: (key: string) => void;
   setAssemblyaiApiKey: (key: string) => void;
   setElevenlabsApiKey: (key: string) => void;
+  setVercelApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
 
@@ -1701,6 +1702,7 @@ const SECRET_IPC_SAVERS = {
   deepgram: "saveDeepgramKey",
   assemblyai: "saveAssemblyAIKey",
   elevenlabs: "saveElevenlabsKey",
+  vercel: "saveVercelKey",
   customTranscription: "saveCustomTranscriptionKey",
   selfHostedSttHeaders: "saveSelfHostedSttHeaders",
   cleanupCustom: "saveCleanupCustomKey",
@@ -1753,6 +1755,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "deepgramApiKey",
   "assemblyaiApiKey",
   "elevenlabsApiKey",
+  "vercelApiKey",
   "customTranscriptionApiKey",
   "selfHostedSttHeaders",
   "customReasoningApiKey",
@@ -1877,6 +1880,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   deepgramApiKey: "",
   assemblyaiApiKey: "",
   elevenlabsApiKey: "",
+  vercelApiKey: "",
   customTranscriptionApiKey: "",
   cleanupCustomApiKey: "",
 
@@ -2614,6 +2618,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setDeepgramApiKey: createSecretSetter("deepgramApiKey", "deepgram"),
   setAssemblyaiApiKey: createSecretSetter("assemblyaiApiKey", "assemblyai"),
   setElevenlabsApiKey: createSecretSetter("elevenlabsApiKey", "elevenlabs"),
+  setVercelApiKey: createSecretSetter("vercelApiKey", "vercel"),
   setCustomTranscriptionApiKey: (key: string) => {
     set({ customTranscriptionApiKey: key });
     debouncedSaveSecret("customTranscription", key);
@@ -3128,6 +3133,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.deepgramApiKey !== undefined) s.setDeepgramApiKey(keys.deepgramApiKey);
     if (keys.assemblyaiApiKey !== undefined) s.setAssemblyaiApiKey(keys.assemblyaiApiKey);
     if (keys.elevenlabsApiKey !== undefined) s.setElevenlabsApiKey(keys.elevenlabsApiKey);
+    if (keys.vercelApiKey !== undefined) s.setVercelApiKey(keys.vercelApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
     if (keys.cleanupCustomApiKey !== undefined) s.setCleanupCustomApiKey(keys.cleanupCustomApiKey);
@@ -4193,6 +4199,7 @@ export async function initializeSettings(): Promise<void> {
         deepgram,
         assemblyai,
         elevenlabs,
+        vercel,
       ] = await Promise.all([
         window.electronAPI.getOpenAIKey?.(),
         window.electronAPI.getAnthropicKey?.(),
@@ -4221,6 +4228,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getDeepgramKey?.(),
         window.electronAPI.getAssemblyAIKey?.(),
         window.electronAPI.getElevenlabsKey?.(),
+        window.electronAPI.getVercelKey?.(),
       ]);
 
       useSettingsStore.setState({
@@ -4257,6 +4265,7 @@ export async function initializeSettings(): Promise<void> {
         deepgramApiKey: deepgram || "",
         assemblyaiApiKey: assemblyai || "",
         elevenlabsApiKey: elevenlabs || "",
+        vercelApiKey: vercel || "",
       });
 
       if (localStorage.getItem("_dictationAgentSeeded") === "key-pending") {

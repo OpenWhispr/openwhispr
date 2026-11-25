@@ -175,7 +175,8 @@ export type TranscriptionRoute =
   | { transport: "local" }
   | {
       transport: "proxied";
-      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini" | "assemblyai" | "elevenlabs";
+      provider:
+        "tinfoil" | "mistral" | "xai" | "corti" | "gemini" | "assemblyai" | "elevenlabs" | "vercel";
       model: string | null;
       language?: string;
       sizeCapBytes: number;
@@ -315,6 +316,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (provider === "corti") return "corti-transcribe";
   if (provider === "gemini") return "gemini-3.5-transcribe";
   if (provider === "elevenlabs") return "scribe_v3";
+  if (provider === "vercel") return "openai/gpt-transcribe";
   if (provider === "deepgram") return "nova-3";
   if (provider === "assemblyai") return "universal-3-6-pro";
   if (provider === "openrouter") return "mistralai/voxtral-mini-transcribe-3-0";
@@ -481,6 +483,10 @@ export function resolveTranscriptionRoute({
       language,
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
     };
+  }
+  if (provider === "vercel") {
+    // No language: the gateway's transcription route takes none of its own.
+    return { transport: "proxied", provider, model, sizeCapBytes: BYOK_FILE_SIZE_LIMIT };
   }
   if (provider === "corti") {
     return {
