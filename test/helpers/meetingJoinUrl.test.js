@@ -80,6 +80,22 @@ test("extractMeetingUrl finds a link inside a location string", async () => {
   );
 });
 
+test("extractMeetingUrl stops at full-width punctuation", async () => {
+  const { extractMeetingUrl } = await load();
+  assert.equal(
+    extractMeetingUrl(["会议链接：https://meet.google.com/abc-defg-hij，密码 123"]),
+    "https://meet.google.com/abc-defg-hij"
+  );
+  assert.equal(
+    extractMeetingUrl(["Zoom（https://zoom.us/j/123456789）"]),
+    "https://zoom.us/j/123456789"
+  );
+  assert.equal(
+    extractMeetingUrl(["参加：https://zoom.us/j/123456789?pwd=abc.1。"]),
+    "https://zoom.us/j/123456789?pwd=abc.1"
+  );
+});
+
 test("extractMeetingUrl rejects meeting paths on untrusted hosts", async () => {
   const { extractMeetingUrl } = await load();
   const urls = [

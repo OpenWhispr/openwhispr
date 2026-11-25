@@ -1,4 +1,6 @@
-const URL_PATTERN = /https?:\/\/[^\s<>"']+/gi;
+// Every vendor below serves ASCII URLs, so a link ends at the first non-ASCII
+// character: CJK text puts full-width punctuation (，。）) right after it.
+const URL_PATTERN = /https?:\/\/[^\s<>"'\u007f-\uffff]+/gi;
 const TRAILING_PUNCTUATION_PATTERN = /[),.;:!?]+$/;
 const MEETING_URL_RULES = [
   {
