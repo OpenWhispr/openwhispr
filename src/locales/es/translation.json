@@ -4098,7 +4098,6 @@
           "matchCase": "Coincidir mayúsculas",
           "close": "Cerrar"
         },
-        "count": "Palabras: {{words}} · Caracteres: {{chars}}",
         "link": {
           "header": "Enlazar nota",
           "empty": "Escribe el título de una nota…",

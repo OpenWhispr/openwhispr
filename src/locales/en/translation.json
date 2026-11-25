@@ -4604,7 +4604,6 @@
           "matchCase": "Match case",
           "close": "Close"
         },
-        "count": "Words: {{words}} · Characters: {{chars}}",
         "link": {
           "header": "Link to note",
           "empty": "Type a note title…",

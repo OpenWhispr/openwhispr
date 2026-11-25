@@ -4604,7 +4604,6 @@
           "matchCase": "Groß-/Kleinschreibung",
           "close": "Schließen"
         },
-        "count": "Wörter: {{words}} · Zeichen: {{chars}}",
         "link": {
           "header": "Notiz verlinken",
           "empty": "Notiztitel eingeben…",

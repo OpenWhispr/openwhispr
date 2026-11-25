@@ -4046,7 +4046,6 @@
           "matchCase": "Maiuscole/minuscole",
           "close": "Chiudi"
         },
-        "count": "Parole: {{words}} · Caratteri: {{chars}}",
         "link": {
           "header": "Collega nota",
           "empty": "Digita il titolo di una nota…",

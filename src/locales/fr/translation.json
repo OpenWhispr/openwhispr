@@ -4611,7 +4611,6 @@
           "matchCase": "Respecter la casse",
           "close": "Fermer"
         },
-        "count": "Mots : {{words}} · Caractères : {{chars}}",
         "link": {
           "header": "Lier une note",
           "empty": "Tapez le titre d'une note…",

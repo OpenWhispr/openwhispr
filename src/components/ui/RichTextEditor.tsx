@@ -6,7 +6,7 @@ import { createRichTextExtensions } from "./RichTextEditorExtensions";
 import { RichTextEditorFormatMenu } from "./RichTextEditorFormatMenu";
 import { RichTextEditorTableMenu } from "./RichTextEditorTableMenu";
 import { DragHandle } from "@tiptap/extension-drag-handle-react";
-import { FindReplacePanel, WordCount } from "./editorBlocks/FindReplacePanel";
+import { FindReplacePanel } from "./editorBlocks/FindReplacePanel";
 import "katex/dist/katex.min.css";
 import "./editorBlocks/editorBlocks.css";
 import type { MentionPerson } from "../../utils/mentionMarkdown";
@@ -169,16 +169,10 @@ export function RichTextEditor({
           disabled && "pointer-events-none opacity-70"
         )}
       />
-      {editor && !disabled && (
-        <RichTextEditorFormatMenu
-          editor={editor}
-          lineMenuPadding={scrollClearance.scrollThreshold}
-        />
-      )}
+      {editor && !disabled && <RichTextEditorFormatMenu editor={editor} />}
       {editor && !disabled && <RichTextEditorTableMenu editor={editor} />}
-      {/* find & replace, word count, drag handle. */}
+      {/* find & replace, drag handle. */}
       {editor && !disabled && <FindReplacePanel editor={editor} />}
-      {editor && !disabled && <WordCount editor={editor} />}
       {editor && !disabled && (
         <DragHandle editor={editor}>
           <div className="rte-drag-handle" aria-hidden="true">

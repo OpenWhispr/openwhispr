@@ -4045,7 +4045,6 @@
           "matchCase": "区分大小写",
           "close": "关闭"
         },
-        "count": "字词：{{words}} · 字符：{{chars}}",
         "link": {
           "header": "链接笔记",
           "empty": "输入笔记标题…",

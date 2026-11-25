@@ -322,17 +322,6 @@
   opacity: 0.6;
 }
 
-/* ---- Word count ------------------------------------------------- */
-.rte-word-count {
-  position: absolute;
-  right: 12px;
-  bottom: calc(var(--bottom-overlay-height, 0px) + 6px);
-  z-index: 5;
-  font-size: 0.7rem;
-  opacity: 0.4;
-  pointer-events: none;
-}
-
 /* ---- Note links & backlinks ------------------------------------------- */
 .ProseMirror .note-link {
   color: var(--color-primary, #2563eb);

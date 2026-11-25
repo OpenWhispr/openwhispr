@@ -643,6 +643,49 @@ test("Insert table over a selection spanning two lines adds the table after the 
   assert.equal(markdownOf(editor), `First line\n\nSecond line\n\n${EMPTY_TABLE}\n\nAfter`);
 });
 
+test("Tab nests list items and moves between cells, and elsewhere keeps the caret in the note", (t) => {
+  const element = happyWindow.document.createElement("div");
+  happyWindow.document.body.appendChild(element);
+  const editor = new Editor({
+    element,
+    extensions: createRichTextExtensions(""),
+    content: `# Plan\n\nIntro\n\n- one\n- two\n\n- [ ] task\n\n${TABLE}`,
+  });
+  t.after(() => {
+    editor.destroy();
+    element.remove();
+  });
+  editor.view.focus();
+  const original = markdownOf(editor);
+  // True when the editor took the key, so the browser doesn't move focus out of the note.
+  const press = (text, shiftKey = false) => {
+    let pos;
+    editor.state.doc.descendants((node, at) => {
+      if (pos === undefined && node.isText && node.text === text) pos = at;
+    });
+    editor.commands.setTextSelection(pos + 1);
+    return pressKey(editor, "Tab", { shiftKey });
+  };
+  for (const text of ["Plan", "Intro", "one", "task"]) assert.equal(press(text), true, text);
+  for (const text of ["Plan", "Intro"]) assert.equal(press(text, true), true, `Shift-Tab ${text}`);
+  assert.equal(markdownOf(editor), original, "where nothing nests, nothing changes");
+  editor.commands.setTextSelection({ from: 1, to: 5 });
+  assert.notEqual(pressKey(editor, "Tab"), true, "over selected text, on to the toolbar");
+  editor.commands.setTextSelection(3);
+  editor.view.dom.querySelector('input[type="checkbox"]').focus();
+  assert.notEqual(pressKey(editor, "Tab"), true, "from a task checkbox, the usual focus order");
+  editor.view.focus();
+
+  assert.equal(press("two"), true);
+  assert.match(markdownOf(editor), /^- one\n\s+- two$/m, "the second item nests");
+  assert.equal(press("two", true), true);
+  assert.equal(markdownOf(editor), original, "and Shift-Tab lifts it back");
+
+  caretInCell(editor, "Budget");
+  assert.equal(pressKey(editor, "Tab"), true);
+  assert.equal(editor.state.selection.$head.parent.textContent, "Ana", "the next cell");
+});
+
 /**
  * Renders the real RichTextEditor, menus included, the way NoteEditor uses it:
  * the note is state, and switching notes remounts the editor.
@@ -891,7 +934,7 @@ test("switching notes while the table menu is open", async (t) => {
   assert.match(notes.host.textContent, /Other note/);
 });
 
-test("the formatting toolbar shows on selected text and empty lines only", async (t) => {
+test("the formatting toolbar shows on selected text only", async (t) => {
   const notes = await mountNotes(t, `Intro text\n\n${TABLE}`);
   await notes.act(() => notes.editor().commands.setTextSelection({ from: 1, to: 6 }), 300);
   assert.ok(isShown(TOOLBAR), "on selected text");
@@ -906,8 +949,7 @@ test("the formatting toolbar shows on selected text and empty lines only", async
   assert.equal(isShown(TOOLBAR), false, "over text in a table");
   assert.ok(isShown("notes.editor.table.actions"), "the table menu instead");
   await notes.act(() => addEmptyLastLine(notes.editor()));
-  assert.ok(isShown(TOOLBAR), "on an empty line");
-  assert.equal(toolbarCount(), 1);
+  assert.equal(isShown(TOOLBAR), false, "on an empty line");
   await notes.act(() => {
     notes.editor().commands.blur();
     notes.editor().commands.setTextSelection({ from: 1, to: 6 });
@@ -916,48 +958,16 @@ test("the formatting toolbar shows on selected text and empty lines only", async
   assert.deepEqual(notes.errors, []);
 });
 
-test("the empty-line toolbar sits below the caret, and above it with no room below", async (t) => {
-  const notes = await mountNotes(t, "Intro text");
-  // happy-dom has no layout: give the page and the toolbar a size, and the caret a
-  // spot on the page. Without a toolbar size, start, centre and end alignment all
-  // land on the caret, and the toolbar never needs to flip.
-  const page = happyWindow.document.documentElement;
-  const proto = happyWindow.HTMLElement.prototype;
-  const pageSize = { clientWidth: 1024, clientHeight: 768 };
-  const menuSize = { offsetWidth: 320, offsetHeight: 40 };
-  for (const [key, value] of Object.entries(pageSize)) {
-    Object.defineProperty(page, key, { value, configurable: true });
+test("no formatting toolbar or word count on a new line or in an empty note", async (t) => {
+  for (const markdown of ["Intro text", ""]) {
+    const notes = await mountNotes(t, markdown);
+    await notes.act(() => notes.editor().commands.focus("end"));
+    assert.equal(isShown(TOOLBAR), false, `on focus (${JSON.stringify(markdown)})`);
+    await notes.act(() => pressKey(notes.editor(), "Enter"));
+    assert.equal(isShown(TOOLBAR), false, `after Enter (${JSON.stringify(markdown)})`);
+    assert.equal(!!notes.host.querySelector(".rte-word-count"), false, "no word count");
+    assert.deepEqual(notes.errors, []);
   }
-  const originals = {};
-  for (const [key, value] of Object.entries(menuSize)) {
-    originals[key] = Object.getOwnPropertyDescriptor(proto, key);
-    Object.defineProperty(proto, key, {
-      configurable: true,
-      get() {
-        return this.classList.contains("rich-text-editor-line-menu")
-          ? value
-          : originals[key].get.call(this);
-      },
-    });
-  }
-  t.after(() => {
-    for (const key of Object.keys(pageSize)) delete page[key];
-    for (const [key, descriptor] of Object.entries(originals)) {
-      Object.defineProperty(proto, key, descriptor);
-    }
-  });
-  let caret = { left: 500, right: 500, top: 300, bottom: 320 };
-  notes.editor().view.coordsAtPos = () => caret;
-  await notes.act(() => addEmptyLastLine(notes.editor()));
-  const menu = happyWindow.document.querySelector(".rich-text-editor-line-menu");
-  const top = () => parseFloat(menu.style.top);
-  assert.equal(parseFloat(menu.style.left), caret.left, "starts at the caret");
-  assert.ok(top() > caret.bottom, `below the line (top ${top()})`);
-
-  caret = { left: 500, right: 500, top: 740, bottom: 760 };
-  await notes.act(() => addEmptyLastLine(notes.editor()));
-  assert.ok(top() + menuSize.offsetHeight < caret.top, `above the line (top ${top()})`);
-  assert.deepEqual(notes.errors, []);
 });
 
 test("the formatting toolbar stays away from code blocks, list items and nodes", async (t) => {
@@ -1005,7 +1015,6 @@ test("the formatting toolbar formats the selection and inserts a table", async (
   await notes.act(() => menuItem("notes.editor.format.heading2").click());
   assert.equal(markdownOf(editor()), "- **Intro** text\n\n## Second");
 
-  await notes.act(() => addEmptyLastLine(editor()));
   const insertTable = byLabel("notes.editor.format.table");
   assert.equal(insertTable.hasAttribute("aria-pressed"), false, "not a toggle");
   // Enter on the focused button, as from the keyboard.
@@ -1020,15 +1029,12 @@ test("the formatting toolbar formats the selection and inserts a table", async (
 });
 
 test("switching notes while a formatting toolbar's dropdown is open", async (t) => {
-  const onSelection = (editor) => editor.commands.setTextSelection({ from: 1, to: 6 });
-  for (const select of [onSelection, addEmptyLastLine]) {
-    const notes = await mountNotes(t, "Intro text");
-    await notes.act(() => select(notes.editor()), 300);
-    await notes.act(() => pointerDown(byLabel("notes.editor.format.textStyle")));
-    assert.ok(menuItem("notes.editor.format.heading1"), `dropdown open (${select.name})`);
-    await notes.act(notes.showOtherNote);
-    assert.deepEqual(notes.errors, [], select.name);
-  }
+  const notes = await mountNotes(t, "Intro text");
+  await notes.act(() => notes.editor().commands.setTextSelection({ from: 1, to: 6 }), 300);
+  await notes.act(() => pointerDown(byLabel("notes.editor.format.textStyle")));
+  assert.ok(menuItem("notes.editor.format.heading1"), "dropdown open");
+  await notes.act(notes.showOtherNote);
+  assert.deepEqual(notes.errors, []);
 });
 
 test("the menus hide when focus leaves them, also after a click on them", async (t) => {
@@ -1081,7 +1087,7 @@ test("a dropdown closes with the menu it lives in", async (t) => {
   assert.deepEqual(notes.errors, []);
 });
 
-for (const menu of ["selection", "empty line", "table"]) {
+for (const menu of ["selection", "table"]) {
   test(`disabling the editor closes the ${menu} dropdown and re-enabling restores it`, async (t) => {
     const notes = await mountNotes(t);
     const openMenu = async () => {
@@ -1091,16 +1097,11 @@ for (const menu of ["selection", "empty line", "table"]) {
       } else {
         await notes.act(() => {
           notes.editor().commands.focus();
-          notes
-            .editor()
-            .commands.setTextSelection(
-              menu === "selection" ? { from: 1, to: 6 } : notes.editor().state.doc.content.size - 1
-            );
+          notes.editor().commands.setTextSelection({ from: 1, to: 6 });
         }, 300);
         await notes.act(() => pointerDown(byLabel("notes.editor.format.textStyle")));
       }
     };
-    if (menu === "empty line") await notes.act(() => addEmptyLastLine(notes.editor()));
     await openMenu();
     const actionKey =
       menu === "table" ? "notes.editor.table.deleteTable" : "notes.editor.format.heading1";
@@ -1156,10 +1157,7 @@ test("the menus mount without error on an editor useEditor already destroyed", a
       React.createElement(
         React.Fragment,
         null,
-        React.createElement(RichTextEditorFormatMenu, {
-          editor,
-          lineMenuPadding: { top: 0, right: 0, bottom: 0, left: 0 },
-        }),
+        React.createElement(RichTextEditorFormatMenu, { editor }),
         React.createElement(RichTextEditorTableMenu, { editor })
       )
     )
@@ -1239,31 +1237,6 @@ test("typing at the end of a long note keeps the caret clear of the note's botto
     await enter();
     assert.equal(clearance(), 138, `new line ${line} sits just above the bar`);
   }
-  assert.deepEqual(notes.errors, []);
-});
-
-test("the empty-line toolbar stays on the caret when Enter scrolls the note, above it over the bar", async (t) => {
-  const notes = await mountNotes(t, LONG_NOTE);
-  const caret = fakeLayout(t, notes.editor());
-  const scroller = notes.editor().view.dom.parentElement;
-  await notes.act(() => notes.editor().commands.focus("end"));
-  const scrolledBefore = scroller.scrollTop;
-
-  await notes.act(() => pressKey(notes.editor(), "Enter"));
-  assert.ok(scroller.scrollTop > scrolledBefore, "Enter scrolled the editor");
-  const menu = happyWindow.document.querySelector(".rich-text-editor-line-menu");
-  assert.equal(!!menu?.isConnected, true, "the toolbar shows on the new empty line");
-  // Floating UI finds no offset parent in happy-dom, so it places the toolbar in
-  // viewport coordinates: below the caret, Tiptap's 8px offset away.
-  const top = () => parseFloat(menu.style.top);
-  assert.equal(top(), caret().bottom + 8);
-
-  // The caret now stops just above the bar, which leaves the toolbar no room below.
-  const height = 40;
-  Object.defineProperty(menu, "offsetHeight", { value: height, configurable: true });
-  notes.host.firstElementChild.style.setProperty("--bottom-overlay-height", "138px");
-  await notes.act(() => pressKey(notes.editor(), "Enter"));
-  assert.ok(top() + height <= caret().top, `above the caret, not under the bar (top ${top()})`);
   assert.deepEqual(notes.errors, []);
 });
 
@@ -1364,6 +1337,16 @@ test("a toggle title stays plain text: emoji, [[ and / add no nodes, Enter moves
   await notes.act(() => pressKey(notes.editor(), "Enter"), 80);
   await notes.act(() => notes.editor().commands.insertContent("Next"), 50);
   assert.equal(notes.saved(), ":::toggle Title 🚀 \\[\\[Week /\n\nNext\n\nBody\n\n:::");
+  assert.deepEqual(notes.errors, []);
+});
+
+test("Tab picks from the / menu", async (t) => {
+  const notes = await mountNotes(t, "");
+  await notes.act(() => notes.editor().commands.insertContent("/"), 120);
+  assert.ok(happyWindow.document.querySelector(".rte-slash-menu"), "the menu is open");
+  await notes.act(() => pressKey(notes.editor(), "Tab"), 80);
+  await notes.act(() => notes.editor().commands.insertContent("Title"), 50);
+  assert.equal(notes.saved(), "# Title", "the first item, Heading 1");
   assert.deepEqual(notes.errors, []);
 });
 
