@@ -3917,6 +3917,7 @@
       "generateSummary": "Genera riepilogo AI",
       "generateWithTemplate": "Genera con {{template}}",
       "startWriting": "Inizia a scrivere...",
+      "tabToLeave": "Premi Esc, poi Tab o Maiusc+Tab per uscire dall’editor.",
       "staleIndicator": "Il contenuto è cambiato dall'ultimo miglioramento",
       "live": "Dal vivo",
       "transcript": "Trascrizione",

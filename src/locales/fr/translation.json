@@ -4482,6 +4482,7 @@
       "generateSummary": "Générer un résumé IA",
       "generateWithTemplate": "Générer avec {{template}}",
       "startWriting": "Commencez à écrire...",
+      "tabToLeave": "Appuyez sur Échap, puis sur Tab ou Maj+Tab pour quitter l’éditeur.",
       "staleIndicator": "Le contenu a changé depuis l'amélioration",
       "live": "En direct",
       "transcript": "Transcription",

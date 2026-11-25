@@ -4475,6 +4475,7 @@
       "generateSummary": "Generate AI Summary",
       "generateWithTemplate": "Generate with {{template}}",
       "startWriting": "Start writing...",
+      "tabToLeave": "Press Esc, then Tab or Shift+Tab to leave the editor.",
       "staleIndicator": "Content has changed since enhancement",
       "live": "Live",
       "transcript": "Transcript",

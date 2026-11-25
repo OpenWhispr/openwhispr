@@ -4475,6 +4475,7 @@
       "generateSummary": "KI-Zusammenfassung erstellen",
       "generateWithTemplate": "Mit {{template}} erstellen",
       "startWriting": "Schreibe los...",
+      "tabToLeave": "Drücke Esc und danach Tab oder Umschalt+Tab, um den Editor zu verlassen.",
       "staleIndicator": "Der Inhalt hat sich seit der Verbesserung geändert",
       "live": "Live",
       "transcript": "Transkript",

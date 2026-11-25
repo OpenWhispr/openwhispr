@@ -3916,6 +3916,7 @@
       "generateSummary": "生成 AI 摘要",
       "generateWithTemplate": "使用{{template}}生成",
       "startWriting": "开始书写...",
+      "tabToLeave": "按 Esc，再按 Tab 或 Shift+Tab 离开编辑器。",
       "staleIndicator": "内容在增强后已更改",
       "live": "实时",
       "transcript": "转录",

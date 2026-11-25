@@ -4022,6 +4022,7 @@
       "generateSummary": "Создать ИИ-сводку",
       "generateWithTemplate": "Создать с шаблоном «{{template}}»",
       "startWriting": "Начните писать...",
+      "tabToLeave": "Нажмите Esc, затем Tab или Shift+Tab, чтобы выйти из редактора.",
       "staleIndicator": "Содержимое изменилось после улучшения",
       "live": "Живой",
       "transcript": "Транскрипция",

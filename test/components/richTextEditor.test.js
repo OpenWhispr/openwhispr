@@ -127,6 +127,11 @@ const pressKey = (editor, key, modifiers = {}) =>
     handler(editor.view, new happyWindow.KeyboardEvent("keydown", { key, ...modifiers }))
   );
 
+const dispatchEditorKey = (editor, key, modifiers = {}) =>
+  editor.view.dom.dispatchEvent(
+    new happyWindow.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...modifiers })
+  );
+
 /** Types through the input rules, like a keyboard does. */
 function type(editor, text) {
   const { view } = editor;
@@ -1347,6 +1352,67 @@ test("Tab picks from the / menu", async (t) => {
   await notes.act(() => pressKey(notes.editor(), "Tab"), 80);
   await notes.act(() => notes.editor().commands.insertContent("Title"), 50);
   assert.equal(notes.saved(), "# Title", "the first item, Heading 1");
+  assert.deepEqual(notes.errors, []);
+});
+
+test("Escape releases the next Tab or Shift-Tab from a blank note", async (t) => {
+  const notes = await mountNotes(t, "");
+  const editor = notes.editor();
+  const hint = happyWindow.document.getElementById(
+    editor.view.dom.getAttribute("aria-describedby")
+  );
+  assert.equal(hint?.textContent, "notes.editor.tabToLeave", "the editor describes its shortcut");
+  await notes.act(() => assert.equal(dispatchEditorKey(editor, "Tab"), false));
+  for (const shiftKey of [false, true]) {
+    await notes.act(() => {
+      dispatchEditorKey(editor, "Escape");
+      if (shiftKey) dispatchEditorKey(editor, "Shift", { shiftKey });
+      assert.equal(dispatchEditorKey(editor, "Tab", { shiftKey }), true, "browser can move focus");
+      assert.equal(dispatchEditorKey(editor, "Tab", { shiftKey }), false, "one Tab is released");
+    });
+  }
+  await notes.act(() => {
+    dispatchEditorKey(editor, "Escape");
+    dispatchEditorKey(editor, "ArrowRight");
+    assert.equal(dispatchEditorKey(editor, "Tab"), false, "another key cancels the release");
+  });
+  assert.deepEqual(notes.errors, []);
+});
+
+test("Escape lets Tab leave a table without moving the caret to another cell", async (t) => {
+  const notes = await mountNotes(t);
+  const editor = notes.editor();
+  await notes.act(() => caretInCell(editor, "Budget"));
+  await notes.act(() => {
+    dispatchEditorKey(editor, "Escape");
+    assert.equal(dispatchEditorKey(editor, "Tab"), true);
+    assert.equal(editor.state.selection.$head.parent.textContent, "Budget");
+  });
+});
+
+test("Escape dismisses the slash menu before enabling keyboard exit", async (t) => {
+  const notes = await mountNotes(t, "");
+  const editor = notes.editor();
+  await notes.act(() => type(editor, "/"), 120);
+  assert.ok(happyWindow.document.querySelector(".rte-slash-menu"), "the menu is open");
+  await notes.act(() => {
+    assert.equal(dispatchEditorKey(editor, "Escape"), false, "Escape dismisses the menu");
+    assert.equal(dispatchEditorKey(editor, "Tab"), false, "Tab stays in the editor");
+    dispatchEditorKey(editor, "Escape");
+    assert.equal(dispatchEditorKey(editor, "Tab"), true, "a second Escape releases Tab");
+  });
+  assert.equal(happyWindow.document.querySelector(".rte-slash-menu"), null);
+});
+
+test("consecutive slash styles keep the preceding style on a blank line", async (t) => {
+  const notes = await mountNotes(t, "");
+  const editor = notes.editor();
+  for (const command of ["/serif", "/purple"]) {
+    await notes.act(() => type(editor, command), 120);
+    await notes.act(() => pressKey(editor, "Enter"), 80);
+  }
+  await notes.act(() => type(editor, "Styled"));
+  assert.equal(notes.saved(), "{color:#9333ea}{font:Georgia, serif}Styled{/font}{/color}");
   assert.deepEqual(notes.errors, []);
 });
 
