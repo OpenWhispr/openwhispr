@@ -34,6 +34,7 @@ import {
 } from '@/android/pipeline';
 import { useFileUpload } from '@/hooks/useFileUpload.android';
 import { useNotesStore } from '@/store/useNotesStore';
+import { defaultFolderFor } from '@/android/notes/library';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import {
   ImportDestinationError,
@@ -160,8 +161,9 @@ export default function AndroidHome() {
     onComplete: (text, fileName) => {
       const destination = uploadDestination.current;
       if (!destination) return;
+      let noteId: number;
       try {
-        saveImportedNote(destination, text, fileName, t('importDefaultTitle'));
+        noteId = saveImportedNote(destination, text, fileName, t('importDefaultTitle')).id;
       } catch (error) {
         Alert.alert(
           t('errorTitle'),
@@ -178,6 +180,8 @@ export default function AndroidHome() {
         (current) =>
           current && { ...current, doneText: h('savedToFolder', { folder: destination.label }) },
       );
+      // Open it, as Notes' upload does; Back from it lands on the Notes home.
+      router.push(`/(tabs)/(notes)/${noteId}`, { withAnchor: true });
     },
   });
 
@@ -250,7 +254,11 @@ export default function AndroidHome() {
       return;
     }
     try {
+      // Private's default folder (Personal), where Notes' New puts a note.
+      const notes = useNotesStore.getState();
+      if (!notes.isInitialized) notes.initialize();
       uploadDestination.current = resolveImportDestination({
+        folderId: defaultFolderFor(useNotesStore.getState().folders),
         isPrivate: useProcessingModeStore.getState().activeMode === 'private',
       });
     } catch (error) {
