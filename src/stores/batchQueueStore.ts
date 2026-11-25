@@ -250,7 +250,8 @@ export function processBatchQueue(
       const requestId = crypto.randomUUID();
       activeUploadRequestId = requestId;
       let cleanupTranscriptionProgress: (() => void) | undefined;
-      if (isManagedTranscriptionActive()) {
+      // Both send a file in pieces and report each one as it finishes.
+      if (isManagedTranscriptionActive() || usesSarvamKey) {
         cleanupTranscriptionProgress = window.electronAPI.onUploadTranscriptionProgress?.(
           ({ chunksCompleted, chunksTotal }) => {
             if (chunksTotal > 0)

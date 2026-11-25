@@ -6,6 +6,7 @@
 // allowlist rejected undefined). Pure module, mirrors meetingTranscriptionRouting.
 import { getEffectiveDictionaryWords } from "../utils/snippets.ts";
 import { resolveSarvamMode, sarvamKeyterms } from "../utils/sarvam.js";
+import { getProviderLanguageHint } from "../utils/languageSupport.ts";
 import { isOrukeetStreaming, isSelfHostedTranscription } from "./selfHostedTranscription.js";
 import { isStreamingOnlySelection, resolveByokModel } from "./transcriptionRoute.ts";
 import { registryData as modelRegistryData, subscribeRegistry } from "../models/registryData.js";
@@ -254,7 +255,8 @@ export function buildStreamingSessionOptions({
   const options = {
     provider: providerName,
     sampleRate: 16000,
-    language: language && language !== "auto" ? language : undefined,
+    language:
+      language && language !== "auto" ? getProviderLanguageHint(providerName, language) : undefined,
     keyterms,
     model: settings.cloudTranscriptionModel,
     mode: settings.cloudTranscriptionMode === "byok" ? "byok" : "openwhispr",

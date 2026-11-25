@@ -2129,6 +2129,68 @@ for (const boundary of ["token rotation", "account switch", "sign-out", "away an
   });
 }
 
+test("a Sarvam capture begun signed out falls back to batch for the account that signs in", async (t) => {
+  const { EventEmitter } = require("node:events");
+  const originalAccount = databaseManager.activeAccountId;
+  const originalToken = tokenState;
+  const overrides = [
+    "_dictationStreaming",
+    "_dictationConnectPromise",
+    "_dictationIdleTimer",
+    "environmentManager",
+  ];
+  const previous = Object.getOwnPropertyDescriptors(fakeThis);
+  let keyReads = 0;
+  Object.assign(fakeThis, {
+    _dictationStreaming: null,
+    _dictationConnectPromise: null,
+    _dictationIdleTimer: null,
+    environmentManager: {
+      getSarvamKey() {
+        keyReads++;
+        if (keyReads === 1) throw new Error("Network disconnected");
+        return "";
+      },
+    },
+  });
+  const messages = [];
+  const sender = Object.assign(new EventEmitter(), {
+    id: 18,
+    send: (channel, data) => messages.push({ channel, data }),
+  });
+  t.after(() => {
+    sender.emit("destroyed");
+    databaseManager.activeAccountId = originalAccount;
+    tokenState = originalToken;
+    for (const key of overrides) {
+      if (previous[key]) Object.defineProperty(fakeThis, key, previous[key]);
+      else delete fakeThis[key];
+    }
+  });
+  handleAuthTokenChange({ token: null, generation: tokenState.generation + 1 });
+  await fakeThis.refreshEffectivePolicy();
+  eventHandlers.get("dictation-realtime-reserve")({ sender }, "guest-take");
+  const first = await handlers.get("dictation-realtime-start")(
+    { sender },
+    { provider: "sarvam", mode: "byok", model: "saaras:v4", sarvamCaptureId: "guest-take" }
+  );
+  assert.equal(first.error, "Network disconnected");
+  handleAuthTokenChange({ token: "test-bearer", generation: tokenState.generation + 1 });
+  await setScope("new-member", tokenState.generation);
+  await fakeThis.refreshEffectivePolicy();
+  const result = await handlers.get("proxy-sarvam-transcription")(
+    { sender },
+    { sarvamCaptureId: "guest-take", model: "saaras:v4", audioBuffer: new Uint8Array(20).buffer }
+  );
+  // The fallback reached the key, so the recording was not dropped as another account's.
+  assert.equal(result.code, "API_KEY_MISSING");
+  assert.equal(keyReads, 2);
+  assert.equal(
+    messages.some(({ data }) => data?.code === "AUTH_CONTEXT_CHANGED"),
+    false
+  );
+});
+
 test("sign-out during a connecting stream preserves its late-socket cleanup", async (t) => {
   const { deferred } = require("./harness/deferred");
   const previous = {

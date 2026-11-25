@@ -3711,6 +3711,7 @@
       "internalAttendeesConfirm": "نعم، ابدأ",
       "recordingDisabledByOrg": "تم تعطيل تسجيل الاجتماعات بواسطة مؤسستك.",
       "stoppedSarvamKeyChanged": "توقف التسجيل لأن مفتاح واجهة برمجة التطبيقات لخدمة Sarvam قد تغيّر.",
+      "noteUnavailable": "لم تعد هذه الملاحظة متاحة، لذا لم يبدأ التسجيل.",
       "stoppedAccountChanged": "توقف التسجيل لأنك سجّلت الخروج أو بدّلت الحساب.",
       "stoppedPolicyUnresolved": "توقف التسجيل لأنه تعذّر التحقق من إعدادات مؤسستك.",
       "stoppedWorkspaceChanged": "توقف التسجيل لأنك بدّلت مساحة العمل."
@@ -4259,6 +4260,7 @@
         "line": {
           "requiredByOrganization": "مطلوب من مؤسستك",
           "organizationModelsUnrunnable": "لا يعمل أي من النماذج التي وافقت عليها مؤسستك على هذا الكمبيوتر",
+          "languageNotLocal": "لا يدعم Whisper نسخ {{languages}}، لذا يكتشف اللغة بنفسه. يدعمها موفّر سحابي مثل Sarvam AI.",
           "offToFit": "متوقف ليتسع في المساحة الحرة على هذا الحاسوب",
           "failed": "تعذّر التنزيل. تحقّق من اتصالك وأعد المحاولة"
         },
@@ -7400,6 +7402,8 @@
     "noResponse": "تعذّر الحصول على رد من {{provider}}. تحقق من مفتاح API واتصالك.",
     "unknown": "أعاد {{provider}} خطأ غير متوقع.",
     "keyMissing": "لا يوجد مفتاح API مضبوط لـ {{provider}}. أضفه في الإعدادات ← النموذج اللغوي.",
+    "credentialChanged": "تغيّر مفتاح واجهة برمجة التطبيقات لخدمة {{provider}} قبل انتهاء النسخ. أعد المحاولة لاستخدام المفتاح الجديد.",
+    "settingsChanged": "تغيّرت إعدادات النسخ قبل انتهاء النسخ. أعد المحاولة.",
     "selfHosted": {
       "authFailed": "رفض خادمك مفتاح API.",
       "accessDenied": "رفض خادمك الوصول. قد لا يشمل المفتاح هذا النموذج.",

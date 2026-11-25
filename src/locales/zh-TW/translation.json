@@ -465,6 +465,7 @@
         "line": {
           "requiredByOrganization": "你的組織要求使用",
           "organizationModelsUnrunnable": "你的組織核准的模型都無法在此電腦上執行",
+          "languageNotLocal": "Whisper 無法轉寫{{languages}}，因此會自行偵測語言。Sarvam AI 等雲端服務供應商支援該語言。",
           "offToFit": "已關閉，以符合這台電腦的可用空間",
           "failed": "無法下載。請檢查網路連線後重試"
         },
@@ -4213,6 +4214,7 @@
       "internalAttendeesConfirm": "是，開始",
       "recordingDisabledByOrg": "您的組織已停用會議錄音。",
       "stoppedSarvamKeyChanged": "Sarvam API 金鑰已變更，錄製已停止。",
+      "noteUnavailable": "此筆記已無法使用，因此未開始錄製。",
       "stoppedAccountChanged": "由於您已登出或切換了帳號，錄音已停止。",
       "stoppedPolicyUnresolved": "由於無法檢查您的組織設定，錄音已停止。",
       "stoppedWorkspaceChanged": "由於您切換了工作區，錄音已停止。"
@@ -6878,6 +6880,8 @@
     "noResponse": "未能收到 {{provider}} 的回應。請檢查你的 API 金鑰和網路連線。",
     "unknown": "{{provider}} 回傳了意外的錯誤。",
     "keyMissing": "尚未為 {{provider}} 設定 API 金鑰。請在「設定 → 語言模型」中新增。",
+    "credentialChanged": "轉寫完成前，{{provider}} API 金鑰已變更。請重試以使用新金鑰。",
+    "settingsChanged": "轉寫完成前，轉寫設定已變更。請重試。",
     "selfHosted": {
       "authFailed": "你的伺服器拒絕了 API 金鑰。",
       "accessDenied": "你的伺服器拒絕存取。該金鑰可能不包含此模型。",

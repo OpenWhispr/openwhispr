@@ -244,6 +244,49 @@ function reconnectHarness(Streaming, options, overrides = {}) {
     _meetingMicStreaming: new Streaming(),
     _meetingSystemStreaming: new Streaming(),
   };
+  const context = {
+    target,
+    cancelMeetingReconnect: null,
+    drainingMeetingStreams: new Map(),
+    resetMeetingStreamingState() {
+      target._meetingMicStreaming = null;
+      target._meetingSystemStreaming = null;
+    },
+    meetingReconnectPromise: null,
+    meetingLocalMode: false,
+    meetingConnectionOptions: options,
+    meetingConnectionWin: { isDestroyed: () => false, webContents: { send() {} } },
+    meetingConnectionKey: "key",
+    meetingReconnectAudioBytes: { mic: 0, system: 0 },
+    meetingReplayIncomplete: false,
+    MEETING_STOP_REPLAY_TIMEOUT_MS: 100,
+    setTimeout,
+    clearTimeout,
+    meetingReconnectCount: 0,
+    meetingReconnectedAt: 0,
+    meetingReconnectReplaySources: new Set(),
+    MAX_MEETING_RECONNECTS: 3,
+    MEETING_RECONNECT_STABLE_MS: 10000,
+    MEETING_STREAM_SAMPLE_RATE: 24000,
+    credentialGeneration: 0,
+    resolveEnterpriseMeetingOptions: async (_event, current) => current,
+    enterpriseMeetingConnectOptions: async () => ({}),
+    getMeetingConnectionKey: () => "key",
+    getMeetingStreamingClient: () => Streaming,
+    attachMeetingStreamingHandlers() {},
+    fetchRealtimeToken: async (_event, _options, streams) => (streams ? ["k", "k"] : "k"),
+    withMeetingSourceConnectOpts: (connectOpts) => connectOpts,
+    assertMeetingAllowed() {},
+    replayMeetingReconnectAudio: () => true,
+    // A replay empties the queue, as the handler's reset does.
+    resetMeetingReconnectAudio() {
+      context.meetingReconnectAudioBytes = { mic: 0, system: 0 };
+    },
+    debugLogger: { error() {}, info() {} },
+    isSignInRefusal: () => false,
+    isAudioPolicyRefusal: () => false,
+    ...overrides,
+  };
   const actions = vm.runInNewContext(
     `(function () {
       ${meetingDrainHelpers}
@@ -251,48 +294,9 @@ function reconnectHarness(Streaming, options, overrides = {}) {
       ${disconnect}
       return {reconnect: reconnectMeetingStreams, disconnect: disconnectMeetingStreaming};
     }).call(target)`,
-    {
-      target,
-      cancelMeetingReconnect: null,
-      drainingMeetingStreams: new Map(),
-      resetMeetingStreamingState() {
-        target._meetingMicStreaming = null;
-        target._meetingSystemStreaming = null;
-      },
-      meetingReconnectPromise: null,
-      meetingLocalMode: false,
-      meetingConnectionOptions: options,
-      meetingConnectionWin: { isDestroyed: () => false, webContents: { send() {} } },
-      meetingConnectionKey: "key",
-      meetingReconnectAudioBytes: { mic: 0, system: 0 },
-      meetingReplayIncomplete: false,
-      MEETING_STOP_REPLAY_TIMEOUT_MS: 100,
-      setTimeout,
-      clearTimeout,
-      meetingReconnectCount: 0,
-      meetingReconnectedAt: 0,
-      meetingReconnectReplaySources: new Set(),
-      MAX_MEETING_RECONNECTS: 3,
-      MEETING_RECONNECT_STABLE_MS: 10000,
-      MEETING_STREAM_SAMPLE_RATE: 24000,
-      credentialGeneration: 0,
-      resolveEnterpriseMeetingOptions: async (_event, current) => current,
-      enterpriseMeetingConnectOptions: async () => ({}),
-      getMeetingConnectionKey: () => "key",
-      getMeetingStreamingClient: () => Streaming,
-      attachMeetingStreamingHandlers() {},
-      fetchRealtimeToken: async (_event, _options, streams) => (streams ? ["k", "k"] : "k"),
-      withMeetingSourceConnectOpts: (connectOpts) => connectOpts,
-      assertMeetingAllowed() {},
-      replayMeetingReconnectAudio: () => true,
-      resetMeetingReconnectAudio() {},
-      debugLogger: { error() {}, info() {} },
-      isSignInRefusal: () => false,
-      isAudioPolicyRefusal: () => false,
-      ...overrides,
-    }
+    context
   );
-  return { ...actions, target };
+  return { ...actions, target, context };
 }
 
 test("reconnects that keep failing right after they succeed run out; ones that hold start over", async () => {
@@ -439,6 +443,41 @@ for (const timing of ["ready", "stalled"]) {
     assert.equal(clients[2].committed, timing === "ready");
   });
 }
+
+test("a user stop whose reconnect was overtaken reports the audio it never replayed", async () => {
+  const gate = Promise.withResolvers();
+  class Client {
+    async connect() {
+      await gate.promise;
+      this.isConnected = true;
+    }
+    async disconnect() {
+      this.closed = true;
+    }
+  }
+  const replayed = [];
+  const { reconnect, disconnect, context } = reconnectHarness(
+    Client,
+    { provider: "sarvam-realtime" },
+    {
+      meetingReconnectAudioBytes: { mic: 48000, system: 0 },
+      replayMeetingReconnectAudio: (source) => {
+        replayed.push(source);
+        return true;
+      },
+    }
+  );
+  const recovery = reconnect();
+  await new Promise(setImmediate);
+  const stopping = disconnect({ replayQueued: true });
+  await new Promise(setImmediate);
+  // The owning window changed, so this reconnect gives up without replaying.
+  context.meetingConnectionWin = { isDestroyed: () => false, webContents: { send() {} } };
+  gate.resolve();
+  assert.equal(await recovery, true);
+  assert.equal(await stopping, true, "the queued audio was never transcribed");
+  assert.deepEqual(replayed, []);
+});
 
 for (const when of ["before token lookup", "during token lookup", "during handshake"]) {
   test(`Sarvam prepare/start refuses a credential replacement ${when}`, async () => {

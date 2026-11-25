@@ -562,6 +562,41 @@ test("GPT-4o transcription omits hints without a two-letter base code", async ()
   assert.equal(current.language, "yue");
 });
 
+test("every other provider leaves out a language only Sarvam transcribes", async () => {
+  for (const provider of ["mistral", "elevenlabs", "gemini", "tinfoil", "xai", "groq", "sarvam"]) {
+    const route = await resolve({ cloudTranscriptionProvider: provider, preferredLanguage: "or" });
+    assert.equal(route.language, provider === "sarvam" ? "or" : undefined, provider);
+    const hindi = await resolve({ cloudTranscriptionProvider: provider, preferredLanguage: "hi" });
+    if (provider !== "xai") assert.equal(hindi.language, "hi", provider);
+  }
+  // Corti needs a language, so it keeps its English default.
+  const corti = await resolve({ cloudTranscriptionProvider: "corti", preferredLanguage: "or" });
+  assert.equal(corti.language, "en");
+});
+
+test("gpt-transcribe and OpenWhispr Cloud leave out languages only Sarvam transcribes", async () => {
+  const { getCloudTranscriptionLanguageHint } = await import("../../src/utils/languageSupport.ts");
+  for (const [preferredLanguage, expected] of [
+    ["brx", undefined],
+    ["or", undefined],
+    ["hi-IN", "hi-IN"],
+    ["yue", "yue"],
+  ]) {
+    const route = await resolve({
+      cloudTranscriptionProvider: "openai",
+      cloudTranscriptionModel: "gpt-transcribe",
+      preferredLanguage,
+    });
+    assert.equal(route.language, expected && expected.split("-")[0], preferredLanguage);
+    assert.equal(
+      getCloudTranscriptionLanguageHint(preferredLanguage),
+      expected && expected.split("-")[0],
+      `cloud / ${preferredLanguage}`
+    );
+  }
+  assert.equal(getCloudTranscriptionLanguageHint("auto"), undefined);
+});
+
 const MANAGED_STT = {
   kind: "managed",
   provider: "azure",

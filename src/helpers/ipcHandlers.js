@@ -219,7 +219,10 @@ const {
 } = require("./geminiLiveStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
-const { DEFAULT_OPENAI_REALTIME_MODEL } = require("../utils/languageSupport.ts");
+const {
+  DEFAULT_OPENAI_REALTIME_MODEL,
+  getCloudTranscriptionLanguageHint,
+} = require("../utils/languageSupport.ts");
 const { getCortiToken } = require("./cortiAuth");
 const { ONBOARDING_DEMO_KINDS, ONBOARDING_DEMO_STATUSES } = require("./onboardingInputPolicy");
 const { focusWindowsHotkeyCaptureWindow } = require("./hotkeyCaptureFocus");
@@ -229,7 +232,7 @@ const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const { SarvamRealtimeStreaming } = require("./sarvamRealtimeStreaming");
 const { captureStartFromDelivery, createMeetingCaptureClock } = require("./meetingCaptureClock");
-const { transcribeWithSarvam } = require("./sarvamTranscription");
+const { transcribeWithSarvam, SARVAM_UPLOAD_LIMITS } = require("./sarvamTranscription");
 const { transcribeWithGemini } = require("./geminiTranscription");
 const { transcribeAssemblyAiRecording } = require("./assemblyAiDictation");
 const { transcribeWithElevenLabs } = require("./elevenLabsTranscription");
@@ -2115,15 +2118,29 @@ class IPCHandlers {
         new Error("The Sarvam AI API key changed before transcription could complete."),
         {
           code: "PROVIDER_CREDENTIAL_CHANGED",
+          messageKey: "providerErrors.credentialChanged",
+          messageParams: { provider: "Sarvam AI" },
         }
       );
     const sarvamKeyForGeneration = (generation) => {
+      // A run pinned to no key began on another route (managed transcription), so
+      // its settings changed rather than the key.
+      if (generation === null)
+        throw Object.assign(
+          new Error("Transcription settings changed before transcription could complete."),
+          { code: "PROVIDER_CREDENTIAL_CHANGED", messageKey: "providerErrors.settingsChanged" }
+        );
       if (generation !== undefined && generation !== sarvamKeyGeneration)
         throw changedSarvamCredential();
       return this.environmentManager.getSarvamKey();
     };
     const cancelledDictation = () =>
       Object.assign(createAbortError("Cancelled"), { code: "TRANSCRIPTION_CANCELLED" });
+    // A recording begun signed out continues for whoever signs in during it, as a
+    // voice command does. One begun under an account never moves to another.
+    const sarvamCaptureAccountChanged = (capture) =>
+      capture.accountId != null &&
+      capture.accountId !== this.effectivePolicyManager.getCurrent().accountId;
     const retireSarvamCapture = (reason) => {
       const capture = sarvamCapture;
       if (!capture) return;
@@ -6881,7 +6898,7 @@ class IPCHandlers {
         (!capture ||
           capture.id !== options.sarvamCaptureId ||
           capture.sender !== event.sender ||
-          capture.accountId !== this.effectivePolicyManager.getCurrent().accountId)
+          sarvamCaptureAccountChanged(capture))
       )
         return { success: false, ...ipcErrorFields(changedDictationAccount()) };
       return createProductHandler(
@@ -9841,7 +9858,7 @@ class IPCHandlers {
               const apiUrl = getApiUrl();
               if (apiUrl) {
                 const multipartFields = {
-                  language,
+                  language: getCloudTranscriptionLanguageHint(language),
                   clientType: "desktop",
                   source: "dictation",
                   appVersion: app.getVersion(),
@@ -12189,7 +12206,13 @@ class IPCHandlers {
               timeout = setTimeout(resolve, MEETING_STOP_REPLAY_TIMEOUT_MS);
             }),
           ]);
-          if (!replayed) meetingReplayIncomplete = true;
+          // A replay empties the queue. A reconnect that was cancelled or overtaken
+          // also answers true, but leaves its audio queued. A policy stop clears the
+          // options and explains itself.
+          const stillQueued =
+            meetingConnectionOptions &&
+            (meetingReconnectAudioBytes.mic || meetingReconnectAudioBytes.system);
+          if (!replayed || stillQueued) meetingReplayIncomplete = true;
         } catch {
           meetingReplayIncomplete = true;
         } finally {
@@ -12956,7 +12979,12 @@ class IPCHandlers {
     const startManagedMeetingSystemAudio = (event, manager, warningLabel, onWarningCode) => {
       const win = BrowserWindow.fromWebContents(event.sender);
       const timeline =
-        manager === this.audioTapManager ? require("./meetingAudioTimeline")() : null;
+        manager === this.audioTapManager
+          ? require("./meetingAudioTimeline")({
+              // Only Sarvam's meeting path converts microphone audio to first-sample times.
+              anchorsFirstSample: () => meetingConnectionOptions?.provider === "sarvam-realtime",
+            })
+          : null;
       let captureStarted = false;
       const startCapture = () => {
         if (captureStarted) timeline?.markRestart();
@@ -13547,7 +13575,7 @@ class IPCHandlers {
         !capture ||
         capture.sender !== event.sender ||
         capture.id !== options.sarvamCaptureId ||
-        capture.accountId !== this.effectivePolicyManager.getCurrent().accountId
+        sarvamCaptureAccountChanged(capture)
       )
         return { success: false, ...ipcErrorFields(changedDictationAccount()) };
       try {
@@ -14754,7 +14782,8 @@ class IPCHandlers {
                 apiKey: sarvamKeyForGeneration(expectedSarvamKeyGeneration),
                 signal,
                 fetchImpl: proxyFetch,
-                maxRetryWaitMs: 60_000,
+                // An assistant voice take is waiting on its answer like a dictation.
+                ...(resolvedPurpose !== "dictation" && SARVAM_UPLOAD_LIMITS),
                 timestamps,
                 onProgress: (payload) =>
                   event.sender.send("upload-transcription-progress", payload),

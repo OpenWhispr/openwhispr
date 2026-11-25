@@ -60,6 +60,9 @@ function isWrongScriptFragment(text, languages) {
 function fragmentFilterLanguages(options) {
   const language = options?.language;
   if (language && language !== "auto") return [language];
+  // Sarvam transcribes only Indian languages and English, so on auto there is no
+  // wrong script to drop, and a short reply such as "हाँ" is real speech.
+  if (options?.provider === "sarvam-realtime") return [];
   return Array.isArray(options?.spokenLanguages) ? options.spokenLanguages : [];
 }
 

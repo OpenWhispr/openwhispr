@@ -23,6 +23,8 @@ export function resolveSarvamMode(mode) {
 
 /**
  * Translate produces English independently of the recognition language hint.
+ * Translit writes the speech in Latin script, which a native-script language
+ * instruction would have cleanup convert back, so its language is left open.
  * @param {string | null | undefined} provider
  * @param {unknown} mode
  * @param {string} [inputLanguage]
@@ -30,7 +32,9 @@ export function resolveSarvamMode(mode) {
  */
 export function sarvamTranscriptLanguage(provider, mode, inputLanguage) {
   if (provider !== "sarvam") return undefined;
-  return mode === "translate" ? "en" : resolveSarvamInputLanguage(inputLanguage);
+  if (mode === "translate") return "en";
+  if (mode === "translit") return "auto";
+  return resolveSarvamInputLanguage(inputLanguage);
 }
 
 export function sarvamLanguage(language) {

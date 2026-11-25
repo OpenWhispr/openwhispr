@@ -73,6 +73,10 @@ test("the meeting language wins, and spoken languages stand in for auto", () => 
   assert.deepEqual(fragmentFilterLanguages({ spokenLanguages: ["en", "ru"] }), ["en", "ru"]);
   assert.deepEqual(fragmentFilterLanguages({ language: "auto", spokenLanguages: ["de"] }), ["de"]);
   assert.deepEqual(fragmentFilterLanguages({}), []);
+  // Sarvam on auto keeps a short Indian-language reply even for an English speaker.
+  const sarvam = { provider: "sarvam-realtime", language: "auto", spokenLanguages: ["en"] };
+  assert.equal(isWrongScriptFragment("हाँ", fragmentFilterLanguages(sarvam)), false);
+  assert.deepEqual(fragmentFilterLanguages({ ...sarvam, language: "hi" }), ["hi"]);
   assert.deepEqual(fragmentFilterLanguages(null), []);
 });
 

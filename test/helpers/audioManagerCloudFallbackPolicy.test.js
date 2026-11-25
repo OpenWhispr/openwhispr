@@ -505,6 +505,17 @@ test("proxied providers dispatch through the registry", async (t) => {
     assert.equal(fetched.length, 0);
   });
 
+  await t.test("a language only Sarvam transcribes is not sent to another provider", async () => {
+    const odia = createManager({
+      getTranscriptionModel: () => "voxtral-mini-latest",
+      getAPIKey: async () => "key",
+      getEffectiveSttLanguage: () => "or",
+    });
+    setSettings(settingsFor("mistral"));
+    await odia.processWithOpenAIAPI(audioBlob);
+    assert.equal(payloads.mistral.language, undefined);
+  });
+
   await t.test("structured proxy errors are rebuilt with every classified field", async () => {
     setSettings(settingsFor("mistral"));
     window.electronAPI.proxyMistralTranscription = async () => ({

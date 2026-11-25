@@ -1175,10 +1175,14 @@ test("a queued Sarvam upload refuses a replaced key even after the original key 
   const priorRequests = fetches.length;
   const unbound = await invokeUpload({ ...options, sarvamKeyGeneration: null });
   assert.equal(unbound.code, "PROVIDER_CREDENTIAL_CHANGED");
+  // A run that began on another route saw its settings change, not its key.
+  assert.equal(unbound.messageKey, "providerErrors.settingsChanged");
   for (const key of ["replacement", original]) {
     save({ sender: {} }, key);
     const result = await invokeUpload(options);
     assert.equal(result.code, "PROVIDER_CREDENTIAL_CHANGED");
+    assert.equal(result.messageKey, "providerErrors.credentialChanged");
+    assert.deepEqual(result.messageParams, { provider: "Sarvam AI" });
     assert.equal(result.success, false);
     assert.equal(fetches.length, priorRequests);
   }

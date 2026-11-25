@@ -20,7 +20,8 @@ test("Sarvam maps only supported REST hints and preserves dictionary phrases", (
   assert.equal(sarvamLanguage("auto"), undefined);
   assert.equal(sarvamLanguage("fr"), undefined);
   assert.equal(sarvamTranscriptLanguage("sarvam", "codemix", "hi-IN"), "hi-IN");
-  assert.equal(sarvamTranscriptLanguage("sarvam", "translit", "or-IN"), "or-IN");
+  // Cleanup must not be told to write romanized output in the native script.
+  assert.equal(sarvamTranscriptLanguage("sarvam", "translit", "or-IN"), "auto");
   assert.equal(sarvamTranscriptLanguage("sarvam", "transcribe", "zh-TW"), "auto");
   assert.equal(sarvamTranscriptLanguage("sarvam", "translate", "zh-TW"), "en");
   const terms = [" New Delhi ", "New Delhi", "", "x".repeat(65), "अ".repeat(64)];
@@ -164,33 +165,112 @@ for (const [reason, starts, ends] of [
   });
 }
 
-mediaTest("a failed or cancelled later segment never returns a partial success", async () => {
+mediaTest(
+  "a refused later piece keeps the transcribed audio and marks the rest as missing",
+  async () => {
+    let calls = 0;
+    const refused = () =>
+      Response.json({ error: { code: "invalid_api_key_error" } }, { status: 403 });
+    const partial = await transcribeWithSarvam({
+      audioBuffer: audio(32),
+      apiKey: "dummy",
+      timestamps: true,
+      fetchImpl: async () => (++calls === 1 ? ok("first") : refused()),
+    });
+    assert.equal(calls, 2);
+    assert.match(partial.text, /^first \[missing audio 0:29-0:32\]$/);
+    assert.equal(partial.failedChunks, 1);
+    assert.equal(partial.totalChunks, 2);
+    assert.ok(partial.warning);
+    // Segments carry no gap marker, so a partial upload is returned as plain text.
+    assert.equal(partial.segments, undefined);
+
+    // Losing most of the recording fails with the refusal that stopped it.
+    calls = 0;
+    await assert.rejects(
+      transcribeWithSarvam({
+        audioBuffer: audio(61),
+        apiKey: "dummy",
+        fetchImpl: async () => (++calls === 1 ? ok("first") : refused()),
+      }),
+      { code: "PROVIDER_AUTH_FAILED" }
+    );
+    assert.equal(calls, 2, "a refused key stops the upload instead of sending the last piece");
+
+    const controller = new AbortController();
+    await assert.rejects(
+      transcribeWithSarvam({
+        audioBuffer: audio(32),
+        apiKey: "dummy",
+        signal: controller.signal,
+        fetchImpl: async () => {
+          controller.abort();
+          return ok("first");
+        },
+      }),
+      { name: "AbortError" }
+    );
+  }
+);
+
+mediaTest("a piece Sarvam rejects on its own leaves the pieces after it", async () => {
+  const responses = [
+    ok("first"),
+    Response.json({ error: { code: "invalid_request_error" } }, { status: 400 }),
+    ok("third"),
+  ];
+  const result = await transcribeWithSarvam({
+    audioBuffer: audio(61),
+    apiKey: "dummy",
+    fetchImpl: async () => responses.shift(),
+  });
+  assert.match(result.text, /^first \[missing audio 0:29-0:58\] third$/);
+  assert.equal(result.failedChunks, 1);
+});
+
+mediaTest("a request that timed out is not sent again", async () => {
   let calls = 0;
   await assert.rejects(
     transcribeWithSarvam({
-      audioBuffer: audio(32),
+      audioBuffer: audio(1),
       apiKey: "dummy",
-      fetchImpl: async () =>
-        ++calls === 1
-          ? ok("first")
-          : Response.json({ error: { code: "invalid_api_key_error" } }, { status: 403 }),
-    }),
-    { code: "PROVIDER_AUTH_FAILED" }
-  );
-  assert.equal(calls, 2);
-  const controller = new AbortController();
-  await assert.rejects(
-    transcribeWithSarvam({
-      audioBuffer: audio(32),
-      apiKey: "dummy",
-      signal: controller.signal,
-      fetchImpl: async () => {
-        controller.abort();
-        return ok("first");
+      requestTimeoutMs: 20,
+      fetchImpl: (_, { signal }) => {
+        calls++;
+        return new Promise((_, reject) =>
+          signal.addEventListener("abort", () => reject(signal.reason))
+        );
       },
     }),
-    { name: "AbortError" }
+    { code: "PROVIDER_TIMEOUT" }
   );
+  assert.equal(calls, 1);
+});
+
+mediaTest("an empty recording reads as no speech", async () => {
+  await assert.rejects(
+    transcribeWithSarvam({
+      audioBuffer: pcm16ToWav(Buffer.alloc(0)),
+      apiKey: "dummy",
+      fetchImpl: async () => assert.fail("nothing is sent"),
+    }),
+    { code: "NO_SPEECH_DETECTED" }
+  );
+});
+
+mediaTest("a phrase ending a few frames past its piece keeps the upload's timing", async () => {
+  const { segments } = await transcribeWithSarvam({
+    audioBuffer: audio(1),
+    apiKey: "dummy",
+    timestamps: true,
+    fetchImpl: async () =>
+      Response.json({
+        transcript: "नमस्ते",
+        timestamps: { words: ["नमस्ते"], start_time_seconds: [0.2], end_time_seconds: [1.04] },
+      }),
+  });
+  assert.equal(segments.length, 1);
+  assert.equal(segments[0].end, 1);
 });
 
 mediaTest("a transient failure retries just the affected piece", async () => {

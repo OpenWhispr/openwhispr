@@ -282,11 +282,16 @@ export const SARVAM_MODE_KEYS = {
   upload: "uploadSarvamMode",
 } as const satisfies Record<TranscriptionPolicyContext, string>;
 
-// Seed each new context once, before a later dictation edit can change its default.
+// A mode chosen before meetings and uploads had their own keeps applying to them.
+// Seeded once, so a later dictation change leaves them alone. Someone who never
+// chose a mode stores nothing and follows the default.
 if (isBrowser) {
-  const previousMode = resolveSarvamMode(localStorage.getItem("sarvamMode"));
-  for (const key of [SARVAM_MODE_KEYS.meeting, SARVAM_MODE_KEYS.upload]) {
-    if (localStorage.getItem(key) === null) localStorage.setItem(key, previousMode);
+  const previousMode = localStorage.getItem(SARVAM_MODE_KEYS.dictation);
+  if (previousMode !== null) {
+    for (const key of [SARVAM_MODE_KEYS.meeting, SARVAM_MODE_KEYS.upload]) {
+      if (localStorage.getItem(key) === null)
+        localStorage.setItem(key, resolveSarvamMode(previousMode));
+    }
   }
 }
 

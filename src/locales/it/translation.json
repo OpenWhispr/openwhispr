@@ -465,6 +465,7 @@
         "line": {
           "requiredByOrganization": "Richiesto dalla tua organizzazione",
           "organizationModelsUnrunnable": "Nessuno dei modelli approvati dalla tua organizzazione funziona su questo computer",
+          "languageNotLocal": "Whisper non trascrive {{languages}}, quindi rileva la lingua da solo. Un provider cloud come Sarvam AI la supporta.",
           "offToFit": "Disattivato per rientrare nello spazio libero di questo computer",
           "failed": "Download non riuscito. Controlla la connessione e riprova"
         },
@@ -4214,6 +4215,7 @@
       "internalAttendeesConfirm": "Sì, avvia",
       "recordingDisabledByOrg": "La registrazione delle riunioni è disattivata dalla tua organizzazione.",
       "stoppedSarvamKeyChanged": "La registrazione è stata interrotta perché la chiave API di Sarvam è cambiata.",
+      "noteUnavailable": "Questa nota non è più disponibile, quindi la registrazione non è stata avviata.",
       "stoppedAccountChanged": "La registrazione si è interrotta perché sei uscito dall'account o hai cambiato account.",
       "stoppedPolicyUnresolved": "La registrazione si è interrotta perché non è stato possibile verificare le impostazioni della tua organizzazione.",
       "stoppedWorkspaceChanged": "La registrazione si è interrotta perché hai cambiato workspace."
@@ -6900,6 +6902,8 @@
     "noResponse": "Nessuna risposta da {{provider}}. Controlla la tua chiave API e la connessione.",
     "unknown": "{{provider}} ha restituito un errore imprevisto.",
     "keyMissing": "Nessuna chiave API impostata per {{provider}}. Aggiungila in Impostazioni → Modello linguistico.",
+    "credentialChanged": "La tua chiave API di {{provider}} è cambiata prima che la trascrizione finisse. Riprova per usare la nuova chiave.",
+    "settingsChanged": "Le impostazioni di trascrizione sono cambiate prima che la trascrizione finisse. Riprova.",
     "selfHosted": {
       "authFailed": "Il tuo server ha rifiutato la chiave API.",
       "accessDenied": "Il tuo server ha negato l’accesso. La chiave potrebbe non includere questo modello.",

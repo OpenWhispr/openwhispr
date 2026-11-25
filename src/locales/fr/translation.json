@@ -465,6 +465,7 @@
         "line": {
           "requiredByOrganization": "Imposé par votre organisation",
           "organizationModelsUnrunnable": "Aucun des modèles approuvés par votre organisation ne fonctionne sur cet ordinateur",
+          "languageNotLocal": "Whisper ne transcrit pas {{languages}} : il détecte donc la langue lui-même. Un fournisseur cloud comme Sarvam AI la prend en charge.",
           "offToFit": "Désactivé pour tenir dans l’espace libre de cet ordinateur",
           "failed": "Téléchargement impossible. Vérifiez votre connexion et réessayez"
         },
@@ -4779,6 +4780,7 @@
       "internalAttendeesConfirm": "Oui, commencer",
       "recordingDisabledByOrg": "L’enregistrement des réunions est désactivé par votre organisation.",
       "stoppedSarvamKeyChanged": "L’enregistrement s’est arrêté car la clé API Sarvam a changé.",
+      "noteUnavailable": "Cette note n’est plus disponible, l’enregistrement n’a donc pas démarré.",
       "stoppedAccountChanged": "L’enregistrement s’est arrêté, car vous vous êtes déconnecté ou avez changé de compte.",
       "stoppedPolicyUnresolved": "L’enregistrement s’est arrêté, car les paramètres de votre organisation n’ont pas pu être vérifiés.",
       "stoppedWorkspaceChanged": "L’enregistrement s’est arrêté, car vous avez changé d’espace de travail."
@@ -6906,6 +6908,8 @@
     "noResponse": "Aucune réponse de {{provider}}. Vérifiez votre clé API et votre connexion.",
     "unknown": "{{provider}} a renvoyé une erreur inattendue.",
     "keyMissing": "Aucune clé API n’est définie pour {{provider}}. Ajoutez-la dans Réglages → Modèle de langage.",
+    "credentialChanged": "Votre clé API {{provider}} a changé avant la fin de la transcription. Réessayez pour utiliser la nouvelle clé.",
+    "settingsChanged": "Vos paramètres de transcription ont changé avant la fin de la transcription. Réessayez.",
     "selfHosted": {
       "authFailed": "Votre serveur a rejeté la clé API.",
       "accessDenied": "Votre serveur a refusé l’accès. La clé ne couvre peut-être pas ce modèle.",

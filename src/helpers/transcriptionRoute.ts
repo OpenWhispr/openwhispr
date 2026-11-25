@@ -11,6 +11,7 @@ import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constant
 import {
   getBaseLanguageCode,
   getHostedTranscriptionLanguageHint,
+  getProviderLanguageHint,
 } from "../utils/languageSupport.ts";
 import {
   isSecureHttpEndpoint,
@@ -367,7 +368,7 @@ export function resolveTranscriptionRoute({
 }: TranscriptionRouteInput): TranscriptionRoute {
   const s = settings || {};
   const managed = policy?.status === "managed";
-  const language =
+  const requestedLanguage =
     request?.effectiveLanguage === "auto"
       ? undefined
       : (request?.effectiveLanguage ?? getBaseLanguageCode(s.preferredLanguage));
@@ -385,7 +386,7 @@ export function resolveTranscriptionRoute({
       deployment: managedResolution.deployment,
       context: managedResolution.context,
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
-      language,
+      language: getProviderLanguageHint(managedResolution.provider, requestedLanguage),
     };
   }
 
@@ -442,7 +443,7 @@ export function resolveTranscriptionRoute({
           ? { scheme: "bearer", keyRef: "custom" }
           : { scheme: "none", keyRef: null },
         sizeCapBytes: null,
-        language,
+        language: getProviderLanguageHint("self-hosted", requestedLanguage),
       };
     }
     if (s.cloudTranscriptionProvider !== "custom") {
@@ -457,6 +458,7 @@ export function resolveTranscriptionRoute({
 
   const provider = s.cloudTranscriptionProvider || "openai";
   const model = resolveByokModel(provider, request?.model ?? s.cloudTranscriptionModel);
+  const language = getProviderLanguageHint(provider, requestedLanguage);
 
   if (provider === "tinfoil" || provider === "mistral" || provider === "xai") {
     return {

@@ -199,22 +199,44 @@ test("HTTP upgrade refusals carry the same account errors as a refused Sarvam se
     [403, "", "PROVIDER_ACCESS_DENIED", true],
     [429, '{"error":"seat_budget_exhausted_error"}', "PROVIDER_QUOTA_EXHAUSTED", true],
     [429, '{"error":"try again later"}', "PROVIDER_RATE_LIMITED", false],
+    [400, '{"error":"Invalid keyterms"}', "PROVIDER_BAD_REQUEST", false],
     [503, "", "PROVIDER_UNAVAILABLE", false],
   ]) {
     const stream = new SarvamRealtimeStreaming(Socket);
     const ready = stream.connect({ apiKey: "saved", model: "saaras:v4" });
     // A definite refusal must be actionable even if its body never finishes.
-    const response = status === 429 ? Readable.from([body]) : new Readable({ read() {} });
+    const readsBody = status === 400 || status === 429;
+    const response = readsBody ? Readable.from([body]) : new Readable({ read() {} });
     response.statusCode = status;
     stream.ws.emit("unexpected-response", {}, response);
-    if (status !== 429) assert.equal(stream.closed, true);
+    if (!readsBody) assert.equal(stream.closed, true);
     await assert.rejects(ready, (error) => {
       assert.equal(error.code, code);
       assert.equal(error.status, status);
       assert.equal(Boolean(error.fatal), fatal);
+      if (status === 400) assert.match(error.technicalDetails.underlyingError, /Invalid keyterms/);
       return true;
     });
   }
+});
+
+test("Sarvam's connection rate limit close reads as a rate limit", async () => {
+  const stream = new SarvamRealtimeStreaming(Socket);
+  const ready = stream.connect({ apiKey: "saved", model: "saaras:v4" });
+  stream.ws.emit("close", 1003, Buffer.from("Rate limit exceeded. Please retry later."));
+  await assert.rejects(ready, (error) => error.code === "PROVIDER_RATE_LIMITED");
+});
+
+test("realtime keyterms stay within the URL size Sarvam's gateway accepts", () => {
+  const stream = new SarvamRealtimeStreaming(Socket);
+  // 50 Devanagari terms of 24 characters would make a URL of about 11 KB.
+  const terms = Array.from({ length: 50 }, (_, index) => `ओपनव्हिस्पर कंपनी शब्दकोश ${index}`);
+  stream.connect({ apiKey: "saved", model: "saaras:v4", keyterms: terms }).catch(() => {});
+  const sent = JSON.parse(stream.ws.url.searchParams.get("keyterms"));
+  assert.ok(stream.ws.url.toString().length < 7000);
+  assert.ok(sent.length > 0 && sent.length < terms.length);
+  assert.deepEqual(sent, terms.slice(0, sent.length));
+  stream.disconnect();
 });
 
 test("a close before completion names the reason Sarvam gave", async () => {

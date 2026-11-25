@@ -1,4 +1,5 @@
 import { resolveSarvamMode, sarvamKeyterms } from "../utils/sarvam.js";
+import { getProviderLanguageHint } from "../utils/languageSupport.ts";
 
 // Note recording only offers providers the main process will actually run:
 // meeting prepare/start check ALLOWED_MEETING_PROVIDERS (derived from the
@@ -67,7 +68,7 @@ export function resolveMeetingTranscriptionOptions({
       provider: `${provider.id}-realtime`,
       model: resolveModel(provider, selectedModel),
       mode: "openwhispr",
-      language,
+      language: getProviderLanguageHint(provider.id, language),
     };
   }
 
@@ -94,7 +95,7 @@ export function resolveMeetingTranscriptionOptions({
     provider: `${provider.id}-realtime`,
     model: resolveModel(provider, selectedModel),
     mode: "byok",
-    language,
+    language: getProviderLanguageHint(provider.id, language),
   };
 
   if (provider.id === "corti") {

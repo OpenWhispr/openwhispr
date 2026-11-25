@@ -125,11 +125,13 @@ function summarizeChunkResults(results) {
 // omitted, and a known input duration clamps the final gap to its real end. The
 // marker is read by users and pasted by dictation, so it is localized like the
 // [Speaker N] labels in transcriptFormatter.
+// `spans` gives each chunk's own start and end in seconds, for chunks cut to
+// varying lengths.
 function assembleChunkTranscript(
   results,
   segmentDurationSeconds,
   totalDurationSeconds,
-  { preserveWhitespace = false } = {}
+  { preserveWhitespace = false, spans } = {}
 ) {
   const pieces = [];
   for (let i = 0; i < results.length; i++) {
@@ -140,10 +142,10 @@ function assembleChunkTranscript(
     }
     const gapStart = i;
     while (i + 1 < results.length && results[i + 1] == null) i++;
-    const gapEnd = (i + 1) * segmentDurationSeconds;
+    const gapEnd = spans ? spans[i].end : (i + 1) * segmentDurationSeconds;
     pieces.push(
       i18nMain.t("transcript.missingAudio", {
-        from: formatTimestamp(gapStart * segmentDurationSeconds),
+        from: formatTimestamp(spans ? spans[gapStart].start : gapStart * segmentDurationSeconds),
         to: formatTimestamp(
           Number.isFinite(totalDurationSeconds) && totalDurationSeconds > 0
             ? Math.min(gapEnd, totalDurationSeconds)

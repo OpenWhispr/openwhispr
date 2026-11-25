@@ -103,6 +103,31 @@ test("a managed batch with a saved Sarvam preference has no personal upload cred
   await flush();
 });
 
+test("a personal Sarvam batch shows each finished piece as progress", async (t) => {
+  const { store, calls, usePolicyStore } = await setup(t);
+  usePolicyStore.setState({ status: "unmanaged", policy: null });
+  globalThis.__audioPolicyBatch.localRoute = true;
+  let report;
+  Object.assign(globalThis.window.electronAPI, {
+    getSarvamKeyGeneration: async () => 3,
+    onUploadTranscriptionProgress: (listener) => {
+      report = listener;
+      return () => (report = undefined);
+    },
+  });
+  store.processBatchQueue(
+    {
+      transcription: { cloudTranscriptionProvider: "sarvam", getApiKey: () => "" },
+      folderId: null,
+    },
+    diarization
+  );
+  await flush();
+  assert.equal(calls[0][1].sarvamKeyGeneration, 3);
+  report({ chunksCompleted: 1, chunksTotal: 2 });
+  assert.equal(store.useBatchQueueStore.getState().queue[0].progress, 45);
+});
+
 test("an upload restriction cancels an active batch and discards late results; meeting-only restrictions leave it running", async (t) => {
   const { store, calls, saved, cancelled, results, setPolicy, run, items } = await setup(t);
   await run();

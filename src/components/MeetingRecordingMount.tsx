@@ -32,6 +32,8 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   policyRestricted: "notes.meeting.restrictedByOrg",
   partialTranscript: "notes.upload.partialWarning",
   sarvamCredentialChanged: "notes.meeting.stoppedSarvamKeyChanged",
+  // Record was pressed on a note that was deleted or can't be read any more.
+  noteUnavailable: "notes.meeting.noteUnavailable",
   // Org-policy refusal codes, from the main process or the server.
   POLICY_MEETING_RECORDING_DISABLED: "notes.meeting.recordingDisabledByOrg",
   POLICY_EXTERNAL_ATTENDEES: "notes.meeting.externalAttendeesBlocked",

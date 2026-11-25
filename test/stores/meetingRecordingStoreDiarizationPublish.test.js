@@ -351,7 +351,12 @@ test("a note-backed resume honors deletion and cancellation while explicit rows 
   const writes = state.updatedTranscripts.length;
   for (const missing of [null, { ...note, deleted_at: "2026-11-01" }]) {
     api.getNote = async () => missing;
+    const { errorNonce } = store.useMeetingRecordingStore.getState();
     assert.equal(await store.startRecording(args), false);
+    // A Record press that can't start says why.
+    const after = store.useMeetingRecordingStore.getState();
+    assert.equal(after.error, "noteUnavailable");
+    assert.equal(after.errorNonce, errorNonce + 1);
   }
   const read = deferred();
   const reading = deferred();

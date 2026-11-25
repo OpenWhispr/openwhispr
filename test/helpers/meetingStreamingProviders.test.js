@@ -62,6 +62,35 @@ test("a dictation-only streaming provider is not offered for note recording", as
   assert.equal(meetingIds.includes("gemini"), false);
 });
 
+test("note recording sends a language only Sarvam transcribes to Sarvam alone", async () => {
+  const { getMeetingStreamingTranscriptionProviders } =
+    await import("../../src/models/ModelRegistry.ts");
+  const { resolveMeetingTranscriptionOptions } =
+    await import("../../src/helpers/meetingTranscriptionRouting.js");
+  const byokProviders = getMeetingStreamingTranscriptionProviders();
+  for (const selectedProvider of ["deepgram", "assemblyai", "elevenlabs", "sarvam"]) {
+    const route = resolveMeetingTranscriptionOptions({
+      transcriptionMode: "providers",
+      byokProviders,
+      selectedProvider,
+      language: "or",
+    });
+    assert.equal(route.language, selectedProvider === "sarvam" ? "or" : undefined);
+  }
+  const cloud = resolveMeetingTranscriptionOptions({
+    transcriptionMode: "openwhispr",
+    language: "or",
+  });
+  assert.equal(cloud.language, undefined);
+  const local = resolveMeetingTranscriptionOptions({
+    transcriptionMode: "local",
+    localProvider: "whisper",
+    language: "or",
+  });
+  // Local engines fall back on their own (Whisper detects, Cohere uses English).
+  assert.equal(local.language, "or");
+});
+
 test("note recording routes both Saaras models through the personal Sarvam account", async () => {
   const { getMeetingStreamingTranscriptionProviders } =
     await import("../../src/models/ModelRegistry.ts");

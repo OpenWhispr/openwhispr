@@ -293,6 +293,18 @@ test("options: openai-realtime sends provider explicitly and no preview (#1624)"
   });
 });
 
+test("options: a language only Sarvam transcribes reaches only Sarvam's socket", async () => {
+  const { buildStreamingSessionOptions } = await loadRouting();
+  for (const providerName of ["deepgram", "assemblyai", "openai-realtime", "gemini", "sarvam"]) {
+    const options = buildStreamingSessionOptions({
+      providerName,
+      settings: settingsWith({}),
+      language: "brx",
+    });
+    assert.equal(options.language, providerName === "sarvam" ? "brx" : undefined, providerName);
+  }
+});
+
 test("options: tinfoil-realtime keeps its always-on preview (#1120)", async () => {
   const { buildStreamingSessionOptions } = await loadRouting();
   const options = buildStreamingSessionOptions({

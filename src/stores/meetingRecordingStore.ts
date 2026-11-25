@@ -8,7 +8,7 @@ import { resolveMeetingTranscriptionOptions } from "../helpers/meetingTranscript
 import { followsSystemDefaultMic } from "../helpers/micSelectionRecovery";
 import { resolvePreferredMicrophone } from "../helpers/microphoneSelection";
 import { ActiveMicRecoveryController } from "../helpers/activeMicRecovery";
-import { getBaseLanguageCode } from "../utils/languageSupport";
+import { getBaseLanguageCode, getProviderLanguageHint } from "../utils/languageSupport";
 import { getEffectiveDictionaryWords, getKeytermDictionaryWords } from "../utils/snippets";
 import {
   resolveInitialSpeakerCountOverride,
@@ -208,7 +208,10 @@ const getMeetingTranscriptionOptions = () => {
       model: managed.deployment,
       managedContext: managed.context,
       enterpriseIdentity,
-      language: getBaseLanguageCode(getSettings().preferredLanguage),
+      language: getProviderLanguageHint(
+        managed.provider,
+        getBaseLanguageCode(getSettings().preferredLanguage)
+      ),
       spokenLanguages: getSettings().spokenLanguages,
     };
   const state = getSettings();
@@ -1069,6 +1072,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         if (startOperation.isCurrent()) {
           if (!note || note.deleted_at) {
             automaticStartCancelled = Boolean(args.canAutoStart);
+            // Someone pressed Record, so say why nothing started.
+            if (!args.canAutoStart) reportMeetingError("noteUnavailable");
             recordingDisabled = true;
             return;
           }

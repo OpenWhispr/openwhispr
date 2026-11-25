@@ -191,6 +191,16 @@ test("each table machine gets its table labels", async () => {
   assert.equal(linux.graphicsPack.bytes, table.graphicsPackBytes["linux-x64"]);
 });
 
+test("dictation names the spoken languages no local model transcribes", async () => {
+  const bodo = await plan(mac({}), { spokenLanguages: ["en-IN", "brx", "or"] });
+  assert.equal(row(bodo, "dictation").modelId, table.models.dictation.other);
+  assert.deepEqual(row(bodo, "dictation").line, {
+    key: "languageNotLocal",
+    languages: ["brx", "or"],
+  });
+  assert.equal(row(await plan(mac({})), "dictation").line, null);
+});
+
 test("rows follow memory needs on top of the table, per platform", async () => {
   const mac8 = await plan(mac({ memoryGb: 8 }));
   assert.equal(row(mac8, "cleanup").reason, "memory");

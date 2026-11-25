@@ -1139,6 +1139,7 @@ for (const connected of [true, false]) {
       error: connected ? undefined : "Handshake timed out",
     });
     await starting;
+    await manager.stopStreamingRecording();
     assert.deepEqual(provider.sent, connected ? [first, tail] : []);
     assert.deepEqual(uploads, connected ? [] : ["opening words"]);
   });
@@ -1177,6 +1178,7 @@ test("Sarvam retries the capture's original input language after the setting cha
     await manager.stopStreamingRecording();
     connecting.resolve({ success: false, error: "Handshake timed out" });
     await starting;
+    await manager.stopStreamingRecording();
   }
   assert.deepEqual(uploads, ["hi", undefined, undefined]);
 });
@@ -1507,10 +1509,42 @@ test("a stop pressed while a refused managed Orukeet start settles uploads once"
   await manager.stopStreamingRecording();
   refuse();
   await starting;
+  await manager.stopStreamingRecording();
 
   assert.equal(manager.isRecording, false, "the deferred stop ends the recording");
   assert.deepEqual(uploads, [{ audio: "opening words", reason: "session_unavailable" }]);
   assert.deepEqual(errors, []);
+});
+
+test("a deferred stop reports its failure after the start has resolved", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  useManagedOrukeetSettings();
+  installCapture(t);
+  let refuse;
+  const provider = startingOrukeetProvider({
+    start: () =>
+      new Promise((resolve) => {
+        refuse = () => resolve({ success: false, error: "Orukeet connection closed" });
+      }),
+  });
+  const { manager } = createStartingManager(AudioManager, { providerName: "orukeet", provider });
+  const events = [];
+  manager.processWithOpenWhisprCloud = async () => {
+    throw Object.assign(new Error("Upload failed"), { code: "NETWORK_ERROR" });
+  };
+  manager.onError = () => events.push("error");
+
+  const starting = manager.startStreamingRecording();
+  while (!refuse) await new Promise((resolve) => setImmediate(resolve));
+  await manager.stopStreamingRecording();
+  refuse();
+  assert.equal(await starting, true);
+  events.push("started");
+  await manager.stopStreamingRecording();
+
+  // The dictation hook clears earlier error pills when a start resolves, so the
+  // stop's own pill must arrive after it.
+  assert.deepEqual(events, ["started", "error"]);
 });
 
 test("the recording after a failed-over one streams to its socket again", async (t) => {

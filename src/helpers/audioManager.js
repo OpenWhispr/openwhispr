@@ -17,7 +17,9 @@ import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import {
   getBaseLanguageCode,
+  getCloudTranscriptionLanguageHint,
   getLanguageLabel,
+  getProviderLanguageHint,
   getWhisperLanguageHint,
 } from "../utils/languageSupport";
 import { convertToWav, needsWavConversion } from "../utils/audioContainer";
@@ -4022,7 +4024,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const timings = {};
     const settings = getSettings();
     const isCloudCleanup = isCloudCleanupMode();
-    const language = getBaseLanguageCode(this.getEffectiveSttLanguage(settings));
+    const language = getCloudTranscriptionLanguageHint(this.getEffectiveSttLanguage(settings));
 
     const arrayBuffer = await audioBlob.arrayBuffer();
     const audioSizeBytes = audioBlob.size;
@@ -4346,7 +4348,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           audioBuffer,
           durationSeconds,
           model,
-          language,
+          language: getProviderLanguageHint(provider, language),
           apiSettings,
           managedResolution,
           mimeType: optimizedAudio.type || "audio/webm",
@@ -6009,10 +6011,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           { providerName, reason: this._streamingFailoverReason },
           "streaming"
         );
-        if (this.stopRequestedDuringStreamingStart) {
-          this.stopRequestedDuringStreamingStart = false;
-          return this.stopStreamingRecording();
-        }
+        if (this.stopRequestedDuringStreamingStart) return this._applyDeferredStreamingStop();
         return true;
       }
 
@@ -6044,11 +6043,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "streaming"
       );
 
-      if (this.stopRequestedDuringStreamingStart) {
-        this.stopRequestedDuringStreamingStart = false;
-        logger.debug("Applying deferred streaming stop requested during startup", {}, "streaming");
-        return this.stopStreamingRecording();
-      }
+      if (this.stopRequestedDuringStreamingStart) return this._applyDeferredStreamingStop();
       return true;
     } catch (error) {
       const stopRequested = this.stopRequestedDuringStreamingStart;
@@ -6214,6 +6209,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.streamingStream?.getTracks().forEach((track) => track.stop());
     this.onStateChange?.({ isRecording: false, isProcessing: true, isStreaming: false });
     return this._connectingCaptureStop;
+  }
+
+  // The start resolves once the recording has begun. The stop finalizes on its own,
+  // so its outcome (an error or no-speech pill) never reads as a fresh start.
+  _applyDeferredStreamingStop() {
+    this.stopRequestedDuringStreamingStart = false;
+    logger.debug("Applying deferred streaming stop requested during startup", {}, "streaming");
+    void this.stopStreamingRecording().catch((error) =>
+      logger.error("Deferred streaming stop failed", { error: error.message }, "streaming")
+    );
+    return true;
   }
 
   async stopStreamingRecording() {

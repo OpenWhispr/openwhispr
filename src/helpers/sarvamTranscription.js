@@ -7,6 +7,12 @@ const { mapVerboseSegments } = require("./uploadTimestamps");
 const { pcm16ToWav } = require("../utils/audioUtils");
 const { resolveSarvamMode, sarvamKeyterms, sarvamLanguage } = require("../utils/sarvam");
 const {
+  CLOUD_CHUNK_MAX_LOSS_RATIO,
+  SILENT_CHUNK,
+  assembleChunkTranscript,
+  summarizeChunkResults,
+} = require("./cloudChunkPolicy");
+const {
   asProviderError,
   providerError,
   providerHttpError,
@@ -16,6 +22,11 @@ const {
 const SARVAM_URL = "https://api.sarvam.ai/speech-to-text";
 const BYTES_PER_SECOND = 16000 * 2;
 const MAX_BYTES = 30 * BYTES_PER_SECOND;
+// A phrase may end a few frames past its piece; anything later is not that piece's timing.
+const PHRASE_END_TOLERANCE_SECONDS = 0.1;
+// Statuses about one piece's request. Any other failure (a refused key, a spent
+// budget, no answer, throttling past its waits) would fail every later piece too.
+const PIECE_REJECTIONS = new Set([400, 413, 422]);
 
 // Prefer a pause in the last two seconds of a long piece. Keep each PCM frame exactly once.
 function boundary(pcm) {
@@ -46,16 +57,16 @@ function phraseSegments(text, timestamps, offset, duration) {
   const segments = [];
   for (const [index, phrase] of words.entries()) {
     const start = starts[index];
-    const end = ends[index];
+    const end = Math.min(ends[index], duration);
     if (
       !Number.isFinite(start) ||
-      !Number.isFinite(end) ||
+      !Number.isFinite(ends[index]) ||
       start < 0 ||
       end < start ||
-      end > duration
+      ends[index] > duration + PHRASE_END_TOLERANCE_SECONDS
     )
       return null;
-    if (index > 0 && (start < starts[index - 1] || end < ends[index - 1])) return null;
+    if (index > 0 && (start < starts[index - 1] || ends[index] < ends[index - 1])) return null;
     segments.push({ text: phrase, start: offset + start, end: offset + end });
   }
   return mapVerboseSegments({ text, segments });
@@ -63,7 +74,18 @@ function phraseSegments(text, timestamps, offset, duration) {
 
 async function sendPiece(
   pcm,
-  { apiKey, model, language, keyterms, sarvamMode, timestamps, signal, fetchImpl, maxRetryWaitMs }
+  {
+    apiKey,
+    model,
+    language,
+    keyterms,
+    sarvamMode,
+    timestamps,
+    signal,
+    fetchImpl,
+    maxRetryWaitMs,
+    requestTimeoutMs,
+  }
 ) {
   const form = new FormData();
   form.set("file", new Blob([pcm16ToWav(pcm)], { type: "audio/wav" }), "audio.wav");
@@ -75,7 +97,7 @@ async function sendPiece(
 
   for (let attempt = 0; ; attempt++) {
     signal?.throwIfAborted();
-    const timeout = AbortSignal.timeout(60_000);
+    const timeout = AbortSignal.timeout(requestTimeoutMs);
     let wait = 500 * 2 ** attempt;
     let response;
     let body;
@@ -91,7 +113,8 @@ async function sendPiece(
     } catch (error) {
       signal?.throwIfAborted();
       if (error?.code === "DEVICE_POLICY_BLOCKED") throw error;
-      if (attempt >= 2)
+      // A request that hung until its timeout would most likely hang again.
+      if (attempt >= 2 || timeout.aborted)
         throw asProviderError(error, { provider: "Sarvam AI", surface: "transcription", model });
       await delay(wait, undefined, { signal });
       continue;
@@ -140,8 +163,9 @@ async function transcribeWithSarvam({
   keyterms,
   signal,
   fetchImpl = fetch,
-  // A dictation is waiting on the paste; an upload can sit out a per-minute rate limit.
+  // A dictation is waiting on the paste; an upload passes SARVAM_UPLOAD_LIMITS.
   maxRetryWaitMs = 10_000,
+  requestTimeoutMs = 30_000,
   onProgress,
   timestamps = false,
 }) {
@@ -161,7 +185,12 @@ async function transcribeWithSarvam({
     }
     // Sample count stays exact even for streaming WebM without a duration header.
     const pcmPath = path.join(dir, "recording.pcm");
-    await convertToPcm16(input, pcmPath, { signal });
+    await convertToPcm16(input, pcmPath, { signal }).catch((error) => {
+      if (error.code !== "FFMPEG_EMPTY_OUTPUT") throw error;
+      throw Object.assign(new Error("No speech detected in audio"), {
+        code: "NO_SPEECH_DETECTED",
+      });
+    });
     const pcm = await fs.open(pcmPath);
     try {
       const { size } = await pcm.stat();
@@ -174,17 +203,22 @@ async function transcribeWithSarvam({
         signal,
         fetchImpl,
         maxRetryWaitMs,
+        requestTimeoutMs,
         timestamps,
       };
-      const parts = [];
+      // One entry per piece: its text, SILENT_CHUNK, or null when it was lost.
+      const results = [];
+      const spans = [];
       let segments = timestamps ? [] : null;
       let position = 0;
+      let firstLoss = null;
+      let stoppedBy = null;
       // Cut points depend on the audio, so the total firms up as pieces are sent.
       const reportProgress = () =>
         onProgress?.({
           stage: "transcribing",
-          chunksTotal: parts.length + Math.ceil((size - position) / MAX_BYTES),
-          chunksCompleted: parts.length,
+          chunksTotal: results.length + Math.ceil((size - position) / MAX_BYTES),
+          chunksCompleted: results.length,
         });
       reportProgress();
       while (position < size) {
@@ -197,9 +231,28 @@ async function transcribeWithSarvam({
           read += bytesRead;
         }
         const length = size - position > MAX_BYTES ? boundary(chunk) : chunk.length;
-        const piece = await sendPiece(chunk.subarray(0, length), fields);
+        spans.push({
+          start: position / BYTES_PER_SECOND,
+          end: (position + length) / BYTES_PER_SECOND,
+        });
+        let piece;
+        try {
+          piece = await sendPiece(chunk.subarray(0, length), fields);
+        } catch (error) {
+          signal?.throwIfAborted();
+          if (error?.code === "DEVICE_POLICY_BLOCKED") throw error;
+          results.push(null);
+          position += length;
+          if (!PIECE_REJECTIONS.has(error.status)) {
+            stoppedBy = error;
+            break;
+          }
+          firstLoss ??= error;
+          reportProgress();
+          continue;
+        }
         const text = piece.transcript.trim();
-        parts.push(text);
+        results.push(text ? { text } : SILENT_CHUNK);
         if (segments && text) {
           const phrases = phraseSegments(
             text,
@@ -215,11 +268,39 @@ async function transcribeWithSarvam({
         reportProgress();
       }
       signal?.throwIfAborted();
-      const text = parts.filter(Boolean).join(" ");
-      if (!text)
-        throw Object.assign(new Error("No speech detected in audio"), {
-          code: "NO_SPEECH_DETECTED",
+      // Audio left unsent after a stop is lost too, in pieces of the longest size.
+      for (; position < size; position += MAX_BYTES) {
+        results.push(null);
+        spans.push({
+          start: position / BYTES_PER_SECOND,
+          end: Math.min(position + MAX_BYTES, size) / BYTES_PER_SECOND,
         });
+      }
+      const { responses, failedChunks, silentChunks } = summarizeChunkResults(results);
+      if (responses.length === 0) {
+        if (stoppedBy) throw stoppedBy;
+        if (silentChunks === results.length)
+          throw Object.assign(new Error("No speech detected in audio"), {
+            code: "NO_SPEECH_DETECTED",
+          });
+        throw firstLoss;
+      }
+      // What was already transcribed, and billed, is kept unless most of it was lost.
+      const lostSeconds = spans.reduce(
+        (total, span, index) => total + (results[index] == null ? span.end - span.start : 0),
+        0
+      );
+      if (lostSeconds / (size / BYTES_PER_SECOND) > CLOUD_CHUNK_MAX_LOSS_RATIO)
+        throw stoppedBy ?? firstLoss;
+      if (failedChunks > 0)
+        return {
+          // The saved note would read the segments, which have no mark where audio is missing.
+          text: assembleChunkTranscript(results, 0, size / BYTES_PER_SECOND, { spans }),
+          warning: `${failedChunks} of ${results.length} chunks failed`,
+          failedChunks,
+          totalChunks: results.length,
+        };
+      const text = responses.map((result) => result.text).join(" ");
       return segments ? { text, segments } : { text };
     } finally {
       await pcm.close();
@@ -229,4 +310,7 @@ async function transcribeWithSarvam({
   }
 }
 
-module.exports = { transcribeWithSarvam };
+// An upload can sit out a per-minute rate limit and a slow connection.
+const SARVAM_UPLOAD_LIMITS = { maxRetryWaitMs: 60_000, requestTimeoutMs: 60_000 };
+
+module.exports = { transcribeWithSarvam, SARVAM_UPLOAD_LIMITS };

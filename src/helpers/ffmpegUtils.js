@@ -175,7 +175,11 @@ function runFFmpegConversion(args, outputPath, { signal } = {}) {
 
       const stats = fs.statSync(outputPath);
       if (stats.size === 0) {
-        reject(new Error("FFmpeg conversion produced empty output file"));
+        reject(
+          Object.assign(new Error("FFmpeg conversion produced empty output file"), {
+            code: "FFMPEG_EMPTY_OUTPUT",
+          })
+        );
         return;
       }
 

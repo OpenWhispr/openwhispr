@@ -18,6 +18,32 @@ const ACCOUNT_FAILURES = new Set([
 ]);
 // Matches the other meeting clients: stop keeps the finals that already arrived.
 const MEETING_STOP_WAIT_MS = 5000;
+// Keyterms ride in the WebSocket URL, and Sarvam's gateway refuses a request line over
+// about 8 KB. Indic script percent-encodes at nine bytes a character, so a full
+// dictionary of long native-script terms would refuse every connection.
+const MAX_KEYTERMS_QUERY_BYTES = 6000;
+// Sarvam closes a socket that exceeds its connection rate with 1003 and this reason.
+const RATE_LIMIT_CLOSE = /rate limit/i;
+
+function realtimeKeyterms(keyterms) {
+  const terms = [];
+  for (const term of sarvamKeyterms(keyterms)) {
+    const query = new URLSearchParams({ keyterms: JSON.stringify([...terms, term]) });
+    if (query.toString().length <= MAX_KEYTERMS_QUERY_BYTES) terms.push(term);
+  }
+  return terms;
+}
+
+function closeError(code, reason) {
+  if (RATE_LIMIT_CLOSE.test(reason))
+    return providerError(PROVIDER_ERROR_CODES.RATE_LIMITED, {
+      provider: "Sarvam AI",
+      surface: "transcription",
+    });
+  return new Error(
+    `Sarvam connection closed before completion (${code}${reason ? `: ${reason}` : ""})`
+  );
+}
 
 function fatalError(message, body = JSON.stringify(message)) {
   if (!Number.isInteger(message.status_code))
@@ -60,7 +86,7 @@ class SarvamRealtimeStreaming {
       stream_type: "fast",
     }).toString();
     if (returnTimestamps) url.searchParams.set("return_timestamps", "true");
-    const terms = model === "saaras:v4" ? sarvamKeyterms(keyterms) : [];
+    const terms = model === "saaras:v4" ? realtimeKeyterms(keyterms) : [];
     if (terms.length) url.searchParams.set("keyterms", JSON.stringify(terms));
 
     const ws = new this.WebSocketImpl(url, {
@@ -82,11 +108,12 @@ class SarvamRealtimeStreaming {
       let body = "";
       const refuse = () => this.fail(fatalError({ status_code: response.statusCode }, body));
       response.on("error", (error) => this.fail(error));
-      if (response.statusCode !== 429) {
+      // Only these bodies change the error: a 429 is an exhausted seat budget or
+      // throttling, and a 400 names what it refused. Any other status is final at once.
+      if (response.statusCode !== 400 && response.statusCode !== 429) {
         refuse();
         return;
       }
-      // Both an exhausted seat budget and transient throttling return HTTP 429.
       response.setEncoding("utf8");
       response.on("data", (chunk) => {
         body += chunk.slice(0, 8192 - body.length);
@@ -96,12 +123,7 @@ class SarvamRealtimeStreaming {
     });
     ws.on("error", (error) => this.fail(error));
     ws.on("close", (code, reason) => {
-      if (!this.closed)
-        this.fail(
-          new Error(
-            `Sarvam connection closed before completion (${code}${reason?.length ? `: ${reason}` : ""})`
-          )
-        );
+      if (!this.closed) this.fail(closeError(code, reason?.toString() ?? ""));
     });
     return this.ready.promise;
   }

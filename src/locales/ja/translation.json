@@ -465,6 +465,7 @@
         "line": {
           "requiredByOrganization": "組織によって必須に設定されています",
           "organizationModelsUnrunnable": "組織が承認したモデルはどれもこのコンピュータでは動作しません",
+          "languageNotLocal": "Whisper は{{languages}}を文字起こしできないため、言語を自動で判別します。Sarvam AI などのクラウドプロバイダーは対応しています。",
           "offToFit": "このコンピュータの空き容量に収めるためオフにしています",
           "failed": "ダウンロードできませんでした。接続を確認して再試行してください"
         },
@@ -4296,6 +4297,7 @@
       "internalAttendeesConfirm": "はい、開始します",
       "recordingDisabledByOrg": "組織によって会議の録音が無効にされています。",
       "stoppedSarvamKeyChanged": "Sarvam の API キーが変更されたため、録音を停止しました。",
+      "noteUnavailable": "このノートは利用できなくなったため、録音を開始しませんでした。",
       "stoppedAccountChanged": "サインアウトまたはアカウントの切り替えにより、録音を停止しました。",
       "stoppedPolicyUnresolved": "組織の設定を確認できなかったため、録音を停止しました。",
       "stoppedWorkspaceChanged": "ワークスペースを切り替えたため、録音を停止しました。"
@@ -6878,6 +6880,8 @@
     "noResponse": "{{provider}} から応答がありませんでした。APIキーと接続を確認してください。",
     "unknown": "{{provider}} から予期しないエラーが返されました。",
     "keyMissing": "{{provider}} のAPIキーが設定されていません。設定 → 言語モデル から追加してください。",
+    "credentialChanged": "文字起こしが完了する前に {{provider}} の API キーが変更されました。新しいキーで再試行してください。",
+    "settingsChanged": "文字起こしが完了する前に文字起こしの設定が変更されました。もう一度お試しください。",
     "selfHosted": {
       "authFailed": "サーバーがAPIキーを拒否しました。",
       "accessDenied": "サーバーがアクセスを拒否しました。キーがこのモデルに対応していない可能性があります。",

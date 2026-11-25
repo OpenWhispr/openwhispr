@@ -73,7 +73,8 @@
       "flag": "\uD83C\uDDEE\uD83C\uDDF3",
       "whisper": false,
       "parakeet": false,
-      "assemblyai": false
+      "assemblyai": false,
+      "sttProviders": ["sarvam"]
     },
     {
       "code": "bs",
@@ -152,7 +153,8 @@
       "flag": "\uD83C\uDDEE\uD83C\uDDF3",
       "whisper": false,
       "parakeet": false,
-      "assemblyai": false
+      "assemblyai": false,
+      "sttProviders": ["sarvam"]
     },
     {
       "code": "nl",
@@ -318,7 +320,8 @@
       "flag": "\uD83C\uDDEE\uD83C\uDDF3",
       "whisper": false,
       "parakeet": false,
-      "assemblyai": false
+      "assemblyai": false,
+      "sttProviders": ["sarvam"]
     },
     {
       "code": "kk",
@@ -334,7 +337,8 @@
       "flag": "\uD83C\uDDEE\uD83C\uDDF3",
       "whisper": false,
       "parakeet": false,
-      "assemblyai": false
+      "assemblyai": false,
+      "sttProviders": ["sarvam"]
     },
     {
       "code": "ko",
@@ -377,7 +381,8 @@
       "flag": "\uD83C\uDDEE\uD83C\uDDF3",
       "whisper": false,
       "parakeet": false,
-      "assemblyai": false
+      "assemblyai": false,
+      "sttProviders": ["sarvam"]
     },
     {
       "code": "ms",
@@ -409,7 +414,8 @@
       "flag": "\uD83C\uDDEE\uD83C\uDDF3",
       "whisper": false,
       "parakeet": false,
-      "assemblyai": false
+      "assemblyai": false,
+      "sttProviders": ["sarvam"]
     },
     {
       "code": "mr",
@@ -450,7 +456,8 @@
       "flag": "\uD83C\uDDEE\uD83C\uDDF3",
       "whisper": false,
       "parakeet": false,
-      "assemblyai": false
+      "assemblyai": false,
+      "sttProviders": ["sarvam"]
     },
     {
       "code": "fa",
@@ -519,7 +526,8 @@
       "flag": "\uD83C\uDDEE\uD83C\uDDF3",
       "whisper": false,
       "parakeet": false,
-      "assemblyai": false
+      "assemblyai": false,
+      "sttProviders": ["sarvam"]
     },
     {
       "code": "sr",

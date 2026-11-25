@@ -465,6 +465,7 @@
         "line": {
           "requiredByOrganization": "Exigido por tu organización",
           "organizationModelsUnrunnable": "Ninguno de los modelos aprobados por tu organización funciona en este equipo",
+          "languageNotLocal": "Whisper no transcribe {{languages}}, así que detecta el idioma por sí mismo. Un proveedor en la nube como Sarvam AI lo admite.",
           "offToFit": "Desactivado para que quepa en el espacio libre de este equipo",
           "failed": "No se pudo descargar. Comprueba tu conexión y reinténtalo"
         },
@@ -4266,6 +4267,7 @@
       "internalAttendeesConfirm": "Sí, empezar",
       "recordingDisabledByOrg": "Tu organización ha desactivado la grabación de reuniones.",
       "stoppedSarvamKeyChanged": "La grabación se detuvo porque cambió la clave de API de Sarvam.",
+      "noteUnavailable": "Esta nota ya no está disponible, así que la grabación no se inició.",
       "stoppedAccountChanged": "La grabación se detuvo porque cerraste sesión o cambiaste de cuenta.",
       "stoppedPolicyUnresolved": "La grabación se detuvo porque no se pudieron comprobar los ajustes de tu organización.",
       "stoppedWorkspaceChanged": "La grabación se detuvo porque cambiaste de espacio de trabajo."
@@ -6900,6 +6902,8 @@
     "noResponse": "No se recibió respuesta de {{provider}}. Comprueba tu clave de API y tu conexión.",
     "unknown": "{{provider}} devolvió un error inesperado.",
     "keyMissing": "No hay ninguna clave de API configurada para {{provider}}. Añádela en Ajustes → Modelo de lenguaje.",
+    "credentialChanged": "Tu clave de API de {{provider}} cambió antes de que terminara la transcripción. Vuelve a intentarlo para usar la nueva clave.",
+    "settingsChanged": "Tu configuración de transcripción cambió antes de que terminara la transcripción. Vuelve a intentarlo.",
     "selfHosted": {
       "authFailed": "Tu servidor rechazó la clave de API.",
       "accessDenied": "Tu servidor denegó el acceso. Es posible que la clave no incluya este modelo.",

@@ -651,6 +651,28 @@ test("a long recovery uses bounded reusable silence rather than a gap-sized allo
   assert.equal(new Set(silence.map((buffer) => buffer.buffer)).size, 1);
 });
 
+test("the macOS tap keeps its arrival anchor for providers that time the mic at arrival", () => {
+  const createTimeline = require("../../src/helpers/meetingAudioTimeline");
+  const firstChunkAt = (anchorsFirstSample) => {
+    const stamps = [];
+    const timeline = createTimeline({
+      now: () => 0,
+      wallNow: () => 10_000,
+      anchorsFirstSample: () => anchorsFirstSample,
+    });
+    // 100 ms of 24 kHz audio, with the helper's capture clock.
+    timeline.write(Buffer.alloc(4800), (_buffer, _synthetic, at) => stamps.push(at), {
+      hostMs: 0,
+      epochMs: 9_850,
+    });
+    return stamps[0];
+  };
+  // Sarvam converts the mic to first-sample times too, so it gets the capture clock.
+  assert.equal(firstChunkAt(true), 9_850);
+  // Any other provider's mic is placed at arrival, so the system track stays with it.
+  assert.equal(firstChunkAt(false), 10_000);
+});
+
 test("recovery silence plus AssemblyAI's pending partial packet stays within its frame limit", () => {
   const AssemblyAiStreaming = require("../../src/helpers/assemblyAiStreaming");
   const createTimeline = require("../../src/helpers/meetingAudioTimeline");
