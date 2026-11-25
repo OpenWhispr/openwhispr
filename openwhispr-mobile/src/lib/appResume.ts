@@ -3,6 +3,7 @@ import { useHandoffStore } from '@/store/useHandoffStore';
 import { isRecoveryDeepLinkFresh, isRecoveryHolding } from '@/store/useKeyboardRecoveryStore';
 import { useUsageStore } from '@/store/useUsageStore';
 import { isAffiliateArrivalFresh } from './affiliateLink';
+import { isKeyboardSettingsLinkFresh } from './keyboardSettingsLink';
 
 export interface ResumeDecision {
   /** Reset the stack to Home — the default for a warm resume. */
@@ -35,6 +36,9 @@ export function resolveResumeAction(alreadyOnHome: boolean): ResumeDecision {
   // `didBecomeActive`, but the screen's flag is raised in a passive effect, so
   // this handler can otherwise replace the screen with Home before it is seen.
   if (isRecoveryDeepLinkFresh()) return STAY;
+
+  // The keyboard's Keyboard Settings… just opened Preferences, ahead of `didBecomeActive` as above.
+  if (isKeyboardSettingsLinkFresh()) return STAY;
 
   if (useGoogleCalendarStore.getState().isAuthSessionActive) return STAY;
 

@@ -1,5 +1,20 @@
 /* editor additions (drag handle, toggles). */
 
+.rte-keyboard-hint {
+  position: absolute;
+  inset-inline-end: 12px;
+  bottom: calc(var(--bottom-overlay-height, 0px) + 6px);
+  z-index: 5;
+  max-width: calc(100% - 24px);
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-popover);
+  color: var(--color-popover-foreground);
+  font-size: 0.75rem;
+  pointer-events: none;
+}
+
 /* Drag handle: shown by Tiptap beside the hovered block. */
 .rte-drag-handle {
   display: flex;
@@ -320,17 +335,6 @@
   min-width: 38px;
   text-align: center;
   opacity: 0.6;
-}
-
-/* ---- Word count ------------------------------------------------- */
-.rte-word-count {
-  position: absolute;
-  right: 12px;
-  bottom: calc(var(--bottom-overlay-height, 0px) + 6px);
-  z-index: 5;
-  font-size: 0.7rem;
-  opacity: 0.4;
-  pointer-events: none;
 }
 
 /* ---- Note links & backlinks ------------------------------------------- */

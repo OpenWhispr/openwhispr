@@ -3916,6 +3916,7 @@
       "generateSummary": "生成 AI 摘要",
       "generateWithTemplate": "使用{{template}}生成",
       "startWriting": "开始书写...",
+      "tabToLeave": "按 Esc，再按 Tab 或 Shift+Tab 离开编辑器。",
       "staleIndicator": "内容在增强后已更改",
       "live": "实时",
       "transcript": "转录",
@@ -4045,7 +4046,6 @@
           "matchCase": "区分大小写",
           "close": "关闭"
         },
-        "count": "字词：{{words}} · 字符：{{chars}}",
         "link": {
           "header": "链接笔记",
           "empty": "输入笔记标题…",

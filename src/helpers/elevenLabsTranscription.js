@@ -1,6 +1,7 @@
 const { net } = require("electron");
 const debugLogger = require("./debugLogger");
-const { sanitizeElevenLabsKeyterms: sanitizeKeyterms } = require("../utils/elevenLabsKeyterms.js");
+const { sanitizeElevenLabsKeyterms } = require("../utils/elevenLabsKeyterms.js");
+const { SCRIBE_SILENCE_MARKER } = require("../utils/scribeSilence.js");
 const {
   PROVIDER_ERROR_CODES,
   providerHttpError,
@@ -12,7 +13,6 @@ const {
 // xi-api-key and takes model_id / language_code, so it is proxied through main.
 const ELEVENLABS_STT_URL = "https://api.elevenlabs.io/v1/speech-to-text";
 const DEFAULT_MODEL = "scribe_v3";
-const SILENCE_MARKER = "[pause]";
 
 // ElevenLabs lists Filipino rather than Tagalog, so the app's "tl" goes out as "fil".
 const LANGUAGE_CODES = { tl: "fil" };
@@ -108,7 +108,7 @@ async function transcribeWithElevenLabs(
   const audio = new Blob([buffer], { type });
   const languageCode =
     language && language !== "auto" ? (LANGUAGE_CODES[language] ?? language) : null;
-  let terms = sanitizeKeyterms(keyterms);
+  let terms = sanitizeElevenLabsKeyterms(keyterms);
   // A speaker is named per word, so speaker labels need the words as much as timestamps do.
   const requestsWords = diarize || timestamps;
 
@@ -208,16 +208,11 @@ async function transcribeWithElevenLabs(
   // Scribe can answer silence with "[pause]" instead of an empty string.
   const trimmed = data.text.trim();
   return {
-    text: !trimmed || trimmed === SILENCE_MARKER ? "" : data.text,
+    text: !trimmed || trimmed === SCRIBE_SILENCE_MARKER ? "" : data.text,
     model: resolvedModel,
     acceptedKeyterms: terms,
     ...(segments.length ? { segments } : {}),
   };
 }
 
-module.exports = {
-  transcribeWithElevenLabs,
-  groupWordsIntoSegments,
-  sanitizeKeyterms,
-  SILENCE_MARKER,
-};
+module.exports = { transcribeWithElevenLabs, groupWordsIntoSegments };

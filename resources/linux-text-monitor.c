@@ -29,6 +29,8 @@
  * to --as-needed (e.g. current Ubuntu/Arch toolchains).
  */
 
+#define _GNU_SOURCE
+#include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -195,6 +197,21 @@ static char *read_text_value(AtspiText *text_iface) {
     return value;
 }
 
+/* Refuses libatspi's direct connections opened after atspi_init(), for releases
+ * before 2.61 that ignore ATSPI_DISABLE_P2P. linux-fast-paste.c explains why. */
+static int atspi_started;
+
+DBusConnection *dbus_connection_open_private(const char *address, DBusError *error) {
+    if (atspi_started) {
+        dbus_set_error_const(error, DBUS_ERROR_NOT_SUPPORTED, "direct connections disabled");
+        return NULL;
+    }
+    DBusConnection *(*forward)(const char *, DBusError *) =
+        (DBusConnection *(*)(const char *, DBusError *))dlsym(
+            RTLD_NEXT, "dbus_connection_open_private");
+    return forward(address, error);
+}
+
 int main(int argc, char **argv) {
     int probe_editable = argc >= 2 && strcmp(argv[1], "--probe-editable") == 0;
     /* The probe never reads `running`, so it keeps the default action and the
@@ -223,7 +240,9 @@ int main(int argc, char **argv) {
         /* consumed */
     }
 
+    setenv("ATSPI_DISABLE_P2P", "1", 1);
     int init_result = atspi_init();
+    atspi_started = 1;
     if (init_result != 0 && init_result != 1) {
         printf("NO_ELEMENT\n");
         fflush(stdout);

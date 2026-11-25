@@ -359,7 +359,7 @@ private final class KeyButton: UIButton {
 
   // Same luminous-rim treatment as PillBackgroundView: a white top-lit gradient
   // masked to the border stroke, so the button reads as glass-edged. Opt-in —
-  // only the toolbar's tone and agent buttons use it.
+  // only the toolbar's options and agent buttons use it.
   var showsGlassRim = false {
     didSet {
       guard showsGlassRim != oldValue else { return }
@@ -458,7 +458,7 @@ private final class KeyButton: UIButton {
 private final class PillBackgroundView: UIView {
   enum Style {
     case adaptive            // grey fill (light) / outlined (dark) — "Tap to speak"
-    case gradient([UIColor]) // brand blue gradient — "Activate"
+    case gradient([UIColor]) // brand blue gradient
     case solid(UIColor)      // flat colour — transient/issue states
   }
 
@@ -780,12 +780,16 @@ private final class KeyPopupView: UIView {
 
 private struct DictationLinkView: View {
   let url: URL
+  /// Receives the URL opener this Link calls, for a control that can't be a Link (a menu row).
+  var onOpenURLAvailable: ((OpenURLAction) -> Void)? = nil
+  @Environment(\.openURL) private var openURL
 
   var body: some View {
     Link(destination: url) {
       Color.clear
         .contentShape(Rectangle())
     }
+    .onAppear { onOpenURLAvailable?(openURL) }
   }
 }
 
@@ -879,7 +883,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private enum Metrics {
-    // The toolbar: tone, the centred dictation pill, agent.
+    // The toolbar: options, the centred dictation pill, agent.
     static let dictationButtonSize: CGFloat = 40
     /// The pill as a mic button beside the suggestions: a 44pt target.
     static let compactPillWidth: CGFloat = 44
@@ -931,7 +935,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     var stripTop: CGFloat
     var stripHeight: CGFloat
     var stripGapBelow: CGFloat
-    /// The toolbar's side inset, from the keyboard's edge: tone and agent sit this far in, plus
+    /// The toolbar's side inset, from the keyboard's edge: options and agent sit this far in, plus
     /// their own 8pt. The bar itself starts at sideMargin, so the strip reaches past it.
     var stripSideInset: CGFloat
     let sideMargin: CGFloat
@@ -1127,7 +1131,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   )
 
   private let rootStack = UIStackView()
-  // The toolbar: tone, the centred dictation pill, agent. The strip guide is the
+  // The toolbar: options, the centred dictation pill, agent. The strip guide is the
   // pill-high strip at the top of the band, where the buttons centre.
   private let topBar = ToolbarView()
   private let stripGuide = UILayoutGuide()
@@ -1138,7 +1142,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // Sits beside the processing pill ("Transcribing"/"Cleaning up") to abandon
   // the in-flight transcription. Hidden in every other state.
   private let processingCancelButton = UIButton(type: .system)
-  private let toneButton = KeyButton(type: .system)
+  private let optionsButton = KeyButton(type: .system)
+  // SwiftUI's opener, handed over by the dictation Link: the only way an extension opens its app.
+  private var openURLAction: OpenURLAction?
   private let keyboardRowsStack = KeyboardRowsStack()
   private let lettersRowsStack = UIStackView()
   private let numbersRowsStack = UIStackView()
@@ -1180,7 +1186,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var lastKeystrokeAt: CFTimeInterval = 0
   private var suggestionRestTimer: Timer?
   private var fieldSyncTimer: Timer?
-  /// The pill shows its resting state ("Tap to speak" / "Activate"), not a take in progress.
+  /// The pill shows a resting state ("Tap to speak", or "Insert dictation" for a take waiting
+  /// for its place), not a take in progress, so suggestions may take its place while typing.
   private var isPillIdle = false
   private var pillTitle = ""
   private var pillCenterConstraint: NSLayoutConstraint?
@@ -1467,18 +1474,23 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     preferredContentSize = CGSize(width: view.bounds.width, height: keyboardHeight)
   }
 
-  override func textWillChange(_ textInput: UITextInput?) {
-    super.textWillChange(textInput)
-    // Moving to another field: its keyboard type may differ (a number pad, a URL row).
-    DispatchQueue.main.async { [weak self] in self?.refreshFieldAwareKeys() }
-  }
+  /// The resting pill hands the dictation to the app (it reads "Tap to speak" either way).
+  private var pillOpensApp = false
 
+  // Between viewWillAppear and viewWillDisappear: the only time the field may be read from a
+  // deferred block.
+  private var isKeyboardOnScreen = false
+
+  // A field's keys (number pad, return key, URL row) follow it here and in viewDidAppear,
+  // never later from textWillChange: iOS can tear down the old field's document interface
+  // in between, and reading its traits then crashes the keyboard.
   override func textDidChange(_ textInput: UITextInput?) {
     super.textDidChange(textInput)
     noteFieldReport()
     syncTypingSessionWithField()
     syncShiftWithContextIfNeeded()
     refreshFieldAwareKeys()
+    if isKeyboardOnScreen, Self.directOwner === self { directDictation?.fieldChanged() }
     _ = consumePendingTranscriptIfAvailable(trigger: "textDidChange")
   }
 
@@ -1486,6 +1498,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // textDidChange when the keyboard opens: shift and the return key follow the field here.
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
+    isKeyboardOnScreen = true
     reloadTypingSettings()
     noteFieldReport()
     syncTypingSessionWithField()
@@ -1498,6 +1511,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // The field's traits can arrive after viewWillAppear with no textDidChange to announce
     // them (an empty number field): the pad, the bottom row and the return key follow here.
     refreshFieldAwareKeys()
+    // A Local snapshot's model takes seconds to load, so start before the first tap.
+    directDictation?.warmUp()
     // Without Full Access every write below is a no-op and every resume gate
     // reads a dead App Group. Today this method reaches refreshRecordButton()
     // anyway, but only because four separate resume gates each happen to fail
@@ -1513,7 +1528,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // On every way out of here (the review card returns early), and last, so a resumed or
     // finished direct take isn't repainted by the handoff paths below.
     defer { directDictation?.keyboardDidAppear() }
-    refreshToneButton()
+    refreshOptionsButton()
     refreshAgentButton()
     // The review card owns the screen until the user acts on it; don't let a
     // stale recording flag or resume path tear it down on reappear. Re-gate its
@@ -1540,15 +1555,29 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     startRecordingPoll()
   }
 
+  override func didReceiveMemoryWarning() {
+    super.didReceiveMemoryWarning()
+    directDictation?.releaseLocalModelWhenIdle()
+  }
+
   override func viewWillDisappear(_ animated: Bool) {
     super.viewWillDisappear(animated)
+    isKeyboardOnScreen = false
     logRecordMarker("viewWillDisappear")
     directKeyboardWillDisappear()
     stopDeleteRepeating()
     suggestionRestTimer?.invalidate()
     fieldSyncTimer?.invalidate()
     issueResetTimer?.invalidate()
+    // Read as "an issue owns the pill" (isRecordButtonAtRest); the invalidated timer will never
+    // reset the pill, and the review card's early return in viewDidAppear skips the refresh that
+    // would otherwise clear it.
+    issueResetTimer = nil
     waitForTranscriptTimer?.invalidate()
+    // Read as "a transcript is still on its way" (isRecordButtonAtRest, the Darwin status
+    // handler), so a reused controller must not keep a dead one. viewDidAppear starts a new
+    // wait when the app is still transcribing.
+    waitForTranscriptTimer = nil
     waitForAgentResultTimer?.invalidate()
     agentReviewNoteResetTimer?.invalidate()
     stopRecordingPoll()
@@ -2428,7 +2457,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
   }
 
-  /// The toolbar: the tone menu on the left, the dictation pill centred, the agent wand on
+  /// The toolbar: the options menu on the left, the dictation pill centred, the agent wand on
   /// the right.
   private func setupTopBar() {
     topBar.translatesAutoresizingMaskIntoConstraints = false
@@ -2483,17 +2512,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     processingCancelButton.isHidden = true
     topBar.addSubview(processingCancelButton)
 
-    // gauge.with.dots.needle.bottom.50percent is iOS 16+; fall back to the classic
-    // gauge on the extension's 15.1 deployment target.
     configureToolbarButton(
-      toneButton,
-      image: UIImage(systemName: "gauge.with.dots.needle.bottom.50percent") ?? UIImage(systemName: "gauge"),
-      accessibilityLabel: "Dictation tone"
+      optionsButton,
+      image: Self.optionsIcon,
+      accessibilityLabel: "Dictation options"
     )
-    toneButton.showsMenuAsPrimaryAction = true
-    refreshToneButton()
+    optionsButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+    optionsButton.setTitleColor(.label, for: .normal)
+    optionsButton.setTitleColor(.label, for: .highlighted)
+    optionsButton.showsMenuAsPrimaryAction = true
+    refreshOptionsButton()
 
-    // Agent entry button, mirroring the tone button on the trailing edge. A press
+    // Agent entry button, mirroring the options button on the trailing edge. A press
     // gesture (not a tap target) so it can write the request before the Link
     // overlay fires the handoff — the same coordination the record button uses.
     configureToolbarButton(
@@ -2524,10 +2554,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     NSLayoutConstraint.activate(stripConstraints + [
       topBarHeight,
 
-      toneButton.leadingAnchor.constraint(equalTo: stripGuide.leadingAnchor, constant: Metrics.toolbarButtonInset),
-      toneButton.centerYAnchor.constraint(equalTo: stripGuide.centerYAnchor),
-      toneButton.widthAnchor.constraint(equalToConstant: Metrics.toolbarButtonSize),
-      toneButton.heightAnchor.constraint(equalToConstant: Metrics.toolbarButtonSize),
+      optionsButton.leadingAnchor.constraint(equalTo: stripGuide.leadingAnchor, constant: Metrics.toolbarButtonInset),
+      optionsButton.centerYAnchor.constraint(equalTo: stripGuide.centerYAnchor),
+      optionsButton.widthAnchor.constraint(equalToConstant: Metrics.toolbarButtonSize),
+      optionsButton.heightAnchor.constraint(equalToConstant: Metrics.toolbarButtonSize),
 
       agentButton.trailingAnchor.constraint(equalTo: stripGuide.trailingAnchor, constant: -Metrics.toolbarButtonInset),
       agentButton.centerYAnchor.constraint(equalTo: stripGuide.centerYAnchor),
@@ -2574,7 +2604,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     setupSuggestionBar()
   }
 
-  /// The round tone and agent buttons: a grey disc with a glass rim.
+  /// The round options and agent buttons: a grey disc with a glass rim.
   private func configureToolbarButton(_ button: KeyButton, image: UIImage?, accessibilityLabel: String) {
     button.translatesAutoresizingMaskIntoConstraints = false
     button.tintColor = .label
@@ -2997,7 +3027,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         constant: -(2 * Metrics.toolbarButtonInset + Metrics.toolbarButtonSize + Metrics.compactPillWidth + 6)
       )
       suggestionStripConstraints = [
-        suggestionBar.leadingAnchor.constraint(equalTo: toneButton.trailingAnchor, constant: 6),
+        suggestionBar.leadingAnchor.constraint(equalTo: optionsButton.trailingAnchor, constant: 6),
         trailing,
         suggestionBar.topAnchor.constraint(equalTo: stripGuide.topAnchor),
         suggestionBar.bottomAnchor.constraint(equalTo: stripGuide.bottomAnchor),
@@ -3061,25 +3091,54 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     ("excited", "Excited"),
   ]
 
-  private func refreshToneButton() {
+  // slider.horizontal.3 reads as "settings for this" on every iOS the extension supports (15.1+).
+  private static let optionsIcon = UIImage(systemName: "slider.horizontal.3")
+
+  private func refreshOptionsButton() {
     // isToneApplicable() fails open on a dead App Group — `guard let defaults`
-    // then `!= "0"` reads a live-but-empty suite as applicable — so the tone
-    // gate needs its own check. Dim and lock rather than isEnabled = false,
-    // which applies UIButton.Configuration's own foreground transform on top.
+    // then `!= "0"` reads a live-but-empty suite as applicable — so the
+    // options gate needs its own check. Dim and lock rather than isEnabled = false:
+    // a system-type button greys its own title and image when disabled, on top of the alpha.
     guard hasFullAccess else {
-      toneButton.menu = nil
-      toneButton.isUserInteractionEnabled = false
-      toneButton.alpha = 0.4
+      optionsButton.menu = nil
+      optionsButton.isUserInteractionEnabled = false
+      optionsButton.alpha = 0.4
+      showOptionsBadge(for: nil, languages: [])
       return
     }
+    // Built each time it opens: the app (or this keyboard in another app) can change the
+    // languages, what's applicable or the target in the App Group while this one stays up.
+    optionsButton.menu = UIMenu(children: [
+      UIDeferredMenuElement.uncached { [weak self] completion in
+        completion(self?.makeOptionsMenuElements() ?? [])
+      },
+    ])
+    optionsButton.isUserInteractionEnabled = true
+    // Keyboard Settings and Default/Off are always usable, so the button never dims here.
+    optionsButton.alpha = 1.0
+    let translation = KeyboardHandoffProvider.shared.translationSection()
+    showOptionsBadge(for: translation.selected, languages: translation.all)
+  }
+
+  /// The options menu's rows, read from the App Group as the menu opens. The badge follows
+  /// what they read, so the button never contradicts the menu it opens.
+  private func makeOptionsMenuElements() -> [UIMenuElement] {
     let provider = KeyboardHandoffProvider.shared
+    let translation = provider.translationSection()
+    showOptionsBadge(for: translation.selected, languages: translation.all)
+    let settings = UIAction(title: "Keyboard Settings…") { [weak self] _ in
+      self?.openKeyboardSettings()
+    }
+    return [makeToneMenu(provider), makeTranslateMenu(translation), settings]
+  }
+
+  private func makeToneMenu(_ provider: KeyboardHandoffProvider) -> UIMenu {
     let current = provider.currentTone()
     let applicable = provider.isToneApplicable()
 
     // When tone isn't applicable (private mode, or cleanup off) the styled tones
     // live behind Cloud. Lock every tone but Default so it reads as gated rather
-    // than broken, and show the reason as a short, single-line header instead of
-    // the old wrapping disabled row.
+    // than broken, and say why in the submenu's title.
     let lockImage = applicable ? nil : UIImage(systemName: "lock.fill")
     let actions: [UIAction] = Self.toneMenuItems.map { item in
       let locked = !applicable && item.value != "default"
@@ -3089,20 +3148,94 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         state: item.value == current ? .on : .off
       ) { [weak self] _ in
         KeyboardHandoffProvider.shared.setTone(item.value)
-        self?.refreshToneButton()
+        self?.refreshOptionsButton()
       }
       if locked { action.attributes = [.disabled] }
       return action
     }
+    return UIMenu(title: applicable ? "Tone" : "Tones are off in Local Mode", children: actions)
+  }
 
-    // Label the menu in both states: its purpose when usable, the upgrade path
-    // when locked. The header costs one row of the height-capped menu, so on
-    // shorter keyboards the last tone ("Excited") can fall into the scroll
-    // region instead of showing inline.
-    let menuTitle = applicable ? "Dictation Tone" : "Tones are off in Local Mode"
-    toneButton.menu = UIMenu(title: menuTitle, children: actions)
-    toneButton.isUserInteractionEnabled = true
-    toneButton.alpha = applicable ? 1.0 : 0.4
+  private func makeTranslateMenu(_ section: KeyboardOptionsMenu.TranslateSection) -> UIMenu {
+    // Off stays enabled when locked, so a stored language can always be cleared.
+    let off = UIAction(title: "Off", state: section.selected == nil ? .on : .off) { [weak self] _ in
+      KeyboardHandoffProvider.shared.setTranslationTarget(nil)
+      self?.translationTargetDidChange()
+    }
+    let languageAction = { [weak self] (language: TranslationLanguage) -> UIAction in
+      let action = UIAction(
+        title: language.label,
+        image: section.locked ? UIImage(systemName: "lock.fill") : nil,
+        state: language.code == section.selected ? .on : .off
+      ) { _ in
+        KeyboardHandoffProvider.shared.setTranslationTarget(language.code)
+        self?.translationTargetDidChange()
+      }
+      if section.locked { action.attributes = [.disabled] }
+      return action
+    }
+    var children: [UIMenuElement] = [off]
+    if !section.recents.isEmpty {
+      children.append(UIMenu(options: .displayInline, children: section.recents.map(languageAction)))
+    }
+    // No list until the app has run since the update; an empty submenu would open onto nothing.
+    if !section.all.isEmpty {
+      children.append(UIMenu(title: "All languages", children: section.all.map(languageAction)))
+    }
+    return UIMenu(
+      title: section.locked ? "Set up translation in OpenWhispr" : "Translate to", children: children
+    )
+  }
+
+  /// The target decides whether the direct path can take a dictation at all (it stands down for
+  /// a translation it can't run), so the pill's route is re-read too. Only at rest: a take,
+  /// a remote recording, a processing pill or a timed issue state owns the pill until it ends,
+  /// and refreshRecordButton() would tear that state down.
+  private func translationTargetDidChange() {
+    refreshOptionsButton()
+    if isRecordButtonAtRest { refreshRecordButton() }
+  }
+
+  private var isRecordButtonAtRest: Bool {
+    !isDirectTakeActive && !isRemoteRecordingActive && !isDarwinStartPending
+      && !isAgentRecordingActive && !isAgentGenerating && !isAgentReviewShown
+      && issueResetTimer == nil && waitForTranscriptTimer == nil && processingCancelButton.isHidden
+  }
+
+  /// A translation target replaces the icon with its badge ("ES"), so the button says what
+  /// dictation will do before the user speaks. Off goes back to the icon.
+  private func showOptionsBadge(for target: String?, languages: [TranslationLanguage]) {
+    if let badge = KeyboardOptionsMenu.badge(for: target) {
+      optionsButton.setImage(nil, for: .normal)
+      optionsButton.setTitle(badge, for: .normal)
+      let label = languages.first { $0.code == target }?.label ?? badge
+      optionsButton.accessibilityValue = "Translating to \(label)"
+    } else {
+      optionsButton.setTitle(nil, for: .normal)
+      optionsButton.setImage(Self.optionsIcon, for: .normal)
+      optionsButton.accessibilityValue = nil
+    }
+  }
+
+  private func openKeyboardSettings() {
+    guard let url = URL(string: "\(Self.appUrlScheme)://keyboard-settings") else { return }
+    guard let openURLAction else {
+      logRecordMarker("openKeyboardSettings.noOpener")
+      showOpenAppToChangeSettings()
+      return
+    }
+    openURLAction(url) { [weak self] accepted in
+      guard !accepted, let self else { return }
+      self.logRecordMarker("openKeyboardSettings.refused")
+      self.showOpenAppToChangeSettings()
+    }
+  }
+
+  /// The menu row did nothing, so the pill says where to go instead. Only at rest: a take, a
+  /// processing pill or another issue owns the pill, and the issue's reset would tear it down.
+  private func showOpenAppToChangeSettings() {
+    guard isRecordButtonAtRest else { return }
+    showIssueState(title: "Open OpenWhispr")
   }
 
   /// The dictation deep link the agent button hands off with when the background
@@ -3139,7 +3272,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     agentLinkHosting = hosting
   }
 
-  /// Gating mirrors refreshToneButton: hidden when the agent is disabled, dimmed
+  /// Gating mirrors refreshOptionsButton: hidden when the agent is disabled, dimmed
   /// (with a transient upgrade pill on tap) when Cloud isn't on. When usable, the
   /// Link overlay is enabled only for the handoff path — an in-place tap goes
   /// through requestStart() in the press handler instead.
@@ -3187,7 +3320,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
     guard let url = components.url else { return }
 
-    let hosting = UIHostingController(rootView: DictationLinkView(url: url))
+    let hosting = UIHostingController(rootView: DictationLinkView(url: url) { [weak self] openURL in
+      self?.openURLAction = openURL
+    })
     hosting.view.backgroundColor = .clear
     hosting.view.isOpaque = false
     hosting.view.translatesAutoresizingMaskIntoConstraints = false
@@ -4752,6 +4887,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     recordButton.removeTarget(self, action: #selector(handleDarwinRecordTapped), for: .touchUpInside)
     recordButton.removeTarget(self, action: #selector(handleStopRecordingTapped), for: .touchUpInside)
     recordButton.removeTarget(self, action: #selector(handleDirectRecordTapped), for: .touchUpInside)
+    recordButton.removeTarget(self, action: #selector(handleInsertHeldTapped), for: .touchUpInside)
     recordButton.removeTarget(
       self, action: #selector(handleFullAccessPillTapped), for: .touchUpInside
     )
@@ -4786,9 +4922,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         showFullAccessPanel(animated: view.window != nil)
       }
       resetVoiceMeterBars()
-      // Neither control can reach the App Group either; refreshToneButton is
+      // Neither control can reach the App Group either; refreshOptionsButton is
       // not part of the normal refresh path, so call it explicitly.
-      refreshToneButton()
+      refreshOptionsButton()
       refreshAgentButton()
       logRecordMarker("refreshRecordButton.noFullAccess")
       return
@@ -4803,10 +4939,24 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       return
     }
 
+    // A dictation that ended while the keyboard was covered and could not be typed by itself
+    // (iOS gave the field a new ID and the text before the cursor changed): the pill offers it,
+    // and the X discards it.
+    if Self.directOwner === self, let direct = directDictation, direct.hasHeldDictation {
+      dictationLinkHosting?.view.isUserInteractionEnabled = false
+      recordButton.addTarget(self, action: #selector(handleInsertHeldTapped), for: .touchUpInside)
+      applyRecordButtonStyle(title: "Insert dictation", systemImage: "text.insert", solidBackground: Palette.accent)
+      processingCancelButton.isHidden = false
+      resetVoiceMeterBars()
+      refreshAgentButton()
+      logRecordMarker("refreshRecordButton.heldDictation")
+      return
+    }
+
     // Inside OpenWhispr itself, tapping records in place (the app's URL handler
     // detects the self-hosted case and starts recording without switching apps),
     // so show "Tap to speak" with a mic. Elsewhere, a tap hands off to the app,
-    // so show "Activate" with the brand logo.
+    // which the pill does through its link (opensApp).
     let backgroundReady = KeyboardHandoffProvider.shared.isBackgroundSessionReady()
     // Bundle-id detection (hostIsOwnApp) misses often; the app's foreground
     // heartbeat is the reliable "we're inside OpenWhispr" signal. Either one
@@ -4825,15 +4975,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       recordButton.addTarget(self, action: #selector(handleDirectRecordTapped), for: .touchUpInside)
     }
 
-    if recordsInPlace || recordsDirect {
-      applyRecordButtonStyle(title: "Tap to speak", image: CachedImages.brandLogoMark)
-    } else {
-      applyRecordButtonStyle(
-        title: "Activate",
-        image: CachedImages.brandLogoMark,
-        gradient: [Palette.brandGradientStart, Palette.brandGradientEnd]
-      )
-    }
+    // The pill reads the same either way: when the keyboard can't record here (the on-device
+    // model is still loading, music is playing, a model or route only the app runs), the tap
+    // opens OpenWhispr through the link over the pill and the app takes the dictation.
+    applyRecordButtonStyle(
+      title: "Tap to speak", image: CachedImages.brandLogoMark, opensApp: !(recordsInPlace || recordsDirect)
+    )
     resetVoiceMeterBars()
     refreshAgentButton()
     logRecordMarker(
@@ -4910,8 +5057,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // Tints title and symbol together via baseForegroundColor. Defaults to
     // white so every existing call site is unchanged; only the persistent
     // Full Access state needs dark ink for contrast on amber.
-    foreground: UIColor = .white
+    foreground: UIColor = .white,
+    // "Tap to speak" hands off to the app instead of recording here.
+    opensApp: Bool = false
   ) {
+    pillOpensApp = opensApp
     // The "ellipsis" states (Processing/Starting/Stopping) use the animated dots
     // overlay instead of a static symbol; the image is then a transparent spacer
     // that reserves the dots' space in the layout.
@@ -4940,11 +5090,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
     recordButton.configuration = config
     pillTitle = title
-    isPillIdle = title == "Tap to speak" || title == "Activate"
+    isPillIdle = title == "Tap to speak" || title == "Insert dictation"
     applyPillCompactness()
     updateSuggestionBarVisibility()
 
-    // "Activate" uses the brand gradient; transient/issue states pass a solid
+    // Transient/issue states pass a solid
     // colour; everything else (incl. "Tap to speak") uses the adaptive pill.
     let pillStyle: PillBackgroundView.Style
     if let gradient {
@@ -4971,7 +5121,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
     recordButton.accessibilityLabel = title
     switch title {
-    case "Activate":
+    case _ where opensApp:
       recordButton.accessibilityHint = "Opens OpenWhispr to dictate"
     case "Turn on Full Access":
       recordButton.accessibilityHint = "Shows how to turn on Full Access"
@@ -4986,7 +5136,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       setRecordButtonPressed(true)
     case .ended:
       setRecordButtonPressed(false)
-      // In "Activate" mode the tap itself is handled by the SwiftUI link
+      // When the pill opens the app, the tap itself is handled by the SwiftUI link
       // overlay, which gives no callback. Stamp the tap in the App Group so
       // the app can recover the handoff when the deep link never reaches JS
       // (cold-launch getInitialURL races deliver null and the tap dies).
@@ -5435,6 +5585,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       directDictation?.cancel()
       return
     }
+    if let direct = directDictation, direct.hasHeldDictation {
+      direct.discardHeld()
+      refreshRecordButton()
+      return
+    }
     let provider = KeyboardHandoffProvider.shared
 
     // During agent generation the same X aborts the compose. The app's currency
@@ -5499,7 +5654,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     guard let direct = directDictation else { return }
     Self.directOwner = self
     direct.readDocumentID = { [weak self] in self?.currentDocumentID }
+    // Only while on screen: iOS detaches the field when the keyboard is covered.
+    direct.readContextBefore = { [weak self] in
+      guard let self, self.isKeyboardOnScreen else { return nil }
+      return self.textDocumentProxy.documentContextBeforeInput
+    }
+    direct.onHeldChange = { [weak self] in self?.directHeldChanged() }
     direct.attach(to: view)
+    direct.onLocalModelLog = { [weak self] line in self?.logRecordMarker("direct.local", extra: line) }
+    direct.onLocalModelReadyChange = { [weak self] in self?.directLocalModelReadyChanged() }
     direct.onStateChange = { [weak self] state in self?.renderDirectState(state) }
     direct.onLevel = { [weak self] level in
       guard let self, self.directDictation?.state == .recording else { return }
@@ -5518,6 +5681,19 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       self.insertSmartText(self.formatTranscription(text))
     }
     if isDirectTakeActive { renderDirectState(direct.state) }
+  }
+
+  /// A Local snapshot's model loads seconds after the keyboard appears, when the web view
+  /// wasn't made (it is only made for an eligible keyboard), and it can be released or swapped
+  /// while the keyboard shows. Attach now, and redraw a resting pill so it says what a tap does.
+  private func directLocalModelReadyChanged() {
+    guard Self.directOwner === self, hasFullAccess, let direct = directDictation else { return }
+    direct.attach(to: view)
+    // A take, a handoff or the review card owns the pill; a timed state redraws it when it ends.
+    guard !isDirectTakeActive, !isRemoteRecordingActive, !isDarwinStartPending, !isAgentReviewShown,
+      issueResetTimer == nil, waitForTranscriptTimer == nil, waitForAgentResultTimer == nil
+    else { return }
+    refreshRecordButton()
   }
 
   private func renderDirectState(_ state: DirectDictationState) {
@@ -5554,6 +5730,23 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
   }
 
+  @objc private func handleInsertHeldTapped() {
+    recordButton.removeTarget(self, action: #selector(handleInsertHeldTapped), for: .touchUpInside)
+    logRecordMarker("handleInsertHeldTapped")
+    directDictation?.insertHeld()
+    // Finished text is typed at once; a Cloud take not yet sent shows Transcribing first.
+    if !isDirectTakeActive { refreshRecordButton() }
+  }
+
+  /// A take started or stopped waiting to be inserted: redraw a resting pill.
+  private func directHeldChanged() {
+    guard Self.directOwner === self, hasFullAccess else { return }
+    guard !isDirectTakeActive, !isRemoteRecordingActive, !isDarwinStartPending, !isAgentReviewShown,
+      waitForTranscriptTimer == nil, waitForAgentResultTimer == nil
+    else { return }
+    refreshRecordButton()
+  }
+
   @objc private func handleDirectRecordTapped() {
     recordButton.removeTarget(self, action: #selector(handleDirectRecordTapped), for: .touchUpInside)
     logRecordMarker("handleDirectRecordTapped")
@@ -5563,6 +5756,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       refreshRecordButton()
       return
     }
+    // Idempotent; covers a web view never made because the model wasn't ready at appearance.
+    // Capture waits for the page to load.
+    direct.attach(to: view)
     let before = direct.state
     direct.start()
     // A start that changed nothing (the snapshot changed since the pill was drawn, or it failed
@@ -6114,6 +6310,16 @@ private struct AgentResult {
   let updatedAtMs: Double?
 }
 
+/// What a dictation the keyboard sends itself translates into (`DirectDictationRuntime`'s
+/// `readTranslation`): the effective target and its English label, nil when either is missing.
+func directDictationTranslation() -> (code: String, label: String)? {
+  let provider = KeyboardHandoffProvider.shared
+  guard let code = provider.translationTarget(),
+    let label = provider.translationLanguages().first(where: { $0.code == code })?.label
+  else { return nil }
+  return (code: code, label: label)
+}
+
 private struct KeyboardHandoffProvider {
   static let shared = KeyboardHandoffProvider()
 
@@ -6166,6 +6372,12 @@ private struct KeyboardHandoffProvider {
   private let transcriptionStatusUpdatedAtMsKey = "keyboard_transcription_status_updated_at_ms"
   private let dictationToneKey = "keyboard_dictation_tone"
   private let toneApplicableKey = "keyboard_tone_applicable"
+  // Translation: the app writes the language list and whether translation is available; the
+  // target is shared (Off is the key's absence); only the keyboard writes its recents.
+  private let translationTargetKey = "keyboard_translation_target"
+  private let translationLanguagesKey = "keyboard_translation_languages"
+  private let translationApplicableKey = "keyboard_translation_applicable"
+  private let translationRecentsKey = "keyboard_translation_recents"
   // Dictation-agent mirror keys (app-written, persist across launches) and the
   // one-shot request / result channels shared with the main app.
   private let agentEnabledKey = "keyboard_agent_enabled"
@@ -6296,6 +6508,52 @@ private struct KeyboardHandoffProvider {
     return defaults.string(forKey: toneApplicableKey) != "0"
   }
 
+  // MARK: Translation
+
+  /// The language dictation is translated into; nil (Off) when translation isn't available or the
+  /// stored code is no longer listed.
+  func translationTarget() -> String? {
+    KeyboardOptionsMenu.effectiveTarget(
+      stored: UserDefaults(suiteName: appGroupId)?.string(forKey: translationTargetKey),
+      languages: translationLanguages(),
+      applicable: isTranslationApplicable())
+  }
+
+  /// nil removes the key (Off); a code also moves to the front of the recents.
+  func setTranslationTarget(_ code: String?) {
+    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    if let code {
+      defaults.set(code, forKey: translationTargetKey)
+      let recents = KeyboardOptionsMenu.recentsAfterSelecting(
+        code, current: KeyboardOptionsMenu.decodeRecents(defaults.string(forKey: translationRecentsKey)))
+      if let data = try? JSONEncoder().encode(recents), let json = String(data: data, encoding: .utf8) {
+        defaults.set(json, forKey: translationRecentsKey)
+      }
+    } else {
+      defaults.removeObject(forKey: translationTargetKey)
+    }
+    defaults.synchronize()
+  }
+
+  func translationLanguages() -> [TranslationLanguage] {
+    KeyboardOptionsMenu.decodeLanguages(UserDefaults(suiteName: appGroupId)?.string(forKey: translationLanguagesKey))
+  }
+
+  /// Fails closed, unlike tone: without the app saying so, translation is locked.
+  func isTranslationApplicable() -> Bool {
+    UserDefaults(suiteName: appGroupId)?.string(forKey: translationApplicableKey) == "1"
+  }
+
+  /// Everything the options menu's Translate to submenu shows, read in one pass.
+  func translationSection() -> KeyboardOptionsMenu.TranslateSection {
+    let defaults = UserDefaults(suiteName: appGroupId)
+    return KeyboardOptionsMenu.translateSection(
+      stored: defaults?.string(forKey: translationTargetKey),
+      languages: translationLanguages(),
+      recents: KeyboardOptionsMenu.decodeRecents(defaults?.string(forKey: translationRecentsKey)),
+      applicable: isTranslationApplicable())
+  }
+
   // MARK: Dictation agent
 
   /// The dictation agent is off entirely unless the app has mirrored enabled=1.
@@ -6305,7 +6563,7 @@ private struct KeyboardHandoffProvider {
 
   /// Applicable = the voice assistant can run: an account for Cloud, or its own
   /// provider. Not applicable ⇒ the entry button is dimmed and points the user at
-  /// the app, mirroring tone.
+  /// the app.
   func isAgentApplicable() -> Bool {
     UserDefaults(suiteName: appGroupId)?.string(forKey: agentApplicableKey) == "1"
   }

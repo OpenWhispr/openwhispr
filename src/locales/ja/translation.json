@@ -3814,6 +3814,7 @@
       "generateSummary": "AI要約を生成",
       "generateWithTemplate": "{{template}}で生成",
       "startWriting": "書き始める...",
+      "tabToLeave": "Esc キーを押してから Tab または Shift+Tab を押すと、エディターから移動できます。",
       "table": {
         "actions": "表の操作",
         "insertRowAbove": "上に行を挿入",
@@ -3935,7 +3936,6 @@
           "matchCase": "大文字と小文字を区別",
           "close": "閉じる"
         },
-        "count": "単語: {{words}} · 文字: {{chars}}",
         "link": {
           "header": "ノートへのリンク",
           "empty": "ノートのタイトルを入力…",

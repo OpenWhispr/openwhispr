@@ -3923,6 +3923,7 @@
       "generateSummary": "Gerar resumo com IA",
       "generateWithTemplate": "Gerar com {{template}}",
       "startWriting": "Comece a escrever...",
+      "tabToLeave": "Pressione Esc e depois Tab ou Shift+Tab para sair do editor.",
       "staleIndicator": "O conteúdo mudou desde o aprimoramento",
       "live": "Ao vivo",
       "transcript": "Transcrição",
@@ -4052,7 +4053,6 @@
           "matchCase": "Diferenciar maiúsculas",
           "close": "Fechar"
         },
-        "count": "Palavras: {{words}} · Caracteres: {{chars}}",
         "link": {
           "header": "Vincular nota",
           "empty": "Digite o título de uma nota…",

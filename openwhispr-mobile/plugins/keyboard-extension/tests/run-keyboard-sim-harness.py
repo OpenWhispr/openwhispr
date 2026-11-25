@@ -20,7 +20,7 @@ import sys
 import tempfile
 import time
 
-DEPLOYMENT_TARGET = "15.1"
+DEPLOYMENT_TARGET = "17.0"
 BUNDLE_ID = "com.gizmolabs.openwhispr.keyboardharness"
 
 
