@@ -1602,7 +1602,10 @@ for (const result of ["A fuller introduction.", null]) {
 }
 
 // A take spoken over a writable field in another app, answered with only reads.
-async function caretTake(t, { onlyRead = true, pasted = true, beforeAnswer } = {}) {
+async function caretTake(
+  t,
+  { onlyRead = true, pasted = true, firstReply = reply([], "**Thanks**, team!"), beforeAnswer } = {}
+) {
   const view = await mountWindow(t);
   const probes = [];
   const pastes = [];
@@ -1628,17 +1631,26 @@ async function caretTake(t, { onlyRead = true, pasted = true, beforeAnswer } = {
     globalThis.__voice.callbacks.onTranscript("Write a thank-you note to my team", "submit")
   );
   const options = globalThis.__chat.sentOptions[0];
-  if (beforeAnswer) await React.act(async () => beforeAnswer(view));
+  // The reply streams in before its turn hands it to the caret.
+  await view.chat({ busy: true, messages: [user, firstReply] });
+  await view.settle();
+  const streamedIn = view.layout();
+  if (beforeAnswer) await beforeAnswer(view);
   await React.act(async () =>
     options.onComplete({ assistantId: "a1", content: "**Thanks**, team!", onlyRead })
   );
+  const answer = { ...reply([], "**Thanks**, team!"), isStreaming: false };
+  await view.chat({ busy: false, messages: [user, answer] });
   await view.settle();
-  return { options, probes, pastes, released, hides: () => hides };
+  const modal = () => view.main.layouts.some((request) => request.layout === "modal");
+  return { options, probes, pastes, released, hides: () => hides, streamedIn, modal };
 }
 
 test("a voice answer for another app's writable field is typed there as plain text", async (t) => {
-  const { options, probes, pastes, released, hides } = await caretTake(t);
+  const { options, probes, pastes, released, hides, streamedIn, modal } = await caretTake(t);
 
+  assert.equal(streamedIn, "pill", "the answer streams in the pill");
+  assert.equal(modal(), false, "the modal never opens over the field");
   assert.deepEqual(probes, [{ probeEditable: true }]);
   assert.equal(options.plainTextResponse, true);
   assert.deepEqual(pastes, [["caret-1", "Thanks, team!"]]);
@@ -1648,16 +1660,19 @@ test("a voice answer for another app's writable field is typed there as plain te
 });
 
 test("an answer whose turn asked or acted stays in the window", async (t) => {
-  const { pastes, released, hides } = await caretTake(t, { onlyRead: false });
+  const { pastes, released, hides, streamedIn, modal } = await caretTake(t, { onlyRead: false });
 
   assert.deepEqual(pastes, []);
   assert.deepEqual(released, ["caret-1"]);
   assert.equal(hides(), 0);
+  assert.equal(streamedIn, "pill", "it may still be typed while the turn runs");
+  assert.equal(modal(), true, "the modal opens to show it once the turn ends");
 });
 
 test("an answer a newer request overtook stays in the window", async (t) => {
   const { pastes, released, hides } = await caretTake(t, {
-    beforeAnswer: (view) => view.main.handlers.command({ text: "Another request" }),
+    beforeAnswer: (view) =>
+      React.act(async () => view.main.handlers.command({ text: "Another request" })),
   });
 
   assert.deepEqual(pastes, []);
@@ -1666,10 +1681,48 @@ test("an answer a newer request overtook stays in the window", async (t) => {
 });
 
 test("an answer the field refused stays in the window", async (t) => {
-  const { pastes, hides } = await caretTake(t, { pasted: false });
+  const { pastes, hides, streamedIn, modal } = await caretTake(t, { pasted: false });
 
   assert.equal(pastes.length, 1);
   assert.equal(hides(), 0);
+  assert.equal(streamedIn, "pill");
+  assert.equal(modal(), true, "the modal opens to show it");
+  assert.equal(globalThis.__chat.newChats, 0);
+});
+
+test("an answer stopped on its way to the caret stays in the pill", async (t) => {
+  const { pastes, hides, modal } = await caretTake(t, {
+    beforeAnswer: (view) => React.act(async () => view.button("Stop").click()),
+  });
+
+  assert.deepEqual(pastes, []);
+  assert.equal(hides(), 0);
+  assert.equal(modal(), false);
+});
+
+test("a caret take whose reply asks a question first is never typed, so its answer opens the modal", async (t) => {
+  let afterQuestion;
+  const { pastes, released } = await caretTake(t, {
+    onlyRead: false,
+    firstReply: reply([askUser]),
+    beforeAnswer: async (view) => {
+      await view.ask("c1", TEXT_QUESTION);
+      await view.settle();
+      const store = await view.vite.ssrLoadModule("/stores/agentInteractionStore.ts");
+      const [key] = Object.keys(store.useAgentInteractionStore.getState().entries);
+      await React.act(async () => store.answerWithText(key, "Friday"));
+      await view.chat({
+        busy: true,
+        messages: [user, reply([{ ...askUser, status: "completed" }], "**Thanks**, team!")],
+      });
+      await view.settle();
+      afterQuestion = view.layout();
+    },
+  });
+
+  assert.equal(afterQuestion, "modal", "the answer shows while the turn runs");
+  assert.deepEqual(pastes, []);
+  assert.deepEqual(released, ["caret-1"]);
   assert.equal(globalThis.__chat.newChats, 0);
 });
 
