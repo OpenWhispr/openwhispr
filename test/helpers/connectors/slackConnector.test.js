@@ -1428,8 +1428,9 @@ test("a Slack window title that names no conversation, or more than one, asks wh
     // Only an exact name counts: no loose match picks where a post goes.
     "Eng (Channel) - Acme Test - Slack",
     "en - Acme Test - Slack",
-    // A browser's profile after Slack's name is no conversation, even when it names someone.
+    // A browser's profile after the workspace is no conversation, even when it names someone.
     "Saved - Acme Test - Slack - Google Chrome – Chad Test (acme.test)",
+    "Slack | Threads | Acme Test - Google Chrome – Chad Test (acme.test)",
   ]) {
     assert.deepEqual(
       await connector.prepare("send_message", { text: "Ship it" }, pressedOver(title)),

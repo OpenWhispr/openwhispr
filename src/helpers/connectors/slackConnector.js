@@ -412,11 +412,8 @@ function createSlackConnector({ api, auth, directory, credentials }) {
   // when no name or several conversations match: a guess never picks where a
   // post goes.
   async function findOpenConversation(title, binding, access, cacheKey) {
-    const { teamName } = access.credential;
-    const workspace = teamName?.toLowerCase();
-    if (!workspace || !slackTitleNames(title).some((name) => name.toLowerCase() === workspace)) {
-      return {};
-    }
+    const names = slackTitleNames(title, access.credential.teamName);
+    if (names.length === 0) return {};
     const lists = await Promise.all([
       directory.channels(access.token, cacheKey),
       directory.people(access.token, cacheKey),
@@ -430,7 +427,7 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       return resolved.status === "match" ? resolved.candidate : null;
     };
     const found = new Map();
-    for (const name of slackTitleNames(title, teamName)) {
+    for (const name of names) {
       const named = exactly(name);
       // A name that could be a channel's (lowercase, no spaces) may be a
       // channel the user isn't in, which the list doesn't hold, so it never
