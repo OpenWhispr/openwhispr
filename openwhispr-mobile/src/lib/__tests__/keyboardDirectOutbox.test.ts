@@ -157,6 +157,63 @@ describe('drainKeyboardDirectOutbox', () => {
     expect(h.disk).toEqual({});
   });
 
+  it('records translatedTo on the History row', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({ text: 'Envíalo a a@b.co.', translationTarget: 'es', translatedTo: 'es' }),
+      ),
+    });
+    await drainKeyboardDirectOutbox(h.deps);
+    expect(h.added).toEqual([
+      expect.objectContaining({
+        text: 'Envíalo a a@b.co.',
+        originalText: 'send it to my email',
+        translatedTo: 'es',
+      }),
+    ]);
+  });
+
+  it('leaves translatedTo off a row the keyboard did not translate', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({ translationTarget: 'es', translatedTo: null, translationFailed: false }),
+      ),
+    });
+    await drainKeyboardDirectOutbox(h.deps);
+    // An unchanged reply was already in the target language: no warning.
+    expect(h.added).toEqual([
+      expect.objectContaining({ translatedTo: undefined, cleanupWarning: undefined }),
+    ]);
+  });
+
+  it('warns on a row the keyboard could not translate', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({ translationTarget: 'es', translatedTo: null, translationFailed: true }),
+      ),
+    });
+    await drainKeyboardDirectOutbox(h.deps);
+    expect(h.added).toEqual([
+      expect.objectContaining({
+        text: 'Send it to a@b.co.',
+        translatedTo: undefined,
+        cleanupWarning: "Couldn't translate to Spanish. The text was left untranslated.",
+      }),
+    ]);
+  });
+
+  it('warns about nothing without a target, or for a record from before the flag', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(record({ translationFailed: true })),
+      'job-2.json': JSON.stringify(record({ jobId: 'job-2', translationTarget: 'es' })),
+    });
+    await drainKeyboardDirectOutbox(h.deps);
+    expect(h.added).toEqual([
+      expect.objectContaining({ id: 'job-1', cleanupWarning: undefined }),
+      expect.objectContaining({ id: 'job-2', cleanupWarning: undefined }),
+    ]);
+  });
+
   it('keeps a record if the account changes during the History lookup', async () => {
     const json = JSON.stringify(record());
     const h = harness({ 'job-1.json': json });
@@ -235,6 +292,19 @@ describe('drainKeyboardDirectOutbox', () => {
       },
     ]);
     expect(h.disk).toEqual({});
+  });
+
+  it('gives a failed dictation the target it was recorded with, so a retry translates it', async () => {
+    const h = harness({
+      'job-1.json': JSON.stringify(
+        record({ status: 'failed', text: null, originalText: null, translationTarget: 'es' }),
+      ),
+      'job-1.m4a': 'audio',
+    });
+    await drainKeyboardDirectOutbox(h.deps);
+    expect(h.failed).toEqual([expect.objectContaining({ translationTarget: 'es' })]);
+    // translatedTo means it was translated; this row wasn't.
+    expect(h.failed[0]).not.toHaveProperty('translatedTo');
   });
 
   it('preserves audio for a later drain when saving the History row fails', async () => {

@@ -7,7 +7,11 @@ const mockAppGroup: Record<string, string> = {};
 const mockUpdateConfig = jest.fn(async (_updates: Partial<UserConfig>) => {});
 let mockConfig: UserConfig | null = null;
 
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('expo-router', () => ({ router: { push: jest.fn() }, useFocusEffect: () => {} }));
+jest.mock('@/lib/keyboardTranslationSync', () => ({
+  keyboardCanTranslate: () => true,
+  reconcileKeyboardTranslationFromAppGroup: async () => {},
+}));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));

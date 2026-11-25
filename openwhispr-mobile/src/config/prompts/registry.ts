@@ -22,6 +22,10 @@ export function customPromptStorageKey(kind: PromptKind): string {
 // fails until both are done.
 export const DEFAULT_CLEANUP_PROMPT: string = defaultPrompts.cleanupPrompt;
 
+// Same byte-for-byte rule as the cleanup prompt (desktop's `translatePrompt`);
+// `{{targetLanguage}}` is filled by buildTranslatePrompt in lib/keyboardTranslation.
+export const DEFAULT_TRANSLATE_PROMPT: string = defaultPrompts.translatePrompt;
+
 export function hasAgentNamePlaceholder(text: string): boolean {
   return text.includes(AGENT_NAME_PLACEHOLDER);
 }

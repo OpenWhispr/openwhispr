@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { AppState } from 'react-native';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { captureDictationContext, recordDictationCompleted } from '@/lib/productEvents';
+import { translationFailureReason } from '@/lib/keyboardTranslation';
 import { countSpokenWords } from '@/lib/wordCount';
 import { useAuthStore } from '@/store/useAuthStore';
 import {
@@ -32,6 +33,12 @@ interface DirectDictationRecord {
   text?: string | null;
   originalText?: string | null;
   cleanupApplied?: boolean | null;
+  /** The keyboard's target when the dictation started. */
+  translationTarget?: string | null;
+  /** Set only when `text` is the translation. */
+  translatedTo?: string | null;
+  /** The take had a target and `text` was left untranslated (an unchanged reply doesn't count). */
+  translationFailed?: boolean | null;
 }
 
 export interface OutboxFiles {
@@ -138,6 +145,12 @@ export async function drainKeyboardDirectOutbox(
           provider: 'cloud',
           requestContext: 'keyboard',
           keyboardTone: (record.tone ?? 'default') as KeyboardTone,
+          translatedTo: record.translatedTo ?? undefined,
+          // The keyboard records no cleanup warning, so the translation's is the row's only one.
+          cleanupWarning:
+            record.translationFailed && record.translationTarget
+              ? translationFailureReason(record.translationTarget)
+              : undefined,
           duration: durationSeconds(record),
           createdAt: occurredAt,
         },
@@ -175,6 +188,8 @@ export async function drainKeyboardDirectOutbox(
         provider: 'cloud',
         requestContext: 'keyboard',
         keyboardTone: (record.tone ?? 'default') as KeyboardTone,
+        // Nothing was translated yet: the target it was recorded with, so a retry translates it.
+        translationTarget: record.translationTarget ?? undefined,
         errorMessage: FAILED_MESSAGE,
         createdAt: record.startedAtMs,
       },

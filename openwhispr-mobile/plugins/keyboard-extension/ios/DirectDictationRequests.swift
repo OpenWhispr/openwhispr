@@ -1,7 +1,7 @@
 import Foundation
 
-/// What one dictation sends: the snapshot it started with, its job id, the tone the user
-/// picked in the keyboard, and the session cookie read from the shared Keychain item.
+/// What one dictation sends: the snapshot it started with, its job id, the tone and translation
+/// target the user picked in the keyboard, and the session cookie read from the shared Keychain item.
 struct DirectRequestContext: Equatable {
   let config: DirectDictationConfig
   let jobId: String
@@ -9,6 +9,10 @@ struct DirectRequestContext: Equatable {
   let tone: String
   /// The Cookie header value, verbatim.
   let cookie: String
+  /// A language registry code ("es", "zh-TW"); nil when translation is off.
+  let translationTarget: String?
+  /// The target's English label, which the prompt names.
+  let translationLabel: String?
 }
 
 enum TranscribeOutcome: Equatable {
@@ -27,12 +31,23 @@ enum TranscribeOutcome: Equatable {
   case rejected
 }
 
-/// The two requests a direct dictation makes, in the shape the app sends them today
+enum TranslationOutcome: Equatable {
+  case translated(String)
+  /// Only differs from the input in whitespace: already in the target language, as the app and
+  /// desktop read it, so nothing is reported.
+  case unchanged
+  /// A refusal, a transport error, or an empty or unreadable answer.
+  case failed
+}
+
+/// The requests a direct dictation makes, in the shape the app sends them today
 /// (`src/services/transcription/TranscriptionService.ts`), and how their answers are read.
 enum DirectDictationRequests {
   static let transcribeTimeout: TimeInterval = 60
   static let reasonTimeout: TimeInterval = 12
   static let cleanupTimeoutMs = "12000"
+  /// The server sizes its model fallback budget from it, as for the app's own `/api/reason` calls.
+  static let reasonClientTimeoutMs = String(Int(reasonTimeout * 1000))
 
   /// Ordered multipart text fields, as the spec's "The request" lists them.
   static func transcribeFields(_ context: DirectRequestContext) -> [(name: String, value: String)] {
@@ -121,6 +136,28 @@ enum DirectDictationRequests {
     return request
   }
 
+  /// Translates the final text, as the app's `translateTranscript` does on OpenWhispr Cloud. nil
+  /// unless the snapshot allows it, a target and label are set, the prompt is non-empty, and the
+  /// dictation language isn't already the target's.
+  static func makeTranslateRequest(_ context: DirectRequestContext, text: String) throws -> URLRequest? {
+    let translation = context.config.translation
+    guard translation.enabled, !translation.prompt.isEmpty,
+      let target = context.translationTarget, let label = context.translationLabel,
+      !isSameLanguage(context.config.language, target)
+    else { return nil }
+    let payload: [String: Any] = [
+      "text": text,
+      "systemPrompt": translation.prompt.replacingOccurrences(of: "{{targetLanguage}}", with: label),
+      "purpose": "translation",
+      "clientType": "mobile",
+    ]
+    var request = baseRequest(context, path: "api/reason", timeout: reasonTimeout)
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue(reasonClientTimeoutMs, forHTTPHeaderField: "x-openwhispr-client-timeout-ms")
+    request.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [.withoutEscapingSlashes])
+    return request
+  }
+
   static func parseTranscribe(status: Int, body: Data) -> TranscribeOutcome {
     switch status {
     case 200..<300:
@@ -155,6 +192,24 @@ enum DirectDictationRequests {
       let object = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any]
     else { return nil }
     return firstText(object, ["text"])
+  }
+
+  /// Reads a translate answer; anything but `.translated` types the untranslated text.
+  static func parseTranslation(status: Int, body: Data, input: String) -> TranslationOutcome {
+    guard let text = parseReason(status: status, body: body) else { return .failed }
+    return collapse(text) == collapse(input) ? .unchanged : .translated(text)
+  }
+
+  private static func collapse(_ text: String) -> String {
+    text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+  }
+
+  // Only an exact match skips, as the app's shouldTranslate and desktop. The dictation language has
+  // no region ("en"), so a regional target (en-GB, zh-TW) still runs; an unchanged reply is typed as
+  // is. No language, or "auto", may be any.
+  static func isSameLanguage(_ source: String?, _ target: String) -> Bool {
+    guard let source, source != "auto" else { return false }
+    return source == target
   }
 
   private static func baseRequest(_ context: DirectRequestContext, path: String, timeout: TimeInterval) -> URLRequest {
