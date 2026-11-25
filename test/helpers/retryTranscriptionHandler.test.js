@@ -1827,11 +1827,12 @@ test("upload: ElevenLabs gets the file at its own endpoint, with no language hin
 });
 
 // Scribe's words for two speakers; it names the speaker only when the request asks.
+// A space carries the speaker of the word before it, also where the speaker changes.
 const SCRIBE_WORDS = [
   { text: "Good", type: "word", start: 0, end: 0.3, speaker_id: "speaker_0" },
   { text: " ", type: "spacing", start: 0.3, end: 0.4, speaker_id: "speaker_0" },
   { text: "morning.", type: "word", start: 0.4, end: 0.9, speaker_id: "speaker_0" },
-  { text: " ", type: "spacing", start: 0.9, end: 1.4, speaker_id: "speaker_1" },
+  { text: " ", type: "spacing", start: 0.9, end: 0.9, speaker_id: "speaker_0" },
   { text: "Hello", type: "word", start: 1.4, end: 1.8, speaker_id: "speaker_1" },
   { text: " ", type: "spacing", start: 1.8, end: 1.9, speaker_id: "speaker_1" },
   { text: "there.", type: "word", start: 1.9, end: 2.3, speaker_id: "speaker_1" },
