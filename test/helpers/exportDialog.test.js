@@ -216,6 +216,23 @@ test("Markdown note export retains the existing enhanced-content preference", as
   assert.equal(await exportNoteToFile(t, "**Original notes**", "md"), "**Original notes**");
 });
 
+test("Text note export writes the AI summary when the note has no typed notes", async (t) => {
+  note.enhanced_content = "## Summary\n\n**Ready** to ship.";
+  for (const content of ["", null, undefined, "  \n"]) {
+    assert.equal(await exportNoteToFile(t, content), "Summary\n\nReady to ship.");
+  }
+});
+
+test("Text note export keeps typed notes when the note also has an AI summary", async (t) => {
+  note.enhanced_content = "## Summary\n\n**Ready** to ship.";
+  assert.equal(await exportNoteToFile(t, "**Original notes**"), "Original notes");
+});
+
+test("Text note export stays empty when the note has neither notes nor summary", async (t) => {
+  note.enhanced_content = null;
+  assert.equal(await exportNoteToFile(t, ""), "");
+});
+
 test("a repeated Text note export writes the latest content to the selected file", async (t) => {
   await exportNoteToFile(t, "First_file");
   note.content = "Second_file";

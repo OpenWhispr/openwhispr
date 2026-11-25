@@ -4801,6 +4801,9 @@ class IPCHandlers {
         if (format === "txt") {
           const { markdownToPlainText } = await import("./markdownToPlainText.ts");
           exportContent = markdownToPlainText(note.content || "");
+          if (!exportContent.trim() && note.enhanced_content) {
+            exportContent = markdownToPlainText(note.enhanced_content);
+          }
         } else {
           exportContent = note.enhanced_content || note.content;
         }
