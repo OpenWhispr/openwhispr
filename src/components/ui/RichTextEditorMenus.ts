@@ -3,7 +3,7 @@ import type { ChainedCommands, Editor } from "@tiptap/core";
 import type { EditorView } from "@tiptap/pm/view";
 import type { BubbleMenuProps } from "@tiptap/react/menus";
 
-// Shared by the note editor's floating menus (Tiptap BubbleMenu and FloatingMenu).
+// Shared by the note editor's floating menus (Tiptap BubbleMenu).
 
 export type ChainCommand = (chain: ChainedCommands) => ChainedCommands;
 

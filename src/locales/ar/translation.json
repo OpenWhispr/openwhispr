@@ -3427,6 +3427,7 @@
       "generateSummary": "إنشاء ملخص بالذكاء الاصطناعي",
       "generateWithTemplate": "إنشاء باستخدام {{template}}",
       "startWriting": "ابدأ الكتابة...",
+      "tabToLeave": "اضغط على Esc ثم Tab أو Shift+Tab للخروج من المحرر.",
       "staleIndicator": "تم تغيير المحتوى منذ التحسين",
       "live": "مباشر",
       "transcript": "النص المفرَّغ",
@@ -3556,7 +3557,6 @@
           "matchCase": "مطابقة حالة الأحرف",
           "close": "إغلاق"
         },
-        "count": "الكلمات: {{words}} · الأحرف: {{chars}}",
         "link": {
           "header": "ربط ملاحظة",
           "empty": "اكتب عنوان ملاحظة…",
