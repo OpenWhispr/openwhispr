@@ -646,12 +646,12 @@ test("a restart waits for every request main is waiting on, not just the last on
     assert.equal(manager.activeRequests.size, 2);
 
     reply("second");
-    await second;
+    await within(second);
     await assert.rejects(manager.start("/models/other.gguf", { busyWaitMs: 0 }), isModelBusy);
     assert.deepEqual(stops, [], "the first request still has its server");
 
     reply("first");
-    await first;
+    await within(first);
     assert.equal(manager.activeRequests.size, 0);
     await manager.start("/models/other.gguf", { busyWaitMs: 0 });
     assert.deepEqual(stops, ["/models/running.gguf"]);

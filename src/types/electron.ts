@@ -2756,9 +2756,12 @@ declare global {
         details?: Record<string, unknown>;
       }>;
       /**
-       * Several texts (whole user messages) on the local model, four at a time, with one result
-       * per text in order. `success: false` means the batch as a whole did not run (busy,
-       * cancelled, a policy refusal, no server); its `requestId` cancels all of it.
+       * Several texts (whole user messages) on the local model at once: up to four, fewer when
+       * they would not fit its window side by side. Texts are expected to fit the running window:
+       * one that needs it grown never restarts the server under the others, and fails the batch
+       * as busy if they hold it past `busyWaitMs`. One result per text, in order. `success: false`
+       * means the batch stopped (busy, cancelled, a policy refusal, the server failing), possibly
+       * after some texts ran; the config's `requestId` cancels all of it.
        */
       processLocalReasoningBatch: (
         texts: string[],

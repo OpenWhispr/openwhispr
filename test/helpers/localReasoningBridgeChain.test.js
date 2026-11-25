@@ -111,7 +111,7 @@ async function setupChain(t, respond) {
   modelManager.currentServerModelId = model.id;
   t.after(() => serverManager.clearIdleTimer());
 
-  return { bridge, modelManager, modelId: model.id, requests, serverManager };
+  return { bridge, modelManager, modelId: model.id, requests, serverManager, server };
 }
 
 const completion = (finishReason, content) => ({
@@ -458,10 +458,44 @@ test("a batch keeps its order and never has more than four texts in flight", asy
   }
 
   assert.deepEqual(
-    await batch,
+    await within(batch),
     texts.map((text) => ({ success: true, text: `clean ${text}` }))
   );
   assert.equal(held.mostInFlight(), 4);
+});
+
+// The four slots share one KV cache the size of the window. Four of the
+// reviewer's ~3.7k-token prompts with a 1,900-token answer allowance each got a
+// 500 "Context size has been exceeded" from the bundled server at 16,384.
+test("a batch runs only as many texts at once as fit in the window side by side", async (t) => {
+  const { bridge, modelManager, modelId, serverManager } = await setupChain(t, () =>
+    completion("stop", "unused")
+  );
+  const mostAtOnce = async (config) => {
+    const held = holdInference(modelManager);
+    const batch = bridge.processTextBatch(["1", "2", "3", "4", "5", "6"], modelId, config);
+    for (let answered = 0; answered < 6; answered += 1) {
+      await waitFor(() => held.calls.length > answered, "the next text");
+      held.calls[answered].resolve("clean");
+    }
+    await within(batch);
+    return held.mostInFlight();
+  };
+  // About 5,900 tokens of system prompt, and 1,000 more per text for its answer.
+  const dictionary = { systemPrompt: "dictionary ".repeat(1600) };
+
+  assert.equal(await mostAtOnce({}), 4, "everyday texts use every slot");
+  assert.equal(await mostAtOnce(dictionary), 2, "two fit the 16,384 floor");
+  assert.equal(
+    await mostAtOnce({ systemPrompt: "dictionary ".repeat(2000) }),
+    1,
+    "a text that needs half the window runs alone"
+  );
+
+  serverManager.contextSize = 32768;
+  assert.equal(await mostAtOnce(dictionary), 4, "this model's running window holds four");
+  modelManager.currentServerModelId = "another-model";
+  assert.equal(await mostAtOnce(dictionary), 2, "another model's window says nothing");
 });
 
 test("each text in a batch gets the request and answer processText gives it", async (t) => {
@@ -522,24 +556,19 @@ test("a batch and any other request refuse each other with the typed busy code",
   await settle();
   await assert.rejects(bridge.processText("dictation", modelId, {}), busy, "until the last text");
   held.calls[1].resolve("two");
-  await batch;
+  await within(batch);
 
   const single = bridge.processText("note", modelId, {});
   await waitFor(() => held.calls.length === 3, "the single request in flight");
   await assert.rejects(bridge.processTextBatch(["piece"], modelId, {}), busy);
   held.calls[2].resolve("note answer");
-  assert.equal(await single, "note answer");
+  assert.equal(await within(single), "note answer");
   assert.equal(held.calls.length, 3, "a refused request never reached the model");
 });
 
 test("a text whose own answer fails gets that failure in its place; the rest still run", async (t) => {
   const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "unused"));
-  const ownFailures = [
-    "CONTEXT_TOO_LARGE",
-    "OUTPUT_TRUNCATED",
-    "OUTPUT_COMPLETION_UNVERIFIED",
-    "INFERENCE_FAILED",
-  ];
+  const ownFailures = ["CONTEXT_TOO_LARGE", "OUTPUT_TRUNCATED", "OUTPUT_COMPLETION_UNVERIFIED"];
   modelManager.runInference = async (_modelId, text) => {
     if (ownFailures.includes(text)) throw codedError(`${text} happened`, text);
     return `clean ${text}`;
@@ -556,6 +585,7 @@ test("a text whose own answer fails gets that failure in its place; the rest sti
 for (const [label, code] of [
   ["a busy server", "LOCAL_MODEL_BUSY"],
   ["a server that cannot start", "LOCAL_SERVER_UNAVAILABLE"],
+  ["a server that failed the request", "INFERENCE_FAILED"],
   ["a policy refusal", "POLICY_MODEL_BLOCKED"],
   ["a failure with no code", undefined],
 ]) {
@@ -618,14 +648,15 @@ test("the caller's signal aborting rejects the batch the same way", async (t) =>
   await assert.rejects(within(batch), { code: "LOCAL_MODEL_CANCELLED" });
   assert.equal(held.calls.length, 4);
 
-  await assert.rejects(bridge.processTextBatch(["6"], modelId, { signal: caller.signal }), {
+  await assert.rejects(within(bridge.processTextBatch(["6"], modelId, { signal: caller.signal })), {
     code: "LOCAL_MODEL_CANCELLED",
   });
   assert.equal(held.calls.length, 4, "an aborted caller's batch never starts");
   assert.equal(bridge.isProcessing, false);
 });
 
-test("a batch logs counts and timings, never what was said", async (t) => {
+// runInference is a stand-in here, so its own debug lines are not checked.
+test("the batch's own log lines carry counts and timings, never what was said", async (t) => {
   const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "unused"));
   const debugLogger = require("../../src/helpers/debugLogger");
   const logged = [];
@@ -719,5 +750,33 @@ test("cancelling a batch closes every request it has at the server and sends no 
   assert.equal(serverManager.activeRequests.size, 0);
   await settle();
   assert.equal(requests.length, 4, "the texts not yet sent never reach the server");
+  assert.equal(bridge.isProcessing, false);
+});
+
+// A stopped server may be stopped on purpose (a GPU switch, a policy), so the
+// texts left must not load the model again.
+test("a server that dies under a batch ends it, and the rest never reload the model", async (t) => {
+  const { bridge, modelId, requests, serverManager, server } = await setupChain(t, () => null);
+  let starts = 0;
+  serverManager._doStart = async () => {
+    starts += 1;
+    serverManager.ready = true;
+    serverManager.process = {};
+  };
+
+  const batch = bridge.processTextBatch(["1", "2", "3", "4", "5", "6"], modelId, {});
+  await waitFor(
+    () => requests.length === 4 && serverManager.activeRequests.size === 4,
+    "four requests at the server"
+  );
+  // What llama-server exiting looks like from main: its handle goes, and the
+  // connections it held drop.
+  serverManager.ready = false;
+  serverManager.process = null;
+  server.closeAllConnections();
+
+  await assert.rejects(within(batch), { code: "INFERENCE_FAILED" });
+  assert.equal(starts, 0);
+  assert.equal(requests.length, 4);
   assert.equal(bridge.isProcessing, false);
 });
