@@ -17,9 +17,13 @@ import {
 } from "../../stores/agentInteractionStore";
 import {
   approvalKey,
+  approveAction,
+  cancelApproval,
   updateApprovalDraft,
   useConnectorApprovalStore,
 } from "../../stores/connectorApprovalStore";
+import { approvalSendCheck } from "../../utils/approvalSendCheck";
+import { spokenCardReply } from "../../utils/spokenCardReply";
 import { editSelectedText } from "../../services/editSelectedText";
 import { getSelectionCaptureDisposition } from "../../helpers/selectionEditing";
 import { markdownToPlainText } from "../../helpers/markdownToPlainText";
@@ -33,14 +37,17 @@ import {
   agentWindowReducer,
   awaitsTypedAnswer,
   findPendingCard,
+  findPendingCards,
   INITIAL_AGENT_WINDOW_STATE,
   resolveAgentPillControls,
   shownMessages,
+  voiceReplyCard,
   type AgentPillButton,
   type AgentPillPlacement,
   type AgentPillStatus,
   type AgentWindowAction,
   type AgentWindowState,
+  type PendingCard,
 } from "./agentWindowState";
 import { useAgentSurface } from "./useAgentSurface";
 import { useAgentVoice, type AgentVoiceIntent } from "./useAgentVoice";
@@ -113,6 +120,22 @@ function selectedApprovalField(): SelectionEditTarget | null {
     text: field.value.slice(start, end),
     appCategory: entry.preview.verbKey === "email" ? "email" : "work",
   };
+}
+
+// A spoken reply to the waiting card: a question takes the words as its
+// answer; an answer card takes a clear yes as Send and a clear no as Cancel.
+function replyToCard(card: PendingCard, text: string): boolean {
+  if (card.interaction === "questions") {
+    answerWithText(card.key, text);
+    return true;
+  }
+  const entry = useConnectorApprovalStore.getState().entries[card.key];
+  const reply = spokenCardReply(text);
+  if (!entry || !reply) return false;
+  if (reply === "no") cancelApproval(card.key);
+  else if (approvalSendCheck(entry).sendBlocked) return false;
+  else void approveAction(card.key);
+  return true;
 }
 
 async function captureRequestScreen(): Promise<ChatImageAttachment | null> {
@@ -208,10 +231,11 @@ export default function AgentWindow() {
   const interactions = useAgentInteractionStore((store) => store.entries);
   const approvals = useConnectorApprovalStore((store) => store.entries);
   const skillApprovals = useSkillApprovalStore((store) => store.entries);
-  const pendingCard = useMemo(
-    () => findPendingCard(shown, interactions, approvals, { skillApprovals }),
+  const pendingCards = useMemo(
+    () => findPendingCards(shown, interactions, approvals, { skillApprovals }),
     [approvals, interactions, shown, skillApprovals]
   );
+  const pendingCard = pendingCards[0] ?? null;
   // What the composer answers: a restored question too, though nothing waits on it.
   const answerableCard = useMemo(
     () =>
@@ -244,6 +268,11 @@ export default function AgentWindow() {
   // Read when a spoken command arrives, so it can be kept from answering.
   const pendingCardRef = useRef(pendingCard);
   pendingCardRef.current = pendingCard;
+  // The card a take answers while the turn waits on it, and the take that answers it.
+  const replyCard = voiceReplyCard(pendingCards, approvals);
+  const replyCardRef = useRef(replyCard);
+  replyCardRef.current = replyCard;
+  const replyTakeRef = useRef<{ take: number; cardId: string } | null>(null);
   const cardFrameRef = useRef<HTMLDivElement>(null);
   const [cardHeight, setCardHeight] = useState(0);
   const standalone = state.layout === "standalone";
@@ -489,6 +518,17 @@ export default function AgentWindow() {
       editTargetRef.current = null;
       const caret = caretRef.current?.press === press ? caretRef.current : null;
       caretRef.current = null;
+      const replyTake = replyTakeRef.current?.take === take ? replyTakeRef.current : null;
+      if (!target && replyTake) {
+        const card = replyCardRef.current;
+        // A card minimized meanwhile is never answered unseen.
+        const { visible, layout } = stateRef.current;
+        const onScreen = visible && (layout === "modal" || layout === "standalone");
+        if (card?.id === replyTake.cardId && onScreen && replyToCard(card, text)) return;
+        // Not a clear answer, or its card is gone: the words wait in the composer.
+        dispatch({ type: "held", text, context: null, attachment: null });
+        return;
+      }
       const extras = {
         selectedContext: stateRef.current.selectedContext,
         attachment: stateRef.current.attachment,
@@ -616,6 +656,8 @@ export default function AgentWindow() {
   });
   const listening = voice.status === "recording" || voice.opening;
   const transcribing = voice.status === "transcribing";
+  // While a turn runs, Mic only answers the card it waits on.
+  const micBlocked = (busy && (!replyCard || editingSelection)) || transcribing;
 
   useEffect(() => {
     if (!state.notice || listening || transcribing || busy) return;
@@ -715,22 +757,48 @@ export default function AgentWindow() {
     async ({ external = false } = {}) => {
       if (refuseIfRestricted()) return;
       const card = external ? null : selectedApprovalField();
-      // Only a selected draft field can be edited while its turn waits on Send.
-      if ((busy && !card) || editingSelection || voice.status !== "idle" || voice.opening) return;
+      // While a turn runs, a take only edits a selected draft field or answers the waiting card.
+      const replyTo = busy && !card ? replyCard : null;
+      if (
+        (busy && !card && !replyTo) ||
+        editingSelection ||
+        voice.status !== "idle" ||
+        voice.opening
+      )
+        return;
       if (voice.streamingOnlyProvider) {
         // A realtime-only provider can't transcribe a take: type instead.
-        dispatch({ type: "useKeyboard" });
+        dispatch({ type: "useKeyboard", pending: replyTo !== null });
         return;
       }
       stopReading();
-      capturePressContext(external, card);
+      // A reply to the card reads nothing from the press: no selection, field or screen.
+      if (replyTo) {
+        editTargetRef.current = null;
+        pressCaptureRef.current = null;
+      } else {
+        capturePressContext(external, card);
+      }
       takeRef.current += 1;
+      replyTakeRef.current = replyTo ? { take: takeRef.current, cardId: replyTo.id } : null;
       dispatch({ type: "useVoice" });
+      // The card a spoken yes would send shows while the user speaks.
+      const { layout } = stateRef.current;
+      if (replyTo && layout !== "modal" && layout !== "standalone") dispatch({ type: "expand" });
       if ((await voice.start()) === "refused") {
         dispatch({ type: "notice", notice: "agentWindow.notices.dictationActive" });
       }
     },
-    [busy, capturePressContext, dispatch, editingSelection, refuseIfRestricted, stopReading, voice]
+    [
+      busy,
+      capturePressContext,
+      dispatch,
+      editingSelection,
+      refuseIfRestricted,
+      replyCard,
+      stopReading,
+      voice,
+    ]
   );
 
   const { cancel: cancelTake } = voice;
@@ -801,8 +869,9 @@ export default function AgentWindow() {
         return;
       }
       const current = stateRef.current;
-      // A reply is running: show it, but don't listen over it.
-      if (busy && (editingSelection || external || !selectedApprovalField())) {
+      // A reply is running: show it, but don't listen over it, unless the take
+      // answers the card it waits on or edits a selected draft field.
+      if (busy && (editingSelection || (!replyCard && (external || !selectedApprovalField())))) {
         if (!current.visible) dispatch({ type: "show", layout: "modal", input: "voice" });
         return;
       }
@@ -817,7 +886,16 @@ export default function AgentWindow() {
       }
       void startListening({ external });
     },
-    [busy, dispatch, editingSelection, listening, refuseIfRestricted, startListening, voice]
+    [
+      busy,
+      dispatch,
+      editingSelection,
+      listening,
+      refuseIfRestricted,
+      replyCard,
+      startListening,
+      voice,
+    ]
   );
 
   const handleEscape = useCallback(() => {
@@ -1097,7 +1175,7 @@ export default function AgentWindow() {
           : undefined
       }
       micUnavailableHint={micHint}
-      micDisabled={busy || transcribing}
+      micDisabled={micBlocked}
       expandCue={placement === "compact" && nudge.cue}
       inModal={placement === "modal"}
       onAction={handlePillAction}
@@ -1150,7 +1228,7 @@ export default function AgentWindow() {
         onStop={editingSelection || offersStop ? stopRequest : undefined}
         onClose={inModal ? () => void close() : undefined}
         onMic={inModal ? () => void startListening() : undefined}
-        micDisabled={busy || transcribing}
+        micDisabled={micBlocked}
         micUnavailableHint={micHint}
         focused={
           surface.shown &&

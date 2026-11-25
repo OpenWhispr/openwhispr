@@ -285,6 +285,33 @@ test("waiting for an answer, the pill says so and keeps the way to the card", as
   assert.deepEqual(resolveAgentPillControls("modal", "waiting").buttons, ["keyboard", "close"]);
 });
 
+test("a spoken reply answers only the one card waiting, if it is a question or waits on Send", async () => {
+  const { findPendingCards, voiceReplyCard } = await load();
+  const call = (id) => ({ id, name: "tool", arguments: "{}", status: "executing" });
+  const messages = [{ id: "m1", toolCalls: [call("c1"), call("c2")] }];
+  const questions = {
+    "m1::c1": { state: "pending", payload: { kind: "questions", questions: [] } },
+  };
+  const reply = (interactions, approvals, skillApprovals = {}) =>
+    voiceReplyCard(
+      findPendingCards(messages, interactions, approvals, { skillApprovals }),
+      approvals
+    )?.id ?? null;
+
+  assert.equal(reply(questions, {}), "m1::c1:questions");
+  assert.equal(reply({}, { "m1::c2": { state: "pending" } }), "m1::c2:approval");
+  // Asking to connect first, waiting on Retry, a connect card or a skill card: not by voice.
+  assert.equal(reply({}, { "m1::c2": { state: "pending", reconnect: "prompt" } }), null);
+  assert.equal(reply({}, { "m1::c2": { state: "failed", awaitingRetry: true } }), null);
+  assert.equal(
+    reply({ "m1::c1": { state: "pending", payload: { kind: "connection" } } }, {}),
+    null
+  );
+  assert.equal(reply({}, {}, { "m1::c2": { state: "pending" } }), null);
+  // Two cards waiting: a yes or no could mean either.
+  assert.equal(reply(questions, { "m1::c2": { state: "pending" } }), null);
+});
+
 test("the pending card is the first open question or answer card on screen", async () => {
   const { findPendingCard } = await load();
   const call = (id, name) => ({ id, name, arguments: "{}", status: "executing" });

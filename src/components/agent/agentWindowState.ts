@@ -210,13 +210,13 @@ export interface PendingCard {
 }
 
 /**
- * The first card a running turn waits on the user for: an interaction (a
+ * The cards a running turn waits on the user for, in order: an interaction (a
  * question, a connect, …) still open, or an answer card waiting on Send or on
  * a Retry. Only cards of the messages on screen count. A card restored from a
  * turn that ended counts only with `includeRestored`: no turn waits on it, but
  * the composer can still answer it.
  */
-export function findPendingCard(
+export function findPendingCards(
   messages: ReadonlyArray<Pick<Message, "id" | "toolCalls">>,
   interactions: Readonly<Record<string, Pick<InteractionEntry, "state" | "payload" | "restored">>>,
   approvals: Readonly<Record<string, Pick<ApprovalEntry, "state" | "awaitingRetry">>>,
@@ -227,10 +227,12 @@ export function findPendingCard(
     includeRestored?: boolean;
     skillApprovals?: Readonly<Record<string, Pick<SkillApprovalEntry, "state">>>;
   } = {}
-): PendingCard | null {
+): PendingCard[] {
+  const cards: PendingCard[] = [];
   for (const message of messages) {
     for (const toolCall of message.toolCalls ?? []) {
       const key = approvalKey(message.id, toolCall.id);
+      const card = { key, messageId: message.id, toolCall };
       const interaction = interactions[key];
       if (
         interaction &&
@@ -238,19 +240,36 @@ export function findPendingCard(
         (includeRestored || !interaction.restored)
       ) {
         const { kind } = interaction.payload;
-        return { key, id: `${key}:${kind}`, messageId: message.id, toolCall, interaction: kind };
-      }
-      const skillApproval = skillApprovals[key];
-      if (skillApproval?.state === "pending") {
-        return { key, id: `${key}:skill`, messageId: message.id, toolCall, interaction: null };
-      }
-      const approval = approvals[key];
-      if (approval?.state === "pending" || approval?.awaitingRetry) {
-        return { key, id: `${key}:approval`, messageId: message.id, toolCall, interaction: null };
+        cards.push({ ...card, id: `${key}:${kind}`, interaction: kind });
+      } else if (skillApprovals[key]?.state === "pending") {
+        cards.push({ ...card, id: `${key}:skill`, interaction: null });
+      } else if (approvals[key]?.state === "pending" || approvals[key]?.awaitingRetry) {
+        cards.push({ ...card, id: `${key}:approval`, interaction: null });
       }
     }
   }
-  return null;
+  return cards;
+}
+
+/** The first card a running turn waits on the user for (see findPendingCards). */
+export function findPendingCard(...args: Parameters<typeof findPendingCards>): PendingCard | null {
+  return findPendingCards(...args)[0] ?? null;
+}
+
+/**
+ * The waiting card a spoken reply answers: the only card waiting, if it is a
+ * question or an answer card waiting on Send (not one asking to connect
+ * first). With several waiting, a yes or no could mean any of them.
+ */
+export function voiceReplyCard(
+  cards: readonly PendingCard[],
+  approvals: Readonly<Record<string, Pick<ApprovalEntry, "state" | "reconnect">>>
+): PendingCard | null {
+  if (cards.length !== 1) return null;
+  const [card] = cards;
+  if (card.interaction === "questions") return card;
+  const approval = card.interaction === null ? approvals[card.key] : undefined;
+  return approval?.state === "pending" && !approval.reconnect ? card : null;
 }
 
 /**

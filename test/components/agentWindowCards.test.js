@@ -206,11 +206,11 @@ async function mountWindow(t, { platform } = {}) {
     });
     return results;
   };
-  const askApproval = (toolCallId) =>
+  const askApproval = (toolCallId, { connectorId = "slack", preview = SLACK_PREVIEW } = {}) =>
     React.act(async () => {
       void approvals.requestApproval(
         toolContext(toolCallId),
-        { actionId: "act-1", connectorId: "slack", preview: SLACK_PREVIEW },
+        { actionId: "act-1", connectorId, preview },
         async () => undefined
       );
     });
@@ -745,6 +745,181 @@ test("an answer card that waits or sends leaves the pill at rest, in the modal a
   await view.settle();
   assert.equal(view.layout(), "pill");
   assert.ok(!view.button("Stop"), "the pill on its own offers no Stop while the card sends");
+});
+
+// A card (Slack unless given) waiting on Send after a spoken request, its Send
+// recorded and left sending, and every press capture counted.
+async function cardWaiting(t, card = {}) {
+  const view = await mountWindow(t);
+  const commits = [];
+  const captures = [];
+  Object.assign(view.happyWindow.electronAPI, {
+    connectorCommit: (...args) => {
+      commits.push(args);
+      return new Promise(() => {});
+    },
+    captureSelectedText: async (options) => {
+      captures.push(options);
+      return null;
+    },
+  });
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([slackCall], "Here it is.")] });
+  await view.askApproval("c5", card);
+  await view.settle();
+  const entry = () =>
+    view.approvals.useConnectorApprovalStore.getState().entries[
+      view.approvals.approvalKey("a1", "c5")
+    ];
+  // The hotkey while the card waits starts a take, as Speak does, reading
+  // nothing from the app it was pressed in.
+  const startReply = async () => {
+    globalThis.__voice.events.length = 0;
+    captures.length = 0;
+    await React.act(async () => view.main.handlers.hotkey({ external: true }));
+    assert.deepEqual(globalThis.__voice.events, ["stopReading", "start"]);
+    assert.deepEqual(captures, [], "a reply take reads no selection or field");
+  };
+  const say = async (said) => {
+    await React.act(async () => globalThis.__voice.callbacks.onTranscript(said, "submit"));
+    await view.settle();
+  };
+  const speak = async (said) => {
+    await startReply();
+    await say(said);
+  };
+  // The composer's text, if one shows (never the card's own field).
+  const composerText = () =>
+    [...view.host.querySelectorAll("textarea")].find(
+      (field) => !field.closest("[data-approval-card]")
+    )?.value ?? "";
+  return { view, commits, card: entry, startReply, say, speak, composerText };
+}
+
+test("a spoken yes sends the waiting Slack card, with nothing sent to the chat", async (t) => {
+  const { view, commits, card, speak, composerText } = await cardWaiting(t);
+  assert.equal(view.button("Speak").disabled, false, "Speak answers the card too");
+  await speak("Yes, send it.");
+  assert.equal(card().state, "committing");
+  assert.deepEqual(commits, [["act-1", { body: SLACK_PREVIEW.body }]]);
+  assert.deepEqual(globalThis.__chat.sent, []);
+  assert.equal(composerText(), "");
+});
+
+test("a spoken no cancels the waiting Slack card", async (t) => {
+  const { commits, card, speak } = await cardWaiting(t);
+  await speak("No, don't post it.");
+  assert.equal(card().state, "cancelled");
+  assert.deepEqual(commits, []);
+  assert.deepEqual(globalThis.__chat.sent, []);
+});
+
+test("spoken words that aren't a clear yes or no wait in the composer, and the card keeps waiting", async (t) => {
+  const { commits, card, speak, composerText } = await cardWaiting(t);
+  await speak("Change the second line to say Friday");
+  assert.equal(card().state, "pending");
+  assert.deepEqual(commits, []);
+  assert.equal(composerText(), "Change the second line to say Friday");
+});
+
+test("minimized, the hotkey opens the waiting card before the take, so a yes never sends it unseen", async (t) => {
+  const { view, commits, card, startReply, say } = await cardWaiting(t);
+  await React.act(async () => view.button("Minimize").click());
+  await view.settle();
+  assert.equal(view.layout(), "pill");
+  assert.equal(view.host.querySelector("[data-approval-card]"), null);
+  await startReply();
+  // Recording pauses the card's timed open, so only the take itself opens it.
+  await React.act(async () => globalThis.__voice.set("recording"));
+  await view.settle();
+  assert.equal(view.layout(), "modal");
+  assert.ok(
+    view.host.querySelector("[data-approval-card]"),
+    "the card shows while the user speaks"
+  );
+  await React.act(async () => globalThis.__voice.set("idle"));
+  await say("Send it.");
+  assert.equal(card().state, "committing");
+  assert.equal(commits.length, 1);
+});
+
+test("a yes said after the card was minimized waits in the composer, never sent unseen", async (t) => {
+  const { view, commits, card, startReply, say, composerText } = await cardWaiting(t);
+  await startReply();
+  await React.act(async () => view.button("Minimize").click());
+  await view.settle();
+  await say("Send it.");
+  assert.equal(card().state, "pending");
+  assert.deepEqual(commits, []);
+  assert.equal(composerText(), "Send it.");
+});
+
+test("a yes whose card settled while it was spoken waits in the composer, never sent", async (t) => {
+  const { view, commits, card, startReply, say, composerText } = await cardWaiting(t);
+  await startReply();
+  await React.act(async () => view.approvals.cancelApproval(card().key));
+  await view.chat({
+    busy: false,
+    messages: [user, { ...reply([slackCall], "Here it is."), isStreaming: false }],
+  });
+  await say("Yes, send it.");
+  assert.equal(card().state, "cancelled");
+  assert.deepEqual(commits, []);
+  assert.deepEqual(globalThis.__chat.sent, []);
+  assert.equal(composerText(), "Yes, send it.");
+});
+
+test("a spoken yes never sends a card whose Send is blocked", async (t) => {
+  const fields = { to: [], cc: [], subject: "Notes", body: "Here are the notes." };
+  const { commits, card, speak, composerText } = await cardWaiting(t, {
+    connectorId: "gmail",
+    preview: {
+      verbKey: "email",
+      destinationLabel: "",
+      accountLabel: "me@example.test",
+      body: fields.body,
+      fields,
+    },
+  });
+  await speak("Send it.");
+  assert.equal(card().state, "pending");
+  assert.deepEqual(commits, []);
+  assert.equal(composerText(), "Send it.");
+});
+
+test("a question minimized while the reply was spoken isn't answered unseen", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([askUser])] });
+  const results = await view.ask("c1", TEXT_QUESTION);
+  await view.settle();
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () => view.button("Minimize").click());
+  await view.settle();
+  assert.equal(view.layout(), "pill");
+  await React.act(async () => globalThis.__voice.callbacks.onTranscript("Friday", "submit"));
+  await view.settle();
+  assert.deepEqual(results, []);
+  assert.deepEqual(globalThis.__chat.sent, []);
+  // The words wait in the composer, which still answers the question with them.
+  assert.equal(view.host.querySelector("textarea").value, "Friday");
+  await React.act(async () => view.button("Send").click());
+  await view.settle();
+  assert.deepEqual(results, [{ status: "answered", answers: { deadline: "Friday" } }]);
+});
+
+test("a spoken reply answers the question the turn waits on", async (t) => {
+  const view = await mountWindow(t);
+  const results = await askWhileCompact(view, TEXT_QUESTION);
+  globalThis.__voice.events.length = 0;
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  assert.deepEqual(globalThis.__voice.events, ["stopReading", "start"]);
+  await React.act(async () => globalThis.__voice.callbacks.onTranscript("Friday", "submit"));
+  await view.settle();
+  assert.deepEqual(results, [{ status: "answered", answers: { deadline: "Friday" } }]);
+  assert.deepEqual(globalThis.__chat.sent, []);
 });
 
 test("the modal's glow is full on an empty chat, faint while speaking or working in one, gone at rest or while a card waits", async (t) => {

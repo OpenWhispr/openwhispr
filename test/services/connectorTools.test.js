@@ -1202,6 +1202,9 @@ test("the system prompt adds connector rules only when a connector tool is prese
   const withSlack = getAgentSystemPrompt([slackSendMessageTool]);
   assert.match(withSlack, /Use slack_send_message/);
   assert.match(withSlack, /needs_clarification/);
+  // The card is the confirmation: no "should I post this?" before it.
+  assert.match(withSlack, /confirmed on that card.*never first ask whether to send or post it/);
+  assert.doesNotMatch(withoutEmail, /confirmed on that card/);
 });
 
 // ---- email_draft with Gmail chosen (the gmailSend target) ----
