@@ -9,18 +9,23 @@ const { bundledRegistryData: bundled } = require("../../src/models/registryData.
 const vendored = require("../../src/models/modelRegistryData.json");
 
 const openRouter = (catalog) => catalog.transcriptionProviders.find((p) => p.id === "openrouter");
+const elevenLabs = (catalog) => catalog.transcriptionProviders.find((p) => p.id === "elevenlabs");
 
 // main.js hands the loader this bundle, and the loader keeps only providers the bundle has.
+// Publications made before model-registry/ listed OpenRouter don't have it.
 test("OpenRouter survives a live catalog that does not list it", () => {
-  assert.equal(openRouter(vendored), undefined, "sync the catalog, then drop the app's entry");
-  const applied = acceptCatalog(vendored, bundled, "1.11.1");
+  const unlisted = {
+    ...vendored,
+    transcriptionProviders: vendored.transcriptionProviders.filter((p) => p.id !== "openrouter"),
+  };
+  const applied = acceptCatalog(unlisted, bundled, "1.12.1");
 
   assert.deepEqual(
     openRouter(applied).models.map((model) => model.id),
-    openRouter(bundled).models.map((model) => model.id)
+    openRouter(vendored).models.map((model) => model.id)
   );
   assert.equal(openRouter(applied).baseUrl, "https://openrouter.ai/api/v1");
-  assert.equal(openRouter(applied).defaultModel, openRouter(bundled).defaultModel);
+  assert.equal(openRouter(applied).defaultModel, openRouter(vendored).defaultModel);
 });
 
 test("a catalog that lists a provider keeps its own entry", () => {
@@ -28,16 +33,15 @@ test("a catalog that lists a provider keeps its own entry", () => {
     ...vendored,
     transcriptionProviders: [
       ...vendored.transcriptionProviders,
-      { id: "openrouter", name: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", models: [] },
+      { id: "elevenlabs", name: "ElevenLabs", baseUrl: "https://api.elevenlabs.io/v1", models: [] },
     ],
   };
   const merged = withAppTranscriptionProviders(listed);
-  assert.equal(merged.transcriptionProviders.filter((p) => p.id === "openrouter").length, 1);
-  assert.deepEqual(openRouter(merged).models, []);
+  assert.equal(merged.transcriptionProviders.filter((p) => p.id === "elevenlabs").length, 1);
+  assert.deepEqual(elevenLabs(merged).models, []);
 });
 
 test("ElevenLabs survives a live catalog that does not list it", () => {
-  const elevenLabs = (catalog) => catalog.transcriptionProviders.find((p) => p.id === "elevenlabs");
   assert.equal(elevenLabs(vendored), undefined, "sync the catalog, then drop the app's entry");
   const applied = acceptCatalog(vendored, bundled, "1.11.1");
 

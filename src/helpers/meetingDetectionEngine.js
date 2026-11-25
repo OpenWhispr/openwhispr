@@ -8,6 +8,7 @@ const {
 } = require("./meetingNotificationDestination");
 const { openExternalUrl } = require("./externalUrlOpener");
 const { getMeetingJoinUrl } = require("./meetingJoinUrl");
+const { meetingAttendeeVerdict, meetingAttendeeRefusalCode } = require("./meetingAttendeePolicy");
 const { tagEventAttendeesJson } = require("./eventAttendees");
 const createMeetingAutoEndController = require("./meetingAutoEndController");
 const { createMeetingAudioActivityMonitor } = require("./meetingAudioActivityMonitor");
@@ -246,6 +247,7 @@ class MeetingDetectionEngine {
       eligible: true,
       reliable: externalMicState.reliable,
       externalMicActive: externalMicState.externalMicActive,
+      micMuted: this._recordingSession.micMuted,
       ...this._audioActivityMonitor.getState(),
     });
     this._autoEndActive = true;
@@ -268,6 +270,7 @@ class MeetingDetectionEngine {
     this._recordingSession = {
       sessionId,
       autoEndEligible: autoEndEligible === true,
+      micMuted: false,
       ownerWebContents,
       systemAudioAvailable: systemAudioAvailable === true,
       // Lets a second manual start surface this recording instead of opening a
@@ -306,6 +309,27 @@ class MeetingDetectionEngine {
 
     this._syncMeetingProcessDetector();
     this._syncAudioActivityDetector();
+    return true;
+  }
+
+  setRecordingMicMuted(sessionId, muted, ownerWebContents) {
+    const session = this._recordingSession;
+    if (
+      !session ||
+      session.sessionId !== sessionId ||
+      (ownerWebContents && session.ownerWebContents !== ownerWebContents)
+    ) {
+      return false;
+    }
+    session.micMuted = muted === true;
+    if (this._autoEndActive) {
+      this._autoEndController.handleMicMuteChanged({ sessionId, micMuted: session.micMuted });
+    }
+    debugLogger.debug(
+      "Recording mic mute changed",
+      { sessionId, muted: session.micMuted },
+      "meeting"
+    );
     return true;
   }
 
@@ -438,13 +462,22 @@ class MeetingDetectionEngine {
     );
   }
 
+  _attendeeRefusal(event, eventId) {
+    const verdict = meetingAttendeeVerdict(event, this.windowManager.getMeetingAttendeePolicy?.());
+    // A linked event can disappear between showing a card and clicking it.
+    return meetingAttendeeRefusalCode(verdict === "confirm" && eventId ? "unverifiable" : verdict);
+  }
+
   _showPrompt(detectionId, source, key, data) {
     const calendarEvent = data?.event ?? this._findCalendarEvent();
     const event = calendarEvent ?? placeholderEvent("__detected__");
-    const joinUrl = source === "calendar" ? getMeetingJoinUrl(calendarEvent) : null;
+    const attendeeRefusal = this._attendeeRefusal(calendarEvent, calendarEvent?.id);
+    const joinUrl =
+      source === "calendar" || attendeeRefusal ? getMeetingJoinUrl(calendarEvent) : null;
     // While the org has meeting recording off, a reminder with a link can still
     // join the meeting; every other prompt only offers to record it.
-    const recordingRefusal = this.windowManager.getMeetingRecordingRefusal?.()?.code ?? null;
+    const recordingRefusal =
+      this.windowManager.getMeetingRecordingRefusal?.()?.code ?? attendeeRefusal;
     if (recordingRefusal && !joinUrl) {
       debugLogger.info(
         "Suppressing detection — meeting recording is off by policy",
@@ -539,6 +572,13 @@ class MeetingDetectionEngine {
     const context = () =>
       meetingDestinationContext(db, owner, this.windowManager.meetingRecentDestinations);
     const eventId = notificationCalendarEventId(owner);
+    const calendarEvent = eventId ? db.getCalendarEventById(eventId) : null;
+    const attendeeRefusal =
+      owner.prompt.recordingRefusal ?? this._attendeeRefusal(calendarEvent, eventId);
+    if (attendeeRefusal) {
+      owner.prompt.recordingRefusal = attendeeRefusal;
+      return { success: false, code: attendeeRefusal };
+    }
     let note = owner.committedNoteId
       ? db.getNote(owner.committedNoteId)
       : eventId
@@ -561,7 +601,6 @@ class MeetingDetectionEngine {
       const ref = owner.selectedDestination ?? available.defaultDestination;
       const folder = resolveMeetingDestination(db, ref);
       if (!folder) return { success: false, code: "FOLDER_UNAVAILABLE" };
-      const calendarEvent = eventId ? db.getCalendarEventById(eventId) : null;
       const result = db.createMeetingNoteForNotification({
         title: owner.detection.event?.summary || "New note",
         folderId: folder.id,
@@ -663,73 +702,52 @@ class MeetingDetectionEngine {
     );
   }
 
-  /** Navigates to the user's own note already linked to a calendar event, if any. */
-  async _resumeExistingEventNote(event, trigger, options) {
-    const existingNote = this.databaseManager.getOwnNoteByCalendarEventId(event.id);
-    if (!existingNote?.id) return false;
-    debugLogger.info(
-      "Reusing existing note for calendar meeting",
-      { eventId: event.id, noteId: existingNote.id, trigger },
-      "meeting"
-    );
-    await this.windowManager.queueMeetingNoteNavigation(
-      {
-        noteId: existingNote.id,
-        noteSessionId: this._beginMeetingNoteSession(event),
-        spaceId: existingNote.space_id,
-        folderId: existingNote.folder_id ?? null,
-        event,
-        trigger,
-        startSource: options?.startSource,
-      },
-      options
-    );
-    return true;
-  }
-
   // Resolves with the org's refusal, if any, for the caller to explain.
   async joinCalendarMeeting(eventId, trigger = "calendar-join", options) {
     const refusal = await this._meetingStartRefusal(options?.startSource);
     if (refusal) return refusal;
-    this._meetingModeActive = true;
-    debugLogger.info("Joining calendar meeting", { eventId, trigger }, "meeting");
-
-    const calEvent = this.databaseManager.getCalendarEventById(eventId);
-    if (!calEvent) {
+    const event = this.databaseManager.getCalendarEventById(eventId);
+    const code = this._attendeeRefusal(event, eventId);
+    const attendeeRefusal = code ? { success: false, code } : null;
+    if (code && !options?.notesOnly) {
+      this._onStartRefused(code, options?.startSource ?? trigger);
+      if (trigger === "hotkey") this.windowManager.sendMeetingStartRefused(code);
+    }
+    if (!event) {
       debugLogger.error("Calendar event not found", { eventId }, "meeting");
-      this._meetingModeActive = false;
-      return;
+      return attendeeRefusal;
+    }
+    // The calendar card already opened its link. A hotkey or Take notes still
+    // opens the user's editable note, even when the invite refuses recording.
+    if (code && trigger === "calendar-join" && getMeetingJoinUrl(event) && !options?.notesOnly)
+      return attendeeRefusal;
+
+    let note = this.databaseManager.getOwnNoteByCalendarEventId(event.id);
+    let folderId = note?.folder_id ?? null;
+    if (!note?.id) {
+      note = this.databaseManager.saveNote(event.summary || "New note", "", "meeting")?.note;
+      if (!note?.id) {
+        debugLogger.error("Join calendar meeting failed — missing note", { eventId }, "meeting");
+        return attendeeRefusal;
+      }
+      folderId = this.databaseManager.getMeetingsFolder()?.id ?? null;
+      const updates = { calendar_event_id: event.id };
+      if (event.attendees) updates.participants = tagEventAttendeesJson(event.attendees, event.id);
+      const result = this.databaseManager.updateNote(note.id, updates);
+      broadcastToWindows("note-added", result?.note || note);
+    }
+    const destination = { noteId: note.id, spaceId: note.space_id, folderId };
+    if (code || options?.notesOnly) {
+      await this.windowManager.queueNoteNavigation(destination, options);
+      return attendeeRefusal;
     }
 
-    // Joining the same event twice resumes its note instead of creating a duplicate.
-    if (await this._resumeExistingEventNote(calEvent, trigger, options)) {
-      return;
-    }
-
-    const noteResult = this.databaseManager.saveNote(calEvent.summary || "New note", "", "meeting");
-    const meetingsFolder = this.databaseManager.getMeetingsFolder();
-
-    if (!noteResult?.note?.id) {
-      debugLogger.error("Join calendar meeting failed — missing note", { eventId }, "meeting");
-      this._meetingModeActive = false;
-      return;
-    }
-
-    const updates = { calendar_event_id: calEvent.id };
-    if (calEvent.attendees) {
-      updates.participants = tagEventAttendeesJson(calEvent.attendees, calEvent.id);
-    }
-    const updateResult = this.databaseManager.updateNote(noteResult.note.id, updates);
-
-    broadcastToWindows("note-added", updateResult?.note || noteResult.note);
-
+    this._meetingModeActive = true;
     await this.windowManager.queueMeetingNoteNavigation(
       {
-        noteId: noteResult.note.id,
-        noteSessionId: this._beginMeetingNoteSession(calEvent),
-        spaceId: noteResult.note.space_id,
-        folderId: meetingsFolder?.id ?? null,
-        event: calEvent,
+        ...destination,
+        noteSessionId: this._beginMeetingNoteSession(event),
+        event,
         trigger,
         startSource: options?.startSource,
       },

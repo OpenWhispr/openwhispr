@@ -31,6 +31,20 @@ test("a trigger resolves case-insensitively to its saved text", async () => {
   });
 });
 
+test("a snippet's variables come back filled, as dictation fills them, with its template", async () => {
+  const { createSnippetTool } = await load();
+  const tool = createSnippetTool([
+    { trigger: "stamp", replacement: "Logged {{date}} at {{time}}" },
+  ]);
+
+  const result = await tool.execute({ trigger: "stamp" });
+
+  assert.equal(result.success, true);
+  assert.match(result.data.text, /^Logged \S.* at \S/);
+  assert.doesNotMatch(result.data.text, /\{\{/);
+  assert.equal(result.data.template, "Logged {{date}} at {{time}}");
+});
+
 test("an unknown trigger fails with the saved triggers so the model can retry", async () => {
   const { createSnippetTool } = await load();
   const tool = createSnippetTool(snippets);

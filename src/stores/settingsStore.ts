@@ -2418,6 +2418,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     const remembered = memory[`${context}:${providerId}`];
     if (context === "dictation") s.setCloudTranscriptionProvider(providerId);
     else setStringSetting(keys.provider, providerId);
+    // OpenWhispr Cloud is not a catalog provider: it has no model to restore or default to.
+    if (providerId === "openwhispr") return;
     setStringSetting(
       keys.model,
       remembered &&

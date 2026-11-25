@@ -35,6 +35,7 @@ export interface UseUsageResult {
    */
   hasPaidAccessOptimistic: boolean;
   plan: string;
+  subscriptionStatus: string | null;
   isPastDue: boolean;
   wordsUsed: number;
   wordsRemaining: number;
@@ -57,7 +58,10 @@ export interface UseUsageResult {
     plan?: "monthly" | "annual";
     tier?: "pro" | "business";
   }) => Promise<{ success: boolean; error?: string; code?: string }>;
-  openBillingPortal: () => Promise<{ success: boolean; error?: string; code?: string }>;
+  openBillingPortal: (
+    onReturn?: () => void,
+    signal?: AbortSignal
+  ) => Promise<{ success: boolean; error?: string; code?: string }>;
   switchPlan: (opts: {
     plan: "monthly" | "annual";
     tier: "pro" | "business";
@@ -97,12 +101,13 @@ async function fetchUsageResponse(): Promise<UsageResponse> {
 
 export function useUsage(): UseUsageResult | null {
   const { isSignedIn, isLoaded, user } = useAuth();
-  const state = useSyncExternalStore(subscribeUsage, getUsageState);
+  const snapshot = useSyncExternalStore(subscribeUsage, getUsageState);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const checkoutInFlightRef = useRef(false);
-  const pendingRefetchRef = useRef(false);
+  const checkoutReturnGeneration = useRef<number | null>(null);
 
   const accountId = isSignedIn ? (user?.id ?? null) : null;
+  const state = snapshot.accountId === accountId ? snapshot : null;
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -115,9 +120,11 @@ export function useUsage(): UseUsageResult | null {
     void loadUsage(fetchUsageResponse);
 
     const handleFocus = () => {
-      if (!pendingRefetchRef.current) return;
-      pendingRefetchRef.current = false;
-      void loadUsage(fetchUsageResponse, { force: true });
+      const generation = checkoutReturnGeneration.current;
+      checkoutReturnGeneration.current = null;
+      if (generation !== null && generation === getValidatedAuthGeneration()) {
+        void loadUsage(fetchUsageResponse, { force: true });
+      }
     };
     const handleUsageChanged = () => {
       void loadUsage(fetchUsageResponse, { force: true });
@@ -159,7 +166,7 @@ export function useUsage(): UseUsageResult | null {
         const result = await window.electronAPI.cloudCheckout(opts, generation);
         if (generation !== getValidatedAuthGeneration()) return UNCONFIRMED_SESSION;
         if (result.success && result.url) {
-          pendingRefetchRef.current = true;
+          checkoutReturnGeneration.current = generation;
           await window.electronAPI.openExternal(result.url);
           return { success: true };
         }
@@ -172,35 +179,68 @@ export function useUsage(): UseUsageResult | null {
     []
   );
 
-  const openBillingPortal = useCallback(async (): Promise<{
-    success: boolean;
-    error?: string;
-    code?: string;
-  }> => {
-    if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
-    if (!hasValidatedAuthContext()) return UNCONFIRMED_SESSION;
-    if (!window.electronAPI?.cloudBillingPortal || !window.electronAPI?.openExternal) {
-      return { success: false, error: "App not ready" };
-    }
-    checkoutInFlightRef.current = true;
-    setCheckoutLoading(true);
-    try {
-      const result = await window.electronAPI.cloudBillingPortal();
-      if (result.success && result.url) {
-        pendingRefetchRef.current = true;
-        await window.electronAPI.openExternal(result.url);
-        return { success: true };
+  const openBillingPortal = useCallback(
+    async (
+      onReturn?: () => void,
+      signal?: AbortSignal
+    ): Promise<{
+      success: boolean;
+      error?: string;
+      code?: string;
+    }> => {
+      if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
+      const generation = getValidatedAuthGeneration();
+      if (generation == null || signal?.aborted) return UNCONFIRMED_SESSION;
+      if (!window.electronAPI?.cloudBillingPortal || !window.electronAPI?.openExternal) {
+        return { success: false, error: "App not ready" };
       }
-      return {
-        success: false,
-        error: result.error || "Failed to open billing portal",
-        code: result.code,
+      checkoutInFlightRef.current = true;
+      setCheckoutLoading(true);
+      const release = (): void => {
+        checkoutInFlightRef.current = false;
+        setCheckoutLoading(false);
       };
-    } finally {
-      checkoutInFlightRef.current = false;
-      setCheckoutLoading(false);
-    }
-  }, []);
+      signal?.addEventListener("abort", release, { once: true });
+      try {
+        const result = await window.electronAPI.cloudBillingPortal(generation);
+        if (signal?.aborted || generation !== getValidatedAuthGeneration())
+          return UNCONFIRMED_SESSION;
+        if (result.success && result.url) {
+          // The browser visit outlives Settings. Refresh the signed-in account on
+          // return even if the original view and its summary have gone away.
+          const handleReturn = (): void => {
+            if (generation !== getValidatedAuthGeneration()) return;
+            void loadUsage(fetchUsageResponse, { force: true });
+            if (!signal?.aborted) onReturn?.();
+          };
+          window.addEventListener("focus", handleReturn, { once: true });
+          try {
+            const opened = await window.electronAPI.openExternal(result.url);
+            if (opened?.success === false) {
+              throw new Error(opened.error || "Failed to open billing portal");
+            }
+            return { success: true };
+          } catch (error) {
+            window.removeEventListener("focus", handleReturn);
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : "Failed to open billing portal",
+            };
+          }
+        }
+        return {
+          success: false,
+          error: result.error || "Failed to open billing portal",
+          code: result.code,
+        };
+      } finally {
+        signal?.removeEventListener("abort", release);
+        // An aborted visit already released the lock. A new visit may now own it.
+        if (!signal?.aborted) release();
+      }
+    },
+    []
+  );
 
   const switchPlan = useCallback(
     async (opts: {
@@ -239,7 +279,7 @@ export function useUsage(): UseUsageResult | null {
 
   if (!isSignedIn) return null;
 
-  const data = state.status === "success" ? state.data : null;
+  const data = state?.status === "success" ? state.data : null;
   const wordsUsed = data?.wordsUsed ?? 0;
   const limit = data?.limit ?? 0;
   const isSubscribed = data?.isSubscribed ?? false;
@@ -250,15 +290,16 @@ export function useUsage(): UseUsageResult | null {
     Boolean(data) && !isSubscribed && limit > 0 && wordsUsed >= limit * 0.8 && !isOverLimit;
 
   return {
-    status: state.status,
-    isRefreshing: state.status === "success" && state.isRefreshing,
-    isRetrying: state.status === "error" && state.isRetrying,
-    error: state.status === "error" ? state.error : null,
+    status: state?.status ?? "idle",
+    isRefreshing: state?.status === "success" && state.isRefreshing,
+    isRetrying: state?.status === "error" && state.isRetrying,
+    error: state?.status === "error" ? state.error : null,
     retry,
     refetch,
     hasPaidAccess,
     hasPaidAccessOptimistic: hasPaidAccess !== false,
     plan: data?.plan ?? "free",
+    subscriptionStatus: data?.subscriptionStatus ?? null,
     isPastDue: data ? isPastDueUsage(data) : false,
     wordsUsed,
     wordsRemaining: data?.wordsRemaining ?? 0,

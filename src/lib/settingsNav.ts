@@ -1,3 +1,10 @@
+import {
+  PLANS_BILLING_TARGET,
+  PLANS_BILLING_WORKSPACE_PREFIX,
+  plansBillingTarget,
+  isPlansBillingTarget,
+} from "../helpers/settingsTargets.js";
+
 export type SettingsSectionType =
   | "account"
   | "general"
@@ -106,11 +113,22 @@ export function buildSettingsNav({
   ];
 }
 
+export type PlansBillingRequest = { kind: "personal" } | { kind: "workspace"; workspaceId: string };
+
+export function parsePlansBillingTarget(target: string | undefined): PlansBillingRequest | null {
+  if (!isPlansBillingTarget(target)) return null;
+  if (target === PLANS_BILLING_TARGET) return { kind: "personal" };
+  return { kind: "workspace", workspaceId: target.slice(PLANS_BILLING_WORKSPACE_PREFIX.length) };
+}
+
 export function resolveSettingsSection(
   requested: string | undefined,
   available: SettingsNavEntry[]
 ): SettingsSectionType {
   if (!requested) return "account";
+  if (isPlansBillingTarget(requested)) {
+    return available.some((entry) => entry.id === "plansBilling") ? "plansBilling" : "account";
+  }
   const section = SECTION_ALIASES[requested] ?? requested;
   if (available.some((entry) => entry.id === section)) return section as SettingsSectionType;
   // A workspace page the user can't see (no workspace yet, or no manage_settings) still lands
@@ -122,4 +140,11 @@ export function resolveSettingsSection(
     return "workspaceGeneral";
   }
   return "account";
+}
+
+export type WorkspacePlanSection = `plansBilling:workspace:${string}`;
+
+// plansBillingTarget is untyped JS (shared with main); this gives openSettingsSection its literal.
+export function workspacePlanSection(workspaceId: string): WorkspacePlanSection {
+  return plansBillingTarget(workspaceId) as WorkspacePlanSection;
 }

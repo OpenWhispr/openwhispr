@@ -547,7 +547,7 @@ for (const when of ["before reconnect", "during token lookup", "during handshake
         },
       }
     );
-    target._stopMeetingForPolicy = (reason, auditReason) => {
+    target._stopMeetingForPolicy = (reason, _sessionId, auditReason) => {
       policyStops.push([reason, auditReason]);
     };
     const recovery = reconnect();
@@ -602,6 +602,6 @@ test("a reconnect refused under org policy ends the meeting instead of restoring
   );
   assert.match(
     source,
-    /this\._stopMeetingForPolicy = \(reason = "policyRestricted", auditReason\) => \{[\s\S]{0,900}?meetingConnectionOptions = null;[\s\S]{0,900}?broadcastToWindows\("meeting-transcription-error", reason\)/
+    /this\._stopMeetingForPolicy = \(reason = "policyRestricted", expectedSessionId, auditReason\) => \{[\s\S]{0,900}?meetingConnectionOptions = null;[\s\S]{0,900}?broadcastToWindows\("meeting-transcription-error", reason\)/
   );
 });

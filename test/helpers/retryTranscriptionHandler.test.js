@@ -819,6 +819,10 @@ const ELEVENLABS_SETTINGS = {
   transcriptionMode: "providers",
   preferredLanguage: "de",
 };
+const {
+  ELEVENLABS_KEYTERM_REFUSALS,
+  ELEVENLABS_AUDIO_TOO_SHORT,
+} = require("./harness/elevenLabsAnswers");
 
 test("retry: ElevenLabs gets the recording at its own endpoint, with the job's abort signal", async () => {
   fetches.length = 0;
@@ -843,7 +847,7 @@ test("ElevenLabs dictation cancellation stops only the sender's request before a
   fetches.length = 0;
   fetchResponse = async () => {
     await response.promise;
-    return Response.json({ detail: "invalid keyterms" }, { status: 422 });
+    return Response.json(ELEVENLABS_KEYTERM_REFUSALS[0], { status: 400 });
   };
 
   const sender = Object.assign(new EventEmitter(), { id: 17 });
@@ -1982,6 +1986,7 @@ test("ElevenLabs dictation, Retry and Upload distinguish silence from an invalid
   });
   for (const [response, expectedCode] of [
     [() => Response.json({ text: "[pause]" }), "NO_SPEECH_DETECTED"],
+    [() => Response.json(ELEVENLABS_AUDIO_TOO_SHORT, { status: 400 }), "NO_SPEECH_DETECTED"],
     [() => new Response("<html>"), "PROVIDER_ERROR"],
   ]) {
     fetchResponse = response;

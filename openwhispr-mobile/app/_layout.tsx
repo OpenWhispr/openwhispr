@@ -42,6 +42,10 @@ import { getCachedSession, type CachedSession } from '@/lib/authClient';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
 import { startKeyboardToneSync } from '@/lib/keyboardToneSync';
 import { startKeyboardAgentSync } from '@/lib/keyboardAgentSync';
+import { startKeyboardCredentialSync } from '@/lib/keyboardCredentialSync';
+import { startKeyboardDirectSync } from '@/lib/keyboardDirectSync';
+import { startKeyboardTypingSync } from '@/lib/keyboardTypingSync';
+import { startKeyboardDirectOutbox } from '@/lib/keyboardDirectOutbox';
 import { startKeyboardFullAccessProbe } from '@/lib/keyboardFullAccessProbe';
 import { OpenWhisprSuperwallProvider } from '@/components/superwall/OpenWhisprSuperwallProvider';
 import { eraseProviderCredentialsFromPreviousInstall } from '@/services/providers/ProviderCredentials';
@@ -121,6 +125,8 @@ function RootLayout() {
     let started = false;
     let stopTone: (() => void) | undefined;
     let stopAgent: (() => void) | undefined;
+    let stopDirect: (() => void) | undefined;
+    let stopTyping: (() => void) | undefined;
     let stopFullAccessProbe: (() => void) | undefined;
     // Waits for config to hydrate so the probe's Sentry events respect the
     // user's Usage Analytics preference rather than the pre-hydration default.
@@ -130,6 +136,8 @@ function RootLayout() {
         started = true;
         stopTone = startKeyboardToneSync();
         stopAgent = startKeyboardAgentSync();
+        stopDirect = startKeyboardDirectSync();
+        stopTyping = startKeyboardTypingSync();
         stopFullAccessProbe = startKeyboardFullAccessProbe();
       }
     };
@@ -140,6 +148,8 @@ function RootLayout() {
       unsubscribe();
       stopTone?.();
       stopAgent?.();
+      stopDirect?.();
+      stopTyping?.();
       stopFullAccessProbe?.();
     };
   }, []);
@@ -148,6 +158,12 @@ function RootLayout() {
     initSyncTriggers();
     initProductEvents();
   }, []);
+
+  // Keeps the keyboard's copy of the session in step with sign-in, sign-out and account changes.
+  useEffect(() => startKeyboardCredentialSync(), []);
+
+  // Brings dictations the keyboard finished on its own into History.
+  useEffect(() => startKeyboardDirectOutbox(), []);
 
   // After an interactive sign-in (AuthScreen was shown, then auth completed),
   // land on home instead of restoring the route that was active before — e.g. the

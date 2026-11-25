@@ -169,6 +169,26 @@ describe('useTranscriptStore retry support', () => {
     ]);
   });
 
+  it('stops an outbox import if its owner changes while audio is copied', async () => {
+    let current = true;
+    mockRetainTranscriptAudio.mockImplementationOnce(async () => {
+      current = false;
+      return 'file://docs/transcript-audio/t1.m4a';
+    });
+    await useTranscriptStore
+      .getState()
+      .addFailedTranscript(
+        { id: 't1', audioUrl: 'file://group/t1.m4a', provider: 'cloud', errorMessage: 'offline' },
+        { mayWrite: () => current, keepSourceAudio: true },
+      );
+    expect(mockRetainTranscriptAudio).toHaveBeenCalledWith(
+      'file://group/t1.m4a',
+      expect.objectContaining({ keepSource: true }),
+    );
+    expect(mockSaveTranscripts).not.toHaveBeenCalled();
+    expect(useTranscriptStore.getState().transcripts).toEqual([]);
+  });
+
   it('retries a failed transcript and updates the same row on success', async () => {
     useTranscriptStore.setState({ transcripts: [failedTranscript()] });
 

@@ -23,6 +23,7 @@
  * not report green.
  */
 import { applyChatCompletionsParams } from "../src/services/ai/chatRequestBody.ts";
+import { getModelFamilyConstraints } from "../src/services/ai/modelFamilyConstraints.ts";
 import { openaiProvider } from "../src/services/ai/inferenceProviders/openai.ts";
 import { geminiProvider } from "../src/services/ai/inferenceProviders/gemini.ts";
 import { getLlmRequestTimeoutSeconds } from "../src/helpers/llmRequestTimeout.js";
@@ -34,8 +35,6 @@ import {
   buildNoteProbeTranscript,
   countWords,
 } from "./lib/note-formatting-probe.mjs";
-
-const CONSTRAINED_FAMILY = /gpt-oss|qwen|magistral/i;
 
 const PROVIDERS = [
   {
@@ -63,7 +62,8 @@ const PROVIDERS = [
     // reasoning-param rejection there hard-errors (#1611).
     // deepseek-v4-flash was replaced by deepseek-v4-1-flash in Tinfoil's live
     // catalog (canary run 35322067138, 2026-09-18: HTTP 404 "model does not exist").
-    models: ["glm-5-3", "gpt-oss-120b", "deepseek-v4-1-flash", "llama3-3-70b"],
+    // kimi-k3-1-pro replaced kimi-k3 in Tinfoil's live catalog (2026-11-12).
+    models: ["glm-5-3", "kimi-k3-1-pro", "gpt-oss-120b", "deepseek-v4-1-flash", "llama3-3-70b"],
   },
   {
     id: "gemini",
@@ -248,7 +248,7 @@ async function catalogDiff(entry, apiKey) {
   const pinned = registryIdsByProvider.get(entry.id) ?? [];
   const vanished = pinned.filter((id) => !live.includes(id));
   const probed = new Set(entry.models);
-  const newConstrained = live.filter((id) => CONSTRAINED_FAMILY.test(id) && !probed.has(id));
+  const newConstrained = live.filter((id) => !probed.has(id) && getModelFamilyConstraints(id));
   return { vanished, newConstrained };
 }
 

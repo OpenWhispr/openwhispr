@@ -11,7 +11,7 @@ const GRAPH_API_BASE = "https://graph.microsoft.com/v1.0";
 // webLink is the series' page: a stripped occurrence has none of its own, and
 // the series is the nearest page to open without a request per occurrence.
 const SERIES_MASTER_FIELDS =
-  "subject,isAllDay,isCancelled,showAs,responseStatus,onlineMeeting,onlineMeetingUrl,location,bodyPreview,organizer,attendees,webLink";
+  "subject,isAllDay,isCancelled,showAs,responseStatus,onlineMeeting,onlineMeetingUrl,location,bodyPreview,organizer,attendees,hideAttendees,isOrganizer,webLink";
 
 // Graph's deltaLink permanently encodes the calendarView window it was created
 // with — it never rolls forward. Sync from CALENDAR_LOOKBACK_MS back to 38 days
@@ -275,13 +275,14 @@ class MicrosoftCalendarManager {
       if (isStrippedOccurrence(item)) {
         const cached = this.databaseManager.getCalendarEventById(item.id);
         if (cached) {
-          if (typeof item.responseStatus?.response === "string") {
-            toUpsert.push({
-              ...cached,
-              self_response_status:
-                RESPONSE_STATUS_BY_GRAPH[item.responseStatus.response] || "unknown",
-            });
-          }
+          toUpsert.push({
+            ...cached,
+            attendees_omitted: true,
+            self_response_status:
+              typeof item.responseStatus?.response === "string"
+                ? RESPONSE_STATUS_BY_GRAPH[item.responseStatus.response] || "unknown"
+                : cached.self_response_status,
+          });
           continue;
         }
       }
@@ -382,6 +383,9 @@ class MicrosoftCalendarManager {
       organizer_email: item.organizer?.emailAddress?.address || null,
       web_link: item.webLink || null,
       attendees_count: attendees.length,
+      attendees_omitted:
+        !Array.isArray(item.attendees) ||
+        (item.hideAttendees === true && item.isOrganizer !== true),
       attendees: attendees.length
         ? JSON.stringify(
             attendees.map((a) => ({

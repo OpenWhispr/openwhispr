@@ -264,7 +264,10 @@
         "description": "Latest Sonnet: fast and capable for everyday work, 1M context",
         "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5_5",
         "supportsTemperature": false,
-        "supportsVision": true
+        "supportsVision": true,
+        "thinkingOff": {
+          "type": "between_tools"
+        }
       },
       {
         "id": "claude-haiku-5-5",
@@ -272,7 +275,10 @@
         "description": "Fastest, lowest-cost Claude model, 1M context",
         "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_5_5",
         "supportsTemperature": false,
-        "supportsVision": true
+        "supportsVision": true,
+        "thinkingOff": {
+          "type": "disabled"
+        }
       },
       {
         "id": "claude-sonnet-5",
@@ -280,7 +286,10 @@
         "description": "Fast, capable agentic model at lower cost",
         "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5",
         "supportsTemperature": false,
-        "supportsVision": true
+        "supportsVision": true,
+        "thinkingOff": {
+          "type": "disabled"
+        }
       },
       {
         "id": "claude-sonnet-4-6",
@@ -304,7 +313,10 @@
         "description": "Previous Opus flagship, 1M context",
         "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_5",
         "supportsTemperature": false,
-        "supportsVision": true
+        "supportsVision": true,
+        "thinkingOff": {
+          "type": "disabled"
+        }
       },
       {
         "id": "claude-opus-4-8",
@@ -581,6 +593,16 @@
         "supportsThinking": true
       },
       {
+        "id": "kimi-k3-1-pro",
+        "name": "Kimi K3.1 Pro",
+        "description": "Private Moonshot flagship for long-horizon coding and agentic work, 256K context",
+        "tokenParam": "max_tokens",
+        "supportsTemperature": true,
+        "descriptionKey": "models.descriptions.cloud.tinfoil_kimi_k3_1_pro",
+        "supportsThinking": true,
+        "minAppVersion": "1.12.1"
+      },
+      {
         "id": "gpt-oss-120b",
         "name": "GPT-OSS 120B",
         "description": "Private open-weight reasoning model with tool use, 131K context",
@@ -597,6 +619,14 @@
         "supportsTemperature": true,
         "descriptionKey": "models.descriptions.cloud.tinfoil_gemma4_31b",
         "supportsThinking": true
+      },
+      {
+        "id": "kimi-k3",
+        "name": "Kimi K3",
+        "description": "Private Moonshot flagship with native reasoning and vision, 256K context",
+        "descriptionKey": "models.descriptions.cloud.tinfoil_kimi_k3",
+        "retired": true,
+        "replacement": "kimi-k3-1-pro"
       }
     ]
   },

@@ -1,6 +1,6 @@
 const { z } = require("zod");
 const { createHash } = require("node:crypto");
-const { selectCatalogForVersion, isRegistryVersion } = require("./registrySelection.js");
+const { selectCatalogForVersion, isRegistryVersion, isModelSupported } = require("./registrySelection.js");
 
 const SCHEMA_VERSION = 2;
 const text = z.string().min(1).max(4096);
@@ -91,6 +91,8 @@ const reasoningEffortShape = {
 };
 const thinkingLevelShape = { level: z.enum(["minimal", "low"]) };
 const thinkingBudgetShape = { budget: z.number().int().min(0).max(1000000) };
+// Anthropic's `thinking` value that turns thinking off, for a model that thinks unasked.
+const thinkingOffShape = { type: z.enum(["disabled", "between_tools"]) };
 const organizationShape = { id: z.enum(["oruk", "nvidia", "cohere"]), name: text };
 const cloudModel = {
   ...lifecycle,
@@ -178,6 +180,7 @@ function buildSchemas(strict) {
       ...cloudModel,
       reasoningEffort: object(reasoningEffortShape).optional(),
       thinkingFloor: z.union([object(thinkingLevelShape), object(thinkingBudgetShape)]).optional(),
+      thinkingOff: object(thinkingOffShape).optional(),
     }),
     transcription: object(transcriptionModel),
     local: object(localModel).refine(completeDraft, "Incomplete draft artifact"),
@@ -231,6 +234,7 @@ const CAPABILITY_FIELDS = [
   "supportsTools",
   "reasoningEffort",
   "thinkingFloor",
+  "thinkingOff",
 ];
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const isActive = (model) => !model.retired && !model.legacy;
@@ -435,6 +439,9 @@ function assertModelTransition(next, previous, section, label) {
   if (ARTIFACTS[section]) assertArtifactTransition(next, previous, section, label);
 }
 
+// Realtime-only providers whose app also has a batch adapter, and the first app with it.
+const BATCH_ADAPTER_SINCE = { assemblyai: "1.12.1" };
+
 const engine = (model) => [
   model.runtime || "offline",
   model.modelType || "transducer",
@@ -448,13 +455,19 @@ function assertCompatibleCatalog(input, previousInput, { floor } = {}) {
   const previous = readPrevious(previousInput);
   const bundled = floor ? readPrevious(floor) : previous;
   for (const section of PROVIDER_SECTIONS) {
+    // A provider can be added at the end, never removed or moved. Apps keep only the
+    // providers they bundle, so one an app lacks is skipped there. An added provider is
+    // in the floor too, so its downloads are checked whatever the floor holds.
     requireCondition(
       same(
-        next[section].map((p) => p.id),
+        next[section].slice(0, previous[section].length).map((p) => p.id),
         previous[section].map((p) => p.id)
       ),
       `Changed providers in ${section}`
     );
+    if (section === "localProviders")
+      for (const provider of next[section].slice(previous[section].length))
+        for (const model of provider.models) assertNewDownload(model);
     for (const oldProvider of previous[section]) {
       const provider = next[section].find((item) => item.id === oldProvider.id);
       for (const field of ["baseUrl", "allowCustomModelId", "batchModel"])
@@ -481,8 +494,15 @@ function assertCompatibleCatalog(input, previousInput, { floor } = {}) {
             !model.streaming || oldProvider.models.some((m) => m.streaming),
             `Unsupported streaming provider ${provider.id}`
           );
+          // A batch model on a realtime-only provider needs the app's batch adapter for
+          // it, so it names at least the first app that has one; older readers never list it.
+          const batchSince = BATCH_ADAPTER_SINCE[provider.id];
           requireCondition(
-            model.streaming || oldProvider.models.some((m) => !m.streaming),
+            model.streaming ||
+              oldProvider.models.some((m) => !m.streaming) ||
+              (!!batchSince &&
+                !!model.minAppVersion &&
+                isModelSupported({ minAppVersion: batchSince }, model.minAppVersion)),
             `Unsupported batch provider ${provider.id}`
           );
         }

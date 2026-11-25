@@ -213,6 +213,93 @@ for (const maxTokens of [128, 8192]) {
   });
 }
 
+for (const [model, disableThinking, expected] of [
+  ["claude-sonnet-5-5", true, { type: "between_tools" }],
+  ["claude-haiku-5-5", true, { type: "disabled" }],
+  ["claude-opus-5", true, { type: "disabled" }],
+  ["claude-sonnet-5", true, { type: "disabled" }],
+  ["claude-sonnet-5-5", false, undefined],
+  ["claude-haiku-5-5", undefined, undefined],
+  // Opus 5.5 rejects any way of turning thinking off.
+  ["claude-opus-5-5", true, undefined],
+  // Older models don't think unless asked.
+  ["claude-opus-4-8", true, undefined],
+  ["claude-haiku-4-5", true, undefined],
+]) {
+  test(`${model} with disableThinking=${disableThinking}: thinking is ${JSON.stringify(expected) ?? "left out"}`, async () => {
+    let requestBody;
+    fetchBehavior = async (_url, init) => {
+      requestBody = JSON.parse(init.body);
+      return Response.json({ content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" });
+    };
+
+    const result = await anthropicHandler({}, "short dictation", model, null, { disableThinking });
+
+    assert.equal(result.success, true);
+    assert.equal(requestBody.max_tokens, 4096);
+    assert.deepEqual(requestBody.thinking, expected);
+  });
+}
+
+test("a Claude model added through the catalog brings its own thinking-off value", async (t) => {
+  const store = require("../../src/models/registryData.js");
+  const old = store.getRegistrySnapshot();
+  const data = structuredClone(old.data);
+  data.cloudProviders
+    .find((provider) => provider.id === "anthropic")
+    .models.push({
+      id: "claude-fixture",
+      name: "Claude Fixture",
+      description: "Fixture",
+      thinkingOff: { type: "between_tools" },
+    });
+  store.replaceRegistryData({ data, manifestVersion: old.manifestVersion + 1 });
+  t.after(() =>
+    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 })
+  );
+  let requestBody;
+  fetchBehavior = async (_url, init) => {
+    requestBody = JSON.parse(init.body);
+    return Response.json({ content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" });
+  };
+
+  const result = await anthropicHandler({}, "short dictation", "claude-fixture", null, {
+    disableThinking: true,
+  });
+
+  assert.equal(result.success, true);
+  assert.deepEqual(requestBody.thinking, { type: "between_tools" });
+});
+
+test("a <thinking> block leaked with thinking off is not returned", async () => {
+  fetchBehavior = async () =>
+    Response.json({
+      content: [{ type: "text", text: "<thinking>tidy it up</thinking>Cleaned dictation." }],
+      stop_reason: "end_turn",
+    });
+
+  const result = await anthropicHandler({}, "short dictation", "claude-opus-5", null, {
+    disableThinking: true,
+  });
+
+  assert.deepEqual(result, { success: true, text: "Cleaned dictation." });
+});
+
+test("a reply that is only a leaked <thinking> block fails as an empty reply", async () => {
+  fetchBehavior = async () =>
+    Response.json({
+      content: [{ type: "text", text: "<thinking>tidy it up</thinking>" }],
+      stop_reason: "end_turn",
+    });
+
+  const result = await anthropicHandler({}, "short dictation", "claude-opus-5", null, {
+    disableThinking: true,
+  });
+
+  assert.equal(result.success, false);
+  assert.equal(result.messageKey, "hooks.audioRecording.errorDescriptions.cleanupEmptyReply");
+});
+
 // The deadline comes from AbortSignal.timeout; swapping it for a controller's
 // signal lets a test expire it at once instead of waiting 30 seconds.
 function stubDeadline(t) {

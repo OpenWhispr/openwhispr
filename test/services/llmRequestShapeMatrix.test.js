@@ -42,6 +42,10 @@ const MATRIX = [
     { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning_effort: "high" }],
   ["tinfoil glm-5.3 suppression floors at low", "tinfoil", "glm-5-3", null, AGENT_NO_THINK,
     { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning_effort: "low", chat_template_kwargs: { enable_thinking: false } }],
+  ["tinfoil kimi-k3.1 cleanup suppression floors at low, not the rejected none", "tinfoil", "kimi-k3-1-pro", null, CLEANUP_NO_THINK,
+    { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "low", chat_template_kwargs: { enable_thinking: false } }],
+  ["tinfoil kimi-k3.1 notes pin high, below its max default", "tinfoil", "kimi-k3-1-pro", null, AGENT,
+    { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning_effort: "high" }],
 
   // --- OpenAI / custom / OpenRouter (registry-driven shape) ---
   ["openai legacy model keeps max_tokens and temperature", "openai", "gpt-4o", null, CLEANUP,

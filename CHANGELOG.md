@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-11-24
+
+A richer note editor with toggles, callouts, note links and find & replace, a redesigned Plans & Billing, and new speech-to-text options: ElevenLabs Scribe for dictation, uploads and Note Recording, AssemblyAI Dictation, and custom headers for self-hosted servers. Skills now back up with Cloud, Salesforce joins Integrations, workspaces get icons, and dictation starts and stops faster. This release also fixes a Settings bug that moved Note Recording and Upload onto OpenAI, chats whose later messages never backed up, and Kimi K3.1 Pro and Gemini Extra high requests that always failed.
+
+### Notes
+
+- **A richer note editor.** Toggles, callouts, a table of contents, code with syntax colours, math, YouTube and Twitch embeds, emoji and a drag handle on every block. Highlight, sub/superscript, text colour, font and alignment in the formatting toolbar, a `/` menu for all of it, find & replace (⌘F) and word count. Type `[[` to link another note, and a "Linked from" row lists the notes that link to this one. Everything is stored as plain Markdown. (#3109, thanks @arcwel)
+- **Shared team notes name the recorder,** not whoever is viewing, in the transcript, its exports and generated notes. (#2993)
+- **A personal conversation still gets notes,** and a "Nothing to summarize" reply in any letter case is no longer saved as the summary. (#3131, thanks @larsschellhas)
+
+### Transcription
+
+- **ElevenLabs Scribe.** Bring your own ElevenLabs key for Scribe v2 in dictation, Retry and uploads, and Scribe v3 Realtime for Note Recording. Dictionary words go out as keyterms. A wrong key is rejected at the key check, and a tap too short to transcribe ends as no speech. (#2968, #2971, #3362, thanks @mariushm)
+- **AssemblyAI Dictation.** One request transcribes and cleans up a finished recording, standing in for the cleanup step. (#3177, thanks @dan-ince-aai)
+- **Custom headers for self-hosted transcription,** kept separately for the Dictation and Upload servers. (#3206, thanks @jaehunshin-git)
+- **Opening Settings no longer moves Note Recording or Upload onto OpenAI.** Signed-out and unmanaged users had a blank provider saved over as OpenAI, sending meetings and uploads (including from a self-hosted server) to api.openai.com. (#3329)
+- **A provider tab you're only browsing says which provider is still in use,** and that choosing a model switches. (#3168)
+- **Choosing OpenWhispr Cloud during onboarding keeps your transcription model** instead of saving `whisper-1` for every scope. (#3363)
+- **Cloud Whisper no longer pastes words from silence.** No-speech segments are dropped from dictation, Retry and voice drafts. (#3128, thanks @hsusul)
+- **Signing in, out or switching accounts refetches the speech-to-text config** instead of keeping the previous account's until restart. (#3308)
+
+### Dictation and audio
+
+- **Faster start and stop.** The mic opens and stops without waiting for the pill to paint, which saved up to half a second at each end on a busy GPU. (#3187, thanks @Mambokarim0731)
+- **The local cleanup model warms up as you speak,** so a model freed after five idle minutes no longer delays the paste. (#3186, thanks @Mambokarim0731)
+- **A replacement microphone that drops during recovery is retried,** instead of the pill showing a recording with flat levels while everything after the dropout was lost. (#3301)
+- **Whisper retries a GPU that already worked this session** instead of falling back to CPU, which left laptops on CPU after every sleep. (#2500)
+- **Anthropic cleanup times out like other providers** and has a consistent output budget, so a stalled request falls back to the raw transcript. (#3008, thanks @widechaos)
+
+### Models
+
+- **LFM3 1.7B, LFM3 VL 2B and LFM3 Omni 2B** join the Liquid AI local models, and the bundled llama-server and Vulkan pack move to llama.cpp b12110. (#3144)
+- **Kimi K3.1 Pro works for cleanup, notes and translation.** Requests with thinking off sent an effort it rejects, so every one failed. (#3335)
+- **Gemini Extra high effort reaches the API** instead of failing before the request. (#3337)
+
+### Assistant and integrations
+
+- **Skills back up with Cloud,** with their on/off state, and follow you to your other computers. (#2853)
+- **Salesforce.** Connect your Salesforce account to export a reviewed meeting note to an Account, Contact, Lead or Opportunity, and prepare cited briefings from CRM records and linked notes. Every write needs your approval. (#3274)
+- **Chats back up their new messages.** After a chat's first upload, later messages, finished replies and renames stayed on the device, so other devices restored incomplete conversations. (#3267)
+
+### Workspaces and billing
+
+- **Plans & Billing redesign.** It opens on Personal, with your plan, usage and invoices, and each workspace has its own view with seats and role-appropriate actions. Seat purchases preview the new total, proration and next invoice, and invoice amounts display in the right currency units. (#3358)
+- **Workspace icons.** Upload an icon in Settings and see it in the workspace switcher. (#3268)
+- **Paywalls wait until billing knows who you are,** so a purchase is never attributed to the wrong account. (#3350)
+- **Workspace lists wait for a validated sign-in** before loading. (#3293)
+- **A second account on the same computer no longer sees the first account's default folders.** (#2930)
+- **Pricing says the mobile app is free** and only Cloud usage is unlimited. (#3295, thanks @chirag127)
+
+### Organization controls
+
+- **Meeting recording audit log.** Starts, stops and policy refusals of meeting recordings are logged locally, and a managed `AuditLogPath` sends the log to IT's folder. (#3179)
+- **API keys and MCP show as managed** when workspace policy turns API access off. Existing keys can still be revoked. (#3315)
+- **Managed enterprise settings tabs match desktop policy,** and hidden personal Azure requests are blocked. (#3134, thanks @xunguangzlj-cloud)
+
+### Performance
+
+- **Less background traffic.** Idle and unmanaged clients poll the API far less often, and Insights reuses this session's answers instead of refetching on every open. (#3344, #3157, #3158)
+
+### Linux
+
+- **Desktop peak meters no longer hold the mic or prompt for meetings,** so auto-end stops a recording after the call. (#3126, #3326, thanks @maxazure)
+- **Pill menus and live transcripts stay clickable** after the pill resizes. (#3302)
+
+### Windows
+
+- **Clicks around the idle pill reach the window underneath,** instead of landing on its transparent frame. (#3234, thanks @stantheman0128)
+
+### macOS
+
+- **Auto-paste setup works with the macOS 27.3 app control picker.** Onboarding asks you to select OpenWhispr under Privacy & Security → System & App Protection Override instead of offering a drag tile, and its guide no longer covers the Settings controls. Earlier macOS versions keep the drag flow. (#3407)
+
 ## [1.12.0] - 2026-11-17
 
 A new assistant window you can use from any app, and workspaces that grow into a full team space: Private sections for your own notes, Teams, Teamspaces, Guests and a People page. Setup on a new computer is one screen with model picks for that machine, the model list updates from a signed catalog between releases, and chats keep answering while you work elsewhere. Organizations get managed device and update policy, accounts no longer share history, dictionary or chats on a shared computer, and this release fixes team notes that stalled after a sync race.

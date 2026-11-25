@@ -1,35 +1,33 @@
-import type { ReactElement } from 'react';
-import { Pressable, View } from 'react-native';
-import { MenuView, type MenuAction } from '@react-native-menu/menu';
+import { useEffect, useRef, type ReactElement } from 'react';
+import { Platform, View } from 'react-native';
+import { MenuView, type MenuAction, type MenuComponentRef } from '@react-native-menu/menu';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { GroupedList } from './GroupedList';
+import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
+import { useNotesStore } from '@/store/useNotesStore';
 import { safeHaptics } from '@/lib/utils';
-import {
-  privateWorkspaceOptions,
-  UNASSIGNED_PRIVATE_ID,
-  type PrivateWorkspace,
-} from '@/lib/privateWorkspaces';
+import { privateWorkspaceOptions, UNASSIGNED_PRIVATE_ID } from '@/lib/privateWorkspaces';
 
-type PrivateWorkspaceSwitcherProps = {
-  workspaces: PrivateWorkspace[];
-  activeId: string | null;
-  defaultId: string | null;
-  onSelect: (workspaceId: string | null) => void;
-};
-
-/**
- * Picks the workspace whose Private and team spaces the Folders screen shows, as desktop's
- * workspace switcher does. Renders only when there is more than one Private section.
- */
+/** Wraps the Folders heading, or renders a standalone Account row. */
 export function PrivateWorkspaceSwitcher({
-  workspaces,
-  activeId,
-  defaultId,
-  onSelect,
-}: PrivateWorkspaceSwitcherProps): ReactElement | null {
+  heading,
+}: {
+  heading?: ReactElement;
+}): ReactElement | null {
+  const menuRef = useRef<MenuComponentRef>(null);
+  const workspaces = useNotesStore((state) => state.privateWorkspaces);
+  const activeId = useNotesStore((state) => state.activePrivateWorkspaceId);
+  const defaultId = useNotesStore((state) => state.defaultPrivateWorkspaceId);
+  const onSelect = useNotesStore((state) => state.setActivePrivateWorkspace);
+  const isInitialized = useNotesStore((state) => state.isInitialized);
+  const initialize = useNotesStore((state) => state.initialize);
+
+  useEffect(() => {
+    if (!isInitialized) initialize();
+  }, [isInitialized, initialize]);
+
   const options = privateWorkspaceOptions(workspaces, defaultId);
-  if (options.length < 2) return null;
+  if (options.length < 2) return heading ?? null;
   const current = options.find((workspace) => workspace.id === activeId) ?? options[0];
 
   const actions: MenuAction[] = options.map((workspace) => ({
@@ -38,8 +36,27 @@ export function PrivateWorkspaceSwitcher({
     state: workspace.id === current.id ? 'on' : 'off',
   }));
 
-  return (
+  const workspaceName = (
+    <View
+      className={
+        heading
+          ? 'max-w-full flex-row items-center gap-1'
+          : 'max-w-[55%] flex-row items-center gap-1.5'
+      }
+    >
+      <Text
+        numberOfLines={1}
+        className={heading ? 'shrink text-[13px] text-brand' : 'shrink text-[15px] text-brand'}
+      >
+        {current.name}
+      </Text>
+      <SystemIcon name="chevron.down" mdName="ChevronDown" size={heading ? 10 : 13} color="brand" />
+    </View>
+  );
+
+  const menu = (
     <MenuView
+      ref={menuRef}
       title="Switch workspace"
       actions={actions}
       shouldOpenOnLongPress={false}
@@ -50,31 +67,35 @@ export function PrivateWorkspaceSwitcher({
         onSelect(selectedId);
       }}
     >
-      <Pressable
+      <View
+        accessible
         accessibilityRole="button"
-        accessibilityLabel={`Workspace: ${current.name}`}
+        accessibilityLabel={`${heading ? 'Folders, ' : ''}Workspace: ${current.name}`}
         accessibilityHint="Switches the workspace whose notes are shown"
+        accessibilityActions={Platform.OS === 'android' ? [{ name: 'activate' }] : undefined}
+        onAccessibilityAction={
+          Platform.OS === 'android' ? () => menuRef.current?.show() : undefined
+        }
+        pointerEvents="none"
+        className={heading ? 'min-h-[44px] items-center justify-center px-2' : undefined}
       >
-        <GroupedList>
-          <GroupedList.Row
-            leadingIconSlot={
-              <SystemIcon name="building.2" mdName="Building2" size={22} color="brand" />
-            }
-          >
-            <View className="flex-row items-center justify-between gap-2">
-              <Text numberOfLines={1} className="flex-shrink text-[17px] text-label">
-                {current.name}
-              </Text>
-              <SystemIcon
-                name="chevron.up.chevron.down"
-                mdName="ChevronsUpDown"
-                size={14}
-                color="tertiaryLabel"
-              />
-            </View>
-          </GroupedList.Row>
-        </GroupedList>
-      </Pressable>
+        {heading ? (
+          <>
+            {heading}
+            {workspaceName}
+          </>
+        ) : (
+          <SettingsRow
+            iconStyle="line"
+            icon="building.2"
+            mdIcon="Building2"
+            title="Workspace"
+            rightElement={workspaceName}
+          />
+        )}
+      </View>
     </MenuView>
   );
+
+  return heading ? menu : <SettingsSection>{menu}</SettingsSection>;
 }

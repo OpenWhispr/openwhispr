@@ -129,6 +129,7 @@ function createAudioFeaturePolicy({
     update,
     failure,
     activeFailure,
+    activeMeetingPolicy: () => (retained ?? snapshot)?.policy?.meetings,
     refreshOnRefusal,
     // Starts made in main (hotkey, tray, calendar) can arrive before the first
     // policy broadcast; fetch it then rather than refuse on a policy that never

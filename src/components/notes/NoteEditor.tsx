@@ -74,6 +74,7 @@ import type { NoteActionProgress } from "../../stores/actionProcessingStore";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
 import NoteBottomBar from "./NoteBottomBar";
 import NoteRecordControl, { RecordingWave } from "./NoteRecordControl";
+import MicMuteButton from "./MicMuteButton";
 import ThemedEmptyIllustration from "../ui/ThemedEmptyIllustration";
 import transcriptsEmptyLight from "../../assets/empty-states/notes-transcripts-light.svg";
 import transcriptsEmptyDark from "../../assets/empty-states/notes-transcripts-dark.svg";
@@ -183,6 +184,7 @@ type LiveMeetingTranscriptChatProps = Omit<
   | "systemPartialSpeakerId"
   | "systemPartialSpeakerName"
   | "isRecording"
+  | "micMuted"
 >;
 
 // Subscribes to live transcript state at this leaf so per-update re-renders
@@ -197,6 +199,7 @@ function LiveMeetingTranscriptChat({
   const systemPartial = useMeetingRecordingStore((s) => s.systemPartial);
   const systemPartialSpeakerId = useMeetingRecordingStore((s) => s.systemPartialSpeakerId);
   const systemPartialSpeakerName = useMeetingRecordingStore((s) => s.systemPartialSpeakerName);
+  const micMuted = useMeetingRecordingStore((s) => s.micMuted);
 
   const knownSpeakers = useMemo(
     () => buildKnownSpeakers(speakerProfiles ?? [], segments, speakerMappings ?? {}),
@@ -212,6 +215,7 @@ function LiveMeetingTranscriptChat({
       systemPartial={systemPartial}
       systemPartialSpeakerId={systemPartialSpeakerId}
       systemPartialSpeakerName={systemPartialSpeakerName}
+      micMuted={micMuted}
       speakerMappings={speakerMappings}
       speakerProfiles={knownSpeakers}
     />
@@ -1408,6 +1412,7 @@ export default function NoteEditor({
                   onStop={onStopRecording}
                 />
               )}
+              {canEditNote && isRecording && <MicMuteButton />}
               <div className={cn(SPLIT_BUTTON_GROUP_CLASS, "h-[30px] shrink-0")}>
                 <button
                   type="button"
