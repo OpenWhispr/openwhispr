@@ -9,7 +9,7 @@ import sys
 import tempfile
 
 # Matches IPHONEOS_DEPLOYMENT_TARGET in withKeyboardExtension.js.
-DEPLOYMENT_TARGET = "15.1"
+DEPLOYMENT_TARGET = "17.0"
 
 
 def main():

@@ -123,7 +123,7 @@ function loadMediaPlayer(platform, { existingPaths = () => false, warnThrows = f
     if (builtin === "fs") {
       // Binary resolution hits the real filesystem; pin it so the host's
       // downloaded binaries can't change which fallback runs. Only existsSync
-      // is stubbed, which covers nircmd and the macOS mediaremote adapter;
+      // is stubbed, which covers the macOS mediaremote adapter;
       // resolvers that also call accessSync (linux-fast-paste,
       // macos-media-remote) still see the real filesystem and resolve null.
       return { ...fs, existsSync: (p) => existingPaths(String(p)) };
@@ -172,7 +172,7 @@ test("win32: GSMTC pause runs through async spawn and records the apps it paused
   assert.deepEqual(mediaPlayer._pausedWinApps, ["Spotify.exe", "Chrome.exe"]);
 });
 
-test("win32: GSMTC_FAIL falls back to the PowerShell media key when nircmd is absent", async () => {
+test("win32: GSMTC_FAIL falls back to the PowerShell media key", async () => {
   const { mediaPlayer, calls } = loadMediaPlayer("win32");
 
   const pausing = mediaPlayer.pauseMedia();
@@ -189,7 +189,7 @@ test("win32: GSMTC_FAIL falls back to the PowerShell media key when nircmd is ab
   assert.deepEqual(mediaPlayer._pausedWinApps, []);
 });
 
-test("win32: bundled nircmd is tried before the PowerShell media key", async () => {
+test("win32: a leftover NirCmd binary is ignored when sending a media key", async () => {
   const { mediaPlayer, calls } = loadMediaPlayer("win32", {
     existingPaths: (p) => /nircmd\.exe$/.test(p),
   });
@@ -197,13 +197,83 @@ test("win32: bundled nircmd is tried before the PowerShell media key", async () 
   const pausing = mediaPlayer.pauseMedia();
   (await waitForCall(calls, 0)).child.finish(1, "", "boom");
 
-  const nircmd = await waitForCall(calls, 1);
-  assert.equal(nircmd.cmd, "nircmd.exe");
-  assert.deepEqual(nircmd.args, ["sendkeypress", "0xB3"]);
-  nircmd.child.finish(0);
+  const fallback = await waitForCall(calls, 1);
+  assert.equal(fallback.cmd, "powershell.exe");
+  assert.match(fallback.args[3], /keybd_event/);
+  fallback.child.finish(0);
 
   assert.equal(await pausing, true);
   assert.equal(calls.length, 2);
+});
+
+const HELPER_CAPABILITIES = "paste-v1 selection-copy-v1 target-identity-v1 focus-restore-v1";
+
+function loadWithFastPasteHelper() {
+  return loadMediaPlayer("win32", {
+    existingPaths: (p) => /windows-fast-paste\.exe$/.test(p),
+  });
+}
+
+test("win32: the signed fast-paste helper sends the media key once it advertises media-key-v1", async () => {
+  const { mediaPlayer, calls } = loadWithFastPasteHelper();
+
+  const pausing = mediaPlayer.pauseMedia();
+  (await waitForCall(calls, 0)).child.finish(0, "GSMTC_FAIL\n");
+
+  const probe = await waitForCall(calls, 1);
+  assert.equal(probe.cmd, "windows-fast-paste.exe");
+  assert.deepEqual(probe.args, ["--capabilities"]);
+  assert.deepEqual(probe.options.stdio, WIN_STDIO);
+  probe.child.finish(0, `${HELPER_CAPABILITIES} media-key-v1\n`);
+
+  const key = await waitForCall(calls, 2);
+  assert.equal(key.cmd, "windows-fast-paste.exe");
+  assert.deepEqual(key.args, ["--media-play-pause"]);
+  key.child.finish(0);
+
+  assert.equal(await pausing, true);
+  assert.equal(mediaPlayer._didPause, true);
+
+  // The probe runs once per session; the resume goes straight to the helper.
+  const resuming = mediaPlayer.resumeMedia();
+  const resumeKey = await waitForCall(calls, 3);
+  assert.deepEqual(resumeKey.args, ["--media-play-pause"]);
+  resumeKey.child.finish(0);
+
+  assert.equal(await resuming, true);
+  assert.equal(calls.length, 4);
+});
+
+test("win32: a fast-paste helper without media-key-v1 is never sent the media flag", async () => {
+  const { mediaPlayer, calls } = loadWithFastPasteHelper();
+
+  const pausing = mediaPlayer.pauseMedia();
+  (await waitForCall(calls, 0)).child.finish(0, "GSMTC_FAIL\n");
+  // Older builds ignore unknown flags and paste, so this one must not be used.
+  (await waitForCall(calls, 1)).child.finish(0, `${HELPER_CAPABILITIES}\n`);
+
+  const fallback = await waitForCall(calls, 2);
+  assert.equal(fallback.cmd, "powershell.exe");
+  assert.match(fallback.args[3], /keybd_event/);
+  fallback.child.finish(0);
+
+  assert.equal(await pausing, true);
+  assert.ok(calls.every((call) => !call.args.includes("--media-play-pause")));
+});
+
+test("win32: a media key the helper fails to send falls back to PowerShell", async () => {
+  const { mediaPlayer, calls } = loadWithFastPasteHelper();
+
+  const toggling = mediaPlayer.toggleMedia();
+  (await waitForCall(calls, 0)).child.finish(0, `${HELPER_CAPABILITIES} media-key-v1\n`);
+  (await waitForCall(calls, 1)).child.finish(1, "", "ERROR: SendInput failed (error 5)");
+
+  const fallback = await waitForCall(calls, 2);
+  assert.equal(fallback.cmd, "powershell.exe");
+  assert.match(fallback.args[3], /keybd_event/);
+  fallback.child.finish(0);
+
+  assert.equal(await toggling, true);
 });
 
 test("win32: a PowerShell that cannot be spawned at all falls through to the media key", async () => {

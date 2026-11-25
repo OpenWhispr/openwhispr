@@ -6,12 +6,10 @@ import {
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { isSelectableTinfoilModel } from "../config/retiredCloudModelPolicy.js";
 import { getCloudModelProviders, setTinfoilModelOverlay } from "./cloudModelCatalog";
-import {
-  isNoteRecordingOnlyTranscriptionModel,
-  isUploadOnlyTranscriptionModel,
-} from "./appTranscriptionProviders.js";
+import { transcriptionModelsForContext } from "./appTranscriptionProviders.js";
 import { pickDefaultModelId } from "./providerDefaultModel";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";
+import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import type { InferenceMode } from "../types/electron";
 
 export interface ModelDefinition {
@@ -462,7 +460,7 @@ export function getTranscriptionProviders(): TranscriptionProviderData[] {
 export function getStreamingTranscriptionProviders(): TranscriptionProviderData[] {
   return modelRegistry
     .getTranscriptionProviders()
-    .map((p) => ({ ...p, models: p.models.filter((m) => m.streaming) }))
+    .map((p) => ({ ...p, models: transcriptionModelsForContext(p.id, p.models, "meeting") }))
     .filter((p) => p.models.length > 0);
 }
 
@@ -472,20 +470,18 @@ export function getStreamingTranscriptionProviders(): TranscriptionProviderData[
 export function getDictationTranscriptionProviders(): TranscriptionProviderData[] {
   return modelRegistry.getTranscriptionProviders().map((p) => ({
     ...p,
-    models: p.models.filter(
-      (m) =>
-        !isNoteRecordingOnlyTranscriptionModel(p.id, m.id) &&
-        !isUploadOnlyTranscriptionModel(p.id, m.id)
-    ),
+    models: transcriptionModelsForContext(p.id, p.models, "dictation"),
   }));
 }
 
-// Audio Upload's list: every batch model, upload-only ones included.
+// Audio Upload's list: every batch model, upload-only ones included. Upload is
+// always http-batch, and the realtime-only providers have no batch route at all
+// (transcriptionRoute fails them closed), so they are left out.
 export function getUploadTranscriptionProviders(): TranscriptionProviderData[] {
-  return modelRegistry.getTranscriptionProviders().map((p) => ({
-    ...p,
-    models: p.models.filter((m) => !isNoteRecordingOnlyTranscriptionModel(p.id, m.id)),
-  }));
+  return modelRegistry
+    .getTranscriptionProviders()
+    .filter((p) => !STREAMING_ONLY_PROVIDERS.has(p.id))
+    .map((p) => ({ ...p, models: transcriptionModelsForContext(p.id, p.models, "upload") }));
 }
 
 // Streaming providers note recording can actually run (see

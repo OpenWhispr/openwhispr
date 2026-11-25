@@ -3969,6 +3969,7 @@
       "generateSummary": "Generar resumen con IA",
       "generateWithTemplate": "Generar con {{template}}",
       "startWriting": "Comienza a escribir...",
+      "tabToLeave": "Pulsa Esc y luego Tab o Mayús+Tab para salir del editor.",
       "staleIndicator": "El contenido ha cambiado desde la mejora",
       "live": "En vivo",
       "transcript": "Transcripción",
@@ -4098,7 +4099,6 @@
           "matchCase": "Coincidir mayúsculas",
           "close": "Cerrar"
         },
-        "count": "Palabras: {{words}} · Caracteres: {{chars}}",
         "link": {
           "header": "Enlazar nota",
           "empty": "Escribe el título de una nota…",

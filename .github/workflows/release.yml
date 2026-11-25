@@ -255,11 +255,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
-      - name: Download nircmd.exe
-        run: node scripts/download-nircmd.js
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-
       - name: Download windows-fast-paste.exe
         run: node scripts/download-windows-fast-paste.js
         env:

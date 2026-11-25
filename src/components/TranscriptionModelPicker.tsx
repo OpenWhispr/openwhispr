@@ -59,7 +59,6 @@ import {
   getSelectedASROrganization,
   usesParakeetManager,
 } from "../helpers/localASROrganization";
-import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { createExternalLinkHandler } from "../utils/externalLinks";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
@@ -668,15 +667,11 @@ export default function TranscriptionModelPicker({
   );
   // streamingOnly is Note Recording's picker, so it offers the streaming
   // providers note recording can actually run — not every streaming provider.
-  // Upload is always http-batch, and the realtime-only providers have no batch
-  // route at all (transcriptionRoute fails them closed), so they are hidden there.
-  // Upload is also the only screen that offers upload-only models.
+  // Upload is the only screen that offers upload-only models.
   const availableCloudProviders = useMemo(() => {
     if (streamingOnly) return getMeetingStreamingTranscriptionProviders();
     if (transcriptionContext !== "upload") return getDictationTranscriptionProviders();
-    return getUploadTranscriptionProviders().filter(
-      (provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id)
-    );
+    return getUploadTranscriptionProviders();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
   }, [streamingOnly, transcriptionContext, registryVersion]);
   const cloudProviders = useMemo(

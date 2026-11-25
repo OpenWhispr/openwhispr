@@ -13,6 +13,7 @@ swiftc -swift-version 5 -parse-as-library \
   "$IOS/SnippetExpander.swift" \
   "$IOS/DirectDictationRequests.swift" \
   "$IOS/DirectDictationStore.swift" \
+  "$IOS/DirectLocalTranscription.swift" \
   "$IOS/DirectDictation.swift" \
   "$IOS/DirectAudioRoute.swift" \
   "$IOS/KeyboardCredentialStore.swift" \

@@ -46,6 +46,7 @@ interface CallApiOptions {
   sharedDictionary?: string[];
   tone?: string;
   agentName?: string;
+  purpose?: 'translation';
   signal?: AbortSignal;
   timeoutMs?: number;
   /**
@@ -128,6 +129,9 @@ export class ReasoningService {
     if (options.agentName) {
       body.agentName = options.agentName;
     }
+    if (options.purpose) {
+      body.purpose = options.purpose;
+    }
 
     let data: ReasonApiResponse;
     try {
@@ -177,6 +181,7 @@ export class ReasoningService {
       timeoutMs,
       tone,
       agentName,
+      purpose,
       routing,
     } = request;
     const { resolveMobileProviderRoute } =
@@ -282,6 +287,7 @@ export class ReasoningService {
       timeoutMs,
       tone,
       agentName,
+      purpose,
     });
   }
 

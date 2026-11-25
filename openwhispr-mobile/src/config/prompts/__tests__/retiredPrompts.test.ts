@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   DEFAULT_CLEANUP_PROMPT,
+  DEFAULT_TRANSLATE_PROMPT,
   PROMPT_KIND_LIST,
   type PromptKind,
 } from '@/config/prompts/registry';
@@ -111,7 +112,10 @@ describe('hash registry', () => {
     // A shipped default prompt changed: move its old hash into
     // RETIRED_DEFAULT_PROMPT_HASHES and record the new hash in
     // CURRENT_DEFAULT_PROMPT_HASHES (src/config/prompts/retiredPrompts.ts).
-    expect(CURRENT_DEFAULT_PROMPT_HASHES).toEqual({ cleanup: sha256(DEFAULT_CLEANUP_PROMPT) });
+    expect(CURRENT_DEFAULT_PROMPT_HASHES).toEqual({
+      cleanup: sha256(DEFAULT_CLEANUP_PROMPT),
+      translate: sha256(DEFAULT_TRANSLATE_PROMPT),
+    });
   });
 
   it('keeps the retired and current sets disjoint', () => {

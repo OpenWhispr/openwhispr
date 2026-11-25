@@ -187,6 +187,7 @@ import {
   MAX_SHARED_KEYTERMS,
 } from "../utils/snippets";
 import { sanitizeElevenLabsKeyterms } from "../utils/elevenLabsKeyterms.js";
+import { SCRIBE_SILENCE_MARKER } from "../utils/scribeSilence.js";
 import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
 import { getAgentName } from "../utils/agentName";
 import { shouldDisplayDictationPreview } from "../utils/transcriptionPreview";
@@ -589,7 +590,13 @@ const MANAGED_TRANSCRIPTION_SPEC = {
   }),
 };
 
-function filterScribeDictionaryEcho(text, acceptedKeyterms, settings) {
+// Rejects a transcript that only recites the accepted keyterms and strips a recital
+// after the speech. Main returns the keyterms the transcript was made with: a request
+// refused over its keyterms goes again without them, and then nothing can be recited.
+// Fewer than two accepted keyterms are never an echo, nor is speech that stays inside
+// one of them. The user's own words are checked on their own only when shared words
+// were accepted beside them (see isDictionaryEcho).
+function rejectOrStripElevenLabsEcho(text, acceptedKeyterms, settings) {
   if (acceptedKeyterms.length < 2 || isSingleKeytermUtterance(text, acceptedKeyterms)) return text;
   const sentPrompt = acceptedKeyterms.join(", ");
   const personal = new Set(sanitizeElevenLabsKeyterms(getPersonalDictionaryWords(settings)));
@@ -618,6 +625,8 @@ function mistralDictionaryHead(prompt, wordCount) {
 
 // `echoPrompt` gives the dictionary in the order the payload carries it, for
 // the trailing-echo strip; without one it's the Whisper-order `prompt`.
+// `rejectOrStripEcho` replaces both echo checks for an entry that judges an echo
+// against its own result.
 const PROXY_TRANSCRIPTION_PROVIDERS = {
   tinfoil: {
     displayName: "Tinfoil",
@@ -659,12 +668,16 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
   elevenlabs: {
     displayName: "ElevenLabs",
     ipc: () => window.electronAPI?.proxyElevenlabsTranscription,
-    buildPayload: ({ audioBuffer, model, language, keyterms }) => ({
+    // The uncut dictionary, not the shared `keyterms`: cut to 50 characters, a
+    // longer term would pass the length rule and go out as a fragment.
+    buildPayload: ({ audioBuffer, model, language, apiSettings }) => ({
       audioBuffer,
       model,
       language,
-      keyterms,
+      keyterms: sanitizeElevenLabsKeyterms(getEffectiveDictionaryWords(apiSettings)),
     }),
+    rejectOrStripEcho: ({ text, acceptedKeyterms = [] }, { apiSettings }) =>
+      rejectOrStripElevenLabsEcho(text, acceptedKeyterms, apiSettings),
   },
   xai: {
     displayName: "xAI",
@@ -3009,11 +3022,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         apiKey = await window.electronAPI.getElevenlabsKey?.();
       }
       if (!apiKey?.trim()) {
-        const err = new Error(
-          "ElevenLabs API key not found. Please set your API key in the Control Panel."
-        );
-        err.code = "API_KEY_MISSING";
-        throw err;
+        throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+          provider: "ElevenLabs",
+          surface: "transcription",
+        });
       }
     } else if (provider === "groq") {
       // Prefer store value (user-entered via UI) over main process (.env)
@@ -4290,10 +4302,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           mimeType: optimizedAudio.type || "audio/webm",
           dictionaryPrompt: proxyDictionaryPrompt,
           priorityDictionaryPrompt: this.getWhisperPrompt(apiSettings, priorityDictionary),
-          keyterms:
-            proxySpec === PROXY_TRANSCRIPTION_PROVIDERS.elevenlabs
-              ? sanitizeElevenLabsKeyterms(getEffectiveDictionaryWords(apiSettings))
-              : limitBatchKeyterms(this.getKeyterms()),
+          keyterms: limitBatchKeyterms(this.getKeyterms()),
         };
         const proxyPayload = proxySpec.buildPayload(proxyArgs);
         // Managed Azure is enterprise: its failures keep their own shape.
@@ -4315,8 +4324,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           throw classifyProxyFailure(errorFromIpcResult(result));
         }
         let proxyText = result?.text;
-        if (result?.acceptedKeyterms) {
-          proxyText = filterScribeDictionaryEcho(proxyText, result.acceptedKeyterms, apiSettings);
+        if (proxySpec.rejectOrStripEcho) {
+          proxyText = proxySpec.rejectOrStripEcho(result, proxyArgs);
         } else if (payloadSendsDictionaryBias(proxyPayload)) {
           const proxyEchoPrompt = proxySpec.echoPrompt?.(proxyArgs) ?? proxyDictionaryPrompt;
           proxyText = this.stripTrailingDictionaryEcho(proxyText, proxyEchoPrompt);
@@ -4671,7 +4680,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Check for text - handle both empty string and missing field. ElevenLabs
       // Scribe answers silence with "[pause]" instead of an empty string.
       const spokenText = result.text?.trim();
-      if (spokenText && spokenText !== "[pause]") {
+      if (spokenText && spokenText !== SCRIBE_SILENCE_MARKER) {
         if (
           sendsDictionary &&
           this.isDictionaryEcho(

@@ -14,7 +14,6 @@ import Highlight from "@tiptap/extension-highlight";
 import { InlineMath, BlockMath } from "@tiptap/extension-mathematics";
 import { FindAndReplace } from "@tiptap/extension-find-and-replace";
 import InvisibleCharacters from "@tiptap/extension-invisible-characters";
-import { CharacterCount } from "@tiptap/extensions";
 import Subscript from "@tiptap/extension-subscript";
 import Superscript from "@tiptap/extension-superscript";
 import { Color, FontFamily, TextStyle } from "@tiptap/extension-text-style";
@@ -373,7 +372,6 @@ export function createEditorBlockExtensions() {
     FindAndReplace,
     FindShortcut,
     InvisibleCharacters.configure({ visible: false }),
-    CharacterCount,
     NoteLink,
     SlashMenu,
   ];
