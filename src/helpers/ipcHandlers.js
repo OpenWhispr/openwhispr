@@ -7829,6 +7829,7 @@ class IPCHandlers {
           if (outputText === null) {
             throw Object.assign(new Error(describeMissingAnthropicText(data)), {
               messageKey: CLEANUP_EMPTY_REPLY_MESSAGE_KEY,
+              code: data?.stop_reason === "max_tokens" ? "OUTPUT_LIMIT_BEFORE_ANSWER" : undefined,
             });
           }
           return { success: true, text: outputText };
