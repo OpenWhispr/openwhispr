@@ -6,7 +6,11 @@ const {
   providerError,
   providerHttpError,
 } = require("./providerHttpErrors");
-const { SPEECH_FRAME_RMS, computePcm16Rms } = require("../utils/audioUtils");
+const {
+  MEETING_MIC_ACTIVITY_RMS,
+  MEETING_SYSTEM_ACTIVITY_RMS,
+  computePcm16Rms,
+} = require("../utils/audioUtils");
 const { sanitizeElevenLabsKeyterms } = require("../utils/elevenLabsKeyterms.js");
 const { SCRIBE_SILENCE_MARKER } = require("../utils/scribeSilence.js");
 
@@ -26,11 +30,19 @@ const MAX_CHUNK_MS = 1000;
 // 0.2 s pause after 20 s; speech with no such pause in the next 15 s gets the cut.
 const COMMIT_AFTER_MS = 20000;
 const COMMIT_PAUSE_MS = 200;
+// A pause is audio under the level the meeting takes for activity on that stream. The
+// microphone has no gain control, so a quiet speaker sits well under dictation's
+// speech level, and a higher bar would commit in the middle of their words. Room noise
+// above it only means no pause is found, and the server cuts as it would anyway.
+const PAUSE_RMS = { mic: MEETING_MIC_ACTIVITY_RMS, system: MEETING_SYSTEM_ACTIVITY_RMS };
 // A commit with no audio in it closed the session when under 0.3 s had arrived since
 // the last one. One carrying this much silence was never refused.
 const COMMIT_SILENCE_MS = 350;
 // How long a commit's answer is waited for; the slowest live took 1.2 s.
 const COMMIT_ACK_TIMEOUT_MS = 2000;
+// Live audio never queues more than a commit's wait and one message. More than this
+// is a backlog, such as a reconnect replay still leaving.
+const LIVE_QUEUE_MAX_MS = COMMIT_ACK_TIMEOUT_MS + MAX_CHUNK_MS;
 // Committed transcripts carry no id and the VAD sends empty ones of its own, so a
 // stop sends three commits and ends at the second empty answer in a row.
 const STOP_COMMITS = 3;
@@ -146,6 +158,7 @@ class ElevenLabsStreaming {
     // and how much quiet audio has come in a row since.
     this.committedMs = 0;
     this.quietBytes = 0;
+    this.pauseRms = PAUSE_RMS.mic;
     // When a commit of the client's own went out, until a committed transcript answers.
     this.commitSentAt = null;
     this.emptyCommits = 0;
@@ -212,6 +225,7 @@ class ElevenLabsStreaming {
     this.emptyCommits = 0;
     this.unsentAudio = [];
     this.sampleRate = options.sampleRate || SAMPLE_RATE;
+    this.pauseRms = PAUSE_RMS[options.streamLabel] ?? PAUSE_RMS.mic;
 
     const url = this.buildWebSocketUrl(options);
     debugLogger.debug("ElevenLabs streaming connecting", {
@@ -590,15 +604,14 @@ class ElevenLabsStreaming {
     }
     this.audioBytesSent += pcmBuffer.length;
     const rms = computePcm16Rms(pcmBuffer);
-    this.quietBytes = rms < SPEECH_FRAME_RMS ? this.quietBytes + pcmBuffer.length : 0;
+    this.quietBytes = rms < this.pauseRms ? this.quietBytes + pcmBuffer.length : 0;
     // Silence handed over faster than it can leave, such as a capture gap repaired in
-    // one burst, would hold live audio behind it. Live audio never queues more than a
-    // commit's wait and one message, and past a second of silence the server needs no
-    // more of it, so the rest is left out and the next audio is anchored again.
+    // one burst, would hold live audio behind it. Past a second of silence the server
+    // needs no more of it, so the rest is left out and the next audio is anchored again.
     if (
       rms === 0 &&
       this.quietBytes > this.msToBytes(MAX_CHUNK_MS) &&
-      this.sendQueueBytes > this.msToBytes(COMMIT_ACK_TIMEOUT_MS + MAX_CHUNK_MS)
+      this.sendQueueBytes > this.msToBytes(LIVE_QUEUE_MAX_MS)
     ) {
       this.reanchorOnNextAudio = true;
       return true;
@@ -657,7 +670,7 @@ class ElevenLabsStreaming {
     this.committedMs = this.queueEndMs();
   }
 
-  // Frames under the speech level are a pause. Silence is one too, so a silent stream
+  // Frames under the pause level are a pause. Silence is one too, so a silent stream
   // is committed every 20 s and speech never starts with the server's count nearly spent.
   commitInPause() {
     if (
@@ -726,16 +739,23 @@ class ElevenLabsStreaming {
   // way is a final.
   async finalize() {
     // Behind a backlog an answer takes longer, so each wait allows for what is flushed.
-    const timeoutMs =
-      COMMIT_ACK_TIMEOUT_MS +
-      (this.bytesToMs(this.sendQueueBytes) / 1000) * BACKLOG_TIMEOUT_MS_PER_SECOND;
+    const flushedMs = this.bytesToMs(this.sendQueueBytes);
+    const timeoutMs = COMMIT_ACK_TIMEOUT_MS + (flushedMs / 1000) * BACKLOG_TIMEOUT_MS_PER_SECOND;
+    // The VAD answers the pauses inside a flushed backlog after the stop's commits have
+    // gone, with empty transcripts nothing tells from the stop's own. Two of those
+    // would end the stop ahead of the words behind them, so it waits out its deadline.
+    const endsOnEmptyCommits = flushedMs <= LIVE_QUEUE_MAX_MS;
     // What is queued leaves back-to-back from here, but still not right behind a commit.
+    // The ack window is read once a pass: one that closes between two reads would send
+    // from an empty queue.
     this.stopSending();
-    while (this.isConnected && (this.sendQueue.length > 0 || this.isAwaitingCommitAck(timeoutMs))) {
+    while (this.isConnected) {
       if (this.isAwaitingCommitAck(timeoutMs)) {
         await this.waitForCommit(this.commitSentAt + timeoutMs - Date.now());
-      } else {
+      } else if (this.sendQueue.length > 0) {
         this.sendNext();
+      } else {
+        break;
       }
     }
     if (!this.isConnected) return;
@@ -745,7 +765,7 @@ class ElevenLabsStreaming {
     }
     this.emptyCommits = 0;
     const deadline = Date.now() + timeoutMs;
-    while (this.isConnected && this.emptyCommits < STOP_COMMITS - 1) {
+    while (this.isConnected && !(endsOnEmptyCommits && this.emptyCommits >= STOP_COMMITS - 1)) {
       const remaining = deadline - Date.now();
       if (remaining <= 0 || !(await this.waitForCommit(remaining))) return;
     }
@@ -811,16 +831,21 @@ class ElevenLabsStreaming {
     this.isDisconnecting = true;
 
     if (commit && this.ws.readyState === WebSocket.OPEN && this.isConnected) {
-      // A VAD response acknowledges a segment, not all audio sent before it arrived.
-      // Commit even without a partial, since the last samples may still be in flight.
-      if (this.currentPartial || this.audioBytesSent > 0) await this.finalize();
-      else if (this.pendingPlainCommit) await this.waitForCommit(PLAIN_COMMIT_GRACE_MS);
-      this.emitOpenPartial();
-      const result = { text: this.accumulatedText };
-      this.onSessionEnd?.(result);
-      this.cleanup();
-      this.isDisconnecting = false;
-      return result;
+      // A stop that throws must still close the socket, or its keep-alive holds the
+      // session open until the server's time limit.
+      try {
+        // A VAD response acknowledges a segment, not all audio sent before it arrived.
+        // Commit even without a partial, since the last samples may still be in flight.
+        if (this.currentPartial || this.audioBytesSent > 0) await this.finalize();
+        else if (this.pendingPlainCommit) await this.waitForCommit(PLAIN_COMMIT_GRACE_MS);
+        this.emitOpenPartial();
+        const result = { text: this.accumulatedText };
+        this.onSessionEnd?.(result);
+        return result;
+      } finally {
+        this.cleanup();
+        this.isDisconnecting = false;
+      }
     }
 
     // A caller that asked for no commit takes nothing more from this session.

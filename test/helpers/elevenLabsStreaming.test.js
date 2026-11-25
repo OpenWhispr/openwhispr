@@ -1051,6 +1051,35 @@ test("a muted microphone's silence is never left out, and is committed every 20 
   });
 });
 
+// A steady sample at this RMS, as a pcm() fill.
+const level = (rms) => {
+  const sample = Buffer.alloc(2);
+  sample.writeInt16LE(Math.round(rms * 32768));
+  return sample;
+};
+
+// Each stream's speech is quieter than dictation's 0.012, but above its own pause level.
+for (const [stream, speech, pause] of [
+  ["mic", 0.008, 0.004],
+  ["system", 0.005, 0.003],
+]) {
+  test(`a quiet speaker on the ${stream} stream is no pause after 20 s, and quieter audio is`, async (t) => {
+    await withScribeServer(async ({ streaming, sessions }) => {
+      await streaming.connect({ apiKey: "k", streamLabel: stream });
+      mockClock(t, streaming);
+      const session = sessions[0];
+      capture(t, streaming, 25000, level(speech));
+      assert.equal(
+        (await received(streaming, session)).some((chunk) => chunk.commit),
+        false
+      );
+      capture(t, streaming, 200, level(pause));
+      t.mock.timers.tick(100);
+      assert.equal((await received(streaming, session)).at(-1).commit, true);
+    });
+  });
+}
+
 test("a capture gap repaired in one burst of silence queues three seconds of it, and the speech behind it keeps its capture time", async (t) => {
   await withScribeServer(async ({ streaming, sessions }) => {
     const finals = [];
@@ -1330,30 +1359,61 @@ const RECORDED_STOPS = [
   },
 ];
 
-for (const { name, flushedMs, frames, finals: expected } of RECORDED_STOPS) {
-  test(`a stop behind a backlog keeps every final: ${name}`, async (t) => {
-    await withScribeServer(async ({ streaming, sessions }) => {
-      const finals = [];
-      streaming.onFinalTranscript = (_text, timestamp) =>
-        finals.push([streaming.completedSegments.at(-1), timestamp]);
-      await streaming.connect({ apiKey: "k" });
-      mockClock(t, streaming);
-      const stoppedAt = Date.now();
-      streaming.sendAudio(pcm(flushedMs, SPEECH));
+// Empty transcripts behind a flushed backlog may answer its own pauses, so the stop
+// reads on to its deadline: 2 s plus 0.15 s for each second flushed.
+async function stopBehindBacklog(t, { flushedMs, frames, finals: expected }) {
+  await withScribeServer(async ({ streaming, sessions }) => {
+    const finals = [];
+    streaming.onFinalTranscript = (_text, timestamp) =>
+      finals.push([streaming.completedSegments.at(-1), timestamp]);
+    await streaming.connect({ apiKey: "k" });
+    mockClock(t, streaming);
+    const stoppedAt = Date.now();
+    streaming.sendAudio(pcm(flushedMs, SPEECH));
 
-      const stopped = streaming.disconnect();
-      for (const [at, frame] of frames) {
-        t.mock.timers.tick(stoppedAt + at - Date.now());
-        await deliver(streaming, sessions[0], frame);
-      }
-      assert.deepEqual(await stopped, { text: expected.map(([text]) => text).join(" ") });
-      assert.deepEqual(
-        finals,
-        expected.map(([text, startMs]) => [text, stoppedAt + startMs])
-      );
-    });
+    const stopped = streaming.disconnect();
+    for (const [at, frame] of frames) {
+      t.mock.timers.tick(stoppedAt + at - Date.now());
+      await deliver(streaming, sessions[0], frame);
+    }
+    const deadline = stoppedAt + 2000 + (flushedMs / 1000) * 150;
+    advance(t, deadline - 1 - Date.now());
+    await settled();
+    assert.equal(streaming.isConnected, true, "an empty answer does not end it early");
+    t.mock.timers.tick(1);
+    assert.deepEqual(await stopped, { text: expected.map(([text]) => text).join(" ") });
+    assert.deepEqual(
+      finals,
+      expected.map(([text, startMs]) => [text, stoppedAt + startMs])
+    );
   });
 }
+
+for (const recorded of RECORDED_STOPS) {
+  test(`a stop behind a backlog keeps every final: ${recorded.name}`, (t) =>
+    stopBehindBacklog(t, recorded));
+}
+
+// The second recorded stop without the partials that came between its two empty
+// transcripts: the stop's own commits answered empty twice would look the same.
+test("a stop behind a backlog keeps the words behind two empty transcripts of the VAD's in a row", (t) =>
+  stopBehindBacklog(t, {
+    flushedMs: 11300,
+    frames: [
+      [288, timed("")],
+      [290, committed("")],
+      [770, timed("")],
+      [772, committed("")],
+      [1036, partial("Great. What about the mobile release?")],
+      [1056, committed(RELEASE)],
+      [1075, timed(RELEASE, 9.236)],
+      [1093, timed("")],
+      [1095, committed("")],
+      [1136, timed("")],
+      [1138, committed("")],
+    ],
+    finals: [[RELEASE, 9236]],
+  }));
 
 test("an unanswered stop ends 2 s after its commits, and 0.15 s later for each second it flushed", async (t) => {
   await withScribeServer(async ({ streaming, sessions }) => {
@@ -1378,6 +1438,50 @@ test("an unanswered stop ends 2 s after its commits, and 0.15 s later for each s
     t.mock.timers.tick(1);
     assert.deepEqual(await stopped, { text: "Never committed" });
     assert.deepEqual(finals, ["Never committed"], "the open partial is the last final");
+  });
+});
+
+test("a stop whose commit wait runs out between two reads of the clock still commits and closes", async (t) => {
+  await withScribeServer(async ({ streaming, sessions }) => {
+    await streaming.connect({ apiKey: "k" });
+    mockClock(t, streaming);
+    const session = sessions[0];
+    capture(t, streaming, 20000);
+    t.mock.timers.tick(100);
+    assert.equal((await received(streaming, session)).at(-1).commit, true);
+    // The pause commit is never answered. The stop comes in the last millisecond of
+    // its wait, and the clock moves on after the stop first reads it.
+    advance(t, streaming.commitSentAt + 1999 - Date.now());
+    const now = Date.now;
+    let reads = 0;
+    Date.now = () => now() + (reads++ > 0 ? 1 : 0);
+    const stopped = streaming.disconnect();
+    Date.now = now;
+
+    advance(t, 100);
+    await settled();
+    assert.deepEqual(
+      (await received(streaming, session)).slice(-3).map((chunk) => chunk.commit),
+      [true, true, true]
+    );
+    await deliver(streaming, session, ...EMPTY_COMMIT, ...EMPTY_COMMIT);
+    assert.deepEqual(await stopped, { text: "" });
+    assert.equal(streaming.ws, null, "the socket is closed");
+  });
+});
+
+test("a stop that throws still closes its socket", async (t) => {
+  await withScribeServer(async ({ streaming }) => {
+    await streaming.connect({ apiKey: "k" });
+    mockClock(t, streaming);
+    streaming.sendAudio(pcm(300, SPEECH));
+    streaming.sendNext = () => {
+      throw new Error("send failed");
+    };
+    await assert.rejects(streaming.disconnect(), /send failed/);
+    assert.equal(streaming.ws, null);
+    assert.equal(streaming.keepAliveInterval, null, "no keep-alive holds the session open");
+    assert.equal(streaming.isDisconnecting, false);
   });
 });
 
@@ -1434,6 +1538,7 @@ test("a stop behind a backlog waits longer for the answer to a pause commit insi
     await settled();
     assert.equal((await received(streaming, session)).length, sent, "held behind the commit");
     await deliver(streaming, session, ...wordedCommit("Before.", 5));
+    const committedAt = Date.now();
     assert.deepEqual(
       (await received(streaming, session)).slice(sent).map((chunk) => chunk.commit),
       [...Array(9).fill(false), true, true, true]
@@ -1445,6 +1550,11 @@ test("a stop behind a backlog waits longer for the answer to a pause commit insi
       ...EMPTY_COMMIT,
       ...EMPTY_COMMIT
     );
+    // 30.35 s flushed, the pause commit's silence included: a deadline 6.55 s on.
+    advance(t, committedAt + 6500 - Date.now());
+    await settled();
+    assert.equal(streaming.isConnected, true, "a backlog's stop reads on to its deadline");
+    advance(t, 100);
     assert.deepEqual(await stopped, { text: "Before. After." });
   });
 });

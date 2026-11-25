@@ -1,6 +1,6 @@
 const WebSocket = require("ws");
 const debugLogger = require("./debugLogger");
-const { SPEECH_FRAME_RMS, computePcm16Rms } = require("../utils/audioUtils");
+const { computePcm16Rms } = require("../utils/audioUtils");
 const { getRegistryData } = require("../models/registryData.js");
 
 const SAMPLE_RATE = 16000;
@@ -14,6 +14,10 @@ const COLD_START_BUFFER_MAX = 3 * SAMPLE_RATE * 2; // 3 seconds of 16-bit PCM
 // Google documents a 1000-phrase ceiling but only promises quality up to 100;
 // the batch dictionary paths truncate the same array at 100.
 const MAX_CUSTOM_VOCABULARY = 100;
+// Trailing room noise in dictation recordings measures 0.003-0.010 RMS while
+// speech frames sit above ~0.0105, so only a frame at this level is a new
+// utterance rather than the tail of a turn the server already closed.
+const TURN_REOPEN_RMS = 0.012;
 const GEMINI_LIVE_MODEL = "gemini-3.5-transcribe-live";
 
 function resolveGeminiLiveModel({ model, mode } = {}) {
@@ -373,8 +377,7 @@ class GeminiLiveStreaming {
       })
     );
     this.audioBytesSent += pcmBuffer.length;
-    // Anything quieter is the tail of a turn the server already closed.
-    if (this._turnEnded && computePcm16Rms(pcmBuffer) >= SPEECH_FRAME_RMS) this._turnEnded = false;
+    if (this._turnEnded && computePcm16Rms(pcmBuffer) >= TURN_REOPEN_RMS) this._turnEnded = false;
   }
 
   sendAudio(pcmBuffer) {
