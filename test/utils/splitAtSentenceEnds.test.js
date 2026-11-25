@@ -58,3 +58,31 @@ test("a decimal point inside a sentence is not a sentence end", async () => {
   );
   assert.deepEqual(chunks, ["Version 3.5 costs $4.20 today.", "Next sentence starts here now."]);
 });
+
+test("a sentence over the limit is cut at its last comma or semicolon that fits", async () => {
+  const { splitAtSentenceEnds } = await load();
+  const text =
+    "we checked the backups, the replicas and the logs; then we paged the on-call engineer, who restored the primary from last night's snapshot before anyone noticed.";
+  const chunks = splitAtSentenceEnds(text, 12);
+  assert.deepEqual(chunks, [
+    "we checked the backups, the replicas and the logs;",
+    "then we paged the on-call engineer,",
+    "who restored the primary from last night's snapshot before anyone noticed.",
+  ]);
+  assert.deepEqual(words(chunks.join(" ")), words(text));
+  // A sentence within the limit stays whole, commas and all.
+  assert.deepEqual(splitAtSentenceEnds("one two, three four. five six, seven eight.", 4), [
+    "one two, three four.",
+    "five six, seven eight.",
+  ]);
+});
+
+test("a long run with no comma or semicolon is still cut every maxWords words", async () => {
+  const { splitAtSentenceEnds } = await load();
+  const run = Array.from({ length: 25 }, (_, i) => `w${i}`);
+  assert.deepEqual(splitAtSentenceEnds(run.join(" "), 10), [
+    run.slice(0, 10).join(" "),
+    run.slice(10, 20).join(" "),
+    run.slice(20).join(" "),
+  ]);
+});

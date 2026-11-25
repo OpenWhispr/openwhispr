@@ -229,12 +229,15 @@ test("the missing-run check reads languages written without spaces", async () =>
   const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
   const chinese = [
     "我们下周要发布新版本，但是测试还没有通过，所以可能要推迟到下下周。",
-    // 24 words.
     "另外设计团队希望在发布之前再检查一遍新的引导流程，因为上次的反馈说权限请求出现得太早了。",
     "最后我们还需要更新帮助中心的文章，并且通知所有测试用户。",
   ];
+  // The dropped sentence's words, as this runtime's ICU splits them.
+  const segmenter = new Intl.Segmenter("und", { granularity: "word" });
+  const dropped = Array.from(segmenter.segment(chinese[1])).filter((s) => s.isWordLike).length;
+  assert.ok(dropped >= 20, `only ${dropped} words`);
   assert.equal(longestMissingRun(chinese.join(""), chinese.join("")), 0);
-  assert.equal(longestMissingRun(chinese.join(""), `${chinese[0]}${chinese[2]}`), 24);
+  assert.equal(longestMissingRun(chinese.join(""), `${chinese[0]}${chinese[2]}`), dropped);
 
   const russian = [
     "Мы планируем выпустить новую версию на следующей неделе, если все тесты пройдут успешно.",
@@ -243,6 +246,18 @@ test("the missing-run check reads languages written without spaces", async () =>
     "После этого мы обновим статьи в справочном центре.",
   ];
   assert.equal(longestMissingRun(russian.join(" "), `${russian[0]} ${russian[2]}`), 20);
+});
+
+test("the missing-run check matches 4-word phrases: one word rewritten in five is no gap", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  // Four kept words around each rewritten one are covered by 4-word phrases;
+  // 5-word phrases would find all 30 words missing.
+  const groups = Array.from({ length: 6 }, (_, g) =>
+    [0, 1, 2, 3].map((w) => `a${g * 4 + w}`).join(" ")
+  );
+  const raw = groups.map((group) => `${group} gonna`).join(" ");
+  const output = groups.map((group) => `${group} going to`).join(" ");
+  assert.equal(longestMissingRun(raw, output), 1);
 });
 
 test("the missing-run check matches the measured reference (guards.py, 4-word phrases)", async () => {

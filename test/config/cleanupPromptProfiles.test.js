@@ -132,6 +132,37 @@ test("a tuned part is cleaned again only when it is over 150 words and lost 20 i
   assert.equal(await requestsFor(say(0, 30), losing(20)), 1);
 });
 
+test("with the guard on, a first answer that fails the output check still fails the cleanup", async () => {
+  const { tuned, runProfiledCleanup } = await loadTuned();
+  // An empty answer to real speech, and one far longer than what was said.
+  for (const [label, answer] of [
+    ["empty", ""],
+    ["runaway", `${say(0, 30)} ${say(0, 20)}`],
+  ]) {
+    await assert.rejects(
+      runProfiledCleanup(tuned, say(0, 30), () => Promise.resolve(answer), notCleanedAgain),
+      { code: "CLEANUP_OUTPUT_INVALID" },
+      label
+    );
+  }
+});
+
+test("an unpunctuated part is cleaned again in pieces of exactly 150 words", async () => {
+  const { tuned, runProfiledCleanup } = await loadTuned();
+  const words = Array.from({ length: 300 }, (_, index) => `w${index}`);
+  const requests = [];
+  await runProfiledCleanup(
+    tuned,
+    words.join(" "),
+    () => Promise.resolve([...words.slice(0, 100), ...words.slice(130)].join(" ")),
+    (users) => {
+      requests.push(users.map(unwrap));
+      return shout(users);
+    }
+  );
+  assert.deepEqual(requests, [[words.slice(0, 150).join(" "), words.slice(150).join(" ")]]);
+});
+
 test("a long part that lost words is cleaned again in 150-word pieces, in one request", async () => {
   const { tuned, runProfiledCleanup } = await loadTuned();
   const requests = [];

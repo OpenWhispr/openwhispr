@@ -175,11 +175,17 @@ test("a tuned model's part that lost words is cleaned again in one batch request
     assert.equal(await cleanup(say(0, 30), TUNED), `${say(0, 15)} ${say(15, 30).toUpperCase()}`);
   });
 
-  await t.test("a failed batch keeps its part as spoken and the cleanup goes on", async () => {
+  await t.test("a failed batch keeps its part as spoken and the cleanup goes on", async (t) => {
+    const { default: logger } = await vite.ssrLoadModule("/utils/logger.ts");
+    const logged = [];
+    t.mock.method(logger, "logReasoning", (stage, details) => logged.push({ stage, details }));
     answers = [`${say(0, 10)} ${say(13, 60)}`, say(60, 90).toUpperCase()];
     answerBatch = () => ({ success: false, error: "boom", code: "LOCAL_MODEL_BUSY" });
     assert.equal(await cleanup(say(0, 90), TUNED), `${say(0, 60)} ${say(60, 90).toUpperCase()}`);
     assert.equal(parts.length, 2);
+    // Counts only: nothing logged carries the dictation's words.
+    assert.ok(logged.some(({ stage }) => stage === "LOCAL_ERROR"));
+    assert.doesNotMatch(JSON.stringify(logged), /\bw\d+\b/);
   });
 
   await t.test("a cancelled cleanup stops at a failed batch, as at a failed part", async () => {

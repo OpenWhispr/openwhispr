@@ -110,9 +110,9 @@ export function assertPlausibleCleanupOutput(rawText: string, output: string): v
   });
 }
 
-// Hesitation sounds only, narrower than FILLER_WORDS on purpose: an answer
-// usually keeps a word like "so" or "right", and leaving it out of the speaker's
-// side would break the phrases around it into a false gap. It is also the list
+// Hesitation sounds only, unlike FILLER_WORDS, which also holds words like "so"
+// and "right" that an answer usually keeps: leaving those out of the speaker's
+// side would break the phrases around them into a false gap. It is also the list
 // the drop thresholds were measured with (openwhispr-finetune guard/guards.py).
 const HESITATIONS = new Set("um uh umm uhh er erm ah hmm mm mhm".split(" "));
 // Words in the phrases matched against the answer. At 3, a measured drop hid
