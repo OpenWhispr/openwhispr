@@ -311,10 +311,10 @@ const SPOKEN_LANGUAGE_NAMES: Record<SpokenLanguage, string> = {
 // The tool line comes first: brevity alone made a local model answer from
 // memory instead of using its tools (2/10 tool use in #2349's harness, 9/10 with it).
 const SPOKEN_REPLY_RULE =
-  "This request was spoken in a live voice call, and your reply will be read aloud. When a tool could help, call it in this same response; never just say you will check. Answer in one or two short sentences unless the user asks for more.";
+  "This request was spoken in a live voice call, and your reply will be read aloud. When a tool could help, call it in this same response; never just say you will check. Answer in one or two short sentences unless the user asks for more. When asked to do something, say first what you did, or that you couldn't and why.";
 // Left out when the reply is also typed at the user's caret: there it is the text itself.
-const SPOKEN_REPLY_ACTIONS =
-  "When asked to do something, say first what you did, or that you couldn't and why. Never write out an email, message or other draft in your reply unless the user asks to hear it.";
+const SPOKEN_REPLY_NO_DRAFT =
+  "Never write out an email, message or other draft in your reply unless the user asks to hear it.";
 const SPOKEN_REPLY_FORMAT =
   "Never use Markdown, lists, tables, headings, code, links or emoji, and write numbers, times and dates the way a person would say them, with month and weekday names in full (Tuesday, not Tue; November 19, not Nov 19), never dates in digits (11/19, 2026-11-19), and 3 PM rather than 3:00 PM.";
 
@@ -326,7 +326,7 @@ export function getSpokenReplyRule(language: SpokenLanguage | null, typedAtCaret
   const name = language ? SPOKEN_LANGUAGE_NAMES[language] : undefined;
   return [
     SPOKEN_REPLY_RULE,
-    ...(typedAtCaret ? [] : [SPOKEN_REPLY_ACTIONS]),
+    ...(typedAtCaret ? [] : [SPOKEN_REPLY_NO_DRAFT]),
     SPOKEN_REPLY_FORMAT,
     name ? `Reply in ${name}.` : "Reply in the language the user spoke.",
   ].join(" ");

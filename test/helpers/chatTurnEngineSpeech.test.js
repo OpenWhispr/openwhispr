@@ -93,6 +93,30 @@ test("a spoken request is answered for speech in its language, without snippet e
   assert.ok(spoken.tools.includes("update_dictionary"), "other vocabulary edits stay");
 });
 
+test("a spoken request typed at the caret may still send with a tool, which a take's may not", async (t) => {
+  const fixture = await setup(t);
+  const prompts = [];
+  t.mock.method(
+    fixture.service,
+    "processTextStreamingAI",
+    async function* (_messages, _model, _provider, config) {
+      prompts.push(config.systemPrompt);
+      yield { type: "content", text: "Ok." };
+      yield { type: "done", finishReason: "stop" };
+    }
+  );
+  await fixture.engine.send("email Sam that I'm late", [], { plainTextResponse: true });
+  const { voice } = speechLog();
+  await fixture.engine.send("email Sam that I'm late", [], { plainTextResponse: true, voice });
+
+  const [take, call] = prompts;
+  assert.match(take, /don't draft or send it with a tool/);
+  assert.doesNotMatch(call, /don't draft or send it with a tool/);
+  assert.match(call, /when the user asks to send or do something, do it with your tools/);
+  assert.match(call, /say first what you did/, "an action it takes is still reported first");
+  assert.doesNotMatch(call, /Never write out an email/, "a draft for the field is the text itself");
+});
+
 test("an answer the claim check asks again is withdrawn from speech before the new one", async (t) => {
   const fixture = await setup(t);
   t.mock.method(fixture.service, "processTextStreamingAI", async function* () {
