@@ -144,7 +144,7 @@ Scope: any workspace content scope (`workspace:notes:read/write`, `workspace:fol
 |-------|------|----------|-------------|
 | `limit` | integer | No | 1-100, default 50 |
 | `cursor` | string | No | Pagination cursor |
-| `folder_id` | UUID | No | Filter by folder |
+| `folder_id` | UUID | No | Filter by folder. Matches that folder only, not its subfolders. |
 | `space_id` | UUID | Workspace keys | Team space to list. Required for workspace keys; rejected for personal keys. |
 Scope: `notes:read` (personal) / `workspace:notes:read` (workspace)
 
@@ -197,7 +197,7 @@ Scope: `notes:read` / `workspace:notes:read`. Uses hybrid semantic (vector) + fu
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
 | `space_id` | UUID | Workspace keys | Team space to list. Required for workspace keys; rejected for personal keys. |
-Scope: `notes:read` / `workspace:folders:read`. Returns all folders sorted by `sort_order` then `created_at`.
+Scope: `notes:read` / `workspace:folders:read`. Returns all folders sorted by `sort_order` then `created_at`. The list is flat: each folder's `parent_folder_id` is the id of its parent folder, or `null` for a top-level folder.
 
 **Create Folder** — `POST /folders/create`
 | Field | Type | Required | Description |
@@ -205,7 +205,8 @@ Scope: `notes:read` / `workspace:folders:read`. Returns all folders sorted by `s
 | `name` | string | Yes | Folder name (1-100 chars) |
 | `sort_order` | integer | No | Sort position |
 | `space_id` | UUID | Workspace keys | Team space to create in. Required for workspace keys; rejected for personal keys. |
-Scope: `notes:write` / `workspace:folders:write`. Max 50 folders per user. Returns `409` if name already exists.
+| `parent_folder_id` | UUID | No | Creates a subfolder of this folder. Omit or send `null` for a top-level folder. |
+Scope: `notes:write` / `workspace:folders:write`. Max 50 folders per user. Returns `409` if name already exists; names are unique across top-level folders and subfolders. Folders nest one level deep: the parent must be a top-level folder, in the same space for workspace keys or among your personal folders for personal keys; otherwise the request returns `400 validation_error`.
 
 ### Transcriptions
 

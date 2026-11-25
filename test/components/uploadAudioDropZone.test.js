@@ -8,6 +8,7 @@ const { findElement, installInteractiveDom } = require("../lib/interactiveDom");
 // Upload audio, with the stores and services it reads at mount stood in for: a managed
 // transcription scope makes the provider ready, so the idle drop zone shows.
 const MOCKS = {
+  "/ui/useToast": "export const useToast = () => ({ toast: () => {} });",
   "react-i18next": `
     const t = (key, values) => (values ? key + JSON.stringify(values) : key);
     export const useTranslation = () => ({ t, i18n: { language: "en" } });
@@ -78,7 +79,10 @@ function dispatch(element, type, init = {}) {
 
 const settle = () => React.act(async () => new Promise((resolve) => setImmediate(resolve)));
 
-async function renderUploadAudio(t, { affiliate = false } = {}) {
+async function renderUploadAudio(
+  t,
+  { affiliate = false, batch = {}, electronAPI = {}, mocks = {} } = {}
+) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -90,6 +94,7 @@ async function renderUploadAudio(t, { affiliate = false } = {}) {
     hasQueue: false,
     queue: [],
     addFiles: (items) => calls.added.push(items),
+    ...batch,
   };
   t.after(() => delete globalThis.__uploadBatch);
   installBrowserGlobals(t, {
@@ -111,6 +116,7 @@ async function renderUploadAudio(t, { affiliate = false } = {}) {
         saveAffiliateCandidate: async (input) => {
           candidate = input;
         },
+        ...electronAPI,
       },
     },
   });
@@ -134,6 +140,7 @@ async function renderUploadAudio(t, { affiliate = false } = {}) {
             "/services/cloudApi": `export const cloudGetForAuthGeneration=async()=>({data:{persisted:false,status:null}}); export const cloudPostForAuthGeneration=async()=>{throw new Error('No tracking consent');};`,
           }
         : {}),
+      ...mocks,
     },
   });
   if (affiliate) {
@@ -284,4 +291,56 @@ test("the shared upload zone blocks restricted inputs and resumes when policy al
     })
   );
   assert.match(container.textContent, /allowed\.mp3/);
+});
+
+test("the default Meetings folder and its subfolders are listed but take no uploads", async (t) => {
+  const folder = (id, name, is_default = 0, parent_folder_id = null) => ({
+    id,
+    name,
+    is_default,
+    space_id: 1,
+    parent_folder_id,
+  });
+  const { container } = await renderUploadAudio(t, {
+    batch: { hasQueue: true, hasPending: true },
+    electronAPI: {
+      getSpaces: async () => [{ id: 1, kind: "private" }],
+      getFolders: async () => [
+        folder(3, "Client A", 0, 2),
+        folder(1, "Personal", 1),
+        folder(2, "Meetings", 1),
+        folder(4, "Work"),
+        folder(5, "Q1", 0, 4),
+      ],
+    },
+    mocks: {
+      "/ui/select": `
+        import { createElement } from "react";
+        const pass = ({ children }) => children;
+        export const Select = pass;
+        export const SelectTrigger = pass;
+        export const SelectValue = () => null;
+        export const SelectContent = pass;
+        export const SelectSeparator = () => null;
+        export const SelectItem = ({ value, disabled, children }) =>
+          createElement("div", { "data-folder": value, "aria-disabled": String(!!disabled) }, children);
+      `,
+    },
+  });
+  await settle();
+
+  const options = [];
+  findElement(container, (node) => {
+    if (node.getAttribute("data-folder")) {
+      options.push([node.getAttribute("data-folder"), node.getAttribute("aria-disabled")]);
+    }
+    return false;
+  });
+  assert.deepEqual(options, [
+    ["1", "false"],
+    ["2", "true"],
+    ["3", "true"],
+    ["4", "false"],
+    ["5", "false"],
+  ]);
 });

@@ -100,9 +100,24 @@ private final class TestTextProxy: NSObject, UITextDocumentProxy {
   var documentInputMode: UITextInputMode?
   var documentIdentifier = UUID()
   var hasText = false
-  var keyboardType: UIKeyboardType = .default
-  var returnKeyType: UIReturnKeyType = .default
-  var enablesReturnKeyAutomatically = false
+  // Counted, so a test can tell whether the keyboard reads the field's traits.
+  private(set) var traitReads = 0
+  private var storedKeyboardType: UIKeyboardType = .default
+  private var storedReturnKeyType: UIReturnKeyType = .default
+  private var storedEnablesReturnKeyAutomatically = false
+  var keyboardType: UIKeyboardType {
+    get { traitReads += 1; return storedKeyboardType }
+    set { storedKeyboardType = newValue }
+  }
+  var returnKeyType: UIReturnKeyType {
+    get { traitReads += 1; return storedReturnKeyType }
+    set { storedReturnKeyType = newValue }
+  }
+  var enablesReturnKeyAutomatically: Bool {
+    get { traitReads += 1; return storedEnablesReturnKeyAutomatically }
+    set { storedEnablesReturnKeyAutomatically = newValue }
+  }
+  func resetTraitReads() { traitReads = 0 }
   var autocapitalizationType: UITextAutocapitalizationType = .sentences
   var smartQuotesType: UITextSmartQuotesType = .default
   var isSecureTextEntry = false
@@ -235,6 +250,7 @@ private extension KeyboardViewController {
   }
   func touchTestDismissCard() { hideAgentReviewCard() }
   func touchTestTextDidChange() { textDidChange(nil) }
+  func touchTestTextWillChange() { textWillChange(nil) }
   func touchTestInsertTranscript(_ text: String) { insertSmartText(text) }
   func touchTestTapLetter(_ index: Int) { handleCharacterKeyTapped(characterButtons[index]) }
   func touchTestTapReturn() { handleReturnTapped() }

@@ -288,3 +288,116 @@ test("a Unicode collision suffix cannot take another container's literal name", 
   assert.equal(result.forNote({ space_id: 3 }).segments.at(-1), "STRASSE (3)");
   assert.equal(result.forNote({ space_id: 4 }).segments.at(-1), "STRASSE (3) (4)");
 });
+
+const subfolder = (id, name, space_id, parent_folder_id, account_id = null) => ({
+  ...folder(id, name, space_id, account_id),
+  parent_folder_id,
+});
+
+test("a subfolder sits inside its parent's directory and names both as its folder", () => {
+  const result = placements({
+    spaces: [privateIn(5, "w-acme-1111")],
+    folders: [subfolder(51, "Q1", 5, 50), folder(50, "Client A", 5)],
+  });
+
+  assert.deepEqual(result.forNote({ folder_id: 51, space_id: 5 }), {
+    segments: ["Workspaces", "Acme", "Private", "Client A", "Q1"],
+    workspace: "Acme",
+    space: "Private",
+    folder: "Client A/Q1",
+  });
+  assert.deepEqual(result.folderLocation(50).segments.at(-1), "Client A");
+  assert.deepEqual(
+    result
+      .folderLocations()
+      .map((location) => location.folder)
+      .sort(),
+    ["Client A", "Client A/Q1"]
+  );
+  assert.equal(result.isInsideFolder(51, 50), true);
+  assert.equal(result.isInsideFolder(50, 51), false);
+});
+
+test("a subfolder is told apart only from the folders that share its directory", () => {
+  const result = placements({
+    folders: [
+      folder(10, "Client A", 1),
+      folder(11, "general", 1),
+      subfolder(12, "General", 1, 10),
+      subfolder(13, "general", 1, 10),
+    ],
+  });
+
+  assert.deepEqual(result.folderLocation(12).segments, ["Private notes", "Client A", "General"]);
+  assert.deepEqual(result.folderLocation(13).segments, [
+    "Private notes",
+    "Client A",
+    "general (13)",
+  ]);
+  assert.deepEqual(result.folderLocation(11).segments, ["Private notes", "general"]);
+});
+
+test("two accounts' same-named parents share a directory, and their subfolders are told apart in it", () => {
+  const result = placements({
+    spaces: [privateIn(5, "w-acme-1111"), privateIn(6, "w-acme-1111")],
+    folders: [
+      folder(50, "Projects", 5, "a1"),
+      folder(60, "Projects", 6, "a2"),
+      subfolder(51, "Q1", 5, 50, "a1"),
+      subfolder(61, "q1", 6, 60, "a2"),
+      subfolder(52, "Notes", 5, 50, "a1"),
+      subfolder(62, "Notes", 6, 60, "a2"),
+    ],
+  });
+  const dirOf = (folderId) => result.folderLocation(folderId).segments.join("/");
+
+  assert.equal(dirOf(50), dirOf(60));
+  assert.equal(dirOf(51), "Workspaces/Acme/Private/Projects/Q1");
+  assert.equal(dirOf(61), "Workspaces/Acme/Private/Projects/q1 (61)");
+  assert.equal(dirOf(52), dirOf(62), "the very same name still shares");
+});
+
+test("a subfolder whose parent is gone or in another space goes at its space's top level", () => {
+  const result = placements({
+    spaces: [unboundPrivate, team(2, "Engineering")],
+    folders: [
+      folder(20, "Client A", 2),
+      subfolder(10, "Orphan", 1, 999),
+      subfolder(11, "Moved", 1, 20),
+    ],
+  });
+
+  assert.deepEqual(result.forNote({ folder_id: 10, space_id: 1 }), {
+    segments: ["Private notes", "Orphan"],
+    space: "Private",
+    folder: "Orphan",
+  });
+  assert.deepEqual(result.folderLocation(11).segments, ["Private notes", "Moved"]);
+  assert.equal(result.isInsideFolder(11, 20), false);
+});
+
+test("folders in a loop of parents go at the top level, with their subfolders inside them", () => {
+  const result = placements({
+    folders: [
+      subfolder(10, "A", 1, 11),
+      subfolder(11, "B", 1, 10),
+      subfolder(12, "C", 1, 10),
+      subfolder(13, "Self", 1, 13),
+    ],
+  });
+
+  assert.deepEqual(result.folderLocation(10).segments, ["Private notes", "A"]);
+  assert.deepEqual(result.folderLocation(11).segments, ["Private notes", "B"]);
+  assert.deepEqual(result.folderLocation(12).segments, ["Private notes", "A", "C"]);
+  assert.deepEqual(result.folderLocation(13).segments, ["Private notes", "Self"]);
+  assert.equal(result.folderLocation(12).folder, "A/C");
+});
+
+test("a folder whose parent is placed later in the list still nests", () => {
+  const result = placements({
+    folders: [subfolder(3, "Leaf", 1, 2), subfolder(2, "Middle", 1, 1), folder(1, "Top", 1)],
+  });
+
+  assert.deepEqual(result.folderLocation(3).segments, ["Private notes", "Top", "Middle", "Leaf"]);
+  assert.equal(result.isInsideFolder(3, 1), true);
+});

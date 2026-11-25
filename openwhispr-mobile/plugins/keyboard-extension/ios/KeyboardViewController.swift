@@ -1473,18 +1473,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     preferredContentSize = CGSize(width: view.bounds.width, height: keyboardHeight)
   }
 
-  override func textWillChange(_ textInput: UITextInput?) {
-    super.textWillChange(textInput)
-    // Moving to another field: its keyboard type may differ (a number pad, a URL row).
-    DispatchQueue.main.async { [weak self] in
-      // iOS sends this as the host is covered (Notification Centre, the app switcher) and then
-      // detaches the field: reading its traits after that crashes inside UIKit. viewWillAppear
-      // refreshes the keys when the keyboard comes back.
-      guard let self, self.isKeyboardOnScreen, self.view.window != nil else { return }
-      self.refreshFieldAwareKeys()
-    }
-  }
-
   /// The resting pill hands the dictation to the app (it reads "Tap to speak" either way).
   private var pillOpensApp = false
 
@@ -1492,6 +1480,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // deferred block.
   private var isKeyboardOnScreen = false
 
+  // A field's keys (number pad, return key, URL row) follow it here and in viewDidAppear,
+  // never later from textWillChange: iOS can tear down the old field's document interface
+  // in between, and reading its traits then crashes the keyboard.
   override func textDidChange(_ textInput: UITextInput?) {
     super.textDidChange(textInput)
     noteFieldReport()
