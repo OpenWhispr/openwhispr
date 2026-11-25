@@ -1,7 +1,12 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react-native';
 
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('expo-router', () => ({ router: { push: jest.fn() }, useFocusEffect: () => {} }));
+// As the other PreferencesScreen suites: the real module reaches expo/fetch through apiClient.
+jest.mock('@/lib/keyboardTranslationSync', () => ({
+  keyboardCanTranslate: () => true,
+  reconcileKeyboardTranslationFromAppGroup: async () => {},
+}));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/store/useConfigStore', () => ({

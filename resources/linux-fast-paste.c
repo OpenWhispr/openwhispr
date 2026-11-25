@@ -27,6 +27,7 @@
 
 #ifdef HAVE_ATSPI
 #include <atspi/atspi.h>
+#include <dlfcn.h>
 
 /* libatspi gives every application it hasn't seen yet 15s to answer, and every
  * application is new to this short-lived process. One peer that stops
@@ -483,8 +484,31 @@ static int check_parent_terminal(Display *dpy, Window win) {
 }
 
 #ifdef HAVE_ATSPI
+/* Route every call through the bus, never libatspi's direct connection to each
+ * application: GTK3's bridge before at-spi2-core 2.62 keeps every one it
+ * accepts, with the pidfds libdbus holds for it, until the app exits, so each
+ * walk here would leave more in every GTK3 app until it runs out of file
+ * descriptors (#3242). libatspi 2.61+ skips them under ATSPI_DISABLE_P2P; older
+ * releases ignore it, so this definition, which libatspi calls instead of
+ * libdbus's, refuses every connection opened after atspi_init() (which opens
+ * the bus itself), and libatspi stays on the bus. */
+static int atspi_started;
+
+DBusConnection *dbus_connection_open_private(const char *address, DBusError *error) {
+    if (atspi_started) {
+        dbus_set_error_const(error, DBUS_ERROR_NOT_SUPPORTED, "direct connections disabled");
+        return NULL;
+    }
+    DBusConnection *(*forward)(const char *, DBusError *) =
+        (DBusConnection *(*)(const char *, DBusError *))dlsym(
+            RTLD_NEXT, "dbus_connection_open_private");
+    return forward(address, error);
+}
+
 static int init_atspi(void) {
+    setenv("ATSPI_DISABLE_P2P", "1", 1);
     int status = atspi_init();
+    atspi_started = 1;
     atspi_set_timeout(ATSPI_CALL_TIMEOUT_MS, -1);
     return status;
 }

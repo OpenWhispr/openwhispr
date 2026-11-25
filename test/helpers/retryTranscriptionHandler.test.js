@@ -3,7 +3,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 const fs = require("node:fs");
-const { EventEmitter } = require("node:events");
 const path = require("node:path");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
@@ -845,7 +844,7 @@ test("ElevenLabs dictation cancellation stops only the sender's request before a
     return Response.json(ELEVENLABS_KEYTERM_REFUSALS[0], { status: 400 });
   };
 
-  const sender = Object.assign(new EventEmitter(), { id: 17 });
+  const sender = { id: 17 };
   const pending = handlers.get("proxy-elevenlabs-transcription")(
     { sender },
     { audioBuffer: new ArrayBuffer(4), keyterms: ["OpenWhispr"] }
@@ -858,9 +857,8 @@ test("ElevenLabs dictation cancellation stops only the sender's request before a
   response.resolve();
   const result = await pending;
   assert.equal(signal.aborted, true);
-  assert.ok(result.error);
+  assert.equal(result.code, "TRANSCRIPTION_CANCELLED");
   assert.equal(fetches.length, 1);
-  assert.equal(sender.listenerCount("destroyed"), 0);
 });
 
 test("a dictation cancelled while policy is loading never reaches ElevenLabs", async (t) => {
@@ -877,7 +875,7 @@ test("a dictation cancelled while policy is loading never reaches ElevenLabs", a
   tokenState = { ...tokenState, generation: tokenState.generation + 1 };
   const refreshing = fakeThis.refreshEffectivePolicy();
   assert.equal(fakeThis.effectivePolicyManager.getCurrent().status, "loading");
-  const sender = Object.assign(new EventEmitter(), { id: 17 });
+  const sender = { id: 17 };
   fetches.length = 0;
   const pending = handlers.get("proxy-elevenlabs-transcription")(
     { sender },
@@ -886,9 +884,8 @@ test("a dictation cancelled while policy is loading never reaches ElevenLabs", a
   eventHandlers.get("cloud-transcribe-cancel")({ sender });
   lookup.resolve();
   await refreshing;
-  assert.ok((await pending).error);
+  assert.equal((await pending).code, "TRANSCRIPTION_CANCELLED");
   assert.equal(fetches.length, 0);
-  assert.equal(sender.listenerCount("destroyed"), 0);
 });
 
 test("retry: a recording over the upload cap still goes to ElevenLabs", async (t) => {
@@ -1129,8 +1126,7 @@ test("proxy transcription handlers resolve to structured errors instead of rejec
     ]) {
       const fn = handlers.get(channel);
       assert.ok(fn, `${channel} must be registered`);
-      const sender = Object.assign(new EventEmitter(), { id: 1 });
-      const result = await fn({ sender }, { audioBuffer: new ArrayBuffer(4) });
+      const result = await fn({ sender: {} }, { audioBuffer: new ArrayBuffer(4) });
       assert.equal(typeof result.error, "string", channel);
     }
   } finally {
@@ -1838,13 +1834,11 @@ test("ElevenLabs dictation, Retry and Upload distinguish silence from an invalid
   ]) {
     fetchResponse = response;
     textUpdates.length = 0;
-    const sender = Object.assign(new EventEmitter(), { id: 17 });
     const dictation = await handlers.get("proxy-elevenlabs-transcription")(
-      { sender },
+      { sender: {} },
       { audioBuffer: new ArrayBuffer(4) }
     );
     assert.equal(dictation.code, expectedCode);
-    assert.equal(sender.listenerCount("destroyed"), 0);
     const retry = await invoke(ELEVENLABS_SETTINGS);
     const upload = await invokeUpload({ provider: "elevenlabs", transcriptionMode: "providers" });
     for (const result of [retry, upload]) {

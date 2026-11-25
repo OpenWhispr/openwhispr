@@ -229,6 +229,15 @@ for (const [name, failure, expectedError] of [
     { success: false, error: "Provider rejected the API key" },
     "Provider rejected the API key",
   ],
+  [
+    "classified refused key",
+    {
+      success: false,
+      messageKey: "providerErrors.authFailed",
+      messageParams: { provider: "ElevenLabs" },
+    },
+    "ElevenLabs rejected your API key.",
+  ],
   ["expired sign-in", { success: false, code: "AUTH_REQUIRED" }, "signInRequired"],
   ["policy refusal", { success: false, code: "POLICY_MODEL_BLOCKED" }, "POLICY_MODEL_BLOCKED"],
   [
