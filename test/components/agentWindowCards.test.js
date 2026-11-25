@@ -71,7 +71,8 @@ const MOCKS = {
         () => status
       );
       return {
-        status: current, opening: false, readLevel: () => 0, streamingOnlyProvider: false,
+        status: current, opening: false, readLevel: () => 0,
+        streamingOnlyProvider: globalThis.__voice.streamingOnlyProvider ?? false,
         start: async () => {
           globalThis.__voice.events.push("start");
           return globalThis.__voice.startResult ?? "started";
@@ -868,6 +869,44 @@ test("a yes whose card settled while it was spoken waits in the composer, never 
   assert.deepEqual(commits, []);
   assert.deepEqual(globalThis.__chat.sent, []);
   assert.equal(composerText(), "Yes, send it.");
+});
+
+test("a yes whose card was prepared again while it was spoken waits in the composer, never sent", async (t) => {
+  const { view, commits, card, startReply, say, composerText } = await cardWaiting(t);
+  await startReply();
+  // What a Send that lost its login, or a Retry, leaves: the same card, waiting on a new action.
+  await React.act(async () =>
+    view.approvals.useConnectorApprovalStore.setState(({ entries }) => ({
+      entries: { ...entries, [card().key]: { ...card(), actionId: "act-2" } },
+    }))
+  );
+  await say("Yes, send it.");
+  assert.equal(card().state, "pending");
+  assert.deepEqual(commits, []);
+  assert.equal(composerText(), "Yes, send it.");
+});
+
+test("with a realtime-only provider, the hotkey opens the waiting card with the keyboard, never a take", async (t) => {
+  const { view, commits, card } = await cardWaiting(t);
+  globalThis.__voice.streamingOnlyProvider = true;
+  await React.act(async () => view.button("Minimize").click());
+  await view.settle();
+  assert.equal(view.layout(), "pill");
+  globalThis.__voice.events.length = 0;
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await view.settle();
+  assert.equal(view.layout(), "modal");
+  assert.ok(view.host.querySelector("[data-approval-card]"), "the card shows");
+  assert.ok(
+    [...view.host.querySelectorAll("textarea")].some(
+      (field) => !field.closest("[data-approval-card]")
+    ),
+    "the composer shows, to type the answer"
+  );
+  assert.deepEqual(globalThis.__voice.events, []);
+  assert.equal(card().state, "pending");
+  assert.deepEqual(commits, []);
+  assert.deepEqual(globalThis.__chat.sent, []);
 });
 
 test("a spoken yes never sends a card whose Send is blocked", async (t) => {

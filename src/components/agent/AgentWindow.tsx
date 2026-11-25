@@ -123,15 +123,16 @@ function selectedApprovalField(): SelectionEditTarget | null {
 }
 
 // A spoken reply to the waiting card: a question takes the words as its
-// answer; an answer card takes a clear yes as Send and a clear no as Cancel.
-function replyToCard(card: PendingCard, text: string): boolean {
+// answer; an answer card takes a clear yes as Send and a clear no as Cancel,
+// only while it holds the action it held when the take began.
+function replyToCard(card: PendingCard, text: string, actionId: string | undefined): boolean {
   if (card.interaction === "questions") {
     answerWithText(card.key, text);
     return true;
   }
   const entry = useConnectorApprovalStore.getState().entries[card.key];
   const reply = spokenCardReply(text);
-  if (!entry || !reply) return false;
+  if (!entry || entry.actionId !== actionId || !reply) return false;
   if (reply === "no") cancelApproval(card.key);
   else if (approvalSendCheck(entry).sendBlocked) return false;
   else void approveAction(card.key);
@@ -272,7 +273,7 @@ export default function AgentWindow() {
   const replyCard = voiceReplyCard(pendingCards, approvals);
   const replyCardRef = useRef(replyCard);
   replyCardRef.current = replyCard;
-  const replyTakeRef = useRef<{ take: number; cardId: string } | null>(null);
+  const replyTakeRef = useRef<{ take: number; cardId: string; actionId?: string } | null>(null);
   const cardFrameRef = useRef<HTMLDivElement>(null);
   const [cardHeight, setCardHeight] = useState(0);
   const standalone = state.layout === "standalone";
@@ -524,8 +525,14 @@ export default function AgentWindow() {
         // A card minimized meanwhile is never answered unseen.
         const { visible, layout } = stateRef.current;
         const onScreen = visible && (layout === "modal" || layout === "standalone");
-        if (card?.id === replyTake.cardId && onScreen && replyToCard(card, text)) return;
-        // Not a clear answer, or its card is gone: the words wait in the composer.
+        if (
+          card?.id === replyTake.cardId &&
+          onScreen &&
+          replyToCard(card, text, replyTake.actionId)
+        )
+          return;
+        // Not a clear answer, or its card is gone or prepared again: the words
+        // wait in the composer.
         dispatch({ type: "held", text, context: null, attachment: null });
         return;
       }
@@ -780,7 +787,13 @@ export default function AgentWindow() {
         capturePressContext(external, card);
       }
       takeRef.current += 1;
-      replyTakeRef.current = replyTo ? { take: takeRef.current, cardId: replyTo.id } : null;
+      replyTakeRef.current = replyTo
+        ? {
+            take: takeRef.current,
+            cardId: replyTo.id,
+            actionId: useConnectorApprovalStore.getState().entries[replyTo.key]?.actionId,
+          }
+        : null;
       dispatch({ type: "useVoice" });
       // The card a spoken yes would send shows while the user speaks.
       const { layout } = stateRef.current;
