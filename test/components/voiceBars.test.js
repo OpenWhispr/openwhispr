@@ -8,7 +8,6 @@ const {
   soundBarHeight,
   soundBarLevels,
   soundLevel,
-  workingBarLevels,
 } = require("../../src/components/agent/voiceBars.ts");
 
 test("a quiet room leaves the bars at rest", () => {
@@ -35,28 +34,10 @@ test("each bar reads a different moment, so the bars don't move in step", () => 
   assert.equal(new Set(levels).size, SOUND_BAR_COUNT);
 });
 
-test("silence keeps every bar at its resting height", () => {
+test("silence keeps every bar at the same resting height", () => {
   const levels = soundBarLevels(new Array(SOUND_HISTORY_FRAMES).fill(0));
   assert.deepEqual(levels, [0, 0, 0, 0]);
-  assert.match(soundBarHeight(2), /^calc\(14px \+ 14px \* var\(--voice-bar-2, 0\)\)$/);
-});
-
-test("while a turn works, a low swell runs slowly across the bars, rising from rest", () => {
-  assert.deepEqual(workingBarLevels(0), [0, 0, 0, 0]);
-  const levels = workingBarLevels(1000);
-  assert.ok(
-    levels.every((lift) => lift >= 0 && lift <= 0.5),
-    "a low swell"
-  );
-  assert.equal(new Set(levels.map((lift) => lift.toFixed(3))).size, SOUND_BAR_COUNT, "out of step");
-  const later = workingBarLevels(1100);
-  assert.ok(
-    levels.every((lift, index) => Math.abs(lift - later[index]) < 0.04),
-    "and slow"
-  );
-  const nextCycle = workingBarLevels(1000 + 3600);
-  assert.deepEqual(
-    nextCycle.map((lift) => lift.toFixed(6)),
-    levels.map((lift) => lift.toFixed(6))
-  );
+  for (let index = 0; index < SOUND_BAR_COUNT; index++) {
+    assert.equal(soundBarHeight(index), `calc(8px + 20px * var(--voice-bar-${index}, 0))`);
+  }
 });

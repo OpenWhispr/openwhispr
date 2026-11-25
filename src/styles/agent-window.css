@@ -228,6 +228,24 @@
   }
 }
 
+/* A call's turn at work: each Sound bar turns blue and back in turn
+   (VoicePill staggers them), a wave across the bars like the shimmer on
+   "Thinking…", on the same 2.4 s loop. */
+.voice-bar-shimmer {
+  animation: voice-bar-shimmer 2.4s linear infinite;
+}
+
+@keyframes voice-bar-shimmer {
+  0%,
+  40%,
+  100% {
+    color: var(--color-foreground);
+  }
+  20% {
+    color: var(--color-primary);
+  }
+}
+
 /* Expand while a card waits on the user (useAnswerNudge): a blue pulse, or a
    steady blue for reduced motion. */
 .agent-expand-cue {
@@ -255,6 +273,10 @@
     animation: none;
     background: none;
     -webkit-text-fill-color: var(--color-foreground);
+  }
+
+  .voice-bar-shimmer {
+    animation: none;
   }
 }
 

@@ -116,18 +116,56 @@ test("while a turn works, the cap reads Working with one, two, then three dots, 
   assert.equal(dotsShown(), 0);
 });
 
-test("while a turn works, the bars swell slowly with no sound, and lie still once it ends", async (t) => {
-  const view = await mountPill(t, { status: "working" });
+test("the bars follow sound only while listening or speaking, sink back gradually after, and shimmer while the turn works", async (t) => {
+  // Loud sound throughout, so any state that followed it would lift the bars.
+  const sound = { waveformActive: true, readLevel: () => 0.1 };
+  const view = await mountPill(t, { status: "working", ...sound });
   const pill = view.host.querySelector("[data-voice-pill]");
+  const bars = () => [...pill.querySelectorAll("span.w-0\\.5")];
   const lifts = () =>
-    Array.from({ length: 4 }, (_, index) =>
-      Number(pill.style.getPropertyValue(`--voice-bar-${index}`))
+    bars().map((_, index) => Number(pill.style.getPropertyValue(`--voice-bar-${index}`) || 0));
+  const shimmer = () =>
+    bars().map((bar) =>
+      bar.classList.contains("voice-bar-shimmer") ? bar.style.animationDelay : null
     );
-  await React.act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+  const wait = (ms) => React.act(() => new Promise((resolve) => setTimeout(resolve, ms)));
+  for (const status of ["working", "sendingEmail", "sendingMessage"]) {
+    await view.render({ status, ...sound });
+    await wait(200);
+    assert.deepEqual(lifts(), [0, 0, 0, 0], `${status}: at rest`);
+    assert.deepEqual(
+      shimmer(),
+      ["0ms", "200ms", "400ms", "600ms"],
+      `${status}: a blue wave across the bars`
+    );
+  }
+  for (const status of ["starting", "micOff", "waiting", "stopped"]) {
+    await view.render({ status, ...sound });
+    await wait(200);
+    assert.deepEqual(lifts(), [0, 0, 0, 0], `${status}: at rest`);
+    assert.deepEqual(shimmer(), [null, null, null, null], `${status}: no shimmer`);
+  }
+  for (const status of ["listening", "speaking"]) {
+    await view.render({ status, ...sound });
+    await wait(300);
+    assert.deepEqual(shimmer(), [null, null, null, null], `${status}: no shimmer`);
+    assert.ok(
+      lifts().some((lift) => lift > 0.05),
+      `${status}: the bars follow the sound: ${lifts()}`
+    );
+  }
+  await view.render({ status: "working", ...sound });
   assert.ok(
     lifts().some((lift) => lift > 0.05),
-    `the bars swell: ${lifts()}`
+    `they sink back from where they were: ${lifts()}`
   );
-  await view.render({ status: "listening" });
-  assert.deepEqual(lifts(), [0, 0, 0, 0]);
+  await wait(2000);
+  assert.ok(
+    lifts().every((lift) => lift <= 0.001),
+    `and come to rest: ${lifts()}`
+  );
+  assert.ok(
+    bars().every((bar) => bar.style.height.startsWith("calc(8px + 20px")),
+    "every bar keeps the same resting size"
+  );
 });

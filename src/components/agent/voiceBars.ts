@@ -1,6 +1,7 @@
-// The call pill's four Sound bars: at rest they keep the design's shape, and speech lifts
-// each one by how loud the sound was a moment ago, so the wave ripples with the real audio.
-const REST_PX = [8, 8, 14, 8];
+// The call pill's four Sound bars: they rest level, and while the call listens or speaks, sound
+// lifts each one by how loud it was a moment ago, so the wave ripples with the real audio. In
+// every other state they sink back to rest, as after a silence.
+const REST_PX = 8;
 const PEAK_PX = 28;
 const REACH = [0.75, 1, 0.9, 0.65];
 // How many frames behind the newest level each bar reads.
@@ -13,7 +14,7 @@ const LOUDNESS_CURVE = 0.6;
 const ATTACK = 0.55;
 const RELEASE = 0.14;
 
-export const SOUND_BAR_COUNT = REST_PX.length;
+export const SOUND_BAR_COUNT = REACH.length;
 export const SOUND_HISTORY_FRAMES = Math.max(...FRAME_DELAY) + 1;
 
 /** How loud a sound's RMS reads, from 0 (the noise floor) to 1. */
@@ -32,23 +33,7 @@ export function soundBarLevels(history: readonly number[]): number[] {
   return FRAME_DELAY.map((delay, index) => (history[delay] ?? 0) * REACH[index]);
 }
 
-// While a turn works, a low swell runs slowly across the bars, once per
-// cycle of the cap's Working dots, rising gently from rest.
-const WORKING_PERIOD_MS = 3600;
-const WORKING_LIFT = 0.35;
-const WORKING_EASE_IN_MS = 800;
-
-/** Each bar's lift `elapsedMs` into a turn's work. */
-export function workingBarLevels(elapsedMs: number): number[] {
-  const ease = Math.min(1, elapsedMs / WORKING_EASE_IN_MS);
-  return REST_PX.map((_, index) => {
-    const phase = elapsedMs / WORKING_PERIOD_MS - index / SOUND_BAR_COUNT;
-    return WORKING_LIFT * ease * (0.5 - 0.5 * Math.cos(2 * Math.PI * phase));
-  });
-}
-
 /** A bar's height, following its `--voice-bar-<index>` lift. */
 export function soundBarHeight(index: number): string {
-  const rest = REST_PX[index];
-  return `calc(${rest}px + ${PEAK_PX - rest}px * var(--voice-bar-${index}, 0))`;
+  return `calc(${REST_PX}px + ${PEAK_PX - REST_PX}px * var(--voice-bar-${index}, 0))`;
 }

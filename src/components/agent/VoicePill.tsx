@@ -11,7 +11,6 @@ import {
   soundBarHeight,
   soundBarLevels,
   soundLevel,
-  workingBarLevels,
 } from "./voiceBars";
 
 /** What the call's status cap says, from what is actually happening. */
@@ -62,6 +61,9 @@ function useWorkingDots(active: boolean): number {
   return dots;
 }
 
+// How far behind the bar before it each bar turns blue, so the shimmer travels across them.
+const BAR_SHIMMER_STAGGER_MS = 200;
+
 // The cap's outline: a tab whose shoulders run down into the pill below it.
 const CAP_WIDTH = 196;
 const CAP_HEIGHT = 28;
@@ -73,10 +75,7 @@ interface VoicePillProps {
   notice?: string | null;
   /** The reply's or the microphone's level, for the Sound bars and the speaking glow. */
   readLevel: () => number;
-  /**
-   * The Sound bars follow sound; dimmed while the microphone is off and nothing
-   * plays, and then still unless a turn works.
-   */
+  /** The Sound bars follow sound while the call listens or speaks; dimmed while the microphone is off and nothing plays. */
   waveformActive: boolean;
   micMuted: boolean;
   sessionControl: VoiceSessionControl;
@@ -122,46 +121,54 @@ export function VoicePill({
   const dots = useWorkingDots(working);
   const starting = status === "starting";
   const stopped = status === "stopped";
+  const live = status === "listening" || status === "speaking";
+  // A turn at work: a blue wave runs across the bars, as the shimmer does across "Thinking…".
+  const busy = status === "working" || status === "sendingEmail" || status === "sendingMessage";
   const glow = !inModal && status === "speaking" && !notice;
-  const levelActive = glow || working || (waveformActive && !stopped);
+  const levelActive = glow || (live && waveformActive);
   const pillRef = useRef<HTMLDivElement>(null);
+  // What the bars last showed, kept across states so they sink back from there.
+  const meterRef = useRef({
+    level: 0,
+    barLevel: 0,
+    history: new Array<number>(SOUND_HISTORY_FRAMES).fill(0),
+  });
 
   // The Sound bars and the glow follow the reply or the microphone as it is
-  // heard (--voice-level), and while a turn works a slow swell runs through the
-  // bars under that; they hold still under reduced motion, and an animation
-  // ending never changes the call.
+  // heard (--voice-level) while the call listens or speaks, and otherwise sink
+  // back to rest as after a silence; they hold still under reduced motion, and
+  // an animation ending never changes the call.
   useEffect(() => {
     const element = pillRef.current;
     if (!element) return undefined;
+    const meter = meterRef.current;
     const paintBars = (lifts: number[]) =>
       lifts.forEach((lift, index) =>
         element.style.setProperty(`--voice-bar-${index}`, lift.toFixed(3))
       );
-    if (!levelActive || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
       element.style.setProperty("--voice-level", "0");
       paintBars(new Array(SOUND_BAR_COUNT).fill(0));
       return undefined;
     }
     let frame = 0;
-    let level = 0;
-    let barLevel = 0;
-    const history: number[] = new Array(SOUND_HISTORY_FRAMES).fill(0);
-    const startedAt = performance.now();
-    const paint = (now: number) => {
-      const rms = readLevel();
-      level = level * 0.8 + Math.min(1, rms * 6) * 0.2;
-      element.style.setProperty("--voice-level", level.toFixed(3));
-      barLevel = followLevel(barLevel, soundLevel(rms));
-      history.pop();
-      history.unshift(barLevel);
-      const lifts = soundBarLevels(history);
-      const swell = working ? workingBarLevels(now - startedAt) : null;
-      paintBars(swell ? lifts.map((lift, index) => Math.max(lift, swell[index])) : lifts);
-      frame = requestAnimationFrame(paint);
+    const paint = () => {
+      const rms = levelActive ? readLevel() : 0;
+      meter.level = meter.level * 0.8 + Math.min(1, rms * 6) * 0.2;
+      element.style.setProperty("--voice-level", meter.level.toFixed(3));
+      meter.barLevel = followLevel(meter.barLevel, soundLevel(rms));
+      meter.history.pop();
+      meter.history.unshift(meter.barLevel);
+      const lifts = soundBarLevels(meter.history);
+      paintBars(lifts);
+      // Back at rest with nothing to follow, it waits for the next state.
+      if (levelActive || meter.level > 0.001 || lifts.some((lift) => lift > 0.001)) {
+        frame = requestAnimationFrame(paint);
+      }
     };
     frame = requestAnimationFrame(paint);
     return () => cancelAnimationFrame(frame);
-  }, [levelActive, readLevel, working]);
+  }, [levelActive, readLevel]);
 
   const surface = inModal ? "bg-surface-1 dark:bg-surface-2" : "agent-panel bg-surface-0";
   const capFill = inModal ? "fill-surface-1 dark:fill-surface-2" : "fill-[var(--color-surface-0)]";
@@ -250,8 +257,11 @@ export function VoicePill({
           {Array.from({ length: SOUND_BAR_COUNT }, (_, index) => (
             <span
               key={index}
-              className="w-0.5 rounded-full bg-current"
-              style={{ height: soundBarHeight(index) }}
+              className={cn("w-0.5 rounded-full bg-current", busy && "voice-bar-shimmer")}
+              style={{
+                height: soundBarHeight(index),
+                ...(busy ? { animationDelay: `${index * BAR_SHIMMER_STAGGER_MS}ms` } : {}),
+              }}
             />
           ))}
         </div>
