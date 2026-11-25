@@ -1,8 +1,10 @@
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Keyboard, Maximize, Mic, Phone, Square, X, type IconComponent } from "../icons";
 import { cn } from "../lib/utils";
 import { ICON_BUTTON } from "../chat/interactions/cardStyles";
-import { PillWaveform } from "../dictation/PillWaveform";
+import { SoundBars } from "./SoundBars";
+import { useSoundMeter } from "./useSoundMeter";
 import type { AgentPillButton, AgentPillControls } from "./agentWindowState";
 import { useAgentWindowDrag } from "./useAgentWindowDrag";
 
@@ -17,7 +19,7 @@ const BUTTONS: Record<AgentPillButton, { icon: IconComponent; label: string }> =
 
 interface AgentPillProps {
   controls: AgentPillControls;
-  /** The waveform moves only while the take records. */
+  /** The Sound bars follow the microphone only while the take records. */
   recording: boolean;
   readLevel: () => number;
   /** Shown in place of the waveform (already translated). */
@@ -52,6 +54,8 @@ export function AgentPill({
 }: AgentPillProps) {
   const { t } = useTranslation();
   const dragHandlers = useAgentWindowDrag();
+  const barsRef = useRef<HTMLDivElement>(null);
+  useSoundMeter(barsRef, recording, readLevel);
   const hasStatus = Boolean(notice || controls.waiting || controls.thinking || controls.waveform);
   return (
     <div
@@ -83,11 +87,10 @@ export function AgentPill({
           {t("agentMode.input.thinking")}
         </span>
       ) : controls.waveform ? (
-        <PillWaveform
-          getLevel={readLevel}
-          active={recording}
-          className="h-6 shrink-0 text-foreground"
-        />
+        // The dictation waveform's slot (11 bars and their gaps), so the pill keeps its size.
+        <span className="flex h-6 w-[52px] shrink-0 items-center">
+          <SoundBars ref={barsRef} />
+        </span>
       ) : null}
       {hasStatus && !controls.thinking && (
         <span className="mx-3 h-3.5 w-px shrink-0 bg-border" aria-hidden="true" />

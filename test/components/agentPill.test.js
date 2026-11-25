@@ -71,7 +71,7 @@ test("waiting for an answer, the pill says so and Expand can pulse blue", async 
   assert.doesNotMatch(still, /agent-expand-cue/);
 });
 
-test("assistant and dictation render the same live waveform from quiet speech through loud peaks", async (t) => {
+test("a take's pill shows the call pill's four Sound bars, rising with the microphone while it records and sinking back after", async (t) => {
   let root;
   t.after(() => root && React.act(() => root.unmount()));
   const dom = await installHappyDom(t);
@@ -82,66 +82,63 @@ test("assistant and dictation render the same live waveform from quiet speech th
     return frameId;
   };
   globalThis.cancelAnimationFrame = (id) => frames.delete(id);
+  const runFrames = (count) => {
+    for (let i = 0; i < count; i++) {
+      const pending = [...frames.values()];
+      frames.clear();
+      pending.forEach((paint) => paint(i * 16));
+    }
+  };
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-agent-waveform-" });
   const { AgentPill } = await vite.ssrLoadModule("/components/agent/AgentPill.tsx");
-  const { VoicePill } = await vite.ssrLoadModule("/components/dictation/VoicePill.tsx");
-  let level = 0;
-  const getLevel = () => level;
+  const readLevel = () => 0.1;
   const host = dom.document.createElement("div");
   dom.document.body.append(host);
   const { createRoot } = require("react-dom/client");
   root = createRoot(host);
-  await React.act(() =>
-    root.render(
-      React.createElement(
-        React.Fragment,
-        null,
-        React.createElement(
-          "div",
-          { id: "assistant" },
-          React.createElement(AgentPill, {
-            controls: {
-              waveform: true,
-              thinking: false,
-              waiting: false,
-              buttons: ["stop", "keyboard", "close"],
-            },
-            recording: true,
-            readLevel: getLevel,
-            onAction() {},
-          })
-        ),
-        React.createElement(VoicePill, {
-          variant: "floating",
-          state: "recording",
-          expanded: true,
-          horizontalDirection: "right",
-          getAudioLevel: getLevel,
+  const render = (recording) =>
+    React.act(() =>
+      root.render(
+        React.createElement(AgentPill, {
+          controls: {
+            waveform: true,
+            thinking: false,
+            waiting: false,
+            buttons: ["stop", "keyboard", "close"],
+          },
+          recording,
+          readLevel,
+          onAction() {},
         })
       )
-    )
-  );
-  const assistantBars = () => [...host.querySelectorAll("#assistant [aria-hidden='true'] > div")];
-  const dictationBars = () => [
-    ...host.querySelectorAll(".voice-pill-waveform > div:last-child > div"),
-  ];
-  let now = 0;
-  for (const sample of [0, 0.01, 0.03, 0.12, 0.02, 0.08, 0.15, 0, 0.04, 0.1, 0.02]) {
-    level = sample;
-    now += 80;
-    const pending = [...frames.values()];
-    frames.clear();
-    pending.forEach((paint) => paint(now));
-    assert.equal(assistantBars().length, 11);
-    assert.deepEqual(
-      assistantBars().map((bar) => bar.style.height),
-      dictationBars().map((bar) => bar.style.height)
     );
-  }
-  assert.ok(assistantBars().some((bar) => parseFloat(bar.style.height) > 20));
-  assert.equal(
-    host.querySelector("#assistant > div > :first-child").tagName,
-    "DIV",
-    "the waveform uses the old logo's space"
+  await render(true);
+  const bars = host.querySelector("[aria-hidden='true']");
+  const lifts = () =>
+    [0, 1, 2, 3].map((index) => Number(bars.style.getPropertyValue(`--voice-bar-${index}`) || 0));
+  assert.equal(bars.querySelectorAll("span.w-0\\.5").length, 4);
+  const slot = host.querySelector(":scope > div > :first-child");
+  assert.ok(slot.contains(bars), "the bars use the old logo's space");
+  assert.match(
+    slot.className,
+    /\bw-\[52px\].*\bh-6\b|\bh-6\b.*\bw-\[52px\]/,
+    "the old waveform's slot, so the pill keeps its size"
+  );
+  runFrames(20);
+  assert.ok(
+    lifts().some((lift) => lift > 0.05),
+    `they rise with the microphone: ${lifts()}`
+  );
+
+  await render(false);
+  runFrames(1);
+  assert.ok(
+    lifts().some((lift) => lift > 0.05),
+    `and sink back from there, not at once: ${lifts()}`
+  );
+  runFrames(120);
+  assert.ok(
+    lifts().every((lift) => lift <= 0.001),
+    `then come to rest: ${lifts()}`
   );
 });

@@ -4,14 +4,8 @@ import { Keyboard, Maximize, Mic, MicOff, Minimize, Settings, X } from "../icons
 import { cn } from "../lib/utils";
 import { ICON_BUTTON } from "../chat/interactions/cardStyles";
 import { useAgentWindowDrag } from "./useAgentWindowDrag";
-import {
-  SOUND_BAR_COUNT,
-  SOUND_HISTORY_FRAMES,
-  followLevel,
-  soundBarHeight,
-  soundBarLevels,
-  soundLevel,
-} from "./voiceBars";
+import { SoundBars } from "./SoundBars";
+import { useSoundMeter } from "./useSoundMeter";
 
 /** What the call's status cap says, from what is actually happening. */
 export type VoiceCallStatus =
@@ -60,9 +54,6 @@ function useWorkingDots(active: boolean): number {
   }, [active]);
   return dots;
 }
-
-// How far behind the bar before it each bar turns blue, so the shimmer travels across them.
-const BAR_SHIMMER_STAGGER_MS = 200;
 
 // The cap's outline: a tab whose shoulders run down into the pill below it.
 const CAP_WIDTH = 196;
@@ -127,48 +118,9 @@ export function VoicePill({
   const glow = !inModal && status === "speaking" && !notice;
   const levelActive = glow || (live && waveformActive);
   const pillRef = useRef<HTMLDivElement>(null);
-  // What the bars last showed, kept across states so they sink back from there.
-  const meterRef = useRef({
-    level: 0,
-    barLevel: 0,
-    history: new Array<number>(SOUND_HISTORY_FRAMES).fill(0),
-  });
-
   // The Sound bars and the glow follow the reply or the microphone as it is
-  // heard (--voice-level) while the call listens or speaks, and otherwise sink
-  // back to rest as after a silence; they hold still under reduced motion, and
-  // an animation ending never changes the call.
-  useEffect(() => {
-    const element = pillRef.current;
-    if (!element) return undefined;
-    const meter = meterRef.current;
-    const paintBars = (lifts: number[]) =>
-      lifts.forEach((lift, index) =>
-        element.style.setProperty(`--voice-bar-${index}`, lift.toFixed(3))
-      );
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      element.style.setProperty("--voice-level", "0");
-      paintBars(new Array(SOUND_BAR_COUNT).fill(0));
-      return undefined;
-    }
-    let frame = 0;
-    const paint = () => {
-      const rms = levelActive ? readLevel() : 0;
-      meter.level = meter.level * 0.8 + Math.min(1, rms * 6) * 0.2;
-      element.style.setProperty("--voice-level", meter.level.toFixed(3));
-      meter.barLevel = followLevel(meter.barLevel, soundLevel(rms));
-      meter.history.pop();
-      meter.history.unshift(meter.barLevel);
-      const lifts = soundBarLevels(meter.history);
-      paintBars(lifts);
-      // Back at rest with nothing to follow, it waits for the next state.
-      if (levelActive || meter.level > 0.001 || lifts.some((lift) => lift > 0.001)) {
-        frame = requestAnimationFrame(paint);
-      }
-    };
-    frame = requestAnimationFrame(paint);
-    return () => cancelAnimationFrame(frame);
-  }, [levelActive, readLevel]);
+  // heard (--voice-level) while the call listens or speaks.
+  useSoundMeter(pillRef, levelActive, readLevel);
 
   const surface = inModal ? "bg-surface-1 dark:bg-surface-2" : "agent-panel bg-surface-0";
   const capFill = inModal ? "fill-surface-1 dark:fill-surface-2" : "fill-[var(--color-surface-0)]";
@@ -247,24 +199,7 @@ export function VoicePill({
         )}
         {...dragHandlers}
       >
-        <div
-          className={cn(
-            "flex h-7 shrink-0 items-center gap-[3.5px] text-foreground",
-            !waveformActive && "opacity-50"
-          )}
-          aria-hidden="true"
-        >
-          {Array.from({ length: SOUND_BAR_COUNT }, (_, index) => (
-            <span
-              key={index}
-              className={cn("w-0.5 rounded-full bg-current", busy && "voice-bar-shimmer")}
-              style={{
-                height: soundBarHeight(index),
-                ...(busy ? { animationDelay: `${index * BAR_SHIMMER_STAGGER_MS}ms` } : {}),
-              }}
-            />
-          ))}
-        </div>
+        <SoundBars shimmer={busy} dimmed={!waveformActive} />
         {stopped ? (
           <button
             type="button"
