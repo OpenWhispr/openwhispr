@@ -27,7 +27,7 @@ export const styleEnglish = {
   describeFormal: 'Capitals and full punctuation',
   describeCasual: 'Capitals, lighter punctuation',
   describeVeryCasual: 'lowercase, barely any punctuation',
-  describeExcited: 'Capitals and more exclamation points',
+  describeExcited: 'Capitals and exclamation points',
   // TalkBack: what the example card shows.
   exampleLabel: 'Example in {{kind}}: {{text}}',
   toneSlider: 'Tone for {{kind}}',
