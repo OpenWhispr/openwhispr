@@ -155,6 +155,7 @@ test("an account change replaces the STT config and drops the old account's late
   let root = null;
   let start = null;
   let broadcastScope = null;
+  const storageEvents = new EventTarget();
   let targetHold = null;
   const fetches = [];
   globalThis.__sttSwitchManager = null;
@@ -170,6 +171,8 @@ test("an account change replaces the STT config and drops the old account's late
   const noopDispose = () => () => {};
   installBrowserGlobals(t, {
     window: {
+      addEventListener: storageEvents.addEventListener.bind(storageEvents),
+      removeEventListener: storageEvents.removeEventListener.bind(storageEvents),
       electronAPI: {
         onToggleDictation: noopDispose,
         onToggleVoiceAgent: noopDispose,
@@ -227,6 +230,16 @@ test("an account change replaces the STT config and drops the old account's late
 
   await answer(fetches.length - 1, "account-a");
   assert.equal(manager().sttConfig?.account, "account-a");
+
+  // Settings is a different window. Enabling a newly offered model clears a
+  // still-fresh config so the next start waits for the enrolled account's route.
+  storageEvents.dispatchEvent(
+    Object.assign(new Event("storage"), {
+      key: "openwhispr:fourier-english:account-a",
+      newValue: "1",
+    })
+  );
+  assert.equal(manager().sttConfig, null);
 
   // A recording start leaves a background refresh pending for account A.
   await React.act(async () => {

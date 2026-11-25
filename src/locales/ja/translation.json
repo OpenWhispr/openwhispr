@@ -2351,6 +2351,7 @@
         "modelsReady": "モデル準備完了",
         "deleteModels": "モデルを削除"
       },
+      "fourierEnglishPilot": "英語が選択され、辞書が空の場合に、録音の終了後に文字起こしします。",
       "transcriptionPreview": "リアルタイム文字起こしプレビュー",
       "transcriptionPreviewDescription": "クリーンアップ前にフローティングウィンドウで文字起こしを表示",
       "aec": {

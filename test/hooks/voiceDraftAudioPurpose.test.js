@@ -24,7 +24,7 @@ test("chat mic takes carry dictation purpose through local, cloud and BYOK file 
     calls.push({ lane, options });
     return Promise.resolve({ success: true, text: "Dictated text" });
   };
-  installBrowserGlobals(t, {
+  const { window } = installBrowserGlobals(t, {
     window: {
       electronAPI: {
         saveTempAudio: async () => ({ path: "/tmp/voice.webm" }),
@@ -58,6 +58,7 @@ test("chat mic takes carry dictation purpose through local, cloud and BYOK file 
     openaiApiKey: "sk-test",
   };
   globalThis.__voiceDraftPurposeSettings = settings;
+  window.localStorage.setItem("openwhispr:fourier-english:account-a", "1");
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-voice-draft-purpose-",
     mockModules: {
@@ -75,6 +76,8 @@ test("chat mic takes carry dictation purpose through local, cloud and BYOK file 
   });
   const { useVoiceDraft } = await vite.ssrLoadModule("/components/chat/useVoiceDraft.ts");
   const { transcribeFile } = await vite.ssrLoadModule("/services/fileTranscription.ts");
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState({ status: "unmanaged", accountId: "account-a" });
   let voice;
   let finished;
   const errors = [];
@@ -109,6 +112,10 @@ test("chat mic takes carry dictation purpose through local, cloud and BYOK file 
     });
     assert.equal(calls.at(-1).lane, lane);
     assert.equal(calls.at(-1).options.purpose, "dictation");
+    if (lane === "cloud") {
+      assert.equal(calls.at(-1).options.fourierAccount, "account-a");
+      assert.equal(calls.at(-1).options.language, "en");
+    }
     if (lane === "byok") assert.equal(calls.at(-1).options.durationSeconds, 1201);
     assert.deepEqual(errors, []);
 
@@ -123,13 +130,13 @@ test("chat mic takes carry dictation purpose through local, cloud and BYOK file 
       false
     );
     assert.equal(calls.at(-1).options.purpose, undefined, "uploads keep the default purpose");
+    assert.equal(calls.at(-1).options.fourierAccount, undefined);
   }
   assert.equal(calls.length, 6);
   const {
     assemblyAiPolicy,
     setManagedBedrockCleanup,
   } = require("../helpers/harness/policyFixtures");
-  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
   const mic = t.mock.method(navigator.mediaDevices, "getUserMedia");
   for (const policy of [assemblyAiPolicy(true, false), assemblyAiPolicy(false, true)]) {
     usePolicyStore.setState(policy);

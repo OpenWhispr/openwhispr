@@ -170,6 +170,9 @@ test("cleanup validates completed provider output using the request's prompt set
       },
       window,
       getKeytermDictionaryWords,
+      user: { id: "account-a" },
+      savedAudioFourierAccount: (await vite.ssrLoadModule("/helpers/fourierPilotSelection.js"))
+        .savedAudioFourierAccount,
       limitBatchKeyterms,
       getSettings: settingsModule.getSettings,
       getManagedTranscriptionResolution: () => null,
@@ -206,8 +209,16 @@ test("cleanup validates completed provider output using the request's prompt set
 
     // A clean retry confirms without a description.
     toasts.length = 0;
+    window.localStorage.setItem("openwhispr:fourier-english:account-a", "1");
+    useSettingsStore.setState({
+      cloudTranscriptionMode: "openwhispr",
+      useLocalWhisper: false,
+      customDictionary: [],
+      sharedDictionaryHints: { space: [], workspace: [] },
+    });
     window.electronAPI.processLocalReasoning = async () => ({ success: true, text: RAW });
     await retry(row.id);
+    assert.equal(retrySettings.fourierAccount, "account-a");
     // Toasts are built in the vm's realm; copy them so deepEqual compares values.
     const shown = () => toasts.map((toast) => ({ ...toast }));
     assert.deepEqual(shown(), [{ title: "controlPanel.history.retrySuccess" }]);

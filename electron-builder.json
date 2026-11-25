@@ -19,6 +19,7 @@
     "main.js",
     "preload.js",
     "package.json",
+    "model-registry/lib/qwen3AsrManifest.cjs",
     "node_modules/**/*",
     "src/dist/**/*",
     "src/helpers/**/*",

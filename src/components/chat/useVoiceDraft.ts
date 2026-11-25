@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSettings } from "../../hooks/useSettings";
 import { getSettings, useSettingsStore } from "../../stores/settingsStore";
+import { usePolicyStore } from "../../stores/policyStore";
 import {
   resolvePreferredMicrophone,
   TRANSCRIPTION_AUDIO_CONSTRAINTS,
@@ -19,6 +20,7 @@ import {
 import i18n from "../../i18n";
 import { analyserRms } from "../../utils/audioLevel";
 import { subscribeAuthBoundary } from "../../lib/authRequestContext";
+import { savedAudioFourierAccount } from "../../helpers/fourierPilotSelection";
 
 export type VoiceDraftStatus = "idle" | "recording" | "transcribing";
 
@@ -197,8 +199,14 @@ export function useVoiceDraft({
       if (signal.aborted) return;
       const requestId = crypto.randomUUID();
       signal.onabort = () => void window.electronAPI.cancelUploadTranscription?.(requestId);
-      const result = await transcribeFile(tempPath, buildConfigRef.current(), false, {
+      const config = buildConfigRef.current();
+      const fourierAccount =
+        config.isOpenWhisprCloud && config.language === "en"
+          ? savedAudioFourierAccount(getSettings(), usePolicyStore.getState().accountId)
+          : undefined;
+      const result = await transcribeFile(tempPath, config, false, {
         purpose: "dictation",
+        ...(fourierAccount ? { fourierAccount, language: config.language } : {}),
         durationSeconds,
         requestId,
         signal,

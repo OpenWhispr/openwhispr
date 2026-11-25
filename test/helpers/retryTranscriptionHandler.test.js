@@ -631,7 +631,7 @@ const CLOUD_SETTINGS = {
   cloudTranscriptionProvider: "openai",
 };
 
-async function withCloudResponse(t, respond, id) {
+async function withCloudResponse(t, respond, id, settings = CLOUD_SETTINGS) {
   const originalFetchResponse = fetchResponse;
   const originalSplitBehavior = splitBehavior;
   const originalApiUrl = process.env.OPENWHISPR_API_URL;
@@ -648,8 +648,36 @@ async function withCloudResponse(t, respond, id) {
     return { ok: status === 200, status, text: async () => JSON.stringify(body) };
   };
   textUpdates.length = 0;
-  return retryHandler({ sender: { window: {} } }, id, CLOUD_SETTINGS);
+  return retryHandler({ sender: { window: {} } }, id, settings);
 }
+
+test("English history retries request the selected account's pilot for inline and chunked audio", async (t) => {
+  for (const [id, account, language, expected] of [
+    [7, "account-a", "en-US", true],
+    [9, "account-a", "en", true],
+    [7, "account-b", "en", false],
+    [7, "account-a", "auto", false],
+    [7, "account-a", "fr", false],
+  ]) {
+    await t.test(`${account} / ${language} / recording ${id}`, async (sample) => {
+      const requests = [];
+      const result = await withCloudResponse(
+        sample,
+        (init) => {
+          requests.push(init.body.toString());
+          return { status: 200, body: { text: "part" } };
+        },
+        id,
+        { ...CLOUD_SETTINGS, fourierAccount: account, preferredLanguage: language }
+      );
+      assert.equal(result.success, true);
+      assert.equal(requests.length, id === 9 ? 4 : 1);
+      for (const request of requests) {
+        assert.equal(request.includes('name="model"\r\n\r\noruk-fourier-2b\r\n'), expected);
+      }
+    });
+  }
+});
 
 test("retry: switching accounts while routing never uploads the original account's recording", async (t) => {
   const originalAudioRead = fakeThis.audioStorageManager.getAudioBuffer;
@@ -2418,6 +2446,30 @@ test("file IPCs preserve dictation when uploads are disabled, including cloud so
     purpose: "dictation",
   });
   assert.equal(deleted.code, "POLICY_AUDIO_UPLOAD_DISABLED");
+});
+
+test("only a voice draft owned by an opted-in account can request hosted Fourier", async (t) => {
+  const { path: draft } = await handlers.get("save-temp-audio")({}, WAV_BUFFER);
+  t.after(() => handlers.get("delete-temp-audio")({}, draft));
+  fsNode.writeFileSync(uploadTempFile, WAV_BUFFER);
+  const transcribe = handlers.get("transcribe-audio-file-cloud");
+  for (const [file, account, language, expected] of [
+    [draft, "account-a", "en", true],
+    [draft, "account-b", "en", false],
+    [draft, "account-a", "fr", false],
+    [uploadTempFile, "account-a", "en", false],
+  ]) {
+    fetches.length = 0;
+    const response = await transcribe({ sender: {} }, file, {
+      purpose: "dictation",
+      fourierAccount: account,
+      language,
+    });
+    assert.equal(response.success, true);
+    const body = fetches[0].init.body.toString();
+    assert.equal(body.includes('name="model"\r\n\r\noruk-fourier-2b\r\n'), expected);
+    assert.equal(body.includes('name="language"\r\n\r\nen\r\n'), expected);
+  }
 });
 
 test("transcribe-audio-file keeps a local model refusal's code", async (t) => {

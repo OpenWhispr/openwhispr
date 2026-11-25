@@ -214,8 +214,9 @@ import {
   isCloudMeteredStream,
   evaluateOrukeetLanguageRouting,
   hasOrukeetExperiment,
-  ORUKEET_EXPERIMENT_CONFIG_TTL_MS,
+  STT_EXPERIMENT_CONFIG_TTL_MS,
 } from "./dictationStreamingRouting";
+import { selectedFourierBatch } from "./fourierPilotSelection";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 // A server-side rollout change (a provider switched on or rolled back) must
@@ -1316,9 +1317,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   isSttConfigStale(now = Date.now()) {
     // Re-check opt-in language experiments frequently so a server rollback
     // takes effect on the next recording after at most 30 s of cached config.
-    const ttl = hasOrukeetExperiment(this.sttConfig)
-      ? ORUKEET_EXPERIMENT_CONFIG_TTL_MS
-      : STT_CONFIG_TTL_MS;
+    const ttl =
+      hasOrukeetExperiment(this.sttConfig) || this.sttConfig?.optionalBatchModels?.length
+        ? STT_EXPERIMENT_CONFIG_TTL_MS
+        : STT_CONFIG_TTL_MS;
     return !this.sttConfig || !this.sttConfigFetchedAt || now - this.sttConfigFetchedAt > ttl;
   }
 
@@ -4008,6 +4010,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const dictionaryPrompt = this.getWhisperPrompt(settings);
     if (dictionaryPrompt) opts.prompt = dictionaryPrompt;
+    else if (
+      this.sttConfig?.optionalBatchModels &&
+      selectedFourierBatch(this.sttConfig, settings, language)
+    )
+      opts.fourierAccount = this.sttConfig.optionalBatchModelAccount;
 
     // Use withSessionRefresh to handle AUTH_EXPIRED automatically
     const transcriptionStart = performance.now();
@@ -5233,6 +5240,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // Managed enterprise STT is batch-only and outranks personal streaming
     // setups; an error resolution must fail closed on the batch path too.
     if (getManagedTranscriptionResolution()) return false;
+
+    if (
+      this.sttConfig?.optionalBatchModels &&
+      selectedFourierBatch(this.sttConfig, s, this.getEffectiveSttLanguage(s)) &&
+      !this.getWhisperPrompt(s)
+    )
+      return false;
 
     if (isOrukeetStreaming(s)) return Boolean(s.customTranscriptionApiKey);
 

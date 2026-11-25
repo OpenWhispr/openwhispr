@@ -3106,6 +3106,7 @@
         "modelsReady": "Models Ready",
         "deleteModels": "Delete Models"
       },
+      "fourierEnglishPilot": "Transcribe after release when English is selected and the dictionary is empty.",
       "transcriptionPreview": "Live Transcription Preview",
       "transcriptionPreviewDescription": "Show transcription in a floating window before cleanup",
       "aec": {

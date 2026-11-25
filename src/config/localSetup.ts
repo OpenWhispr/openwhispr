@@ -19,6 +19,7 @@ import { getASRModelOrganization } from "../helpers/localASROrganization";
 import { formatBytes, spaceSizeUnit } from "../utils/formatBytes";
 import modelRegistryData from "../models/modelRegistryData.json" with { type: "json" };
 import { registryData } from "../models/registryData.js";
+import { parakeetDownloadSpace } from "../models/parakeetDownload";
 import languageRegistry from "./languageRegistry.json" with { type: "json" };
 import localSetupTableData from "../models/localSetupTable.json" with { type: "json" };
 
@@ -458,7 +459,14 @@ export function localSetupRequiredBytes(
   items: LocalSetupDownload[],
   factors: LocalSetupFactors
 ): number {
-  return items.reduce((sum, item) => sum + item.bytes * (factors[item.kind] ?? 1), 0);
+  return items.reduce((sum, item) => {
+    const factor = factors[item.kind] ?? 1;
+    const bytes =
+      item.kind === "parakeet"
+        ? parakeetDownloadSpace(item.bytes, registryData.parakeetModels[item.id]?.modelType, factor)
+        : item.bytes * factor;
+    return sum + bytes;
+  }, 0);
 }
 
 // Turned off in this order until the downloads fit (design §4.5).

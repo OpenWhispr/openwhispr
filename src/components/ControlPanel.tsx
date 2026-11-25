@@ -50,6 +50,7 @@ import { useEnsureDefaultWorkspace } from "../hooks/useWorkspace";
 import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
 import { usePolicySnapshot, useMeetingAutoTranscriptionCheck } from "../hooks/usePolicy";
 import { getKeytermDictionaryWords, limitBatchKeyterms } from "../utils/snippets";
+import { savedAudioFourierAccount } from "../helpers/fourierPilotSelection";
 import { providerCleanupStandsIn } from "../helpers/dictationRouting";
 import { handleMeetingRecordingRequest } from "../helpers/meetingRecordingRequest";
 import { useMeetingNoteSession } from "../hooks/useMeetingNoteSession";
@@ -838,6 +839,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         }
         const result = await window.electronAPI.retryTranscription(id, {
           managed,
+          fourierAccount: savedAudioFourierAccount(s, user?.id),
           useLocalWhisper: s.useLocalWhisper,
           localTranscriptionProvider: s.localTranscriptionProvider,
           cloudTranscriptionMode: s.cloudTranscriptionMode,
@@ -1055,7 +1057,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         });
       }
     },
-    [toast, t, useCleanupModel]
+    [toast, t, useCleanupModel, user?.id]
   );
 
   const toggleShowDiscarded = useCallback(() => {

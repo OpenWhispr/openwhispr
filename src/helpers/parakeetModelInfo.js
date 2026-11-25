@@ -1,5 +1,7 @@
 const { getRunnableSpeechModel } = require("../models/registryData.js");
 
+const { files: qwenFiles } = require("./qwen3AsrBundle");
+
 const TRANSDUCER_MODEL_FILES = [
   "encoder.int8.onnx",
   "decoder.int8.onnx",
@@ -23,9 +25,7 @@ function getModelRuntime(modelName) {
 }
 
 function getModelType(modelName) {
-  return getModelInfo(modelName)?.modelType === "cohere-transcribe"
-    ? "cohere-transcribe"
-    : "transducer";
+  return getModelInfo(modelName)?.modelType ?? "transducer";
 }
 
 function getSherpaModelType(modelName) {
@@ -39,6 +39,7 @@ function getSherpaModelType(modelName) {
 }
 
 function getRequiredModelFiles(modelName) {
+  if (getModelType(modelName) === "qwen3-asr") return qwenFiles;
   return getModelType(modelName) === "cohere-transcribe"
     ? COHERE_TRANSCRIBE_MODEL_FILES
     : TRANSDUCER_MODEL_FILES;

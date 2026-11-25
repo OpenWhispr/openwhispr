@@ -3106,6 +3106,7 @@
         "modelsReady": "Modelle bereit",
         "deleteModels": "Modelle löschen"
       },
+      "fourierEnglishPilot": "Transkribiert nach dem Ende der Aufnahme, wenn Englisch ausgewählt und das Wörterbuch leer ist.",
       "transcriptionPreview": "Live-Transkriptionsvorschau",
       "transcriptionPreviewDescription": "Transkription vor der Bereinigung in einem Fenster anzeigen",
       "aec": {
