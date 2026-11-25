@@ -102,6 +102,7 @@ test("an empty LLM scope leaves permitted transcription and update policy availa
   assert.equal(snapshot.success, true);
   assert.equal(productOperationAllowed(snapshot, "1.11.1", "transcribe-local-whisper"), true);
   assert.equal(productOperationAllowed(snapshot, "1.11.1", "process-local-reasoning"), false);
+  assert.equal(productOperationAllowed(snapshot, "1.11.1", "process-local-reasoning-batch"), false);
   assert.equal(productOperationAllowed(snapshot, "1.11.1", "cloud-reason"), false);
   assert.equal(snapshot.policy.updates.mode, "always_on");
 });
@@ -121,6 +122,7 @@ test("local-only filtering preserves independent transcription and updates", () 
   assert.deepEqual(snapshot.policy.llm.allowedModes, []);
   assert.equal(productOperationAllowed(snapshot, "1.11.1", "transcribe-local-whisper"), true);
   assert.equal(productOperationAllowed(snapshot, "1.11.1", "process-local-reasoning"), false);
+  assert.equal(productOperationAllowed(snapshot, "1.11.1", "process-local-reasoning-batch"), false);
   assert.equal(productOperationAllowed(snapshot, "1.11.1", "cloud-reason"), false);
   assert.equal(snapshot.policy.updates.mode, "always_on");
 });
@@ -294,6 +296,7 @@ test("a failed lookup holds nothing closed without evidence that the identity is
     ["transcribe-local-whisper"],
     ["transcribe-local-parakeet"],
     ["process-local-reasoning"],
+    ["process-local-reasoning-batch"],
     ["retry-transcription"],
     ["transcribe-audio-file"],
     ["cloud-transcribe"],

@@ -114,7 +114,8 @@ class LlamaServerManager {
     this.process = null;
     this.port = null;
     this.ready = false;
-    this.activeRequest = null;
+    // Requests main is waiting on; a batch has several in flight at once.
+    this.activeRequests = new Set();
     // Prompt measurement happens before the request is visible in /slots.
     this.inferenceReservations = new Set();
     this.modelPath = null;
@@ -406,7 +407,11 @@ class LlamaServerManager {
   // can't hold a restart up; but llama-server answers /slots between batches, so
   // one that goes unanswered is usually still evaluating a long prompt.
   async _isBusy(budgetMs) {
-    if (this.inferenceReservations.size || this.activeRequest || Date.now() < this.handoffUntil)
+    if (
+      this.inferenceReservations.size ||
+      this.activeRequests.size ||
+      Date.now() < this.handoffUntil
+    )
       return true;
     const handoffs = this.handoffs;
     const slots = await this._requestJson(
@@ -416,7 +421,7 @@ class LlamaServerManager {
       SLOTS_UNANSWERED
     );
     // Work handed out while the read was out is newer than its answer.
-    if (this.activeRequest || this.handoffs !== handoffs) return true;
+    if (this.activeRequests.size || this.handoffs !== handoffs) return true;
     if (slots === SLOTS_UNANSWERED) return true;
     return Array.isArray(slots) && slots.some((slot) => slot.is_processing);
   }
@@ -1137,18 +1142,18 @@ class LlamaServerManager {
         reject(new Error("llama-server request timed out"));
       });
 
-      this.activeRequest = req;
+      this.activeRequests.add(req);
       req.write(body);
       req.end();
     }).finally(() => {
-      if (this.activeRequest === req) this.activeRequest = null;
+      this.activeRequests.delete(req);
       this.resetIdleTimer();
     });
   }
 
   // Closing the connection is what makes llama-server stop generating.
   cancelInference() {
-    this.activeRequest?.destroy(new Error("cancelled"));
+    for (const request of this.activeRequests) request.destroy(new Error("cancelled"));
   }
 
   async stop() {

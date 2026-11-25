@@ -586,10 +586,88 @@ test("growing a busy server's context waits for its answer too", async () => {
 test("a request main is waiting on counts as busy", async () => {
   // Between sending it and the server taking it, /slots still reads idle.
   const { manager, stops } = makeRunningManager(() => IDLE);
-  manager.activeRequest = {};
+  manager.activeRequests.add({});
 
   await assert.rejects(manager.start("/models/other.gguf", { busyWaitMs: 0 }), isModelBusy);
   assert.deepEqual(stops, []);
+});
+
+// A batch of texts has several requests in flight at once. This serves chat
+// completions that wait until the test answers them, by their one message.
+async function withHeldReplies(manager, run) {
+  const held = new Map();
+  const server = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      held.set(JSON.parse(body).messages[0].content, () => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "ok" } }] })
+        );
+      });
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  manager.port = server.address().port;
+  const arrived = async (contents) => {
+    for (let waited = 0; !contents.every((content) => held.has(content)); waited += 5) {
+      if (waited > 2000) assert.fail(`requests never arrived: ${contents}`);
+      await pause(5);
+    }
+  };
+  const send = (content) => manager.inference([{ role: "user", content }], {});
+  try {
+    await run({ send, arrived, reply: (content) => held.get(content)() });
+  } finally {
+    manager.clearIdleTimer();
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
+// Settles with the promise, or rejects rather than leave the test hanging.
+const within = (promise, ms = 2000) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`still pending after ${ms}ms`)), ms).unref();
+    }),
+  ]);
+
+test("a restart waits for every request main is waiting on, not just the last one sent", async () => {
+  const { manager, stops } = makeRunningManager(() => IDLE);
+  await withHeldReplies(manager, async ({ send, arrived, reply }) => {
+    const first = send("first");
+    const second = send("second");
+    await arrived(["first", "second"]);
+    assert.equal(manager.activeRequests.size, 2);
+
+    reply("second");
+    await second;
+    await assert.rejects(manager.start("/models/other.gguf", { busyWaitMs: 0 }), isModelBusy);
+    assert.deepEqual(stops, [], "the first request still has its server");
+
+    reply("first");
+    await first;
+    assert.equal(manager.activeRequests.size, 0);
+    await manager.start("/models/other.gguf", { busyWaitMs: 0 });
+    assert.deepEqual(stops, ["/models/running.gguf"]);
+  });
+});
+
+test("cancelling inference closes every request main is waiting on", async () => {
+  const { manager } = makeRunningManager(() => IDLE);
+  await withHeldReplies(manager, async ({ send, arrived }) => {
+    const requests = [send("first"), send("second")];
+    await arrived(["first", "second"]);
+
+    manager.cancelInference();
+    await Promise.all(requests.map((request) => assert.rejects(within(request), /cancelled/)));
+    assert.equal(manager.activeRequests.size, 0);
+  });
 });
 
 test("a server just handed to a caller is kept until its request can arrive", async () => {
@@ -726,7 +804,7 @@ test("a handoff made while /slots is being read outlives the idle answer", async
 test("a request main sends while /slots is being read outlives the idle answer", async () => {
   const { manager, stops } = makeRunningManager(() => IDLE);
   manager._requestJson = async () => {
-    manager.activeRequest = {};
+    manager.activeRequests.add({});
     return IDLE;
   };
 

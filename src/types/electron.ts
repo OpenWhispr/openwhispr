@@ -2755,6 +2755,23 @@ declare global {
         code?: string;
         details?: Record<string, unknown>;
       }>;
+      /**
+       * Several texts (whole user messages) on the local model, four at a time, with one result
+       * per text in order. `success: false` means the batch as a whole did not run (busy,
+       * cancelled, a policy refusal, no server); its `requestId` cancels all of it.
+       */
+      processLocalReasoningBatch: (
+        texts: string[],
+        modelId: string,
+        agentName: string | null,
+        config: ReasoningConfig
+      ) => Promise<{
+        success: boolean;
+        results?: Array<{ success: boolean; text?: string; error?: string; code?: string }>;
+        error?: string;
+        code?: string;
+        details?: Record<string, unknown>;
+      }>;
       checkLocalReasoningAvailable: () => Promise<boolean>;
       /** The largest context this machine can give a bundled model; drives chunked note generation. */
       getLocalContextBudget: (modelId: string) => Promise<{

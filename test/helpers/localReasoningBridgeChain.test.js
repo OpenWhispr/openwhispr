@@ -73,15 +73,17 @@ async function setupChain(t, respond) {
   const server = http.createServer((req, res) => {
     let raw = "";
     req.on("data", (chunk) => (raw += chunk));
-    req.on("end", () => {
+    req.on("end", async () => {
       if (req.url === "/slots") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end("[]");
         return;
       }
-      requests.push(JSON.parse(raw));
-      const reply = respond();
-      // null leaves the request hanging, like a model still generating.
+      const body = JSON.parse(raw);
+      requests.push(body);
+      // null leaves the request hanging, like a model still generating; a
+      // promise holds the reply until it settles.
+      const reply = await respond(body);
       if (reply === null) return;
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(reply));
@@ -381,5 +383,341 @@ test("cancellation after context metadata prevents tokenization and inference", 
     { name: "AbortError" }
   );
   assert.equal(requests.length, 0);
+  assert.equal(bridge.isProcessing, false);
+});
+
+// --- several texts at once (processTextBatch) -------------------------------
+//
+// The dropped-words guard re-cleans a part in pieces of up to 150 words, four
+// at a time: llama-server runs four slots, so one request at a time leaves
+// three of them idle.
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+async function waitFor(predicate, label) {
+  for (let attempt = 0; attempt < 400; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error(`timed out waiting for ${label}`);
+}
+
+// Settles with the promise, or rejects rather than leave the test hanging.
+const within = (promise, ms = 2000) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`still pending after ${ms}ms`)), ms).unref();
+    }),
+  ]);
+
+const codedError = (message, code) => Object.assign(new Error(message), { code });
+
+// Stands in for runInference: each call waits for the test to answer it, and
+// gives up when its signal aborts, as a request waiting for the server does.
+function holdInference(modelManager) {
+  const calls = [];
+  let inFlight = 0;
+  let mostInFlight = 0;
+  modelManager.runInference = (_modelId, text, options) => {
+    inFlight += 1;
+    mostInFlight = Math.max(mostInFlight, inFlight);
+    const { promise, resolve, reject } = Promise.withResolvers();
+    options.signal.addEventListener(
+      "abort",
+      () => reject(codedError("cancelled", "LOCAL_MODEL_CANCELLED")),
+      { once: true }
+    );
+    calls.push({ text, options, resolve, reject });
+    return promise.finally(() => {
+      inFlight -= 1;
+    });
+  };
+  return { calls, mostInFlight: () => mostInFlight };
+}
+
+test("a batch keeps its order and never has more than four texts in flight", async (t) => {
+  const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "unused"));
+  const held = holdInference(modelManager);
+  const texts = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+
+  const batch = bridge.processTextBatch(texts, modelId, {});
+  await waitFor(() => held.calls.length === 4, "four texts in flight");
+  await settle();
+  assert.equal(held.calls.length, 4, "a fifth waits for one of the four to finish");
+
+  // Answering the newest first brings every answer back out of order.
+  for (let answered = 0; answered < texts.length; answered += 1) {
+    await waitFor(
+      () => held.calls.length === Math.min(texts.length, answered + 4),
+      "the next text once one finished"
+    );
+    const call = held.calls.findLast((candidate) => !candidate.answered);
+    call.answered = true;
+    call.resolve(`clean ${call.text}`);
+  }
+
+  assert.deepEqual(
+    await batch,
+    texts.map((text) => ({ success: true, text: `clean ${text}` }))
+  );
+  assert.equal(held.mostInFlight(), 4);
+});
+
+test("each text in a batch gets the request and answer processText gives it", async (t) => {
+  const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "unused"));
+  const sent = [];
+  modelManager.runInference = async (id, text, { signal, ...options }) => {
+    assert.ok(signal instanceof AbortSignal);
+    sent.push({ id, text, options });
+    return ` <think>planning</think> clean ${text.length} `;
+  };
+  const texts = ["short", "a much longer piece of dictation ".repeat(40)];
+  const requestsFor = async (config) => {
+    sent.length = 0;
+    const results = await bridge.processTextBatch(texts, modelId, config);
+    const batchRequests = sent.splice(0);
+    const singles = [];
+    for (const text of texts) singles.push(await bridge.processText(text, modelId, config));
+    assert.deepEqual(batchRequests, sent);
+    assert.deepEqual(
+      results,
+      singles.map((text) => ({ success: true, text }))
+    );
+    return batchRequests;
+  };
+
+  const shaped = await requestsFor({
+    systemPrompt: "Clean up.",
+    temperature: 0,
+    disableThinking: true,
+    requireCompleteOutput: true,
+    refuseClippedByWindow: true,
+    contextSize: 32768,
+    busyWaitMs: 1234,
+  });
+  // Each text's own length sizes its answer, unless the caller fixed the size.
+  assert.deepEqual(
+    shaped.map((request) => request.options.maxTokens),
+    [512, 2048]
+  );
+  assert.equal(shaped[1].options.contextSize, 32768);
+  const capped = await requestsFor({ maxTokens: 300 });
+  assert.deepEqual(
+    capped.map((request) => request.options.maxTokens),
+    [300, 300]
+  );
+});
+
+test("a batch and any other request refuse each other with the typed busy code", async (t) => {
+  const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "unused"));
+  const held = holdInference(modelManager);
+  const busy = { code: "LOCAL_MODEL_BUSY" };
+
+  const batch = bridge.processTextBatch(["one", "two"], modelId, {});
+  await waitFor(() => held.calls.length === 2, "the batch in flight");
+  await assert.rejects(bridge.processText("dictation", modelId, {}), busy);
+  await assert.rejects(bridge.processTextBatch(["other"], modelId, {}), busy);
+  held.calls[0].resolve("one");
+  await settle();
+  await assert.rejects(bridge.processText("dictation", modelId, {}), busy, "until the last text");
+  held.calls[1].resolve("two");
+  await batch;
+
+  const single = bridge.processText("note", modelId, {});
+  await waitFor(() => held.calls.length === 3, "the single request in flight");
+  await assert.rejects(bridge.processTextBatch(["piece"], modelId, {}), busy);
+  held.calls[2].resolve("note answer");
+  assert.equal(await single, "note answer");
+  assert.equal(held.calls.length, 3, "a refused request never reached the model");
+});
+
+test("a text whose own answer fails gets that failure in its place; the rest still run", async (t) => {
+  const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "unused"));
+  const ownFailures = [
+    "CONTEXT_TOO_LARGE",
+    "OUTPUT_TRUNCATED",
+    "OUTPUT_COMPLETION_UNVERIFIED",
+    "INFERENCE_FAILED",
+  ];
+  modelManager.runInference = async (_modelId, text) => {
+    if (ownFailures.includes(text)) throw codedError(`${text} happened`, text);
+    return `clean ${text}`;
+  };
+
+  assert.deepEqual(await bridge.processTextBatch(["first", ...ownFailures, "last"], modelId, {}), [
+    { success: true, text: "clean first" },
+    ...ownFailures.map((code) => ({ success: false, error: `${code} happened`, code })),
+    { success: true, text: "clean last" },
+  ]);
+  assert.equal(bridge.isProcessing, false);
+});
+
+for (const [label, code] of [
+  ["a busy server", "LOCAL_MODEL_BUSY"],
+  ["a server that cannot start", "LOCAL_SERVER_UNAVAILABLE"],
+  ["a policy refusal", "POLICY_MODEL_BLOCKED"],
+  ["a failure with no code", undefined],
+]) {
+  test(`${label} ends the whole batch and stops what is left of it`, async (t) => {
+    const { bridge, modelManager, modelId } = await setupChain(t, () =>
+      completion("stop", "unused")
+    );
+    const held = holdInference(modelManager);
+    let cancels = 0;
+    modelManager.cancelInference = () => {
+      cancels += 1;
+    };
+
+    const batch = bridge.processTextBatch(["1", "2", "3", "4", "5", "6"], modelId, {});
+    await waitFor(() => held.calls.length === 4, "four texts in flight");
+    held.calls[0].resolve("clean 1");
+    await waitFor(() => held.calls.length === 5, "a fifth text");
+    held.calls[2].reject(codedError("no", code));
+
+    await assert.rejects(within(batch), (error) => error.message === "no" && error.code === code);
+    assert.equal(cancels, 1, "the requests still in flight are closed");
+    assert.equal(held.calls.length, 5, "the sixth text never starts");
+    assert.equal(bridge.isProcessing, false);
+  });
+}
+
+test("cancelling a batch by its id stops the texts in flight and starts no more", async (t) => {
+  const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "unused"));
+  const held = holdInference(modelManager);
+  let cancels = 0;
+  modelManager.cancelInference = () => {
+    cancels += 1;
+  };
+
+  const batch = bridge.processTextBatch(["1", "2", "3", "4", "5", "6"], modelId, {
+    requestId: "guard-1",
+  });
+  await waitFor(() => held.calls.length === 4, "four texts in flight");
+  bridge.cancel("guard-2");
+  await settle();
+  assert.equal(cancels, 0, "another caller's id cancels nothing");
+
+  bridge.cancel("guard-1");
+  await assert.rejects(within(batch), { code: "LOCAL_MODEL_CANCELLED" });
+  assert.equal(cancels, 1);
+  assert.equal(held.calls.length, 4, "the texts not yet started never start");
+  assert.equal(bridge.isProcessing, false);
+});
+
+test("the caller's signal aborting rejects the batch the same way", async (t) => {
+  const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "unused"));
+  const held = holdInference(modelManager);
+  const caller = new AbortController();
+
+  const batch = bridge.processTextBatch(["1", "2", "3", "4", "5"], modelId, {
+    signal: caller.signal,
+  });
+  await waitFor(() => held.calls.length === 4, "four texts in flight");
+  caller.abort();
+  await assert.rejects(within(batch), { code: "LOCAL_MODEL_CANCELLED" });
+  assert.equal(held.calls.length, 4);
+
+  await assert.rejects(bridge.processTextBatch(["6"], modelId, { signal: caller.signal }), {
+    code: "LOCAL_MODEL_CANCELLED",
+  });
+  assert.equal(held.calls.length, 4, "an aborted caller's batch never starts");
+  assert.equal(bridge.isProcessing, false);
+});
+
+test("a batch logs counts and timings, never what was said", async (t) => {
+  const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "unused"));
+  const debugLogger = require("../../src/helpers/debugLogger");
+  const logged = [];
+  t.mock.method(debugLogger, "logReasoning", (stage, details) => {
+    logged.push(JSON.stringify([stage, details]));
+  });
+  modelManager.runInference = async (_modelId, text) => {
+    if (text === "private two") throw codedError("Model output was truncated", "OUTPUT_TRUNCATED");
+    return `cleaned ${text}`;
+  };
+  const config = { systemPrompt: "Spell Zyxwv this way." };
+
+  await bridge.processTextBatch(["private one", "private two"], modelId, config);
+  modelManager.runInference = async () => {
+    throw codedError("no server", "LOCAL_SERVER_UNAVAILABLE");
+  };
+  await assert.rejects(bridge.processTextBatch(["private three"], modelId, config));
+
+  assert.ok(logged.length >= 4);
+  for (const line of logged) assert.doesNotMatch(line, /private|Zyxwv/);
+});
+
+// Through the real runInference and llamaServer, against the stub server.
+
+test("a batch puts four texts on the running server at once and never restarts it", async (t) => {
+  const answer = Promise.withResolvers();
+  const { bridge, modelId, requests, serverManager } = await setupChain(t, async (body) => {
+    await answer.promise;
+    return completion("stop", `clean ${body.messages[1].content}`);
+  });
+  const restarts = [];
+  serverManager._doStart = async () => restarts.push("start");
+  serverManager.stop = async () => restarts.push("stop");
+  const texts = ["one", "two", "three", "four", "five", "six"];
+
+  const batch = bridge.processTextBatch(texts, modelId, {});
+  await waitFor(() => requests.length === 4, "four requests at the server");
+  await settle();
+  assert.equal(requests.length, 4, "a fifth waits for a free slot");
+  assert.equal(serverManager.activeRequests.size, 4);
+
+  answer.resolve();
+  assert.deepEqual(
+    await within(batch),
+    texts.map((text) => ({ success: true, text: `clean ${text}` }))
+  );
+  assert.deepEqual(restarts, []);
+});
+
+test("texts arriving together at a stopped server share one start", async (t) => {
+  const { bridge, modelId, serverManager } = await setupChain(t, (body) =>
+    completion("stop", `clean ${body.messages[1].content}`)
+  );
+  const { port } = serverManager;
+  serverManager.ready = false;
+  serverManager.process = null;
+  let starts = 0;
+  serverManager._doStart = async (modelPath) => {
+    starts += 1;
+    await settle();
+    Object.assign(serverManager, { modelPath, port, ready: true, process: {} });
+  };
+  const texts = ["one", "two", "three", "four"];
+
+  const results = await within(bridge.processTextBatch(texts, modelId, {}));
+
+  assert.equal(starts, 1);
+  assert.deepEqual(
+    results,
+    texts.map((text) => ({ success: true, text: `clean ${text}` }))
+  );
+});
+
+test("cancelling a batch closes every request it has at the server and sends no more", async (t) => {
+  const { bridge, modelId, requests, serverManager } = await setupChain(t, () => null);
+
+  const batch = bridge.processTextBatch(["1", "2", "3", "4", "5", "6"], modelId, {
+    requestId: "guard-1",
+  });
+  const outcome = batch.then(
+    () => "resolved",
+    (error) => error
+  );
+  await waitFor(
+    () => requests.length === 4 && serverManager.activeRequests.size === 4,
+    "four requests at the server"
+  );
+
+  bridge.cancel("guard-1");
+  assert.equal((await within(outcome)).code, "LOCAL_MODEL_CANCELLED");
+  assert.equal(serverManager.activeRequests.size, 0);
+  await settle();
+  assert.equal(requests.length, 4, "the texts not yet sent never reach the server");
   assert.equal(bridge.isProcessing, false);
 });
