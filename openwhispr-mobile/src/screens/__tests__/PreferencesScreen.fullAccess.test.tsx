@@ -5,6 +5,11 @@ const mockRouterPush = jest.fn();
 
 jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockRouterPush(...args) },
+  useFocusEffect: () => {},
+}));
+jest.mock('@/lib/keyboardTranslationSync', () => ({
+  keyboardCanTranslate: () => true,
+  reconcileKeyboardTranslationFromAppGroup: async () => {},
 }));
 // nativewind's cssInterop breaks jest's transform; same stub the banner suite uses.
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));

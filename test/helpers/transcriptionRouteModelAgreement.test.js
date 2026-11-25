@@ -7,8 +7,8 @@ const {
 } = require("../../src/models/appTranscriptionProviders.js");
 const load = () => import("../../src/helpers/transcriptionRoute.ts");
 
-// Every model the picker can write must survive a round trip through the resolver, or a user
-// who picks it has their choice replaced by the provider default at request time.
+// Every model the picker can write must resolve to itself, or a streaming one to its provider's
+// batch model; otherwise a user who picks it has their choice reset at request time.
 //
 // Tinfoil is excluded: its batch model comes from the registry directly
 // (getBatchTranscriptionModel) and the route sends none.
@@ -25,21 +25,22 @@ const PREFIX_VALIDATED_PROVIDERS = [
   "openrouter",
 ];
 
-test("every shipping registry model survives resolveByokModel", async () => {
+test("every shipping registry model resolves to itself or its provider's batch model", async () => {
   const { resolveByokModel } = await load();
 
   for (const providerId of PREFIX_VALIDATED_PROVIDERS) {
     const provider = registry.transcriptionProviders.find((p) => p.id === providerId);
     assert.ok(provider, `registry is missing provider ${providerId}`);
 
-    // A Note Recording-only model never reaches a batch request.
+    // A Note Recording-only model never reaches a batch request. Gemini answers 400 for
+    // gemini-3.5-transcribe-live in a batch request (#3369).
     for (const model of provider.models.filter(
       (m) => !isNoteRecordingOnlyTranscriptionModel(providerId, m.id)
     )) {
       assert.equal(
         resolveByokModel(providerId, model.id),
-        model.id,
-        `${providerId}/${model.id} is offered by the picker but rewritten by the resolver`
+        model.streaming && provider.batchModel ? provider.batchModel : model.id,
+        `${providerId}/${model.id} is offered by the picker but resolved to another model`
       );
     }
   }
@@ -102,6 +103,29 @@ test("a model belonging to another provider degrades to the provider default", a
       "scribe_v3",
       "a realtime model has no batch endpoint"
     );
+  }
+});
+
+// The catalog sends an offered model as is and moves a retired one to its replacement,
+// and a publication can do both with a realtime model this build has never named.
+test("a realtime model a publication lists degrades to the provider default", async (t) => {
+  const store = require("../../src/models/registryData.js");
+  const { resolveByokModel } = await load();
+  const old = store.getRegistrySnapshot();
+  t.after(() =>
+    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 })
+  );
+  const published = structuredClone(old.data);
+  const { models } = published.transcriptionProviders.find((p) => p.id === "elevenlabs");
+  const live = models.find((m) => m.id === "scribe_v3_live");
+  models.push({ ...live, id: "scribe_v4_live" });
+  Object.assign(live, { retired: true, replacement: "scribe_v4_live" });
+  assert.ok(
+    store.replaceRegistryData({ data: published, manifestVersion: old.manifestVersion + 1 })
+  );
+
+  for (const realtime of ["scribe_v4_live", "scribe_v3_live"]) {
+    assert.equal(resolveByokModel("elevenlabs", realtime), "scribe_v3", realtime);
   }
 });
 

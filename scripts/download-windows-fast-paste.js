@@ -79,7 +79,7 @@ async function main() {
 
   if (!release) {
     console.error("[windows-fast-paste] Could not find a release matching prefix:", TAG_PREFIX);
-    console.log("[windows-fast-paste] Paste will use nircmd/PowerShell fallback");
+    console.log("[windows-fast-paste] Paste will use PowerShell fallback");
     return;
   }
 
@@ -141,7 +141,7 @@ async function main() {
       fs.unlinkSync(zipPath);
     }
 
-    console.log("[windows-fast-paste] Paste will use nircmd/PowerShell fallback");
+    console.log("[windows-fast-paste] Paste will use PowerShell fallback");
   }
 }
 

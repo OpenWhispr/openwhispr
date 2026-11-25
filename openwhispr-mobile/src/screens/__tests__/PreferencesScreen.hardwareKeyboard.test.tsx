@@ -5,6 +5,11 @@ const mockRouterPush = jest.fn();
 
 jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockRouterPush(...args) },
+  useFocusEffect: () => {},
+}));
+jest.mock('@/lib/keyboardTranslationSync', () => ({
+  keyboardCanTranslate: () => true,
+  reconcileKeyboardTranslationFromAppGroup: async () => {},
 }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));

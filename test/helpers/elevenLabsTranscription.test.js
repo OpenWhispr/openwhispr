@@ -1,9 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {
-  transcribeWithElevenLabs,
-  sanitizeKeyterms,
-} = require("../../src/helpers/elevenLabsTranscription");
+const { transcribeWithElevenLabs } = require("../../src/helpers/elevenLabsTranscription");
+const { sanitizeElevenLabsKeyterms } = require("../../src/utils/elevenLabsKeyterms.js");
 const {
   ELEVENLABS_KEYTERM_REFUSALS,
   ELEVENLABS_AUDIO_TOO_SHORT,
@@ -82,9 +80,9 @@ test("dictionary words go out as repeated keyterms parts after sanitising", asyn
   assert.deepEqual(calls[0].init.body.getAll("keyterms"), result.acceptedKeyterms);
 });
 
-test("sanitizeKeyterms drops terms ElevenLabs would reject the whole request for", () => {
+test("sanitizeElevenLabsKeyterms drops terms ElevenLabs would reject the whole request for", () => {
   assert.deepEqual(
-    sanitizeKeyterms([
+    sanitizeElevenLabsKeyterms([
       "ok",
       "OK",
       "x".repeat(51),
@@ -98,13 +96,16 @@ test("sanitizeKeyterms drops terms ElevenLabs would reject the whole request for
     ]),
     ["ok", "spaced out"]
   );
-  assert.deepEqual(sanitizeKeyterms(undefined), []);
-  assert.equal(sanitizeKeyterms(Array.from({ length: 150 }, (_, i) => `term${i}`)).length, 100);
+  assert.deepEqual(sanitizeElevenLabsKeyterms(undefined), []);
+  assert.equal(
+    sanitizeElevenLabsKeyterms(Array.from({ length: 150 }, (_, i) => `term${i}`)).length,
+    100
+  );
 });
 
 test("keyterms can contain exactly 50 Unicode characters", () => {
   const boundary = "𠮷".repeat(50);
-  assert.deepEqual(sanitizeKeyterms([boundary, boundary + "a", "x".repeat(50)]), [
+  assert.deepEqual(sanitizeElevenLabsKeyterms([boundary, boundary + "a", "x".repeat(50)]), [
     boundary,
     "x".repeat(50),
   ]);
@@ -113,12 +114,16 @@ test("keyterms can contain exactly 50 Unicode characters", () => {
 test("keyterms holding a control character ElevenLabs refuses are dropped", () => {
   const terms = Array.from({ length: 0x20 }, (_, code) => `Open${String.fromCharCode(code)}Whispr`);
   // U+0009 to U+000D are whitespace, and to ElevenLabs so are U+001C to U+001F.
-  assert.deepEqual(sanitizeKeyterms(terms), ["Open Whispr"]);
+  assert.deepEqual(sanitizeElevenLabsKeyterms(terms), ["Open Whispr"]);
   // U+0085 too, though \s matches none of the five: ElevenLabs refused six letters joined
   // by one as holding five spaces, and a term of nothing else as empty.
   for (const space of "\u001c\u001d\u001e\u001f\u0085") {
     assert.deepEqual(
-      sanitizeKeyterms([[..."abcdef"].join(space), space, `${space}Open${space}Whispr${space}`]),
+      sanitizeElevenLabsKeyterms([
+        [..."abcdef"].join(space),
+        space,
+        `${space}Open${space}Whispr${space}`,
+      ]),
       ["Open Whispr"]
     );
   }

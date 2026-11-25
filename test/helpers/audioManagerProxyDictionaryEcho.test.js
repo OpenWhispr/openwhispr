@@ -104,6 +104,10 @@ test("Scribe dictation filters echoes only against hints accepted with the trans
     assert.deepEqual(retried.submittedKeyterms, [["Piha", "Biscuit"], []]);
     assert.equal(retried.result.rawText, text);
   }
+
+  // A result that names no accepted keyterms is filtered against none.
+  const unnamed = await transcribe("elevenlabs", { text: `${SPEECH} Piha, Biscuit.` }, shared);
+  assert.equal(unnamed.result.rawText, `${SPEECH} Piha, Biscuit.`);
 });
 
 test("Scribe keeps dictation that uses only one accepted keyterm", async (t) => {

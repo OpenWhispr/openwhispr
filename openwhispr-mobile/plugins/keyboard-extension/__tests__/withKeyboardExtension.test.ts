@@ -350,6 +350,7 @@ const KEYBOARD_SOURCES = [
   'DirectDictationRequests.swift',
   'DirectDictationRuntime.swift',
   'DirectDictationStore.swift',
+  'DirectLocalTranscription.swift',
   'EmojiCatalog.swift',
   'EmojiPanelView.swift',
   'HitTargetModel.swift',
@@ -357,6 +358,8 @@ const KEYBOARD_SOURCES = [
   'KeyboardCapitalization.swift',
   'KeyboardCredentialStore.swift',
   'KeyboardInteractions.swift',
+  'KeyboardOptionsMenu.swift',
+  'KeyboardParakeetTranscriber.swift',
   'KeyboardViewController.swift',
   'SnippetExpander.swift',
   'SuggestionBarView.swift',
@@ -618,6 +621,95 @@ describe('withKeyboardExtension mods', () => {
       [...KEYBOARD_SOURCES, ...KEYBOARD_RESOURCES].sort(),
     );
     expect(groupChildNames(project, 'B30000000000000000000004')).toEqual([]);
+  });
+
+  async function runXcodeprojModRoundTrip(root: string, modResults: Project): Promise<Project> {
+    const config = withKeyboardExtension(structuredClone(PLUGIN_CONFIG));
+    const result = await config.mods.ios.xcodeproj({
+      ...config,
+      modResults,
+      modRequest: modRequest(root),
+    });
+    return parseProject(result.modResults.writeSync());
+  }
+
+  function entries(project: Project, isa: string): Record<string, unknown>[] {
+    const section = project.hash.project.objects[isa] || {};
+    return Object.keys(section)
+      .filter((key) => !key.endsWith('_comment'))
+      .map((key) => section[key]);
+  }
+
+  function unquote(value: unknown): string {
+    return String(value).replace(/"/g, '');
+  }
+
+  // The FluidAudio product dependencies the keyboard's Frameworks phase links.
+  function keyboardLinkedProducts(project: Project, targetUuid: string): string[] {
+    const objects = project.hash.project.objects;
+    const frameworks = objects.PBXFrameworksBuildPhase || {};
+    const products = objects.XCSwiftPackageProductDependency || {};
+    return project
+      .pbxNativeTargetSection()
+      [targetUuid].buildPhases.filter((ref: { value: string }) => frameworks[ref.value])
+      .flatMap((ref: { value: string }) => frameworks[ref.value].files)
+      .map((entry: { value: string }) => objects.PBXBuildFile[entry.value]?.productRef)
+      .filter(Boolean)
+      .map((productRef: string) => unquote(products[productRef]?.productName));
+  }
+
+  const FLUIDAUDIO_URL = 'https://github.com/FluidInference/FluidAudio.git';
+
+  it('links FluidAudio into the keyboard', async () => {
+    const project = await runXcodeprojModRoundTrip(
+      tempDir('kb-plugin-fluid-'),
+      parseProject(FIXTURE),
+    );
+
+    const packages = entries(project, 'XCRemoteSwiftPackageReference');
+    expect(packages).toHaveLength(1);
+    expect(unquote(packages[0].repositoryURL)).toBe(FLUIDAUDIO_URL);
+    expect(packages[0].requirement).toEqual({ kind: 'exactVersion', version: '0.15.4' });
+    expect(keyboardLinkedProducts(project, KEYBOARD_TARGET)).toEqual(['FluidAudio']);
+    expect(keyboardLinkedProducts(project, APP_TARGET)).toEqual([]);
+  });
+
+  it('builds the keyboard for iOS 17', async () => {
+    const project = await runXcodeprojModRoundTrip(
+      tempDir('kb-plugin-ios17-'),
+      parseProject(FIXTURE),
+    );
+    const checkouts = '${PROJECT_DERIVED_DATA_DIR}/SourcePackages/checkouts/FluidAudio/Sources';
+
+    for (const settings of buildSettingsOf(project, KEYBOARD_TARGET)) {
+      expect(unquote(settings.IPHONEOS_DEPLOYMENT_TARGET)).toBe('17.0');
+      // Defined by cocoapods-spm's Pods xcconfigs only, which the keyboard doesn't use.
+      expect(unquote(settings.PROJECT_DERIVED_DATA_DIR)).toBe(
+        '${BUILD_ROOT}/../..${BUILD_ROOT_TO_DERIVED_DATA_SUFFIX_${ACTION}}',
+      );
+      expect(unquote(settings.BUILD_ROOT_TO_DERIVED_DATA_SUFFIX_archive)).toBe('/../../..');
+      expect(unquote(settings.BUILD_ROOT_TO_DERIVED_DATA_SUFFIX_install)).toBe('/../../..');
+      expect(String(settings.OTHER_LDFLAGS)).toContain('-lc++');
+      expect(unquote(settings.SWIFT_ACTIVE_COMPILATION_CONDITIONS)).toBe(
+        '$(inherited) OPENWHISPR_KEYBOARD_EXTENSION',
+      );
+      expect(String(settings.OTHER_SWIFT_FLAGS)).toContain(
+        `-Xcc -fmodule-map-file=${checkouts}/FastClusterWrapper/include/module.modulemap`,
+      );
+      expect(String(settings.OTHER_SWIFT_FLAGS)).toContain(
+        `-Xcc -fmodule-map-file=${checkouts}/MachTaskSelfWrapper/include/module.modulemap`,
+      );
+    }
+  });
+
+  it('links FluidAudio once when run twice', async () => {
+    const root = tempDir('kb-plugin-fluid-twice-');
+    const once = await runXcodeprojModRoundTrip(root, appOnlyProject());
+    const twice = await runXcodeprojModRoundTrip(root, once);
+
+    expect(entries(twice, 'XCRemoteSwiftPackageReference')).toHaveLength(1);
+    expect(entries(twice, 'XCSwiftPackageProductDependency')).toHaveLength(1);
+    expect(keyboardLinkedProducts(twice, keyboardTargetUuid(twice)!)).toEqual(['FluidAudio']);
   });
 
   it('leaves a project without the keyboard target to the xcodeproj mod', async () => {
