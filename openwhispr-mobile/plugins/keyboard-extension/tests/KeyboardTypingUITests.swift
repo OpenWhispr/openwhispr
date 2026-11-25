@@ -65,6 +65,7 @@ private extension KeyboardViewController {
     textDidChange(nil)
   }
   var uiTestFieldPolicy: TypingFieldPolicy? { typingEngine?.session.policy }
+  var uiTestEngineLoaded: Bool { didLoadTypingEngine && typingEngine != nil }
   var uiTestStripShowsSuggestions: Bool { isSuggestionBarShown && !suggestionBar.isHidden }
   var uiTestPillFrame: CGRect {
     // Off-window, a constraint change inside the toolbar isn't laid out until asked.
@@ -168,6 +169,24 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
   defer {
     TestEnvironment.reset()
     KeyboardViewController.typingResourcesOverride = nil
+  }
+
+  // The engine loads as the keyboard appears, not on the first key.
+  do {
+    let defaults = KeyboardTypingTestDefaults()
+    TypingSettings.store(language: .english, in: defaults)
+    KeyboardViewController.typingResourcesOverride = typingResources
+    let proxy = TestTextProxy()
+    proxy.documentContextBeforeInput = ""
+    TestEnvironment.proxy = proxy
+    let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402) {
+      $0.typingPreferencesOverride = (defaults, ["en"])
+    }
+    keyboard.viewWillAppear(false)
+    let loadedEarly = keyboard.uiTestEngineLoaded
+    keyboard.viewDidAppear(false)
+    checks.check("the typing engine is ready when the keyboard appears", !loadedEarly && keyboard.uiTestEngineLoaded)
+    checks.check("and nothing is typed or suggested by loading it", proxy.inserted.isEmpty)
   }
 
   // Autocorrect at a word boundary, and backspace taking it back.

@@ -1495,6 +1495,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   override func viewDidAppear(_ animated: Bool) {
     super.viewDidAppear(animated)
+    // iOS holds back touches near the screen's edges while it checks for a system gesture:
+    // on an iPhone they reached the keys about 80 ms late (measured by Hex, whose keyboard has
+    // the same fix), so q, a, p, l, shift, delete and space lagged and could land after the
+    // next key. Apple's own keyboard has no such delay.
+    Self.stopDelayingTouches(view.window?.gestureRecognizers)
+    preloadTypingEngine()
     // The field's traits can arrive after viewWillAppear with no textDidChange to announce
     // them (an empty number field): the pad, the bottom row and the return key follow here.
     refreshFieldAwareKeys()
@@ -2711,7 +2717,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     refreshSuggestions()
   }
 
+  static func stopDelayingTouches(_ recognizers: [UIGestureRecognizer]?) {
+    recognizers?.forEach { $0.delaysTouchesBegan = false }
+  }
+
   private var typing: TypingSession? { loadedTypingEngine()?.session }
+
+  /// Loads the typing engine as the keyboard appears rather than on the first key, and has
+  /// the word list read ahead in the background, so the first words don't wait on the disk.
+  private func preloadTypingEngine() {
+    guard let lexicon = loadedTypingEngine()?.lexicon else { return }
+    DispatchQueue.global(qos: .utility).async { lexicon.prefetch() }
+  }
 
   private func loadedTypingEngine() -> TypingEngine? {
     if didLoadTypingEngine {
