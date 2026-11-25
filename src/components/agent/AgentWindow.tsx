@@ -32,6 +32,7 @@ import { useSkillApprovalStore } from "../../stores/skillApprovalStore";
 import { INTERACTION_TOOL_NAMES } from "../../services/tools/interactionTools";
 import { captureScreenNow } from "../../services/tools/lookAtScreenTool";
 import type { ChatImageAttachment, Message } from "../chat/types";
+import type { SendToAIOptions } from "../chat/chatTurnEngine";
 import { unsentForkContext, type AgentSelectionContext } from "../../utils/agentSelectionContext";
 import { getCachedPlatform } from "../../utils/platform";
 import type { AgentWindowCommand, AgentWindowLayout } from "../../types/electron";
@@ -724,13 +725,15 @@ export default function AgentWindow() {
         attachment: current.attachment,
       });
       try {
-        const options = {
+        const options: SendToAIOptions = {
           ...(current.selectedContext ? { selectedContext: current.selectedContext } : {}),
           ...(current.attachment ? { attachment: current.attachment } : {}),
           ...(caretSessionId
             ? {
                 plainTextResponse: true,
-                onComplete: deliverToCaret(caretSessionId, pressRef.current, false),
+                // Not awaited: the turn ends, and its last sentence is spoken, while the answer is typed.
+                onComplete: (result) =>
+                  void deliverToCaret(caretSessionId, pressRef.current, false)(result),
               }
             : {}),
           voice: { replyLanguage, speech, dryRunWrites, interrupts: interrupts && !joinedRequest },

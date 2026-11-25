@@ -1809,15 +1809,18 @@ test("a call types an answer into the field the user is in as they speak, and st
   const view = await mountWindow(t);
   const probes = [];
   const pastes = [];
+  let finishPaste;
   let hides = 0;
   Object.assign(view.happyWindow.electronAPI, {
     captureSelectedText: async (options) => {
       probes.push(options);
       return { status: "editable", sessionId: "caret-1" };
     },
-    pasteAtCapturedTarget: async (...args) => {
+    pasteAtCapturedTarget: (...args) => {
       pastes.push(args);
-      return { success: true };
+      return new Promise((resolve) => {
+        finishPaste = () => resolve({ success: true });
+      });
     },
     cancelSelectionEdit: async () => {},
     agentWindowHide: async () => {
@@ -1831,11 +1834,19 @@ test("a call types an answer into the field the user is in as they speak, and st
   assert.deepEqual(probes, [{ probeEditable: true, refreshTarget: true }]);
   assert.equal(options.plainTextResponse, true);
   assert.ok(options.voice, "the reply is still spoken");
-  await React.act(async () =>
-    options.onComplete({ assistantId: "a1", content: "**Thanks**, team!", onlyRead: true })
-  );
+  let completed = false;
+  await React.act(async () => {
+    void Promise.resolve(
+      options.onComplete({ assistantId: "a1", content: "**Thanks**, team!", onlyRead: true })
+    ).then(() => {
+      completed = true;
+    });
+  });
   await view.settle();
   assert.deepEqual(pastes, [["caret-1", "Thanks, team!"]]);
+  assert.ok(completed, "the turn ends, and its last sentence is spoken, while the answer is typed");
+  await React.act(async () => finishPaste());
+  await view.settle();
   assert.equal(hides, 0, "the call goes on");
   assert.ok(view.button("End call"), "in its pill");
 });
