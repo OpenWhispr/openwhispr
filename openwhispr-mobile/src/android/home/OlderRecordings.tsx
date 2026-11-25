@@ -76,7 +76,7 @@ function OlderRow({
         }}
       >
         <View style={{ flex: 1, gap: 2 }}>
-          <Text selectable={!audioOnly} numberOfLines={2} style={type.rowTitle}>
+          <Text selectable={!audioOnly} style={type.rowTitle}>
             {audioOnly ? t('audioOnly') : text}
           </Text>
           <Text style={type.footnote}>{longDate(item.createdAt)}</Text>

@@ -436,9 +436,8 @@ export function HistoryRow({
         >
           <SourceTile item={item} />
           <View style={{ flex: 1, gap: 2 }}>
-            <Text numberOfLines={1} style={type.rowTitle}>
-              {text}
-            </Text>
+            {/* The whole dictation, wrapped: never cut off (Josh, 25 Nov). */}
+            <Text style={type.rowTitle}>{text}</Text>
             {item.cleanupWarning ? (
               <Text accessibilityRole="alert" numberOfLines={2} style={type.footnote}>
                 {item.cleanupWarning}
