@@ -619,6 +619,7 @@
       "failed": "Não foi possível verificar o acesso.",
       "microphone": "Ative o OpenWhispr em Microfone.",
       "accessibility": "Arraste o OpenWhispr para Acessibilidade e ative-o.",
+      "selectApp": "Em Privacidade e Segurança, abra System & App Protection Override e selecione o OpenWhispr.",
       "systemAudio": "Ative o OpenWhispr em Apenas gravação de áudio do sistema.",
       "screenContext": "Arraste o OpenWhispr para Gravação de tela e áudio do sistema e ative-o.",
       "settings": "Abrir Ajustes",
@@ -3724,6 +3725,9 @@
     "mutationErrors": {
       "folderNameRequired": "Insira um nome para a pasta.",
       "folderAlreadyExists": "Já existe uma pasta com esse nome.",
+      "folderNameTakenIn": "“{{name}}” já é usado em “{{parent}}”. Um nome de pasta só pode ser usado uma vez em cada espaço.",
+      "folderNameTakenTopLevel": "“{{name}}” já é usado no nível superior. Um nome de pasta só pode ser usado uma vez em cada espaço.",
+      "reservedSubfolderName": "“{{name}}” é o nome de uma pasta padrão em Privado, então uma subpasta não pode usá-lo.",
       "folderNotFound": "Não foi possível encontrar essa pasta.",
       "defaultFolderImmutable": "As pastas padrão não podem ser alteradas.",
       "spaceNameRequired": "Insira um nome para o espaço.",
@@ -3777,6 +3781,8 @@
       "confirmMoveInTitle": "Mover para {{space}}?",
       "confirmMoveIn": "Todos em {{space}} poderão ver e editar esta nota. As notas não podem ser retiradas de um teamspace depois.",
       "confirmMoveInFolder": "Todos em {{space}} poderão ver e editar esta pasta e suas notas. As pastas e notas não podem ser retiradas de um teamspace depois.",
+      "confirmMoveInFolderSubfolders": "Todos em {{space}} poderão ver e editar esta pasta, incluindo {{subfolders}} e {{notes}}. As pastas e notas não podem ser retiradas de um teamspace depois.",
+      "confirmMoveInSubfolder": "Todos em {{space}} poderão ver e editar esta subpasta e suas notas. Ela se tornará uma pasta de nível superior em {{space}}, e esta movimentação não pode ser desfeita.",
       "cantMoveOut": "As notas não podem ser retiradas de um teamspace.",
       "cantMoveTeammate": "Apenas o proprietário da nota ou um administrador do workspace pode movê-la para outro espaço.",
       "moved": "“{{title}}” movida para {{target}}",
@@ -3853,7 +3859,7 @@
         "title": "Teamspace",
         "description": "Uma área compartilhada dentro de um workspace. Adicione pessoas ou equipes para dar acesso a elas."
       },
-      "contents": "Cada espaço pode conter pastas e notas.",
+      "contents": "Cada espaço pode conter pastas e notas, e cada pasta pode ter subpastas.",
       "done": "Entendi",
       "reopen": "Entenda como os espaços são organizados"
     },
@@ -3866,13 +3872,18 @@
       "title": "Pastas",
       "soon": "Em breve",
       "folderName": "Nome da pasta",
+      "topLevel": "Nível superior",
       "couldNotCreate": "Não foi possível criar a pasta",
       "couldNotRename": "Não foi possível renomear a pasta",
       "couldNotDelete": "Não foi possível excluir a pasta",
       "deleteTitle": "Excluir pasta?",
       "deleteDescription": "Isso excluirá permanentemente \"{{name}}\" e suas {{count}} nota(s). Esta ação não pode ser desfeita.",
       "deleteDescriptionEmpty": "Isso excluirá permanentemente \"{{name}}\". Esta ação não pode ser desfeita.",
-      "deleteConfirm": "Excluir pasta e notas"
+      "deleteDescriptionSubfolders": "Isso excluirá permanentemente \"{{name}}\", incluindo {{subfolders}} e {{notes}}. Esta ação não pode ser desfeita.",
+      "subfolderCount_one": "{{count}} subpasta",
+      "subfolderCount_other": "{{count}} subpastas",
+      "deleteConfirm": "Excluir pasta e notas",
+      "recordingInFolder": "“{{title}}” nesta pasta está sendo gravada. Pare a gravação e depois exclua a pasta."
     },
     "list": {
       "title": "Notas",
@@ -4058,7 +4069,15 @@
           "title": "Conteúdo",
           "empty": "Adicione títulos para criar o sumário."
         }
-      }
+      },
+      "lostNoteCopy": {
+        "title": "Suas últimas edições estão em uma nova nota",
+        "description": "“{{title}}” foi excluída antes de elas serem salvas, então foram salvas em uma nova nota em Privado.",
+        "open": "Abrir nota"
+      },
+      "muteMic": "Silenciar microfone",
+      "unmuteMic": "Ativar microfone",
+      "micMuted": "Microfone silenciado"
     },
     "participants": {
       "attendee": "participante",
@@ -4198,14 +4217,25 @@
         "title": "O áudio da reunião ficou silencioso",
         "description": "Ninguém foi ouvido nos últimos minutos. Se a chamada ainda estiver acontecendo, verifique seu dispositivo de saída de som."
       },
+      "externalAttendeesBlocked": "Esta reunião inclui pessoas de fora da sua organização. Sua organização não permite transcrever esta reunião.",
+      "externalAttendeesUnverifiable": "O OpenWhispr não conseguiu verificar todas as pessoas convidadas. Sua organização só permite transcrever reuniões internas.",
+      "externalAttendeesStopped": "A gravação foi interrompida porque a lista de convidados inclui alguém de fora da sua organização. Você pode continuar fazendo anotações.",
+      "internalAttendeesQuestion": "Todas as pessoas nesta reunião fazem parte da sua organização?",
+      "internalAttendeesConfirm": "Sim, iniciar",
       "recordingDisabledByOrg": "A gravação de reuniões foi desativada pela sua organização.",
       "stoppedAccountChanged": "A gravação parou porque você saiu da conta ou trocou de conta.",
       "stoppedPolicyUnresolved": "A gravação parou porque não foi possível verificar as configurações da sua organização.",
-      "stoppedWorkspaceChanged": "A gravação parou porque você trocou de espaço de trabalho."
+      "stoppedWorkspaceChanged": "A gravação parou porque você trocou de espaço de trabalho.",
+      "recordingCopy": {
+        "title": "Gravação movida para uma nova nota",
+        "description": "“{{title}}” foi excluída durante a gravação. A transcrição está sendo salva em uma nova nota em Privado.",
+        "open": "Abrir nota"
+      }
     },
     "meetingPill": {
       "returnToNote": "Voltar à gravação",
-      "waitingForMicrophone": "Aguardando microfone"
+      "waitingForMicrophone": "Aguardando microfone",
+      "micMuted": "Microfone silenciado"
     },
     "context": {
       "moveToFolder": "Mover para pasta",
@@ -4214,6 +4244,7 @@
       "searchFolders": "Pesquisar pastas...",
       "noResults": "Nenhuma pasta encontrada",
       "newFolder": "Nova pasta",
+      "newSubfolder": "Nova subpasta",
       "showInFileManager": "Mostrar no {{manager}}"
     },
     "actions": {
@@ -4448,6 +4479,7 @@
         "members_one": "{{count}} membro",
         "members_other": "{{count}} membros"
       },
+      "subfolders": "Subpastas",
       "banner": {
         "title": {
           "team": "Seu teamspace",
@@ -4520,6 +4552,7 @@
       "triggerPlaceholder": "ex.: minha agenda",
       "replacementLabel": "Substituição",
       "replacementPlaceholder": "Texto a inserir quando você disser o gatilho…",
+      "variablesLabel": "Inserir",
       "create": "Criar snippet",
       "duplicate": "Já existe um snippet com esse gatilho",
       "emptyTitle": "O que você não deveria ter que dizer",
@@ -6857,7 +6890,7 @@
         "FOLDER_UNAVAILABLE": "Este destino não está disponível. Escolha outra pasta.",
         "SPACE_UNAVAILABLE": "Este destino não está disponível. Escolha outra pasta.",
         "FOLDER_NAME_REQUIRED": "Digite um nome para a pasta.",
-        "FOLDER_NAME_TAKEN": "Já existe uma pasta com esse nome neste local.",
+        "FOLDER_NAME_TAKEN": "Já existe uma pasta com esse nome neste espaço.",
         "CREATE_FAILED": "Não foi possível concluir. Tente novamente.",
         "LINKED_NOTE_CHANGED": "Confira o destino e entre novamente.",
         "NOTE_UNAVAILABLE": "Esta nota não está disponível. Tente novamente sem criar outra.",

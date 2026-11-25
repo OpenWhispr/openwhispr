@@ -125,10 +125,12 @@ test("a repeated cloud ID inherits or matches the first entry's request settings
   assert.doesNotThrow(() => validateCatalog(data));
 });
 
-test("thinking floors and reasoning levels are data", () => {
+test("thinking floors, thinking-off values and reasoning levels are data", () => {
   assert.doesNotThrow(() => validateCatalog(withCloudModel({ thinkingFloor: { level: "low" } })));
   assert.doesNotThrow(() => validateCatalog(withCloudModel({ thinkingFloor: { budget: 0 } })));
   assert.throws(() => validateCatalog(withCloudModel({ thinkingFloor: { level: "max" } })));
+  assert.doesNotThrow(() => validateCatalog(withCloudModel({ thinkingOff: { type: "between_tools" } })));
+  assert.throws(() => validateCatalog(withCloudModel({ thinkingOff: { type: "enabled" } })));
   assert.throws(() =>
     validateCatalog(withCloudModel({ reasoningEffort: { options: ["ultra"] } }))
   );

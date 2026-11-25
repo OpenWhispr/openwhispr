@@ -1,9 +1,13 @@
 import type { MeetingNotificationData } from "../types/electron";
 
+import { meetingAttendeeRefusalKey } from "../helpers/meetingAttendeePolicy.js";
+
 export interface MeetingNotificationPresentation {
   title?: string;
   titleKey?: "meetingNotification.title";
   bodyKey:
+    | "notes.meeting.externalAttendeesBlocked"
+    | "notes.meeting.externalAttendeesUnverifiable"
     | "meetingNotification.body.detected"
     | "meetingNotification.body.starting"
     | "meetingNotification.body.underway"
@@ -36,7 +40,9 @@ export function getMeetingNotificationPresentation(
   if (data?.recordingRefusal) {
     return {
       ...title,
-      bodyKey: `meetingNotification.folders.errors.${data.recordingRefusal}`,
+      bodyKey:
+        meetingAttendeeRefusalKey(data.recordingRefusal) ??
+        `meetingNotification.folders.errors.${data.recordingRefusal}`,
       actionKey: "meetingNotification.joinOnly",
       action: "open",
       dismissible: true,

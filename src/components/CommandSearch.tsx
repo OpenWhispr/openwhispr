@@ -32,7 +32,7 @@ import type {
 } from "../types/electron.js";
 import { formatRelativeTime } from "../utils/dateFormatting";
 import { parseTranscriptSegments } from "../utils/parseTranscriptSegments";
-import { defaultFolderDisplayName, folderMatchesQuery } from "./notes/shared";
+import { folderMatchesQuery, folderPathLabel, orderFoldersAsTree } from "./notes/shared";
 import { useSpacesInWorkspaceScope } from "../hooks/useWorkspace";
 import { privateSectionFolders, privateSectionSpaces } from "../lib/privateSection";
 import { isConversationInScope, resolveAssistantScopeSpaceIds } from "../lib/assistantNoteScope";
@@ -287,11 +287,11 @@ export default function CommandSearch({
     (note: NoteItem) => {
       const space = spaceMap.get(note.space_id);
       const folder = note.folder_id != null ? folderMap.get(note.folder_id) : undefined;
-      const folderLabel = folder ? defaultFolderDisplayName(folder, t) : "";
+      const folderLabel = folder ? folderPathLabel(folder, folders, t) : "";
       if (!space) return folderLabel;
       return folder ? `${spaceLabel(space)} / ${folderLabel}` : spaceLabel(space);
     },
-    [spaceMap, folderMap, spaceLabel, t]
+    [spaceMap, folderMap, folders, spaceLabel, t]
   );
 
   const jumpTargets = useMemo<JumpTarget[]>(() => {
@@ -309,15 +309,17 @@ export default function CommandSearch({
         targets.push({ key: `s:${space.id}`, spaceId: space.id, folderId: null, label, space });
       }
     }
-    for (const folder of folders) {
+    for (const folder of orderFoldersAsTree(folders)) {
       const space = spaceMap.get(folder.space_id);
       if (space?.kind === "private" && !privateFolderRows.has(folder.id)) continue;
-      if (visibleIds.has(folder.space_id) && folderMatchesQuery(folder, t, q)) {
+      if (!visibleIds.has(folder.space_id)) continue;
+      const label = folderPathLabel(folder, folders, t);
+      if (folderMatchesQuery(folder, t, q) || label.toLowerCase().includes(q)) {
         targets.push({
           key: `f:${folder.id}`,
           spaceId: folder.space_id,
           folderId: folder.id,
-          label: defaultFolderDisplayName(folder, t),
+          label,
           space: spaceMap.get(folder.space_id),
         });
       }

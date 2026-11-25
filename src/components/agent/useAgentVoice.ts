@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useVoiceDraft } from "../chat/useVoiceDraft";
 import { playStartCue, playStopCue } from "../../utils/dictationCues";
 import { getSettings } from "../../stores/settingsStore";
-import { expandSnippets } from "../../utils/snippets";
+import { expandSnippets, snippetLocale } from "../../utils/snippets";
 
 /** What a finished take is for: a request to send, or text for the typed draft. */
 export type AgentVoiceIntent = "submit" | "draft";
@@ -41,7 +41,12 @@ export function useAgentVoice({
   }, []);
   const voice = useVoiceDraft({
     onTranscript: (text) =>
-      onTranscript(expandSnippets(text, getSettings().snippets), intentRef.current),
+      onTranscript(
+        expandSnippets(text, getSettings().snippets, {
+          locale: snippetLocale(getSettings().uiLanguage),
+        }),
+        intentRef.current
+      ),
     onEmpty,
     onError,
     onMicError,

@@ -4,6 +4,7 @@ const DevServerManager = require("./devServerManager");
 const debugLogger = require("./debugLogger");
 const { isFromWindow } = require("./ipcSender");
 const { computeGuideBounds } = require("./permissionGuidePlacement");
+const { usesAppControlPicker } = require("./macAppControl");
 const {
   isSettingsWindowStateAvailable,
   readSettingsWindowState,
@@ -42,6 +43,7 @@ class PermissionGuideManager {
     this.wait = wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.sawSettings = false;
     this.steppedAside = false;
+    this.placedAt = null;
     this.pollTimer = null;
     // The onboarding document that owns this guide is gone: closed, crashed, or
     // navigated away (log out reloads it, the OAuth refresh loads a new URL).
@@ -104,15 +106,25 @@ class PermissionGuideManager {
 
   snapshot() {
     if (!this.state) return null;
+    const selectApp = this.usesAppPicker();
     return {
       ...this.state,
+      selectApp,
       canDrag:
         !!this.bundlePath &&
+        !selectApp &&
         !this.state.busy &&
         !this.state.granted &&
         ["accessibility", "screen-context"].includes(this.state.permission),
       appIcon: this.icon?.toDataURL(),
     };
+  }
+
+  usesAppPicker() {
+    return (
+      this.state?.permission === "accessibility" &&
+      usesAppControlPicker(process.getSystemVersion?.())
+    );
   }
 
   setState(state) {
@@ -133,7 +145,8 @@ class PermissionGuideManager {
   }
 
   // Anchored inside the System Settings window, falling back to the bottom of
-  // the display while that window has not appeared.
+  // the display while that window has not appeared. The app picker needs the
+  // whole Settings window, so its guide moves beside it when there is room.
   applyBounds(window, settings) {
     // Keyed off the dialog, not the onboarding window: System Settings can open
     // on a different display, and clamping to the onboarding window's screen
@@ -142,9 +155,16 @@ class PermissionGuideManager {
       settingsBounds: settings,
       workArea: this.workAreaFor(settings ?? this.owner.getBounds()),
       size: GUIDE_SIZE,
+      keepSettingsClear: this.usesAppPicker(),
     });
     const current = window.getBounds();
+    // With no room beside Settings the picker guide overlaps the pane, so once
+    // the user drags it off whatever it covers, it stays where they put it.
+    const moved = this.placedAt && (current.x !== this.placedAt.x || current.y !== this.placedAt.y);
+    if (moved && this.usesAppPicker()) return;
     if (current.x !== bounds.x || current.y !== bounds.y) window.setBounds(bounds);
+    // Read back, not assumed: macOS may adjust the spot it was asked for.
+    this.placedAt = window.getBounds();
   }
 
   async waitForSettings(window) {
@@ -332,6 +352,7 @@ class PermissionGuideManager {
     this.icon = null;
     this.sawSettings = false;
     this.steppedAside = false;
+    this.placedAt = null;
     if (owner) owner.removeListener("closed", this.ownerGone);
     if (ownerContents) {
       ownerContents.removeListener("render-process-gone", this.ownerGone);

@@ -15,6 +15,24 @@ const SYNC_LOOKAHEAD_MS = 33 * 24 * 60 * 60 * 1000;
 const SYNC_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const GOOGLE_RESPONSE_STATUSES = new Set(["accepted", "declined", "tentative", "needsAction"]);
 
+function googleAttendeesOmitted(item, accessRole, userIsOrganizer) {
+  // events.list supplies the visibility of the calendar on each response page.
+  // Private event details may be redacted even without attendeesOmitted.
+  const privateDetailsHidden =
+    (accessRole === "reader" || accessRole === "writerWithoutPrivateAccess") &&
+    (item.visibility === "private" ||
+      item.visibility === "confidential" ||
+      (!item.organizer && !item.attendees && !item.summary));
+  return (
+    accessRole === "freeBusyReader" ||
+    accessRole === "none" ||
+    privateDetailsHidden ||
+    item.attendeesOmitted === true ||
+    (item.guestsCanSeeOtherGuests === false && !userIsOrganizer) ||
+    Boolean(item.attendees?.some((attendee) => attendee.additionalGuests > 0))
+  );
+}
+
 // The browser opens an event link under its default Google account, so with
 // several signed in it finds no such event; authuser picks the calendar's own.
 function eventWebLink(htmlLink, accountEmail) {
@@ -252,7 +270,7 @@ class GoogleCalendarManager {
       }
 
       if (data.items) {
-        allItems.push(...data.items);
+        for (const item of data.items) allItems.push({ item, accessRole: data.accessRole });
       }
       pageToken = data.nextPageToken || null;
       if (data.nextSyncToken) {
@@ -271,13 +289,16 @@ class GoogleCalendarManager {
     // an alias) on their primary calendar, a colleague on a shared one.
     const selfIsUser = Boolean(calendar.is_primary) || calendar.id === accountEmail;
 
-    for (const item of allItems) {
+    for (const { item, accessRole } of allItems) {
       if (item.status === "cancelled") {
         toRemove.push(item.id);
         continue;
       }
 
       const isAllDay = !item.start?.dateTime;
+      const userIsOrganizer =
+        (selfIsUser && item.organizer?.self === true) ||
+        item.organizer?.email?.toLowerCase() === ownEmail;
       const selfAttendee = selfIsUser
         ? item.attendees?.find((attendee) => attendee.self === true)
         : item.attendees?.find((attendee) => attendee.email?.toLowerCase() === ownEmail);
@@ -299,6 +320,7 @@ class GoogleCalendarManager {
         organizer_email: item.organizer?.email || null,
         web_link: eventWebLink(item.htmlLink, accountEmail),
         attendees_count: item.attendees?.length || 0,
+        attendees_omitted: googleAttendeesOmitted(item, accessRole, userIsOrganizer),
         attendees: item.attendees
           ? JSON.stringify(
               item.attendees.map((a) => ({

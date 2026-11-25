@@ -303,6 +303,6 @@ test("a reconnect refused under org policy ends the meeting instead of restoring
   );
   assert.match(
     source,
-    /this\._stopMeetingForPolicy = \(reason = "policyRestricted"\) => \{[\s\S]{0,900}?meetingConnectionOptions = null;[\s\S]{0,900}?broadcastToWindows\("meeting-transcription-error", reason\)/
+    /this\._stopMeetingForPolicy = \(reason = "policyRestricted", expectedSessionId\) => \{[\s\S]{0,900}?meetingConnectionOptions = null;[\s\S]{0,900}?broadcastToWindows\("meeting-transcription-error", reason\)/
   );
 });

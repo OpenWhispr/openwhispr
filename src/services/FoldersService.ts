@@ -19,6 +19,7 @@ interface FolderInput {
   placement_backfill?: true;
   workspace_id?: string | null;
   space_id?: string | null;
+  parent_folder_id?: string | null;
 }
 
 interface CloudFolder {
@@ -30,6 +31,8 @@ interface CloudFolder {
   private_workspace_id?: string | null;
   workspace_id: string | null;
   space_id: string | null;
+  // Absent from APIs that predate subfolders and from access stubs.
+  parent_folder_id?: string | null;
   previous_space_id?: string | null;
   // Redacted stub for a row that moved out of one of the caller's spaces —
   // only id/client_folder_id/scope/updated_at are present.

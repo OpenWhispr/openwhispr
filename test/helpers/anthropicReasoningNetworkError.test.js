@@ -213,6 +213,93 @@ for (const maxTokens of [128, 8192]) {
   });
 }
 
+for (const [model, disableThinking, expected] of [
+  ["claude-sonnet-5-5", true, { type: "between_tools" }],
+  ["claude-haiku-5-5", true, { type: "disabled" }],
+  ["claude-opus-5", true, { type: "disabled" }],
+  ["claude-sonnet-5", true, { type: "disabled" }],
+  ["claude-sonnet-5-5", false, undefined],
+  ["claude-haiku-5-5", undefined, undefined],
+  // Opus 5.5 rejects any way of turning thinking off.
+  ["claude-opus-5-5", true, undefined],
+  // Older models don't think unless asked.
+  ["claude-opus-4-8", true, undefined],
+  ["claude-haiku-4-5", true, undefined],
+]) {
+  test(`${model} with disableThinking=${disableThinking}: thinking is ${JSON.stringify(expected) ?? "left out"}`, async () => {
+    let requestBody;
+    fetchBehavior = async (_url, init) => {
+      requestBody = JSON.parse(init.body);
+      return Response.json({ content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" });
+    };
+
+    const result = await anthropicHandler({}, "short dictation", model, null, { disableThinking });
+
+    assert.equal(result.success, true);
+    assert.equal(requestBody.max_tokens, 4096);
+    assert.deepEqual(requestBody.thinking, expected);
+  });
+}
+
+test("a Claude model added through the catalog brings its own thinking-off value", async (t) => {
+  const store = require("../../src/models/registryData.js");
+  const old = store.getRegistrySnapshot();
+  const data = structuredClone(old.data);
+  data.cloudProviders
+    .find((provider) => provider.id === "anthropic")
+    .models.push({
+      id: "claude-fixture",
+      name: "Claude Fixture",
+      description: "Fixture",
+      thinkingOff: { type: "between_tools" },
+    });
+  store.replaceRegistryData({ data, manifestVersion: old.manifestVersion + 1 });
+  t.after(() =>
+    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 })
+  );
+  let requestBody;
+  fetchBehavior = async (_url, init) => {
+    requestBody = JSON.parse(init.body);
+    return Response.json({ content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" });
+  };
+
+  const result = await anthropicHandler({}, "short dictation", "claude-fixture", null, {
+    disableThinking: true,
+  });
+
+  assert.equal(result.success, true);
+  assert.deepEqual(requestBody.thinking, { type: "between_tools" });
+});
+
+test("a <thinking> block leaked with thinking off is not returned", async () => {
+  fetchBehavior = async () =>
+    Response.json({
+      content: [{ type: "text", text: "<thinking>tidy it up</thinking>Cleaned dictation." }],
+      stop_reason: "end_turn",
+    });
+
+  const result = await anthropicHandler({}, "short dictation", "claude-opus-5", null, {
+    disableThinking: true,
+  });
+
+  assert.deepEqual(result, { success: true, text: "Cleaned dictation." });
+});
+
+test("a reply that is only a leaked <thinking> block fails as an empty reply", async () => {
+  fetchBehavior = async () =>
+    Response.json({
+      content: [{ type: "text", text: "<thinking>tidy it up</thinking>" }],
+      stop_reason: "end_turn",
+    });
+
+  const result = await anthropicHandler({}, "short dictation", "claude-opus-5", null, {
+    disableThinking: true,
+  });
+
+  assert.equal(result.success, false);
+  assert.equal(result.messageKey, "hooks.audioRecording.errorDescriptions.cleanupEmptyReply");
+});
+
 // The deadline comes from AbortSignal.timeout; swapping it for a controller's
 // signal lets a test expire it at once instead of waiting 30 seconds.
 function stubDeadline(t) {
@@ -291,4 +378,118 @@ test("an abort before the deadline is not reported as a timeout", async (t) => {
 
   assert.equal(result.success, false);
   assert.notEqual(result.code, "PROVIDER_TIMEOUT");
+});
+
+for (const content of [[], [{ type: "thinking", thinking: "Synthetic reasoning" }]]) {
+  test(`no text at max_tokens carries the notes retry code: ${JSON.stringify(content)}`, async () => {
+    fetchBehavior = async () => Response.json({ content, stop_reason: "max_tokens" });
+    const result = await anthropicHandler(
+      { sender: {} },
+      "Synthetic input",
+      "claude-haiku-5-5",
+      null,
+      {}
+    );
+    assert.equal(result.success, false);
+    assert.equal(result.code, "OUTPUT_LIMIT_BEFORE_ANSWER");
+    assert.equal(result.messageKey, "hooks.audioRecording.errorDescriptions.cleanupEmptyReply");
+  });
+}
+
+test("empty end_turn and complete-output truncation keep their non-retry contracts", async () => {
+  fetchBehavior = async () => Response.json({ content: [], stop_reason: "end_turn" });
+  const empty = await anthropicHandler(
+    { sender: {} },
+    "Synthetic input",
+    "claude-haiku-5-5",
+    null,
+    {}
+  );
+  assert.equal(empty.success, false);
+  assert.equal(empty.code, undefined);
+  fetchBehavior = async () => Response.json(null);
+  const malformed = await anthropicHandler(
+    { sender: {} },
+    "Synthetic input",
+    "claude-haiku-5-5",
+    null,
+    {}
+  );
+  assert.equal(malformed.success, false);
+  assert.equal(malformed.code, undefined);
+  assert.equal(malformed.messageKey, "hooks.audioRecording.errorDescriptions.cleanupEmptyReply");
+  fetchBehavior = async () => Response.json({ content: [], stop_reason: "max_tokens" });
+  const complete = await anthropicHandler(
+    { sender: {} },
+    "Synthetic input",
+    "claude-haiku-5-5",
+    null,
+    { requireCompleteOutput: true }
+  );
+  assert.equal(complete.success, false);
+  assert.equal(complete.code, undefined);
+  assert.equal(complete.messageKey, "hooks.audioRecording.errorDescriptions.cleanupTruncated");
+  fetchBehavior = async () =>
+    Response.json({
+      content: [{ type: "text", text: "partial answer" }],
+      stop_reason: "max_tokens",
+    });
+  const partial = await anthropicHandler(
+    { sender: {} },
+    "Synthetic input",
+    "claude-haiku-5-5",
+    null,
+    {}
+  );
+  assert.deepEqual(partial, { success: true, text: "partial answer" });
+});
+
+test("the real notes consumer retries an Anthropic IPC empty-limit reply once and saves its answer", async (t) => {
+  const bodies = [];
+  fetchBehavior = async (_url, init) => {
+    bodies.push(JSON.parse(init.body));
+    return Response.json(
+      bodies.length === 1
+        ? {
+            content: [{ type: "thinking", thinking: "Synthetic reasoning" }],
+            stop_reason: "max_tokens",
+          }
+        : {
+            content: [{ type: "text", text: "# Notes\n- Send the proposal on Friday." }],
+            stop_reason: "end_turn",
+          }
+    );
+  };
+  const { runAnthropicNoteRetry } = require("./harness/anthropicNoteRetry");
+  const result = await runAnthropicNoteRetry(t, (...args) =>
+    anthropicHandler({ sender: {} }, ...args)
+  );
+  assert.equal(bodies.length, 2);
+  assert.deepEqual(
+    bodies.map((b) => b.max_tokens),
+    [4096, 25000]
+  );
+  assert.equal(bodies[1].system, bodies[0].system);
+  assert.deepEqual(bodies[1].messages, bodies[0].messages);
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.updates.length, 1);
+  assert.equal(
+    result.updates[0].payload.enhanced_content,
+    "# Notes\n- Send the proposal on Friday."
+  );
+});
+
+test("Anthropic exhausting both budgets stops after its one retry without overwriting notes", async (t) => {
+  let requests = 0;
+  fetchBehavior = async () => {
+    requests++;
+    return Response.json({ content: [], stop_reason: "max_tokens" });
+  };
+  const { runAnthropicNoteRetry } = require("./harness/anthropicNoteRetry");
+  const result = await runAnthropicNoteRetry(t, (...args) =>
+    anthropicHandler({ sender: {} }, ...args)
+  );
+  assert.equal(requests, 2);
+  assert.deepEqual(result.updates, []);
+  assert.equal(result.errors.length, 1);
 });

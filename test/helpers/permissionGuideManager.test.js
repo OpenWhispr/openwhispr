@@ -9,6 +9,7 @@ const noSettings = () => ({ settings: null, authPrompt: false });
 
 function fixture({
   platform = "darwin",
+  systemVersion = "26.6.2",
   packaged = true,
   deferredLoad = false,
   settingsState = noSettings,
@@ -88,6 +89,7 @@ function fixture({
       __dirname: path.join(__dirname, "../../src/helpers"),
       process: {
         platform,
+        getSystemVersion: () => systemVersion,
         env: {},
         execPath: "/Applications/OpenWhispr.app/Contents/MacOS/OpenWhispr",
         resourcesPath: "/Applications/OpenWhispr.app/Contents/Resources",
@@ -132,6 +134,7 @@ function fixture({
         // app actually ships; only the OS window query is stubbed.
         if (name === "./permissionGuidePlacement")
           return require("../../src/helpers/permissionGuidePlacement.js");
+        if (name === "./macAppControl") return require("../../src/helpers/macAppControl.js");
         if (name === "./ipcSender") return require("../../src/helpers/ipcSender.js");
         if (name === "./settingsWindowState")
           return {
@@ -469,6 +472,52 @@ test("development guides disable dragging and owner teardown closes the helper",
   setup.owner.close();
   assert.equal(helper.isDestroyed(), true);
   assert.equal(setup.owner.listenerCount("closed"), 0);
+});
+
+test("before macOS 27.3 a dragged guide still returns to the Settings window", async () => {
+  const setup = fixture({ settingsState: () => ({ settings: anchored, authPrompt: false }) });
+  const guide = await openGuide(setup);
+  const placed = guide.getBounds();
+
+  guide.setBounds({ ...placed, x: 40, y: 40 });
+  await setup.manager.poll();
+
+  assert.deepEqual(guide.getBounds(), placed);
+});
+
+test("macOS 27.3 directs app-control grants to the picker and keeps Settings clear when it can", async () => {
+  let settings = { x: 300, y: 200, width: 750, height: 500 };
+  const setup = fixture({
+    systemVersion: "27.3",
+    settingsState: () => ({ settings, authPrompt: false }),
+  });
+  const guide = await openGuide(setup);
+  assert.equal(setup.manager.snapshot().selectApp, true);
+  assert.equal(setup.manager.snapshot().canDrag, false);
+  setup.manager.startDrag(setup.event(guide), state);
+  assert.equal(guide.dragged, undefined);
+  assert.ok(guide.boundsAtShow.y >= settings.y + settings.height);
+
+  // With no room beside a Settings window that fills the display, the guide
+  // stays up in its usual spot: hiding it would leave no instruction at all.
+  settings = { x: 0, y: 0, width: 1440, height: 900 };
+  await setup.manager.poll();
+  assert.equal(guide.isVisible(), true);
+  assert.ok(guide.getBounds().y + guide.getBounds().height <= settings.height);
+
+  settings = { x: 300, y: 200, width: 750, height: 500 };
+  await setup.manager.poll();
+  assert.ok(guide.getBounds().y >= settings.y + settings.height);
+
+  // Dragged off whatever it covered, the picker guide stays where it was put.
+  const dragged = { ...guide.getBounds(), x: 40, y: 40 };
+  guide.setBounds(dragged);
+  await setup.manager.poll();
+  assert.deepEqual(guide.getBounds(), dragged);
+
+  await setup.manager.open(setup.event(setup.owner), { ...state, permission: "screen-context" });
+  assert.equal(setup.manager.snapshot().selectApp, false);
+  assert.equal(setup.manager.snapshot().canDrag, true);
 });
 
 test("a helper closed while loading never reappears", async () => {

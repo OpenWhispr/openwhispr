@@ -2258,6 +2258,7 @@
       "triggerPlaceholder": "مثال: رابط التقويم",
       "replacementLabel": "الاستبدال",
       "replacementPlaceholder": "النص المراد إدراجه عندما تنطق العبارة المفتاحية…",
+      "variablesLabel": "إدراج",
       "create": "إنشاء مقتطف",
       "duplicate": "يوجد مقتطف بهذه العبارة المفتاحية بالفعل",
       "emptyTitle": "الأشياء التي لا ينبغي أن تضطر إلى قولها",
@@ -3212,6 +3213,9 @@
     "mutationErrors": {
       "folderNameRequired": "أدخل اسم مجلد.",
       "folderAlreadyExists": "يوجد مجلد بهذا الاسم بالفعل.",
+      "folderNameTakenIn": "الاسم “{{name}}” مستخدم بالفعل في “{{parent}}”. لا يمكن استخدام اسم المجلد إلا مرة واحدة في كل مساحة.",
+      "folderNameTakenTopLevel": "الاسم “{{name}}” مستخدم بالفعل في المستوى الأعلى. لا يمكن استخدام اسم المجلد إلا مرة واحدة في كل مساحة.",
+      "reservedSubfolderName": "الاسم “{{name}}” هو اسم مجلد افتراضي في خاص، لذا لا يمكن استخدامه لمجلد فرعي.",
       "folderNotFound": "تعذر العثور على ذلك المجلد.",
       "defaultFolderImmutable": "لا يمكن تغيير المجلدات الافتراضية.",
       "spaceNameRequired": "أدخل اسم مساحة.",
@@ -3265,6 +3269,8 @@
       "confirmMoveInTitle": "نقل إلى {{space}}؟",
       "confirmMoveIn": "سيتمكن كل شخص في {{space}} من عرض هذه الملاحظة وتعديلها. لا يمكن نقل الملاحظات خارج مساحة الفريق لاحقًا.",
       "confirmMoveInFolder": "سيتمكن كل شخص في {{space}} من عرض هذا المجلد وملاحظاته وتعديلها. لا يمكن نقل المجلدات والملاحظات خارج مساحة الفريق لاحقًا.",
+      "confirmMoveInFolderSubfolders": "سيتمكن كل شخص في {{space}} من عرض هذا المجلد وتعديله، بما في ذلك {{subfolders}} و{{notes}}. لا يمكن نقل المجلدات والملاحظات خارج مساحة الفريق لاحقًا.",
+      "confirmMoveInSubfolder": "سيتمكن كل شخص في {{space}} من عرض هذا المجلد الفرعي وملاحظاته وتعديلها. سيصبح مجلدًا من المستوى الأعلى في {{space}}، ولا يمكن التراجع عن هذا النقل.",
       "cantMoveOut": "لا يمكن نقل الملاحظات خارج مساحة الفريق.",
       "cantMoveTeammate": "يمكن فقط لمالك الملاحظة أو مسؤول مساحة العمل نقلها إلى مساحة أخرى.",
       "moved": "تم نقل “{{title}}” إلى {{target}}",
@@ -3353,7 +3359,7 @@
         "title": "مساحة الفريق",
         "description": "منطقة مشتركة داخل مساحة العمل. أضف أشخاصًا أو فرق لمنحهم الوصول."
       },
-      "contents": "يمكن أن تحتوي كل مساحة على مجلدات وملاحظات.",
+      "contents": "يمكن أن تحتوي كل مساحة على مجلدات وملاحظات، ويمكن أن يحتوي كل مجلد على مجلدات فرعية.",
       "done": "فهمت",
       "reopen": "تعرف على كيفية تنظيم المساحات"
     },
@@ -3366,13 +3372,22 @@
       "title": "المجلدات",
       "soon": "قريبًا",
       "folderName": "اسم المجلد",
+      "topLevel": "المستوى الأعلى",
       "couldNotCreate": "تعذر إنشاء المجلد",
       "couldNotRename": "تعذر إعادة تسمية المجلد",
       "couldNotDelete": "تعذر حذف المجلد",
       "deleteTitle": "حذف المجلد؟",
       "deleteDescription": "سيؤدي هذا إلى حذف \"{{name}}\" وملاحظاتها البالغ عددها {{count}} بشكل دائم. لا يمكن التراجع عن هذا.",
       "deleteDescriptionEmpty": "سيؤدي هذا إلى حذف \"{{name}}\" بشكل دائم. لا يمكن التراجع عن هذا.",
-      "deleteConfirm": "حذف المجلد والملاحظات"
+      "deleteDescriptionSubfolders": "سيؤدي هذا إلى حذف \"{{name}}\" بشكل دائم، بما في ذلك {{subfolders}} و{{notes}}. لا يمكن التراجع عن هذا.",
+      "subfolderCount_zero": "{{count}} مجلدات فرعية",
+      "subfolderCount_one": "{{count}} مجلد فرعي",
+      "subfolderCount_two": "{{count}} مجلدان فرعيان",
+      "subfolderCount_few": "{{count}} مجلدات فرعية",
+      "subfolderCount_many": "{{count}} مجلدًا فرعيًا",
+      "subfolderCount_other": "{{count}} مجلد فرعي",
+      "deleteConfirm": "حذف المجلد والملاحظات",
+      "recordingInFolder": "يجري تسجيل “{{title}}” في هذا المجلد. أوقف التسجيل، ثم احذف المجلد."
     },
     "list": {
       "title": "الملاحظات",
@@ -3558,7 +3573,15 @@
           "title": "المحتويات",
           "empty": "أضف عناوين لإنشاء جدول المحتويات."
         }
-      }
+      },
+      "lostNoteCopy": {
+        "title": "تعديلاتك الأخيرة في ملاحظة جديدة",
+        "description": "حُذفت “{{title}}” قبل حفظ تعديلاتك، لذا حُفظت في ملاحظة جديدة في «خاص».",
+        "open": "فتح الملاحظة"
+      },
+      "muteMic": "كتم الميكروفون",
+      "unmuteMic": "إلغاء كتم الميكروفون",
+      "micMuted": "الميكروفون مكتوم"
     },
     "participants": {
       "attendee": "حاضر",
@@ -3698,14 +3721,25 @@
         "title": "خفت صوت الاجتماع",
         "description": "لم يُسمع أي شخص منذ بضع دقائق. إذا كانت المكالمة لا تزال جارية، فتحقق من جهاز إخراج الصوت."
       },
+      "externalAttendeesBlocked": "يضم هذا الاجتماع أشخاصًا من خارج مؤسستك. لا تسمح مؤسستك بتحويل هذا الاجتماع إلى نص.",
+      "externalAttendeesUnverifiable": "تعذّر على OpenWhispr التحقق من جميع المدعوين. لا تسمح مؤسستك بتحويل الاجتماعات إلى نص إلا إذا كانت داخلية.",
+      "externalAttendeesStopped": "توقف التسجيل لأن قائمة المدعوين تضم شخصًا من خارج مؤسستك. يمكنك متابعة تدوين الملاحظات.",
+      "internalAttendeesQuestion": "هل ينتمي جميع المشاركين في هذا الاجتماع إلى مؤسستك؟",
+      "internalAttendeesConfirm": "نعم، ابدأ",
       "recordingDisabledByOrg": "تم تعطيل تسجيل الاجتماعات بواسطة مؤسستك.",
       "stoppedAccountChanged": "توقف التسجيل لأنك سجّلت الخروج أو بدّلت الحساب.",
       "stoppedPolicyUnresolved": "توقف التسجيل لأنه تعذّر التحقق من إعدادات مؤسستك.",
-      "stoppedWorkspaceChanged": "توقف التسجيل لأنك بدّلت مساحة العمل."
+      "stoppedWorkspaceChanged": "توقف التسجيل لأنك بدّلت مساحة العمل.",
+      "recordingCopy": {
+        "title": "نُقل التسجيل إلى ملاحظة جديدة",
+        "description": "حُذفت “{{title}}” أثناء التسجيل. يُحفظ النص المكتوب في ملاحظة جديدة في «خاص».",
+        "open": "فتح الملاحظة"
+      }
     },
     "meetingPill": {
       "returnToNote": "العودة إلى التسجيل",
-      "waitingForMicrophone": "في انتظار الميكروفون"
+      "waitingForMicrophone": "في انتظار الميكروفون",
+      "micMuted": "الميكروفون مكتوم"
     },
     "empty": {
       "title": "لا توجد ملاحظات هنا بعد",
@@ -3742,6 +3776,7 @@
       "searchFolders": "البحث في المجلدات...",
       "noResults": "لم يتم العثور على مجلدات",
       "newFolder": "مجلد جديد",
+      "newSubfolder": "مجلد فرعي جديد",
       "showInFileManager": "إظهار في {{manager}}"
     },
     "actions": {
@@ -3966,6 +4001,7 @@
         "members_many": "{{count}} عضوًا",
         "members_other": "{{count}} عضو"
       },
+      "subfolders": "المجلدات الفرعية",
       "banner": {
         "title": {
           "team": "مساحة فريقك",
@@ -4421,6 +4457,7 @@
       "failed": "تعذر التحقق من الوصول.",
       "microphone": "فعّل OpenWhispr ضمن الميكروفون.",
       "accessibility": "اسحب OpenWhispr إلى تسهيلات الاستخدام، ثم فعّله.",
+      "selectApp": "في «الخصوصية والأمن»، افتح System & App Protection Override واختر OpenWhispr.",
       "systemAudio": "فعّل OpenWhispr ضمن تسجيل صوت النظام فقط.",
       "screenContext": "اسحب OpenWhispr إلى تسجيل الشاشة وصوت النظام، ثم فعّله.",
       "settings": "فتح الإعدادات",
@@ -7351,7 +7388,7 @@
         "FOLDER_UNAVAILABLE": "هذا الموقع غير متاح. اختر مجلدًا آخر.",
         "SPACE_UNAVAILABLE": "هذا الموقع غير متاح. اختر مجلدًا آخر.",
         "FOLDER_NAME_REQUIRED": "أدخل اسم المجلد.",
-        "FOLDER_NAME_TAKEN": "يوجد مجلد بهذا الاسم في هذا الموقع.",
+        "FOLDER_NAME_TAKEN": "يوجد مجلد بهذا الاسم في هذه المساحة.",
         "CREATE_FAILED": "تعذر الإكمال. حاول مجددًا.",
         "LINKED_NOTE_CHANGED": "راجع الموقع، ثم انضم مجددًا.",
         "NOTE_UNAVAILABLE": "هذه الملاحظة غير متاحة. أعد المحاولة دون إنشاء بديل.",

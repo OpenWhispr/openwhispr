@@ -156,6 +156,7 @@ const MOCK_MODULES = {
     export const persistNoteShareState = async (noteId, updates) => {
       globalThis.__shareTest.persisted.push({ noteId, updates });
     };
+    export const useFolders = () => globalThis.__shareTest.folders;
     export const useSpaces = () => globalThis.__shareTest.spaces;
     export const useShareCacheEntry = (id) => (id ? (cache().get(id) ?? null) : null);
   `,
@@ -214,6 +215,7 @@ async function setupDialog(
     server,
     updateResult = null,
     rotateResult = null,
+    folders = [],
     spaces = ALL_SPACES,
     ensureResult = null,
     moveResult = { success: true },
@@ -248,6 +250,7 @@ async function setupDialog(
     server,
     updateResult,
     rotateResult,
+    folders,
     spaces,
     ensureResult,
     moveResult,
@@ -659,6 +662,38 @@ test("synthetic scope rows offer no permission or remove controls", async (t) =>
   );
   assert.ok(targeted.includes(direct.id), "the direct grant keeps its controls");
   assert.ok(!targeted.includes(scope.id), `scope row was offered controls: ${targeted}`);
+});
+
+test("a grant to a synced subfolder names it with its parent", async (t) => {
+  const folder = (id, name, cloud_id, parent_folder_id = null) => ({
+    id,
+    name,
+    cloud_id,
+    parent_folder_id,
+    space_id: 1,
+    is_default: 0,
+  });
+  const { markup } = await renderDialog(t, {
+    folders: [folder(1, "Work", "cloud-work"), folder(2, "Q1", "cloud-q1", 1)],
+    entry: {
+      share: shareSettings("invited", PREFIX),
+      invitations: [],
+      rawToken: null,
+      access: {
+        owner: { type: "user", id: "owner", email: "owner@acme.com", name: null, image: null },
+        grants: [
+          accessGrant("grant-folder", {
+            principal: { type: "folder", id: "cloud-q1", email: null, name: "Q1", image: null },
+          }),
+        ],
+        my_permission: "owner",
+        can_manage_access: true,
+        can_manage_inherited_access: true,
+      },
+    },
+  });
+
+  assert.match(markup, /Work \/ Q1/);
 });
 
 const PRIVATE_NOTE = {

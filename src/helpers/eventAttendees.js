@@ -2,6 +2,9 @@
 // handles ESM source files; main-process CJS callers load it via Node's
 // require(esm) with module-syntax detection.
 
+// Rooms, resources, groups and holiday calendars Google lists as attendees.
+export const NON_PERSON_CALENDAR_ADDRESS = /@(?:[^@]+\.)?calendar\.google\.com$/i;
+
 /**
  * Whether an event's attendee belongs on a note made from it: rooms and other
  * resources are booked rather than invited, and a guest who declined isn't

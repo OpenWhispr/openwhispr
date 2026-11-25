@@ -8,11 +8,14 @@ const os = require("os");
 const debugLogger = require("./debugLogger");
 const { getLinuxSessionInfo } = require("./linuxSession");
 const { getCosmicActiveAppId } = require("./cosmicToplevel");
+const { PRIVACY_SETTINGS_URL, usesAppControlPicker } = require("./macAppControl");
+const { queryPostEventAccess } = require("./settingsWindowState");
 
 const CACHE_TTL_MS = 30000;
 
-// isTrustedAccessibilityClient() is a cheap synchronous syscall, so the cache
-// only exists to debounce the dialog shown on denial.
+// isTrustedAccessibilityClient() is a cheap synchronous syscall (the macOS 27.3
+// input-posting check behind it spawns a short-lived helper), so the cache only
+// exists to debounce the dialog shown on denial.
 const ACCESSIBILITY_CHECK_TTL_MS = 5000;
 
 function pasteCancelledError() {
@@ -150,6 +153,7 @@ function spawnWlCopy(flags, text) {
 class ClipboardManager {
   constructor() {
     this.accessibilityCache = { value: null, expiresAt: 0 };
+    this.postEventAccess = null;
     this.commandAvailabilityCache = new Map();
     this.nircmdPath = null;
     this.nircmdChecked = false;
@@ -1401,10 +1405,10 @@ class ClipboardManager {
                 "Paste could not resolve the active keyboard layout. Text is copied to clipboard - please paste manually with Cmd+V."
               )
             );
-          } else if (useFastPaste) {
+          } else if (useFastPaste && this.canPasteWithOsascript()) {
             this.safeLog(
               code === 2
-                ? "CGEvent binary lacks accessibility trust, falling back to osascript"
+                ? "CGEvent binary lacks permission to post input, falling back to osascript"
                 : `CGEvent paste failed (code ${code}), falling back to osascript`,
               { stderr: errorOutput.trim() }
             );
@@ -1413,6 +1417,7 @@ class ClipboardManager {
             this.fastPastePath = null;
             this.pasteMacOSWithOsascript(originalClipboard, options).then(resolve).catch(reject);
           } else {
+            if (useFastPaste) keepTranscript();
             this.accessibilityCache = { value: null, expiresAt: 0 };
             const stderr = errorOutput.trim();
             const errorMsg = `Paste failed (code ${code}${stderr ? `: ${stderr}` : ""}). Text is copied to clipboard - please paste manually with Cmd+V.`;
@@ -1430,13 +1435,14 @@ class ClipboardManager {
             return;
           }
           if (options.isCancelled?.()) return reject(pasteCancelledError());
-          if (useFastPaste) {
+          if (useFastPaste && this.canPasteWithOsascript()) {
             keepTranscript();
             this.safeLog("CGEvent paste error, falling back to osascript");
             this.fastPasteChecked = true;
             this.fastPastePath = null;
             this.pasteMacOSWithOsascript(originalClipboard, options).then(resolve).catch(reject);
           } else {
+            if (useFastPaste) keepTranscript();
             const errorMsg = `Paste command failed: ${error.message}. Text is copied to clipboard - please paste manually with Cmd+V.`;
             reject(new Error(errorMsg));
           }
@@ -2630,6 +2636,29 @@ class ClipboardManager {
     throw err;
   }
 
+  requestPostEventAccess() {
+    return queryPostEventAccess(true);
+  }
+
+  async hasPostEventAccess() {
+    let access = await queryPostEventAccess(false);
+    // The first spawn after launch is the slow one and has no earlier verdict
+    // to fall back on, so it gets a second try before reading as "not granted".
+    if (access === null && this.postEventAccess === null) {
+      access = await queryPostEventAccess(false);
+    }
+    // A helper that could not answer keeps the last known verdict, so a slow
+    // spawn does not turn a granted paste into a clipboard-only one.
+    if (access !== null) this.postEventAccess = access;
+    return this.postEventAccess === true;
+  }
+
+  // System Events keystrokes need assistive access; on macOS 27.3 a grant made
+  // through the app picker covers input posting only.
+  canPasteWithOsascript() {
+    return !usesAppControlPicker() || systemPreferences.isTrustedAccessibilityClient(false);
+  }
+
   async checkAccessibilityPermissions(silent = false) {
     if (process.platform !== "darwin") return true;
 
@@ -2640,7 +2669,9 @@ class ClipboardManager {
       }
     }
 
-    const allowed = systemPreferences.isTrustedAccessibilityClient(false);
+    const allowed =
+      systemPreferences.isTrustedAccessibilityClient(false) ||
+      (usesAppControlPicker() && (await this.hasPostEventAccess()));
 
     if (!silent) {
       this.accessibilityCache = {
@@ -2663,7 +2694,11 @@ class ClipboardManager {
       testError.includes("(-25006)");
 
     let dialogMessage;
-    if (isStuckPermission) {
+    if (usesAppControlPicker()) {
+      dialogMessage = `To enable automatic pasting, select OpenWhispr in Privacy & Security → System & App Protection Override. Without permission, you can paste the copied text with Command-V.
+
+Would you like to open System Settings now?`;
+    } else if (isStuckPermission) {
       dialogMessage = `🔒 OpenWhispr needs Accessibility permissions, but it looks like you may have OLD PERMISSIONS from a previous version.
 
 ❗ COMMON ISSUE: If you've rebuilt/reinstalled OpenWhispr, the old permissions may be "stuck" and preventing new ones.
@@ -2715,8 +2750,16 @@ Would you like to open System Settings now?`;
   }
 
   openSystemSettings() {
+    const useAppPicker = usesAppControlPicker();
     const settingsCommands = [
-      ["open", ["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"]],
+      [
+        "open",
+        [
+          useAppPicker
+            ? PRIVACY_SETTINGS_URL
+            : "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+        ],
+      ],
       ["open", ["-b", "com.apple.systempreferences"]],
       ["open", ["/System/Library/PreferencePanes/Security.prefPane"]],
     ];
@@ -2736,6 +2779,8 @@ Would you like to open System Settings now?`;
           if (settingsCode !== 0) {
             commandIndex++;
             tryNextCommand();
+          } else if (useAppPicker) {
+            void this.requestPostEventAccess();
           }
         });
       } else {

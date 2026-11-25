@@ -135,6 +135,8 @@ export function isRegistryStreamingModel(providerId, modelId) {
 const MANAGED_REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 export const REALTIME_MODELS = new Set();
 export function isOpenAiRealtimeSelection(settings) {
+  // Cloud onboarding keeps the previous model, but the server chooses its streaming provider.
+  if (settings.cloudTranscriptionProvider === "openwhispr") return false;
   return settings.cloudTranscriptionMode === "byok"
     ? (settings.cloudTranscriptionProvider || "openai") === "openai" &&
         REALTIME_MODELS.has(settings.cloudTranscriptionModel)
