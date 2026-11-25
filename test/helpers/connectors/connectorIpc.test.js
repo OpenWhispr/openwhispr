@@ -117,7 +117,12 @@ test("each channel reaches the manager, with policy only where something can lea
     manager.calls.map((call) => call.name),
     ["status", "prepare", "commit", "cancel", "runDirect", "recentActions"]
   );
-  assert.deepEqual(manager.calls[1].args, ["slack", "send_message", { text: "hi" }, ALLOWED]);
+  assert.deepEqual(manager.calls[1].args, [
+    "slack",
+    "send_message",
+    { text: "hi" },
+    { ...ALLOWED, slackWindowTitle: null },
+  ]);
   assert.deepEqual(manager.calls[2].args, ["action-1", { body: "hi!" }, ALLOWED]);
   const [connectorId, action, args, auth, runtime] = manager.calls[4].args;
   assert.deepEqual(

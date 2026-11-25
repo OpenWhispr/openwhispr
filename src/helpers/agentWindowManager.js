@@ -2,6 +2,7 @@ const { BrowserWindow, Menu, screen } = require("electron");
 const debugLogger = require("./debugLogger");
 const DragManager = require("./dragManager");
 const { isFromWindow } = require("./ipcSender");
+const { slackWindowTitle } = require("./connectors/slackWindowTitle");
 const { createLinuxWindowInputRegion } = require("./linuxWindowInputRegion");
 const { plasmaWorkAreas } = require("./plasmaWorkAreas");
 const { AGENT_WINDOW_CONFIG, WindowPositionUtil } = require("./windowConfig");
@@ -54,6 +55,8 @@ class AgentWindowManager {
         return this._bounds(display);
       },
     });
+    this.slackRead = null;
+    this.slackTitle = null;
     this.voiceState = "idle";
     this.voiceAttempt = null;
     this.keyboardFocus = false;
@@ -87,6 +90,7 @@ class AgentWindowManager {
     if (external) {
       targetPidPromise = windowManager.textEditMonitor?.captureTargetPid?.();
       void windowManager.selectionManager?.captureTarget?.({ force: true });
+      this._readSlackTitle(targetPidPromise);
     }
     void this._show(() => windowManager._resolveActiveDisplay(targetPidPromise));
     this._send("agent-window-hotkey", { external });
@@ -119,6 +123,8 @@ class AgentWindowManager {
     const selectedText =
       typeof command.selectedContext?.text === "string" ? command.selectedContext.text : "";
     this._ensureWindow();
+    // Spoken over the app the dictation captured.
+    this._readSlackTitle();
     void this._show(() => this.windowManager._resolveActiveDisplay());
     this._send(
       "agent-window-command",
@@ -292,6 +298,7 @@ class AgentWindowManager {
 
   // The window is gone (crash, failed load): nothing it held may block dictation.
   _forget() {
+    this._forgetSlackTitle();
     void this.dragManager.stopWindowDrag();
     this.window = null;
     this.ready = false;
@@ -330,7 +337,37 @@ class AgentWindowManager {
     win.moveTop?.();
   }
 
+  // The title of the Slack window the hotkey was pressed over (or a wake word
+  // spoken over), kept while the window shows: a Slack post that names no
+  // destination goes to its conversation. Read after the target is captured;
+  // a newer press, or one over another app, replaces it.
+  _readSlackTitle(targetPidPromise) {
+    this.slackTitle = null;
+    const read = (async () => {
+      await targetPidPromise;
+      const context = await this.windowManager.selectionManager
+        ?.getTargetAppContext?.()
+        .catch(() => null);
+      if (this.slackRead === read) this.slackTitle = slackWindowTitle(context);
+    })();
+    this.slackRead = read;
+  }
+
+  _forgetSlackTitle() {
+    this.slackRead = null;
+    this.slackTitle = null;
+  }
+
+  // Only this window's own requests are spoken over that Slack window; a read
+  // still running is waited for.
+  async slackWindowTitle(event) {
+    if (!isFromWindow(event, this.window)) return null;
+    await this.slackRead;
+    return this.slackTitle;
+  }
+
   _hide() {
+    this._forgetSlackTitle();
     const win = this.window;
     if (!win) return;
     void this.dragManager.stopWindowDrag();

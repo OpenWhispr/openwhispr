@@ -701,7 +701,7 @@ function createConnectorManager({
     await Promise.all(revokes);
   }
 
-  async function prepare(connectorId, action, args, { policyState, accountId }) {
+  async function prepare(connectorId, action, args, { policyState, accountId, slackWindowTitle }) {
     sweepExpired();
     const refusal = policyRefusal(policyState);
     if (refusal) return { status: "unavailable", reason: refusal };
@@ -716,7 +716,10 @@ function createConnectorManager({
     let prepared;
     try {
       prepared = normalizePrepareResult(
-        await connector.prepare(action, args || {}, { binding }),
+        await connector.prepare(action, args || {}, {
+          binding,
+          ...(slackWindowTitle ? { slackWindowTitle } : {}),
+        }),
         connector.actions?.[action]?.editable
       );
     } catch (error) {

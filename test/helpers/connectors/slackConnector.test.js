@@ -116,6 +116,120 @@ test("a DM is opened only after Send, never while preparing", async () => {
   assert.equal(posts(slack)[0].params.channel, "D0GABE001");
 });
 
+const GROUP_OPEN = { ok: true, channel: { id: "C0MPIM001" } };
+const POSTED_GROUP = { ...FIXTURES.posted, channel: "C0MPIM001" };
+
+test("a group DM is named by its people: Send opens it with all of them and posts there", async () => {
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok(FIXTURES.people)],
+    "conversations.open": [ok(GROUP_OPEN)],
+    "chat.postMessage": [ok(POSTED_GROUP)],
+  });
+
+  // The user is in every group DM they post to, so naming them changes nothing.
+  const prepared = await connector.prepare(
+    "send_message",
+    { destination: "Gabe Smith, @gstone, chad", text: "Standup notes" },
+    BOUND
+  );
+  assert.equal(prepared.status, "ready");
+  assert.equal(prepared.preview.destinationLabel, "Gabe Smith (@gabe), Gabriel Stone (@gstone)");
+  assert.equal(slack.methods().includes("conversations.open"), false);
+
+  const result = await connector.commit("send_message", prepared.payload, {}, BOUND);
+  assert.equal(result.state, "sent");
+  assert.deepEqual(slack.calls.at(-2).params, { users: "U0GABE001,U0GABRIEL" });
+  assert.equal(posts(slack)[0].params.channel, "C0MPIM001");
+
+  // Its link then names that group DM, as a reply in its thread does.
+  const again = await connector.prepare(
+    "send_message",
+    { destination: "https://acme-test.slack.com/archives/C0MPIM001", text: "One more thing" },
+    BOUND
+  );
+  assert.equal(again.status, "ready");
+  assert.equal(again.preview.destinationLabel, "Gabe Smith (@gabe), Gabriel Stone (@gstone)");
+});
+
+test("a list that isn't two or more other people is no group DM", async () => {
+  const { connector } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok(FIXTURES.people)],
+  });
+
+  const oneOther = await connector.prepare(
+    "send_message",
+    { destination: "Gabe Smith, chad", text: "Lunch?" },
+    BOUND
+  );
+  assert.equal(oneOther.status, "ready");
+  assert.equal(oneOther.preview.destinationLabel, "Gabe Smith (@gabe)");
+  assert.equal(oneOther.payload.target.kind, "user");
+
+  const withChannel = await connector.prepare(
+    "send_message",
+    { destination: "Gabe Smith, #eng", text: "Lunch?" },
+    BOUND
+  );
+  assert.equal(withChannel.status, "needs_clarification");
+});
+
+test("a login from before group DMs is told to reconnect when Slack refuses to open one", async () => {
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok(FIXTURES.people)],
+    "conversations.open": [slackError("missing_scope")],
+  });
+  const prepared = await connector.prepare(
+    "send_message",
+    { destination: "Gabe Smith, Gabriel Stone", text: "Standup notes" },
+    BOUND
+  );
+  const result = await connector.commit("send_message", prepared.payload, {}, BOUND);
+  assert.equal(result.state, "failed");
+  assert.equal(result.errorCode, "reconnect_needed");
+  assert.equal(posts(slack).length, 0);
+  // Flagged, so Settings and the card offer a reconnect, which asks for the new scope.
+  assert.equal((await connector.getStatus()).needsReconnect, true);
+});
+
+test("a person whose name has a comma in it is that person, not a group DM", async () => {
+  const smith = {
+    id: "U0SMITH01",
+    name: "gsmith",
+    deleted: false,
+    is_bot: false,
+    profile: { real_name: "Smith, Gabe", display_name: "" },
+  };
+  const { connector } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok({ ...FIXTURES.people, members: [...FIXTURES.people.members, smith] })],
+  });
+  const prepared = await connector.prepare(
+    "send_message",
+    { destination: "Smith, Gabe", text: "Hi" },
+    BOUND
+  );
+  assert.equal(prepared.preview.destinationLabel, "Smith, Gabe (@gsmith)");
+});
+
+test("a list of people is a group DM even when it loosely matches one channel's name", async () => {
+  const gabeGabriel = { ...FIXTURES.channels.channels[0], id: "C0GABEGAB", name: "gabe-gabriel" };
+  const { connector } = await setupSlack({
+    "users.conversations": [
+      ok({ ...FIXTURES.channels, channels: [...FIXTURES.channels.channels, gabeGabriel] }),
+    ],
+    "users.list": [ok(FIXTURES.people)],
+  });
+  const prepared = await connector.prepare(
+    "send_message",
+    { destination: "Gabe, Gabriel", text: "Hi" },
+    BOUND
+  );
+  assert.equal(prepared.preview.destinationLabel, "Gabe Smith (@gabe), Gabriel Stone (@gstone)");
+});
+
 test("two people with the same name are told apart by their usernames", async () => {
   const alex = (id, name) => ({
     id,
@@ -1223,4 +1337,75 @@ test("a name that only looks like an id is still a name", async () => {
     assert.equal(prepared.status, "ready", destination);
     assert.equal(prepared.preview.destinationLabel, label, destination);
   }
+});
+
+// The Slack window the agent hotkey was pressed over, as main hands it to prepare.
+const pressedOver = (slackWindowTitle) => ({ ...BOUND, slackWindowTitle });
+
+test("a post with no destination goes to the conversation the Slack window's title names", async () => {
+  const { connector } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok(FIXTURES.people)],
+  });
+  const cases = [
+    ["eng (Channel) - Acme Test - Slack", "#eng"],
+    ["* eng-backend | Acme Test | Slack", "#eng-backend"],
+    ["Slack | #leads | Acme Test", "#leads"],
+    ["Gabe Smith (DM) - Acme Test - Slack - Google Chrome", "Gabe Smith (@gabe)"],
+    [
+      "Gabe Smith, Gabriel Stone - Acme Test - Slack",
+      "Gabe Smith (@gabe), Gabriel Stone (@gstone)",
+    ],
+  ];
+  for (const [title, label] of cases) {
+    const prepared = await connector.prepare(
+      "send_message",
+      { text: "Ship it" },
+      pressedOver(title)
+    );
+    assert.equal(prepared.status, "ready", title);
+    assert.equal(prepared.preview.destinationLabel, label, title);
+  }
+});
+
+test("a Slack window title that names no conversation, or more than one, asks where, without the title", async () => {
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok(FIXTURES.people)],
+  });
+  const ask = {
+    status: "needs_clarification",
+    message: "Ask the user which Slack channel or person to send this to.",
+    candidates: [],
+  };
+  for (const title of [
+    "Acme Test - Slack",
+    "Threads - Acme Test - Slack",
+    "eng - leads - Acme Test - Slack",
+    // Slack can show another workspace, whose #eng isn't this one's.
+    "eng (Channel) - OtherCo - Slack",
+    "eng (Channel) - Slack",
+    // Only an exact name counts: no loose match picks where a post goes.
+    "Eng (Channel) - Acme Test - Slack",
+    "en - Acme Test - Slack",
+  ]) {
+    assert.deepEqual(
+      await connector.prepare("send_message", { text: "Ship it" }, pressedOver(title)),
+      ask,
+      title
+    );
+  }
+  slack.calls.length = 0;
+  assert.deepEqual(await connector.prepare("send_message", { text: "Ship it" }, BOUND), ask);
+  assert.deepEqual(slack.calls, [], "without a Slack window nothing is looked up");
+});
+
+test("a destination the model names wins over the open Slack window", async () => {
+  const { connector } = await setupSlack(channelsOnly);
+  const prepared = await connector.prepare(
+    "send_message",
+    { destination: "#leads", text: "Ship it" },
+    pressedOver("eng (Channel) - Acme Test - Slack")
+  );
+  assert.equal(prepared.preview.destinationLabel, "#leads");
 });

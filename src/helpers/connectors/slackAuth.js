@@ -6,6 +6,7 @@ const SLACK_USER_SCOPES = [
   "channels:read",
   "groups:read",
   "im:write",
+  "mpim:write",
   "users:read",
   "users:read.email",
 ];
