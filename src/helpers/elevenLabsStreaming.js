@@ -1,33 +1,69 @@
 const WebSocket = require("ws");
 const debugLogger = require("./debugLogger");
-const { sanitizeKeyterms, SILENCE_MARKER } = require("./elevenLabsTranscription");
+const {
+  PROVIDER_ERROR_CODES,
+  asProviderError,
+  providerError,
+  providerHttpError,
+} = require("./providerHttpErrors");
+const { SPEECH_FRAME_RMS, computePcm16Rms } = require("../utils/audioUtils");
+const { sanitizeElevenLabsKeyterms } = require("../utils/elevenLabsKeyterms.js");
+const { SCRIBE_SILENCE_MARKER } = require("../utils/scribeSilence.js");
 
 const REALTIME_URL = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 const REALTIME_MODEL = "scribe_v3_live";
 const SAMPLE_RATE = 24000;
 const WEBSOCKET_TIMEOUT_MS = 30000;
-// The final commit's transcript; a stop must not hang on a server that never sends it.
-const FINAL_COMMIT_TIMEOUT_MS = 4000;
+// The VAD's default 1.5 s is more silence than a fluent speaker leaves. At 0.8 s a
+// final came 1.1 to 1.4 s after the speech ended.
+const VAD_SILENCE_SECS = 0.8;
+// ElevenLabs asks for chunks of 0.1 to 1 s and closed a session that was sent a
+// reconnect replay frame by frame, so audio is queued and leaves one message a tick.
+const SEND_INTERVAL_MS = 100;
+const MAX_CHUNK_MS = 1000;
+// The server commits a segment itself after about 35 s without a commit, silence
+// included, and the word under that cut was lost. So the client commits in the first
+// 0.2 s pause after 20 s; speech with no such pause in the next 15 s gets the cut.
+const COMMIT_AFTER_MS = 20000;
+const COMMIT_PAUSE_MS = 200;
+// A commit with no audio in it closed the session when under 0.3 s had arrived since
+// the last one. One carrying this much silence was never refused.
+const COMMIT_SILENCE_MS = 350;
+// How long a commit's answer is waited for; the slowest live took 1.2 s.
+const COMMIT_ACK_TIMEOUT_MS = 2000;
+// Committed transcripts carry no id and the VAD sends empty ones of its own, so a
+// stop sends three commits and ends at the second empty answer in a row.
+const STOP_COMMITS = 3;
+// Behind a backlog the server took up to 103 ms per second of audio flushed.
+const BACKLOG_TIMEOUT_MS_PER_SECOND = 150;
+// A capture time this far past where the audio before it ended means the caller left
+// audio out in between. Capture times of a replayed microphone jitter by less.
+const CAPTURE_HOLE_MS = 500;
 // How long a plain committed_transcript waits for its timestamped twin.
 const PLAIN_COMMIT_GRACE_MS = 1500;
 // ElevenLabs closes a socket that hears nothing for 15 s. Meeting audio arrives
 // continuously, so this only fills gaps such as a paused capture.
 const KEEPALIVE_IDLE_MS = 5000;
 const KEEPALIVE_SILENCE_MS = 100;
-// A final commit for audio the server has shown no words for is answered quickly
-// or not at all, so a stop waits only this long for it.
-const QUIET_COMMIT_TIMEOUT_MS = 1000;
+const KEEPALIVE_POLL_MS = 1000;
 // The realtime endpoint takes fewer and shorter keyterms than the batch one.
 const MAX_REALTIME_KEYTERMS = 50;
 const MAX_REALTIME_KEYTERM_CHARS = 20;
 
+const C = PROVIDER_ERROR_CODES;
+const ERROR_CONTEXT = { provider: "ElevenLabs", surface: "transcription" };
+
 // Errors after which the session cannot continue. The rest are either transient
 // (the server closes the socket and the meeting reconnects) or advisory.
-const FATAL_ERRORS = new Set([
-  "auth_error",
-  "quota_exceeded",
-  "unaccepted_terms",
-  "invalid_request",
+const FATAL_ERROR_CODES = new Map([
+  ["auth_error", C.AUTH_FAILED],
+  ["quota_exceeded", C.QUOTA_EXHAUSTED],
+  ["unaccepted_terms", C.ACCESS_DENIED],
+  ["invalid_request", C.BAD_REQUEST],
+]);
+const TRANSIENT_ERROR_CODES = new Map([
+  ["rate_limited", C.RATE_LIMITED],
+  ["queue_overflow", C.UNAVAILABLE],
 ]);
 const ADVISORY_ERRORS = new Set([
   "commit_throttled",
@@ -35,41 +71,24 @@ const ADVISORY_ERRORS = new Set([
   "chunk_size_exceeded",
 ]);
 
-function errorWithCode(message, code) {
-  const error = new Error(message);
-  if (code) error.code = code;
-  return error;
-}
-
-function describeServerError(type, detail) {
-  switch (type) {
-    case "auth_error":
-      return errorWithCode(
-        "ElevenLabs rejected the API key. Check it in Settings.",
-        "PROVIDER_AUTH_FAILED"
-      );
-    case "quota_exceeded":
-      return errorWithCode(
-        "Your ElevenLabs quota is used up. Check your plan or usage.",
-        "PROVIDER_QUOTA_EXHAUSTED"
-      );
-    case "unaccepted_terms":
-      return errorWithCode(
-        "Accept ElevenLabs' speech-to-text terms in your ElevenLabs account first.",
-        "PROVIDER_ACCESS_DENIED"
-      );
-    default:
-      return errorWithCode(`ElevenLabs ${type}${detail ? `: ${detail}` : ""}`);
+function serverError(type) {
+  // No shared message says what to do about this one.
+  if (type === "unaccepted_terms") {
+    return Object.assign(
+      new Error("Accept ElevenLabs' speech-to-text terms in your ElevenLabs account first."),
+      { code: C.ACCESS_DENIED }
+    );
   }
+  const code = FATAL_ERROR_CODES.get(type) ?? TRANSIENT_ERROR_CODES.get(type) ?? C.ERROR;
+  return providerError(code, ERROR_CONTEXT);
 }
 
-// The handshake answers a refused key with an HTTP status before any message.
-function describeHandshakeError(error) {
+// ws reports a refused upgrade only in its error's message.
+function socketError(error) {
   const status = Number(/Unexpected server response: (\d{3})/.exec(error?.message || "")?.[1]);
-  if (status === 401 || status === 403) return describeServerError("auth_error");
-  if (status === 429)
-    return errorWithCode("ElevenLabs is rate limiting requests.", "PROVIDER_RATE_LIMITED");
-  return error;
+  return status
+    ? providerHttpError({ ...ERROR_CONTEXT, status, body: "" })
+    : asProviderError(error, ERROR_CONTEXT);
 }
 
 function firstWordOffsetMs(words) {
@@ -79,8 +98,8 @@ function firstWordOffsetMs(words) {
 }
 
 // Scribe v3 Live over WSS: xi-api-key header, base64 PCM inside JSON
-// input_audio_chunk messages, and server-side VAD commits. Mirrors the
-// Corti/Deepgram streaming classes the meeting pipeline drives.
+// input_audio_chunk messages, and server-side VAD commits beside the client's own.
+// Mirrors the Corti/Deepgram streaming classes the meeting pipeline drives.
 class ElevenLabsStreaming {
   constructor() {
     this.ws = null;
@@ -103,6 +122,8 @@ class ElevenLabsStreaming {
     this.lastTimestampedCommit = null;
     this.plainCommitsAwaitingTimestamps = [];
     this.currentPartial = "";
+    // Where on the server's clock the open partial began.
+    this.partialStartMs = 0;
     this.isDisconnecting = false;
     this.preSessionBuffer = [];
     this.preSessionBufferSize = 0;
@@ -110,12 +131,24 @@ class ElevenLabsStreaming {
     this.sessionStartedAt = null;
     this.firstAudioAt = null;
     this.audioBytesSent = 0;
-    // Audio the server has heard, keep-alive silence included, and the points where
-    // that stream jumped ahead of the wall clock (a paused capture filled by silence).
+    // Audio the server has heard, the client's own silence included, and the points
+    // where the caller's audio resumed behind that silence.
     this.streamMs = 0;
     this.streamAnchors = [];
     this.reanchorOnNextAudio = false;
-    this.currentModel = REALTIME_MODEL;
+    // Audio waiting for its tick, as the messages it will leave in.
+    this.sendQueue = [];
+    this.sendQueueBytes = 0;
+    this.sendInterval = null;
+    // The caller's audio a session that ended unasked had taken and never sent.
+    this.unsentAudio = [];
+    // Where the last commit sits in the stream, the server's or the client's own,
+    // and how much quiet audio has come in a row since.
+    this.committedMs = 0;
+    this.quietBytes = 0;
+    // When a commit of the client's own went out, until a committed transcript answers.
+    this.commitSentAt = null;
+    this.emptyCommits = 0;
     this.sampleRate = SAMPLE_RATE;
     this.keepAliveInterval = null;
     this.lastSendAt = 0;
@@ -125,15 +158,16 @@ class ElevenLabsStreaming {
 
   buildWebSocketUrl(options = {}) {
     const params = new URLSearchParams({
-      model_id: REALTIME_MODEL,
+      model_id: options.model || REALTIME_MODEL,
       audio_format: `pcm_${this.sampleRate}`,
       commit_strategy: "vad",
+      vad_silence_threshold_secs: String(VAD_SILENCE_SECS),
       include_timestamps: "true",
     });
     if (options.language && options.language !== "auto") {
       params.set("language_code", options.language);
     }
-    const keyterms = sanitizeKeyterms(
+    const keyterms = sanitizeElevenLabsKeyterms(
       options.keyterms,
       MAX_REALTIME_KEYTERMS,
       MAX_REALTIME_KEYTERM_CHARS
@@ -172,6 +206,11 @@ class ElevenLabsStreaming {
     this.streamMs = 0;
     this.streamAnchors = [];
     this.reanchorOnNextAudio = false;
+    this.committedMs = 0;
+    this.quietBytes = 0;
+    this.commitSentAt = null;
+    this.emptyCommits = 0;
+    this.unsentAudio = [];
     this.sampleRate = options.sampleRate || SAMPLE_RATE;
 
     const url = this.buildWebSocketUrl(options);
@@ -187,7 +226,7 @@ class ElevenLabsStreaming {
 
       this.connectionTimeout = setTimeout(() => {
         this.cleanup();
-        this.rejectPending(new Error("ElevenLabs WebSocket connection timeout"));
+        this.rejectPending(providerError(C.TIMEOUT, ERROR_CONTEXT));
       }, WEBSOCKET_TIMEOUT_MS);
 
       const ws = new WebSocket(url, { headers: { "xi-api-key": apiKey } });
@@ -214,10 +253,10 @@ class ElevenLabsStreaming {
 
     ws.on("error", (rawError) => {
       if (ws !== this.ws) return;
-      const error = describeHandshakeError(rawError);
+      const error = socketError(rawError);
       const wasActive = this.isConnected;
       debugLogger.error("ElevenLabs WebSocket error", { error: rawError.message });
-      this.emitPendingPlainCommit();
+      this.emitOpenPartial();
       this.cleanup();
       if (this.rejectPending(error)) return;
       if (wasActive && !this.isDisconnecting) {
@@ -235,8 +274,8 @@ class ElevenLabsStreaming {
         reason: reason?.toString(),
         wasActive,
       });
-      this.rejectPending(new Error(`ElevenLabs WebSocket closed before ready (code: ${code})`));
-      this.emitPendingPlainCommit();
+      this.rejectPending(providerError(C.UNAVAILABLE, ERROR_CONTEXT));
+      this.emitOpenPartial();
       this.cleanup();
       if (wasActive && !this.isDisconnecting) {
         this.notifyConnectionLost(new Error(`Connection lost (code: ${code})`));
@@ -255,6 +294,8 @@ class ElevenLabsStreaming {
   }
 
   handleMessage(data) {
+    // Frames behind a reported end would make the open partial a final again.
+    if (this.connectionLossNotified) return;
     let message;
     try {
       message = JSON.parse(data.toString());
@@ -283,6 +324,7 @@ class ElevenLabsStreaming {
         this.connectionTimeout = null;
         this.flushPreSessionBuffer();
         this.startKeepAlive();
+        this.startSending();
         debugLogger.debug("ElevenLabs session started", {
           sessionId: this.sessionId,
           model: message.config?.model_id,
@@ -294,10 +336,17 @@ class ElevenLabsStreaming {
         }
         break;
 
-      case "partial_transcript":
-        this.currentPartial = message.text?.trim() === SILENCE_MARKER ? "" : message.text || "";
+      case "partial_transcript": {
+        const wasOpen = Boolean(this.currentPartial);
+        this.currentPartial =
+          message.text?.trim() === SCRIBE_SILENCE_MARKER ? "" : message.text || "";
+        if (this.currentPartial) {
+          this.emptyCommits = 0;
+          if (!wasOpen) this.partialStartMs = this.streamMs;
+        }
         this.onPartialTranscript?.(this.currentPartial);
         break;
+      }
 
       case "committed_transcript":
       case "committed_transcript_with_timestamps":
@@ -307,6 +356,7 @@ class ElevenLabsStreaming {
       case "session_time_limit_exceeded":
         if (this.isDisconnecting) break;
         debugLogger.warn("ElevenLabs session time limit reached", { error: message.error });
+        this.emitOpenPartial();
         // The session takes no more audio, so the meeting keeps it for the replacement,
         // and the close that follows is not a second loss.
         this.isConnected = false;
@@ -314,7 +364,7 @@ class ElevenLabsStreaming {
         if (this.onSessionExpired) {
           this.onSessionExpired({ proactive: false });
         } else {
-          this.notifyConnectionLost(describeServerError(type, message.error));
+          this.notifyConnectionLost(serverError(type));
         }
         break;
 
@@ -340,7 +390,7 @@ class ElevenLabsStreaming {
       debugLogger.debug("ElevenLabs advisory error", { type, detail });
       return;
     }
-    const error = describeServerError(type, detail);
+    const error = serverError(type);
     debugLogger.error("ElevenLabs streaming error", { type, detail });
     if (this.rejectPending(error)) {
       this.cleanup();
@@ -349,15 +399,16 @@ class ElevenLabsStreaming {
     // Transient failures end with the server closing the socket, which reconnects.
     // A fatal one would fail every reconnect the same way, so it is reported as a
     // loss the meeting must not retry; the close that follows adds nothing.
-    if (FATAL_ERRORS.has(type)) {
+    if (FATAL_ERROR_CODES.has(type)) {
       error.fatal = true;
+      this.emitOpenPartial();
       this.notifyConnectionLost(error);
     }
   }
 
-  // Word times count along the audio the server heard. Keep-alive silence adds
-  // only a little of it for a long pause, so times after a pause are taken from
-  // where real audio resumed.
+  // Word times count along the audio the server heard. A keep-alive adds only a
+  // little of it for a long pause and a commit adds silence nobody captured, so
+  // times after either are taken from where real audio resumed.
   timeAtAudioOffset(offsetMs) {
     if (this.sessionStartedAt == null) return null;
     let anchor = { offsetMs: 0, at: this.sessionStartedAt };
@@ -372,8 +423,20 @@ class ElevenLabsStreaming {
     return (bytes / 2 / this.sampleRate) * 1000;
   }
 
+  msToBytes(ms) {
+    return Math.round((this.sampleRate * ms) / 1000) * 2;
+  }
+
   receiveCommit(message, timestamped) {
     const text = (message.text || "").trim();
+    const spoken = Boolean(text) && text !== SCRIBE_SILENCE_MARKER;
+    // Any committed transcript restarts the count towards the server's cut. Each
+    // arrives as two frames: the plain one is the answer, and the one a stop counts.
+    this.committedMs = Math.max(this.committedMs, this.streamMs);
+    if (!timestamped) this.commitSentAt = null;
+    if (spoken) this.emptyCommits = 0;
+    else if (!timestamped) this.emptyCommits++;
+    this.resolvePendingCommit();
     const startMs = firstWordOffsetMs(message.words);
     const timestamp = startMs === null ? null : this.timeAtAudioOffset(startMs);
     if (timestamped) {
@@ -421,11 +484,10 @@ class ElevenLabsStreaming {
     } else if (!possibleReverseTwin) {
       this.lastTimestampedCommit = null;
     }
-    if (!text || text === SILENCE_MARKER) this.onPartialTranscript?.("");
+    if (!spoken) this.onPartialTranscript?.("");
     // Without word times, place the segment at the last sample available when the
     // commit arrived. Waiting for its twin must not move the segment past later audio.
-    const lastSampleMs = Math.max(0, this.streamMs - this.bytesToMs(2));
-    const fallbackTimestamp = this.timeAtAudioOffset(lastSampleMs) ?? Date.now();
+    const fallbackTimestamp = this.lastSampleTime();
     if (timestamped) {
       this.commitSegment(text, timestamp ?? fallbackTimestamp);
     } else {
@@ -438,8 +500,13 @@ class ElevenLabsStreaming {
     }
   }
 
+  lastSampleTime() {
+    const lastSampleMs = Math.max(0, this.streamMs - this.bytesToMs(2));
+    return this.timeAtAudioOffset(lastSampleMs) ?? Date.now();
+  }
+
   commitSegment(text, timestamp) {
-    if (text && text !== SILENCE_MARKER) {
+    if (text && text !== SCRIBE_SILENCE_MARKER) {
       this.completedSegments.push(text);
       this.accumulatedText = this.completedSegments.join(" ");
       this.onFinalTranscript?.(this.accumulatedText, timestamp);
@@ -463,6 +530,17 @@ class ElevenLabsStreaming {
     this.pendingPlainCommit = null;
   }
 
+  // Words the server will not commit any more exist only as the open partial, so it
+  // becomes a final, behind a plain commit still waiting for its twin. It has no
+  // word times, so it is placed where its first partial arrived.
+  emitOpenPartial() {
+    this.emitPendingPlainCommit();
+    const text = this.currentPartial.trim();
+    if (!text) return;
+    this.currentPartial = "";
+    this.commitSegment(text, this.timeAtAudioOffset(this.partialStartMs) ?? Date.now());
+  }
+
   sendChunk(pcmBuffer, commit = false) {
     this.ws.send(
       JSON.stringify({
@@ -473,6 +551,7 @@ class ElevenLabsStreaming {
       })
     );
     this.lastSendAt = Date.now();
+    this.streamMs += this.bytesToMs(pcmBuffer.length);
   }
 
   flushPreSessionBuffer() {
@@ -483,9 +562,8 @@ class ElevenLabsStreaming {
       bytes: this.preSessionBufferSize,
     });
     for (const chunk of this.preSessionBuffer) {
-      this.sendChunk(chunk);
+      this.queueAudio(chunk);
       this.audioBytesSent += chunk.length;
-      this.streamMs += this.bytesToMs(chunk.length);
     }
     this.preSessionBuffer = [];
     this.preSessionBufferSize = 0;
@@ -510,22 +588,167 @@ class ElevenLabsStreaming {
       this.firstAudioAt = capturedAt ?? Date.now();
       this.sessionStartedAt = this.firstAudioAt;
     }
-    if (this.reanchorOnNextAudio) {
-      this.reanchorOnNextAudio = false;
-      this.streamAnchors.push({ offsetMs: this.streamMs, at: capturedAt ?? Date.now() });
-    }
     this.audioBytesSent += pcmBuffer.length;
-    this.streamMs += this.bytesToMs(pcmBuffer.length);
-    this.sendChunk(Buffer.from(pcmBuffer));
+    const rms = computePcm16Rms(pcmBuffer);
+    this.quietBytes = rms < SPEECH_FRAME_RMS ? this.quietBytes + pcmBuffer.length : 0;
+    // Silence handed over faster than it can leave, such as a capture gap repaired in
+    // one burst, would hold live audio behind it. Live audio never queues more than a
+    // commit's wait and one message, and past a second of silence the server needs no
+    // more of it, so the rest is left out and the next audio is anchored again.
+    if (
+      rms === 0 &&
+      this.quietBytes > this.msToBytes(MAX_CHUNK_MS) &&
+      this.sendQueueBytes > this.msToBytes(COMMIT_ACK_TIMEOUT_MS + MAX_CHUNK_MS)
+    ) {
+      this.reanchorOnNextAudio = true;
+      return true;
+    }
+    if (
+      capturedAt !== null &&
+      capturedAt - this.timeAtAudioOffset(this.queueEndMs()) > CAPTURE_HOLE_MS
+    ) {
+      this.reanchorOnNextAudio = true;
+    }
+    const reanchored = this.reanchorOnNextAudio;
+    if (reanchored) {
+      this.reanchorOnNextAudio = false;
+      this.streamAnchors.push({ offsetMs: this.queueEndMs(), at: capturedAt ?? Date.now() });
+    }
+    this.queueAudio(Buffer.from(pcmBuffer), reanchored);
+    this.commitInPause();
     return true;
   }
 
-  // Commits whatever has been heard since the last VAD commit.
-  finalize() {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.isConnected) return false;
-    this.sendChunk(Buffer.alloc(0), true);
-    debugLogger.debug("ElevenLabs commit sent");
-    return true;
+  // Where audio handed over now lands on the server's clock: behind what was sent
+  // and what is still queued.
+  queueEndMs() {
+    return this.streamMs + this.bytesToMs(this.sendQueueBytes);
+  }
+
+  // Audio joins the queue's last message until that one holds a second. Audio behind
+  // a re-anchor starts its own, so a message is one unbroken stretch of the caller's
+  // audio and carries the time its first sample was captured.
+  queueAudio(pcmBuffer, reanchored = false) {
+    const maxBytes = this.msToBytes(MAX_CHUNK_MS);
+    let offset = 0;
+    while (offset < pcmBuffer.length) {
+      let message = this.sendQueue.at(-1);
+      if (!message || message.commit || message.bytes === maxBytes || (reanchored && !offset)) {
+        const capturedAt = this.timeAtAudioOffset(
+          this.streamMs + this.bytesToMs(this.sendQueueBytes + offset)
+        );
+        message = { chunks: [], bytes: 0, commit: false, capturedAt };
+        this.sendQueue.push(message);
+      }
+      const chunk = pcmBuffer.subarray(offset, offset + maxBytes - message.bytes);
+      message.chunks.push(chunk);
+      message.bytes += chunk.length;
+      offset += chunk.length;
+    }
+    this.sendQueueBytes += pcmBuffer.length;
+  }
+
+  // A commit is a message of its own, queued behind the audio so far.
+  queueCommit() {
+    const silence = Buffer.alloc(this.msToBytes(COMMIT_SILENCE_MS));
+    this.sendQueue.push({ chunks: [silence], bytes: silence.length, commit: true });
+    this.sendQueueBytes += silence.length;
+    this.reanchorOnNextAudio = true;
+    this.committedMs = this.queueEndMs();
+  }
+
+  // Frames under the speech level are a pause. Silence is one too, so a silent stream
+  // is committed every 20 s and speech never starts with the server's count nearly spent.
+  commitInPause() {
+    if (
+      this.quietBytes >= this.msToBytes(COMMIT_PAUSE_MS) &&
+      this.queueEndMs() - this.committedMs >= COMMIT_AFTER_MS
+    ) {
+      this.queueCommit();
+    }
+  }
+
+  // One message a tick. What follows a commit waits for its answer: audio sent in
+  // the same burst went into the segment being committed and was not transcribed.
+  sendQueued() {
+    if (this.ws?.readyState !== WebSocket.OPEN || !this.isConnected) return;
+    if (this.sendQueue.length === 0 || this.isAwaitingCommitAck()) return;
+    this.sendNext();
+  }
+
+  sendNext() {
+    const { chunks, bytes, commit } = this.sendQueue.shift();
+    this.sendQueueBytes -= bytes;
+    this.sendChunk(Buffer.concat(chunks, bytes), commit);
+    if (commit) {
+      this.commitSentAt = Date.now();
+      debugLogger.debug("ElevenLabs commit sent");
+    }
+  }
+
+  isAwaitingCommitAck(timeoutMs = COMMIT_ACK_TIMEOUT_MS) {
+    return this.commitSentAt !== null && Date.now() - this.commitSentAt < timeoutMs;
+  }
+
+  // Empties the queue into the caller's audio that never left. Commit silence is the
+  // client's own.
+  drainUnsentAudio() {
+    for (const { chunks, bytes, commit, capturedAt } of this.sendQueue) {
+      if (!commit) this.unsentAudio.push({ buffer: Buffer.concat(chunks, bytes), capturedAt });
+    }
+    this.sendQueue = [];
+    this.sendQueueBytes = 0;
+  }
+
+  // After an unasked end: what this session took and never sent, handed over once
+  // for the session that replaces it.
+  takeUnsentAudio() {
+    this.drainUnsentAudio();
+    const unsent = this.unsentAudio;
+    this.unsentAudio = [];
+    return unsent;
+  }
+
+  startSending() {
+    this.stopSending();
+    this.sendInterval = setInterval(() => this.sendQueued(), SEND_INTERVAL_MS);
+  }
+
+  stopSending() {
+    if (this.sendInterval) {
+      clearInterval(this.sendInterval);
+      this.sendInterval = null;
+    }
+  }
+
+  // Commits everything handed over and reads on until the server has answered it.
+  // The server applies a commit in audio order, so every worded transcript on the
+  // way is a final.
+  async finalize() {
+    // Behind a backlog an answer takes longer, so each wait allows for what is flushed.
+    const timeoutMs =
+      COMMIT_ACK_TIMEOUT_MS +
+      (this.bytesToMs(this.sendQueueBytes) / 1000) * BACKLOG_TIMEOUT_MS_PER_SECOND;
+    // What is queued leaves back-to-back from here, but still not right behind a commit.
+    this.stopSending();
+    while (this.isConnected && (this.sendQueue.length > 0 || this.isAwaitingCommitAck(timeoutMs))) {
+      if (this.isAwaitingCommitAck(timeoutMs)) {
+        await this.waitForCommit(this.commitSentAt + timeoutMs - Date.now());
+      } else {
+        this.sendNext();
+      }
+    }
+    if (!this.isConnected) return;
+    for (let sent = 0; sent < STOP_COMMITS; sent++) {
+      this.queueCommit();
+      this.sendNext();
+    }
+    this.emptyCommits = 0;
+    const deadline = Date.now() + timeoutMs;
+    while (this.isConnected && this.emptyCommits < STOP_COMMITS - 1) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0 || !(await this.waitForCommit(remaining))) return;
+    }
   }
 
   startKeepAlive() {
@@ -533,16 +756,22 @@ class ElevenLabsStreaming {
     this.lastSendAt = Date.now();
     this.keepAliveInterval = setInterval(() => {
       if (this.ws?.readyState !== WebSocket.OPEN || !this.isConnected) return;
-      if (Date.now() - this.lastSendAt < KEEPALIVE_IDLE_MS) return;
-      const silence = Buffer.alloc(Math.round((this.sampleRate * KEEPALIVE_SILENCE_MS) / 1000) * 2);
+      // Audio waiting for its tick is no gap.
+      if (this.sendQueue.length > 0 || Date.now() - this.lastSendAt < KEEPALIVE_IDLE_MS) return;
+      // 100 ms every 5 s never gives the VAD its silence, so the first keep-alive of
+      // a gap commits the sentence before it instead.
+      if (!this.reanchorOnNextAudio && this.streamMs > this.committedMs) {
+        this.queueCommit();
+        return;
+      }
+      const silence = Buffer.alloc(this.msToBytes(KEEPALIVE_SILENCE_MS));
       try {
         this.sendChunk(silence);
-        this.streamMs += KEEPALIVE_SILENCE_MS;
         this.reanchorOnNextAudio = true;
       } catch (err) {
         debugLogger.debug("ElevenLabs keep-alive failed", { error: err.message });
       }
-    }, 1000);
+    }, KEEPALIVE_POLL_MS);
   }
 
   stopKeepAlive() {
@@ -559,7 +788,7 @@ class ElevenLabsStreaming {
     this.pendingCommit = null;
   }
 
-  // Resolves true on the next emitted commit, false on timeout or cleanup.
+  // Resolves true on the next commit, received or emitted, false on timeout or cleanup.
   waitForCommit(timeoutMs) {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
@@ -568,26 +797,6 @@ class ElevenLabsStreaming {
       }, timeoutMs);
       this.pendingCommit = { resolve, timer };
     });
-  }
-
-  async waitForFinalCommits(requestedCommit) {
-    if (!requestedCommit) {
-      if (this.pendingPlainCommit) await this.waitForCommit(PLAIN_COMMIT_GRACE_MS);
-      return;
-    }
-
-    const deadline = Date.now() + FINAL_COMMIT_TIMEOUT_MS;
-    if (!this.currentPartial && !this.pendingPlainCommit) {
-      const heardCommit = await this.waitForCommit(QUIET_COMMIT_TIMEOUT_MS);
-      if (!heardCommit && !this.currentPartial && !this.pendingPlainCommit) return;
-    }
-
-    // Scribe does not label the response to our explicit commit. Any response
-    // could be an older VAD segment, so drain to the original deadline.
-    while (this.isConnected) {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0 || !(await this.waitForCommit(remaining))) return;
-    }
   }
 
   async disconnect({ commit = true } = {}) {
@@ -604,10 +813,9 @@ class ElevenLabsStreaming {
     if (commit && this.ws.readyState === WebSocket.OPEN && this.isConnected) {
       // A VAD response acknowledges a segment, not all audio sent before it arrived.
       // Commit even without a partial, since the last samples may still be in flight.
-      const requestedCommit = Boolean(this.currentPartial || this.audioBytesSent > 0);
-      if (requestedCommit) this.finalize();
-      await this.waitForFinalCommits(requestedCommit);
-      this.emitPendingPlainCommit();
+      if (this.currentPartial || this.audioBytesSent > 0) await this.finalize();
+      else if (this.pendingPlainCommit) await this.waitForCommit(PLAIN_COMMIT_GRACE_MS);
+      this.emitOpenPartial();
       const result = { text: this.accumulatedText };
       this.onSessionEnd?.(result);
       this.cleanup();
@@ -636,6 +844,8 @@ class ElevenLabsStreaming {
     this.connectionTimeout = null;
     this.clearPendingPlainCommit();
     this.stopKeepAlive();
+    this.stopSending();
+    this.drainUnsentAudio();
     this.preSessionBuffer = [];
     this.preSessionBufferSize = 0;
     this.bufferingAudio = false;
@@ -652,13 +862,6 @@ class ElevenLabsStreaming {
     this.isConnected = false;
     this.sessionId = null;
     this.resolvePendingCommit(false);
-  }
-
-  getStatus() {
-    return {
-      isConnected: this.isConnected,
-      sessionId: this.sessionId,
-    };
   }
 }
 

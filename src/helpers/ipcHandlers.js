@@ -419,6 +419,7 @@ const {
   formatSpeakerTranscript,
 } = require("./speakerMerge");
 const { dropNoSpeechSegments } = require("./noSpeechSegments");
+const { SCRIBE_SILENCE_MARKER } = require("../utils/scribeSilence.js");
 const {
   supportsWhisperSegments,
   timestampRequestFields,
@@ -10022,7 +10023,7 @@ class IPCHandlers {
           return { success: false, error: "No transcription engine available" };
         }
         // ElevenLabs Scribe answers silence with "[pause]" instead of nothing.
-        if (!result.text || result.text.trim() === "[pause]") {
+        if (!result.text || result.text.trim() === SCRIBE_SILENCE_MARKER) {
           throw Object.assign(new Error("No speech detected in audio"), {
             code: "NO_SPEECH_DETECTED",
           });
@@ -10566,13 +10567,24 @@ class IPCHandlers {
       if (!meetingReconnectReplaySources.has(source)) return;
       const copy = Buffer.from(buffer);
       const queue = meetingReconnectAudioBuffers[source];
-      queue.push({ buffer: copy, capturedAt });
+      // A chunk with no capture time is queued within a third of a second of its
+      // capture, and the replay must time it from then rather than from the hand-over.
+      queue.push({ buffer: copy, capturedAt: capturedAt ?? Date.now() });
       meetingReconnectAudioBytes[source] += copy.length;
       while (
         meetingReconnectAudioBytes[source] > MEETING_RECONNECT_BUFFER_MAX_BYTES &&
         queue.length > 1
       ) {
         meetingReconnectAudioBytes[source] -= queue.shift().buffer.length;
+      }
+    };
+
+    // A client that queues what it takes still holds some of it when its session ends
+    // unasked. That audio leads the replay, or it would reach no session.
+    const requeueUnsentMeetingAudio = (source, streaming) => {
+      if (!meetingReconnectReplaySources.has(source)) return;
+      for (const { buffer, capturedAt } of streaming?.takeUnsentAudio?.() ?? []) {
+        queueMeetingReconnectAudio(source, buffer, capturedAt);
       }
     };
 
@@ -10633,6 +10645,8 @@ class IPCHandlers {
           ...(!oldMic?.isConnected ? ["mic"] : []),
           ...(oldSystem && !oldSystem.isConnected ? ["system"] : []),
         ]);
+        requeueUnsentMeetingAudio("mic", oldMic);
+        requeueUnsentMeetingAudio("system", oldSystem);
         let newMic = null;
         let newSystem = null;
 
@@ -11299,6 +11313,7 @@ class IPCHandlers {
       // joins that reconnect's replay, or its audio would go nowhere until the swap.
       if (meetingReconnectPromise && !streaming.isConnected) {
         meetingReconnectReplaySources.add(source);
+        requeueUnsentMeetingAudio(source, streaming);
       }
       queueMeetingReconnectAudio(source, outbound, capturedAt);
       const sent = sendMeetingStreamingAudio(streaming, outbound, capturedAt);

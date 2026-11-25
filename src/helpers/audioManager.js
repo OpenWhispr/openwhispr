@@ -187,6 +187,7 @@ import {
   MAX_SHARED_KEYTERMS,
 } from "../utils/snippets";
 import { sanitizeElevenLabsKeyterms } from "../utils/elevenLabsKeyterms.js";
+import { SCRIBE_SILENCE_MARKER } from "../utils/scribeSilence.js";
 import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
 import { getAgentName } from "../utils/agentName";
 import { shouldDisplayDictationPreview } from "../utils/transcriptionPreview";
@@ -4671,7 +4672,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Check for text - handle both empty string and missing field. ElevenLabs
       // Scribe answers silence with "[pause]" instead of an empty string.
       const spokenText = result.text?.trim();
-      if (spokenText && spokenText !== "[pause]") {
+      if (spokenText && spokenText !== SCRIBE_SILENCE_MARKER) {
         if (
           sendsDictionary &&
           this.isDictionaryEcho(

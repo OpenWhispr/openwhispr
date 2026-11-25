@@ -50,6 +50,10 @@ function pcm16ToFloat32(pcmBuffer) {
 const MEETING_MIC_ACTIVITY_RMS = 0.006;
 const MEETING_SYSTEM_ACTIVITY_RMS = 0.004;
 
+// Trailing room noise in dictation recordings measures 0.003-0.010 RMS while
+// speech frames sit above ~0.0105, so a frame at this level is speech.
+const SPEECH_FRAME_RMS = 0.012;
+
 // RMS of raw s16le PCM in [0, 1]. Tolerates the odd-length and unaligned
 // buffers that helper stdout reads produce (an Int16Array view would throw on
 // an odd byteOffset), which is why it doesn't reuse pcm16ToFloat32.
@@ -82,4 +86,5 @@ module.exports = {
   computePcm16Rms,
   MEETING_MIC_ACTIVITY_RMS,
   MEETING_SYSTEM_ACTIVITY_RMS,
+  SPEECH_FRAME_RMS,
 };

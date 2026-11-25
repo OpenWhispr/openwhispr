@@ -11,6 +11,7 @@ const {
   chunkRetryDelayMs,
   abortableSleep,
 } = require("./cloudChunkPolicy");
+const { SCRIBE_SILENCE_MARKER } = require("../utils/scribeSilence.js");
 
 // Audio Upload through OpenRouter (#2105). Its upstream providers stop after
 // about 60 s of work per request and its multipart bodies stop at 25 MB, so a
@@ -107,7 +108,8 @@ async function transcribeOpenRouterChunks({
         const { text } = await transcribeWithRetries(pieces[index]);
         // ElevenLabs Scribe answers a silent piece with "[pause]" instead of nothing.
         const spokenText = text?.trim();
-        results[index] = spokenText && spokenText !== "[pause]" ? { text } : SILENT_CHUNK;
+        results[index] =
+          spokenText && spokenText !== SCRIBE_SILENCE_MARKER ? { text } : SILENT_CHUNK;
       } catch (err) {
         if (signal?.aborted) throw err;
         if (stopsUpload(err)) {
