@@ -295,19 +295,20 @@ class BubbleFace(context: Context) : View(context) {
     // The design's dp are for a 52 dp bubble; every size scales from the radius.
     val unit = r / 26f
     val barWidth = BubblePolicy.BAR_WIDTH * unit
-    val dotSize = r * 0.138f
+    // The dots and the rim arc keep the weights they had beside the old thin bars, scaled to the logo's
+    // bars, so listening and writing read as one weight (Josh, 25 Nov). Each bar folds in place.
+    val dotSize = barWidth * 1.15f
     for (i in 0 until 3) {
       val x = cx + (i - 1) * BubblePolicy.BAR_SPACING * unit
       val listening = barHeights[i] * unit
       val ripple = dotRipple(i)
       val height = listening + (dotSize - listening) * fold
-      val dx = ((i - 1) * r * 0.32f - (i - 1) * BubblePolicy.BAR_SPACING * unit) * fold
       val y = cy - ripple * r * 0.12f * fold
       val half = barWidth / 2 + (dotSize - barWidth) / 2 * fold
-      canvas.drawRoundRect(x + dx - half, y - height / 2, x + dx + half, y + height / 2, half, half, white)
+      canvas.drawRoundRect(x - half, y - height / 2, x + half, y + height / 2, half, half, white)
     }
     if (fold > 0f && look == Look.WRITING) {
-      whiteStroke.strokeWidth = r * 0.07f
+      whiteStroke.strokeWidth = barWidth * 0.58f
       whiteStroke.alpha = (white.alpha * fold * 0.85f).toInt()
       val turn = ((System.currentTimeMillis() - started) % 1200L) / 1200f * 360f
       val inset = whiteStroke.strokeWidth
