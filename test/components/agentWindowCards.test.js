@@ -1901,34 +1901,39 @@ test("a call types its answer only once its reply is heard", async (t) => {
   assert.deepEqual(pastes, [["caret-1", "Thanks!"]]);
 });
 
-test("a request a pause cut short reads the field again when its first half took the read", async (t) => {
-  const view = await mountWindow(t);
-  const probes = [];
-  Object.assign(view.happyWindow.electronAPI, {
-    captureSelectedText: async (options) => {
-      probes.push(options);
-      return { status: "editable", sessionId: `caret-${probes.length}` };
-    },
-    cancelSelectionEdit: async () => {},
-  });
-  await callTurn(view, "Write a thank-you note");
-  await React.act(async () =>
-    globalThis.__call.options.onUserTurn({
-      text: "to my team",
-      speech: { onEnd() {} },
-      replyLanguage: null,
-      dryRunWrites: false,
-      joinedRequest: "Write a thank-you note to my team",
-      isCurrent: () => true,
-      heard: Promise.resolve(),
-    })
-  );
-  await view.settle();
+for (const [kind, joinedRequest] of [
+  ["a pause cut short", "Write a thank-you note to my team"],
+  ["talked over after a tool call", null],
+]) {
+  test(`a request ${kind} reads the field again when the turn before took the read`, async (t) => {
+    const view = await mountWindow(t);
+    const probes = [];
+    Object.assign(view.happyWindow.electronAPI, {
+      captureSelectedText: async (options) => {
+        probes.push(options);
+        return { status: "editable", sessionId: `caret-${probes.length}` };
+      },
+      cancelSelectionEdit: async () => {},
+    });
+    await callTurn(view, "Write a thank-you note");
+    await React.act(async () =>
+      globalThis.__call.options.onUserTurn({
+        text: "to my team",
+        speech: { onEnd() {} },
+        replyLanguage: null,
+        dryRunWrites: false,
+        joinedRequest,
+        isCurrent: () => true,
+        heard: Promise.resolve(),
+      })
+    );
+    await view.settle();
 
-  assert.equal(probes.length, 2);
-  assert.equal(globalThis.__chat.sent[1], "Write a thank-you note to my team");
-  assert.equal(globalThis.__chat.sentOptions[1].plainTextResponse, true);
-});
+    assert.equal(probes.length, 2);
+    assert.equal(globalThis.__chat.sent[1], joinedRequest ?? "to my team");
+    assert.equal(globalThis.__chat.sentOptions[1].plainTextResponse, true);
+  });
+}
 
 test("Call on a take still listening drops it and starts once the take lets go of the microphone", async (t) => {
   const view = await mountWindow(t);

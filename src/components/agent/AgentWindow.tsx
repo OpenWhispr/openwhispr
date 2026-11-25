@@ -707,10 +707,10 @@ export default function AgentWindow() {
       const interrupts = chatBusyRef.current;
       if (interrupts) cancelTurn();
       cancelCaretDelivery();
-      // A request finished after a pause reads again when its first half took the read.
+      // A request whose read the turn before took (spoken before that turn's
+      // transcript: finished after a pause, or talked over) reads again.
       const caretRead =
-        callCaretRef.current?.sessionId ??
-        (joinedRequest && !dryRunWrites ? captureCallCaret() : null);
+        callCaretRef.current?.sessionId ?? (dryRunWrites ? null : captureCallCaret());
       callCaretRef.current = null;
       const [caretSessionId] = await Promise.all([caretRead, chatSettled()]);
       const current = stateRef.current;
