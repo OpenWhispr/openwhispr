@@ -1827,7 +1827,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
           this._previewProcessor = new AudioWorkletNode(
             this._previewAudioContext,
-            "pcm-streaming-processor"
+            "pcm-streaming-processor",
+            { channelCount: 1, channelCountMode: "explicit" }
           );
           this._previewProcessor.port.onmessage = (event) => {
             if (event.data === "flushed") {
@@ -5696,7 +5697,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.workletModuleLoaded = true;
       }
 
-      this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
+      // Downmix in Web Audio before the PCM worklet reads its single input channel.
+      this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor", {
+        channelCount: 1,
+        channelCountMode: "explicit",
+      });
       const provider = this.getStreamingProvider(providerName);
       // Decided once, with the provider, so a config refresh mid-recording
       // cannot change how this session's stream errors are handled. Only a

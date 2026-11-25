@@ -276,6 +276,9 @@ for (const [label, resolution, previews] of [
       close = async () => {};
     };
     globalThis.AudioWorkletNode = class {
+      constructor(context, name, options) {
+        this.options = options;
+      }
       port = {};
     };
     t.after(() => {
@@ -288,5 +291,9 @@ for (const [label, resolution, previews] of [
 
     assert.equal(await manager.startRecording(), true);
     assert.equal(started.length, previews);
+    if (previews) {
+      assert.equal(manager._previewProcessor.options?.channelCount, 1);
+      assert.equal(manager._previewProcessor.options?.channelCountMode, "explicit");
+    }
   });
 }
