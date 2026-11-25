@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Image, View } from 'react-native';
 import { makeStyles } from '../ThemeProvider';
-import { AccentText, GlassButton, PulseRings, Screen } from './kit';
+import { AccentText, GlassButton, Screen } from './kit';
 import { useOnboardingT } from './strings';
 
 const app = (name: string) => {
@@ -44,11 +44,10 @@ export const appIcon = app;
 
 // The v3 graphic (Figma 4860:90) exported at 3x, its drop shadow included: 393 x 448 around the
 // 345 x 400 card, which sits 24 in and 6 down. Everything outside the card is transparent (only the
-// shadow has alpha), so the page's canvas shows around it in both themes. Glows, logos and the two rings at rest are the export;
-// the rings' pulse is drawn on top, centred on the bubble at (172.5, 202).
+// shadow has alpha), so the page's canvas shows around it in both themes. Glows, logos and the two
+// still rings are the export; nothing pulses (Josh, 25 Nov).
 const EVERYWHERE = require('./assets/everywhere.png');
 const CARD = { width: 345, height: 400, left: 24, top: 6, imageWidth: 393, imageHeight: 448 };
-const BUBBLE_CENTER = { x: 172.5, y: 202 };
 
 export function AppsScreen({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const t = useOnboardingT();
@@ -65,30 +64,16 @@ export function AppsScreen({ onBack, onNext }: { onBack: () => void; onNext: () 
         importantForAccessibility="no-hide-descendants"
       >
         {width > 0 ? (
-          <>
-            <Image
-              source={EVERYWHERE}
-              style={{
-                position: 'absolute',
-                left: -CARD.left * scale,
-                top: -CARD.top * scale,
-                width: CARD.imageWidth * scale,
-                height: CARD.imageHeight * scale,
-              }}
-            />
-            <View
-              pointerEvents="none"
-              style={{
-                position: 'absolute',
-                left: (BUBBLE_CENTER.x - 56) * scale,
-                top: (BUBBLE_CENTER.y - 56) * scale,
-                width: 112 * scale,
-                height: 112 * scale,
-              }}
-            >
-              <PulseRings size={112 * scale} color="rgba(255,255,255,0.16)" />
-            </View>
-          </>
+          <Image
+            source={EVERYWHERE}
+            style={{
+              position: 'absolute',
+              left: -CARD.left * scale,
+              top: -CARD.top * scale,
+              width: CARD.imageWidth * scale,
+              height: CARD.imageHeight * scale,
+            }}
+          />
         ) : null}
       </View>
     </Screen>
