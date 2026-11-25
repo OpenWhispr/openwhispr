@@ -1,6 +1,7 @@
 {
   "appId": "com.gizmolabs.openwhispr",
   "afterPack": "scripts/afterPack.js",
+  "afterSign": "scripts/afterSign.js",
   "extraMetadata": {
     "windowsTrayIdentity": true
   },
@@ -182,6 +183,7 @@
     "target": ["nsis"],
     "icon": "src/assets/icon.ico",
     "forceCodeSigning": true,
+    "signExts": [".node", ".dll"],
     "azureSignOptions": {
       "endpoint": "https://eus.codesigning.azure.net/",
       "certificateProfileName": "openwhispr-release",
@@ -190,8 +192,9 @@
     },
     "extraResources": [
       {
-        "from": "resources/bin/nircmd.exe",
-        "to": "bin/nircmd.exe"
+        "from": "resources/bin/",
+        "to": "bin/",
+        "filter": ["nircmd.exe"]
       }
     ]
   },

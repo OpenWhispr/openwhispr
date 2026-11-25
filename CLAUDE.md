@@ -1027,7 +1027,7 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
    - ASAR unpacking needed for FFmpeg
    - Run `npm run download:whisper-cpp` before packaging (current platform)
    - Use `npm run download:whisper-cpp:all` for multi-platform packaging
-   - afterSign.js automatically skips signing when CSC_IDENTITY_AUTO_DISCOVERY=false
+   - `scripts/afterSign.js` fails a signed Windows build when any `.exe`, `.dll` or `.node` in it is unsigned (see Platform-Specific Notes → Windows → Code signing); it skips unsigned builds and other platforms
    - **Lockfile**: Always use Node 24 when running `npm install` (matches CI). If your local Node version differs, use `nvm exec 24 npm install`. Running `npm install` with a different major version will produce an incompatible `package-lock.json` that breaks `npm ci` in CI.
 
 5. **Windows Push-to-Talk Binary**:
@@ -1077,6 +1077,9 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
 - **Tray identity**: signed production builds pass a permanent GUID to `new Tray()` (`tray.js`) so Windows keeps the user's tray placement across updates. Never change the GUID
   - Windows binds an unsigned executable's GUID to its path, so the GUID is gated on the `windowsTrayIdentity` marker that `electron-builder.json` injects through `extraMetadata`
   - `electron-builder.json` forces Windows code signing; unsigned Windows builds (PR CI, local) must use `electron-builder.unsigned-win.json`, which clears the marker. Never run the `win-unpacked` a failed signed build leaves behind: it carries the marker and may be unsigned
+- **Code signing**: Azure Trusted Signing signs every `.exe`, `.dll` and `.node` in the app (`win.signExts`; electron-builder signs only `.exe` without it). Smart App Control and App Control for Business refuse to load an unsigned native module, so an unsigned `better_sqlite3.node` stops the app at startup ("An Application Control policy has blocked this file")
+  - electron-builder never signs an `extraResources` entry whose `from` is a single file, so a Windows binary there is listed by folder with a `filter` (as `nircmd.exe` is)
+  - `scripts/afterSign.js` reads each `.exe`, `.dll` and `.node` in `win-unpacked` for an Authenticode signature (`hasEmbeddedSignature` in `scripts/lib/pe-imports.js`) and fails the build, before the installer is built or published, if any has none. It runs only when `forceCodeSigning` is on, so PR CI's unsigned config skips it
 - **Push-to-Talk**: Native key listener binary (`windows-key-listener.exe`) enables true push-to-talk
   - Uses Windows Low-Level Keyboard Hook (`WH_KEYBOARD_LL`)
   - Supports compound hotkeys (e.g., `Ctrl+Shift+F11`)
