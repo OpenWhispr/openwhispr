@@ -100,6 +100,7 @@ const wavConversions = [];
 let convertBehavior = async () => CONVERTED_WAV;
 let prepareUploadBehavior;
 let localReasoningBehavior = async () => "local output";
+let localReasoningBatchBehavior = async (texts) => texts.map((text) => ({ success: true, text }));
 let localReasoningCancel = () => {};
 
 // ffmpeg's segmenter, faked: writes `count` pieces of about a second of 128 kbps
@@ -143,6 +144,7 @@ Module._load = function loadWithMocks(request, parent, isMain) {
       return {
         default: {
           processText: (...args) => localReasoningBehavior(...args),
+          processTextBatch: (...args) => localReasoningBatchBehavior(...args),
           cancel: (id) => localReasoningCancel(id),
         },
       };
@@ -2976,6 +2978,88 @@ test("revoked local agent inference is cancelled by id and leaves ordinary clean
   });
   assert.equal(cleanup.success, true);
   assert.equal(cleanup.text, "permitted cleanup");
+});
+
+test("a local reasoning batch is gated, cancelled by its id and answered like one request", async (t) => {
+  const noLocalModels = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  noLocalModels.llm.allowedModes = [];
+  const started = Promise.withResolvers();
+  const finish = Promise.withResolvers();
+  const cancelled = [];
+  t.after(async () => {
+    finish.resolve([]);
+    localReasoningBatchBehavior = async (texts) => texts.map((text) => ({ success: true, text }));
+    localReasoningCancel = () => {};
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  policySnapshot = { success: true, managed: false };
+  await fakeThis.refreshEffectivePolicy();
+  const handler = handlers.get("process-local-reasoning-batch");
+  const run = (texts, config) => handler({ sender: {} }, texts, "local-model", null, config);
+
+  const results = [
+    { success: true, text: "one" },
+    { success: false, error: "cut off", code: "OUTPUT_TRUNCATED" },
+  ];
+  const received = [];
+  localReasoningBatchBehavior = async (...args) => {
+    received.push(args);
+    return results;
+  };
+  assert.deepEqual(await run(["a", "b"], { systemPrompt: "Clean up." }), {
+    success: true,
+    results,
+  });
+  const [texts, model, config] = received[0];
+  assert.deepEqual(texts, ["a", "b"]);
+  assert.equal(model, "local-model");
+  assert.equal(config.systemPrompt, "Clean up.");
+  assert.equal(typeof config.requestId, "string", "a batch without an id still gets one");
+  assert.ok(config.signal instanceof AbortSignal);
+
+  localReasoningBatchBehavior = async () => {
+    throw Object.assign(new Error("could not start"), {
+      code: "LOCAL_SERVER_UNAVAILABLE",
+      details: { modelName: "Local" },
+    });
+  };
+  assert.deepEqual(await run(["a"], {}), {
+    success: false,
+    error: "could not start",
+    code: "LOCAL_SERVER_UNAVAILABLE",
+    details: { modelName: "Local" },
+  });
+
+  // A policy that refuses local models refuses the batch before it runs.
+  policySnapshot = { success: true, managed: true, policy: noLocalModels };
+  await fakeThis.refreshEffectivePolicy();
+  let ran = false;
+  localReasoningBatchBehavior = async () => {
+    ran = true;
+    return [];
+  };
+  assert.equal((await run(["private"], {})).code, "DEVICE_POLICY_BLOCKED");
+  assert.equal(ran, false);
+
+  // One that lands mid-batch cancels it by its id.
+  policySnapshot = { success: true, managed: false };
+  await fakeThis.refreshEffectivePolicy();
+  localReasoningBatchBehavior = async (_texts, _model, { requestId }) => {
+    assert.equal(requestId, "guard-job");
+    started.resolve();
+    return finish.promise;
+  };
+  localReasoningCancel = (id) => {
+    cancelled.push(id);
+    finish.resolve([]);
+  };
+  const pending = run(["private"], { requestId: "guard-job" });
+  await started.promise;
+  policySnapshot = { success: true, managed: true, policy: noLocalModels };
+  await fakeThis.refreshEffectivePolicy();
+  assert.deepEqual(cancelled, ["guard-job"]);
+  assert.equal((await pending).code, "DEVICE_POLICY_BLOCKED");
 });
 
 test("local transcription retry propagates policy retirement to both native decoders", async (t) => {

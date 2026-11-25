@@ -126,6 +126,7 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
     (channel === "cloud-reason" && args[1]?.requestPurpose === "agent") ||
     ([
       "process-local-reasoning",
+      "process-local-reasoning-batch",
       "process-anthropic-reasoning",
       "process-enterprise-reasoning",
     ].includes(channel) &&
@@ -163,7 +164,8 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
   if (channel === "cloud-agent-stream-start")
     return rules.isAgentAllowed(state) && llm("openwhispr");
   if (channel === "cloud-reason") return llm("openwhispr");
-  if (channel === "process-local-reasoning") return llm("local");
+  if (["process-local-reasoning", "process-local-reasoning-batch"].includes(channel))
+    return llm("local");
   if (channel === "process-anthropic-reasoning") return llm("providers", "anthropic");
   if (channel === "process-enterprise-reasoning") return llm("enterprise", args[3]?.provider);
   if (channel === "enterprise-stream-start") return llm("enterprise", args[0]?.provider);

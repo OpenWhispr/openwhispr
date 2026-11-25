@@ -136,3 +136,200 @@ test("the wider check accepts ordinary cleanup, including modest growth", async 
     assert.doesNotThrow(() => assertPlausibleCleanupOutput(raw, output), output);
   }
 });
+
+const OPTIONS =
+  "we looked at three options for the new onboarding flow and the team liked the second one best because it asks for the microphone permission only when it is needed.";
+const QUESTION =
+  "the open question is whether the account step should come before or after the first dictation since signing in early lets us sync the dictionary.";
+const NEXT_STEP =
+  "next week we will build a prototype of both orders and test them with five people from the beta list.";
+const OPTIONS_CLEAN =
+  "We looked at three options for the new onboarding flow, and the team liked the second one best because it asks for the microphone permission only when it is needed.";
+const QUESTION_CLEAN =
+  "The open question is whether the account step should come before or after the first dictation, since signing in early lets us sync the dictionary.";
+const NEXT_STEP_CLEAN =
+  "Next week we will build a prototype of both orders and test them with five people from the beta list.";
+const PASSAGES = `${OPTIONS} ${QUESTION} ${NEXT_STEP}`;
+
+test("the missing-run check finds nothing missing from a faithful answer", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  assert.equal(longestMissingRun(PASSAGES, PASSAGES), 0);
+  assert.equal(
+    longestMissingRun(PASSAGES, `${OPTIONS_CLEAN} ${QUESTION_CLEAN} ${NEXT_STEP_CLEAN}`),
+    0
+  );
+  assert.equal(longestMissingRun(LONG_RAW, LONG_CLEAN), 0);
+});
+
+test("the missing-run check counts a dropped passage word for word", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  // QUESTION is 25 words.
+  assert.equal(longestMissingRun(PASSAGES, `${OPTIONS_CLEAN} ${NEXT_STEP_CLEAN}`), 25);
+});
+
+test("the missing-run check counts what a looping answer never reached", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  // Longer than what was said, yet QUESTION and NEXT_STEP (45 words) are gone.
+  const looping = Array(4).fill(OPTIONS_CLEAN).join(" ");
+  assert.equal(longestMissingRun(PASSAGES, looping), 45);
+});
+
+test("the missing-run check ignores hesitations on the speaker's side only", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  assert.equal(
+    longestMissingRun(
+      "um so uh i think um we should uh move the meeting to uh friday because er the client is hmm out on thursday",
+      "So I think we should move the meeting to Friday because the client is out on Thursday."
+    ),
+    0
+  );
+  // "like" and "so" are words the answer keeps, so they still count.
+  assert.equal(
+    longestMissingRun(
+      "we would like to move the launch to friday so that the support team has time to update the help center articles",
+      "We would like to move the launch to Friday so that the support team has time to update the help center articles."
+    ),
+    0
+  );
+});
+
+test("punctuation, case and apostrophes are not missing words", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  for (const [raw, output] of [
+    [
+      "dont worry its fine we cant ship it on friday because the client isnt ready yet so lets wait until monday",
+      "Don't worry, it's fine. We can't ship it on Friday because the client isn't ready yet, so let's wait until Monday.",
+    ],
+    [
+      "we don’t need the old export step any more because the new one is faster",
+      "We don't need the old export step any more because the new one is faster.",
+    ],
+    [
+      "the follow-up email goes out on MONDAY to everyone on the beta list",
+      "The follow up email goes out on Monday to everyone on the beta list.",
+    ],
+  ]) {
+    assert.equal(longestMissingRun(raw, output), 0, output);
+  }
+});
+
+test("a short edit the cleanup is meant to make stays well under a drop", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  // The false start "can you send the report" is removed.
+  assert.equal(
+    longestMissingRun(
+      "can you send the report can you please send the quarterly report to marie by friday afternoon so she has time to review it before the board meeting on monday",
+      "Can you please send the quarterly report to Marie by Friday afternoon, so she has time to review it before the board meeting on Monday?"
+    ),
+    5
+  );
+});
+
+test("the missing-run check reads languages written without spaces", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  const chinese = [
+    "我们下周要发布新版本，但是测试还没有通过，所以可能要推迟到下下周。",
+    "另外设计团队希望在发布之前再检查一遍新的引导流程，因为上次的反馈说权限请求出现得太早了。",
+    "最后我们还需要更新帮助中心的文章，并且通知所有测试用户。",
+  ];
+  // The dropped sentence's words, as this runtime's ICU splits them.
+  const segmenter = new Intl.Segmenter("und", { granularity: "word" });
+  const dropped = Array.from(segmenter.segment(chinese[1])).filter((s) => s.isWordLike).length;
+  assert.ok(dropped >= 20, `only ${dropped} words`);
+  assert.equal(longestMissingRun(chinese.join(""), chinese.join("")), 0);
+  assert.equal(longestMissingRun(chinese.join(""), `${chinese[0]}${chinese[2]}`), dropped);
+
+  const russian = [
+    "Мы планируем выпустить новую версию на следующей неделе, если все тесты пройдут успешно.",
+    // 20 words.
+    "Команда дизайна хочет ещё раз проверить новый процесс регистрации, потому что пользователи жаловались на слишком ранний запрос доступа к микрофону.",
+    "После этого мы обновим статьи в справочном центре.",
+  ];
+  assert.equal(longestMissingRun(russian.join(" "), `${russian[0]} ${russian[2]}`), 20);
+});
+
+test("the missing-run check matches 4-word phrases: one word rewritten in five is no gap", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  // Four kept words around each rewritten one are covered by 4-word phrases;
+  // 5-word phrases would find all 30 words missing.
+  const groups = Array.from({ length: 6 }, (_, g) =>
+    [0, 1, 2, 3].map((w) => `a${g * 4 + w}`).join(" ")
+  );
+  const raw = groups.map((group) => `${group} gonna`).join(" ");
+  const output = groups.map((group) => `${group} going to`).join(" ");
+  assert.equal(longestMissingRun(raw, output), 1);
+});
+
+test("the missing-run check matches the measured reference (guards.py, 4-word phrases)", async () => {
+  const { longestMissingRun } = await import("../../src/utils/cleanupOutput.ts");
+  // Expected values from openwhispr-finetune guard/guards.py uncovered_run(). Its
+  // tokens are ASCII only and keep apostrophes, so these vectors avoid both.
+  for (const [raw, output, expected] of [
+    [
+      "um so first we need to finish the migration script and run it against the staging database twice then uh we should write the release notes for the desktop app and send them to the design team for review before thursday and finally we can tag the build and ship it to the beta channel on friday morning",
+      "So first we need to finish the migration script and run it against the staging database twice. Finally, we can tag the build and ship it to the beta channel on Friday morning.",
+      23,
+    ],
+    ["please book a table for six people at the italian place", "Okay.", 11],
+    // Fewer than four words said (hesitations aside): nothing to measure.
+    ["um yes uh please do", "", 0],
+    [LONG_RAW, LONG_CLEAN, 0],
+  ]) {
+    assert.equal(longestMissingRun(raw, output), expected, raw);
+  }
+});
+
+// The reviewer's cases: heavy rewording that keeps every word in order.
+const LIST_SAID =
+  "Here is the packing list. First item tent. Second item sleeping bags. Third item camping stove. Fourth item gas canisters. Fifth item headlamps. Sixth item water filter. Seventh item first aid kit. Eighth item bug spray. Ninth item sunscreen. Tenth item rain jackets. Eleventh item spare batteries. Twelfth item the big cooler.";
+const LIST_CLEAN =
+  "Here is the packing list:\n\n1. Tent\n2. Sleeping bags\n3. Camping stove\n4. Gas canisters\n5. Headlamps\n6. Water filter\n7. First aid kit\n8. Bug spray\n9. Sunscreen\n10. Rain jackets\n11. Spare batteries\n12. The big cooler";
+const FIGURES_SAID =
+  "Revenue came in at four point two million dollars, up twenty three percent from three point four million in the same quarter last year, and gross margin went from sixty one point five percent to sixty four point two percent. We added one hundred and eighty seven new customers, churned twenty nine, and net revenue retention was one hundred and twelve percent. Headcount is now one hundred and forty three, up from one hundred and twenty one, with eleven open roles.";
+const FIGURES_CLEAN =
+  "Revenue came in at $4.2 million, up 23% from 3.4 million in the same quarter last year, and gross margin went from 61.5% to 64.2%. We added 187 new customers, churned 29, and net revenue retention was 112%. Headcount is now 143, up from 121, with 11 open roles.";
+
+test("the order-aware check sees no gap where rewording keeps the words in order", async () => {
+  const { longestMissingRun, longestUnalignedRun } =
+    await import("../../src/utils/cleanupOutput.ts");
+  // The phrase check reads a numbered list and written figures as lost words.
+  assert.equal(longestMissingRun(LIST_SAID, LIST_CLEAN), 47);
+  assert.equal(longestUnalignedRun(LIST_SAID, LIST_CLEAN), 2);
+  assert.equal(longestMissingRun(FIGURES_SAID, FIGURES_CLEAN), 24);
+  assert.equal(longestUnalignedRun(FIGURES_SAID, FIGURES_CLEAN), 5);
+  assert.equal(longestUnalignedRun(PASSAGES, PASSAGES), 0);
+  assert.equal(
+    longestUnalignedRun(PASSAGES, `${OPTIONS_CLEAN} ${QUESTION_CLEAN} ${NEXT_STEP_CLEAN}`),
+    0
+  );
+});
+
+test("the order-aware check counts a dropped passage and a loop, as the phrase check does", async () => {
+  const { longestMissingRun, longestUnalignedRun } =
+    await import("../../src/utils/cleanupOutput.ts");
+  const lostQuestion = `${OPTIONS_CLEAN} ${NEXT_STEP_CLEAN}`;
+  assert.equal(longestMissingRun(PASSAGES, lostQuestion), 25);
+  assert.equal(longestUnalignedRun(PASSAGES, lostQuestion), 25);
+
+  // The opening sentence written ten times over in place of the 81 words after it.
+  const said = [
+    "Okay so the plan for the offsite is mostly settled now.",
+    "Marta booked the lakeside venue for two nights, and catering covers vegetarian and gluten free meals at no extra cost.",
+    "Trains leave Central Station at eight fifteen on Thursday morning, so please buy tickets before Monday because group fares sell out quickly.",
+    "Bring hiking boots, a rain jacket and a laptop charger, since Friday afternoon includes a ridge walk followed by planning workshops.",
+    "Expense claims go through Javier, who needs receipts within ten days of returning, otherwise finance cannot reimburse anything.",
+  ].join(" ");
+  const looping = Array(10)
+    .fill("Okay, so the plan for the offsite is mostly settled now.")
+    .join(" ");
+  assert.equal(longestMissingRun(said, looping), 81);
+  assert.equal(longestUnalignedRun(said, looping), 50);
+});
+
+test("the order-aware check counts a sentence moved elsewhere, which the phrase check does not", async () => {
+  const { longestMissingRun, longestUnalignedRun } =
+    await import("../../src/utils/cleanupOutput.ts");
+  const moved = `${QUESTION_CLEAN} ${OPTIONS_CLEAN} ${NEXT_STEP_CLEAN}`;
+  assert.equal(longestMissingRun(PASSAGES, moved), 0);
+  assert.equal(longestUnalignedRun(PASSAGES, moved), 25);
+});

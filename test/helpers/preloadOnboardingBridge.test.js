@@ -99,6 +99,21 @@ test("onboarding active bridge invokes only its allowlisted channel", async () =
   ]);
 });
 
+// A misspelt channel would leave every main-process test green and fail every
+// cleanup whose dropped words the guard re-cleans.
+test("local reasoning batch bridge invokes its own channel, and cancels by the batch's id", async () => {
+  const { api, invocations } = loadPreloadApi();
+  const config = { requestId: "guard-1", systemPrompt: "Clean up." };
+
+  await api.processLocalReasoningBatch(["one", "two"], "model", null, config);
+  await api.cancelLocalReasoning("guard-1");
+
+  assert.deepEqual(invocations, [
+    ["process-local-reasoning-batch", ["one", "two"], "model", null, config],
+    ["cancel-local-reasoning", "guard-1"],
+  ]);
+});
+
 test("macOS accessibility readiness forwards an optional account scope", () => {
   const { api, sends } = loadPreloadApi();
   const expectedAccountScope = { accountId: "account-a", authGeneration: 3 };

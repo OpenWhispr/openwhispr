@@ -2755,6 +2755,26 @@ declare global {
         code?: string;
         details?: Record<string, unknown>;
       }>;
+      /**
+       * Several texts (whole user messages) on the local model at once: up to four, fewer when
+       * they would not fit its window side by side. Texts are expected to fit the running window:
+       * one that needs it grown never restarts the server under the others, and fails the batch
+       * as busy if they hold it past `busyWaitMs`. One result per text, in order. `success: false`
+       * means the batch stopped (busy, cancelled, a policy refusal, the server failing), possibly
+       * after some texts ran; the config's `requestId` cancels all of it.
+       */
+      processLocalReasoningBatch: (
+        texts: string[],
+        modelId: string,
+        agentName: string | null,
+        config: ReasoningConfig
+      ) => Promise<{
+        success: boolean;
+        results?: Array<{ success: boolean; text?: string; error?: string; code?: string }>;
+        error?: string;
+        code?: string;
+        details?: Record<string, unknown>;
+      }>;
       checkLocalReasoningAvailable: () => Promise<boolean>;
       /** The largest context this machine can give a bundled model; drives chunked note generation. */
       getLocalContextBudget: (modelId: string) => Promise<{

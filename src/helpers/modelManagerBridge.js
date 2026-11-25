@@ -1057,4 +1057,5 @@ module.exports = {
   ModelError,
   ModelNotFoundError,
   LLM_DISK_SPACE_FACTOR,
+  reserveFor,
 };

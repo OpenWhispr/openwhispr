@@ -149,6 +149,62 @@ test("agent-only revocation gates IPC agent work without disabling ordinary clea
   );
 });
 
+test("a local reasoning batch is allowed or refused exactly when one local request is", () => {
+  const { runningOperationAllowed } = require("../../src/helpers/productPolicy");
+  const managedWith = (change) => {
+    const policy = defaultDevicePolicy();
+    change(policy);
+    return { accountId: "member", success: true, managed: true, policy };
+  };
+  const snapshots = [
+    { accountId: "member", success: true, managed: false },
+    { accountId: "member", success: false },
+    managedWith(() => {}),
+    managedWith((policy) => (policy.llm.allowedModes = ["local"])),
+    managedWith((policy) => (policy.llm.allowedModes = ["providers"])),
+    managedWith((policy) => (policy.llm.allowedModes = [])),
+    managedWith((policy) => (policy.minAppVersion = "99.0.0")),
+    managedWith((policy) => (policy.features.agentEnabled = false)),
+    {
+      ...managedWith((policy) => (policy.llm.allowedModes = ["providers"])),
+      success: false,
+      status: "loading",
+      deviceReady: true,
+    },
+  ];
+  const configs = [undefined, {}, { requiresAgent: true }];
+  const answers = new Set();
+  for (const snapshot of snapshots)
+    for (const config of configs) {
+      const args = (text) => [text, "model", null, config];
+      const single = productOperationAllowed(
+        snapshot,
+        "1.11.1",
+        "process-local-reasoning",
+        args("private")
+      );
+      const label = JSON.stringify({ snapshot, config });
+      assert.equal(
+        productOperationAllowed(snapshot, "1.11.1", "process-local-reasoning-batch", args(["a"])),
+        single,
+        label
+      );
+      assert.equal(
+        runningOperationAllowed(
+          snapshot,
+          "member",
+          "1.11.1",
+          "process-local-reasoning-batch",
+          args(["a"])
+        ),
+        runningOperationAllowed(snapshot, "member", "1.11.1", "process-local-reasoning", args("a")),
+        label
+      );
+      answers.add(single);
+    }
+  assert.deepEqual([...answers].sort(), [false, true], "both answers are exercised");
+});
+
 test("known pending restrictions selectively revoke running work without admitting new remote work", () => {
   const { runningOperationAllowed } = require("../../src/helpers/productPolicy");
   const policy = defaultDevicePolicy();

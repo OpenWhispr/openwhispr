@@ -7672,7 +7672,9 @@ class IPCHandlers {
       this._syncStartupEnv(setVars, clearVars);
     });
 
-    handleProduct("process-local-reasoning", async (event, text, modelId, _agentName, config) => {
+    // Both local reasoning channels: the request carries an id that
+    // cancel-local-reasoning and the product signal abort it by.
+    const runLocalReasoning = async (config, run) => {
       const LocalReasoningService = require("../services/localReasoningBridge").default;
       const signal = this._productRequestContext.getStore().signal;
       const requestId = config?.requestId ?? crypto.randomUUID();
@@ -7680,13 +7682,9 @@ class IPCHandlers {
       signal.addEventListener("abort", cancel, { once: true });
       try {
         signal.throwIfAborted();
-        const result = await LocalReasoningService.processText(text, modelId, {
-          ...config,
-          requestId,
-          signal,
-        });
+        const answer = await run(LocalReasoningService, { ...config, requestId, signal });
         signal.throwIfAborted();
-        return { success: true, text: result };
+        return { success: true, ...answer };
       } catch (error) {
         // code/details carry the machine-readable failure across to the
         // renderer, which owns the translation keys. Flattening to a bare
@@ -7700,7 +7698,20 @@ class IPCHandlers {
       } finally {
         signal.removeEventListener("abort", cancel);
       }
-    });
+    };
+
+    handleProduct("process-local-reasoning", (event, text, modelId, _agentName, config) =>
+      runLocalReasoning(config, async (service, options) => ({
+        text: await service.processText(text, modelId, options),
+      }))
+    );
+
+    // Several texts on the local model at once; one result per text, in order.
+    handleProduct("process-local-reasoning-batch", (event, texts, modelId, _agentName, config) =>
+      runLocalReasoning(config, async (service, options) => ({
+        results: await service.processTextBatch(texts, modelId, options),
+      }))
+    );
 
     ipcMain.handle("cancel-local-reasoning", (event, requestId) => {
       require("../services/localReasoningBridge").default.cancel(requestId);

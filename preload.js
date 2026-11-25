@@ -816,6 +816,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Local reasoning
   processLocalReasoning: (text, modelId, agentName, config) =>
     ipcRenderer.invoke("process-local-reasoning", text, modelId, agentName, config),
+  processLocalReasoningBatch: (texts, modelId, agentName, config) =>
+    ipcRenderer.invoke("process-local-reasoning-batch", texts, modelId, agentName, config),
   checkLocalReasoningAvailable: () => ipcRenderer.invoke("check-local-reasoning-available"),
   getLocalContextBudget: (modelId) => ipcRenderer.invoke("get-local-context-budget", modelId),
   cancelLocalReasoning: (requestId) => ipcRenderer.invoke("cancel-local-reasoning", requestId),
