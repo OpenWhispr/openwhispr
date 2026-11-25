@@ -5,8 +5,55 @@ extension DirectDictationTests {
     testWavHeader()
     testBudget()
     testResidency()
+    testLoadRetry()
+    testUnneededModelReleased()
     testLocalModelLog()
     testLanguageCode()
+  }
+
+  static func testLoadRetry() {
+    var retry = ParakeetLoadRetry()
+    expect(retry.mayLoad(.parakeetV2, now: 0), true, "retry: loads before any failure")
+    retry.failed(.parakeetV2, now: 1_000)
+    expect(retry.mayLoad(.parakeetV2, now: 1_059), false, "retry: waits a minute after a failure")
+    expect(retry.mayLoad(.parakeetV2, now: 1_060), true, "retry: loads a minute later")
+    expect(retry.mayLoad(.parakeetV3, now: 1_001), true, "retry: another model isn't held back")
+    retry.failed(.parakeetV2, now: 1_060)
+    expect(retry.mayLoad(.parakeetV2, now: 1_179), false, "retry: the second failure waits two minutes")
+    expect(retry.mayLoad(.parakeetV2, now: 1_180), true, "retry: then loads")
+    for attempt in 0..<10 { retry.failed(.parakeetV2, now: 2_000 + Double(attempt)) }
+    expect(retry.mayLoad(.parakeetV2, now: 2_009 + 1_799), false, "retry: the wait stops growing at half an hour")
+    expect(retry.mayLoad(.parakeetV2, now: 2_009 + 1_800), true, "retry: and loads after it")
+    retry.failed(.parakeetV3, now: 5_000)
+    expect(retry.mayLoad(.parakeetV3, now: 5_060), true, "retry: a newly failing model starts at a minute")
+    retry.loaded()
+    expect(retry.mayLoad(.parakeetV3, now: 5_000), true, "retry: a load that worked clears the wait")
+  }
+
+  static func testUnneededModelReleased() {
+    let h = Harness()
+    defer { h.cleanup() }
+    h.useLocal(.parakeetV2)
+    _ = h.dictation.isEligible
+    expect(h.transcriber.releases, 0, "release: the named model stays")
+    h.configJSON = DirectDictationTests.validConfig
+    _ = h.dictation.isEligible
+    expect(h.transcriber.releases, 1, "release: a Cloud snapshot lets the model go")
+
+    let off = Harness()
+    defer { off.cleanup() }
+    off.useLocal(.parakeetV2)
+    off.configJSON = nil
+    _ = off.dictation.isEligible
+    expect(off.transcriber.releases, 1, "release: no usable snapshot lets the model go")
+
+    let busy = Harness()
+    defer { busy.cleanup() }
+    busy.useLocal(.parakeetV2)
+    busy.record(seconds: 1)
+    busy.configJSON = DirectDictationTests.validConfig
+    _ = busy.dictation.isEligible
+    expect(busy.transcriber.releases, 0, "release: never under a take")
   }
 
   static func testLanguageCode() {

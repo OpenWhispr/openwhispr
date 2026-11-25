@@ -85,13 +85,14 @@ function isLocal(inputs: KeyboardDirectInputs): boolean {
 }
 
 // A Local take never reaches the network, so neither the session cookie nor anything the server
-// enforces (custom prompts, policy, word limits) applies. The account is still required: a guest
-// keeps the handoff.
+// enforces (policy, word limits) applies. The account is still required: a guest keeps the
+// handoff. The keyboard types the raw transcript, so a custom cleanup prompt, which the user
+// wrote to change that text, keeps the handoff too; the default cleanup is skipped.
 function localDisabledReason(inputs: KeyboardDirectInputs): KeyboardDirectDisabledReason | null {
   if (!inputs.userId) return 'signed_out';
   switch (inputs.localEngine?.engine) {
     case 'parakeet':
-      return null;
+      return inputs.cleanupEnabled && inputs.customCleanupPrompt ? 'custom_prompt' : null;
     case 'whisper':
       return 'local_engine_unsupported';
     default:

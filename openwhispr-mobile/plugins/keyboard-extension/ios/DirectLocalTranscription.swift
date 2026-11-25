@@ -34,6 +34,8 @@ protocol DirectLocalTranscriber: AnyObject {
   var readyModel: DirectLocalModel? { get }
   /// Loads `model` in the background when it isn't ready (or loading) already.
   func prepare(_ model: DirectLocalModel)
+  /// Lets go of the loaded model, or of a load under way, unless a transcription holds it.
+  func release()
   func transcribe(
     wavURL: URL, languageHint: String?, completion: @escaping (Result<String, Error>) -> Void
   ) -> DirectCancellable
@@ -146,6 +148,37 @@ struct ParakeetResidency {
   func mayLoad(now: TimeInterval) -> Bool {
     guard let lastWarning else { return true }
     return now - lastWarning >= Self.cooldownAfterWarning
+  }
+}
+
+/// When a model whose load failed may be tried again. Each attempt costs seconds and tens of MB,
+/// and a model that keeps failing (a damaged download, a compute plan the keyboard can't read)
+/// would otherwise be loaded again every minute the keyboard is in use, so the wait doubles with
+/// each failure in a row, up to half an hour.
+struct ParakeetLoadRetry {
+  static let firstWait: TimeInterval = 60
+  static let longestWait: TimeInterval = 1800
+
+  private var model: DirectLocalModel?
+  private var failures = 0
+  private var lastFailure: TimeInterval = 0
+
+  /// `now` is the system uptime.
+  mutating func failed(_ failedModel: DirectLocalModel, now: TimeInterval) {
+    failures = failedModel == model ? failures + 1 : 1
+    model = failedModel
+    lastFailure = now
+  }
+
+  mutating func loaded() {
+    model = nil
+    failures = 0
+  }
+
+  func mayLoad(_ candidate: DirectLocalModel, now: TimeInterval) -> Bool {
+    guard candidate == model, failures > 0 else { return true }
+    let wait = min(Self.firstWait * pow(2, Double(failures - 1)), Self.longestWait)
+    return now - lastFailure >= wait
   }
 }
 

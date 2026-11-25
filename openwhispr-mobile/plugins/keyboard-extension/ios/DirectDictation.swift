@@ -110,7 +110,8 @@ final class DirectDictation {
     let jobId: String
     let config: DirectDictationConfig
     let engine: JobEngine
-    let documentID: UUID
+    /// Follows the field when iOS renames it while the take is transcribed.
+    var documentID: UUID
     var contextBefore: String?
     var writer: PcmFileWriter?
     var meter = SpeechActivityMeter()
@@ -127,8 +128,16 @@ final class DirectDictation {
   private var turnedOff = false
   private var configWhenTurnedOff: String?
   private var keyboardVisible = true
-  /// How long unchanged text before the cursor counts as the same place.
-  static let sameTextWindowMs: Int64 = 60_000
+  /// How long after a take ends it is typed by itself where the text before the cursor is
+  /// unchanged, and offered on the pill anywhere else.
+  static let heldWindowMs: Int64 = 60_000
+  /// How long after the keyboard appears the field's text may still arrive to show that iOS
+  /// renamed the field a take was spoken in.
+  static let renamedFieldCheckMs: Int64 = 2_000
+  /// Until then the text before the cursor may identify a renamed field. The first text read
+  /// after the keyboard appears ends it: anything later is the user typing, and typing the same
+  /// words in another field must never pull a take into it.
+  private var renamedFieldCheckEndsAtMs: Int64 = 0
 
   /// Where a take was spoken, and when it stopped.
   private struct Place {
@@ -143,19 +152,36 @@ final class DirectDictation {
     let place: Place
   }
 
+  /// A Cloud take encoded when the keyboard was covered, not yet sent.
+  private struct SuspendedTake {
+    let place: Place
+    let jobId: String
+    let durationMs: Int
+  }
+
   private var undeliveredText: ResultForInsertion? {
     didSet { reportHeldChange() }
   }
 
-  /// A Cloud take encoded when the keyboard was covered, not yet sent.
-  private var suspendedTake: Place? {
+  private var suspendedTake: SuspendedTake? {
     didSet { reportHeldChange() }
   }
 
   private var heldReported = false
+  private var heldExpiryTimer: DirectCancellable?
 
   private func reportHeldChange() {
+    heldExpiryTimer?.cancel()
+    heldExpiryTimer = nil
     let held = hasHeldDictation
+    // The pill goes back to Tap to speak when the offer ends, without waiting for a redraw.
+    let now = deps.store.now()
+    let offerEnds = [undeliveredText?.place.atMs, suspendedTake?.place.atMs]
+      .compactMap { $0.map { $0 + Self.heldWindowMs } }
+      .filter { $0 > now }
+    if held, let endsAt = offerEnds.min() {
+      heldExpiryTimer = deps.scheduler.after(Double(endsAt - now) / 1000) { [weak self] in self?.reportHeldChange() }
+    }
     guard held != heldReported else { return }
     heldReported = held
     onHeldChange?()
@@ -265,23 +291,8 @@ final class DirectDictation {
 
   func keyboardDidAppear() {
     keyboardVisible = true
-    deliverHeldTextIfSamePlace()
-    switch state {
-    case .idle, .failed: break
-    default: return
-    }
-    guard job == nil, let documentID = readDocumentID?() else { return }
-    if resumeCloudTake(recordedIn: documentID) {
-      suspendedTake = nil
-      return
-    }
-    // The field's ID changed while the keyboard was covered.
-    guard let suspended = suspendedTake else { return }
-    if deps.store.now() - suspended.atMs >= DirectDictationStore.resumeWindowMs {
-      suspendedTake = nil
-    } else if isSamePlace(suspended), resumeCloudTake(recordedIn: suspended.documentID) {
-      suspendedTake = nil
-    }
+    renamedFieldCheckEndsAtMs = deps.store.now() + Self.renamedFieldCheckMs
+    deliverWaitingTakes(onAppear: true)
   }
 
   /// The text before the cursor changed, or the cursor moved.
@@ -294,72 +305,116 @@ final class DirectDictation {
         job?.contextBefore = readContextBefore?()
       }
     default:
-      // The text can arrive a moment after the keyboard appears.
-      deliverHeldTextIfSamePlace()
+      // The field's text can arrive a moment after the keyboard appears.
+      deliverWaitingTakes(onAppear: false)
     }
   }
 
   // MARK: - A take waiting for its place
 
-  /// A finished take has text that was not typed, or a Cloud take waits to be sent: the
-  /// keyboard offers to insert it.
+  /// For a minute after it ends, a finished take whose text was not typed, or a Cloud take not
+  /// yet sent, is offered on the pill wherever the keyboard is. After that it only reaches the
+  /// field it was spoken in.
   var hasHeldDictation: Bool {
-    let cutoff = deps.store.now() - DirectDictationStore.resumeWindowMs
-    let userId = deliverableUserId()
-    if let result = undeliveredText, result.place.atMs > cutoff, result.place.userId == userId { return true }
-    if let suspended = suspendedTake, suspended.atMs > cutoff, suspended.userId == userId { return true }
+    let cutoff = deps.store.now() - Self.heldWindowMs
+    if let result = undeliveredText, result.place.atMs > cutoff {
+      return deliverableUserId() == result.place.userId
+    }
+    // A take stops at most `takeCap` after it starts, so within the offer it is still inside
+    // the store's resume window; sending it needs a Cloud snapshot of the same account.
+    if let take = suspendedTake, take.place.atMs > cutoff {
+      return deliverableUserId(sending: true) == take.place.userId
+    }
     return false
   }
 
   /// The user asked for the waiting take here, whatever the field.
   func insertHeld() {
-    guard hasHeldDictation else {
-      discardHeld()
-      return
-    }
+    // A pill drawn just before the offer ended: the keyboard redraws it.
+    guard hasHeldDictation else { return }
     if let result = undeliveredText {
-      guard deliverableUserId() == result.place.userId else { return }
       undeliveredText = nil
       onText?(result.text)
       return
     }
-    guard let suspended = suspendedTake else { return }
+    guard let take = suspendedTake else { return }
     switch state {
     case .idle, .failed: break
     default: return
     }
     suspendedTake = nil
-    _ = resumeCloudTake(recordedIn: suspended.documentID)
+    _ = resumeCloudTake(recordedIn: take.place.documentID)
   }
 
-  /// Not typed. A finished take stays in History; an unsent one becomes a row to retry there.
+  /// Not typed. A finished take stays in History. An unsent one is marked failed, so it is never
+  /// sent from here and the app makes it a row to retry in History.
   func discardHeld() {
     undeliveredText = nil
+    guard let take = suspendedTake else { return }
     suspendedTake = nil
+    try? deps.store.fail(jobId: take.jobId, durationMs: take.durationMs)
   }
 
-  /// The field the take was spoken in: the same document, or, once iOS has renamed it, the same
-  /// text before the cursor soon after. An empty field proves nothing.
-  private func isSamePlace(_ place: Place) -> Bool {
-    guard let current = readDocumentID?() else { return false }
-    if current == place.documentID { return true }
-    guard let before = place.contextBefore, !before.isEmpty,
-      deps.store.now() - place.atMs < Self.sameTextWindowMs
+  /// Types or sends what waits for the field the keyboard is in: a take spoken in this very
+  /// document, or, just after the keyboard came back, one whose field iOS renamed meanwhile. A
+  /// take still being transcribed follows a renamed field, so its text is typed when it arrives.
+  /// Held text is kept until it reaches its place, the user inserts or discards it, a newer take
+  /// starts, or it is older than a take may be resumed.
+  private func deliverWaitingTakes(onAppear: Bool) {
+    guard let documentID = readDocumentID?() else { return }
+    defer { endRenamedFieldCheckOnceTextIsRead() }
+    if let result = undeliveredText {
+      if deps.store.now() - result.place.atMs >= DirectDictationStore.resumeWindowMs {
+        undeliveredText = nil
+      } else if isPlace(result.place, documentID: documentID), deliverableUserId() == result.place.userId {
+        undeliveredText = nil
+        onText?(result.text)
+      }
+    }
+    switch state {
+    case .transcribing:
+      if let current = job, current.documentID != documentID,
+        isRenamedField(contextBefore: current.contextBefore, endedAtMs: nil) {
+        job?.documentID = documentID
+      }
+      return
+    case .idle, .failed: break
+    default: return
+    }
+    guard job == nil else { return }
+    // A take a killed keyboard left behind is looked for once per appearance: the lookup reads
+    // every record.
+    if onAppear, resumeCloudTake(recordedIn: documentID) {
+      if suspendedTake?.place.documentID == documentID { suspendedTake = nil }
+      return
+    }
+    guard let take = suspendedTake else { return }
+    if deps.store.now() - take.place.atMs >= DirectDictationStore.resumeWindowMs {
+      suspendedTake = nil
+    } else if isPlace(take.place, documentID: documentID), resumeCloudTake(recordedIn: take.place.documentID) {
+      suspendedTake = nil
+    }
+  }
+
+  private func isPlace(_ place: Place, documentID: UUID) -> Bool {
+    place.documentID == documentID || isRenamedField(contextBefore: place.contextBefore, endedAtMs: place.atMs)
+  }
+
+  /// iOS renamed the field a take was spoken in to the one the keyboard is in now. Asked only in
+  /// the moments after the keyboard came back, for a take that ended less than `heldWindowMs`
+  /// ago, and proved only by unchanged text before the cursor: blank text proves nothing.
+  private func isRenamedField(contextBefore: String?, endedAtMs: Int64?) -> Bool {
+    let now = deps.store.now()
+    guard now < renamedFieldCheckEndsAtMs, let before = contextBefore,
+      !before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     else { return false }
+    if let endedAtMs, now - endedAtMs >= Self.heldWindowMs { return false }
     return readContextBefore?() == before
   }
 
-  /// Kept until it reaches the place and account it was spoken for, the user asks for it or
-  /// discards it, a newer take starts, or it is older than a take may be resumed: an old
-  /// dictation is never typed unprompted.
-  private func deliverHeldTextIfSamePlace() {
-    guard let result = undeliveredText else { return }
-    if deps.store.now() - result.place.atMs >= DirectDictationStore.resumeWindowMs {
-      undeliveredText = nil
-    } else if isSamePlace(result.place), deliverableUserId() == result.place.userId {
-      undeliveredText = nil
-      onText?(result.text)
-    }
+  private func endRenamedFieldCheckOnceTextIsRead() {
+    guard deps.store.now() < renamedFieldCheckEndsAtMs, let text = readContextBefore?(), !text.isEmpty else { return }
+    renamedFieldCheckEndsAtMs = 0
   }
 
   /// Sends the pending Cloud take recorded in `recordedIn` and types its text in the field the
@@ -496,9 +551,13 @@ final class DirectDictation {
 
     current.writer = nil
     guard shouldUpload else {
-      suspendedTake = Place(
-        userId: current.config.userId, documentID: current.documentID, contextBefore: current.contextBefore,
-        atMs: deps.store.now()
+      suspendedTake = SuspendedTake(
+        place: Place(
+          userId: current.config.userId, documentID: current.documentID, contextBefore: current.contextBefore,
+          atMs: deps.store.now()
+        ),
+        jobId: jobId,
+        durationMs: current.durationMs
       )
       job = nil
       state = .idle
@@ -679,7 +738,8 @@ final class DirectDictation {
     )
     // Typed now when the keyboard is in the take's place (never held first: the pill would flash
     // "Insert dictation"); otherwise it waits.
-    if keyboardVisible, isSamePlace(place), deliverableUserId() == place.userId {
+    if keyboardVisible, let documentID = readDocumentID?(), isPlace(place, documentID: documentID),
+      deliverableUserId() == place.userId {
       onText?(text)
     } else {
       undeliveredText = ResultForInsertion(text: text, place: place)
@@ -709,9 +769,13 @@ final class DirectDictation {
   }
 
   private func eligibleContext() -> (DirectDictationConfig, EligibleEngine)? {
-    guard let config = currentConfig() else { return nil }
+    guard let config = currentConfig() else {
+      releaseUnneededLocalModel()
+      return nil
+    }
     switch config.engine {
     case .cloud:
+      releaseUnneededLocalModel()
       guard let cookie = deps.readCookie(config.userId), !cookie.isEmpty else { return nil }
       return (config, .cloud(cookie: cookie))
     case let .local(model, languageHint):
@@ -726,16 +790,26 @@ final class DirectDictation {
     }
   }
 
-  /// The account a finished take may still be typed for. Unlike eligibility, a Local result
-  /// doesn't need the model loaded any more: only the account has to be the same.
-  private func deliverableUserId() -> String? {
+  /// A model no Local snapshot names (Cloud, Whisper, the setting off, the model deleted) only
+  /// takes the keyboard's memory: it goes once no take needs it. A Local snapshot naming another
+  /// model swaps it in `prepare`.
+  private func releaseUnneededLocalModel() {
+    guard job == nil else { return }
+    deps.localTranscriber?.release()
+  }
+
+  /// The account a finished take may still be typed for, or with `sending`, a Cloud take sent
+  /// for. Unlike eligibility, a Local result doesn't need the model loaded any more: only the
+  /// account has to be the same.
+  private func deliverableUserId(sending: Bool = false) -> String? {
     guard let config = currentConfig() else { return nil }
     switch config.engine {
     case .cloud:
       guard let cookie = deps.readCookie(config.userId), !cookie.isEmpty else { return nil }
       return config.userId
     case .local:
-      return config.userId
+      // Sending is an upload, which a Local snapshot never makes.
+      return sending ? nil : config.userId
     }
   }
 

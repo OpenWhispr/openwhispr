@@ -85,9 +85,16 @@ final class FakeLocalTranscriber: DirectLocalTranscriber {
 
   var readyModel: DirectLocalModel?
   var prepared: [DirectLocalModel] = []
+  var releases = 0
   var calls: [Call] = []
 
   func prepare(_ model: DirectLocalModel) { prepared.append(model) }
+
+  func release() {
+    guard readyModel != nil else { return }
+    releases += 1
+    readyModel = nil
+  }
 
   func transcribe(
     wavURL: URL, languageHint: String?, completion: @escaping (Result<String, Error>) -> Void

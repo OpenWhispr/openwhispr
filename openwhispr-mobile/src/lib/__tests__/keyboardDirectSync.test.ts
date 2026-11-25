@@ -280,17 +280,34 @@ describe('buildKeyboardDirectConfig in Local Mode', () => {
     expect(config.disabledReason).toBe('setting_off');
   });
 
-  it('local ignores custom prompts and word limits', () => {
+  it('local ignores word limits and transcription policy', () => {
     const config = buildKeyboardDirectConfig(
       inputs({
         route: localRoute,
-        customCleanupPrompt: true,
         overWordLimit: true,
         cloudTranscriptionAllowed: false,
         localEngine: { engine: 'parakeet', version: 'v2' },
       }),
     );
     expect(config.enabled).toBe(true);
+  });
+
+  it('local keeps the handoff for a custom cleanup prompt that would apply', () => {
+    const local = {
+      route: localRoute,
+      localEngine: { engine: 'parakeet', version: 'v2' },
+    } as const;
+    expect(
+      buildKeyboardDirectConfig(inputs({ ...local, customCleanupPrompt: true })),
+    ).toMatchObject({
+      enabled: false,
+      disabledReason: 'custom_prompt',
+      local: null,
+    });
+    const cleanupOff = buildKeyboardDirectConfig(
+      inputs({ ...local, customCleanupPrompt: true, cleanupEnabled: false }),
+    );
+    expect(cleanupOff).toMatchObject({ enabled: true, disabledReason: null });
   });
 
   it('BYOK keeps the handoff', () => {

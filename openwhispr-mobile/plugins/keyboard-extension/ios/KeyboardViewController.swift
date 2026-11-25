@@ -1186,7 +1186,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var lastKeystrokeAt: CFTimeInterval = 0
   private var suggestionRestTimer: Timer?
   private var fieldSyncTimer: Timer?
-  /// The pill shows its resting state ("Tap to speak"), not a take in progress.
+  /// The pill shows a resting state ("Tap to speak", or "Insert dictation" for a take waiting
+  /// for its place), not a take in progress, so suggestions may take its place while typing.
   private var isPillIdle = false
   private var pillTitle = ""
   private var pillCenterConstraint: NSLayoutConstraint?
@@ -5089,7 +5090,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
     recordButton.configuration = config
     pillTitle = title
-    isPillIdle = title == "Tap to speak"
+    isPillIdle = title == "Tap to speak" || title == "Insert dictation"
     applyPillCompactness()
     updateSuggestionBarVisibility()
 

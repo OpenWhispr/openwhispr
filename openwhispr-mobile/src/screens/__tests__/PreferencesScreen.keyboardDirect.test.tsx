@@ -53,7 +53,7 @@ describe('PreferencesScreen — dictate without opening the app', () => {
     expect(screen.getByText('Dictate without opening OpenWhispr')).toBeTruthy();
     expect(
       screen.getByText(
-        'Beta. Records in the keyboard for OpenWhispr Cloud, and on this iPhone with Parakeet in Local Mode. Bring Your Own Key, Whisper, a custom cleanup prompt and the assistant still open the app, and so does dictating while music plays or with Bluetooth audio.',
+        'Beta. Records in the keyboard for OpenWhispr Cloud, and on this iPhone with Parakeet in Local Mode, typed as transcribed without cleanup. Bring Your Own Key, Whisper, a custom cleanup prompt and the assistant still open the app, and so does dictating while music plays or with Bluetooth audio.',
       ),
     ).toBeTruthy();
     const toggle = screen.getByLabelText('Dictate without opening OpenWhispr');

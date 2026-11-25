@@ -26,9 +26,6 @@ final class KeyboardParakeetTranscriber: @preconcurrency DirectLocalTranscriber 
   /// Below iOS 27 the ledger doesn't count the Neural Engine's memory, so Core ML's plan for
   /// the encoder decides instead.
   private static let neuralShareThreshold = 0.5
-  /// A load that failed (files mid-replace, a damaged model) is tried again after this, not
-  /// on the very next eligibility read: each attempt costs seconds and tens of MB.
-  private static let retryAfterFailure: TimeInterval = 60
 
   private(set) var readyModel: DirectLocalModel? {
     didSet {
@@ -52,7 +49,7 @@ final class KeyboardParakeetTranscriber: @preconcurrency DirectLocalTranscriber 
   private var offNeuralEngine: Set<DirectLocalModel> = []
   private var residency = ParakeetResidency()
   private var lastRefusal: String?
-  private var lastFailure: (model: DirectLocalModel, at: TimeInterval)?
+  private var loadRetry = ParakeetLoadRetry()
 
   /// `appGroupContainer` is nil without an App Group, and then nothing ever loads.
   init(appGroupContainer: URL?) {
@@ -77,29 +74,41 @@ final class KeyboardParakeetTranscriber: @preconcurrency DirectLocalTranscriber 
     guard Self.hasNeuralEngine else { return refuse(model, "no Neural Engine") }
     guard Self.modelFilesPresent(in: directory, model: model) else { return refuse(model, "model not on the device") }
     guard residency.mayLoad(now: Self.uptime) else { return refuse(model, "cooling down after a memory warning") }
-    if let lastFailure, lastFailure.model == model, Self.uptime - lastFailure.at < Self.retryAfterFailure {
-      return refuse(model, "waiting to retry a failed load")
-    }
+    guard loadRetry.mayLoad(model, now: Self.uptime) else { return refuse(model, "waiting to retry a failed load") }
     let before = Self.memory()
-    guard KeyboardParakeetBudget.allowsLoad(footprint: before.footprint, available: before.available) else {
-      return refuse(model, String(format: "no room (limit %.0f MB, available %.0f MB)",
-                                  Self.mb(before.footprint + before.available), Self.mb(before.available)))
+    // A model still loaded is checked again once it's gone (below): counting it here would
+    // refuse a swap the keyboard has room for.
+    if manager == nil {
+      guard KeyboardParakeetBudget.allowsLoad(footprint: before.footprint, available: before.available) else {
+        return refuse(model, String(format: "no room (limit %.0f MB, available %.0f MB)",
+                                    Self.mb(before.footprint + before.available), Self.mb(before.available)))
+      }
     }
 
     lastRefusal = nil
-    releaseModel()
+    let replaced = detachModel()
     loading = model
     let loadGeneration = generation
     let started = Self.uptime
     Task { [weak self] in
       let outcome: Result<(AsrManager, onNeuralEngine: Bool, detail: String), Error>
       do {
+        // Measured once the replaced model is gone, or a swap would count the old model's Neural
+        // Engine memory against the new one and read a model on the Neural Engine as off it.
+        var baseline = before
+        if let replaced {
+          await replaced.cleanup()
+          baseline = Self.memory()
+          guard KeyboardParakeetBudget.allowsLoad(footprint: baseline.footprint, available: baseline.available) else {
+            throw TranscriberError.noRoom
+          }
+        }
         let models = try await Task.detached(priority: .utility) {
           try Self.loadModels(from: directory, model: model)
         }.value
         let asr = AsrManager(config: ASRConfig(parallelChunkConcurrency: 1))
         try await asr.loadModels(models)
-        let rise = Self.memory().neural - before.neural
+        let rise = Self.memory().neural - baseline.neural
         if rise >= Self.neuralRiseThreshold {
           outcome = .success((asr, true, String(format: "neural +%.0f MB", Self.mb(rise))))
         } else {
@@ -150,6 +159,13 @@ final class KeyboardParakeetTranscriber: @preconcurrency DirectLocalTranscriber 
       completion(result)
     }
     return TaskCancellable(task: task)
+  }
+
+  /// The snapshot stopped naming a Local model: let go of the loaded one, or of a load under way.
+  func release() {
+    guard manager != nil || loading != nil, !residency.isTranscribing else { return }
+    log?("released: no Local snapshot names it")
+    releaseModel()
   }
 
   // MARK: - Memory
@@ -219,10 +235,10 @@ final class KeyboardParakeetTranscriber: @preconcurrency DirectLocalTranscriber 
       }
       manager = asr
       readyModel = model
-      lastFailure = nil
+      loadRetry.loaded()
       log?(String(format: "load %@ ready in %.1f s; footprint %.1f MB; %@", model.rawValue, seconds, footprint, detail))
     case let .failure(error):
-      lastFailure = (model, Self.uptime)
+      loadRetry.failed(model, now: Self.uptime)
       log?(String(format: "load %@ failed in %.1f s: %@", model.rawValue, seconds, String(describing: type(of: error))))
     }
   }
@@ -241,15 +257,18 @@ final class KeyboardParakeetTranscriber: @preconcurrency DirectLocalTranscriber 
     }
   }
 
-  /// Only called while no transcription runs (`ParakeetResidency` sees to it).
-  private func releaseModel() {
+  /// Only called while no transcription runs (`ParakeetResidency` sees to it). Returns the
+  /// released manager, for the caller to clean up.
+  private func detachModel() -> AsrManager? {
     generation += 1
     loading = nil
     readyModel = nil
-    if let old = manager {
-      manager = nil
-      Task { await old.cleanup() }
-    }
+    defer { manager = nil }
+    return manager
+  }
+
+  private func releaseModel() {
+    if let old = detachModel() { Task { await old.cleanup() } }
   }
 
   private func refuse(_ model: DirectLocalModel, _ reason: String) {

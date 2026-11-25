@@ -14,6 +14,142 @@ extension DirectDictationTests {
     heldCloudWaitsForTap()
     heldTypingDuringTheTake()
     heldNeverReportedForAnOrdinaryTake()
+    heldNeverPulledInByTyping()
+    heldTextArrivingLate()
+    heldBlankTextProvesNothing()
+    heldTranscriptionFollowsRenamedField()
+    heldCloudDiscardIsNeverSent()
+    heldCloudNotOfferedToLocalSnapshot()
+  }
+
+  static func heldNeverPulledInByTyping() {
+    // A take spoken after "Hi " waits; the user moves on and types "Hi " in another field.
+    let h = coveredLocalTake(context: "Hi ")
+    defer { h.cleanup() }
+    h.documentID = UUID()
+    h.contextBefore = ""
+    h.dictation.keyboardDidAppear()
+    expect(h.dictation.hasHeldDictation, true, "held: an empty field gets the pill")
+    h.contextBefore = "H"
+    h.dictation.fieldChanged()
+    h.contextBefore = "Hi "
+    h.dictation.fieldChanged()
+    expect(h.texts, [], "held: typing the same words in another field types nothing")
+    expect(h.dictation.hasHeldDictation, true, "held: the take still waits for a tap")
+
+    // Prefilled with the same text and typed into after the moment the field could still report.
+    let prefilled = coveredLocalTake(context: "@alice ")
+    defer { prefilled.cleanup() }
+    prefilled.documentID = UUID()
+    prefilled.contextBefore = nil
+    prefilled.dictation.keyboardDidAppear()
+    prefilled.scheduler.advance(seconds: Double(DirectDictation.renamedFieldCheckMs) / 1000 + 0.5)
+    prefilled.contextBefore = "@alice "
+    prefilled.dictation.fieldChanged()
+    expect(prefilled.texts, [], "held: text arriving after the check is never proof")
+
+    // A result for another field, with the keyboard on screen the whole time.
+    let visible = Harness()
+    defer { visible.cleanup() }
+    visible.contextBefore = "Hi "
+    visible.useLocal(.parakeetV2)
+    visible.record(seconds: 1)
+    visible.dictation.confirm()
+    visible.documentID = UUID()
+    visible.contextBefore = ""
+    visible.dictation.fieldChanged()
+    visible.contextBefore = "Hi "
+    visible.transcriber.succeed("hello there")
+    visible.dictation.fieldChanged()
+    expect(visible.texts, [], "held: a result for another field isn't typed when its text matches")
+    expect(visible.dictation.hasHeldDictation, true, "held: it waits for a tap")
+  }
+
+  static func heldTextArrivingLate() {
+    let h = coveredLocalTake(context: "Dear Sam, ")
+    defer { h.cleanup() }
+    h.documentID = UUID()
+    h.contextBefore = nil
+    h.dictation.keyboardDidAppear()
+    expect(h.texts, [], "held: nothing to compare yet")
+    h.contextBefore = "Dear Sam, "
+    h.dictation.fieldChanged()
+    expect(h.texts, ["hello there"], "held: typed when the field's text arrives a moment later")
+
+    let other = coveredLocalTake(context: "Dear Sam, ")
+    defer { other.cleanup() }
+    other.documentID = UUID()
+    other.contextBefore = nil
+    other.dictation.keyboardDidAppear()
+    other.contextBefore = "Notes"
+    other.dictation.fieldChanged()
+    other.contextBefore = "Dear Sam, "
+    other.dictation.fieldChanged()
+    expect(other.texts, [], "held: only the first text read after appearing identifies the field")
+  }
+
+  static func heldBlankTextProvesNothing() {
+    let h = coveredLocalTake(context: "\n")
+    defer { h.cleanup() }
+    h.documentID = UUID()
+    h.dictation.keyboardDidAppear()
+    expect(h.texts, [], "held: a blank line before the cursor is not proof of the same place")
+    expect(h.dictation.hasHeldDictation, true, "held: blank text waits for a tap")
+  }
+
+  static func heldTranscriptionFollowsRenamedField() {
+    // Covered while Parakeet still works: the field comes back renamed before the text is ready.
+    let h = Harness()
+    defer { h.cleanup() }
+    h.contextBefore = "Dear Sam, "
+    h.useLocal(.parakeetV2)
+    h.record(seconds: 1)
+    h.dictation.keyboardWillDisappear()
+    expect(h.state, .transcribing, "held: still transcribing while covered")
+    h.documentID = UUID()
+    h.dictation.keyboardDidAppear()
+    h.scheduler.advance(seconds: Double(DirectDictation.renamedFieldCheckMs) / 1000 + 1)
+    h.transcriber.succeed("hello there")
+    expect(h.texts, ["hello there"], "held: typed in the renamed field when it arrives")
+  }
+
+  static func heldCloudDiscardIsNeverSent() {
+    let h = Harness()
+    defer { h.cleanup() }
+    h.contextBefore = "Dear Sam, "
+    h.record(seconds: 1)
+    h.dictation.keyboardWillDisappear()
+    let spokenIn = h.documentID
+    h.documentID = UUID()
+    h.contextBefore = "elsewhere"
+    h.dictation.keyboardDidAppear()
+    expect(h.dictation.hasHeldDictation, true, "held cloud: offered elsewhere")
+    h.dictation.discardHeld()
+    expect(h.store.record(jobId: "job-1")?.status, .failed, "held cloud: discarded take is a History retry")
+    for restart in [false, true] {
+      if restart { h.restartProcess() }
+      h.dictation.keyboardWillDisappear()
+      h.documentID = spokenIn
+      h.contextBefore = "Dear Sam, "
+      h.dictation.keyboardDidAppear()
+      expect(h.transport.uploads.count, 0, "held cloud: a discarded take is never sent (restart \(restart))")
+    }
+    expect(h.texts, [], "held cloud: and never typed")
+  }
+
+  static func heldCloudNotOfferedToLocalSnapshot() {
+    let h = Harness()
+    defer { h.cleanup() }
+    h.contextBefore = "Dear Sam, "
+    h.record(seconds: 1)
+    h.dictation.keyboardWillDisappear()
+    h.useLocal(.parakeetV2)
+    h.documentID = UUID()
+    h.contextBefore = "elsewhere"
+    h.dictation.keyboardDidAppear()
+    expect(h.dictation.hasHeldDictation, false, "held cloud: never offered where it can't be sent")
+    h.dictation.insertHeld()
+    expect(h.networkCalls, 0, "held cloud: a Local snapshot sends nothing")
   }
 
   static func heldNeverReportedForAnOrdinaryTake() {
@@ -84,11 +220,24 @@ extension DirectDictationTests {
 
     let late = coveredLocalTake(context: "Dear Sam, ")
     defer { late.cleanup() }
+    var redraws = 0
+    late.dictation.onHeldChange = { redraws += 1 }
+    let spokenIn = late.documentID
     late.documentID = UUID()
-    late.scheduler.advance(seconds: Double(DirectDictation.sameTextWindowMs) / 1000 + 1)
+    late.contextBefore = "elsewhere"
     late.dictation.keyboardDidAppear()
-    expect(late.texts, [], "held: not typed by itself after the window")
-    expect(late.dictation.hasHeldDictation, true, "held: still there for a tap")
+    expect(late.dictation.hasHeldDictation, true, "held: offered on the pill elsewhere")
+    late.scheduler.advance(seconds: Double(DirectDictation.heldWindowMs) / 1000 + 1)
+    expect(late.dictation.hasHeldDictation, false, "held: no longer offered after a minute")
+    expect(redraws, 1, "held: the pill is told when the offer ends")
+    late.dictation.keyboardWillDisappear()
+    late.contextBefore = "Dear Sam, "
+    late.dictation.keyboardDidAppear()
+    expect(late.texts, [], "held: not typed by itself in a renamed field after the window")
+    late.dictation.keyboardWillDisappear()
+    late.documentID = spokenIn
+    late.dictation.keyboardDidAppear()
+    expect(late.texts, ["hello there"], "held: still typed in the field it was spoken in")
 
     let expired = coveredLocalTake(context: "Dear Sam, ")
     defer { expired.cleanup() }

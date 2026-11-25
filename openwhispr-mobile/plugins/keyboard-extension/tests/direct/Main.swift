@@ -19,6 +19,7 @@ enum DirectDictationTests {
     testConfig()
     testAudio()
     testSnippets()
+    testSnippetVariables()
     testRequests()
     testStore()
     testStateMachine()
