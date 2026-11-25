@@ -38,3 +38,16 @@ test("a title's names leave out Slack, the workspace, unread marks, # and a kind
   ]);
   assert.deepEqual(slackTitleNames("Acme - Slack", "Acme"), []);
 });
+
+test("a title's names stop at Slack's name, before what a browser adds", () => {
+  // As Slack's desktop app and Chrome title them.
+  assert.deepEqual(slackTitleNames("eng (Channel) - Acme - 28 new items - Slack", "Acme"), [
+    "eng (Channel)",
+    "eng",
+    "28 new items",
+  ]);
+  assert.deepEqual(
+    slackTitleNames("Saved - Acme - Slack - Google Chrome – Sam Lee (acme.com)", "Acme"),
+    ["Saved"]
+  );
+});

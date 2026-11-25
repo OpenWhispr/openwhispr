@@ -1349,6 +1349,16 @@ test("a post with no destination goes to the conversation the Slack window's tit
   });
   const cases = [
     ["eng (Channel) - Acme Test - Slack", "#eng"],
+    // As Slack's desktop app and Chrome title them.
+    ["eng (Channel) - Acme Test - 28 new items - Slack", "#eng"],
+    [
+      "eng (Channel) - Acme Test - 28 new items - Slack - Google Chrome – Chad Test (acme.test)",
+      "#eng",
+    ],
+    [
+      "Gabe Smith, Gabriel Stone (DM) - Acme Test - 3 new items - Slack",
+      "Gabe Smith (@gabe), Gabriel Stone (@gstone)",
+    ],
     ["* eng-backend | Acme Test | Slack", "#eng-backend"],
     ["Slack | #leads | Acme Test", "#leads"],
     ["Gabe Smith (DM) - Acme Test - Slack - Google Chrome", "Gabe Smith (@gabe)"],
@@ -1388,6 +1398,8 @@ test("a Slack window title that names no conversation, or more than one, asks wh
     // Only an exact name counts: no loose match picks where a post goes.
     "Eng (Channel) - Acme Test - Slack",
     "en - Acme Test - Slack",
+    // A browser's profile after Slack's name is no conversation, even when it names someone.
+    "Saved - Acme Test - Slack - Google Chrome – Chad Test (acme.test)",
   ]) {
     assert.deepEqual(
       await connector.prepare("send_message", { text: "Ship it" }, pressedOver(title)),

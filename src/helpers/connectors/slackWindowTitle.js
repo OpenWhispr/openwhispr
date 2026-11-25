@@ -34,12 +34,17 @@ function slackWindowTitle(context) {
 /**
  * The names a Slack window title may give its conversation: each part, with
  * and without a kind tag after it, without an unread mark or a leading "#",
- * leaving out Slack's own name and the workspace's.
+ * leaving out Slack's own name and the workspace's. Slack's title ends with
+ * its name ("eng (Channel) - Acme - 3 new items - Slack"), and a browser adds
+ * its own and the profile's after it ("… - Slack - Google Chrome – Sam (acme.com)"),
+ * so the parts after Slack's name never count.
  */
 function slackTitleNames(title, workspaceName) {
   const skip = new Set(["slack", String(workspaceName ?? "").toLowerCase()]);
   const names = new Set();
-  for (const segment of title.replace(ZERO_WIDTH, "").split(SEPARATOR)) {
+  const parts = title.replace(ZERO_WIDTH, "").split(SEPARATOR);
+  const slackAt = parts.findLastIndex((part) => part.trim().toLowerCase() === "slack");
+  for (const segment of slackAt > 0 ? parts.slice(0, slackAt) : parts) {
     const part = segment.trim().replace(UNREAD, "");
     for (const name of [part, part.replace(KIND_TAG, "")]) {
       const bare = name.replace(/^#/, "").trim();
