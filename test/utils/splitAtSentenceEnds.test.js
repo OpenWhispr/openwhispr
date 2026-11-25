@@ -86,3 +86,27 @@ test("a long run with no comma or semicolon is still cut every maxWords words", 
     run.slice(20).join(" "),
   ]);
 });
+
+test("a comma is a cut only when it keeps at least half the limit in the run", async () => {
+  const { splitAtSentenceEnds } = await load();
+  // An opening "Okay," would otherwise be a piece of its own.
+  const opening = ["Okay,", ...Array.from({ length: 299 }, (_, i) => `w${i}`)];
+  assert.deepEqual(splitAtSentenceEnds(opening.join(" "), 150), [
+    opening.slice(0, 150).join(" "),
+    opening.slice(150).join(" "),
+  ]);
+  // At 10, a comma after word 5 is a cut; one after word 4 is not.
+  const commaAfter = (count) =>
+    Array.from({ length: 15 }, (_, i) => (i === count - 1 ? `w${i},` : `w${i}`));
+  for (const [count, cut] of [
+    [5, 5],
+    [4, 10],
+  ]) {
+    const words = commaAfter(count);
+    assert.deepEqual(
+      splitAtSentenceEnds(words.join(" "), 10),
+      [words.slice(0, cut).join(" "), words.slice(cut).join(" ")],
+      `comma after word ${count}`
+    );
+  }
+});

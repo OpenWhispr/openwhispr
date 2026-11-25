@@ -1,4 +1,8 @@
-import { assertPlausibleCleanupOutput, longestMissingRun } from "../utils/cleanupOutput";
+import {
+  assertPlausibleCleanupOutput,
+  longestMissingRun,
+  longestUnalignedRun,
+} from "../utils/cleanupOutput";
 import logger from "../utils/logger";
 import { splitAtSentenceEnds, wordsOf } from "../utils/splitAtSentenceEnds";
 
@@ -34,7 +38,10 @@ export interface CleanupPromptProfile {
 export interface CleanupDropGuard {
   /** Parts of this many words or fewer are not checked. */
   minWords: number;
-  /** This many spoken words in a row missing from an answer is a drop (longestMissingRun). */
+  /**
+   * An answer dropped words when both longestMissingRun and longestUnalignedRun
+   * find at least this many spoken words in a row missing from it.
+   */
   minMissingRun: number;
   /** A part with a drop is cleaned again in pieces of at most this many words. */
   pieceWords: number;
@@ -79,7 +86,7 @@ const OPENWHISPR_TUNED: CleanupPromptProfile = {
   dropGuard: {
     // No shipped tuned model dropped text from a dictation this short.
     minWords: 150,
-    // 20 spoken words gone in a row caught every measured drop, with few false alarms.
+    // At 20, both checks together caught 41 of 42 measured losses (not a moved sentence), no rewording.
     minMissingRun: 20,
     // Of the sizes measured, 150-word pieces left the least text uncleaned.
     pieceWords: 150,
@@ -126,13 +133,19 @@ type PiecesRunner = (userContents: string[]) => Promise<Array<string | null> | n
  * fails the profile's output check fails the whole cleanup.
  *
  * With the profile's dropGuard and `runPieces`, a part over minWords whose
- * answer lost minMissingRun spoken words in a row is cleaned again in pieces of
- * up to pieceWords, all in one request. Each piece's answer goes through
- * validateOutput and the same missing-words check, and a piece that failed or
- * fails either is kept exactly as spoken. When the request fails as a whole,
- * the part is kept as spoken: a known drop is never pasted. `runPieces` rejects
- * only to stop the cleanup (it was cancelled), which fails the whole cleanup as
- * a failed part does.
+ * answer dropped words is cleaned again in pieces of up to pieceWords, all in
+ * one request. An answer dropped words when at least minMissingRun spoken words
+ * in a row are missing from it by two checks: no 4-word phrase of the answer
+ * holds them (longestMissingRun), and lining the two up in order leaves them
+ * unmatched (longestUnalignedRun, run only when the first finds a drop), which
+ * clears rewording such as a numbered list. Words the speaker took back
+ * ("scratch that") read as dropped too when that many go in a row, so such a
+ * part is cleaned again and the piece that rightly drops them comes back as
+ * spoken. Each piece's answer goes through validateOutput and the same checks,
+ * and a piece that failed or fails either is kept exactly as spoken. When the
+ * request fails as a whole, the part is kept as spoken: a known drop is never
+ * pasted. `runPieces` rejects only to stop the cleanup (it was cancelled),
+ * which fails the whole cleanup as a failed part does.
  */
 export async function runProfiledCleanup(
   profile: CleanupPromptProfile,
@@ -161,8 +174,8 @@ async function cleanAgainIfDropped(
   const guard = profile.dropGuard;
   const partWords = wordsOf(part).length;
   if (partWords <= guard.minWords) return output;
-  const missingRun = longestMissingRun(part, output);
-  if (missingRun < guard.minMissingRun) return output;
+  const drop = droppedRuns(guard, part, output);
+  if (!drop) return output;
 
   const pieces = splitAtSentenceEnds(part, guard.pieceWords);
   const answers = await runPieces(pieces.map((piece) => profile.buildUserContent(piece)));
@@ -170,7 +183,7 @@ async function cleanAgainIfDropped(
     answers && pieces.map((piece, index) => checkedPieceAnswer(profile, piece, answers[index]));
   logger.logReasoning("CLEANUP_DROP_GUARD", {
     partWords,
-    missingRun,
+    ...drop,
     pieces: pieces.length,
     piecesKeptAsSpoken: checked
       ? checked.filter((answer) => answer === null).length
@@ -197,5 +210,17 @@ function checkedPieceAnswer(
   } catch {
     return null;
   }
-  return longestMissingRun(piece, output) < profile.dropGuard.minMissingRun ? output : null;
+  return droppedRuns(profile.dropGuard, piece, output) ? null : output;
+}
+
+/** Both checks' runs when they agree the answer dropped words, else null (see runProfiledCleanup). */
+function droppedRuns(
+  guard: CleanupDropGuard,
+  said: string,
+  answer: string
+): { missingRun: number; unalignedRun: number } | null {
+  const missingRun = longestMissingRun(said, answer);
+  if (missingRun < guard.minMissingRun) return null;
+  const unalignedRun = longestUnalignedRun(said, answer);
+  return unalignedRun < guard.minMissingRun ? null : { missingRun, unalignedRun };
 }

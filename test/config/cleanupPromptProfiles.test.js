@@ -296,7 +296,94 @@ test("a part cleaned again is logged with counts only", async (t) => {
   await runProfiledCleanup(tuned, say(0, 30), answer, () => Promise.resolve(null));
   await runProfiledCleanup(tuned, say(0, 30), () => Promise.resolve(say(0, 30)), notCleanedAgain);
   assert.deepEqual(events, [
-    { partWords: 300, missingRun: 30, pieces: 2, piecesKeptAsSpoken: 1, runnerFailed: false },
-    { partWords: 300, missingRun: 30, pieces: 2, piecesKeptAsSpoken: 2, runnerFailed: true },
+    {
+      partWords: 300,
+      missingRun: 30,
+      unalignedRun: 30,
+      pieces: 2,
+      piecesKeptAsSpoken: 1,
+      runnerFailed: false,
+    },
+    {
+      partWords: 300,
+      missingRun: 30,
+      unalignedRun: 30,
+      pieces: 2,
+      piecesKeptAsSpoken: 2,
+      runnerFailed: true,
+    },
   ]);
+});
+
+// A spoken list the answer numbers: every word kept, in order.
+const LIST_SAID =
+  "Here is the packing list. First item tent. Second item sleeping bags. Third item camping stove. Fourth item gas canisters. Fifth item headlamps. Sixth item water filter. Seventh item first aid kit. Eighth item bug spray. Ninth item sunscreen. Tenth item rain jackets. Eleventh item spare batteries. Twelfth item the big cooler.";
+const LIST_CLEAN =
+  "Here is the packing list:\n\n1. Tent\n2. Sleeping bags\n3. Camping stove\n4. Gas canisters\n5. Headlamps\n6. Water filter\n7. First aid kit\n8. Bug spray\n9. Sunscreen\n10. Rain jackets\n11. Spare batteries\n12. The big cooler";
+// One 25-word sentence of distinct words, none of them in SENTENCES.
+const longSentence = (prefix) =>
+  `${Array.from({ length: 25 }, (_, w) => `${prefix}${w}`).join(" ")}.`;
+const STRUCK = longSentence("x");
+const OTHER = longSentence("y");
+
+test("a part reworded with every word kept in order is not cleaned again", async () => {
+  const { tuned, runProfiledCleanup } = await loadTuned();
+  // The phrase check alone finds 47 words in a row missing from the numbered list.
+  const answer = `${say(0, 10)} ${LIST_CLEAN}`;
+  assert.equal(
+    await runProfiledCleanup(
+      tuned,
+      `${say(0, 10)} ${LIST_SAID}`,
+      () => Promise.resolve(answer),
+      notCleanedAgain
+    ),
+    answer
+  );
+});
+
+test("a long struck sentence reads as lost, so the piece holding it comes back as spoken", async () => {
+  const { tuned, runProfiledCleanup } = await loadTuned();
+  // A known cost: the checks cannot tell words taken back from words lost.
+  const struckPiece = `${say(0, 10)} ${STRUCK} Scratch that. ${say(10, 12)}`;
+  const result = await runProfiledCleanup(
+    tuned,
+    `${say(0, 10)} ${STRUCK} Scratch that. ${say(10, 20)}`,
+    () => Promise.resolve(`${say(0, 10)} ${say(10, 20)}`),
+    // Each piece cleaned right: the struck sentence and the command go.
+    (users) =>
+      Promise.resolve(
+        users.map((user) => unwrap(user).replace(` ${STRUCK} Scratch that.`, "").toUpperCase())
+      )
+  );
+  assert.equal(result, `${struckPiece} ${say(12, 20).toUpperCase()}`);
+});
+
+test("a sentence lost beside a struck one is caught", async () => {
+  const { tuned, runProfiledCleanup } = await loadTuned();
+  let requests = 0;
+  await runProfiledCleanup(
+    tuned,
+    `${say(0, 10)} ${STRUCK} Scratch that. ${say(10, 15)} ${OTHER} ${say(15, 20)}`,
+    () => Promise.resolve(say(0, 20)),
+    (users) => {
+      requests++;
+      return shout(users);
+    }
+  );
+  assert.equal(requests, 1);
+});
+
+test("a sentence lost two before an edit command is still caught", async () => {
+  const { tuned, runProfiledCleanup } = await loadTuned();
+  let requests = 0;
+  await runProfiledCleanup(
+    tuned,
+    `${say(0, 10)} ${OTHER} ${say(10, 11)} Scratch that. ${say(11, 20)}`,
+    () => Promise.resolve(`${say(0, 10)} ${say(11, 20)}`),
+    (users) => {
+      requests++;
+      return shout(users);
+    }
+  );
+  assert.equal(requests, 1);
 });

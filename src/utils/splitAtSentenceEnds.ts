@@ -8,15 +8,16 @@ export const wordsOf = (text: string): string[] => text.split(/\s+/u).filter(Boo
 
 // A cleanup model reads a cut between words as a sentence end and writes a full
 // stop and a capital there, so a long sentence is cut at the last comma or
-// semicolon that keeps a run within the limit, and between words only where a
-// run has none.
+// semicolon that keeps a run within the limit and at least half as long as it
+// (an early comma would only add a short piece), and between words otherwise.
 function cutLongSentence(words: string[], maxWords: number): string[] {
   const runs: string[] = [];
+  const minRunWords = Math.ceil(maxWords / 2);
   let start = 0;
   while (words.length - start > maxWords) {
     let end = start + maxWords;
-    while (end > start && !CLAUSE_END.test(words[end - 1])) end--;
-    if (end === start) end = start + maxWords;
+    while (end - start > minRunWords && !CLAUSE_END.test(words[end - 1])) end--;
+    if (!CLAUSE_END.test(words[end - 1])) end = start + maxWords;
     runs.push(words.slice(start, end).join(" "));
     start = end;
   }

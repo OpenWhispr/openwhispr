@@ -278,3 +278,58 @@ test("the missing-run check matches the measured reference (guards.py, 4-word ph
     assert.equal(longestMissingRun(raw, output), expected, raw);
   }
 });
+
+// The reviewer's cases: heavy rewording that keeps every word in order.
+const LIST_SAID =
+  "Here is the packing list. First item tent. Second item sleeping bags. Third item camping stove. Fourth item gas canisters. Fifth item headlamps. Sixth item water filter. Seventh item first aid kit. Eighth item bug spray. Ninth item sunscreen. Tenth item rain jackets. Eleventh item spare batteries. Twelfth item the big cooler.";
+const LIST_CLEAN =
+  "Here is the packing list:\n\n1. Tent\n2. Sleeping bags\n3. Camping stove\n4. Gas canisters\n5. Headlamps\n6. Water filter\n7. First aid kit\n8. Bug spray\n9. Sunscreen\n10. Rain jackets\n11. Spare batteries\n12. The big cooler";
+const FIGURES_SAID =
+  "Revenue came in at four point two million dollars, up twenty three percent from three point four million in the same quarter last year, and gross margin went from sixty one point five percent to sixty four point two percent. We added one hundred and eighty seven new customers, churned twenty nine, and net revenue retention was one hundred and twelve percent. Headcount is now one hundred and forty three, up from one hundred and twenty one, with eleven open roles.";
+const FIGURES_CLEAN =
+  "Revenue came in at $4.2 million, up 23% from 3.4 million in the same quarter last year, and gross margin went from 61.5% to 64.2%. We added 187 new customers, churned 29, and net revenue retention was 112%. Headcount is now 143, up from 121, with 11 open roles.";
+
+test("the order-aware check sees no gap where rewording keeps the words in order", async () => {
+  const { longestMissingRun, longestUnalignedRun } =
+    await import("../../src/utils/cleanupOutput.ts");
+  // The phrase check reads a numbered list and written figures as lost words.
+  assert.equal(longestMissingRun(LIST_SAID, LIST_CLEAN), 47);
+  assert.equal(longestUnalignedRun(LIST_SAID, LIST_CLEAN), 2);
+  assert.equal(longestMissingRun(FIGURES_SAID, FIGURES_CLEAN), 24);
+  assert.equal(longestUnalignedRun(FIGURES_SAID, FIGURES_CLEAN), 5);
+  assert.equal(longestUnalignedRun(PASSAGES, PASSAGES), 0);
+  assert.equal(
+    longestUnalignedRun(PASSAGES, `${OPTIONS_CLEAN} ${QUESTION_CLEAN} ${NEXT_STEP_CLEAN}`),
+    0
+  );
+});
+
+test("the order-aware check counts a dropped passage and a loop, as the phrase check does", async () => {
+  const { longestMissingRun, longestUnalignedRun } =
+    await import("../../src/utils/cleanupOutput.ts");
+  const lostQuestion = `${OPTIONS_CLEAN} ${NEXT_STEP_CLEAN}`;
+  assert.equal(longestMissingRun(PASSAGES, lostQuestion), 25);
+  assert.equal(longestUnalignedRun(PASSAGES, lostQuestion), 25);
+
+  // The opening sentence written ten times over in place of the 81 words after it.
+  const said = [
+    "Okay so the plan for the offsite is mostly settled now.",
+    "Marta booked the lakeside venue for two nights, and catering covers vegetarian and gluten free meals at no extra cost.",
+    "Trains leave Central Station at eight fifteen on Thursday morning, so please buy tickets before Monday because group fares sell out quickly.",
+    "Bring hiking boots, a rain jacket and a laptop charger, since Friday afternoon includes a ridge walk followed by planning workshops.",
+    "Expense claims go through Javier, who needs receipts within ten days of returning, otherwise finance cannot reimburse anything.",
+  ].join(" ");
+  const looping = Array(10)
+    .fill("Okay, so the plan for the offsite is mostly settled now.")
+    .join(" ");
+  assert.equal(longestMissingRun(said, looping), 81);
+  assert.equal(longestUnalignedRun(said, looping), 50);
+});
+
+test("the order-aware check counts a sentence moved elsewhere, which the phrase check does not", async () => {
+  const { longestMissingRun, longestUnalignedRun } =
+    await import("../../src/utils/cleanupOutput.ts");
+  const moved = `${QUESTION_CLEAN} ${OPTIONS_CLEAN} ${NEXT_STEP_CLEAN}`;
+  assert.equal(longestMissingRun(PASSAGES, moved), 0);
+  assert.equal(longestUnalignedRun(PASSAGES, moved), 25);
+});
