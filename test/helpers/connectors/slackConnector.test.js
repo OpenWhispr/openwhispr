@@ -230,6 +230,36 @@ test("a list of people is a group DM even when it loosely matches one channel's 
   assert.equal(prepared.preview.destinationLabel, "Gabe Smith (@gabe), Gabriel Stone (@gstone)");
 });
 
+test("a list with a name that matches several people asks about that name, never a looser match", async () => {
+  const person = (id, name, realName) => ({
+    id,
+    name,
+    deleted: false,
+    is_bot: false,
+    profile: { real_name: realName, display_name: "" },
+  });
+  const members = [
+    ...FIXTURES.people.members,
+    person("U0ANASAMP", "asampson", "Ana Sampson"),
+    person("U0SAMALPH", "sama", "Sam Alpha"),
+    person("U0SAMBETA", "samb", "Sam Beta"),
+  ];
+  const { connector } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok({ ...FIXTURES.people, members })],
+  });
+  const prepared = await connector.prepare(
+    "send_message",
+    { destination: "Ana, Sam", text: "Hi" },
+    BOUND
+  );
+  assert.equal(prepared.status, "needs_clarification");
+  assert.match(prepared.message, /"Sam"/);
+  assert.deepEqual(prepared.candidates, ["Sam Alpha (@sama)", "Sam Beta (@samb)"]);
+  // A pick would post to that one person, without Ana.
+  assert.equal(prepared.choices, undefined);
+});
+
 test("two people with the same name are told apart by their usernames", async () => {
   const alex = (id, name) => ({
     id,

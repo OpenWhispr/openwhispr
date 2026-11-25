@@ -359,6 +359,8 @@ function createSlackConnector({ api, auth, directory, credentials }) {
     for (const part of parts) {
       const found = await findTargetWithRefresh(parseDestination(part), binding, access, cacheKey);
       if (found.error) return { error: found.error };
+      // Asked about that one name, with no picker: a pick would replace the whole list.
+      if (found.clarify) return { clarify: { ...found.clarify, choices: undefined } };
       if (found.candidate?.kind !== "user") return null;
       const { id } = found.candidate;
       if (id !== access.credential.userId && !people.some((person) => person.id === id)) {
