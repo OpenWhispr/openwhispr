@@ -217,9 +217,13 @@ test("Markdown note export retains the existing enhanced-content preference", as
 });
 
 test("Text note export writes the AI summary when the note has no typed notes", async (t) => {
-  note.enhanced_content = "## Summary\n\n**Ready** to ship.";
+  note.enhanced_content =
+    "## Summary\n\n**Ready** to ship.\n\n## Action Items\n\n- [ ] Send the proposal — [@Sam Lee](mention:sam%40acme.com)";
   for (const content of ["", null, undefined, "  \n"]) {
-    assert.equal(await exportNoteToFile(t, content), "Summary\n\nReady to ship.");
+    assert.equal(
+      await exportNoteToFile(t, content),
+      "Summary\n\nReady to ship.\n\nAction Items\n\n- [ ] Send the proposal — @Sam Lee"
+    );
   }
 });
 
