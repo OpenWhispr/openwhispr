@@ -3,14 +3,12 @@
 // binaries at a privately named ONNX Runtime, because Windows 11 ships an
 // older onnxruntime.dll in System32 and some loader configurations pick it
 // over the application directory (#2054). Names are patched in place, so a
-// replacement can never be longer than the original. Also reports whether an
-// image carries an Authenticode signature, for scripts/afterSign.js.
+// replacement can never be longer than the original.
 const DOS_MAGIC = 0x5a4d; // "MZ"
 const PE_SIGNATURE = 0x00004550; // "PE\0\0"
 const OPTIONAL_HEADER_PE32 = 0x10b;
 const OPTIONAL_HEADER_PE32_PLUS = 0x20b;
 const IMPORT_DIRECTORY_INDEX = 1;
-const SECURITY_DIRECTORY_INDEX = 4;
 const DELAY_IMPORT_DIRECTORY_INDEX = 13;
 const IMPORT_DESCRIPTOR_SIZE = 20;
 const DELAY_DESCRIPTOR_SIZE = 32;
@@ -141,11 +139,4 @@ function renameImportedModule(image, fromName, toName) {
   return patchedOffsets.size;
 }
 
-// The security directory holds the Authenticode signature. Its address is a
-// file offset, not an RVA, so only the headers are needed to see it.
-function hasEmbeddedSignature(image) {
-  const security = parseHeaders(image).directory(SECURITY_DIRECTORY_INDEX);
-  return security !== null && security.size > 0;
-}
-
-module.exports = { hasEmbeddedSignature, listImportedModules, renameImportedModule };
+module.exports = { listImportedModules, renameImportedModule };

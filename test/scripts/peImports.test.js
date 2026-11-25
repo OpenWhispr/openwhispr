@@ -2,11 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { buildPeImage } = require("../helpers/harness/peFixture");
-const {
-  hasEmbeddedSignature,
-  listImportedModules,
-  renameImportedModule,
-} = require("../../scripts/lib/pe-imports");
+const { listImportedModules, renameImportedModule } = require("../../scripts/lib/pe-imports");
 
 test("lists module names from the import directory in table order", () => {
   const image = buildPeImage({ imports: ["KERNEL32.dll", "onnxruntime.dll", "MSVCP140.dll"] });
@@ -67,9 +63,4 @@ test("refuses a replacement name longer than the original", () => {
     () => renameImportedModule(image, "onnxruntime.dll", "openwhispr-onnxruntime.dll"),
     /longer/
   );
-});
-
-test("reports a signature only when the security directory names one", () => {
-  assert.equal(hasEmbeddedSignature(buildPeImage({ signed: true })), true);
-  assert.equal(hasEmbeddedSignature(buildPeImage({ imports: ["KERNEL32.dll"] })), false);
 });

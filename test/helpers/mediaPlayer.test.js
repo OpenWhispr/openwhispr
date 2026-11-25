@@ -123,7 +123,7 @@ function loadMediaPlayer(platform, { existingPaths = () => false, warnThrows = f
     if (builtin === "fs") {
       // Binary resolution hits the real filesystem; pin it so the host's
       // downloaded binaries can't change which fallback runs. Only existsSync
-      // is stubbed, which covers nircmd and the macOS mediaremote adapter;
+      // is stubbed, which covers the macOS mediaremote adapter;
       // resolvers that also call accessSync (linux-fast-paste,
       // macos-media-remote) still see the real filesystem and resolve null.
       return { ...fs, existsSync: (p) => existingPaths(String(p)) };
@@ -172,7 +172,7 @@ test("win32: GSMTC pause runs through async spawn and records the apps it paused
   assert.deepEqual(mediaPlayer._pausedWinApps, ["Spotify.exe", "Chrome.exe"]);
 });
 
-test("win32: GSMTC_FAIL falls back to the PowerShell media key when nircmd is absent", async () => {
+test("win32: GSMTC_FAIL falls back to the PowerShell media key", async () => {
   const { mediaPlayer, calls } = loadMediaPlayer("win32");
 
   const pausing = mediaPlayer.pauseMedia();
@@ -189,7 +189,7 @@ test("win32: GSMTC_FAIL falls back to the PowerShell media key when nircmd is ab
   assert.deepEqual(mediaPlayer._pausedWinApps, []);
 });
 
-test("win32: bundled nircmd is tried before the PowerShell media key", async () => {
+test("win32: a leftover NirCmd binary is ignored when sending a media key", async () => {
   const { mediaPlayer, calls } = loadMediaPlayer("win32", {
     existingPaths: (p) => /nircmd\.exe$/.test(p),
   });
@@ -197,10 +197,10 @@ test("win32: bundled nircmd is tried before the PowerShell media key", async () 
   const pausing = mediaPlayer.pauseMedia();
   (await waitForCall(calls, 0)).child.finish(1, "", "boom");
 
-  const nircmd = await waitForCall(calls, 1);
-  assert.equal(nircmd.cmd, "nircmd.exe");
-  assert.deepEqual(nircmd.args, ["sendkeypress", "0xB3"]);
-  nircmd.child.finish(0);
+  const fallback = await waitForCall(calls, 1);
+  assert.equal(fallback.cmd, "powershell.exe");
+  assert.match(fallback.args[3], /keybd_event/);
+  fallback.child.finish(0);
 
   assert.equal(await pausing, true);
   assert.equal(calls.length, 2);

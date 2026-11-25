@@ -1,8 +1,7 @@
 // Minimal PE32+ images for exercising scripts/lib/pe-imports.js without real
 // Windows binaries. One .rdata section holds the import descriptors, the
 // delay-load descriptors and the module name strings, which is all the
-// reader looks at. A signed image gets a security directory entry only; the
-// reader never follows it to the certificate table.
+// reader looks at.
 const IMPORT_DESCRIPTOR_SIZE = 20;
 const DELAY_DESCRIPTOR_SIZE = 32;
 const PE_HEADER_OFFSET = 0x80;
@@ -11,7 +10,7 @@ const SECTION_RVA = 0x1000;
 const SECTION_FILE_OFFSET = 0x400;
 const FILE_ALIGNMENT = 0x200;
 
-function buildPeImage({ imports = [], delayImports = [], signed = false } = {}) {
+function buildPeImage({ imports = [], delayImports = [] } = {}) {
   const importTableSize = (imports.length + 1) * IMPORT_DESCRIPTOR_SIZE;
   const delayTableSize =
     delayImports.length > 0 ? (delayImports.length + 1) * DELAY_DESCRIPTOR_SIZE : 0;
@@ -48,10 +47,6 @@ function buildPeImage({ imports = [], delayImports = [], signed = false } = {}) 
   if (delayTableSize > 0) {
     image.writeUInt32LE(SECTION_RVA + importTableSize, dataDirectory(13));
     image.writeUInt32LE(delayTableSize, dataDirectory(13) + 4);
-  }
-  if (signed) {
-    image.writeUInt32LE(image.length, dataDirectory(4)); // file offset, past the last section
-    image.writeUInt32LE(0x1000, dataDirectory(4) + 4);
   }
 
   // Section header

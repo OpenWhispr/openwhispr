@@ -18,6 +18,7 @@ const path = require("path");
 const { execFileSync } = require("child_process");
 const { Arch } = require("app-builder-lib");
 const { buildLinuxWrapperScript } = require("./lib/linux-launcher");
+const { signWindowsNativeModules } = require("./lib/windows-signatures");
 const {
   shouldVerifyLinuxSqliteBaseline,
   verifyLinuxSqliteBaseline,
@@ -350,6 +351,7 @@ exports.default = async function (context) {
     verifyLinuxSqliteBaseline(context.appOutDir, `${context.packager.executableName}-app`);
   }
   registerMacResourceBinariesForSigning(context);
+  await signWindowsNativeModules(context);
 };
 
 exports.verifyWindowsOnnxRuntimePrivatized = verifyWindowsOnnxRuntimePrivatized;
