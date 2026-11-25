@@ -14,6 +14,7 @@ import {
   STOP_FLUSH_TIMEOUT_MS,
   SHORT_LEG_MS,
 } from '../realtimeReconnect';
+import { setDebugRotationMs } from '@/lib/debug/meetingDebug';
 import { acquireCaptureLease, releaseCaptureLease } from '@/lib/captureLease';
 import { MEETING_RECORDING_DISABLED_MESSAGE } from '../policyErrors';
 import { api } from '@/lib/apiClient';
@@ -515,6 +516,23 @@ describe('startRealtimeMeetingWs — rotation', () => {
     expect(utterances.map((u) => u.text)).toEqual(['leg one', 'leg two']);
     expect(utterances.map((u) => u.itemId)).toEqual(['L1:a', 'L2:a']);
     expect(LivePCMStreaming.stop).not.toHaveBeenCalled();
+  });
+
+  it('rotates at the debug interval when a development build sets one', async () => {
+    setDebugRotationMs(120_000);
+    try {
+      const { leg1 } = await boot();
+
+      jest.advanceTimersByTime(120_000 - 1);
+      await flushMicro();
+      expect(lastLeg()).toBe(leg1);
+
+      await jest.advanceTimersByTimeAsync(1);
+      await flushMicro();
+      expect(lastLeg()).not.toBe(leg1);
+    } finally {
+      setDebugRotationMs(null);
+    }
   });
 
   it('falls back to reconnect when a rotation fails, keeping the mic and retiring the old leg', async () => {

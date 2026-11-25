@@ -30,6 +30,7 @@ import { transcriptionPolicyErrorFromApiError } from './policyErrors';
 import { createRealtimeEventReducer } from './realtimeEvents';
 import type { RealtimeCallbacks, RealtimeSession } from './realtimeEvents';
 import type { AudioWindow } from './realtimeReconnect';
+import { meetingRotationMs } from '@/lib/debug/meetingDebug';
 import {
   PcmRingBuffer,
   applyLegOffset,
@@ -39,7 +40,6 @@ import {
   namespaceItemId,
   pcmTailCapBytes,
   shortLegBackoffMs,
-  ROTATION_MS,
   RECONNECT_MAX_RETRIES,
   RECONNECT_INITIAL_DELAY_MS,
   RECONNECT_MAX_DELAY_MS,
@@ -572,7 +572,7 @@ export async function startRealtimeMeetingWs(
     if (rotationTimer) clearTimeout(rotationTimer);
     rotationTimer = setTimeout(() => {
       void rollLeg();
-    }, ROTATION_MS);
+    }, meetingRotationMs());
   };
 
   // Point the flush loop at a fresh, open leg and retire the previous one. On a
