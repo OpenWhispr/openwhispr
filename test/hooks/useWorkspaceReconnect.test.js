@@ -5,6 +5,7 @@ const { createRoot } = require("react-dom/client");
 const {
   createRendererServer,
   installBrowserGlobals,
+  installHostDom,
   installHookDom,
 } = require("../lib/rendererTestHarness");
 
@@ -47,7 +48,10 @@ test("a workspace list that failed to load retries when the app reconnects", asy
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-use-workspace-reconnect-",
     mockModules: {
-      "/useAuth": "export const useAuth = () => ({ isSignedIn: globalThis.__state.isSignedIn });",
+      "/useAuth": `export const useAuth = () => ({
+        isSignedIn: globalThis.__state.isSignedIn,
+        isOfflineAccount: globalThis.__state.isOfflineAccount,
+      });`,
       "/stores/workspaceStore": `
         export const useWorkspaceStore = (selector) => selector(globalThis.__state.store);
       `,
@@ -72,7 +76,12 @@ test("a workspace list that failed to load retries when the app reconnects", asy
     setActiveWorkspaceId: () => {},
   };
   const render = async (state) => {
-    globalThis.__state = { isSignedIn: true, ...state, store: { ...store, ...state.store } };
+    globalThis.__state = {
+      isSignedIn: true,
+      isOfflineAccount: false,
+      ...state,
+      store: { ...store, ...state.store },
+    };
     await React.act(async () => {
       root.render(React.createElement(Harness));
     });
@@ -100,4 +109,89 @@ test("a workspace list that failed to load retries when the app reconnects", asy
   await render({ isSignedIn: false });
   events.fire("online");
   assert.equal(refreshes, 3);
+
+  // A presented offline account cannot retry until the session validates again.
+  await render({ isOfflineAccount: true });
+  assert.equal(events.count("online"), 0);
+  assert.equal(events.count("focus"), 0);
+  events.fire("online");
+  events.fire("focus");
+  assert.equal(refreshes, 3);
+
+  // The same guard applies before the first list has loaded. Validation starts it.
+  await render({ isOfflineAccount: true, store: { loaded: false } });
+  assert.equal(refreshes, 3);
+  await render({ store: { loaded: false } });
+  assert.equal(refreshes, 4);
 });
+
+for (const { name, modulePath, exportName, props } of [
+  {
+    name: "workspace settings",
+    modulePath: "/components/settings/useSettingsWorkspace.ts",
+    exportName: "useSettingsWorkspace",
+  },
+  {
+    name: "plans & billing picker",
+    modulePath: "/components/settings/billing/PlansBillingPicker.tsx",
+    exportName: "PlansBillingPicker",
+    props: { request: { kind: "personal" }, onChange: () => {}, personalPlanLabel: null },
+  },
+]) {
+  test(`${name} waits for validated sign-in before automatically loading memberships`, async (t) => {
+    let root = null;
+    t.after(async () => {
+      if (root) await React.act(async () => root.unmount());
+      delete globalThis.__workspaceLoader;
+    });
+    installBrowserGlobals(t);
+    const container = installHostDom(t);
+    const state = { isSignedIn: true, isOfflineAccount: true };
+    let refreshes = 0;
+    const store = {
+      workspaces: [],
+      activeWorkspaceId: null,
+      loaded: false,
+      loading: false,
+      error: false,
+      refresh: async () => {
+        refreshes += 1;
+      },
+    };
+    globalThis.__workspaceLoader = { state, store };
+    const vite = await createRendererServer(t, {
+      cachePrefix: "openwhispr-settings-workspace-auth-",
+      noExternal: ["react-i18next"],
+      mockModules: {
+        "/useAuth": "export const useAuth = () => globalThis.__workspaceLoader.state;",
+        "/stores/workspaceStore": `
+          export const useWorkspaceStore = (selector) => selector(globalThis.__workspaceLoader.store);
+        `,
+        "react-i18next": "export const useTranslation = () => ({ t: (key) => key });",
+        "/WorkspaceBillingCard": "export default function Mock() { return null; }",
+        "/WorkspaceSwitcher": "export const RetryMenuItem = () => null;",
+      },
+    });
+    const consumer = (await vite.ssrLoadModule(modulePath))[exportName];
+    function Harness() {
+      if (props) return React.createElement(consumer, props);
+      consumer();
+      return null;
+    }
+    root = createRoot(container);
+    const render = async () => {
+      await React.act(async () => root.render(React.createElement(Harness)));
+    };
+
+    await render();
+    assert.equal(refreshes, 0);
+
+    state.isOfflineAccount = false;
+    await render();
+    assert.equal(refreshes, 1);
+
+    state.isSignedIn = false;
+    await render();
+    assert.equal(refreshes, 1);
+  });
+}

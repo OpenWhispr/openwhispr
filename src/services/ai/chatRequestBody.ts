@@ -66,7 +66,7 @@ export function applyChatCompletionsParams(
   // (cleanup, selection edits) pin the family's preferred effort — see
   // modelFamilyConstraints for the gpt-oss rationale. A suppressed request has
   // no chosen effort, so applyThinkingSuppression still decides it.
-  const familyEffort = getModelFamilyConstraints(model)?.reasoningEffort;
+  const familyEffort = getModelFamilyConstraints(model, endpoint)?.reasoningEffort;
   const effort = chosenReasoningEffort(providerKey, model, config, endpoint);
   if (effort) {
     // OpenRouter takes effort only inside its reasoning object.
@@ -102,7 +102,7 @@ export function responsesReasoningEffort(
   config: ReasoningConfig,
   endpoint?: string | null
 ): string | undefined {
-  const familyEffort = getModelFamilyConstraints(model)?.reasoningEffort;
+  const familyEffort = getModelFamilyConstraints(model, endpoint)?.reasoningEffort;
   if (isThinkingSuppressed(model, config)) {
     // Native OpenAI shows no toggle, so its default-on value is not the user's
     // choice: a model id the registry no longer lists keeps the server's default.

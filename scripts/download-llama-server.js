@@ -16,7 +16,7 @@ const LLAMA_CPP_REPO = "ggml-org/llama.cpp";
 
 // Pinned to a tested build that loads current GGUF models. whisper-server is
 // statically linked, so bumping this can't affect local Whisper.
-const LLAMA_CPP_TAG = process.env.LLAMA_CPP_VERSION || "b9763";
+const LLAMA_CPP_TAG = process.env.LLAMA_CPP_VERSION || "b12110";
 
 const BINARIES = {
   "darwin-arm64": {

@@ -18,7 +18,8 @@ const {
   window: windowStub,
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
-const { createFakeCloud, createAccountCloud } = require("./harness/fakeCloud.js");
+const { createFakeCloud, createAccountCloud, deltaSince } = require("./harness/fakeCloud.js");
+const { joinTeamSpace } = require("./harness/teamSpace.js");
 const { createSyncDevice } = require("./harness/syncDevice.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 const { resetServerClockForTests } = require("../../src/lib/serverClock.ts");
@@ -37,6 +38,7 @@ async function setup(t, behindMs) {
   const cloud = createFakeCloud({ serverDate: true });
   const server = { offsetMs: -behindMs };
   cloud.setClock(() => new Date(Date.now() + server.offsetMs).toISOString());
+  joinTeamSpace(db, cloud);
   const api = createElectronApi(db, { cloud });
   windowStub.electronAPI = api;
   await establishValidatedAuth();
@@ -121,9 +123,14 @@ test("a fast clock's old cursors still bring the deletes made since they were st
   const { db, cloud, service, serverIso } = ctx;
 
   const at = serverIso(-3 * HOUR);
+  // This chat originated locally and can follow remote deletes; restored chats stay local.
+  const localChat = db.createAgentConversation("Chat");
+  db.addAgentMessage(localChat.id, "user", "hello");
+  const local = db.getAgentConversation(localChat.id);
+  assert.equal(local.device_only, 0);
   const chat = cloud.seedConversation({
     title: "Chat",
-    client_conversation_id: "chat",
+    client_conversation_id: local.client_conversation_id,
     created_at: at,
     updated_at: at,
   });
@@ -134,7 +141,8 @@ test("a fast clock's old cursors still bring the deletes made since they were st
     updated_at: at,
   });
   await service.syncAll(true);
-  assert.ok(db.getConversationByClientId("chat"));
+  assert.equal(db.getAgentConversation(localChat.id).cloud_id, chat.id);
+  assert.ok(db.getConversationByClientId(local.client_conversation_id));
   assert.ok(db.getTranscriptionByClientId("dictation"));
 
   // An older build pulled two hours ago by the device's clock. Without a
@@ -148,7 +156,7 @@ test("a fast clock's old cursors still bring the deletes made since they were st
 
   await service.syncAll(true);
 
-  assert.equal(db.getConversationByClientId("chat") ?? null, null);
+  assert.equal(db.getConversationByClientId(local.client_conversation_id) ?? null, null);
   assert.equal(db.getTranscriptionByClientId("dictation") ?? null, null);
 });
 
@@ -158,13 +166,15 @@ test("a device on time keeps the cursors it already has", async (t) => {
   const { cloud, service } = ctx;
 
   const kept = new Date(Date.now() - 5 * MINUTE).toISOString();
+  localStorageStub.setItem("lastSyncedAt.accountId", "user-harness");
+  localStorageStub.setItem("syncCursors.privateBackup:user-harness", "1");
   localStorageStub.setItem("lastSyncedAt.notes", kept);
   localStorageStub.setItem("noteFeedReplay.v1", "3");
 
   await service.syncAll(true);
 
   const firstList = cloud.logFor("/api/notes/list")[0];
-  assert.equal(new URL(firstList.path, "https://x").searchParams.get("since"), kept);
+  assert.equal(new URL(firstList.path, "https://x").searchParams.get("since"), deltaSince(kept));
 });
 
 test("restoring another account's old cursors still recovers rows missed by a fast clock", async (t) => {

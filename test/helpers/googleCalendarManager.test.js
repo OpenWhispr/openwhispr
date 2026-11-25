@@ -385,7 +385,7 @@ test("_syncCalendar trusts self as the user only on the account's primary calend
   );
 });
 
-async function syncGoogleRow(calendar, attendees) {
+async function syncGoogleRow(calendar, attendees, extra = {}, accessRole) {
   const rows = [];
   const GoogleCalendarManager = loadManagerModule();
   const manager = new GoogleCalendarManager(
@@ -400,6 +400,7 @@ async function syncGoogleRow(calendar, attendees) {
     { scheduleNextMeeting: () => {} }
   );
   manager._apiGet = async () => ({
+    accessRole,
     items: [
       {
         id: "meeting",
@@ -408,6 +409,7 @@ async function syncGoogleRow(calendar, attendees) {
         start: { dateTime: "2026-10-01T10:00:00Z" },
         end: { dateTime: "2026-10-01T11:00:00Z" },
         attendees,
+        ...extra,
       },
     ],
   });
@@ -490,4 +492,54 @@ test("_syncCalendar full sync looks back CALENDAR_LOOKBACK_DAYS", async () => {
   assert.ok(Math.abs(Date.parse(params.get("timeMin")) - (now - CALENDAR_LOOKBACK_MS)) < 5_000);
   const lookaheadMs = (33 * 24 + 48) * 3_600_000;
   assert.ok(Math.abs(Date.parse(params.get("timeMax")) - (now + lookaheadMs)) < 5_000);
+});
+
+test("Google keeps omitted, hidden and unnamed additional guests distinguishable from an empty invite", async () => {
+  const calendar = { id: "me@corp.com", account_email: "me@corp.com" };
+  for (const [attendees, extra, expected] of [
+    [[], { attendeesOmitted: true }, true],
+    [[], { guestsCanSeeOtherGuests: false }, true],
+    [[], { guestsCanSeeOtherGuests: false, organizer: { self: true } }, false],
+    [[{ email: "me@corp.com", additionalGuests: 1 }], {}, true],
+    [[], {}, false],
+  ])
+    assert.equal((await syncGoogleRow(calendar, attendees, extra)).attendees_omitted, expected);
+});
+
+test("Google page access and invite visibility distinguish hidden from truly empty rosters", async () => {
+  const calendar = { id: "shared", account_email: "me@corp.com" };
+  for (const [role, visibility, incomplete] of [
+    ["freeBusyReader", "public", true],
+    ["none", "default", true],
+    ["reader", "private", true],
+    ["writerWithoutPrivateAccess", "private", true],
+    ["reader", "public", false],
+    ["writer", "private", false],
+    ["owner", "private", false],
+  ]) {
+    const row = await syncGoogleRow(
+      calendar,
+      undefined,
+      { visibility, organizer: { email: "colleague@corp.com" } },
+      role
+    );
+    assert.equal(row.attendees_omitted, incomplete, role + "/" + visibility);
+  }
+});
+
+test("the organizer self flag on a shared calendar cannot expose a hidden roster", async () => {
+  const shared = { id: "coordinator@corp.com", account_email: "viewer@corp.com" };
+  const hidden = { guestsCanSeeOtherGuests: false, organizer: { self: true, email: shared.id } };
+  assert.equal((await syncGoogleRow(shared, [], hidden, "reader")).attendees_omitted, true);
+  assert.equal(
+    (
+      await syncGoogleRow(
+        shared,
+        [],
+        { ...hidden, organizer: { email: "VIEWER@corp.com" } },
+        "reader"
+      )
+    ).attendees_omitted,
+    false
+  );
 });

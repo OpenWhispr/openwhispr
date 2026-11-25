@@ -1,5 +1,7 @@
+import { refreshEnterpriseIdentityForUse } from "./enterpriseIdentityStore";
 import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import { create } from "zustand";
+import i18n from "../i18n";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import { getMeetingStreamingTranscriptionProviders } from "../models/ModelRegistry";
@@ -9,11 +11,14 @@ import { resolvePreferredMicrophone } from "../helpers/microphoneSelection";
 import { ActiveMicRecoveryController } from "../helpers/activeMicRecovery";
 import { getBaseLanguageCode } from "../utils/languageSupport";
 import { getKeytermDictionaryWords } from "../utils/snippets";
+import { describeProviderError } from "../utils/describeProviderError";
 import {
   resolveInitialSpeakerCountOverride,
   resolveParticipantSpeakerCountSync,
 } from "../utils/participants";
 import type {
+  MeetingStartSource,
+  MeetingStopReason,
   MeetingSystemAudioInterruption,
   NoteItem,
   SystemAudioAccessResult,
@@ -131,7 +136,17 @@ interface MeetingRecordingState {
   systemAudioInterruptedDeliveredNonce: number;
   currentMicLevel: number;
   micCaptureStatus: "inactive" | "active" | "reconnecting" | "unavailable";
+  /** The user muted the microphone for this recording; system audio keeps going. */
+  micMuted: boolean;
   windowWidth: number;
+  /** The new note a recording went on in after its note vanished, for the notes view to announce
+   * (it clears this once shown). `lostTitle` names the vanished note. */
+  recordingCopy: {
+    noteId: number;
+    spaceId: number;
+    folderId: number | null;
+    lostTitle: string;
+  } | null;
 }
 
 const MEETING_AUDIO_BUFFER_SIZE = 800;
@@ -170,9 +185,20 @@ const isSegmentWithinIdentificationWindow = (
 };
 
 // MeetingRecordingMount translates the `managedConfig:<key>` sentinel.
+// It carries only the key, so a key with params is translated here.
 const describeMeetingSetupError = (err: unknown): string => {
-  const { message, messageKey } = (err ?? {}) as { message?: string; messageKey?: unknown };
-  return typeof messageKey === "string" ? `managedConfig:${messageKey}` : String(message);
+  const { code, error, message, messageKey, messageParams } = (err ?? {}) as {
+    code?: string;
+    error?: string;
+    message?: string;
+    messageKey?: string;
+    messageParams?: Record<string, string | number>;
+  };
+  if (code === "AUTH_EXPIRED" || code === "AUTH_REQUIRED") return "signInRequired";
+  if (code && MEETING_POLICY_REFUSALS.has(code)) return code;
+  if (messageKey && messageParams) return describeProviderError(err, i18n.t).description;
+  if (messageKey) return `managedConfig:${messageKey}`;
+  return message || error || "Failed to start meeting transcription";
 };
 
 const getMeetingTranscriptionOptions = () => {
@@ -473,6 +499,8 @@ let isRecordingFlag = false;
 let isStartingFlag = false;
 let activeRecordingSessionId: string | null = null;
 const meetingRecordingStartCoordinator = createMeetingRecordingStartCoordinator();
+// Why the first stop cancelled a start still in progress, for its teardown.
+let startCancelReason: MeetingStopReason | null = null;
 const meetingRecordingStopBarrier = createMeetingRecordingStopBarrier();
 let isPrepared = false;
 let segmentsRefValue: TranscriptSegment[] = [];
@@ -493,6 +521,11 @@ let stoppingSeed: {
   recorderName?: string;
 } | null = null;
 let preparePromise: Promise<void> | null = null;
+let awaitingMeetingAdmission: {
+  noteId: number | null;
+  sessionId: string;
+  result: Promise<StartRecordingResult>;
+} | null = null;
 let ipcCleanups: Array<() => void> = [];
 let speakerIdentifications: SpeakerIdentification[] = [];
 let nextPlaceholderSpeakerIndex = 0;
@@ -507,6 +540,16 @@ let sessionSystemAudioActive = false;
 // True while the recording's own note is deleted mid-recording, so a live save
 // never writes the transcript back onto its tombstone.
 let recordingNoteDeleted = false;
+// The user deleted the recording's note here, so its transcript goes with it. A note
+// deleted any other way (on another device, with its folder) goes on in a copy.
+let recordingNoteDeletedByUser = false;
+// Read as the recording starts: the account a copy may be made for, and where the
+// note lives, so a Private note's copy stays in that Private.
+let recordingOwnerAccountId: string | null | undefined;
+let recordingNoteSpaceId: number | null = null;
+// Each note a recording moved off, by the copy it went on in.
+const recordingNoteCopies = new Map<number, number>();
+let recordingRescue: { lostNoteId: number; promise: Promise<number | null> } | null = null;
 
 export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   isRecording: false,
@@ -535,7 +578,9 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   systemAudioInterruptedDeliveredNonce: 0,
   currentMicLevel: 0,
   micCaptureStatus: "inactive",
+  micMuted: false,
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
+  recordingCopy: null,
 }));
 
 // Org-policy refusals: the main process's own sentinel and the refusal codes it
@@ -544,6 +589,8 @@ const MEETING_POLICY_REFUSALS = new Set([
   "policyRestricted",
   "POLICY_MEETING_RECORDING_DISABLED",
   "AUDIO_PURPOSE_REQUIRED",
+  "POLICY_EXTERNAL_ATTENDEES",
+  "POLICY_ATTENDEES_UNVERIFIABLE",
   "POLICY_UNRESOLVABLE",
   "POLICY_MODEL_BLOCKED",
   "POLICY_LOCAL_MODE_BLOCKED",
@@ -598,6 +645,32 @@ function reportMeetingError(error: string, extra: Partial<MeetingRecordingState>
 }
 
 export const getMicAnalyser = (): AnalyserNode | null => micAnalyser;
+
+// A disabled track keeps delivering silent frames on the same clock, so the
+// provider socket, the audio timeline and the mic gate all carry on as if the
+// user had simply stopped talking. The meeting app's own mic is untouched.
+const applyMicMuted = (stream: MediaStream | null, muted: boolean): void => {
+  stream?.getAudioTracks().forEach((track) => {
+    track.enabled = !muted;
+  });
+};
+
+export function setMicMuted(muted: boolean): void {
+  if (!isRecordingFlag) return;
+  if (useMeetingRecordingStore.getState().micMuted === muted) return;
+  applyMicMuted(micStream, muted);
+  useMeetingRecordingStore.setState(
+    muted ? { micMuted: true, micPartial: "", currentMicLevel: 0 } : { micMuted: false }
+  );
+  logger.debug("Meeting microphone mute changed", { muted }, "meeting");
+  // Main's auto-end can't hear the room through a muted mic. A start still
+  // connecting resends this once its session is live.
+  if (activeRecordingSessionId) {
+    void window.electronAPI
+      ?.meetingTranscriptionSetMicMuted?.(activeRecordingSessionId, muted)
+      .catch(() => undefined);
+  }
+}
 
 export const getActiveRecordingSessionId = (): string | null => activeRecordingSessionId;
 
@@ -836,6 +909,7 @@ async function cleanup(): Promise<void> {
     micStream?.getTracks().forEach((t) => t.stop());
   } catch {}
   micStream = null;
+  useMeetingRecordingStore.setState({ micCaptureStatus: "inactive" });
 
   try {
     await micContext?.close();
@@ -906,53 +980,90 @@ export interface StartRecordingArgs {
   expectedCount?: number | null;
   expectedCountIsExplicit?: boolean;
   autoEndEligible: boolean;
+  startSource?: MeetingStartSource;
   canAutoStart?: () => boolean;
 }
 
 export type StartRecordingResult = boolean | "cancelled";
 
 // Resolves false only when workspace policy refuses the recording or an automatic
-// start loses its consent. An automatic start cancelled before main setup reports
-// "cancelled" so its note session can be released without restoring the layout.
-// Setup failures remain accepted and are reported through the store.
+// start loses its consent. An automatic start cancelled before main setup, or an
+// explicit one cancelled before meeting admission while main's admission check is
+// available, reports "cancelled" so its note session can be released without
+// restoring the layout. Setup failures remain accepted and are reported through
+// the store.
 export async function startRecording(args: StartRecordingArgs): Promise<StartRecordingResult> {
   if (isRecordingFlag && !isStartingFlag) return true;
   // An automatic request must observe a pending start's outcome before its own
   // note session can be released. Live recordings and explicit starts stay accepted.
   if (isStartingFlag && !args.canAutoStart) return true;
   if (args.canAutoStart && !args.canAutoStart()) return false;
-  const policy = usePolicyStore.getState();
-  if (!isMeetingAllowedByPolicy(policy)) {
-    logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");
-    reportMeetingError(
-      isAudioFeatureAllowed(policy, "meeting")
-        ? (transcriptionChoiceRefusal(policy, getSettings(), "meeting")?.code ?? "policyRestricted")
-        : meetingPolicyRefusalError(policy)
-    );
-    return false;
+  if (awaitingMeetingAdmission) {
+    if (awaitingMeetingAdmission.noteId === args.noteId) return awaitingMeetingAdmission.result;
+    void meetingRecordingStartCoordinator.cancelActiveStart(awaitingMeetingAdmission.sessionId);
   }
-
-  // Resolve the managed route before any capture so a failure never lights the mic indicator.
-  const managed = getManagedTranscriptionResolution("realtime");
-  if (managed?.kind === "error") {
-    logger.warn(
-      "Meeting recording blocked by managed audio setup",
-      { code: managed.code },
-      "meeting"
-    );
-    reportMeetingError(describeMeetingSetupError(managed));
-    return true;
-  }
-
   const sessionId = createMeetingRecordingSessionId();
   let automaticStartSuppressed = false;
   let automaticStartCancelled = false;
-  await meetingRecordingStartCoordinator.runStart(sessionId, async (startOperation) => {
+  let recordingDisabled = false;
+  const setup = meetingRecordingStartCoordinator.runStart(sessionId, async (startOperation) => {
     if (isRecordingFlag || isStartingFlag) return;
+    const refresh = refreshEnterpriseIdentityForUse();
+    if (refresh) {
+      await refresh;
+      if (!startOperation.isCurrent()) {
+        automaticStartCancelled = Boolean(
+          args.canAutoStart || window.electronAPI?.checkMeetingRecordingStart
+        );
+        return;
+      }
+    }
+    const policy = usePolicyStore.getState();
+    if (!isMeetingAllowedByPolicy(policy)) {
+      logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");
+      const refusal = isAudioFeatureAllowed(policy, "meeting")
+        ? (transcriptionChoiceRefusal(policy, getSettings(), "meeting")?.code ?? "policyRestricted")
+        : meetingPolicyRefusalError(policy);
+      reportMeetingError(refusal);
+      void window.electronAPI?.meetingRecordingRefused?.({
+        noteId: args.noteId,
+        startSource: args.startSource,
+        reason: refusal,
+      });
+      recordingDisabled = true;
+      return;
+    }
+
+    // Resolve the managed route before any capture so a failure never lights the mic indicator.
+    const managed = getManagedTranscriptionResolution("realtime");
+    if (managed?.kind === "error") {
+      logger.warn(
+        "Meeting recording blocked by managed audio setup",
+        { code: managed.code },
+        "meeting"
+      );
+      reportMeetingError(describeMeetingSetupError(managed));
+      return;
+    }
+
+    // Asked inside the start, so a stop during the lookup still cancels it.
+    if (await window.electronAPI?.isMeetingRecordingDisabled?.()) {
+      logger.warn("Meeting recording disabled by administrator", {}, "meeting");
+      reportMeetingError("policyRestricted");
+      void window.electronAPI?.meetingRecordingRefused?.({
+        noteId: args.noteId,
+        startSource: args.startSource,
+        reason: "POLICY_MEETING_RECORDING_DISABLED",
+      });
+      recordingDisabled = true;
+      return;
+    }
 
     await meetingRecordingStopBarrier.waitForPendingStop();
     if (!startOperation.isCurrent()) {
-      automaticStartCancelled = Boolean(args.canAutoStart);
+      automaticStartCancelled = Boolean(
+        args.canAutoStart || window.electronAPI?.checkMeetingRecordingStart
+      );
       return;
     }
     if (isRecordingFlag || isStartingFlag) return;
@@ -960,8 +1071,62 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       automaticStartSuppressed = true;
       return;
     }
+    const api = window.electronAPI;
+    const releaseAdmission = (): void => api?.releaseMeetingRecordingStart?.(sessionId);
+    startOperation.onCancel(releaseAdmission);
+    const unsubscribeAdmission = api?.onMeetingRecordingAdmissionRevoked?.((notice) => {
+      if (notice.sessionId !== sessionId) return;
+      const code =
+        notice.code === "POLICY_EXTERNAL_ATTENDEES" && isRecordingFlag
+          ? "POLICY_EXTERNAL_ATTENDEES_STOPPED"
+          : notice.code;
+      if (code !== "AUDIO_OPERATION_CANCELLED") reportMeetingError(code);
+      void stopRecording(sessionId, "policy");
+    });
+    // Main owns the invite and the native confirmation. A restricted desktop with
+    // an unavailable bridge must keep the microphone off.
+    const required =
+      (usePolicyStore.getState().policy?.meetings?.externalAttendees ?? "allowed") !== "allowed";
+    const admission = api?.checkMeetingRecordingStart
+      ? await api
+          .checkMeetingRecordingStart({ noteId: args.noteId, sessionId })
+          .catch(() => ({ success: false as const, code: "POLICY_ATTENDEES_UNVERIFIABLE" }))
+      : required
+        ? { success: false as const, code: "POLICY_ATTENDEES_UNVERIFIABLE" }
+        : { success: true as const };
+    if (awaitingMeetingAdmission?.sessionId === sessionId) awaitingMeetingAdmission = null;
+    if (
+      admission.success === false ||
+      !startOperation.isCurrent() ||
+      (args.canAutoStart && !args.canAutoStart())
+    ) {
+      unsubscribeAdmission?.();
+      releaseAdmission();
+      if (
+        !startOperation.isCurrent() ||
+        (admission.success === false && admission.code === "AUDIO_OPERATION_CANCELLED")
+      ) {
+        automaticStartCancelled = true;
+      } else if (admission.success === false) {
+        recordingDisabled = true;
+        reportMeetingError(admission.code);
+        void api?.meetingRecordingRefused?.({
+          noteId: args.noteId,
+          startSource: args.startSource,
+          reason: admission.code,
+        });
+      } else {
+        automaticStartSuppressed = true;
+      }
+      return;
+    }
+    ipcCleanups.push(() => {
+      unsubscribeAdmission?.();
+      releaseAdmission();
+    });
     isStartingFlag = true;
     activeRecordingSessionId = sessionId;
+    startCancelReason = null;
     const isCurrentStart = () =>
       startOperation.isCurrent() && activeRecordingSessionId === sessionId;
     let captureStarted = false;
@@ -1013,6 +1178,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     systemPartialSpeakerIdValue = null;
     sessionSystemAudioActive = false;
     recordingNoteDeleted = false;
+    recordingNoteDeletedByUser = false;
+    recordingOwnerAccountId = undefined;
+    recordingNoteSpaceId = null;
 
     useMeetingRecordingStore.setState({
       isRecording: true,
@@ -1039,7 +1207,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       systemAudioSilentWarning: false,
       systemAudioInterrupted: null,
       micCaptureStatus: "inactive",
+      micMuted: false,
     });
+    void captureRecordingOwner(args.noteId);
 
     isRecordingFlag = true;
     let systemAudioAvailabilityResolved = false;
@@ -1061,9 +1231,15 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     const releaseSession = () => {
       if (activeRecordingSessionId === sessionId) activeRecordingSessionId = null;
     };
+    // A start that is no longer current was cancelled by a stop; otherwise its setup failed.
     const stopScopedMainOnce = () =>
       startOperation.stopMainOnce(async () => {
-        await window.electronAPI?.meetingTranscriptionStop?.(sessionId).catch(() => undefined);
+        await window.electronAPI
+          ?.meetingTranscriptionStop?.(
+            sessionId,
+            startOperation.isCurrent() ? "error" : (startCancelReason ?? "user")
+          )
+          .catch(() => undefined);
       });
     const teardownStart = async () => {
       if (args.canAutoStart && !captureStarted && !startOperation.isCurrent())
@@ -1072,6 +1248,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       setupSystemCaptureResult = { stream: null, error: null };
       isRecordingFlag = false;
       isStartingFlag = false;
+      useMeetingRecordingStore.setState({ micMuted: false });
       await teardownFailedMeetingRecordingSetup({
         stopBarrier: meetingRecordingStopBarrier,
         cleanup,
@@ -1192,26 +1369,34 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
             return null;
           }
           micStream = micResult;
+          applyMicMuted(micResult, useMeetingRecordingStore.getState().micMuted);
+          const micTrack = micResult.getAudioTracks()[0];
+          useMeetingRecordingStore.setState({
+            micCaptureStatus: micTrack?.readyState === "live" ? "active" : "unavailable",
+          });
           // A Stop while main is still connecting (up to its connect timeout)
           // turns the microphone off now; the rest is torn down once start settles.
           startOperation.onCancel(() => {
             if (micStream !== micResult) return;
             stopMediaStream(micResult);
             micStream = null;
+            useMeetingRecordingStore.setState({ micCaptureStatus: "inactive" });
           });
           const ctx = new AudioContext({ sampleRate: 24000 });
           micContext = ctx;
           await detachFromOutputDevice(ctx);
-          if (!isCurrentStart()) {
-            await teardownStart();
-            return null;
-          }
+          if (!isCurrentStart()) return null;
 
           await createAudioPipeline({
             stream: micResult,
             context: ctx,
-            onChunk: (chunk) => {
+            onChunk: (captured) => {
               if (!isRecordingFlag || activeRecordingSessionId !== sessionId) return;
+              // Frames already in the worklet when mute lands, or from a replacement
+              // track not yet disabled, must not leave the renderer either.
+              const chunk = useMeetingRecordingStore.getState().micMuted
+                ? new ArrayBuffer(captured.byteLength)
+                : captured;
               if (socketReady) {
                 window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic");
                 return;
@@ -1239,7 +1424,6 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
             analyserSink.connect(ctx.destination);
             micAnalyser = analyser;
 
-            const micTrack = micResult.getAudioTracks()[0];
             logger.info(
               "Mic capture started for meeting transcription",
               {
@@ -1263,6 +1447,15 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
           if (args.canAutoStart && !startOperation.isCurrent()) automaticStartCancelled = true;
           return;
         }
+        // A provider can fail after connecting while a device permission prompt is still open.
+        const fatalCleanup = window.electronAPI?.onMeetingTranscriptionFatalError?.((error) => {
+          if (activeRecordingSessionId !== sessionId || !isRecordingFlag) return;
+          reportMeetingError(error);
+          logger.error("Meeting transcription stopped after connection loss", { error }, "meeting");
+          if (isStartingFlag) void stopScopedMainOnce();
+          void stopRecording(sessionId, "error");
+        });
+        if (fatalCleanup) ipcCleanups.push(fatalCleanup);
         startOperation.markMainStartAttempted();
         return window.electronAPI?.meetingTranscriptionStart?.({
           ...meetingTranscriptionOptions,
@@ -1271,64 +1464,59 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
           autoEndEligible: args.autoEndEligible,
           aecEnabled: getSettings().meetingAecEnabled,
           speakerIndexBase: sessionSpeakerIndexBase,
+          startSource: args.startSource,
         });
       })();
-      const [startOutcome, micOutcome, systemCaptureOutcome] = await Promise.allSettled([
-        mainStartPromise,
+      // Observe device failures while main connects. A refusal can finish before either
+      // permission prompt, and a stream granted afterward belongs to the failed session.
+      const captureOutcomes = Promise.allSettled([
         micCapturePromise,
-        systemCapturePromise,
+        systemCapturePromise.then((capture) => {
+          if (isCurrentStart()) setupSystemCaptureResult = capture;
+          else stopMediaStream(capture.stream);
+        }),
       ] as const);
-
-      if (systemCaptureOutcome.status === "fulfilled") {
-        setupSystemCaptureResult = systemCaptureOutcome.value;
-      }
+      const startResult = await mainStartPromise;
       if (automaticStartSuppressed) {
         await endSuppressedStart();
         return;
       }
-      if (startOutcome.status === "rejected") throw startOutcome.reason;
-      if (micOutcome.status === "rejected") throw micOutcome.reason;
-      if (systemCaptureOutcome.status === "rejected") throw systemCaptureOutcome.reason;
-
-      const startResult = startOutcome.value;
-      const micResult = micOutcome.value;
-      const initialSystemCaptureResult = setupSystemCaptureResult;
-      let systemCaptureResult = initialSystemCaptureResult;
-
-      const streamsMs = performance.now() - startTime;
       if (!isCurrentStart()) {
-        logger.info("Meeting transcription aborted during setup (stop called)", {}, "meeting");
         await teardownStart();
         return;
       }
-
       if (!startResult?.success) {
+        recordingDisabled =
+          startResult?.code === "POLICY_EXTERNAL_ATTENDEES" ||
+          startResult?.code === "POLICY_ATTENDEES_UNVERIFIABLE";
         logger.error(
           "Meeting transcription IPC start failed",
           { error: startResult?.error, code: startResult?.code },
           "meeting"
         );
-        const needsSignIn =
-          startResult?.code === "AUTH_EXPIRED" || startResult?.code === "AUTH_REQUIRED";
-        reportMeetingError(
-          needsSignIn
-            ? "signInRequired"
-            : startResult?.code && MEETING_POLICY_REFUSALS.has(startResult.code)
-              ? startResult.code
-              : describeMeetingSetupError({
-                  message: startResult?.error || "Failed to start meeting transcription",
-                  messageKey: startResult?.messageKey,
-                }),
-          { isRecording: false, isTranscribing: false }
-        );
-        stopMediaStream(systemCaptureResult.stream);
-        setupSystemCaptureResult = { stream: null, error: null };
+        reportMeetingError(describeMeetingSetupError(startResult), {
+          isRecording: false,
+          isTranscribing: false,
+          micMuted: false,
+        });
+        releaseSession();
+        stopMediaStream(setupSystemCaptureResult.stream);
         isRecordingFlag = false;
         isStartingFlag = false;
         await cleanup();
-        releaseSession();
         return;
       }
+
+      const [micOutcome, systemCaptureOutcome] = await captureOutcomes;
+      if (!isCurrentStart()) {
+        await teardownStart();
+        return;
+      }
+      if (micOutcome.status === "rejected") throw micOutcome.reason;
+      if (systemCaptureOutcome.status === "rejected") throw systemCaptureOutcome.reason;
+      const micResult = micOutcome.value;
+      let systemCaptureResult = setupSystemCaptureResult;
+      const streamsMs = performance.now() - startTime;
       adoptSpeakerIndexBase(startResult.speakerIndexBase);
       const systemAudioMode = startResult.systemAudioMode || initialSystemAudioAccess.mode;
       const systemAudioStrategy = startResult.systemAudioStrategy || initialSystemAudioStrategy;
@@ -1526,21 +1714,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         logger.error("Meeting transcription stream error", { error: err }, "meeting");
         if (!MEETING_MAIN_STOPS.has(err)) return;
         mainStoppedSessionId = sessionId;
-        if (isRecordingFlag) void stopRecording(sessionId);
+        if (isRecordingFlag) void stopRecording(sessionId, "error");
       });
       if (errorCleanup) ipcCleanups.push(errorCleanup);
-
-      const fatalErrorCleanup = window.electronAPI?.onMeetingTranscriptionFatalError?.((err) => {
-        if (activeRecordingSessionId !== sessionId) return;
-        reportMeetingError(err);
-        logger.error(
-          "Meeting transcription stopped after connection loss",
-          { error: err },
-          "meeting"
-        );
-        if (isRecordingFlag) void stopRecording(sessionId);
-      });
-      if (fatalErrorCleanup) ipcCleanups.push(fatalErrorCleanup);
 
       // One-shot from main (~45s in) when the system tap has streamed only
       // silence; main never emits it for mic-only sessions, but gate on this
@@ -1619,6 +1795,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
             ) {
               throw new Error("Meeting recording is no longer active");
             }
+            applyMicMuted(replacement, useMeetingRecordingStore.getState().micMuted);
             const nextSource = micContext.createMediaStreamSource(replacement);
             nextSource.connect(micProcessor);
             if (micAnalyser) nextSource.connect(micAnalyser);
@@ -1626,8 +1803,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
             previous?.getTracks().forEach((track) => track.stop());
             micSource = nextSource;
             micStream = replacement;
-            logger.info("Meeting microphone capture recovered", {}, "meeting");
           },
+          logger,
+          logScope: "meeting",
         });
         await micRecovery.start(micStream, {
           followDefault: followsSystemDefaultMic(getSettings()),
@@ -1775,6 +1953,12 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         return;
       }
 
+      if (useMeetingRecordingStore.getState().micMuted) {
+        void window.electronAPI
+          ?.meetingTranscriptionSetMicMuted?.(sessionId, true)
+          .catch(() => undefined);
+      }
+
       startOperation.markCommitted();
       isStartingFlag = false;
       socketReady = true;
@@ -1801,6 +1985,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         "meeting"
       );
     } catch (err) {
+      if (!isCurrentStart()) {
+        await teardownStart();
+        return;
+      }
+      releaseSession();
       logger.error(
         "Meeting transcription setup failed",
         { error: (err as Error).message },
@@ -1815,7 +2004,226 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       await teardownStart();
     }
   });
-  return automaticStartCancelled ? "cancelled" : !automaticStartSuppressed;
+  const result = setup
+    .then((): StartRecordingResult => {
+      if (recordingDisabled) return false;
+      return automaticStartCancelled ? "cancelled" : !automaticStartSuppressed;
+    })
+    .finally(() => {
+      if (awaitingMeetingAdmission?.sessionId === sessionId) awaitingMeetingAdmission = null;
+    });
+  if (window.electronAPI?.checkMeetingRecordingStart) {
+    awaitingMeetingAdmission = { sessionId, noteId: args.noteId, result };
+  }
+  return result;
+}
+
+function rememberRecordingNoteSpace(note: NoteItem | null | undefined): void {
+  if (note && !note.deleted_at && note.id === useMeetingRecordingStore.getState().recordingNoteId) {
+    recordingNoteSpaceId = note.space_id;
+  }
+}
+
+async function captureRecordingOwner(noteId: number | null): Promise<void> {
+  if (noteId == null) return;
+  try {
+    const api = window.electronAPI;
+    const [guard, note] = await Promise.all([api?.getNoteWriteGuard?.(), api?.getNote?.(noteId)]);
+    if (useMeetingRecordingStore.getState().recordingNoteId !== noteId) return;
+    if (guard) recordingOwnerAccountId = guard.accountId;
+    rememberRecordingNoteSpace(note);
+  } catch {
+    // With no owner, a vanished note's transcript stays on screen and is only logged.
+  }
+}
+
+/**
+ * The user is deleting this note here: if it's the one recording, its transcript goes with it
+ * rather than on in a copy. Answers how to take that back, should the delete fail.
+ */
+export function markRecordingNoteDeletedByUser(noteId: number): () => void {
+  if (!isRecordingFlag || noteId !== useMeetingRecordingStore.getState().recordingNoteId) {
+    return () => {};
+  }
+  recordingNoteDeletedByUser = true;
+  return () => {
+    recordingNoteDeletedByUser = false;
+  };
+}
+
+// The recording's note was deleted, on its own or with its folder. Saves to it stop at
+// once; unless the user deleted it here, the recording goes on in a copy.
+function noteLeftRecording(noteId: number): void {
+  if (!isRecordingFlag || noteId !== useMeetingRecordingStore.getState().recordingNoteId) return;
+  recordingNoteDeleted = true;
+  if (!recordingNoteDeletedByUser) void startRecordingRescue(noteId);
+}
+
+/**
+ * The note a live recording's vanished note goes on in (see copyRecordingNote), for the editor's
+ * own unsaved edits to that note. Null when the note isn't one this recording writes to.
+ */
+export function rescueRecordingNote(lostNoteId: number): Promise<number | null> {
+  const known = recordingNoteCopies.has(lostNoteId) || recordingRescue?.lostNoteId === lostNoteId;
+  return known || isRecordingFlag ? startRecordingRescue(lostNoteId) : Promise.resolve(null);
+}
+
+// One copy per vanished note, whoever asks first.
+function startRecordingRescue(lostNoteId: number): Promise<number | null> {
+  const copied = recordingNoteCopies.get(lostNoteId);
+  if (copied != null) return Promise.resolve(copied);
+  if (recordingRescue?.lostNoteId === lostNoteId) return recordingRescue.promise;
+  if (
+    recordingNoteDeletedByUser ||
+    useMeetingRecordingStore.getState().recordingNoteId !== lostNoteId
+  ) {
+    return Promise.resolve(null);
+  }
+  const promise = copyRecordingNote(lostNoteId).catch((error: unknown) => {
+    logger.error(
+      "Could not save a vanished recording note's transcript",
+      { error: (error as Error).message, noteId: lostNoteId },
+      "meeting"
+    );
+    return null;
+  });
+  const rescue = { lostNoteId, promise };
+  recordingRescue = rescue;
+  void promise.then(() => {
+    if (recordingRescue === rescue) recordingRescue = null;
+  });
+  return promise;
+}
+
+// The recording's note vanished (deleted on another device, or with its folder): what this
+// session recorded is saved as a new note in Private, and the recording goes on in it. Like
+// main keeping unsent work, only that leaves the note: not its earlier transcript, notes,
+// title or summary. Made only for the account the recording started under, and refused by
+// main if the account changes on the way. Answers the note the transcript now goes to.
+async function copyRecordingNote(lostNoteId: number): Promise<number | null> {
+  const api = window.electronAPI;
+  const row = await api?.getNote?.(lostNoteId);
+  // Moved or unfiled rather than removed: the recording keeps its note.
+  if (row && !row.deleted_at) {
+    if (useMeetingRecordingStore.getState().recordingNoteId === lostNoteId) {
+      recordingNoteDeleted = false;
+    }
+    return lostNoteId;
+  }
+  if (recordingNoteDeletedByUser) return null;
+  const guard = await api?.getNoteWriteGuard?.();
+  if (
+    !guard ||
+    recordingOwnerAccountId === undefined ||
+    guard.accountId !== recordingOwnerAccountId
+  ) {
+    logger.warn("A recording's note vanished; no copy was made", { noteId: lostNoteId }, "meeting");
+    return null;
+  }
+  const spaces = recordingNoteSpaceId != null ? ((await api?.getSpaces?.()) ?? []) : [];
+  const ownPrivate = spaces.find(
+    (space) => space.id === recordingNoteSpaceId && space.kind === "private"
+  );
+  const { segments, recordingNoteTitle } = useMeetingRecordingStore.getState();
+  const recorded = segments.slice(sessionSeedLength);
+  const transcript = recorded.length > 0 ? serializeTranscriptSegments(recorded) : null;
+  const save = async (spaceId: number | null) =>
+    (await api
+      ?.saveNote?.("", "", "meeting", null, null, null, spaceId, transcript, guard)
+      .catch(() => null)) ?? null;
+  let saved = ownPrivate ? await save(ownPrivate.id) : null;
+  if (!saved?.success) saved = await save(null);
+  const copy = saved?.success ? saved.note : undefined;
+  if (!copy) return null;
+
+  recordingNoteCopies.set(lostNoteId, copy.id);
+  const state = useMeetingRecordingStore.getState();
+  if (state.recordingNoteId === lostNoteId) {
+    // The copy holds none of the note's earlier transcript, so neither does the recording.
+    const ownSegments = state.segments.slice(sessionSeedLength);
+    sessionSeedLength = 0;
+    segmentsRefValue = ownSegments;
+    recordingNoteDeleted = false;
+    recordingNoteSpaceId = copy.space_id;
+    useMeetingRecordingStore.setState({
+      recordingNoteId: copy.id,
+      recordingNoteTitle: copy.title,
+      recordingFolderId: copy.folder_id,
+      segments: ownSegments,
+      transcript: buildTranscriptText(ownSegments),
+    });
+    // Said while the copy was made: saved now rather than at the next 30-second save.
+    if (ownSegments.length !== recorded.length) void persistLiveTranscript();
+  }
+  useMeetingRecordingStore.setState({
+    recordingCopy: {
+      noteId: copy.id,
+      spaceId: copy.space_id,
+      folderId: copy.folder_id,
+      lostTitle: recordingNoteTitle ?? "",
+    },
+  });
+  return copy.id;
+}
+
+// A stop whose note vanished saves to the copy the recording went on in, made now if need
+// be. A note found there after all takes the transcript it was to get (none after a refusal).
+async function persistToRecordingCopy(
+  lostNoteId: number,
+  transcript: string | null
+): Promise<void> {
+  const target = await startRecordingRescue(lostNoteId);
+  if (target == null) return;
+  if (target === lostNoteId) {
+    if (transcript != null) await window.electronAPI?.updateNote?.(target, { transcript });
+    return;
+  }
+  // The copy holds this session's segments only, as the store's now do.
+  const { segments } = useMeetingRecordingStore.getState();
+  if (segments.length > 0) {
+    await window.electronAPI?.updateNote?.(target, {
+      transcript: serializeTranscriptSegments(segments),
+    });
+  }
+}
+
+// A stop whose note the user deleted here: the final transcript stays on the tombstone, so a
+// delete the server denies brings the note back with it, and a confirmed one takes both. Only
+// for the account the recording started under. A note revived meanwhile takes it as any save.
+async function keepTranscriptOfDeletedNote(noteId: number, transcript: string): Promise<void> {
+  const api = window.electronAPI;
+  const guard = await api?.getNoteWriteGuard?.();
+  if (
+    !guard ||
+    recordingOwnerAccountId === undefined ||
+    guard.accountId !== recordingOwnerAccountId
+  ) {
+    logger.warn("A deleted recording note's transcript wasn't kept", { noteId }, "meeting");
+    return;
+  }
+  const kept = await api?.keepDeletedNoteTranscript?.(noteId, transcript, guard);
+  if (kept?.code === "note_live") await api?.updateNote?.(noteId, { transcript });
+}
+
+/**
+ * The note being recorded, when it sits in one of these folders, so deleting them would take
+ * it. Null at once when nothing is recording.
+ */
+export function recordingNoteInFolders(
+  folderIds: ReadonlySet<number>
+): Promise<NoteItem | null> | null {
+  const { isRecording, recordingNoteId } = useMeetingRecordingStore.getState();
+  if (!isRecording || recordingNoteId == null) return null;
+  return (async () => {
+    try {
+      const note = await window.electronAPI?.getNote?.(recordingNoteId);
+      return note && !note.deleted_at && note.folder_id != null && folderIds.has(note.folder_id)
+        ? note
+        : null;
+    } catch {
+      return null;
+    }
+  })();
 }
 
 // Writes the live segments to the recording's note, serialized exactly as the
@@ -1825,7 +2233,12 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
 // recording with no segments), and a second write could overwrite it.
 export async function persistLiveTranscript(): Promise<void> {
   const { recordingNoteId, segments } = useMeetingRecordingStore.getState();
-  if (!isRecordingFlag || recordingNoteDeleted || recordingNoteId == null) return;
+  if (!isRecordingFlag || recordingNoteId == null) return;
+  if (recordingNoteDeleted) {
+    // Gone: the copy the recording goes on in takes the transcript once made.
+    if (!recordingNoteDeletedByUser) void startRecordingRescue(recordingNoteId);
+    return;
+  }
   if (segments.length === 0) return;
   try {
     // Posted before the first await: during beforeunload nothing after it is
@@ -1839,6 +2252,8 @@ export async function persistLiveTranscript(): Promise<void> {
         { error: result.error, noteId: recordingNoteId },
         "meeting"
       );
+      // Refused because the note is gone (main's note_deleted, or no row at all).
+      noteLeftRecording(recordingNoteId);
     }
   } catch (err) {
     logger.error(
@@ -1858,9 +2273,13 @@ export interface StopRecordingResult {
   cancelledStart?: boolean;
 }
 
-export async function stopRecording(expectedSessionId?: string): Promise<StopRecordingResult> {
+export async function stopRecording(
+  expectedSessionId?: string,
+  reason: MeetingStopReason = "user"
+): Promise<StopRecordingResult> {
   const canceledStart = meetingRecordingStartCoordinator.cancelActiveStart(expectedSessionId);
   if (canceledStart) {
+    startCancelReason ??= reason;
     isRecordingFlag = false;
     isStartingFlag = false;
     useMeetingRecordingStore.setState({ isRecording: false, isTranscribing: false });
@@ -1873,6 +2292,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       systemAudioSilentWarning: false,
       systemAudioInterrupted: null,
       currentMicLevel: 0,
+      micMuted: false,
       recordingStartedAt: null,
     });
     return { diarizationSessionId: null, stopped: false, cancelledStart: true };
@@ -1909,7 +2329,18 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
     const persistTranscript = async (transcript: string) => {
       if (recordingNoteId == null) return;
       try {
-        await window.electronAPI?.updateNote?.(recordingNoteId, { transcript });
+        if (recordingNoteDeleted && !recordingNoteDeletedByUser) {
+          await persistToRecordingCopy(recordingNoteId, transcript);
+          return;
+        }
+        const result = await window.electronAPI?.updateNote?.(recordingNoteId, { transcript });
+        if (result && !result.success) {
+          if (recordingNoteDeletedByUser) {
+            await keepTranscriptOfDeletedNote(recordingNoteId, transcript);
+          } else {
+            await persistToRecordingCopy(recordingNoteId, null);
+          }
+        }
       } catch (err) {
         logger.error(
           "Failed to persist final meeting transcript",
@@ -1944,7 +2375,8 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
         let stoppedDiarizationSessionId: string | null = null;
         try {
           const result = await window.electronAPI?.meetingTranscriptionStop?.(
-            sessionId ?? undefined
+            sessionId ?? undefined,
+            reason
           );
           if (result?.diarizationSessionId) {
             stoppedDiarizationSessionId = result.diarizationSessionId;
@@ -1994,6 +2426,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       systemAudioSilentWarning: false,
       systemAudioInterrupted: null,
       currentMicLevel: 0,
+      micMuted: false,
       recordingStartedAt: null,
     });
 
@@ -2013,7 +2446,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
 export async function stopRecordingForPolicy(): Promise<void> {
   const sessionId = activeRecordingSessionId;
   const reason = meetingPolicyRefusalError(usePolicyStore.getState());
-  const { stopped, cancelledStart } = await stopRecording();
+  const { stopped, cancelledStart } = await stopRecording(undefined, "policy");
   if ((stopped || cancelledStart) && sessionId && mainStoppedSessionId !== sessionId) {
     reportMeetingError(reason);
   }
@@ -2069,12 +2502,14 @@ if (typeof window !== "undefined") {
         recordingNoteId,
         segments: liveSegments,
       } = useMeetingRecordingStore.getState();
-      const { targetNoteId, isCurrentSession } = resolveDiarizationTarget({
+      const resolved = resolveDiarizationTarget({
         payloadNoteId: data?.noteId,
         payloadSessionId: data?.sessionId,
         currentSessionId: diarizationSessionId,
         activeRecordingNoteId: isRecording ? recordingNoteId : null,
       });
+      const { isCurrentSession } = resolved;
+      let targetNoteId = resolved.targetNoteId;
       if (targetNoteId == null) {
         if (data?.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
         return;
@@ -2111,6 +2546,13 @@ if (typeof window !== "undefined") {
       const seed = data.sessionId ? seedLengthByDiarizationSession.get(data.sessionId) : undefined;
       const seedLength = seed?.seedLength ?? 0;
       if (data.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
+      // A session that went on in a copy of its vanished note stopped there: main still
+      // names the note it started on.
+      const copyId = recordingNoteCopies.get(targetNoteId);
+      if (copyId != null && seed?.noteId === copyId) {
+        targetNoteId = copyId;
+        persisted = await window.electronAPI?.getNote?.(copyId).catch(() => null);
+      }
       // No note means no safe base to merge into, and writing to a deleted one
       // would resurrect its tombstone in the sidebar, cloud mirror, and vector
       // index.
@@ -2198,20 +2640,23 @@ if (typeof window !== "undefined") {
 }
 
 // Registered once at module load, like the diarization listener above: the
-// note can be deleted from the sidebar while the recording runs on. A team-note
-// delete the server denies revives the same row, and the snapshot pull that
-// follows re-syncs it live, so saves resume. A pull never clears deleted_at, so
-// one racing a real delete re-syncs the tombstone and the guard holds.
+// note can be deleted while the recording runs on, on its own (here or on another
+// device) or with its folder. A team-note delete the server denies revives the
+// same row, and the snapshot pull that follows re-syncs it live, so saves resume.
+// A pull never clears deleted_at, so one racing a real delete re-syncs the
+// tombstone and the guard holds.
 if (typeof window !== "undefined") {
-  window.electronAPI?.onNoteDeleted?.(({ id }) => {
-    if (isRecordingFlag && id === useMeetingRecordingStore.getState().recordingNoteId) {
-      recordingNoteDeleted = true;
-    }
+  window.electronAPI?.onNoteDeleted?.(({ id }) => noteLeftRecording(id));
+  window.electronAPI?.onFolderDeleted?.(({ noteIds }) => {
+    for (const id of noteIds ?? []) noteLeftRecording(id);
   });
+  window.electronAPI?.onNoteUpdated?.((note) => rememberRecordingNoteSpace(note));
   window.electronAPI?.onNoteSynced?.((note) => {
     if (!note.deleted_at && note.id === useMeetingRecordingStore.getState().recordingNoteId) {
       recordingNoteDeleted = false;
+      recordingNoteDeletedByUser = false;
     }
+    rememberRecordingNoteSpace(note);
   });
 }
 

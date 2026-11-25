@@ -12,12 +12,45 @@
 //   staleWriteGuard    a write whose basis predates the stored row is rejected
 //   updatedAtClamp     a stored updated_at never moves backwards
 //
+// Notes and folders keep their scope (space_id, workspace_id) once a write or a
+// seed names it; a row nobody scoped carries neither key, as before teamspaces.
+// seedSpace lists a teamspace under /api/me/spaces (a 404 until one is seeded,
+// the pre-teamspace API) and can file the rows a test seeds without a scope
+// into it; a client's write without one stays personal, as on the server.
 // Two more model the current server and are off unless a test asks for them:
 //   revisionGuard      note writes advance `revision`, and a PATCH whose
 //                      base_revision isn't the stored one gets the server's
 //                      409 note_version_conflict with the current row
 //   serverDate         every answer carries the server clock as an HTTP Date
 //                      header would (whole seconds), read from setClock
+//   folderPlacement    a personal note naming a folder takes the folder's
+//                      private_workspace_id unless it names its own, and one
+//                      that differs is refused (a batch create drops the folder);
+//                      an explicit null is the account's defaultWorkspaceId
+
+// `folderNamesPerParent` models the subfolder API: a personal folder create
+// that names a parent takes a same-named folder only under that parent, and
+// one elsewhere in the account's personal folders (a legacy unplaced one
+// included) answers 409 folder_name_taken with no winner; a batch create
+// returns such refusals per row (`refused`) and creates the rest.
+// `subfolderPlacement` models a subfolder's placement: one left out takes its
+// parent's, and one named (null being the default workspace) that isn't the
+// parent's answers 400 invalid_parent_folder. An unplaced parent counts as the
+// default only when the subfolder leaves the placement out.
+// `subfolderScope` models the rest of lib/folders-service.ts's nesting. A parent
+// must be a live top-level folder in the scope the write leaves the folder in (a
+// space folder under a folder of that space, a personal one under a personal
+// folder), other than the folder, which may be neither a default folder nor a
+// parent itself; anything else answers 400 invalid_parent_folder
+// (assertValidParent). A space change with no parent in the payload takes the
+// folder top-level (updateFolder), and leaves its subfolders that stay in
+// another space top-level there (unnestSubfolders). What a move does to notes
+// (relocate_private_folder_children, detachNotesLeftInPreviousSpace) isn't
+// modelled: the real API then refuses a note's next PATCH as
+// note_version_conflict on base_updated_at, which this fake's guards don't model.
+// `userId` models one account's note ownership and separates its cloud ids.
+// `adoptDefaultFolders` models the server returning an existing personal
+// default when another device creates the same name in the same workspace.
 
 // The server compares timestamps itself; it must not borrow the client's guard,
 // or a client-side regression would be invisible here.
@@ -62,7 +95,7 @@ const NOTE_FIELDS = [
   "expected_speaker_count",
 ];
 
-const FOLDER_FIELDS = ["name", "is_default", "sort_order"];
+const FOLDER_FIELDS = ["name", "is_default", "sort_order", "parent_folder_id"];
 
 // `messages` rides along as a stored field; of the routes returning a conversation,
 // only the list includes it, as api/conversations/list.ts does. A row stored
@@ -96,7 +129,7 @@ const NOTE_DEFAULTS = {
   expected_speaker_count: null,
 };
 
-const FOLDER_DEFAULTS = { name: "", is_default: false, sort_order: 0 };
+const FOLDER_DEFAULTS = { name: "", is_default: false, sort_order: 0, parent_folder_id: null };
 
 const CONVERSATION_DEFAULTS = { title: "Untitled", archived_at: null, messages: [] };
 
@@ -110,12 +143,19 @@ const TRANSCRIPTION_FIELDS = ["text", "raw_text", "status", "provider", "model"]
 
 const TRANSCRIPTION_DEFAULTS = { text: "", raw_text: null, status: "completed" };
 
+const SCOPE_FIELDS = ["workspace_id", "space_id", "private_workspace_id"];
+
 function createFakeCloud(config = {}) {
   const cfg = {
     materialPatchGate: true,
     coalesceOnConflict: true,
     staleWriteGuard: true,
     updatedAtClamp: true,
+    userId: null,
+    adoptDefaultFolders: false,
+    folderNamesPerParent: false,
+    subfolderPlacement: false,
+    subfolderScope: false,
     revisionGuard: false,
     serverDate: false,
     ...config,
@@ -124,17 +164,23 @@ function createFakeCloud(config = {}) {
   const notes = new Map();
   const folders = new Map();
   const conversations = new Map();
+  const skills = new Map();
   const dictionary = new Map();
   const snippets = new Map();
   const transcriptions = new Map();
+  const spaces = new Map();
   const log = [];
   const failures = [];
   let seq = 0;
   let clock = () => new Date().toISOString();
+  // Where a note or folder no write scoped lands, and whose it is.
+  let homeSpace = null;
+  let ownerId = cfg.userId;
 
   // Real cloud ids are UUIDs; `idSpace` keeps two fake accounts' ids apart too
   // (see createAccountCloud).
-  const nextId = (prefix) => `${cfg.idSpace ?? ""}${prefix}-${String(++seq).padStart(4, "0")}`;
+  const idPrefix = cfg.idSpace ?? (cfg.userId ? `${cfg.userId}-` : "");
+  const nextId = (prefix) => `${idPrefix}${prefix}-${String(++seq).padStart(4, "0")}`;
 
   // The server stores timestamps and serves them back as ISO, whatever format
   // the client sent. Local rows carry SQLite's "YYYY-MM-DD HH:MM:SS", so echoing
@@ -168,7 +214,12 @@ function createFakeCloud(config = {}) {
         continue;
       }
       const value = incoming[key];
-      if (cfg.coalesceOnConflict && (value === null || value === undefined) && row[key] != null) {
+      if (
+        cfg.coalesceOnConflict &&
+        (value === null || value === undefined) &&
+        row[key] != null &&
+        !collection.clearable?.includes(key)
+      ) {
         next[key] = row[key];
         continue;
       }
@@ -178,6 +229,19 @@ function createFakeCloud(config = {}) {
 
     // Without the gate a no-op PATCH still bumps updated_at, which is what hands
     // the next pull a cloud copy that never received the local edit.
+    // Scope moves are always material; null is a real value here (a
+    // retraction back to personal), never "keep".
+    if (collection.scoped) {
+      for (const key of SCOPE_FIELDS) {
+        if (!(key in incoming)) continue;
+        const value = incoming[key] ?? null;
+        if (!sameValue(value, row[key])) {
+          next[key] = value;
+          material = true;
+        }
+      }
+    }
+
     if (cfg.materialPatchGate && !material) return row;
 
     Object.assign(row, next);
@@ -186,7 +250,9 @@ function createFakeCloud(config = {}) {
     return row;
   }
 
-  function insertRow(collection, input) {
+  // A seeded row (seeded: true) with no scope may land in the home teamspace;
+  // a client's create without one is a personal row, as on the server.
+  function insertRow(collection, input, { seeded = false } = {}) {
     const clientId = input[collection.clientKey] ?? nextId(`${collection.prefix}-client`);
     const createdAt = toIso(input.created_at ?? clock());
     const row = {
@@ -200,8 +266,120 @@ function createFakeCloud(config = {}) {
     for (const key of collection.fields) {
       if (input[key] !== undefined && input[key] !== null) row[key] = input[key];
     }
+    if (collection.scoped) {
+      if ("space_id" in input || "workspace_id" in input) {
+        row.space_id = input.space_id ?? null;
+        row.workspace_id =
+          input.workspace_id ??
+          (row.space_id ? (spaces.get(row.space_id)?.workspace_id ?? null) : null);
+      } else if (seeded && homeSpace) {
+        row.space_id = homeSpace.id;
+        row.workspace_id = homeSpace.workspace_id;
+      }
+      if (cfg.privateWorkspacePlacement || "private_workspace_id" in input)
+        row.private_workspace_id = input.private_workspace_id ?? null;
+      if (ownerId && collection === noteCollection) row.user_id = ownerId;
+    }
     if (cfg.revisionGuard && collection === noteCollection) row.revision = 0;
     collection.store.set(row.id, row);
+    return row;
+  }
+
+  // As lib/notes-service.ts compares them, a folder from before placement (null) differs from
+  // the default named explicitly.
+  function placeInFolder(input, existing, { dropFolder = false } = {}) {
+    if (!cfg.folderPlacement || !input.folder_id || input.space_id) return input;
+    const folder = folders.get(input.folder_id);
+    if (!folder) return input;
+    const folderPlacement = folder.private_workspace_id ?? null;
+    if (!("private_workspace_id" in input) || existing?.folder_id === input.folder_id) {
+      return { ...input, private_workspace_id: folderPlacement };
+    }
+    if ((input.private_workspace_id ?? cfg.defaultWorkspaceId ?? null) === folderPlacement) {
+      return input;
+    }
+    if (dropFolder) return { ...input, folder_id: null };
+    throw new HttpError(400, "Folder not found");
+  }
+
+  // As lib/folders-service.ts checks a subfolder's parent and placement.
+  function placeSubfolder(input) {
+    if (!cfg.subfolderPlacement || !input.parent_folder_id || input.space_id) return input;
+    const parent = folders.get(input.parent_folder_id);
+    if (!parent || parent.deleted_at) return input;
+    if (!("private_workspace_id" in input)) {
+      return { ...input, private_workspace_id: parent.private_workspace_id ?? null };
+    }
+    const named = input.private_workspace_id ?? cfg.defaultWorkspaceId ?? null;
+    if (!sameValue(named, parent.private_workspace_id ?? null)) {
+      throw new HttpError(400, "Invalid parent folder", "invalid_parent_folder");
+    }
+    return input;
+  }
+
+  // As assertValidParent: `existing` is the row the write lands on, if any.
+  function assertValidParent(input, existing) {
+    if (!cfg.subfolderScope || !input.parent_folder_id) return;
+    const parent = folders.get(input.parent_folder_id);
+    const spaceId = "space_id" in input ? (input.space_id ?? null) : (existing?.space_id ?? null);
+    const isParent =
+      !!existing &&
+      [...folders.values()].some((row) => row.parent_folder_id === existing.id && !row.deleted_at);
+    if (
+      !parent ||
+      parent.deleted_at ||
+      parent.parent_folder_id ||
+      parent === existing ||
+      isParent ||
+      (existing ? existing.is_default : input.is_default) ||
+      (parent.space_id ?? null) !== spaceId
+    ) {
+      throw new HttpError(400, "Invalid parent folder", "invalid_parent_folder");
+    }
+  }
+
+  // A space change, given the folder's space before the write: with no parent in
+  // the payload the folder goes top-level, and subfolders left in another space
+  // go top-level there.
+  function afterFolderWrite(row, spaceBefore, input) {
+    const spaceId = row.space_id ?? null;
+    if (!cfg.subfolderScope || spaceBefore === spaceId) return;
+    if (!("parent_folder_id" in input)) row.parent_folder_id = null;
+    for (const child of folders.values()) {
+      if (child.parent_folder_id !== row.id || child.deleted_at) continue;
+      if ((child.space_id ?? null) === spaceId) continue;
+      child.parent_folder_id = null;
+      child.updated_at = bump(child);
+    }
+  }
+
+  function createFolder(input) {
+    input = placeSubfolder(input);
+    const existing = findByClientId(folderCollection, input.client_folder_id);
+    assertValidParent(input, existing);
+    if (cfg.folderNamesPerParent && !input.space_id && "parent_folder_id" in input) {
+      for (const row of folders.values()) {
+        if (row.deleted_at || row.space_id || row.name !== input.name) continue;
+        if (row.client_folder_id === input.client_folder_id) continue;
+        if ((row.parent_folder_id ?? null) === (input.parent_folder_id ?? null)) return row;
+        throw new HttpError(409, "Folder name already taken", "folder_name_taken");
+      }
+    }
+    if (cfg.adoptDefaultFolders && input.is_default && !input.space_id) {
+      for (const row of folders.values()) {
+        if (
+          row.is_default &&
+          !row.space_id &&
+          !row.deleted_at &&
+          row.name === input.name &&
+          sameValue(row.private_workspace_id, input.private_workspace_id)
+        )
+          return row;
+      }
+    }
+    const spaceBefore = existing && (existing.space_id ?? null);
+    const row = upsertRow(folderCollection, input);
+    if (existing) afterFolderWrite(row, spaceBefore, input);
     return row;
   }
 
@@ -213,12 +391,14 @@ function createFakeCloud(config = {}) {
     return null;
   }
 
-  // batch-create is idempotent by client id: a retried batch must return the
-  // existing row instead of forking a duplicate.
+  // Creates upsert by client id, so a retried batch returns the existing row
+  // instead of forking a duplicate. As lib/notes-service.ts, a note's upsert
+  // keeps tombstones unchanged. A folder's, as lib/folders-service.ts, revives it.
   function upsertRow(collection, input) {
     const existing = findByClientId(collection, input[collection.clientKey]);
     if (!existing) return insertRow(collection, input);
-    if (existing.deleted_at) return existing;
+    if (existing.deleted_at && collection === noteCollection) return existing;
+    if (existing.deleted_at && collection === folderCollection) existing.deleted_at = null;
     return applyWrite(collection, existing, input);
   }
 
@@ -288,13 +468,18 @@ function createFakeCloud(config = {}) {
     defaults: NOTE_DEFAULTS,
     clientKey: "client_note_id",
     prefix: "note",
+    scoped: true,
   };
   const folderCollection = {
     store: folders,
     fields: FOLDER_FIELDS,
     defaults: FOLDER_DEFAULTS,
+    // The API gates the parent on the key's presence: an explicit null
+    // moves the folder to the top level.
+    clearable: ["parent_folder_id"],
     clientKey: "client_folder_id",
     prefix: "folder",
+    scoped: true,
   };
   const conversationCollection = {
     store: conversations,
@@ -348,6 +533,53 @@ function createFakeCloud(config = {}) {
   function conversationResponse(row) {
     const { messages: _messages, ...conversation } = row;
     return conversation;
+  }
+
+  // Skills follow the API's own rules (lib/skill-service.ts there): batch-create upserts on the
+  // name and revives a tombstone, the snapshot walks created_at forwards from `cursor`, and the
+  // delta walks updated_at forwards from `since`, tombstones included.
+  function skillMeta(row) {
+    const { files: _files, ...meta } = row;
+    return meta;
+  }
+
+  function writeSkill(input) {
+    const at = toIso(clock());
+    const existing = [...skills.values()].find((row) => row.name === input.name);
+    const row = existing ?? {
+      id: nextId("skill"),
+      created_at: toIso(input.created_at ?? at),
+    };
+    Object.assign(row, {
+      client_skill_id: input.client_skill_id ?? existing?.client_skill_id ?? null,
+      name: input.name,
+      enabled: input.enabled,
+      content_hash: input.content_hash,
+      files: input.files,
+      deleted_at: null,
+      updated_at: existing ? bump(existing, at) : at,
+      edited_at: toIso(input.edited_at ?? at),
+    });
+    skills.set(row.id, row);
+    return row;
+  }
+
+  function skillPage(query) {
+    const limit = Number(query.get("limit")) || 50;
+    const since = query.get("since");
+    const cursor = query.get("cursor");
+    const key = since ? "updated_at" : "created_at";
+    const bound = normalizeTimestamp(since ?? cursor);
+    const boundId = query.get(since ? "since_id" : "cursor_id");
+    const rows = [...skills.values()]
+      .filter((row) => since || !row.deleted_at)
+      .filter((row) => {
+        if (!bound) return true;
+        const order = compare(normalizeTimestamp(row[key]), bound);
+        return order > 0 || (order === 0 && (!boundId || row.id > boundId));
+      })
+      .sort((a, b) => compare(a[key], b[key]) || compare(a.id, b.id));
+    return { entries: rows.slice(0, limit), hasMore: rows.length > limit };
   }
 
   // Snapshot paging walks created_at backwards from `before` and hides
@@ -434,29 +666,74 @@ function createFakeCloud(config = {}) {
   }
 
   function handle(method, pathname, query, body) {
+    if (method === "GET" && pathname.startsWith("/api/notes/") && pathname.endsWith("/access")) {
+      const cloudId = decodeURIComponent(pathname.slice("/api/notes/".length, -"/access".length));
+      const note = requireLive(noteCollection, cloudId);
+      return {
+        my_permission: "owner",
+        owner: { id: note.user_id ?? ownerId },
+        grants: note.space_id ? [{ source: "space" }] : [],
+      };
+    }
+    // Only a cloud configured with `workspaces` lists them, as /api/workspaces and
+    // /api/workspaces/:id do (a 404 for a workspace the account isn't in).
+    if (method === "GET" && cfg.workspaces && pathname.startsWith("/api/workspaces")) {
+      if (pathname === "/api/workspaces") return { data: structuredClone(cfg.workspaces) };
+      const workspace = cfg.workspaces.find((w) => pathname === `/api/workspaces/${w.id}`);
+      if (!workspace) throw new HttpError(404, "Workspace not found");
+      return { data: structuredClone(workspace) };
+    }
+    // As the API's placement backfill: exactly the id and placement, written only where the
+    // row has none (no bump otherwise), and the row returned as stored.
+    if (method === "PATCH" && body?.placement_backfill === true) {
+      const collection = pathname === "/api/notes/update" ? noteCollection : folderCollection;
+      const keys = Object.keys(body).sort().join(",");
+      if (keys !== "id,placement_backfill,private_workspace_id") {
+        throw new HttpError(400, "Invalid placement backfill", "invalid_placement_backfill");
+      }
+      const row = requireLive(collection, body.id);
+      if (row.private_workspace_id == null) {
+        row.private_workspace_id = body.private_workspace_id;
+        row.updated_at = bump(row);
+        // As relocate_private_folder_children: a folder's notes follow its placement.
+        if (collection === folderCollection) {
+          for (const note of notes.values()) {
+            if (note.folder_id !== row.id || note.space_id || note.deleted_at) continue;
+            note.private_workspace_id = row.private_workspace_id;
+            note.updated_at = bump(note);
+          }
+        }
+      }
+      return row;
+    }
     const route = `${method} ${pathname}`;
     switch (route) {
       case "POST /api/notes/create": {
-        const rowCreated = ![...notes.values()].some(
-          (row) => row.client_note_id === body?.client_note_id
-        );
+        const existing = findByClientId(noteCollection, body?.client_note_id);
         return {
-          ...upsertRow(noteCollection, body ?? {}),
-          row_created: rowCreated,
-          write_applied: true,
+          ...upsertRow(noteCollection, placeInFolder(body ?? {}, existing)),
+          row_created: !existing,
+          write_applied: !existing?.deleted_at,
         };
       }
       case "POST /api/notes/batch-create": {
         const inputs = Array.isArray(body?.notes) ? body.notes : [];
-        return {
-          created: inputs.map((input) => {
-            const rowCreated = ![...notes.values()].some(
-              (row) => row.client_note_id === input.client_note_id
-            );
-            const row = upsertRow(noteCollection, input);
-            return { ...row, row_created: rowCreated, write_applied: true };
-          }),
-        };
+        const created = [];
+        for (const input of inputs) {
+          const existing = findByClientId(noteCollection, input.client_note_id);
+          const folder = folders.get(input.folder_id);
+          const folderInScope = !input.folder_id || (folder && !folder.deleted_at);
+          const row = upsertRow(
+            noteCollection,
+            placeInFolder(
+              cfg.userId && !folderInScope ? { ...input, folder_id: null } : input,
+              existing,
+              { dropFolder: true }
+            )
+          );
+          created.push({ ...row, row_created: !existing, write_applied: !existing?.deleted_at });
+        }
+        return { created };
       }
       case "PATCH /api/notes/update": {
         const { id, ...updates } = body ?? {};
@@ -473,7 +750,7 @@ function createFakeCloud(config = {}) {
             { note: structuredClone(row) }
           );
         }
-        return applyWrite(noteCollection, row, updates);
+        return applyWrite(noteCollection, row, placeInFolder(updates, row));
       }
       case "DELETE /api/notes/delete":
         tombstone(noteCollection, body?.id);
@@ -492,17 +769,53 @@ function createFakeCloud(config = {}) {
       case "POST /api/notes/search":
         return { notes: [] };
 
-      case "POST /api/folders/create":
-        return upsertRow(folderCollection, body ?? {});
+      case "POST /api/folders/create": {
+        return createFolder(body ?? {});
+      }
       case "POST /api/folders/batch-create": {
         const inputs = Array.isArray(body?.folders) ? body.folders : [];
-        return { created: inputs.map((input) => upsertRow(folderCollection, input)) };
+        if (inputs.length > 50) throw new HttpError(400, "too many folders", "validation_error");
+        const created = [];
+        const refused = [];
+        for (const input of inputs) {
+          try {
+            created.push(createFolder(input));
+          } catch (error) {
+            if (!cfg.folderNamesPerParent || !(error instanceof HttpError) || !error.code) {
+              throw error;
+            }
+            refused.push({ client_folder_id: input.client_folder_id ?? null, code: error.code });
+          }
+        }
+        return cfg.folderNamesPerParent ? { created, refused } : { created };
       }
       case "PATCH /api/folders/update": {
         const { id, ...updates } = body ?? {};
-        return applyWrite(folderCollection, requireLive(folderCollection, id), updates);
+        const row = requireLive(folderCollection, id);
+        const input = placeSubfolder(updates);
+        assertValidParent(input, row);
+        const spaceBefore = row.space_id ?? null;
+        applyWrite(folderCollection, row, input);
+        afterFolderWrite(row, spaceBefore, input);
+        return row;
       }
+      case "GET /api/me/spaces":
+        if (spaces.size === 0 && !cfg.privateWorkspacePlacement)
+          throw new HttpError(404, "fake cloud has no spaces route", "no_route");
+        return {
+          data: [...spaces.values()].map((space) => structuredClone(space)),
+          ...(cfg.privateWorkspacePlacement
+            ? {
+                private_workspace_placement: true,
+                default_workspace_id: cfg.defaultWorkspaceId ?? null,
+              }
+            : {}),
+        };
       case "DELETE /api/folders/delete":
+        // The server tombstones the folder's notes with it.
+        for (const row of notes.values()) {
+          if (row.folder_id === body?.id && !row.deleted_at) tombstone(noteCollection, row.id);
+        }
         tombstone(folderCollection, body?.id);
         return {};
       case "GET /api/folders/list": {
@@ -613,6 +926,30 @@ function createFakeCloud(config = {}) {
           created: inputs.map((input) => upsertKeyedRow(snippetCollection, "trigger", input)),
         };
       }
+      case "GET /api/skills/list":
+        return skillPage(query);
+      case "POST /api/skills/batch-create":
+        return { created: (body?.entries ?? []).map((entry) => skillMeta(writeSkill(entry))) };
+      case "PATCH /api/skills/update": {
+        const row = skills.get(body?.id);
+        if (!row || row.deleted_at) throw new HttpError(404, "Skill not found", "not_found");
+        if (body.enabled != null) row.enabled = body.enabled;
+        if (body.files) Object.assign(row, { files: body.files, content_hash: body.content_hash });
+        row.updated_at = bump(row, clock());
+        // As the API: a switch alone never dates the files back.
+        const editedAt = toIso(body.edited_at ?? row.updated_at);
+        if (body.files || editedAt > row.edited_at) row.edited_at = editedAt;
+        return skillMeta(row);
+      }
+      case "DELETE /api/skills/delete": {
+        const row = skills.get(body?.id);
+        if (!row) throw new HttpError(404, "Skill not found", "not_found");
+        if (!row.deleted_at)
+          Object.assign(tombstone({ store: skills, prefix: "skill" }, row.id), {
+            files: [],
+          });
+        return {};
+      }
       default:
         throw new HttpError(404, `fake cloud has no route for ${route}`, "no_route");
     }
@@ -654,6 +991,7 @@ function createFakeCloud(config = {}) {
         error: failure.error ?? "fake cloud failure",
         status: failure.status ?? 500,
         code: failure.code,
+        details: failure.details,
       };
     }
 
@@ -688,11 +1026,22 @@ function createFakeCloud(config = {}) {
     setClock: (fn) => {
       clock = fn;
     },
-    seedNote: (input) => structuredClone(insertRow(noteCollection, input)),
+    seedNote: (input) => structuredClone(insertRow(noteCollection, input, { seeded: true })),
+    // A teamspace the caller belongs to. With fileRowsHere, the notes and
+    // folders a test seeds without a scope land in it (a client's unscoped
+    // write stays personal); ownerId stamps user_id on notes, as the server
+    // does.
+    seedSpace: (space, options = {}) => {
+      spaces.set(space.id, structuredClone(space));
+      if (options.fileRowsHere) homeSpace = { id: space.id, workspace_id: space.workspace_id };
+      if (options.ownerId !== undefined) ownerId = options.ownerId;
+      return structuredClone(space);
+    },
+    removeSpace: (id) => spaces.delete(id),
     // A row the public API stored without a client id, and the server backfill
     // that later keys it by its own id without moving updated_at.
     seedUnkeyedNote: (input) => {
-      const row = insertRow(noteCollection, input);
+      const row = insertRow(noteCollection, input, { seeded: true });
       row.client_note_id = null;
       return structuredClone(row);
     },
@@ -702,7 +1051,7 @@ function createFakeCloud(config = {}) {
     setNoteRevision: (id, revision) => {
       notes.get(id).revision = revision;
     },
-    seedFolder: (input) => structuredClone(insertRow(folderCollection, input)),
+    seedFolder: (input) => structuredClone(insertRow(folderCollection, input, { seeded: true })),
     seedConversation: (input = {}) => {
       const row = insertRow(conversationCollection, input);
       // The defaults object is spread, not cloned, so every row needs its own array.
@@ -713,6 +1062,7 @@ function createFakeCloud(config = {}) {
     seedTranscription: (input) => structuredClone(insertRow(transcriptionCollection, input)),
     deleteTranscription: (id) => structuredClone(tombstone(transcriptionCollection, id)),
     deleteConversation: (id) => structuredClone(tombstone(conversationCollection, id)),
+    deleteNote: (id) => structuredClone(tombstone(noteCollection, id)),
     seedDictionaryEntry: (input) => structuredClone(insertRow(dictionaryCollection, input)),
     seedSnippet: (input) => structuredClone(insertRow(snippetCollection, input)),
     dictionary: () => [...dictionary.values()].map((row) => structuredClone(row)),
@@ -721,6 +1071,9 @@ function createFakeCloud(config = {}) {
     folders: () => [...folders.values()].map((row) => structuredClone(row)),
     conversations: () => [...conversations.values()].map((row) => structuredClone(row)),
     transcriptions: () => [...transcriptions.values()].map((row) => structuredClone(row)),
+    seedSkill: (input) => structuredClone(writeSkill(input)),
+    deleteSkill: (id) => structuredClone(tombstone({ store: skills, prefix: "skill" }, id)),
+    skills: () => [...skills.values()].map((row) => structuredClone(row)),
     note: (id) => {
       const row = notes.get(id) ?? findByClientId(noteCollection, id);
       return row ? structuredClone(row) : null;
@@ -737,6 +1090,12 @@ function createFakeCloud(config = {}) {
   };
 }
 
+// The `since` a client's note or folder delta sends for a stored cursor: it
+// re-reads 10 seconds before it (DELTA_READ_OVERLAP_MS in SyncService).
+function deltaSince(cursor) {
+  return new Date(Math.max(0, Date.parse(cursor) - 10_000)).toISOString();
+}
+
 // One cloud per account. Real cloud ids are UUIDs, so two accounts' clouds
 // never hold the same id; each of these mints its ids in a space of its own.
 let accountClouds = 0;
@@ -744,4 +1103,4 @@ function createAccountCloud(config = {}) {
   return createFakeCloud({ idSpace: `cloud${++accountClouds}-`, ...config });
 }
 
-module.exports = { createFakeCloud, createAccountCloud, normalizeTimestamp };
+module.exports = { createFakeCloud, createAccountCloud, normalizeTimestamp, deltaSince };

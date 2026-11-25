@@ -151,48 +151,101 @@ export function canUpgradeWorkspaceToEnterprise(workspace: WorkspaceBillingState
   );
 }
 
-export type EnterpriseTileCta =
-  | { action: "openDialog" }
-  | { action: "createWorkspace" }
-  | { action: "contactSales"; ownerName: string | null };
+/** The workspaces whose billable seat covers the user: the ids /api/usage lists, as far as the list knows them. */
+export function coveringWorkspaces<W extends Pick<Workspace, "id">>(
+  entitledWorkspaceIds: string[] | undefined,
+  workspaces: W[]
+): W[] {
+  if (!entitledWorkspaceIds?.length) return [];
+  const entitled = new Set(entitledWorkspaceIds);
+  return workspaces.filter((workspace) => entitled.has(workspace.id));
+}
+
+export type BusinessTileAction =
+  | { kind: "none" }
+  | { kind: "workspacePlan" }
+  | { kind: "viewWorkspace"; workspaceId: string }
+  | { kind: "createWorkspace" };
+
+type BusinessTileWorkspace = Pick<Workspace, "id"> & WorkspaceBillingState;
 
 /**
- * Which CTA the Enterprise pricing tile leads with: owners of a workspace the
- * dialog can actually serve (fresh checkout or in-place upgrade) get the
- * purchase dialog, users with no workspace at all get the create-workspace
- * on-ramp, and members/admins of someone else's workspace are pointed at the
- * owner — upgrading in-app would otherwise create a workspace they didn't
- * want. Owners whose workspaces are all ineligible (e.g. already Enterprise)
- * get plain contact sales: they are the decision makers, so no ask-owner hint.
+ * What the Business pricing tile does. None of these starts a checkout: the
+ * personal view never sells a workspace plan, it only points at the workspace
+ * view or the create-workspace on-ramp.
  */
-export function enterpriseTileCta(
-  workspaces: Array<
-    Pick<
-      Workspace,
-      | "id"
-      | "role"
-      | "capabilities"
-      | "billing_manager"
-      | "plan"
-      | "status"
-      | "stripe_subscription_id"
-      | "has_subscription"
-    >
-  >,
-  activeWorkspaceId: string | null
-): EnterpriseTileCta {
-  if (
-    workspaces.some(
-      (workspace) => canSelfServeEnterprise(workspace) || canUpgradeWorkspaceToEnterprise(workspace)
-    )
-  ) {
-    return { action: "openDialog" };
+export function businessTileAction(input: {
+  listLoaded: boolean;
+  listError: boolean;
+  entitledWorkspaceIds: string[] | undefined;
+  workspaces: BusinessTileWorkspace[];
+  defaultWorkspaceId: string | null;
+}): BusinessTileAction {
+  // An unloaded list reads as empty, which must never send a member to "Create workspace".
+  if (!input.listLoaded || input.listError) return { kind: "none" };
+
+  const covering = coveringWorkspaces(input.entitledWorkspaceIds, input.workspaces);
+  if (covering.some((workspace) => workspace.plan === "business")) {
+    return { kind: "workspacePlan" };
   }
-  if (workspaces.length === 0) return { action: "createWorkspace" };
-  if (workspaces.some((workspace) => workspaceCan(workspace, "manage_billing"))) {
-    return { action: "contactSales", ownerName: null };
-  }
+  if (covering.some((workspace) => workspace.plan === "enterprise")) return { kind: "none" };
+
+  const unpaid = input.workspaces.filter(
+    (workspace) =>
+      workspaceCan(workspace, "manage_billing") &&
+      !hasSubscription(workspace) &&
+      !hasActiveWorkspaceSubscription(workspace)
+  );
+  const target = unpaid.find((workspace) => workspace.id === input.defaultWorkspaceId) ?? unpaid[0];
+  if (target) return { kind: "viewWorkspace", workspaceId: target.id };
+  return { kind: "createWorkspace" };
+}
+
+export type EnterpriseTileAction =
+  | { kind: "none" }
+  | { kind: "workspacePlan" }
+  | { kind: "viewWorkspace"; workspaceId: string }
+  | { kind: "contactSales"; ownerName: string | null };
+
+type EnterpriseTileWorkspace = Pick<Workspace, "id" | "billing_manager"> & WorkspaceBillingState;
+
+/**
+ * What the personal view's Enterprise tile does. Like the Business tile it
+ * never starts a checkout: an owner of a workspace the purchase dialog can
+ * serve (fresh checkout or in-place upgrade) is sent to that workspace's view,
+ * where the dialog lives. Members of someone else's workspace are pointed at
+ * its owner; owners with nothing eligible are the decision makers, so no hint.
+ */
+export function enterpriseTileAction(input: {
+  listLoaded: boolean;
+  listError: boolean;
+  entitledWorkspaceIds: string[] | undefined;
+  workspaces: EnterpriseTileWorkspace[];
+  defaultWorkspaceId: string | null;
+  activeWorkspaceId: string | null;
+}): EnterpriseTileAction {
+  if (!input.listLoaded || input.listError) return { kind: "none" };
+
+  const eligible = input.workspaces.filter(
+    (workspace) => canSelfServeEnterprise(workspace) || canUpgradeWorkspaceToEnterprise(workspace)
+  );
   const target =
-    workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? workspaces[0];
-  return { action: "contactSales", ownerName: target.billing_manager ?? null };
+    eligible.find((workspace) => workspace.id === input.defaultWorkspaceId) ?? eligible[0];
+  if (target) return { kind: "viewWorkspace", workspaceId: target.id };
+
+  const covering = coveringWorkspaces(input.entitledWorkspaceIds, input.workspaces);
+  if (covering.some((workspace) => workspace.plan === "enterprise")) {
+    return { kind: "workspacePlan" };
+  }
+
+  if (
+    input.workspaces.length === 0 ||
+    input.workspaces.some((workspace) => workspaceCan(workspace, "manage_billing"))
+  ) {
+    return { kind: "contactSales", ownerName: null };
+  }
+  const asked =
+    input.workspaces.find((workspace) => workspace.id === input.activeWorkspaceId) ??
+    input.workspaces[0];
+  return { kind: "contactSales", ownerName: asked.billing_manager ?? null };
 }

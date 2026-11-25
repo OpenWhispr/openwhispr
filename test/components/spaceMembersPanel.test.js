@@ -33,6 +33,11 @@ test.before(async (t) => {
       "/hooks/useAuth": 'export const useAuth = () => ({ user: { id: "me" } });',
       "/ui/useToast":
         "export const useToast = () => ({ toast: (toast) => globalThis.__toasts.push(toast) });",
+      "/lib/authRequestContext": `
+        export const hasValidatedAuthContext = () => true;
+        export const getValidatedAuthGeneration = () => 1;
+        export const subscribeAuthRequestContext = () => () => {};
+      `,
       "/stores/workspaceStore": `
         export const useWorkspaceStore = Object.assign(
           (selector) => selector(globalThis.__store),
@@ -450,7 +455,10 @@ test("a team's access menu says what Admin means for the team", async (t) => {
   await mount(t);
 
   await openMenu(roleTrigger(rowFor("Sales")));
-  assert.match(text(menuItem("Everyone is a member")), /Everyone on the team can view and edit notes/);
+  assert.match(
+    text(menuItem("Everyone is a member")),
+    /Everyone on the team can view and edit notes/
+  );
   assert.match(text(menuItem("Team admins are admins")), /Everyone else on the team is a member/);
 });
 
@@ -674,7 +682,7 @@ test("Add members sits beside the field, and the chips go under both", async (t)
 const FULL_SEATS = { has_subscription: true, seats: 8, seats_used: 8 };
 const PANEL_TEXT = () => text(doc().body);
 
-test("a new address says what it costs, as People does, and Add still goes", async (t) => {
+test("a workspace admin sees seat usage and can invite without accessing a price", async (t) => {
   const { callsTo } = await mount(t, {
     workspaceFields: { ...FULL_SEATS, billing_manager: "Olivia" },
     seatPreview: { seats_used: 8, current_quantity: 8, amount_due: 1200, currency: "usd" },
@@ -686,7 +694,7 @@ test("a new address says what it costs, as People does, and Add still goes", asy
   await ui.settle();
   assert.match(PANEL_TEXT(), /Using 8 of 8 seats/);
   assert.match(PANEL_TEXT(), /No seats left\. Ask Olivia to add seats\./);
-  assert.match(PANEL_TEXT(), /If accepted, adds a seat to your plan/);
+  assert.doesNotMatch(PANEL_TEXT(), /adds (?:a|1) seat to your plan/);
   assert.deepEqual(callsTo("workspaces").at(-1), ["workspaces", { fresh: true }]);
   assert.equal(addButton().disabled, false);
 
@@ -702,15 +710,19 @@ test("someone who manages billing gets Upgrade beside the seat warning", async (
       ...FULL_SEATS,
       capabilities: workspaceCapabilities({ manage_billing: true }),
     },
+    seatPreview: { seats_used: 8, current_quantity: 8, amount_due: 1200, currency: "usd" },
   });
   const sections = [];
   happyWindow.electronAPI = { openSettingsSection: (section) => sections.push(section) };
   t.after(() => delete happyWindow.electronAPI);
 
   await addAddress("new@example.com");
+  assert.match(PANEL_TEXT(), /adds 1 seat to your plan/);
+  assert.doesNotMatch(PANEL_TEXT(), /12[.,]00/, "the invoice total is not a seat price");
   await ui.click(buttonNamed("Upgrade"));
 
-  assert.deepEqual(sections, ["plansBilling"]);
+  // The seat warning links to the workspace whose seats are full.
+  assert.deepEqual(sections, ["plansBilling:workspace:w1"]);
 });
 
 test("what is staged is explained under the field", async (t) => {

@@ -12,11 +12,17 @@ const UNSAFE_NAME_CHARACTERS = new RegExp(UNSAFE_NAME_CHARACTER.source, "g");
 // What a name made safe ends with, so a name typed that way is made safe too
 // and can never land on another's directory.
 const SAFE_NAME_SUFFIX = / \([0-9a-f]{8}\)$/i;
+// A folder's directory sits beside note files (its space's root notes, or its
+// parent folder's), so a name that reads as one, or as one kept aside, is made
+// safe too and never takes a note file's name.
+const NOTE_FILE_NAME = /^(?:edited-(?:\d+-)?)?\d+-.*\.(?:md|txt)$/i;
 // Leaves room in a 255-byte file name for the note id, "-transcript.md" and a
 // temporary file's suffix.
 const MAX_SLUG_BYTES = 150;
 
 const CASE_RENAME_RETRY_MS = 1000;
+// "<name> (moving)", then "(moving 2)" and on: a folder stepping aside needs one free.
+const MAX_PARKING_NAMES = 20;
 const BUSY_DIRECTORY_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
 
 const SYSTEM_LEFTOVERS = new Set([".DS_Store", "Thumbs.db", "desktop.ini"]);
@@ -153,7 +159,8 @@ class MarkdownMirror {
       Buffer.byteLength(raw, "utf8") > MAX_FOLDER_NAME_BYTES ||
       UNSAFE_NAME_CHARACTER.test(raw) ||
       WINDOWS_RESERVED_NAME.test(raw) ||
-      SAFE_NAME_SUFFIX.test(raw);
+      SAFE_NAME_SUFFIX.test(raw) ||
+      NOTE_FILE_NAME.test(raw);
     if (!needsChange) return raw;
 
     let readable = "";
@@ -320,6 +327,17 @@ class MarkdownMirror {
   recordedFiles() {
     if (!this._baseRealPath) return [];
     return this._ledger.files(this._ledgerBasePath);
+  }
+
+  // A relocation leaves a note's old row, without a hash, until the note is written
+  // again; once its file is gone it holds nothing.
+  isEmptyRecord(entry) {
+    if (!this._baseRealPath || entry.kind === "dir" || entry.hash !== null) return false;
+    try {
+      return !fs.lstatSync(this._absolutePath(entry.relPath), { throwIfNoEntry: false });
+    } catch {
+      return false;
+    }
   }
 
   _recorded(noteId, kind) {
@@ -507,13 +525,26 @@ class MarkdownMirror {
     }
   }
 
+  _isTranscriptOnlyUpload(note, segments = this.transcriptSegments(note)) {
+    return (
+      note.note_type === "upload" &&
+      !note.content?.trim() &&
+      !note.enhanced_content?.trim() &&
+      segments.some((segment) => segment?.text?.trim())
+    );
+  }
+
   writeNote(note, location) {
     if (!this._baseRealPath) return;
     try {
+      if (this._isTranscriptOnlyUpload(note)) return;
       const target = this._toLocation(location);
       const dirPath = this._resolveFolderPath(target, { create: true });
       if (!dirPath) return;
-      const body = note.enhanced_content || note.content || "";
+      const body =
+        note.note_type === "upload" && !note.enhanced_content?.trim()
+          ? note.content || ""
+          : note.enhanced_content || note.content || "";
       this._writeNoteFile(
         note.id,
         "note",
@@ -585,6 +616,12 @@ class MarkdownMirror {
         formatMd(note, segments, speakerMappings || {}),
         this._isUnchangedOldTranscript(note, speakerMappings)
       );
+      if (this._isTranscriptOnlyUpload(note, segments)) {
+        for (const entry of this._recorded(note.id, "note")) this._releaseRecordedFile(entry);
+        for (const oldPath of this._oldLayoutFiles(note.id, "note")) {
+          this._releaseOldFile(oldPath, (_filePath, text) => isUnchangedNoteFile(text, note));
+        }
+      }
     } catch (err) {
       debugLogger.error(
         "Failed to write transcript file",
@@ -644,6 +681,29 @@ class MarkdownMirror {
     }
   }
 
+  isSameDirectory(leftPath, rightPath) {
+    return !!leftPath && !!rightPath && this._isSameFile(leftPath, rightPath);
+  }
+
+  // Moves a folder's directory aside to a free sibling, "<name> (moving)", for a
+  // move that has to free the spelling first; the folder then moves on from there.
+  // Answers where it went, or null where it stayed.
+  parkFolderDir(oldRelPath, location, folderId) {
+    const { segments } = this._toLocation(location);
+    for (let attempt = 1; attempt <= MAX_PARKING_NAMES; attempt++) {
+      const suffix = attempt === 1 ? " (moving)" : ` (moving ${attempt})`;
+      const parked = {
+        ...location,
+        segments: [...segments.slice(0, -1), segments.at(-1) + suffix],
+      };
+      if (this.getFolderPath(parked)) continue;
+      if (!this.relocateFolderDir(oldRelPath, parked, folderId)) return null;
+      const parkedPath = this._resolveFolderPath(parked);
+      return parkedPath ? this._relPath(parkedPath) : null;
+    }
+    return null;
+  }
+
   // The coordinator proves exclusive ownership before moving a whole folder.
   // Keep old file records until their metadata is refreshed, including after a restart.
   relocateFolderDir(oldRelPath, location, folderId) {
@@ -662,6 +722,13 @@ class MarkdownMirror {
         fs.lstatSync(this._absolutePath(desiredRelPath), { throwIfNoEntry: false })
       )
         return false;
+      // Never into itself or one of its subfolders' directories, however this disk
+      // spells them: a destination whose existing ancestor is the source stays put.
+      for (let depth = 1; depth < location.segments.length; depth++) {
+        const ancestor = this._resolveFolderPath({ segments: location.segments.slice(0, depth) });
+        if (!ancestor) break;
+        if (this._isSameFile(ancestor, oldPath)) return false;
+      }
       const parent = this._resolveFolderPath(
         { segments: location.segments.slice(0, -1) },
         { create: true }
@@ -671,6 +738,9 @@ class MarkdownMirror {
       // Resolving the parent can recase an ancestor and rebase its ledger rows.
       oldPath = this._resolveExistingFolderPath(oldPath);
       oldRelPath = this._relPath(oldPath);
+      const fromOld = path.relative(oldPath, newPath);
+      if (fromOld !== ".." && !fromOld.startsWith(`..${path.sep}`) && !path.isAbsolute(fromOld))
+        return false;
       const entries = this.recordedFiles().filter(
         (entry) => entry.relPath === oldRelPath || entry.relPath.startsWith(`${oldRelPath}/`)
       );
@@ -844,12 +914,15 @@ class MarkdownMirror {
 
   getNotePath(noteId) {
     if (!this._baseRealPath) return null;
-    const recorded = this._recorded(noteId, "note").find(
-      (entry) => entry.hash !== null && fs.existsSync(this._absolutePath(entry.relPath))
-    );
-    if (recorded) return this._displayPath(this._absolutePath(recorded.relPath));
-    const [oldPath] = this._oldLayoutFiles(noteId, "note");
-    return oldPath ? this._displayPath(oldPath) : null;
+    for (const kind of ["note", "transcript"]) {
+      const recorded = this._recorded(noteId, kind).find(
+        (entry) => entry.hash !== null && fs.existsSync(this._absolutePath(entry.relPath))
+      );
+      if (recorded) return this._displayPath(this._absolutePath(recorded.relPath));
+      const [oldPath] = this._oldLayoutFiles(noteId, kind);
+      if (oldPath) return this._displayPath(oldPath);
+    }
+    return null;
   }
 
   getFolderPath(location) {

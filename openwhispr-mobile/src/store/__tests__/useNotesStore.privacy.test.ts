@@ -154,7 +154,7 @@ it('keeps deletion recoverable when a note becomes private during its first uplo
   const id = seed();
   jest.mocked(batchCreateNotes).mockImplementationOnce(async () => {
     await expect(useNotesStore.getState().setNotePrivacy(id, true)).rejects.toThrow();
-    return [remoteNote()];
+    return { created: [remoteNote()] };
   });
   await pushNotes();
   await pushPrivateNoteDeletes();

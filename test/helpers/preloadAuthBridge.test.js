@@ -86,6 +86,12 @@ test("account ownership operations forward the account and credential generation
   ]);
 });
 
+test("checkout forwards the generation separately from the Stripe options", async () => {
+  const { api, invocations } = loadPreloadApi();
+  await api.cloudCheckout({ plan: "annual" }, 7);
+  assert.deepEqual(invocations, [["cloud-checkout", { plan: "annual" }, 7]]);
+});
+
 test("sync writes forward the sign-in that read them and the account a chat was sent as", async () => {
   const { api, invocations } = loadPreloadApi();
 
@@ -126,12 +132,21 @@ test("sync writes forward the sign-in that read them and the account a chat was 
   ]);
 });
 
-test("meeting stop forwards the optional expected recording session ID", async () => {
+test("meeting stop forwards the optional expected recording session ID and stop reason", async () => {
   const { api, invocations } = loadPreloadApi();
 
-  await api.meetingTranscriptionStop("meeting-2");
+  await api.meetingTranscriptionStop("meeting-2", "auto-end");
 
-  assert.deepEqual(invocations, [["meeting-transcription-stop", "meeting-2"]]);
+  assert.deepEqual(invocations, [["meeting-transcription-stop", "meeting-2", "auto-end"]]);
+});
+
+test("a meeting start the renderer refuses is forwarded for the audit log", async () => {
+  const { api, invocations } = loadPreloadApi();
+  const details = { noteId: 4, startSource: "record-button", reason: "POLICY_UNRESOLVABLE" };
+
+  await api.meetingRecordingRefused(details);
+
+  assert.deepEqual(invocations, [["meeting-recording-refused", details]]);
 });
 
 test("meeting system-audio availability forwards the scoped session", async () => {
@@ -159,12 +174,53 @@ test("meeting auto-end listener strips the event and can unsubscribe", () => {
   assert.equal(listeners.has("meeting-auto-end-requested"), false);
 });
 
+test("note and folder sync receipts forward their originating sign-in", async () => {
+  const { api, invocations } = loadPreloadApi();
+  const snapshot = { id: 1 };
+  await api.markNoteCreatesAttempted(["client-note"], 9);
+  await api.acknowledgeNoteCreate(1, snapshot, "cloud-note", null, "owner", {
+    expectedAuthGeneration: 9,
+  });
+  await api.markNoteSyncedIfUnchanged(1, snapshot, "cloud-note", null, "owner", 2, null, 9);
+  await api.markFolderSyncedIfUnchanged(2, snapshot, "cloud-folder", 9);
+  const expected = { client_note_id: "client-note", sync_status: "synced" };
+  await api.hardDeleteNote(1, 9, { expected });
+  await api.hardDeleteFolder(2, 9, { preserveDirtyNotes: true });
+  const candidates = { notes: ["client-note"], folders: [] };
+  await api.getPrivatePlacementBackupCandidates(9);
+  await api.getPrivatePlacementBackupRows(9, candidates);
+  await api.queueUnlinkedPrivateFolders(9);
+  assert.deepEqual(invocations, [
+    ["db-mark-note-creates-attempted", ["client-note"], 9],
+    [
+      "db-acknowledge-note-create",
+      1,
+      snapshot,
+      "cloud-note",
+      null,
+      "owner",
+      { expectedAuthGeneration: 9 },
+    ],
+    ["db-mark-note-synced-if-unchanged", 1, snapshot, "cloud-note", null, "owner", 2, null, 9],
+    ["db-mark-folder-synced-if-unchanged", 2, snapshot, "cloud-folder", 9],
+    ["db-hard-delete-note", 1, 9, { expected }],
+    ["db-hard-delete-folder", 2, 9, { preserveDirtyNotes: true }],
+    ["db-get-private-placement-backup-candidates", 9],
+    ["db-get-private-placement-backup-rows", 9, candidates],
+    ["db-queue-unlinked-private-folders", 9],
+  ]);
+});
+
 test("dictation lifecycle reports reach main", async () => {
   const { api, invocations } = loadPreloadApi();
 
   await api.dictationLifecycleStateChanged("preparing", "take-1");
+  await api.dictationLifecycleStateChanged("recording", "take-1", true);
 
-  assert.deepEqual(invocations, [["dictation-lifecycle-state-changed", "preparing", "take-1"]]);
+  assert.deepEqual(invocations, [
+    ["dictation-lifecycle-state-changed", "preparing", "take-1", false],
+    ["dictation-lifecycle-state-changed", "recording", "take-1", true],
+  ]);
 });
 
 test("the agent window's bridges reach their channels and strip the Electron event", async () => {
@@ -286,5 +342,42 @@ test("dictionary deltas forward their account owner, including the signed-out sc
   assert.deepEqual(invocations, [
     ["db-apply-dictionary-changes", { add: ["Word"] }, "account-a"],
     ["db-apply-dictionary-changes", { remove: ["Word"] }, null],
+  ]);
+});
+
+test("private-space workspace calls reach their channels", async () => {
+  const { api, invocations } = loadPreloadApi();
+  const scope = { activeWorkspaceId: "w2", defaultWorkspaceId: "w1", accountId: "account-a" };
+
+  await api.setActiveWorkspaceScope(scope);
+  await api.getPrivateSpaceId("w2");
+  await api.getPrivateSpaceId();
+  await api.getPrivateSpaceId("w2", 9);
+  await api.getDefaultPrivateSpaceId(9);
+  await api.bindDefaultPrivateSpace("w1", "account-a");
+  await api.copyNoteToSpace(7, 3, 12);
+  await api.copyNoteToSpace(7, 3);
+  await api.relocatePrivateSpace("w2", null, "account-a");
+
+  assert.deepEqual(invocations, [
+    ["set-active-workspace-scope", scope],
+    ["get-private-space-id", "w2", undefined],
+    ["get-private-space-id", undefined, undefined],
+    ["get-private-space-id", "w2", 9],
+    ["get-default-private-space-id", 9],
+    ["bind-default-private-space", "w1", "account-a"],
+    ["copy-note-to-space", 7, 3, 12],
+    ["copy-note-to-space", 7, 3, undefined],
+    ["relocate-private-space", "w2", null, "account-a"],
+  ]);
+});
+
+test("personal Stripe portal forwards the captured credential generation", async () => {
+  const { api, invocations } = loadPreloadApi();
+  await api.cloudBillingPortal(7);
+  await api.cloudBillingPortal();
+  assert.deepEqual(invocations, [
+    ["cloud-billing-portal", 7],
+    ["cloud-billing-portal", undefined],
   ]);
 });

@@ -1,3 +1,5 @@
+import { ASSEMBLYAI_DICTATION_MODEL, resolveByokModel } from "../helpers/transcriptionRoute";
+import { useRegistryVersion } from "./useRegistryVersion";
 import { useCallback, useMemo, useRef } from "react";
 import { getAuthRequestContextSnapshot, hasUsableCredential } from "../lib/authRequestContext";
 import { useShallow } from "zustand/react/shallow";
@@ -9,8 +11,10 @@ import {
   useSettingsStore,
 } from "../stores/settingsStore";
 import {
+  apiAccessRestriction,
   filterModeOptionsByPolicy,
   getTranscriptionSelection,
+  isByokTranscriptionAllowed,
   isModeAllowedByPolicy,
   isTranscriptionSelectionAllowed,
   isAudioFeatureAllowed,
@@ -19,6 +23,7 @@ import {
   isTranscriptionContextAllowed,
   reconcilePolicyModeSelection,
   transcriptionChoiceRefusal,
+  type ApiAccessRestriction,
   type LocalModelRefusal,
   type PolicyDecisionSnapshot,
   type TranscriptionPolicyContext,
@@ -32,6 +37,47 @@ export function usePolicySnapshot(): PolicyDecisionSnapshot {
   const policy = usePolicyStore((state) => state.policy);
   const appVersion = usePolicyStore((state) => state.appVersion);
   return useMemo(() => ({ status, policy, appVersion }), [status, policy, appVersion]);
+}
+
+export function useApiAccessRestriction(): ApiAccessRestriction | null {
+  return usePolicyStore(apiAccessRestriction);
+}
+
+export function useByokTranscriptionModelAllowed(
+  policy: PolicyDecisionSnapshot
+): (provider: string, model: string) => boolean {
+  const manualCleanup = useManagedScopeResolution("dictationCleanup", "manual").kind === "manual";
+  return useCallback(
+    (provider, model) => isByokTranscriptionAllowed(policy, provider, model, () => manualCleanup),
+    [policy, manualCleanup]
+  );
+}
+
+/** Whether the selected dictation route can use AssemblyAI's own standard cleanup. */
+export function useAssemblyAiDictationCleanup(): boolean {
+  useRegistryVersion();
+  const policy = usePolicySnapshot();
+  const { batch, sttSetup, cleanupSetup } = useSettingsStore(
+    useShallow((state) => {
+      const s = selectPolicyEffectiveSettings(state, policy);
+      return {
+        batch:
+          s.transcriptionMode === "providers" &&
+          !s.useLocalWhisper &&
+          s.cloudTranscriptionMode === "byok" &&
+          s.cloudTranscriptionProvider === "assemblyai" &&
+          resolveByokModel("assemblyai", s.cloudTranscriptionModel) ===
+            ASSEMBLYAI_DICTATION_MODEL &&
+          isAudioFeatureAllowed(policy, "dictation") &&
+          isByokTranscriptionAllowed(policy, "assemblyai", ASSEMBLYAI_DICTATION_MODEL),
+        sttSetup: s.enterpriseTranscriptionSetupMode,
+        cleanupSetup: s.enterpriseSetupMode,
+      };
+    })
+  );
+  const stt = useManagedScopeResolution("transcription", sttSetup);
+  const cleanup = useManagedScopeResolution("dictationCleanup", cleanupSetup);
+  return batch && stt.kind === "manual" && cleanup.kind === "manual";
 }
 
 interface MeetingAutoTranscriptionAuth {

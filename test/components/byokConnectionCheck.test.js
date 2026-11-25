@@ -249,3 +249,39 @@ test("no verdict unlocks Proceed; an answer that faults the setup does not", asy
   await step.proceed();
   assert.equal(step.proceeded(), 1);
 });
+
+test("onboarding keeps the AssemblyAI realtime choices when Dictation permission is revoked", async (t) => {
+  const {
+    assemblyAiPolicy,
+    loadAssemblyAiDictationCatalog,
+    setManagedBedrockCleanup,
+  } = require("../helpers/harness/policyFixtures");
+  const step = await mountByokStep(t, { secrets: { assemblyaiApiKey: "fixture" } });
+  const { usePolicyStore } = await step.vite.ssrLoadModule("/stores/policyStore.ts");
+  const { act } = require("react");
+  await act(async () => {
+    await loadAssemblyAiDictationCatalog(step.vite);
+    usePolicyStore.setState(assemblyAiPolicy(true, true));
+  });
+  await step.chooseProvider("assemblyai");
+  assert.ok(step.modelOptions().includes("dictation"));
+  await step.chooseModel("dictation");
+  await step.passConnectionTest();
+  await act(async () => usePolicyStore.setState(assemblyAiPolicy(true, false)));
+  assert.ok(!step.modelOptions().includes("dictation"));
+  assert.equal(step.selectValues()[1], undefined);
+  assert.equal(step.proceedDisabled(), true);
+  await step.proceed();
+  assert.equal(step.proceeded(), 0);
+  await act(async () => usePolicyStore.setState(assemblyAiPolicy(true, true)));
+  assert.ok(step.modelOptions().includes("dictation"));
+  await act(() => setManagedBedrockCleanup(step.vite));
+  assert.ok(!step.modelOptions().includes("dictation"));
+  assert.equal(step.proceedDisabled(), true);
+  await step.chooseModel("universal-3-6-pro");
+  await step.chooseModel("dictation");
+  assert.equal(step.selectValues()[1], "universal-3-6-pro");
+  await step.passConnectionTest();
+  await step.proceed();
+  assert.equal(step.state().cloudTranscriptionModel, "universal-3-6-pro");
+});

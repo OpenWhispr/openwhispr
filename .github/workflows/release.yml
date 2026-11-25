@@ -20,6 +20,8 @@ env:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    outputs:
+      registry_publication: ${{ steps.registry.outputs.publication }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -40,14 +42,21 @@ jobs:
           fi
       - name: Install dependencies
         run: npm ci --ignore-scripts
+      - name: Apply dependency patches
+        run: npm run apply:patches
       - name: Run quality checks
         run: npm run quality-check
-      - name: Check the model registry serves this build
-        run: npm run model-registry:release-check
+      # Bundles the signed publication of this commit's catalog; fails when the catalog
+      # is not published yet or the registry would stop serving this build.
+      - name: Pin the signed model catalog
+        id: registry
+        run: |
+          npm run model-registry:pin-release
+          echo "publication=$(node -p "require('./src/models/registryMetadata.json').publicationCommit")" >> "$GITHUB_OUTPUT"
       - name: Check translations
         run: npm run i18n:check
       - name: Audit dependencies
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
       - name: Install Linux native test dependencies
         run: |
           sudo apt-get update
@@ -89,6 +98,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+      # The same publication the tests job checked, so every platform bundles one catalog.
+      - name: Pin the signed model catalog
+        run: npm run model-registry:pin-release -- --revision ${{ needs.tests.outputs.registry_publication }}
 
       - name: Install platform-specific native binaries
         run: npm install @rollup/rollup-linux-x64-gnu lightningcss-linux-x64-gnu @tailwindcss/oxide-linux-x64-gnu --no-save
@@ -164,6 +176,7 @@ jobs:
           echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
           echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
           echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "SALESFORCE_CLIENT_ID=${{ secrets.SALESFORCE_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
@@ -199,6 +212,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+      # The same publication the tests job checked, so every platform bundles one catalog.
+      - name: Pin the signed model catalog
+        run: npm run model-registry:pin-release -- --revision ${{ needs.tests.outputs.registry_publication }}
 
       - name: Install platform-specific native binaries
         run: npm install @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc @tailwindcss/oxide-win32-x64-msvc --no-save
@@ -281,6 +297,7 @@ jobs:
           echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
           echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
           echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "SALESFORCE_CLIENT_ID=${{ secrets.SALESFORCE_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
@@ -314,6 +331,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+      # The same publication the tests job checked, so every platform bundles one catalog.
+      - name: Pin the signed model catalog
+        run: npm run model-registry:pin-release -- --revision ${{ needs.tests.outputs.registry_publication }}
 
       - name: Install ffmpeg-static for target architecture
         if: matrix.arch == 'x64'
@@ -407,6 +427,7 @@ jobs:
           echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
           echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
           echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "SALESFORCE_CLIENT_ID=${{ secrets.SALESFORCE_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
@@ -428,7 +449,7 @@ jobs:
       - name: Verify packaged macOS native binaries
         run: |
           APP_PATH=$(ls -d dist/mac*/OpenWhispr.app | head -n1)
-          for bin in macos-audio-tap macos-globe-listener macos-fast-paste macos-mic-listener macos-calendar-listener macos-text-monitor macos-window-bounds macos-media-remote; do
+          for bin in macos-audio-tap macos-globe-listener macos-fast-paste macos-mic-listener macos-calendar-listener macos-text-monitor macos-window-bounds macos-media-remote macos-managed-policy; do
             test -x "$APP_PATH/Contents/Resources/bin/$bin" || { echo "Missing in bundle: $bin"; exit 1; }
           done
           node scripts/verify-macos-parakeet.js "$APP_PATH"

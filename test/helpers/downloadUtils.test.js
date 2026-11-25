@@ -9,6 +9,7 @@ const { PassThrough } = require("stream");
 function createElectronMock(response) {
   return {
     app: { isReady: () => false },
+    session: { fromPartition: () => ({}) },
     net: {
       request() {
         const request = new EventEmitter();
@@ -26,7 +27,11 @@ function loadWithNetFetch(fetchImpl) {
   const downloadUtilsPath = require.resolve("../../src/helpers/downloadUtils.js");
   const originalElectronCache = require.cache[electronPath];
   require.cache[electronPath] = {
-    exports: { app: { isReady: () => false }, net: { fetch: fetchImpl } },
+    exports: {
+      app: { isReady: () => false },
+      net: { fetch: fetchImpl },
+      session: { fromPartition: () => ({ fetch: fetchImpl }) },
+    },
   };
   delete require.cache[downloadUtilsPath];
   return {

@@ -125,6 +125,7 @@ async function mountByokStep(
   return {
     vite,
     selfHostedChanges,
+    showsText: (text) => find((node) => node.props?.children === text).length > 0,
     state: () => useSettingsStore.getState(),
     setStore: (patch) => act(() => useSettingsStore.setState(patch)),
     value: (placeholder) => input(placeholder)?.props.value,
@@ -137,6 +138,16 @@ async function mountByokStep(
       ),
     toggleSelfHosted: () =>
       act(() => find((node) => node.props?.role === "checkbox")[0].props.onClick()),
+    modelOptions: () =>
+      find((node) => node.props?.value && typeof node.props.children === "string").map(
+        (node) => node.props.value
+      ),
+    chooseModel: (modelId) =>
+      act(() =>
+        find((node) => typeof node.props?.onValueChange === "function")[1].props.onValueChange(
+          modelId
+        )
+      ),
     chooseProvider: (providerId) =>
       act(() =>
         find((node) => typeof node.props?.onValueChange === "function")[0].props.onValueChange(

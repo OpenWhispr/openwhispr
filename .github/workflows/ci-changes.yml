@@ -9,6 +9,8 @@ on:
         value: ${{ jobs.changes.outputs.mobile }}
       build:
         value: ${{ jobs.changes.outputs.build }}
+      registry:
+        value: ${{ jobs.changes.outputs.registry }}
 
 permissions:
   contents: read
@@ -21,6 +23,7 @@ jobs:
       desktop: ${{ steps.scope.outputs.desktop }}
       mobile: ${{ steps.scope.outputs.mobile }}
       build: ${{ steps.scope.outputs.build }}
+      registry: ${{ steps.scope.outputs.registry }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

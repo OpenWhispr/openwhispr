@@ -184,18 +184,25 @@
     "unknownError": "Ocurrió un error desconocido",
     "copy": "Copiar",
     "copied": "Copiado",
-    "done": "Listo",
+    "done": "Concluído",
     "skip": "Pular",
     "policyAiProcessingRestricted": "O processamento de IA está restrito pela sua organização.",
     "policyAgentRestricted": "O uso do assistente de IA está restrito pela sua organização.",
     "policyAccountChanged": "Sua conta mudou, então esta resposta foi interrompida.",
     "policyTranscriptionRestricted": "A transcrição está restrita pela sua organização.",
     "policyUnresolved": "As configurações da sua organização ainda não foram carregadas. Tente novamente em instantes.",
+    "policyBlocked": "Sua organização não permite isso neste dispositivo.",
     "managedConfigLoading": "Verificando a configuração gerenciada da sua organização. Tente novamente em instantes.",
     "managedConfigUnavailable": "O acesso empresarial gerenciado está indisponível. Entre novamente ou entre em contato com o administrador.",
     "managedConfigAmbiguous": "A configuração gerenciada da sua organização está inconsistente. Entre em contato com o administrador.",
     "managedPolicyConflict": "O acesso gerenciado está bloqueado pela política do seu espaço de trabalho. Entre em contato com o administrador.",
-    "resizePanel": "Redimensionar painel"
+    "resizePanel": "Redimensionar painel",
+    "managedDevice": "Dispositivo gerenciado",
+    "managedDeviceAndWorkspace": "Dispositivo e espaço de trabalho gerenciados",
+    "deviceLocalOnly": "Este dispositivo usa apenas processamento local. Os recursos na nuvem estão indisponíveis, inclusive para contas que já estavam conectadas.",
+    "deviceSignInRequired": "Sua organização exige login neste dispositivo.",
+    "devicePolicyInvalid": "Não foi possível ler a política do dispositivo ou ela é inválida. Contate seu administrador. O OpenWhispr não pode ser usado até a correção da política.",
+    "deviceWorkspaceUnavailable": "Este dispositivo exige processamento local, mas a política do espaço de trabalho da conta salva está indisponível. Saia para continuar sem essa conta ou contate seu administrador."
   },
   "onboarding": {
     "rehaul": {
@@ -388,7 +395,9 @@
           "modelNotFound": "O modelo selecionado não está disponível neste provedor.",
           "providerStatus": "O provedor retornou o status {{status}}.",
           "timeout": "O teste de conexão expirou.",
-          "network": "Não foi possível contatar o provedor."
+          "network": "Não foi possível contatar o provedor.",
+          "invalidHeaders": "Cabeçalho HTTP inválido. Verifique o nome e o valor; Content-Type e cabeçalhos de transporte não podem ser personalizados.",
+          "redirected": "O servidor redirecionou a solicitação. Digite o endereço para o qual ele redireciona."
         }
       },
       "local": {
@@ -610,6 +619,7 @@
       "failed": "Não foi possível verificar o acesso.",
       "microphone": "Ative o OpenWhispr em Microfone.",
       "accessibility": "Arraste o OpenWhispr para Acessibilidade e ative-o.",
+      "selectApp": "Em Privacidade e Segurança, abra System & App Protection Override e selecione o OpenWhispr.",
       "systemAudio": "Ative o OpenWhispr em Apenas gravação de áudio do sistema.",
       "screenContext": "Arraste o OpenWhispr para Gravação de tela e áudio do sistema e ative-o.",
       "settings": "Abrir Ajustes",
@@ -634,7 +644,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "Atualização obrigatória",
-      "description": "Sua organização exige o OpenWhispr {{version}} ou mais recente. Atualize o aplicativo."
+      "description": "Sua organização exige o OpenWhispr {{version}} ou mais recente. Atualize o aplicativo.",
+      "contactIT": "A sua organização requer OpenWhispr {{version}} ou posterior. Contacte a equipa de TI para instalar uma versão aprovada."
     },
     "update": {
       "readyTitle": "Atualização pronta para instalar",
@@ -928,7 +939,11 @@
     "getKey": "Obter chave ->",
     "endpointUrl": "URL do endpoint",
     "azureHint": "Azure AI Foundry: insira o endpoint do seu recurso (ex.: https://your-resource.cognitiveservices.azure.com) e defina Modelo com o nome exato da sua implantação.",
+    "browsedProviderHint": "{{current}} continua em uso. Escolha um modelo para mudar para {{provider}}.",
+    "browsedCustomHint": "{{current}} continua em uso. Insira o nome de um modelo para mudar para o seu endpoint personalizado.",
+    "customInUseHint": "O seu endpoint personalizado continua em uso. Escolha um modelo para mudar para {{provider}}.",
     "customProvider": "Personalizado",
+    "providerUnavailable": "{{provider}} não pode ser usado aqui. Escolha um modelo para trocar de provedor.",
     "fallback": {
       "whisperModelDescription": "Modelo",
       "parakeetModelDescription": "Modelo NVIDIA Parakeet"
@@ -944,6 +959,9 @@
     "tinfoil": {
       "transportNote": "O Tinfoil transmite com o Voxtral Mini 4B e processa em lote com o Voxtral Small 24B.",
       "docsLink": "Ver a documentação"
+    },
+    "elevenlabs": {
+      "keytermsNote": "O OpenWhispr envia à ElevenLabs os termos compatíveis do seu dicionário. A ElevenLabs cobra 20% a mais quando esses termos são incluídos."
     }
   },
   "hooks": {
@@ -1216,7 +1234,8 @@
       "failedUserCheck": "Falha ao verificar conta do usuário",
       "generic": "Algo deu errado. Tente novamente.",
       "invalidCredentials": "E-mail ou senha inválidos",
-      "invalidEmail": "Digite um endereço de e-mail válido"
+      "invalidEmail": "Digite um endereço de e-mail válido",
+      "signInDisabledByDevice": "Sua organização desativou o login neste dispositivo."
     },
     "getStarted": "Começar",
     "legal": {
@@ -1582,7 +1601,7 @@
         "label": "Perfil"
       },
       "plansBilling": {
-        "description": "Planos, uso e cobrança",
+        "description": "Gerencie seu plano, uso e faturamento.",
         "label": "Plano e cobrança"
       },
       "workspaceGeneral": {
@@ -1634,47 +1653,16 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "workspaceTitle": "Cobrança do workspace",
-      "workspaceDescription": "Cada workspace tem seu próprio plano, assentos e responsável pela cobrança.",
-      "billableSeat": "Seu assento é faturável",
-      "nonBillableSeat": "Acesso somente de administrador · sem assento pago",
-      "managedBy": "A cobrança é gerenciada por {{owner}}.",
-      "addSeat": "Adicionar assento",
-      "seatUpdated_one": "Capacidade do workspace atualizada para {{count}} assento",
-      "seatUpdated_other": "Capacidade do workspace atualizada para {{count}} assentos",
-      "seatUpdateFailed": "Não foi possível atualizar os assentos do workspace",
-      "businessWorkspaceOnly": "Disponível para workspaces",
-      "personalPlanTitle": "Plano pessoal",
-      "providedBy": "Plano pessoal: Gratuito · Acesso pago fornecido por {{workspaces}}",
-      "confirmSeats": {
-        "title": "Adicionar um assento ao workspace?",
-        "description_one": "Aumentar {{workspace}} para {{count}} assento. O Stripe fará o rateio da alteração.",
-        "description_other": "Aumentar {{workspace}} para {{count}} assentos. O Stripe fará o rateio da alteração.",
-        "newCapacity": "Nova capacidade",
-        "chargeToday": "Cobrança de hoje",
-        "confirm": "Adicionar assento"
-      }
+      "seatUpdateFailed": "Não foi possível atualizar os assentos do workspace"
     },
     "account": {
-      "badges": {
-        "free": "Gratuito",
-        "limitReached": "Limite da nuvem atingido",
-        "pastDue": "Em atraso",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "Teste"
-      },
       "billing": {
         "couldNotOpenDescription": "Tivemos dificuldade em abrir a página de cobrança. Tente novamente.",
         "couldNotOpenTitle": "Não foi possível abrir cobrança",
-        "manageBilling": "Gerenciar cobrança",
-        "opening": "Abrindo...",
-        "updatePaymentMethod": "Atualizar forma de pagamento",
         "contactOwnerTitle": "Fale com o proprietário do workspace",
         "contactOwnerDescription": "Apenas o proprietário do workspace pode atualizar a cobrança dele.",
         "manageInAppStore": "Gerenciar na App Store",
-        "manageInGooglePlay": "Gerenciar no Google Play",
-        "managedInMobileStore": "Cobrado pela loja de apps do seu celular. Gerencie pelo celular."
+        "manageInGooglePlay": "Gerenciar no Google Play"
       },
       "checkout": {
         "couldNotOpenDescription": "Tivemos dificuldade em abrir a página de checkout. Tente novamente.",
@@ -1693,27 +1681,12 @@
         "title": "Mostrando seu último login",
         "description": "A sincronização e as alterações da conta ficam pausadas até que o OpenWhispr consiga acessar seus servidores."
       },
-      "pastDue": {
-        "description": "Você está no plano gratuito por enquanto. Atualize sua forma de pagamento para voltar ao Pro.",
-        "title": "Não foi possível processar seu pagamento"
-      },
-      "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} palavras do OpenWhispr Cloud esta semana",
-        "byokUnlimited": "Suas próprias chaves de API e os modelos locais continuam sem limite.",
-        "nextBilling": "Próxima cobrança: {{date}}",
-        "pastDue": "{{used}} / {{limit}} palavras do OpenWhispr Cloud esta semana — atualize o pagamento para restaurar o Pro",
-        "trial": "{{days}} dias restantes — transcrições ilimitadas",
-        "unlimited": "Ilimitado",
-        "accessUntil": "Acesso até {{date}}",
-        "storePaymentIssue": "A loja de apps não conseguiu renovar esta assinatura. Atualize lá sua forma de pagamento para manter seu plano."
-      },
       "planLabels": {
         "free": "Gratuito",
         "pro": "Pro",
         "business": "Business",
         "trial": "Teste"
       },
-      "rollingWeeklyLimit": "Limite semanal contínuo",
       "signOut": {
         "endMeetingDescription": "Sair da conta encerra a gravação da reunião em andamento. O que foi capturado até agora permanece na nota.",
         "endMeetingTitle": "Encerrar a gravação da reunião?",
@@ -1737,81 +1710,24 @@
       "pricing": {
         "title": "Planos",
         "billedYearly": "Cobrança anual",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "para sempre",
-          "features": [
-            "## OpenWhispr Cloud",
-            "2.000 palavras/semana de transcrição",
-            "5 horas de gravação de reuniões/mês",
-            "## Sempre gratuito",
-            "Modelos de IA locais ilimitados",
-            "Transcrição na nuvem ilimitada com suas próprias chaves de API",
-            "Mais de 100 idiomas suportados",
-            "Dicionário personalizado",
-            "Zero retenção de dados",
-            "Suporte da comunidade"
-          ]
-        },
         "pro": {
           "name": "Pro",
           "monthlyPrice": "$8",
-          "monthlyPeriod": "/mês",
-          "annualPrice": "$80",
-          "annualPeriod": "/ano",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "Todos os recursos do Free +",
-          "features": [
-            "Transcrição na nuvem ilimitada",
-            "20 horas de gravação de reuniões/mês",
-            "Sincronização entre dispositivos",
-            "Compartilhe notas com links públicos",
-            "Acesso pessoal à API",
-            "Integração MCP em todos os seus apps",
-            "Aplicativo móvel",
-            "Suporte por e-mail"
-          ],
-          "cta": "Começar",
-          "switchToAnnual": "Mudar para anual"
+          "annualEquivalent": "$6.67"
         },
         "business": {
           "name": "Business",
           "monthlyPrice": "$16",
-          "monthlyPeriod": "/mês",
-          "annualPrice": "$160",
-          "annualPeriod": "/ano",
           "annualEquivalent": "$13.33",
-          "includesPrefix": "Todos os recursos do Pro +",
-          "badge": "Mais popular",
-          "features": [
-            "Gravações de reuniões ilimitadas",
-            "Funções e gestão de membros do espaço de trabalho",
-            "Modo assistente",
-            "Converse com seus dados",
-            "Suporte prioritário"
-          ],
-          "cta": "Começar",
-          "switchToAnnual": "Mudar para anual"
+          "cta": "Começar"
         },
         "enterprise": {
           "name": "Enterprise",
           "price": "Personalizado",
-          "subtitle": "Para segurança avançada e suporte",
-          "includesPrefix": "Todos os recursos do Business +",
-          "features": [
-            "Créditos de API gerenciados",
-            "Sincronização na nuvem entre dispositivos",
-            "Recursos de equipe e administração",
-            "SSO e conformidade",
-            "Suporte dedicado"
-          ],
           "cta": "Falar com Vendas",
           "upgradeCta": "Fazer upgrade para Enterprise",
           "askOwner": "Peça a {{name}} para fazer o upgrade do seu workspace."
         },
-        "currentPlan": "Plano atual",
-        "yourPersonalPlan": "Seu plano pessoal",
         "yourWorkspacePlan": "O plano do seu espaço de trabalho",
         "manage": "Gerenciar",
         "coveredByWorkspace": "Incluído no plano do seu workspace",
@@ -1833,11 +1749,7 @@
           "confirm": "Confirmar"
         }
       },
-      "signedOutPlans": {
-        "button": "Criar conta gratuita"
-      },
       "user": "Usuário",
-      "wordsRemaining": "{{remaining}} restantes",
       "deleteAccount": {
         "label": "Excluir conta",
         "labelDescription": "Excluir permanentemente sua conta e dados pessoais na nuvem. Outros usuários locais e conteúdos dos espaços de trabalho são preservados.",
@@ -1888,10 +1800,6 @@
           "noPassword": "Nenhuma senha está definida para esta conta.",
           "generic": "Algo deu errado. Tente novamente."
         }
-      },
-      "planUnavailable": {
-        "title": "Plano indisponível",
-        "description": "Não conseguimos carregar seu plano agora. Seu acesso permanece o mesmo."
       }
     },
     "agentConfig": {
@@ -1919,6 +1827,19 @@
       "customSetup": "Configuração personalizada",
       "customSetupDescription": "Use seu próprio provedor e chave API.",
       "description": "Limpe transcrições, processe comandos e corrija erros preservando seu tom de voz.",
+      "assemblyAiCleanup": {
+        "pickerOn": "A revisão padrão está incluída no AssemblyAI Dictation.",
+        "pickerOff": "A revisão está desativada. O OpenWhispr colará suas palavras originais.",
+        "description": "O AssemblyAI devolve tanto o texto revisado quanto as palavras originais. Mantenha a revisão ativada para colar o texto revisado ou desative-a para colar as palavras originais.",
+        "standard": "Revisão padrão do ditado",
+        "included": "Incluída no modelo de ditado. Não é necessário um modelo de revisão separado.",
+        "advanced": "Revisão avançada",
+        "summary": "Provedor salvo para instruções personalizadas e tom e estilo",
+        "advancedHelp": "O AssemblyAI faz a revisão padrão. Escolha o provedor que o OpenWhispr usa quando suas instruções ou seu tom e estilo exigem uma revisão adicional.",
+        "saved": "Salvo",
+        "modelNeeded": "É necessário um modelo de revisão local",
+        "modelHelp": "Escolha e baixe um modelo local para aplicar seu tom ou suas instruções. O AssemblyAI faz a revisão padrão."
+      },
       "enableTextCleanup": "Ativar limpeza de texto",
       "enableTextCleanupDescription": "A IA remove palavras de preenchimento, corrige gramática e pontuação",
       "modes": {
@@ -2248,7 +2169,14 @@
         "restarting": "Reiniciando...",
         "title": "Atualizações",
         "versionPlaceholder": "—",
-        "whatsNew": "Novidades na v{{version}}"
+        "whatsNew": "Novidades na v{{version}}",
+        "managedByOrganization": "Gerido pela sua organização.",
+        "itManaged": "A sua organização gere as atualizações.",
+        "policyLoading": "A carregar as definições de atualização…",
+        "policyUnavailable": "Não foi possível carregar as definições de atualização. Verifique se há atualizações para tentar novamente.",
+        "policyChanged": "A política de atualizações mudou. Verifique novamente se há atualizações.",
+        "managedBadge": "Gerido",
+        "stagedBeforePolicy": "Uma atualização foi preparada antes da aplicação desta política e poderá ser instalada ao fechar a aplicação. Contacte a equipa de TI antes de fechar ou reiniciar."
       },
       "translationHotkey": {
         "title": "Atalho de Tradução",
@@ -2280,9 +2208,8 @@
     "privacy": {
       "cloudBackup": "Backup na nuvem",
       "cloudBackupDescription": "Salve suas transcrições e notas na nuvem para acesso contínuo em todos os dispositivos.",
-      "cloudBackupTeamCaveat": "Notas em teamspaces e notas que você compartilhou são sempre sincronizadas, independentemente desta configuração.",
+      "cloudBackupTeamCaveat": "Notas em teamspaces e notas que você compartilhou são sempre sincronizadas, independentemente desta configuração. Chats que usam conteúdo privado ficam neste dispositivo. Chats de versões anteriores e chats restaurados de um backup também são excluídos.",
       "cloudNotesMigration": "Fazendo backup das notas… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "Todas as notas salvas na nuvem",
       "description": "Controle quais dados saem do seu dispositivo. Tudo está desativado por padrão.",
       "title": "Privacidade",
       "insightsSync": "Sincronizar Estatísticas pessoais",
@@ -2467,19 +2394,26 @@
     "selfHosted": {
       "endpointUrl": "URL do endpoint",
       "serverUrl": "URL do servidor",
-      "apiKeyOptional": "API Key (opcional)"
+      "apiKeyOptional": "API Key (opcional)",
+      "headers": "Cabeçalhos HTTP",
+      "headersHelp": "Enviados em cada solicitação a este servidor, como uma chave de API exigida por um gateway.",
+      "headerName": "Nome do cabeçalho",
+      "headerValue": "Valor do cabeçalho",
+      "removeHeader": "Remover",
+      "addHeader": "Adicionar cabeçalho",
+      "unauthorized": "Seu servidor recusou a solicitação (401/403). Verifique os cabeçalhos abaixo ou as configurações de autenticação do servidor.",
+      "headerErrors": {
+        "missingName": "Digite um nome de cabeçalho.",
+        "invalidName": "Nomes de cabeçalho não podem conter espaços, dois-pontos nem outros separadores.",
+        "reserved": "O OpenWhispr define este cabeçalho por conta própria.",
+        "invalidValue": "Este valor tem um caractere que um cabeçalho não aceita, como uma aspa curva."
+      }
     },
     "workspace": {
       "title": "Espaço de trabalho",
       "description": "Colabore com colegas, compartilhe notas e gerencie o acesso ao workspace em um só lugar.",
       "empty": {
-        "title": "Crie seu primeiro espaço de trabalho",
-        "description": "Espaços de trabalho permitem colaborar com colegas e compartilhar notas.",
         "create": "Criar espaço de trabalho"
-      },
-      "personal": {
-        "title": "Você está em Pessoal",
-        "description": "Escolha um espaço de trabalho para gerenciar as configurações dele."
       },
       "loadError": {
         "title": "Não foi possível carregar os espaços de trabalho",
@@ -2757,8 +2691,8 @@
           "leaveBodyLoses": "Você perderá o acesso a {{space}} e às notas dele.",
           "leaveBodyAdmins": "Outro administrador continuará gerenciando este Teamspace.",
           "deleteNotAllowed": "Você não tem permissão para excluir {{space}}.",
-          "movedToPersonal_one": "{{count}} nota não sincronizada foi movida para seu espaço pessoal.",
-          "movedToPersonal_other": "{{count}} notas não sincronizadas foram movidas para seu espaço pessoal."
+          "movedToPersonal_one": "{{count}} nota não sincronizada foi movida para Privado.",
+          "movedToPersonal_other": "{{count}} notas não sincronizadas foram movidas para Privado."
         },
         "addPeople": {
           "loading": "Carregando teamspaces…",
@@ -2788,6 +2722,21 @@
         "nameHint": "O nome do espaço de trabalho pode ter até 65 caracteres",
         "iconLabel": "Ícone do espaço de trabalho",
         "iconHint": "Este ícone aparece na sua barra lateral e nas notificações.",
+        "iconUpload": "Enviar imagem",
+        "iconChange": "Alterar imagem",
+        "iconRemove": "Remover imagem",
+        "iconUploading": "Enviando…",
+        "iconUploaded": "Ícone do espaço de trabalho atualizado",
+        "iconRemoved": "Ícone do espaço de trabalho removido",
+        "iconUnsupported": "Escolha uma imagem PNG, JPEG, WebP ou GIF.",
+        "iconTooLarge": "Escolha uma imagem com menos de 10 MB.",
+        "iconUnreadable": "Não foi possível ler essa imagem. Escolha outro arquivo.",
+        "iconFailed": "Não foi possível atualizar o ícone do espaço de trabalho. Verifique sua conexão e tente novamente.",
+        "iconUnavailable": "Os ícones de espaço de trabalho não estão disponíveis no momento. Tente novamente mais tarde.",
+        "iconRateLimited": "Muitos envios de ícone na última hora. Tente novamente mais tarde.",
+        "iconSignInChanged": "Não foi possível atualizar o ícone do espaço de trabalho: seu login expirou ou mudou. Entre novamente e tente outra vez.",
+        "iconNotAllowed": "Você não pode mais alterar o ícone de {{workspace}}.",
+        "iconSsoRequired": "Entre com o login único (SSO) da sua empresa para alterar o ícone de {{workspace}}.",
         "roleLabel": "Sua função",
         "saved": "Espaço de trabalho atualizado",
         "ownerTitle": "Proprietário do espaço de trabalho",
@@ -3005,26 +2954,12 @@
         "resentNoEmail": "Convite atualizado, mas não foi possível entregar o e-mail."
       },
       "billing": {
-        "plan": "Plano",
-        "seats": "Assentos",
-        "ownerOnly": "Apenas o proprietário do espaço de trabalho pode gerenciar a assinatura.",
         "nextInvoice": "Próxima fatura",
-        "manageStripe": "Gerenciar no Stripe",
-        "startSubscription": "Iniciar assinatura",
-        "provisionedPlan": "Configurado pela OpenWhispr. Fale com vendas para alterar o plano ou os assentos.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
           "free": "Gratuito",
           "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "Ativa",
-          "trialing": "Em teste",
-          "past_due": "Em atraso",
-          "canceled": "Cancelada",
-          "incomplete": "Incompleta",
-          "unpaid": "Não paga"
         }
       },
       "developer": {
@@ -3168,6 +3103,327 @@
       "upgradeCta": "Fazer upgrade agora",
       "upgradedTitle": "Upgrade concluído",
       "upgradedDescription": "{{workspace}} agora está no Enterprise."
+    },
+    "billing": {
+      "addSeats": {
+        "title": "Adicionar lugares",
+        "invoiceDate": "Próxima fatura · {{date}}",
+        "quantity": "Lugares a adicionar",
+        "decrease": "Diminuir lugares",
+        "increase": "Aumentar lugares",
+        "now": "Agora",
+        "after": "Depois",
+        "inUse": "Em uso",
+        "pending": "Lugares pendentes",
+        "available": "Disponíveis",
+        "total": "Total de lugares",
+        "price": "Preço",
+        "perMonth": "{{price}} / lugar / mês",
+        "proration": "Adicionado à próxima fatura",
+        "confirm_one": "Adicionar {{count}} lugar",
+        "confirm_other": "Adicionar {{count}} lugares",
+        "confirm_many": "Adicionar {{count}} lugares",
+        "adding": "A adicionar…",
+        "failure": "Não foi possível confirmar a alteração. A verificar o total de lugares.",
+        "success": "{{workspace}} tem agora {{count}} lugares.",
+        "limitReached": "O espaço de trabalho atingiu o limite de assentos.",
+        "occupancyMinimum": "O total deve ser de pelo menos {{minimum}} para cobrir os assentos ocupados.",
+        "previewFailed": "Não foi possível carregar os preços."
+      },
+      "free": {
+        "inviteTeammates": "Convidar colegas",
+        "upgradeToBusiness": "Fazer upgrade para Business",
+        "proHint": "Só você? O Pro custa {{price}} / mês.",
+        "viewPersonal": "Ver plano pessoal",
+        "countFailed": "Não foi possível verificar quem está neste espaço de trabalho."
+      },
+      "errors": {
+        "noTeammates": "Convide um colega antes de iniciar o Business."
+      },
+      "picker": {
+        "label": "Plano exibido",
+        "personal": "Pessoal",
+        "workspaces": "Workspaces",
+        "loadFailed": "Não foi possível carregar os workspaces"
+      },
+      "workspaceUnavailable": {
+        "title": "Plano do workspace indisponível",
+        "description": "Seu acesso não mudou."
+      },
+      "tiles": {
+        "upgradeWorkspace": "Fazer upgrade de um workspace",
+        "createWorkspace": "Criar workspace"
+      },
+      "plans": {
+        "pricePerMonth": "{{price}} / mês",
+        "pricePerMonthYearly": "{{price}} / mês, cobrança anual",
+        "pricePerSeat": "{{price}} / usuário / mês",
+        "pricePerSeatYearly": "{{price}} / usuário / mês, cobrança anual",
+        "yourPlan": "Seu plano",
+        "pro": {
+          "includes": "Tudo do Free, mais",
+          "features": {
+            "unlimitedCloud": "Transcrição na nuvem ilimitada",
+            "syncDevices": "Sincronização entre dispositivos",
+            "publicLinks": "Links públicos para notas",
+            "apiMcp": "Acesso pessoal à API e ao MCP",
+            "mobileApp": "Aplicativo móvel"
+          }
+        },
+        "business": {
+          "includes": "Tudo do Pro, mais",
+          "features": {
+            "workspaceRoles": "Funções e membros do espaço de trabalho",
+            "assistantMode": "Modo assistente",
+            "chatOverData": "Converse com seus dados",
+            "prioritySupport": "Suporte prioritário"
+          }
+        },
+        "enterprise": {
+          "includes": "Tudo do Business, mais",
+          "features": {
+            "managedCredits": "Créditos de API gerenciados",
+            "ssoCompliance": "SSO e conformidade",
+            "adminControls": "Controles e políticas de administração",
+            "dedicatedSupport": "Suporte dedicado"
+          }
+        }
+      },
+      "personal": {
+        "blocks": {
+          "currentPlan": "Plano atual",
+          "usage": "Uso",
+          "billingDetails": "Detalhes de cobrança"
+        },
+        "signedOut": {
+          "title": "Sem sessão iniciada",
+          "body": "Entre para ver seu plano."
+        },
+        "failed": {
+          "title": "Plano indisponível",
+          "body": "Seu acesso não muda."
+        },
+        "actions": {
+          "cancelTrial": "Cancelar teste",
+          "cancelBusiness": "Cancelar Business",
+          "keepPlan": "Manter {{plan}}",
+          "subscribePro": "Assinar o Pro",
+          "manageBilling": "Gerenciar cobrança",
+          "updatePayment": "Atualizar pagamento",
+          "cancelPro": "Cancelar Pro"
+        },
+        "usage": {
+          "cloudTranscription": "Transcrição na nuvem",
+          "unlimited": "Ilimitada",
+          "wordsValue": "{{used}} / {{limit}} palavras",
+          "wordsLeft": "Restam {{remaining}} palavras nos últimos 7 dias",
+          "rolling": "Conta os últimos 7 dias. Modelos locais e suas próprias chaves de API são ilimitados.",
+          "limitReached": "Limite atingido. Modelos locais e suas próprias chaves de API continuam funcionando."
+        },
+        "stores": {
+          "appStore": "App Store",
+          "playStore": "Google Play",
+          "unknown": "A loja de apps do seu celular"
+        },
+        "badges": {
+          "stripeTrial": "Período de teste",
+          "trial_one": "Teste · falta {{count}} dia",
+          "trial_other": "Teste · faltam {{count}} dias",
+          "pastDue": "Pagamento atrasado",
+          "cancelled": "Cancelado",
+          "yearly": "Anual",
+          "monthly": "Mensal"
+        },
+        "price": {
+          "trialStarts": "Cobrança a partir de {{date}}",
+          "trialYearlyStarts": "Cobrança anual a partir de {{date}}",
+          "free": "$0",
+          "billedYearly": "Cobrança anual"
+        },
+        "banners": {
+          "endingDated": {
+            "title": "{{plan}} termina em {{date}}",
+            "body": "Você pode manter seu plano no portal de cobrança."
+          },
+          "ending": {
+            "title": "{{plan}} tem encerramento programado",
+            "body": "Você pode manter seu plano no portal de cobrança."
+          },
+          "paymentFailedRetry": {
+            "title": "Falha no pagamento",
+            "body": "Os limites do plano gratuito se aplicam até que o pagamento seja concluído. Próxima tentativa em {{date}}."
+          },
+          "coveredPastDue": {
+            "title": "{{workspace}} já cobre você",
+            "body": "Confira o pagamento que falhou no portal de cobrança."
+          },
+          "coveredPastDueUnnamed": {
+            "title": "Um espaço de trabalho já cobre você",
+            "body": "Confira o pagamento que falhou no portal de cobrança."
+          },
+          "coveredStripeTrial": {
+            "title": "{{workspace}} já cobre você",
+            "body": "Ao terminar, seu teste do Pro será convertido em uma assinatura paga."
+          },
+          "coveredStripeTrialUnnamed": {
+            "title": "Um espaço de trabalho já cobre você",
+            "body": "Ao terminar, seu teste do Pro será convertido em uma assinatura paga."
+          },
+          "coveredPaying": {
+            "title": "{{workspace}} já cobre você",
+            "body": "Você ainda paga pelo {{plan}}."
+          },
+          "coveredPayingUnnamed": {
+            "title": "Um espaço de trabalho já cobre você",
+            "body": "Você ainda paga pelo {{plan}}."
+          },
+          "coveredStore": {
+            "title": "{{workspace}} já cobre você",
+            "body": "Você pode consultar sua compra de {{plan}} na loja de aplicativos do celular."
+          },
+          "coveredStoreUnnamed": {
+            "title": "Um espaço de trabalho já cobre você",
+            "body": "Você pode consultar sua compra de {{plan}} na loja de aplicativos do celular."
+          },
+          "covered": {
+            "title": "{{workspace}} cobre você",
+            "body": "Sua vaga no espaço de trabalho também dá uso ilimitado aqui."
+          },
+          "coveredUnnamed": {
+            "title": "Um espaço de trabalho cobre você",
+            "body": "Sua vaga no espaço de trabalho também dá uso ilimitado aqui."
+          },
+          "paymentFailed": {
+            "title": "Falha no pagamento",
+            "body": "Os limites do Free valem até o pagamento ser concluído."
+          },
+          "storeRenewalFailed": {
+            "title": "Falha na renovação",
+            "body": "A loja de apps do seu celular está tentando de novo. Atualize seu pagamento lá."
+          },
+          "weeklyLimit": {
+            "title": "Limite semanal atingido",
+            "body": "A transcrição na nuvem volta conforme as palavras de mais de 7 dias atrás saem da contagem. Modelos locais e suas próprias chaves de API continuam funcionando."
+          }
+        },
+        "details": {
+          "nextInvoice": "Próxima fatura",
+          "finalInvoice": "Fatura final",
+          "firstInvoice": "Primeira fatura",
+          "nextRetry": "Próxima tentativa de cobrança",
+          "amountDue": "Valor em aberto",
+          "ends": "Termina em",
+          "ended": "Terminou em",
+          "billingContact": "Contato de cobrança",
+          "periodEnds": "O período atual termina",
+          "billedThrough": "Cobrado por",
+          "accessUntil": "Acesso até"
+        }
+      },
+      "workspace": {
+        "managedAccount": "Conta gerenciada",
+        "billingDetails": "Detalhes de cobrança",
+        "workspaceDetails": "Detalhes do workspace",
+        "badges": {
+          "trial_one": "Teste · {{count}} dia restante",
+          "trial_other": "Teste · {{count}} dias restantes",
+          "trialUndated": "Teste",
+          "pastDue": "Em atraso",
+          "unpaid": "Não pago",
+          "incomplete": "Incompleto",
+          "cancelled": "Cancelado",
+          "paused": "Pausado"
+        },
+        "interval": {
+          "monthly": "Mensal",
+          "annual": "Anual"
+        },
+        "planLine": {
+          "seatPrice": "{{price}} por assento por mês",
+          "customPricing": "Preços personalizados",
+          "free": "$0",
+          "invoicedByOpenWhispr": "Faturado pela OpenWhispr",
+          "paidBy": "Pago por {{workspace}}",
+          "personalApplies": "Seu plano pessoal se aplica"
+        },
+        "actions": {
+          "manageBilling": "Gerenciar cobrança",
+          "updatePayment": "Atualizar pagamento",
+          "finishCheckout": "Concluir pagamento",
+          "keepPlan": "Manter {{plan}}",
+          "resubscribe": "Assinar novamente",
+          "openConsole": "Abrir console",
+          "upgradeEnterprise": "Fazer upgrade para Enterprise",
+          "viewPersonal": "Ver plano pessoal",
+          "copyEmail": "Copiar e-mail"
+        },
+        "banners": {
+          "ends": {
+            "title": "{{plan}} termina em {{date}}",
+            "body": "Seus membros mantêm o {{plan}} até lá."
+          },
+          "endsUndated": {
+            "title": "{{plan}} vai terminar",
+            "body": "Seus membros mantêm o {{plan}} até o fim do período atual."
+          },
+          "paymentFailed": {
+            "title": "Falha no pagamento",
+            "body": "Atualize a forma de pagamento para que seus membros voltem a usar o {{plan}}."
+          },
+          "paused": {
+            "title": "{{plan}} está pausado",
+            "body": "Seus membros usam os planos pessoais até o pagamento ser aprovado."
+          },
+          "checkoutIncomplete": {
+            "title": "Pagamento não concluído",
+            "body": "Conclua o pagamento para ativar o {{plan}} para seus membros."
+          },
+          "ended": {
+            "title": "{{plan}} terminou em {{date}}",
+            "body": "Seus membros voltaram aos planos pessoais."
+          },
+          "endedUndated": {
+            "title": "{{plan}} terminou",
+            "body": "Seus membros voltaram aos planos pessoais."
+          },
+          "memberPaymentProblem": {
+            "title": "{{workspace}} tem um problema de pagamento",
+            "body": "Seu plano pessoal se aplica até que o pagamento do espaço de trabalho seja aprovado."
+          },
+          "memberPaused": {
+            "title": "O plano de {{workspace}} está pausado",
+            "body": "Seu plano pessoal se aplica até ele voltar."
+          }
+        },
+        "usage": {
+          "seats": "Vagas",
+          "members": "Membros",
+          "noSeatsLeft": "Nenhuma vaga disponível",
+          "noSeatsLeftWithInvites_one": "Nenhuma vaga disponível · {{count}} convite pendente",
+          "noSeatsLeftWithInvites_other": "Nenhuma vaga disponível · {{count}} convites pendentes",
+          "pendingInvites_one": "{{count}} convite pendente",
+          "pendingInvites_other": "{{count}} convites pendentes"
+        },
+        "details": {
+          "nextInvoice": "Próxima fatura",
+          "nextRetry": "Próxima tentativa de pagamento",
+          "amountDue": "Valor em aberto",
+          "billingContact": "Contato de cobrança",
+          "finalInvoice": "Fatura final",
+          "firstInvoice": "Primeira fatura",
+          "ends": "Termina",
+          "ended": "Terminou",
+          "billing": "Cobrança",
+          "periodEnds": "O período atual termina",
+          "workspace": "Workspace",
+          "yourRole": "Sua função",
+          "yourSeat": "Sua vaga",
+          "managedBy": "Gerenciado por",
+          "invoicedByOpenWhispr": "Faturado pela OpenWhispr",
+          "paidSeat": "Vaga paga",
+          "noPaidSeat": "Sem vaga paga"
+        }
+      }
     }
   },
   "models": {
@@ -3206,6 +3462,9 @@
         "groq_whisper_large_v3": "Modelo Large v3, rápido e preciso",
         "mistral_voxtral_mini_latest": "Transcrição multilíngue rápida",
         "gemini_3_5_transcribe": "Fala para texto Gemini do Google",
+        "elevenlabs_scribe_v3": "A transcrição multilíngue mais precisa",
+        "elevenlabs_scribe_v2": "Transcrição multilíngue precisa",
+        "elevenlabs_scribe_v3_live": "Transcrição ao vivo para gravação de notas",
         "gemini_3_5_transcribe_live": "Fala para texto em streaming em tempo real",
         "corti_transcribe": "Transcrição médica de nível clínico",
         "xai_grok_stt": "Reconhecimento de voz de alta precisão pela xAI",
@@ -3213,6 +3472,7 @@
         "deepgram_nova_3": "O modelo em tempo real mais preciso da Deepgram",
         "assemblyai_universal_streaming_english": "Transcrições em tempo real imutáveis, em inglês",
         "assemblyai_universal_streaming_multilingual": "Transcrições em tempo real imutáveis, multilíngues",
+        "assemblyai_dictation": "Transcrição e limpeza em uma única chamada, 32 idiomas",
         "assemblyai_universal_3_5_pro": "Máxima precisão em tempo real, 18 idiomas",
         "assemblyai_universal_3_6_pro": "Máxima precisão em tempo real, 32 idiomas",
         "mistral_voxtral_mini_transcribe_3_0": "Transcrição rápida em mais de 50 idiomas (prévia)",
@@ -3276,6 +3536,7 @@
         "gemini_gemini_3_8_flash": "O modelo Flash mais capaz",
         "gemini_gemini_4_argon": "O modelo de raciocínio de ponta do Google",
         "tinfoil_kimi_k3": "Modelo principal privado da Moonshot com raciocínio nativo e visão, contexto de 256K",
+        "tinfoil_kimi_k3_1_pro": "Modelo principal privado da Moonshot para programação de longo prazo e trabalho agêntico, contexto de 256K",
         "tinfoil_deepseek_v4_1_flash": "Modelo DeepSeek privado e rápido com raciocínio opcional, contexto de 1M"
       },
       "enterprise": {
@@ -3329,6 +3590,9 @@
         "liquidai_lfm2_2_6b_q4_k_m": "LFM2 equilibrado para limpeza de maior qualidade",
         "liquidai_lfm2_5_350m_q8_0": "Modelo ultraleve para limpeza rápida de ditado",
         "liquidai_lfm2_5_230m_q8_0": "Modelo minúsculo, limpeza instantânea em hardware modesto",
+        "liquidai_lfm3_1_7b_qad_q4_0": "O modelo pequeno mais recente da Liquid AI",
+        "liquidai_lfm3_vl_2b_qad_q4_0": "Modelo de visão LFM3 da Liquid AI, usado aqui para texto",
+        "liquidai_lfm3_omni_2b_q4_0": "Modelo multimodal LFM3 da Liquid AI, usado aqui para texto",
         "qwen_qwen3_5_0_8b_q4_k_m": "Qwen3.5 minúsculo para a limpeza mais rápida",
         "qwen_qwen3_8_27b_q4_k_m": "O modelo Qwen mais capaz para computadores de 32 GB",
         "qwen_qwen3_6_35b_a3b_q4_k_m": "Modelo de mistura de especialistas rápido, 3B de parâmetros ativos",
@@ -3461,11 +3725,14 @@
     "mutationErrors": {
       "folderNameRequired": "Insira um nome para a pasta.",
       "folderAlreadyExists": "Já existe uma pasta com esse nome.",
+      "folderNameTakenIn": "“{{name}}” já é usado em “{{parent}}”. Um nome de pasta só pode ser usado uma vez em cada espaço.",
+      "folderNameTakenTopLevel": "“{{name}}” já é usado no nível superior. Um nome de pasta só pode ser usado uma vez em cada espaço.",
+      "reservedSubfolderName": "“{{name}}” é o nome de uma pasta padrão em Privado, então uma subpasta não pode usá-lo.",
       "folderNotFound": "Não foi possível encontrar essa pasta.",
       "defaultFolderImmutable": "As pastas padrão não podem ser alteradas.",
       "spaceNameRequired": "Insira um nome para o espaço.",
       "spaceNotFound": "Não foi possível encontrar esse espaço.",
-      "privateSpaceImmutable": "Seu espaço Pessoal não pode ser alterado.",
+      "privateSpaceImmutable": "Privado não pode ser alterado.",
       "generic": "Não foi possível concluir a alteração. Tente novamente."
     },
     "sidebar": {
@@ -3474,10 +3741,10 @@
       "templatesAndActions": "Modelos e ações"
     },
     "spaces": {
-      "privateSpaces": "Notas privadas",
+      "privateSpaces": "Privado",
       "teamSpaces": "Teamspaces",
-      "personal": "Pessoal",
-      "privateTooltip": "Somente você pode ver seu espaço pessoal",
+      "personal": "Privado",
+      "privateTooltip": "Somente você pode ver as pastas e notas deste espaço.",
       "newSpace": "Novo teamspace",
       "nameAndIconLabel": "Nome e ícone",
       "changeEmoji": "Alterar emoji",
@@ -3499,9 +3766,23 @@
       "noSpacesFound": "Nenhum espaço encontrado",
       "spaceRoot": "Raiz do espaço",
       "moveConfirm": "Mover",
+      "copyToPrivate": "Copiar para Privado",
+      "moveToWorkspacePrivate": "Mover para {{workspace}} › Privado",
+      "workspacePrivate": "{{workspace}} › Privado",
+      "confirmCopyTitle": "Copiar para Privado?",
+      "confirmCopy": "A nota permanece em {{space}}.",
+      "copiedToPrivate": "Copiada para Privado",
+      "couldNotCopyNote": "Não foi possível copiar a nota",
+      "openCopy": "Abrir",
+      "noteAlreadyInTeam": "“{{title}}” já está em {{space}}. Use “Copiar para Privado” para manter uma cópia privada.",
+      "folderAlreadyInTeam": "“{{name}}” já está em {{space}}. Use “Copiar para Privado” nas notas dela para manter cópias privadas.",
+      "workspacesLoading": "Seus workspaces ainda estão carregando. Tente novamente em instantes.",
+      "cantMoveIntoLegacy": "Não é possível mover notas para {{space}} porque ele não faz parte de um workspace.",
       "confirmMoveInTitle": "Mover para {{space}}?",
       "confirmMoveIn": "Todos em {{space}} poderão ver e editar esta nota. As notas não podem ser retiradas de um teamspace depois.",
       "confirmMoveInFolder": "Todos em {{space}} poderão ver e editar esta pasta e suas notas. As pastas e notas não podem ser retiradas de um teamspace depois.",
+      "confirmMoveInFolderSubfolders": "Todos em {{space}} poderão ver e editar esta pasta, incluindo {{subfolders}} e {{notes}}. As pastas e notas não podem ser retiradas de um teamspace depois.",
+      "confirmMoveInSubfolder": "Todos em {{space}} poderão ver e editar esta subpasta e suas notas. Ela se tornará uma pasta de nível superior em {{space}}, e esta movimentação não pode ser desfeita.",
       "cantMoveOut": "As notas não podem ser retiradas de um teamspace.",
       "cantMoveTeammate": "Apenas o proprietário da nota ou um administrador do workspace pode movê-la para outro espaço.",
       "moved": "“{{title}}” movida para {{target}}",
@@ -3516,10 +3797,10 @@
       "noteCount_other": "{{count}} notas",
       "accessRevoked": "Você não tem mais acesso a {{space}}",
       "accessRevokedActiveNote": "Você não tem mais acesso a {{space}} — \"{{title}}\" não está mais disponível neste dispositivo",
-      "movedToPersonal": "Você não tem mais acesso a {{space}} — “{{title}}” foi movida para o seu espaço pessoal",
-      "updateDeniedNote": "Você não tem permissão para alterar “{{title}}” — suas edições não sincronizadas foram salvas como cópia no seu espaço pessoal",
+      "movedToPersonal": "Você não tem mais acesso a {{space}} — “{{title}}” foi movida para Privado",
+      "updateDeniedNote": "Você não tem permissão para alterar “{{title}}” — suas edições não sincronizadas foram salvas como cópia em Privado",
       "deleteDeniedNote": "“{{title}}” não foi excluída — apenas o proprietário da nota ou um administrador pode excluí-la",
-      "updateDeniedFolder": "Você não tem permissão para alterar “{{name}}” — seu trabalho não sincronizado foi salvo no seu espaço pessoal",
+      "updateDeniedFolder": "Você não tem permissão para alterar “{{name}}” — seu trabalho não sincronizado foi salvo em Privado",
       "deleteDeniedFolder": "“{{name}}” não foi excluída — apenas um administrador pode excluir uma pasta do espaço",
       "conflictBanner": "Existe uma versão mais recente desta nota.",
       "conflictRefresh": "Atualizar",
@@ -3545,11 +3826,29 @@
         "loadError": "Não foi possível carregar as equipes."
       }
     },
+    "deviceNotes": {
+      "title": "Neste dispositivo",
+      "info": "Estas notas não estão atribuídas a nenhuma conta. Mova uma nota para mantê-la e editá-la.",
+      "infoLabel": "Sobre as notas neste dispositivo",
+      "moveNote": "Mover para meu Privado",
+      "moveFolder": "Mover pasta para meu Privado",
+      "moveAll": "Mover tudo para meu Privado",
+      "moveAllTo": "Mover tudo para pasta",
+      "moved": "Movida para seu Privado",
+      "movedCount_one": "{{count}} nota movida para seu Privado",
+      "movedCount_other": "{{count}} notas movidas para seu Privado",
+      "moveFailed": "Não foi possível mover esta nota",
+      "moveFolderFailed": "Não foi possível mover estas notas",
+      "banner": "Esta nota ainda não está atribuída a uma conta.",
+      "notesHeading": "Notas",
+      "summaryHeading": "Resumo com IA",
+      "transcriptHeading": "Transcrição"
+    },
     "structureIntro": {
       "title": "Onde ficam suas notas",
       "description": "O OpenWhispr separa pensamentos privados do trabalho compartilhado para que as pessoas certas vejam as notas certas.",
       "personal": {
-        "title": "Espaço pessoal",
+        "title": "Privado",
         "description": "Somente você pode ver as pastas e notas deste espaço."
       },
       "workspace": {
@@ -3560,7 +3859,7 @@
         "title": "Teamspace",
         "description": "Uma área compartilhada dentro de um workspace. Adicione pessoas ou equipes para dar acesso a elas."
       },
-      "contents": "Cada espaço pode conter pastas e notas.",
+      "contents": "Cada espaço pode conter pastas e notas, e cada pasta pode ter subpastas.",
       "done": "Entendi",
       "reopen": "Entenda como os espaços são organizados"
     },
@@ -3573,13 +3872,18 @@
       "title": "Pastas",
       "soon": "Em breve",
       "folderName": "Nome da pasta",
+      "topLevel": "Nível superior",
       "couldNotCreate": "Não foi possível criar a pasta",
       "couldNotRename": "Não foi possível renomear a pasta",
       "couldNotDelete": "Não foi possível excluir a pasta",
       "deleteTitle": "Excluir pasta?",
       "deleteDescription": "Isso excluirá permanentemente \"{{name}}\" e suas {{count}} nota(s). Esta ação não pode ser desfeita.",
       "deleteDescriptionEmpty": "Isso excluirá permanentemente \"{{name}}\". Esta ação não pode ser desfeita.",
-      "deleteConfirm": "Excluir pasta e notas"
+      "deleteDescriptionSubfolders": "Isso excluirá permanentemente \"{{name}}\", incluindo {{subfolders}} e {{notes}}. Esta ação não pode ser desfeita.",
+      "subfolderCount_one": "{{count}} subpasta",
+      "subfolderCount_other": "{{count}} subpastas",
+      "deleteConfirm": "Excluir pasta e notas",
+      "recordingInFolder": "“{{title}}” nesta pasta está sendo gravada. Pare a gravação e depois exclua a pasta."
     },
     "list": {
       "title": "Notas",
@@ -3654,7 +3958,126 @@
         "taskList": "Lista de verificação",
         "blockquote": "Citação",
         "table": "Inserir tabela"
-      }
+      },
+      "blocks": {
+        "groups": {
+          "basic": "Básico",
+          "blocks": "Blocos",
+          "style": "Estilo",
+          "tools": "Ferramentas"
+        },
+        "slash": {
+          "heading": "Título {{level}}",
+          "bulletList": "Lista com marcadores",
+          "orderedList": "Lista numerada",
+          "taskList": "Tarefa com caixa",
+          "quote": "Citação",
+          "divider": "Divisor",
+          "table": "Tabela",
+          "codeBlock": "Bloco de código",
+          "codeHint": "Cores de sintaxe",
+          "noteLink": "Vincular nota",
+          "noteLinkHint": "ou digite [[",
+          "toggle": "Recolhível",
+          "callout": "Destaque: {{type}}",
+          "toc": "Sumário",
+          "mathBlock": "Bloco de matemática",
+          "inlineMath": "Fórmula em linha",
+          "inlineMathHint": "ou digite $$x^2$$",
+          "emoji": "Emoji",
+          "emojiHint": "ou digite :smile:",
+          "highlight": "Realçar",
+          "subscript": "Subscrito",
+          "superscript": "Sobrescrito",
+          "color": "Cor do texto: {{name}}",
+          "font": "Fonte: {{name}}",
+          "ruby": "Anotação ruby",
+          "rubyHint": "Leitura acima do texto",
+          "align": "Alinhar: {{dir}}",
+          "find": "Localizar e substituir",
+          "invisible": "Mostrar/ocultar caracteres invisíveis"
+        },
+        "callout": {
+          "note": "Nota",
+          "tip": "Dica",
+          "important": "Importante",
+          "warning": "Aviso",
+          "caution": "Cuidado"
+        },
+        "colors": {
+          "default": "Padrão",
+          "red": "Vermelho",
+          "orange": "Laranja",
+          "yellow": "Amarelo",
+          "green": "Verde",
+          "blue": "Azul",
+          "purple": "Roxo",
+          "gray": "Cinza"
+        },
+        "fonts": {
+          "default": "Padrão",
+          "serif": "Serifa",
+          "monospace": "Monoespaçada"
+        },
+        "align": {
+          "left": "Esquerda",
+          "center": "Centro",
+          "right": "Direita",
+          "justify": "Justificado"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX, ex.: \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX, ex.: x^2",
+          "emoji": "Nome do emoji, ex.: rocket",
+          "reading": "Leitura, ex.: かんじ",
+          "textReading": "Texto|leitura, ex.: 漢字|かんじ",
+          "apply": "Enter para aplicar · Esc para cancelar",
+          "mathEdit": "Enter para salvar · Esc para cancelar · vazio exclui"
+        },
+        "toolbar": {
+          "highlight": "Realçar",
+          "subscript": "Subscrito",
+          "superscript": "Sobrescrito",
+          "color": "Cor do texto",
+          "font": "Fonte",
+          "alignment": "Alinhamento",
+          "ruby": "Texto ruby (leitura acima dos caracteres)"
+        },
+        "find": {
+          "find": "Localizar",
+          "replace": "Substituir",
+          "all": "Tudo",
+          "previous": "Anterior",
+          "next": "Próximo",
+          "matchCase": "Diferenciar maiúsculas",
+          "close": "Fechar"
+        },
+        "count": "Palavras: {{words}} · Caracteres: {{chars}}",
+        "link": {
+          "header": "Vincular nota",
+          "empty": "Digite o título de uma nota…",
+          "create": "Vincular a “{{title}}” (ainda sem nota)",
+          "open": "Abrir “{{title}}”",
+          "missing": "Nenhuma nota com o título “{{title}}”"
+        },
+        "backlinks": {
+          "label": "Vinculada em",
+          "more": "+{{count}} mais",
+          "untitled": "Sem título"
+        },
+        "toc": {
+          "title": "Conteúdo",
+          "empty": "Adicione títulos para criar o sumário."
+        }
+      },
+      "lostNoteCopy": {
+        "title": "Suas últimas edições estão em uma nova nota",
+        "description": "“{{title}}” foi excluída antes de elas serem salvas, então foram salvas em uma nova nota em Privado.",
+        "open": "Abrir nota"
+      },
+      "muteMic": "Silenciar microfone",
+      "unmuteMic": "Ativar microfone",
+      "micMuted": "Microfone silenciado"
     },
     "participants": {
       "attendee": "participante",
@@ -3794,14 +4217,25 @@
         "title": "O áudio da reunião ficou silencioso",
         "description": "Ninguém foi ouvido nos últimos minutos. Se a chamada ainda estiver acontecendo, verifique seu dispositivo de saída de som."
       },
+      "externalAttendeesBlocked": "Esta reunião inclui pessoas de fora da sua organização. Sua organização não permite transcrever esta reunião.",
+      "externalAttendeesUnverifiable": "O OpenWhispr não conseguiu verificar todas as pessoas convidadas. Sua organização só permite transcrever reuniões internas.",
+      "externalAttendeesStopped": "A gravação foi interrompida porque a lista de convidados inclui alguém de fora da sua organização. Você pode continuar fazendo anotações.",
+      "internalAttendeesQuestion": "Todas as pessoas nesta reunião fazem parte da sua organização?",
+      "internalAttendeesConfirm": "Sim, iniciar",
       "recordingDisabledByOrg": "A gravação de reuniões foi desativada pela sua organização.",
       "stoppedAccountChanged": "A gravação parou porque você saiu da conta ou trocou de conta.",
       "stoppedPolicyUnresolved": "A gravação parou porque não foi possível verificar as configurações da sua organização.",
-      "stoppedWorkspaceChanged": "A gravação parou porque você trocou de espaço de trabalho."
+      "stoppedWorkspaceChanged": "A gravação parou porque você trocou de espaço de trabalho.",
+      "recordingCopy": {
+        "title": "Gravação movida para uma nova nota",
+        "description": "“{{title}}” foi excluída durante a gravação. A transcrição está sendo salva em uma nova nota em Privado.",
+        "open": "Abrir nota"
+      }
     },
     "meetingPill": {
       "returnToNote": "Voltar à gravação",
-      "waitingForMicrophone": "Aguardando microfone"
+      "waitingForMicrophone": "Aguardando microfone",
+      "micMuted": "Microfone silenciado"
     },
     "context": {
       "moveToFolder": "Mover para pasta",
@@ -3810,6 +4244,7 @@
       "searchFolders": "Pesquisar pastas...",
       "noResults": "Nenhuma pasta encontrada",
       "newFolder": "Nova pasta",
+      "newSubfolder": "Nova subpasta",
       "showInFileManager": "Mostrar no {{manager}}"
     },
     "actions": {
@@ -3954,7 +4389,9 @@
       "addExisting": "Adicionar existentes",
       "addCount": "Adicionar {{count}} notas",
       "noResults": "Nenhuma nota encontrada",
-      "noNotesAvailable": "Nenhuma outra nota disponível"
+      "noNotesAvailable": "Nenhuma outra nota disponível",
+      "notAdded_one": "Não foi possível adicionar {{count}} nota",
+      "notAdded_other": "Não foi possível adicionar {{count}} notas"
     },
     "onboarding": {
       "llm": {
@@ -4042,6 +4479,7 @@
         "members_one": "{{count}} membro",
         "members_other": "{{count}} membros"
       },
+      "subfolders": "Subpastas",
       "banner": {
         "title": {
           "team": "Seu teamspace",
@@ -4114,6 +4552,7 @@
       "triggerPlaceholder": "ex.: minha agenda",
       "replacementLabel": "Substituição",
       "replacementPlaceholder": "Texto a inserir quando você disser o gatilho…",
+      "variablesLabel": "Inserir",
       "create": "Criar snippet",
       "duplicate": "Já existe um snippet com esse gatilho",
       "emptyTitle": "O que você não deveria ter que dizer",
@@ -4268,7 +4707,6 @@
       },
       "locked": {
         "noWorkspace": "Os dicionários compartilhados estão incluídos no Business. Compartilhe com todos o jargão, os nomes de produtos e as siglas da sua equipe.",
-        "chooseWorkspace": "Você está em Pessoal. Mude para um espaço de trabalho para usar as palavras compartilhadas dele.",
         "upgradeAdmin": "Os dicionários compartilhados estão incluídos no Business. Faça o upgrade de {{workspace}} para que todos tenham as mesmas palavras.",
         "upgradeMember": "Os dicionários compartilhados estão incluídos no Business. Peça a um administrador para fazer o upgrade de {{workspace}}.",
         "paused_one": "A {{count}} palavra compartilhada de {{workspace}} está pausada. Faça o upgrade para o Business para usá-la novamente no ditado.",
@@ -4729,12 +5167,24 @@
       "request_accessStatus": "Pedindo acesso...",
       "look_at_screenName": "Ver a tela",
       "look_at_screenStatus": "Vendo sua tela...",
-      "look_at_screenSuccess": "Tela lida.",
-      "look_at_screenFailed": "Não foi possível ler a tela.",
       "request_api_keyName": "Chave de API",
       "request_api_keyStatus": "Pedindo uma chave de API...",
       "open_settingsName": "Configurações",
-      "open_settingsStatus": "Indicando as configurações..."
+      "open_settingsStatus": "Indicando as configurações...",
+      "salesforce_search_recordsName": "Pesquisar no Salesforce",
+      "salesforce_search_recordsStatus": "Pesquisando no Salesforce…",
+      "salesforce_get_recordName": "Registro do Salesforce",
+      "salesforce_get_recordStatus": "Lendo registro do Salesforce…",
+      "salesforce_describe_fieldsName": "Campos da oportunidade",
+      "salesforce_describe_fieldsStatus": "Lendo campos da oportunidade…",
+      "salesforce_get_briefingName": "Resumo do cliente",
+      "salesforce_get_briefingStatus": "Preparando resumo do cliente…",
+      "salesforce_export_conversationName": "Atividade do Salesforce",
+      "salesforce_export_conversationStatus": "Preparando atividade do Salesforce…",
+      "salesforce_update_fieldsName": "Atualizações de campos do Salesforce",
+      "salesforce_update_fieldsStatus": "Preparando atualizações de campos do Salesforce…",
+      "salesforce_present_briefingName": "Conclusões do resumo",
+      "salesforce_present_briefingStatus": "Selecionando evidências do resumo…"
     },
     "turn": {
       "reasoning": "Raciocínio",
@@ -4771,7 +5221,8 @@
           "slack": "Posso publicar a mensagem no Slack para você.",
           "linear": "Posso encontrar e criar issues do Linear para você.",
           "github": "Posso encontrar e criar issues do GitHub para você.",
-          "calendar": "Posso verificar sua disponibilidade e sugerir horários."
+          "calendar": "Posso verificar sua disponibilidade e sugerir horários.",
+          "salesforce": "Posso ler registros do Salesforce e salvar neles notas de reunião revisadas."
         }
       },
       "access": {
@@ -4871,6 +5322,7 @@
     "waitingForAnswer": "Aguardando resposta"
   },
   "integrations": {
+    "apiAccessDisabled": "Sua organização desativou o acesso à API e ao MCP.",
     "title": "Integrações",
     "googleCalendar": {
       "title": "Google Calendar",
@@ -4993,7 +5445,9 @@
         "default": "Enviar para {{destination}}",
         "email": "E-mail para {{destination}}",
         "issue": "Criar issue em {{destination}}",
-        "comment": "Comentar em {{destination}}"
+        "comment": "Comentar em {{destination}}",
+        "salesforceActivity": "Salvar conversa em {{destination}}",
+        "salesforceFields": "Revisar campos da oportunidade em {{destination}}"
       },
       "identity": "Como {{account}}",
       "identityWithWorkspace": "Como {{account}} em {{workspace}}",
@@ -5084,6 +5538,31 @@
           "refused": "O Linear recusou a solicitação. Nada foi enviado.",
           "unknown_action": "O OpenWhispr não pode fazer isso no Linear. Nada foi enviado.",
           "generic": "Algo deu errado. Nada foi enviado ao Linear."
+        },
+        "salesforce": {
+          "reconnect_needed": "O Salesforce precisa ser reconectado nas Configurações.",
+          "connection_changed": "A conexão do Salesforce mudou antes do envio, então nada foi enviado.",
+          "credential_save_failed": "Não foi possível salvar o login do Salesforce neste computador. Nada foi enviado. Tente novamente.",
+          "network": "Não foi possível acessar o Salesforce. Nada foi enviado.",
+          "rate_limited": "O Salesforce está ocupado. Tente novamente em breve.",
+          "forbidden": "Sua conta do Salesforce não tem permissão para isso. Nada foi enviado.",
+          "invalid_input": "O Salesforce não pôde aceitar isso como está. Nada foi enviado.",
+          "too_long": "Longo demais para o Salesforce. Nada foi enviado.",
+          "refused": "O Salesforce recusou a solicitação. Nada foi enviado.",
+          "unknown_action": "O OpenWhispr não pode fazer isso no Salesforce. Nada foi enviado.",
+          "generic": "Algo deu errado. Nada foi enviado ao Salesforce.",
+          "stale_record": "O Salesforce mudou desde esta revisão. Atualize e revise novamente.",
+          "source_unavailable": "A nota de origem está ausente ou inacessível.",
+          "export_required": "Salve a atividade nesta oportunidade antes de atualizar seus campos.",
+          "duplicate_operation": "Esta exportação foi salva de novo depois desta revisão, ou ainda está sendo salva. Nada foi enviado. Prepare uma nova revisão.",
+          "invalid_field": "Escolha até três campos de texto personalizados e editáveis da oportunidade.",
+          "storage_unavailable": "O histórico local de exportações está indisponível. Nenhuma nova gravação foi iniciada.",
+          "task_status_unavailable": "O Salesforce não tem um status de tarefa concluída disponível. Consulte seu administrador do Salesforce.",
+          "not_found": "Este registro do Salesforce não existe mais ou você não tem acesso a ele. Nada foi enviado.",
+          "invalid_reference": "O Salesforce não pôde aceitar isso como está. Nada foi enviado.",
+          "no_fields_selected": "Selecione pelo menos um campo ou cancele.",
+          "record_locked": "Este registro do Salesforce está bloqueado, por exemplo por um processo de aprovação. Nada foi enviado.",
+          "validation_failed": "Uma regra de validação, uma regra de duplicidade ou um campo obrigatório do Salesforce impediu isso. Verifique o registro no Salesforce. Nada foi enviado."
         }
       },
       "email": {
@@ -5112,11 +5591,14 @@
       "openIn": {
         "github": "Abrir no GitHub",
         "gmail": "Abrir no Gmail",
-        "linear": "Abrir no Linear"
+        "linear": "Abrir no Linear",
+        "salesforce": "Abrir no Salesforce"
       },
       "sendLabel": {
         "issue": "Criar issue",
-        "comment": "Comentar"
+        "comment": "Comentar",
+        "salesforceActivity": "Salvar atividade",
+        "salesforceFields": "Salvar campos"
       },
       "issue": {
         "created": "{{result}} criada.",
@@ -5159,7 +5641,26 @@
       "identityChanged": "Agora será enviado como {{account}}. Pressione Enviar para enviar.",
       "connectToSend": "Conecte o {{name}} para enviar isto",
       "edit": "Editar",
-      "doneEditing": "Edição concluída"
+      "doneEditing": "Edição concluída",
+      "salesforce": {
+        "include": "Incluir {{field}}",
+        "omitted": "Omitido — este campo não será alterado",
+        "before": "Valor atual",
+        "after": "Substituição proposta",
+        "empty": "Vazio",
+        "limit": "{{count}} / {{max}} caracteres",
+        "noneSelected": "Selecione pelo menos um campo ou cancele.",
+        "tooLong": "Um campo selecionado excede o limite de caracteres.",
+        "salesforceActivity": {
+          "sent": "Atividade salva em {{destination}}.",
+          "unknown": "Não foi possível confirmar as alterações. Verifique {{destination}} no Salesforce antes de tentar novamente."
+        },
+        "salesforceFields": {
+          "sent": "Campos salvos em {{destination}}.",
+          "unknown": "Não foi possível confirmar as alterações. Verifique {{destination}} no Salesforce antes de tentar novamente."
+        },
+        "savedLabel": "Salvo"
+      }
     },
     "policyOff": "Sua organização desativou os conectores.",
     "email": {
@@ -5335,7 +5836,9 @@
         "slack_send_message": "Mensagem para {{destination}}",
         "gmail_send": "E-mail para {{destination}}",
         "linear_create_issue": "Nova issue em {{destination}}",
-        "linear_comment": "Comentário em {{destination}}"
+        "linear_comment": "Comentário em {{destination}}",
+        "salesforce_export_conversation": "Salvar conversa em {{destination}}",
+        "salesforce_update_fields": "Revisar campos da oportunidade em {{destination}}"
       },
       "unlabeledActions": {
         "email_draft": "Rascunho de e-mail",
@@ -5344,7 +5847,9 @@
         "slack_send_message": "Mensagem do Slack",
         "gmail_send": "E-mail do Gmail",
         "linear_create_issue": "Issue do Linear",
-        "linear_comment": "Comentário do Linear"
+        "linear_comment": "Comentário do Linear",
+        "salesforce_export_conversation": "Atividade do Salesforce",
+        "salesforce_update_fields": "Atualizações de campos do Salesforce"
       },
       "states": {
         "pending": "Aguardando",
@@ -5446,6 +5951,31 @@
           "refused": "O Linear recusou a solicitação.",
           "unknown_action": "Não disponível no Linear.",
           "generic": "Não funcionou no Linear."
+        },
+        "salesforce": {
+          "reconnect_needed": "O Salesforce precisa ser reconectado.",
+          "connection_changed": "A conexão do Salesforce mudou. Nada foi enviado.",
+          "credential_save_failed": "Não foi possível salvar o login do Salesforce neste computador.",
+          "network": "Não foi possível acessar o Salesforce.",
+          "rate_limited": "O Salesforce está ocupado.",
+          "forbidden": "Não permitido no Salesforce.",
+          "invalid_input": "O Salesforce não pôde aceitar.",
+          "too_long": "Longo demais para o Salesforce.",
+          "refused": "O Salesforce recusou a solicitação.",
+          "unknown_action": "Não disponível no Salesforce.",
+          "generic": "Não funcionou no Salesforce.",
+          "stale_record": "O Salesforce mudou desde esta revisão. Atualize e revise novamente.",
+          "source_unavailable": "A nota de origem está ausente ou inacessível.",
+          "export_required": "Salve a atividade nesta oportunidade antes de atualizar seus campos.",
+          "duplicate_operation": "Esta exportação foi salva de novo depois desta revisão, ou ainda está sendo salva. Nada foi enviado.",
+          "invalid_field": "Escolha até três campos de texto personalizados e editáveis da oportunidade.",
+          "storage_unavailable": "O histórico local de exportações está indisponível. Nenhuma nova gravação foi iniciada.",
+          "task_status_unavailable": "O Salesforce não tem um status de tarefa concluída disponível. Consulte seu administrador do Salesforce.",
+          "not_found": "Não encontrado no Salesforce.",
+          "invalid_reference": "O Salesforce não pôde aceitar.",
+          "no_fields_selected": "Selecione pelo menos um campo ou cancele.",
+          "record_locked": "O registro do Salesforce está bloqueado.",
+          "validation_failed": "Bloqueado por uma regra ou um campo obrigatório do Salesforce."
         }
       },
       "unknownSent": {
@@ -5458,7 +5988,120 @@
     },
     "beta": "Beta",
     "upsell": "Os conectores estão incluídos nos planos pagos. Faça upgrade para o assistente trabalhar nas suas ferramentas.",
-    "locked": "Incluído nos planos pagos"
+    "locked": "Incluído nos planos pagos",
+    "salesforce": {
+      "title": "Salesforce",
+      "description": "Exporte conversas revisadas e prepare resumos para um cliente selecionado. As associações de notas são armazenadas apenas neste dispositivo.",
+      "connect": "Conectar",
+      "reconnect": "Reconectar",
+      "disconnect": "Desconectar",
+      "connecting": "Termine de conectar no seu navegador…",
+      "connectedAs": "Conectado como {{account}} em {{workspace}}",
+      "needsReconnect": "O Salesforce precisa ser reconectado.",
+      "errors": {
+        "connect_failed": "Não foi possível conectar o Salesforce. Tente novamente.",
+        "disconnect_failed": "Não foi possível desconectar o Salesforce. Tente novamente.",
+        "oauth_denied": "O Salesforce não foi conectado porque o acesso não foi permitido.",
+        "oauth_timeout": "A conexão demorou demais. Tente novamente.",
+        "oauth_state_mismatch": "Esse link de login estava desatualizado. Tente novamente.",
+        "ports_busy": "Outro aplicativo está usando as portas que o OpenWhispr precisa para conectar. Feche-o e tente novamente.",
+        "token_exchange_failed": "O Salesforce não concluiu a conexão. Tente novamente.",
+        "not_configured": "O Salesforce não está disponível nesta versão.",
+        "connection_changed": "Sua conta ou a conexão do Salesforce mudou durante a conexão. Tente novamente.",
+        "signed_out": "Entre no OpenWhispr para conectar o Salesforce.",
+        "policy_blocked": "Sua organização desativou os conectores.",
+        "policy_unavailable": "Não foi possível verificar as configurações da sua organização. Tente novamente.",
+        "permission_not_granted": "O Salesforce não foi conectado porque nem todas as permissões foram concedidas. Conecte novamente e permita todas.",
+        "invalid_login_domain": "Digite test.salesforce.com ou o My Domain da sua empresa, como suaempresa.my.salesforce.com."
+      },
+      "browser": {
+        "connectedTitle": "O Salesforce está conectado",
+        "connectedBody": "Você pode fechar esta aba e voltar para o OpenWhispr.",
+        "failedTitle": "O Salesforce não foi conectado",
+        "failedBody": "Volte para o OpenWhispr para tentar novamente."
+      },
+      "notes": {
+        "updateExisting": "Atualizar a atividade salva anteriormente; nenhuma outra tarefa será criada.",
+        "earlierAttemptUncertain": "Uma tentativa anterior pode já ter salvado isso no Salesforce. Verifique o registro lá antes de enviar novamente.",
+        "replacesMissing": "A atividade salva anteriormente não está mais neste registro do Salesforce, ou você não pode mais vê-la, então uma nova será criada.",
+        "editedInSalesforce": "Esta atividade foi editada no Salesforce depois que o OpenWhispr a salvou. Ao enviar, essas edições serão substituídas.",
+        "sourceNote": "Da nota “{{title}}”.",
+        "sourceNoteUntitled": "De uma nota sem título."
+      },
+      "provenance": "Fonte: OpenWhispr — {{title}}{{date}}",
+      "briefing": {
+        "untitledRecord": "Registro do Salesforce selecionado",
+        "retrieved": "Obtido: {{time}}",
+        "crmFacts": "Dados atuais do CRM",
+        "fields": {
+          "Name": "Nome",
+          "PersonName": "Nome",
+          "StageName": "Fase",
+          "CloseDate": "Data de fechamento",
+          "Amount": "Valor",
+          "CurrencyIsoCode": "Moeda",
+          "NextStep": "Próxima etapa",
+          "OwnerId": "Proprietário",
+          "AccountId": "Conta",
+          "Type": "Tipo",
+          "Industry": "Setor",
+          "Website": "Site",
+          "Phone": "Telefone",
+          "FirstName": "Primeiro nome",
+          "LastName": "Sobrenome",
+          "Email": "Email",
+          "Title": "Cargo",
+          "Company": "Empresa",
+          "Status": "Status"
+        },
+        "notReturned": "não retornado",
+        "notRecorded": "não registrado",
+        "linkedNameUnavailable": "vinculado; nome indisponível",
+        "gaps": "Lacunas e identidade do cliente",
+        "identityNotVerified": "Uma associação de exportação não verifica a identidade do cliente. As notas foram vinculadas ao registro escolhido pelo usuário; nomes de clientes e relações de conta não foram conferidos de forma independente.",
+        "missingFieldsNote": "Campos do CRM ausentes ou não retornados não comprovam aprovação de orçamento, compromissos nem concordância com as notas da reunião.",
+        "unavailableNotes": "Notas vinculadas indisponíveis no espaço de trabalho atual: {{count}}.",
+        "partial": "A cobertura é parcial: o número de notas, o texto de origem, a transcrição ou os resultados do CRM foram limitados. O que não aparece nestes trechos não necessariamente ficou de fora das reuniões.",
+        "crmOnly": "Nenhum conteúdo de reunião acessível foi obtido. Este resumo se baseia só no CRM.",
+        "notPrepared": "As conclusões das reuniões não foram preparadas. As notas de origem disponíveis estão listadas abaixo; nenhuma conclusão foi deduzida.",
+        "findings": "Conclusões das reuniões",
+        "findingsExplainer": "Os trechos de origem estão reproduzidos abaixo. Os status são a classificação do assistente; confirmado significa registrado na nota, não verificado de forma independente. Responsáveis e prazos são apenas os informados em cada trecho.",
+        "categories": {
+          "takeaway": "Pontos principais",
+          "decision": "Decisões",
+          "commitment": "Compromissos",
+          "proposal": "Propostas",
+          "risk": "Riscos",
+          "question": "Perguntas em aberto"
+        },
+        "status": {
+          "confirmed": "Confirmado",
+          "proposed": "Proposto",
+          "unknown": "Indefinido"
+        },
+        "conflict": "Possível contradição — não resolvida",
+        "crmConflictEntry": "Salesforce {{label}}: {{value}}",
+        "sources": "Fontes",
+        "noteCreated": "Nota criada: {{time}}.",
+        "lastEdited": "Última edição: {{time}}.",
+        "addedForBriefing": "Adicionada para este resumo.",
+        "exported": "Exportada: {{time}}.",
+        "savedActivity": "Atividade salva no Salesforce",
+        "sourcesExplainer": "Datas de criação não são datas de reunião. As atividades salvas no Salesforce contêm o resumo exportado; as notas podem ter mudado desde a exportação.",
+        "sections": {
+          "personalNotes": "Notas pessoais",
+          "summary": "Resumo de IA salvo",
+          "transcript": "Transcrição, caracteres {{start}}–{{end}}"
+        },
+        "prepared": "Resumo do cliente do Salesforce preparado"
+      },
+      "loginDomain": {
+        "toggle": "Usar um sandbox ou o domínio da empresa",
+        "label": "Domínio de login do Salesforce",
+        "placeholder": "test.salesforce.com ou suaempresa.my.salesforce.com",
+        "hint": "Deixe em branco para entrar em uma organização de produção."
+      }
+    }
   },
   "skills": {
     "pane": {
@@ -5504,6 +6147,7 @@
       "neverRun": "O OpenWhispr nunca executa scripts",
       "uninstall": "Desinstalar",
       "uninstallConfirm": "Desinstalar {{name}}? Ela será removida deste computador.",
+      "uninstallConfirmSynced": "Desinstalar {{name}}? Ela será removida deste computador e dos seus outros dispositivos.",
       "problem": "Esta habilidade não pode ser usada até ser corrigida: {{reason}}",
       "tryNow": "Experimentar agora"
     },
@@ -5529,6 +6173,7 @@
     "manage": {
       "title": "Gerenciar habilidades",
       "description": "Ative ou desative habilidades, ou remova as que você não usa. Cada uma fica salva neste computador.",
+      "descriptionBackedUp": "Ative ou desative habilidades, ou remova as que você não usa. Cada uma fica salva neste computador e no Backup na nuvem.",
       "noMatches": "Nenhuma habilidade corresponde a \"{{query}}\".",
       "none": "Nenhuma habilidade ainda."
     },
@@ -5679,6 +6324,9 @@
       "pasteNote": "Cola sem pressionar Enter, para você escolher quando executar.",
       "pasted": "Colado",
       "pasteFailed": "Não foi possível colar. O texto está na sua área de transferência."
+    },
+    "sync": {
+      "tooLarge": "Grande demais para o backup"
     }
   },
   "calendar": {
@@ -5917,10 +6565,13 @@
     "missingAudio": "[áudio ausente {{from}}-{{to}}]"
   },
   "workspaces": {
+    "defaultName": "Espaço de trabalho de {{name}}",
+    "defaultNameFallback": "Meu espaço de trabalho",
     "switcher": {
       "workspaces": "Espaços de trabalho",
       "add": "Adicionar espaço de trabalho",
-      "invitePeople": "Convidar pessoas"
+      "invitePeople": "Convidar pessoas",
+      "unavailable": "Os espaços de trabalho não estão disponíveis no momento."
     },
     "create": {
       "title": "Criar espaço de trabalho",
@@ -6050,16 +6701,17 @@
       "leave": {
         "title": "Sair de {{name}}?",
         "body": "Você perderá o acesso a este espaço de trabalho, às equipes e aos teamspaces dele. O proprietário ou um administrador do espaço de trabalho pode convidar você de volta.",
+        "privateNotes": "Suas notas privadas neste espaço de trabalho serão movidas para {{workspace}}.",
         "failed": "Não foi possível sair de {{name}}. Verifique sua conexão e tente novamente."
       },
       "left": {
         "title": "Você saiu de {{name}}"
       },
-      "chooseAnother": "Escolha outro espaço de trabalho para continuar.",
-      "chooseWorkspace": "Escolher espaço de trabalho",
+      "nowIn": "Agora você está em {{workspace}}.",
       "delete": {
         "title": "Excluir {{name}}?",
-        "body": "Isso exclui permanentemente o espaço de trabalho, as notas, os arquivos, as equipes e os teamspaces dele para todos. Não é possível desfazer."
+        "body": "Isso exclui permanentemente o espaço de trabalho, as notas, os arquivos, as equipes e os teamspaces dele para todos. Não é possível desfazer.",
+        "privateNotes": "Suas notas privadas neste espaço de trabalho serão movidas para {{workspace}}."
       },
       "deleting": {
         "title": "Excluindo {{name}}…",
@@ -6238,7 +6890,7 @@
         "FOLDER_UNAVAILABLE": "Este destino não está disponível. Escolha outra pasta.",
         "SPACE_UNAVAILABLE": "Este destino não está disponível. Escolha outra pasta.",
         "FOLDER_NAME_REQUIRED": "Digite um nome para a pasta.",
-        "FOLDER_NAME_TAKEN": "Já existe uma pasta com esse nome neste local.",
+        "FOLDER_NAME_TAKEN": "Já existe uma pasta com esse nome neste espaço.",
         "CREATE_FAILED": "Não foi possível concluir. Tente novamente.",
         "LINKED_NOTE_CHANGED": "Confira o destino e entre novamente.",
         "NOTE_UNAVAILABLE": "Esta nota não está disponível. Tente novamente sem criar outra.",
@@ -6278,7 +6930,9 @@
       "timeout": "Seu servidor demorou demais para responder.",
       "unreachable": "Não foi possível conectar-se ao seu servidor. Verifique se ele está em execução.",
       "noResponse": "Não foi possível obter uma resposta do seu servidor. Verifique a chave de API dele e se ele está em execução.",
-      "unknown": "Seu servidor retornou um erro inesperado."
+      "unknown": "Seu servidor retornou um erro inesperado.",
+      "invalidHeaders": "Um cabeçalho personalizado do seu servidor não é válido.",
+      "redirected": "Seu servidor redirecionou a solicitação. Digite o endereço para o qual ele redireciona."
     },
     "openSettings": "Abrir Configurações",
     "copyDetails": "Copiar detalhes",
@@ -6371,6 +7025,7 @@
       "saveChanges": "Salvar alterações",
       "saved": "Tom e estilo salvos",
       "cleanupOff": "A limpeza de texto está desativada, então esses tons não são aplicados ao seu ditado. O assistente e os chats continuam usando-os.",
+      "customPrompt": "Você está usando um prompt personalizado para a limpeza de texto, então esses tons não são aplicados ao seu ditado. O assistente e os chats continuam usando-os.",
       "turnOnCleanup": "Ativar limpeza de texto",
       "enabled": "Tons e vozes ativados",
       "enabledDescription": "A limpeza de texto, o assistente e os chats usam seu tom para cada tipo de app. Desativado, usam o tom padrão."
@@ -6471,5 +7126,16 @@
       "bootstrapMismatch": "O arquivo de inicialização não corresponde à sua conta, a este espaço de trabalho ou às credenciais configuradas.",
       "testLinkOtherWorkspace": "Este link de teste é de outro espaço de trabalho. Mude para esse espaço de trabalho e abra o link novamente."
     }
+  },
+  "affiliate": {
+    "remove": "Remover link do criador",
+    "haveLink": "Tem um link de criador?",
+    "label": "Link do criador (opcional)",
+    "placeholder": "Cole o link do seu criador",
+    "saved": "Link do criador salvo.",
+    "checking": "Verificando seu link…",
+    "unavailable": "Não foi possível verificar seu link. Tente novamente ou limpe o campo para continuar.",
+    "privacy": "Os links de criadores não estão disponíveis com suas configurações de rastreamento atuais. Limpe o campo para continuar.",
+    "review": "Seu link foi salvo para análise."
   }
 }

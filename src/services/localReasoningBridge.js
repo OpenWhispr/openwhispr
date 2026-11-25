@@ -39,6 +39,7 @@ class LocalReasoningService {
     const startTime = Date.now();
 
     try {
+      config.signal?.throwIfAborted();
       const inferenceConfig = {
         maxTokens: config.maxTokens ?? this.calculateMaxTokens(text.length),
         temperature: config.temperature ?? 0.7,
@@ -65,8 +66,11 @@ class LocalReasoningService {
 
       const result = await modelManager.runInference(modelId, text, {
         ...inferenceConfig,
-        signal: abortController.signal,
+        signal: config.signal
+          ? AbortSignal.any([config.signal, abortController.signal])
+          : abortController.signal,
       });
+      config.signal?.throwIfAborted();
       let cleanResult = result;
       // Thinking tags inside a JSON string are document data. The caller
       // validates the complete envelope instead of stripping anything from it.

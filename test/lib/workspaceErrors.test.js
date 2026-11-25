@@ -7,6 +7,7 @@ const {
   classifyRowActionError,
   classifySpaceError,
   classifyTeamError,
+  classifyWorkspaceIconError,
   rowActionErrorOf,
 } = require("../../src/lib/workspaceErrors.ts");
 const { CloudApiError } = require("../../src/services/cloudApi.ts");
@@ -130,6 +131,35 @@ test("connection and server failures on a row action are failed", () => {
     kind: "failed",
   });
   assert.deepEqual(classifyRowActionError(new Error("boom")), { kind: "failed" });
+});
+
+test("a workspace icon change refused by the sign-in or the storage has its own kind", () => {
+  for (const code of ["AUTH_EXPIRED", "AUTH_CONTEXT_CHANGED", "AUTH_CONTEXT_UNVALIDATED"]) {
+    assert.deepEqual(classifyWorkspaceIconError(new CloudApiError("x", 0, code)), {
+      kind: "signInChanged",
+    });
+  }
+  // Main rewrites every 503, the server's icons_unavailable included.
+  assert.deepEqual(
+    classifyWorkspaceIconError(
+      new CloudApiError("Service temporarily unavailable", 503, "SERVER_ERROR")
+    ),
+    { kind: "unavailable" }
+  );
+});
+
+test("other workspace icon failures classify as row actions", () => {
+  assert.deepEqual(classifyWorkspaceIconError(new CloudApiError("Insufficient role", 403)), {
+    kind: "notAllowed",
+  });
+  assert.deepEqual(
+    classifyWorkspaceIconError(new CloudApiError("Sign in with company SSO", 403, "SSO_REQUIRED")),
+    { kind: "ssoRequired" }
+  );
+  assert.deepEqual(classifyWorkspaceIconError(new CloudApiError("Network", 0)), {
+    kind: "failed",
+  });
+  assert.deepEqual(classifyWorkspaceIconError(new Error("boom")), { kind: "failed" });
 });
 
 test("a seat refusal carries how many fit", () => {

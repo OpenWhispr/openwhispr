@@ -14,6 +14,7 @@ const contexts = () => ({
     is_default: i === 0 ? 1 : 0,
   })),
   defaultDestination: { folderId: 1, spaceId: 1 },
+  privateSpaceId: 1,
   selectedDestination: null,
   recentDestinations: [],
   existingNote: null,
@@ -193,6 +194,27 @@ test("search reaches shared folders and creation starts Private with an unmatche
   assert.equal(c.calls.filter((x) => x[0] === "start").length, 0);
 });
 
+test("the meeting folder picker defaults to the active workspace's Private", async (t) => {
+  // Main names the active workspace's Private; another Private listed first is not it.
+  const context = {
+    ...contexts(),
+    spaces: [
+      { id: 5, kind: "private", name: "Private" },
+      { id: 2, kind: "team", name: "Team" },
+      { id: 1, kind: "private", name: "Private" },
+    ],
+  };
+  const c = await mount(t, {
+    getMeetingNotificationDestination: async () => ({ success: true, value: context }),
+  });
+  await c.click(c.byLabel("Choose meeting folder"));
+  await c.click(c.button("New folder"));
+  await c.type(c.byLabel("Name"), "Board prep");
+  await c.click(c.button("Create & select"));
+  assert.equal(c.calls[0][0], "create");
+  assert.equal(c.calls[0][1].spaceId, 1);
+});
+
 test("canceling a delayed create ignores its late selection and keeps Start disabled until settlement", async (t) => {
   let resolve;
   const c = await mount(t, {
@@ -233,6 +255,29 @@ test("two recents fill with three fallbacks and an outside selection remains vis
   assert.equal(c.container.querySelectorAll('[role="option"]').length, 1);
   await c.click(c.byLabel("Clear search"));
   assert.equal(c.container.querySelectorAll('[role="option"]').length, 6);
+});
+
+test("subfolders follow their parent and carry its name", async (t) => {
+  const c = await mount(t);
+  const base = contexts();
+  c.setContext({
+    ...base,
+    folders: [
+      { id: 20, space_id: 1, name: "Q1", is_default: 0, parent_folder_id: 2 },
+      ...base.folders,
+    ],
+  });
+  await c.click(c.byLabel("Choose meeting folder"));
+  assert.deepEqual(
+    [...c.container.querySelectorAll('[role="option"]')].map((o) => o.getAttribute("aria-label")),
+    [
+      "Private / Meetings",
+      "Private / Calls 1",
+      "Private / Calls 1 / Q1",
+      "Private / Calls 2",
+      "Private / Calls 3",
+    ]
+  );
 });
 
 test("a successful create with a failed selection retries only selection", async (t) => {

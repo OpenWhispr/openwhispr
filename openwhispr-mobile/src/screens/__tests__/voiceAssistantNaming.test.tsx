@@ -9,6 +9,12 @@ jest.mock('@/store/useConfigStore', () => ({
     selector({ config: null, updateConfig: jest.fn() }),
 }));
 jest.mock('@/hooks/useConfigToggle', () => ({ useConfigToggle: () => jest.fn() }));
+jest.mock('@react-native-menu/menu', () =>
+  require('../../components/notes/__tests__/menuViewMock'),
+);
+jest.mock('../../../modules/app-group-storage/src', () => ({
+  AppGroupStorage: { setItem: jest.fn(), removeItem: jest.fn() },
+}));
 jest.mock('../../../modules/live-activity/src', () => ({
   LiveActivity: { isDictationModeEnabled: () => false, setDictationMode: jest.fn() },
 }));

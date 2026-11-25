@@ -834,6 +834,29 @@ body:has(.onboarding-canvas) kbd {
   mask-composite: intersect;
 }
 
+/* The native range retains Electron's keyboard and high-contrast behavior. */
+@media (forced-colors: none) {
+  .billing-seat-range {
+    appearance: none;
+    background: transparent;
+  }
+
+  .billing-seat-range::-webkit-slider-runnable-track {
+    height: 6px;
+    background: transparent;
+  }
+
+  .billing-seat-range::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -5px;
+    border: 3px solid var(--color-primary);
+    border-radius: 50%;
+    background: white;
+  }
+}
+
 /* OpenWhispr Brand Typography */
 .brand-heading {
   font-family: var(--font-family-display);

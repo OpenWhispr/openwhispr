@@ -105,6 +105,11 @@ test.before(async (t) => {
         export const useTranslation = () => ({ t, i18n: { language: "en" } });
       `,
       "/i18n": "export default { t: (key) => key, language: 'en' };",
+      "/lib/authRequestContext": `
+        export const hasValidatedAuthContext = () => true;
+        export const getValidatedAuthGeneration = () => 1;
+        export const subscribeAuthRequestContext = () => () => {};
+      `,
       "/stores/workspaceStore": `
         export const useWorkspaceStore = Object.assign(
           (selector) => selector(globalThis.__store),

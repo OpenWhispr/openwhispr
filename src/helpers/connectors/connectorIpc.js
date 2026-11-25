@@ -215,8 +215,12 @@ function registerConnectorIpc({
   // flow that then polls for 15 minutes with nothing on screen.
   const pendingConnects = new Set();
 
-  ipcMain.handle("connector-connect", async (event, connectorId) => {
+  ipcMain.handle("connector-connect", async (event, connectorId, options) => {
     if (!isNonEmptyString(connectorId)) return { status: "unavailable", reason: "invalid_request" };
+    // The one connect option: a sign-in host, which the connector validates.
+    const loginDomain = options?.loginDomain;
+    if (loginDomain !== undefined && (typeof loginDomain !== "string" || loginDomain.length > 300))
+      return { status: "unavailable", reason: "invalid_request" };
     const pending = { connectorId, controller: new AbortController() };
     pendingConnects.add(pending);
     let policyState;
@@ -229,7 +233,7 @@ function registerConnectorIpc({
     if (pending.controller.signal.aborted) {
       return { status: "failed", errorCode: "oauth_cancelled" };
     }
-    return manager.connect(connectorId, policyState);
+    return manager.connect(connectorId, policyState, loginDomain ? { loginDomain } : {});
   });
 
   // Stopping a connect is always allowed, so it skips the policy check too.

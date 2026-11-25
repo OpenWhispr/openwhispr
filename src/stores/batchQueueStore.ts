@@ -255,7 +255,7 @@ export function processBatchQueue(
         transcription,
         diarization,
         durationSeconds,
-        { requestId, timestamps: true }
+        { requestId, timestamps: true, isCancelled: () => run !== runId }
       ).finally(() => {
         cleanupTranscriptionProgress?.();
         if (activeUploadProgressCleanup === cleanupTranscriptionProgress)

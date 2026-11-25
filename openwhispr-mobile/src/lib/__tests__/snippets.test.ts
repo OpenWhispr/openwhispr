@@ -1,5 +1,6 @@
 import {
   expandSnippets,
+  resolveSnippetVariables,
   getDictionaryHintTiers,
   splitLlmDictionary,
   type Snippet,
@@ -137,5 +138,42 @@ describe('splitLlmDictionary', () => {
     expect(shared).toEqual(long);
     expect(shared.join('').length).toBe(2000);
     expect(splitLlmDictionary([[], [], ['y'.repeat(2001), 'short']]).shared).toEqual([]);
+  });
+});
+
+describe('snippet variables', () => {
+  const context = { now: new Date(2026, 10, 18, 9, 5), locale: 'en-US' };
+
+  it('fills date, time, datetime and locale like desktop', () => {
+    expect(
+      resolveSnippetVariables('{{date}} | {{time}} | {{datetime}} | {{locale}}', context),
+    ).toBe('11/18/2026 | 9:05 AM | 11/18/2026, 9:05 AM | en-US');
+    expect(resolveSnippetVariables('{{date}}', { ...context, locale: 'de' })).toBe('18.11.2026');
+  });
+
+  it('leaves unknown, misspelled and prototype placeholders as typed', () => {
+    const literal = '{{clipboard}} {{Date}} {{ date }} {{constructor}} {{__proto__}} {date}';
+    expect(resolveSnippetVariables(literal, context)).toBe(literal);
+  });
+
+  it("fills only a snippet's saved text, never the rest of the dictation", () => {
+    const snippets: Snippet[] = [{ trigger: 'stamp', replacement: 'Logged {{date}} at {{time}}' }];
+    expect(expandSnippets('stamp, then put {{date}} in the template', snippets, context)).toBe(
+      'Logged 11/18/2026 at 9:05 AM, then put {{date}} in the template',
+    );
+    expect(expandSnippets('put {{date}} in the template', snippets, context)).toBe(
+      'put {{date}} in the template',
+    );
+  });
+
+  it('keeps the placeholders when the runtime cannot format dates', () => {
+    const spy = jest.spyOn(Date.prototype, 'toLocaleDateString').mockImplementation(() => {
+      throw new RangeError('no Intl');
+    });
+    try {
+      expect(resolveSnippetVariables('Logged {{date}}', context)).toBe('Logged {{date}}');
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

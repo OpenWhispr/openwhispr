@@ -1,3 +1,5 @@
+const CONFIG_REFRESH_MS = 5 * 60_000;
+
 const ENTERPRISE_INFERENCE_SCOPES = [
   "dictationCleanup",
   "dictationAgent",
@@ -390,6 +392,7 @@ function isValidAudioOperation(operation, scheme, gateway) {
 }
 
 export {
+  CONFIG_REFRESH_MS,
   AZURE_HOST_SUFFIXES,
   ENTERPRISE_INFERENCE_SCOPES,
   ENTERPRISE_TRANSCRIPTION_SCOPE,

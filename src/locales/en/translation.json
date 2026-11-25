@@ -212,11 +212,18 @@
     "policyAccountChanged": "Your account changed, so this answer was stopped.",
     "policyTranscriptionRestricted": "Transcription is restricted by your organization.",
     "policyUnresolved": "Your organization's settings haven't loaded yet. Try again in a moment.",
+    "policyBlocked": "Your organization doesn't allow this on this device.",
     "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
     "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
     "managedConfigAmbiguous": "Your organization's managed setup is inconsistent. Contact your administrator.",
     "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator.",
-    "resizePanel": "Resize panel"
+    "resizePanel": "Resize panel",
+    "managedDevice": "Managed device",
+    "managedDeviceAndWorkspace": "Managed device and workspace",
+    "deviceLocalOnly": "This device uses local processing only. Cloud features are unavailable, including for previously signed-in accounts.",
+    "deviceSignInRequired": "Your organization requires sign-in on this device.",
+    "devicePolicyInvalid": "The device policy could not be read or is invalid. Contact your administrator. OpenWhispr can't be used until the policy is corrected.",
+    "deviceWorkspaceUnavailable": "This device requires local processing, but the saved account's workspace policy is unavailable. Log out to continue without that account, or contact your administrator."
   },
   "onboarding": {
     "rehaul": {
@@ -409,7 +416,9 @@
           "modelNotFound": "The selected model is not available from this provider.",
           "providerStatus": "The provider returned status {{status}}.",
           "timeout": "The connection test timed out.",
-          "network": "The provider could not be reached."
+          "network": "The provider could not be reached.",
+          "invalidHeaders": "Invalid HTTP header. Check the name and value; Content-Type and transport headers cannot be customized.",
+          "redirected": "The server redirected the request. Enter the address it redirects to."
         }
       },
       "local": {
@@ -631,6 +640,7 @@
       "failed": "Could not check access.",
       "microphone": "Turn on OpenWhispr in Microphone.",
       "accessibility": "Drag OpenWhispr into Accessibility, then turn it on.",
+      "selectApp": "In Privacy & Security, open System & App Protection Override and select OpenWhispr.",
       "systemAudio": "Turn on OpenWhispr under System Audio Recording Only.",
       "screenContext": "Drag OpenWhispr into Screen & System Audio Recording, then turn it on.",
       "settings": "Open Settings",
@@ -655,7 +665,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "Update required",
-      "description": "Your organization requires OpenWhispr {{version}} or newer. Please update the app."
+      "description": "Your organization requires OpenWhispr {{version}} or newer. Please update the app.",
+      "contactIT": "Your organization requires OpenWhispr {{version}} or newer. Contact IT to install an approved version."
     },
     "update": {
       "readyTitle": "Update ready to install",
@@ -949,7 +960,11 @@
     "getKey": "Get key ->",
     "endpointUrl": "Endpoint URL",
     "azureHint": "Azure AI Foundry: enter your resource endpoint (e.g. https://your-resource.cognitiveservices.azure.com) and set Model to your exact deployment name.",
+    "browsedProviderHint": "{{current}} is still in use. Choose a model to switch to {{provider}}.",
+    "browsedCustomHint": "{{current}} is still in use. Enter a model name to switch to your custom endpoint.",
+    "customInUseHint": "Your custom endpoint is still in use. Choose a model to switch to {{provider}}.",
     "customProvider": "Custom",
+    "providerUnavailable": "{{provider}} can't be used here. Pick a model to switch providers.",
     "fallback": {
       "whisperModelDescription": "Model",
       "parakeetModelDescription": "NVIDIA Parakeet Model"
@@ -965,6 +980,9 @@
     "tinfoil": {
       "transportNote": "Tinfoil streams using Voxtral Mini 4B, and batches with Voxtral Small 24B.",
       "docsLink": "Read the docs"
+    },
+    "elevenlabs": {
+      "keytermsNote": "OpenWhispr sends eligible words from your dictionary to ElevenLabs. ElevenLabs charges 20% more when those words are included."
     }
   },
   "hooks": {
@@ -1235,7 +1253,8 @@
       "failedUserCheck": "Failed to check user account",
       "generic": "Something went wrong. Please try again.",
       "invalidCredentials": "Invalid email or password",
-      "invalidEmail": "Enter a valid email address"
+      "invalidEmail": "Enter a valid email address",
+      "signInDisabledByDevice": "Sign-in is turned off on this device by your organization."
     },
     "getStarted": "Get Started",
     "legal": {
@@ -1697,7 +1716,7 @@
         "label": "Profile"
       },
       "plansBilling": {
-        "description": "Plans, usage & billing",
+        "description": "Manage your plan, usage and billing.",
         "label": "Plan & Billing"
       },
       "workspaceGeneral": {
@@ -1752,13 +1771,7 @@
       "title": "Workspace",
       "description": "Collaborate with teammates, share notes, and manage workspace access in one place.",
       "empty": {
-        "title": "Create your first workspace",
-        "description": "Workspaces let you collaborate with teammates and share notes.",
         "create": "Create workspace"
-      },
-      "personal": {
-        "title": "You're in Personal",
-        "description": "Choose a workspace to manage its settings."
       },
       "loadError": {
         "title": "Couldn't load workspaces",
@@ -2036,8 +2049,8 @@
           "leaveBodyLoses": "You'll lose access to {{space}} and its notes.",
           "leaveBodyAdmins": "Another admin will continue managing this teamspace.",
           "deleteNotAllowed": "You don't have permission to delete {{space}}.",
-          "movedToPersonal_one": "{{count}} note that hadn't synced was moved to your Personal space.",
-          "movedToPersonal_other": "{{count}} notes that hadn't synced were moved to your Personal space."
+          "movedToPersonal_one": "{{count}} note that hadn't synced was moved to Private.",
+          "movedToPersonal_other": "{{count}} notes that hadn't synced were moved to Private."
         },
         "addPeople": {
           "loading": "Loading teamspaces…",
@@ -2067,6 +2080,21 @@
         "nameHint": "Your workspace name can be up to 65 characters",
         "iconLabel": "Workspace icon",
         "iconHint": "This icon appears in your sidebar and notifications.",
+        "iconUpload": "Upload image",
+        "iconChange": "Change image",
+        "iconRemove": "Remove image",
+        "iconUploading": "Uploading…",
+        "iconUploaded": "Workspace icon updated",
+        "iconRemoved": "Workspace icon removed",
+        "iconUnsupported": "Choose a PNG, JPEG, WebP or GIF image.",
+        "iconTooLarge": "Choose an image under 10 MB.",
+        "iconUnreadable": "Couldn't read that image. Choose another file.",
+        "iconFailed": "Couldn't update the workspace icon. Check your connection and try again.",
+        "iconUnavailable": "Workspace icons aren't available right now. Try again later.",
+        "iconRateLimited": "Too many icon uploads in the last hour. Try again later.",
+        "iconSignInChanged": "Couldn't update the workspace icon: your sign-in expired or changed. Sign in again, then try again.",
+        "iconNotAllowed": "You can no longer change the icon for {{workspace}}.",
+        "iconSsoRequired": "Sign in with your company's single sign-on to change the icon for {{workspace}}.",
         "roleLabel": "Your role",
         "saved": "Workspace updated",
         "ownerTitle": "Workspace Owner",
@@ -2284,26 +2312,12 @@
         "resentNoEmail": "Invitation updated, but the email couldn't be delivered."
       },
       "billing": {
-        "plan": "Plan",
-        "seats": "Seats",
-        "ownerOnly": "Only the workspace owner can manage the subscription.",
         "nextInvoice": "Next invoice",
-        "manageStripe": "Manage in Stripe",
-        "startSubscription": "Start subscription",
-        "provisionedPlan": "Set up by OpenWhispr. Contact sales to change the plan or seats.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
           "free": "Free",
           "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "Active",
-          "trialing": "Trialing",
-          "past_due": "Past due",
-          "canceled": "Canceled",
-          "incomplete": "Incomplete",
-          "unpaid": "Unpaid"
         }
       },
       "developer": {
@@ -2415,47 +2429,16 @@
       }
     },
     "unifiedBilling": {
-      "workspaceTitle": "Workspace billing",
-      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
-      "billableSeat": "Your seat is billable",
-      "nonBillableSeat": "Admin-only access · no paid seat",
-      "managedBy": "Billing is managed by {{owner}}.",
-      "addSeat": "Add seat",
-      "seatUpdated_one": "Workspace capacity updated to {{count}} seat",
-      "seatUpdated_other": "Workspace capacity updated to {{count}} seats",
-      "seatUpdateFailed": "Couldn't update workspace seats",
-      "businessWorkspaceOnly": "Available for workspaces",
-      "personalPlanTitle": "Personal plan",
-      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
-      "confirmSeats": {
-        "title": "Add a workspace seat?",
-        "description_one": "Increase {{workspace}} to {{count}} seat. Stripe will prorate the change.",
-        "description_other": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
-        "newCapacity": "New capacity",
-        "chargeToday": "Charge today",
-        "confirm": "Add seat"
-      }
+      "seatUpdateFailed": "Couldn't update workspace seats"
     },
     "account": {
-      "badges": {
-        "free": "Free",
-        "limitReached": "Cloud limit reached",
-        "pastDue": "Past due",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "Trial"
-      },
       "billing": {
         "couldNotOpenDescription": "We had trouble opening the billing page. Please try again.",
         "couldNotOpenTitle": "Couldn't open billing",
-        "manageBilling": "Manage Billing",
-        "opening": "Opening...",
-        "updatePaymentMethod": "Update Payment Method",
         "contactOwnerTitle": "Contact your workspace owner",
         "contactOwnerDescription": "Only the workspace owner can update billing for this workspace.",
         "manageInAppStore": "Manage in App Store",
-        "manageInGooglePlay": "Manage in Google Play",
-        "managedInMobileStore": "Billed through your phone's app store. Manage it from your phone."
+        "manageInGooglePlay": "Manage in Google Play"
       },
       "checkout": {
         "couldNotOpenDescription": "We had trouble opening the checkout page. Please try again.",
@@ -2474,20 +2457,6 @@
         "title": "Showing your last sign-in",
         "description": "Sync and account changes are paused until OpenWhispr can reach its servers."
       },
-      "pastDue": {
-        "description": "You're on the free plan for now. Update your payment method to get back to Pro.",
-        "title": "We couldn't process your payment"
-      },
-      "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} OpenWhispr Cloud words this week",
-        "byokUnlimited": "Your own API keys and local models remain unlimited.",
-        "nextBilling": "Next billing: {{date}}",
-        "pastDue": "{{used}} / {{limit}} OpenWhispr Cloud words this week - update payment to restore Pro",
-        "trial": "{{days}} days remaining - unlimited transcriptions",
-        "unlimited": "Unlimited",
-        "accessUntil": "Access until {{date}}",
-        "storePaymentIssue": "Your app store couldn't renew this subscription. Update your payment method there to keep your plan."
-      },
       "planLabels": {
         "free": "Free",
         "pro": "Pro",
@@ -2497,81 +2466,24 @@
       "pricing": {
         "title": "Plans",
         "billedYearly": "Billed yearly",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "forever",
-          "features": [
-            "## OpenWhispr Cloud",
-            "2,000 words/week transcription",
-            "5 hours of meeting recordings/month",
-            "## Always free",
-            "Unlimited local AI models",
-            "Unlimited cloud transcription with your own API keys",
-            "100+ languages supported",
-            "Custom dictionary",
-            "Zero data retention",
-            "Community support"
-          ]
-        },
         "pro": {
           "name": "Pro",
           "monthlyPrice": "$8",
-          "monthlyPeriod": "/mo",
-          "annualPrice": "$80",
-          "annualPeriod": "/yr",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "All Free features +",
-          "features": [
-            "Unlimited cloud transcription",
-            "20 hours of meeting recordings/month",
-            "Sync across devices",
-            "Share notes with public links",
-            "Personal API access",
-            "MCP integration in all your apps",
-            "Mobile app",
-            "Email support"
-          ],
-          "cta": "Get Started",
-          "switchToAnnual": "Switch to Annual"
+          "annualEquivalent": "$6.67"
         },
         "business": {
           "name": "Business",
           "monthlyPrice": "$16",
-          "monthlyPeriod": "/mo",
-          "annualPrice": "$160",
-          "annualPeriod": "/yr",
           "annualEquivalent": "$13.33",
-          "includesPrefix": "All Pro features +",
-          "badge": "Most Popular",
-          "features": [
-            "Unlimited meeting recordings",
-            "Workspace roles & member management",
-            "Assistant mode",
-            "Chat over your data",
-            "Priority support"
-          ],
-          "cta": "Get Started",
-          "switchToAnnual": "Switch to Annual"
+          "cta": "Get Started"
         },
         "enterprise": {
           "name": "Enterprise",
           "price": "Custom",
-          "subtitle": "For advanced security & support",
-          "includesPrefix": "All Business features +",
-          "features": [
-            "Managed API credits",
-            "Cloud sync across devices",
-            "Team features & admin",
-            "SSO & compliance",
-            "Dedicated support"
-          ],
           "cta": "Contact Sales",
           "upgradeCta": "Upgrade to Enterprise",
           "askOwner": "Ask {{name}} to upgrade your workspace."
         },
-        "currentPlan": "Current plan",
-        "yourPersonalPlan": "Your personal plan",
         "yourWorkspacePlan": "Your workspace's plan",
         "manage": "Manage",
         "coveredByWorkspace": "Included with your workspace plan",
@@ -2593,7 +2505,6 @@
           "confirm": "Confirm"
         }
       },
-      "rollingWeeklyLimit": "Rolling weekly limit",
       "signOut": {
         "endMeetingDescription": "Signing out stops the meeting that's recording. What it has captured so far stays in its note.",
         "endMeetingTitle": "End the meeting recording?",
@@ -2614,11 +2525,7 @@
         "description": "Unlimited transcriptions, priority processing, and more.",
         "title": "Try Pro free for 7 days"
       },
-      "signedOutPlans": {
-        "button": "Create Free Account"
-      },
       "user": "User",
-      "wordsRemaining": "{{remaining}} remaining",
       "deleteAccount": {
         "label": "Delete Account",
         "labelDescription": "Permanently delete your account and personal cloud data. Other local users and workspace-owned content are preserved.",
@@ -2669,10 +2576,6 @@
           "noPassword": "No password is set for this account.",
           "generic": "Something went wrong. Please try again."
         }
-      },
-      "planUnavailable": {
-        "title": "Plan unavailable",
-        "description": "We couldn't load your plan right now. Your access is unchanged."
       }
     },
     "agentConfig": {
@@ -2700,6 +2603,19 @@
       "customSetup": "Custom Setup",
       "customSetupDescription": "Use your own provider and API key.",
       "description": "Clean up transcriptions, handle commands, and fix errors while preserving your tone.",
+      "assemblyAiCleanup": {
+        "pickerOn": "Standard cleanup is included with AssemblyAI Dictation.",
+        "pickerOff": "Text cleanup is off. OpenWhispr will paste your original wording.",
+        "description": "AssemblyAI returns both polished text and your original wording. Leave cleanup on to paste polished text, or turn it off to paste your original wording.",
+        "standard": "Standard dictation cleanup",
+        "included": "Included with your dictation model. No separate cleanup model is needed.",
+        "advanced": "Advanced cleanup",
+        "summary": "Saved provider for custom prompts and Tone & Style",
+        "advancedHelp": "AssemblyAI handles standard dictation cleanup. Choose which provider OpenWhispr uses when a custom prompt or Tone & Style needs a separate cleanup pass.",
+        "saved": "Saved",
+        "modelNeeded": "Local cleanup model needed",
+        "modelHelp": "Choose and download a local cleanup model to apply your tone or custom prompt. AssemblyAI provides standard cleanup."
+      },
       "enableTextCleanup": "Enable text cleanup",
       "enableTextCleanupDescription": "Use AI to remove filler words, fix grammar, and polish punctuation",
       "modes": {
@@ -3029,7 +2945,14 @@
         "restarting": "Restarting...",
         "title": "Updates",
         "versionPlaceholder": "—",
-        "whatsNew": "What's new in v{{version}}"
+        "whatsNew": "What's new in v{{version}}",
+        "managedByOrganization": "Managed by your organization.",
+        "itManaged": "Your organization manages updates.",
+        "policyLoading": "Loading update settings…",
+        "policyUnavailable": "Update settings couldn’t be loaded. Check for updates to try again.",
+        "policyChanged": "Update policy changed. Check for updates again.",
+        "managedBadge": "Managed",
+        "stagedBeforePolicy": "An update was staged before this policy applied and may install when the app quits. Contact IT before quitting or restarting."
       },
       "translationHotkey": {
         "title": "Translation Hotkey",
@@ -3061,9 +2984,8 @@
     "privacy": {
       "cloudBackup": "Cloud backup",
       "cloudBackupDescription": "Back up your transcriptions and notes to the cloud for seamless access across devices.",
-      "cloudBackupTeamCaveat": "Notes in teamspaces and notes you've shared always sync, regardless of this setting.",
+      "cloudBackupTeamCaveat": "Notes in teamspaces and notes you've shared always sync, regardless of this setting. Chats that use Private content stay on this device. Chats from earlier versions and chats restored from Backup are also excluded.",
       "cloudNotesMigration": "Backing up notes… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "All notes backed up",
       "description": "Control what data leaves your device. Everything is off by default.",
       "title": "Privacy",
       "usageAnalytics": "Usage analytics",
@@ -3248,7 +3170,20 @@
     "selfHosted": {
       "endpointUrl": "Endpoint URL",
       "serverUrl": "Server URL",
-      "apiKeyOptional": "API Key (optional)"
+      "apiKeyOptional": "API Key (optional)",
+      "headers": "HTTP headers",
+      "headersHelp": "Sent with every request to this server, such as an API key a gateway asks for.",
+      "headerName": "Header name",
+      "headerValue": "Header value",
+      "removeHeader": "Remove",
+      "addHeader": "Add header",
+      "unauthorized": "Your server refused the request (401/403). Check the headers below or the server's auth settings.",
+      "headerErrors": {
+        "missingName": "Enter a header name.",
+        "invalidName": "Header names can't contain spaces, colons or other separators.",
+        "reserved": "OpenWhispr sets this header itself.",
+        "invalidValue": "This value has a character a header can't carry, such as a curly quote."
+      }
     },
     "enterpriseCheckout": {
       "title": "Upgrade to Enterprise",
@@ -3277,6 +3212,326 @@
       "upgradeCta": "Upgrade now",
       "upgradedTitle": "Upgraded to Enterprise",
       "upgradedDescription": "{{workspace}} is now on Enterprise."
+    },
+    "billing": {
+      "addSeats": {
+        "title": "Add seats",
+        "invoiceDate": "Next invoice · {{date}}",
+        "quantity": "Seats to add",
+        "decrease": "Decrease seats",
+        "increase": "Increase seats",
+        "now": "Now",
+        "after": "After",
+        "inUse": "In use",
+        "pending": "Pending seats",
+        "available": "Available",
+        "total": "Total seats",
+        "price": "Price",
+        "perMonth": "{{price}} / seat / month",
+        "proration": "Added to next invoice",
+        "confirm_one": "Add {{count}} seat",
+        "confirm_other": "Add {{count}} seats",
+        "adding": "Adding…",
+        "failure": "Couldn’t confirm the seat change. Checking the current total.",
+        "success": "{{workspace}} now has {{count}} seats.",
+        "limitReached": "The workspace has reached its seat limit.",
+        "occupancyMinimum": "The total must be at least {{minimum}} to cover occupied seats.",
+        "previewFailed": "Couldn’t load seat pricing."
+      },
+      "free": {
+        "inviteTeammates": "Invite teammates",
+        "upgradeToBusiness": "Upgrade to Business",
+        "proHint": "Just you? Pro is {{price}} / month.",
+        "viewPersonal": "View Personal plan",
+        "countFailed": "Couldn't check who is in this workspace."
+      },
+      "errors": {
+        "noTeammates": "Invite a teammate before starting Business."
+      },
+      "picker": {
+        "label": "Plan shown",
+        "personal": "Personal",
+        "workspaces": "Workspaces",
+        "loadFailed": "Couldn't load workspaces"
+      },
+      "workspaceUnavailable": {
+        "title": "Workspace plan unavailable",
+        "description": "Your access is unchanged."
+      },
+      "tiles": {
+        "upgradeWorkspace": "Upgrade a workspace",
+        "createWorkspace": "Create workspace"
+      },
+      "plans": {
+        "pricePerMonth": "{{price}} / month",
+        "pricePerMonthYearly": "{{price}} / month, billed yearly",
+        "pricePerSeat": "{{price}} / seat / month",
+        "pricePerSeatYearly": "{{price}} / seat / month, billed yearly",
+        "yourPlan": "Your plan",
+        "pro": {
+          "includes": "Everything in Free, plus",
+          "features": {
+            "unlimitedCloud": "Unlimited cloud transcription",
+            "syncDevices": "Sync across devices",
+            "publicLinks": "Public links for notes",
+            "apiMcp": "Personal API and MCP access",
+            "mobileApp": "Mobile app"
+          }
+        },
+        "business": {
+          "includes": "Everything in Pro, plus",
+          "features": {
+            "workspaceRoles": "Workspace roles and members",
+            "assistantMode": "Assistant mode",
+            "chatOverData": "Chat over your data",
+            "prioritySupport": "Priority support"
+          }
+        },
+        "enterprise": {
+          "includes": "Everything in Business, plus",
+          "features": {
+            "managedCredits": "Managed API credits",
+            "ssoCompliance": "SSO and compliance",
+            "adminControls": "Admin controls and policies",
+            "dedicatedSupport": "Dedicated support"
+          }
+        }
+      },
+      "personal": {
+        "blocks": {
+          "currentPlan": "Current Plan",
+          "usage": "Usage",
+          "billingDetails": "Billing Details"
+        },
+        "signedOut": {
+          "title": "Not signed in",
+          "body": "Sign in to see your plan."
+        },
+        "failed": {
+          "title": "Plan unavailable",
+          "body": "Your access is unchanged."
+        },
+        "actions": {
+          "cancelTrial": "Cancel trial",
+          "cancelBusiness": "Cancel Business",
+          "keepPlan": "Keep {{plan}}",
+          "subscribePro": "Subscribe to Pro",
+          "manageBilling": "Manage billing",
+          "updatePayment": "Update payment",
+          "cancelPro": "Cancel Pro"
+        },
+        "usage": {
+          "cloudTranscription": "Cloud transcription",
+          "unlimited": "Unlimited",
+          "wordsValue": "{{used}} / {{limit}} words",
+          "wordsLeft": "{{remaining}} words left in the last 7 days",
+          "rolling": "Counts the last 7 days. Local models and your own API keys are unlimited.",
+          "limitReached": "Limit reached. Local models and your own API keys still work."
+        },
+        "stores": {
+          "appStore": "App Store",
+          "playStore": "Google Play",
+          "unknown": "Your phone's app store"
+        },
+        "badges": {
+          "stripeTrial": "Trial",
+          "trial_one": "Trial · {{count}} day left",
+          "trial_other": "Trial · {{count}} days left",
+          "pastDue": "Past due",
+          "cancelled": "Cancelled",
+          "yearly": "Yearly",
+          "monthly": "Monthly"
+        },
+        "price": {
+          "trialStarts": "Billing starts {{date}}",
+          "trialYearlyStarts": "Billed yearly from {{date}}",
+          "free": "$0",
+          "billedYearly": "Billed yearly"
+        },
+        "banners": {
+          "endingDated": {
+            "title": "{{plan}} ends {{date}}",
+            "body": "You can keep your plan in the billing portal."
+          },
+          "ending": {
+            "title": "{{plan}} is set to end",
+            "body": "You can keep your plan in the billing portal."
+          },
+          "paymentFailedRetry": {
+            "title": "Payment failed",
+            "body": "Free limits apply until the payment goes through. Next retry {{date}}."
+          },
+          "coveredPastDue": {
+            "title": "{{workspace}} already covers you",
+            "body": "Review the failed payment in the billing portal."
+          },
+          "coveredPastDueUnnamed": {
+            "title": "A workspace already covers you",
+            "body": "Review the failed payment in the billing portal."
+          },
+          "coveredStripeTrial": {
+            "title": "{{workspace}} already covers you",
+            "body": "Your Pro trial will become a paid subscription when it ends."
+          },
+          "coveredStripeTrialUnnamed": {
+            "title": "A workspace already covers you",
+            "body": "Your Pro trial will become a paid subscription when it ends."
+          },
+          "coveredPaying": {
+            "title": "{{workspace}} already covers you",
+            "body": "You still pay for {{plan}}."
+          },
+          "coveredPayingUnnamed": {
+            "title": "A workspace already covers you",
+            "body": "You still pay for {{plan}}."
+          },
+          "coveredStore": {
+            "title": "{{workspace}} already covers you",
+            "body": "You can review your {{plan}} purchase in your phone's app store."
+          },
+          "coveredStoreUnnamed": {
+            "title": "A workspace already covers you",
+            "body": "You can review your {{plan}} purchase in your phone's app store."
+          },
+          "covered": {
+            "title": "{{workspace}} covers you",
+            "body": "Your workspace seat gives you unlimited use here too."
+          },
+          "coveredUnnamed": {
+            "title": "A workspace covers you",
+            "body": "Your workspace seat gives you unlimited use here too."
+          },
+          "paymentFailed": {
+            "title": "Payment failed",
+            "body": "Free limits apply until the payment goes through."
+          },
+          "storeRenewalFailed": {
+            "title": "Renewal failed",
+            "body": "Your phone's app store is retrying. Update your payment there."
+          },
+          "weeklyLimit": {
+            "title": "Weekly limit reached",
+            "body": "Cloud transcription comes back as words from more than 7 days ago drop off. Local models and your own API keys still work."
+          }
+        },
+        "details": {
+          "nextInvoice": "Next invoice",
+          "finalInvoice": "Final invoice",
+          "firstInvoice": "First invoice",
+          "nextRetry": "Next retry",
+          "amountDue": "Amount due",
+          "ends": "Ends",
+          "ended": "Ended",
+          "billingContact": "Billing contact",
+          "periodEnds": "Current period ends",
+          "billedThrough": "Billed through",
+          "accessUntil": "Access until"
+        }
+      },
+      "workspace": {
+        "managedAccount": "Managed account",
+        "billingDetails": "Billing Details",
+        "workspaceDetails": "Workspace Details",
+        "badges": {
+          "trial_one": "Trial · {{count}} day left",
+          "trial_other": "Trial · {{count}} days left",
+          "trialUndated": "Trial",
+          "pastDue": "Past due",
+          "unpaid": "Unpaid",
+          "incomplete": "Incomplete",
+          "cancelled": "Cancelled",
+          "paused": "Paused"
+        },
+        "interval": {
+          "monthly": "Monthly",
+          "annual": "Yearly"
+        },
+        "planLine": {
+          "seatPrice": "{{price}} per seat per month",
+          "customPricing": "Custom pricing",
+          "free": "$0",
+          "invoicedByOpenWhispr": "Invoiced by OpenWhispr",
+          "paidBy": "Paid by {{workspace}}",
+          "personalApplies": "Your personal plan applies"
+        },
+        "actions": {
+          "manageBilling": "Manage billing",
+          "updatePayment": "Update payment",
+          "finishCheckout": "Finish checkout",
+          "keepPlan": "Keep {{plan}}",
+          "resubscribe": "Resubscribe",
+          "openConsole": "Open console",
+          "upgradeEnterprise": "Upgrade to Enterprise",
+          "viewPersonal": "View personal plan",
+          "copyEmail": "Copy email"
+        },
+        "banners": {
+          "ends": {
+            "title": "{{plan}} ends {{date}}",
+            "body": "Your members keep {{plan}} until then."
+          },
+          "endsUndated": {
+            "title": "{{plan}} is set to end",
+            "body": "Your members keep {{plan}} until the current period ends."
+          },
+          "paymentFailed": {
+            "title": "Payment failed",
+            "body": "Update the payment to restore {{plan}} for your members."
+          },
+          "paused": {
+            "title": "{{plan}} is paused",
+            "body": "Your members are on their personal plans until the payment goes through."
+          },
+          "checkoutIncomplete": {
+            "title": "Checkout not finished",
+            "body": "Finish checkout to start {{plan}} for your members."
+          },
+          "ended": {
+            "title": "{{plan}} ended {{date}}",
+            "body": "Your members are back on their personal plans."
+          },
+          "endedUndated": {
+            "title": "{{plan}} ended",
+            "body": "Your members are back on their personal plans."
+          },
+          "memberPaymentProblem": {
+            "title": "{{workspace}} has a payment problem",
+            "body": "Your personal plan applies until the workspace payment goes through."
+          },
+          "memberPaused": {
+            "title": "The plan for {{workspace}} is paused",
+            "body": "Your personal plan applies until it comes back."
+          }
+        },
+        "usage": {
+          "seats": "Seats",
+          "members": "Members",
+          "noSeatsLeft": "No seats left",
+          "noSeatsLeftWithInvites_one": "No seats left · {{count}} pending invite",
+          "noSeatsLeftWithInvites_other": "No seats left · {{count}} pending invites",
+          "pendingInvites_one": "{{count}} pending invite",
+          "pendingInvites_other": "{{count}} pending invites"
+        },
+        "details": {
+          "nextInvoice": "Next invoice",
+          "nextRetry": "Next retry",
+          "amountDue": "Amount due",
+          "billingContact": "Billing contact",
+          "finalInvoice": "Final invoice",
+          "firstInvoice": "First invoice",
+          "ends": "Ends",
+          "ended": "Ended",
+          "billing": "Billing",
+          "periodEnds": "Current period ends",
+          "workspace": "Workspace",
+          "yourRole": "Your role",
+          "yourSeat": "Your seat",
+          "managedBy": "Managed by",
+          "invoicedByOpenWhispr": "Invoiced by OpenWhispr",
+          "paidSeat": "Paid seat",
+          "noPaidSeat": "No paid seat"
+        }
+      }
     }
   },
   "models": {
@@ -3319,6 +3574,9 @@
         "groq_whisper_large_v3_turbo": "216x real-time speed",
         "mistral_voxtral_mini_latest": "Fast multilingual transcription",
         "gemini_3_5_transcribe": "Google's Gemini speech-to-text",
+        "elevenlabs_scribe_v3": "Most accurate multilingual transcription",
+        "elevenlabs_scribe_v2": "Accurate multilingual transcription",
+        "elevenlabs_scribe_v3_live": "Live transcription for note recording",
         "gemini_3_5_transcribe_live": "Realtime streaming speech-to-text",
         "corti_transcribe": "Clinical-grade medical transcription",
         "xai_grok_stt": "High-accuracy speech recognition by xAI",
@@ -3326,6 +3584,7 @@
         "deepgram_nova_3": "Deepgram's most accurate realtime model",
         "assemblyai_universal_streaming_english": "Immutable realtime transcripts, English",
         "assemblyai_universal_streaming_multilingual": "Immutable realtime transcripts, multilingual",
+        "assemblyai_dictation": "Transcription and cleanup in one call, 32 languages",
         "assemblyai_universal_3_5_pro": "Highest accuracy realtime, 18 languages",
         "assemblyai_universal_3_6_pro": "Highest accuracy realtime, 32 languages",
         "mistral_voxtral_mini_transcribe_3_0": "Fast transcription in 50+ languages (preview)",
@@ -3389,6 +3648,7 @@
         "gemini_gemini_3_8_flash": "Most capable Flash model",
         "gemini_gemini_4_argon": "Google's frontier reasoning model",
         "tinfoil_kimi_k3": "Private Moonshot flagship with native reasoning and vision, 256K context",
+        "tinfoil_kimi_k3_1_pro": "Private Moonshot flagship for long-horizon coding and agentic work, 256K context",
         "tinfoil_deepseek_v4_1_flash": "Private fast DeepSeek model with optional reasoning, 1M context"
       },
       "enterprise": {
@@ -3442,6 +3702,9 @@
         "liquidai_lfm2_2_6b_q4_k_m": "Balanced LFM2 for higher quality cleanup",
         "liquidai_lfm2_5_350m_q8_0": "Ultra-light model for fast dictation cleanup",
         "liquidai_lfm2_5_230m_q8_0": "Tiny model, instant cleanup on modest hardware",
+        "liquidai_lfm3_1_7b_qad_q4_0": "Liquid AI's newest small model",
+        "liquidai_lfm3_vl_2b_qad_q4_0": "Liquid AI's LFM3 vision model, used here for text",
+        "liquidai_lfm3_omni_2b_q4_0": "Liquid AI's LFM3 multimodal model, used here for text",
         "qwen_qwen3_5_0_8b_q4_k_m": "Tiny Qwen3.5 for the fastest cleanup",
         "qwen_qwen3_8_27b_q4_k_m": "Most capable Qwen model for 32 GB machines",
         "qwen_qwen3_6_35b_a3b_q4_k_m": "Fast mixture-of-experts model, 3B active parameters",
@@ -3625,10 +3888,13 @@
     }
   },
   "workspaces": {
+    "defaultName": "{{name}}'s workspace",
+    "defaultNameFallback": "My workspace",
     "switcher": {
       "workspaces": "Workspaces",
       "add": "Add workspace",
-      "invitePeople": "Invite people"
+      "invitePeople": "Invite people",
+      "unavailable": "Workspaces aren't available right now."
     },
     "create": {
       "title": "Create workspace",
@@ -3758,16 +4024,17 @@
       "leave": {
         "title": "Leave {{name}}?",
         "body": "You'll lose access to this workspace, its teams, and its teamspaces. The workspace Owner or an Admin can invite you back.",
+        "privateNotes": "Your private notes in this workspace will move to {{workspace}}.",
         "failed": "Couldn't leave {{name}}. Check your connection and try again."
       },
       "left": {
         "title": "You left {{name}}"
       },
-      "chooseAnother": "Choose another workspace to continue.",
-      "chooseWorkspace": "Choose workspace",
+      "nowIn": "You're now in {{workspace}}.",
       "delete": {
         "title": "Delete {{name}}?",
-        "body": "This permanently deletes the workspace, its notes, files, teams, and teamspaces for everyone. This can't be undone."
+        "body": "This permanently deletes the workspace, its notes, files, teams, and teamspaces for everyone. This can't be undone.",
+        "privateNotes": "Your private notes in this workspace will move to {{workspace}}."
       },
       "deleting": {
         "title": "Deleting {{name}}…",
@@ -4010,11 +4277,14 @@
     "mutationErrors": {
       "folderNameRequired": "Enter a folder name.",
       "folderAlreadyExists": "A folder with that name already exists.",
+      "folderNameTakenIn": "“{{name}}” is already used in “{{parent}}”. A folder name can only be used once in each space.",
+      "folderNameTakenTopLevel": "“{{name}}” is already used at the top level. A folder name can only be used once in each space.",
+      "reservedSubfolderName": "“{{name}}” is the name of a default folder in Private, so a subfolder can't use it.",
       "folderNotFound": "That folder could not be found.",
       "defaultFolderImmutable": "Default folders cannot be changed.",
       "spaceNameRequired": "Enter a space name.",
       "spaceNotFound": "That space could not be found.",
-      "privateSpaceImmutable": "Your Personal space cannot be changed.",
+      "privateSpaceImmutable": "Private can't be changed.",
       "generic": "The change could not be completed. Please try again."
     },
     "sidebar": {
@@ -4023,10 +4293,10 @@
       "templatesAndActions": "Templates & Actions"
     },
     "spaces": {
-      "privateSpaces": "Private notes",
+      "privateSpaces": "Private",
       "teamSpaces": "Teamspaces",
-      "personal": "Personal",
-      "privateTooltip": "Only you can see your Personal space",
+      "personal": "Private",
+      "privateTooltip": "Only you can see the folders and notes here.",
       "newSpace": "New teamspace",
       "nameAndIconLabel": "Name and icon",
       "changeEmoji": "Change emoji",
@@ -4048,9 +4318,23 @@
       "noSpacesFound": "No spaces found",
       "spaceRoot": "Space root",
       "moveConfirm": "Move",
+      "copyToPrivate": "Copy to Private",
+      "moveToWorkspacePrivate": "Move to {{workspace}} › Private",
+      "workspacePrivate": "{{workspace}} › Private",
+      "confirmCopyTitle": "Copy to Private?",
+      "confirmCopy": "The note stays in {{space}}.",
+      "copiedToPrivate": "Copied to Private",
+      "couldNotCopyNote": "Couldn't copy note",
+      "openCopy": "Open",
+      "noteAlreadyInTeam": "“{{title}}” is already in {{space}}. Use Copy to Private to keep a private copy.",
+      "folderAlreadyInTeam": "“{{name}}” is already in {{space}}. Use Copy to Private on its notes to keep private copies.",
+      "workspacesLoading": "Your workspaces are still loading. Try again in a moment.",
+      "cantMoveIntoLegacy": "Notes can't move into {{space}}: it isn't part of a workspace.",
       "confirmMoveInTitle": "Move to {{space}}?",
       "confirmMoveIn": "Everyone in {{space}} will be able to view and edit this note. Notes can't be moved back out of a teamspace later.",
       "confirmMoveInFolder": "Everyone in {{space}} will be able to view and edit this folder and its notes. Folders and notes can't be moved back out of a teamspace later.",
+      "confirmMoveInFolderSubfolders": "Everyone in {{space}} will be able to view and edit this folder, including {{subfolders}} and {{notes}}. Folders and notes can't be moved back out of a teamspace later.",
+      "confirmMoveInSubfolder": "Everyone in {{space}} will be able to view and edit this subfolder and its notes. It will become a top-level folder in {{space}}, and this move can't be undone.",
       "cantMoveOut": "Notes can't be moved out of a teamspace.",
       "cantMoveTeammate": "Only the note's owner or a workspace admin can move it to another space.",
       "moved": "Moved “{{title}}” to {{target}}",
@@ -4065,10 +4349,10 @@
       "noteCount_other": "{{count}} notes",
       "accessRevoked": "You no longer have access to {{space}}",
       "accessRevokedActiveNote": "You no longer have access to {{space}} — \"{{title}}\" is no longer available on this device",
-      "movedToPersonal": "You no longer have access to {{space}} — “{{title}}” was moved to your Personal space",
-      "updateDeniedNote": "You don't have permission to change “{{title}}” — your unsynced edits were saved as a copy in your Personal space",
+      "movedToPersonal": "You no longer have access to {{space}} — “{{title}}” was moved to Private",
+      "updateDeniedNote": "You don't have permission to change “{{title}}” — your unsynced edits were saved as a copy in Private",
       "deleteDeniedNote": "“{{title}}” wasn't deleted — only the note's owner or an admin can delete it",
-      "updateDeniedFolder": "You don't have permission to change “{{name}}” — your unsynced work was saved to your Personal space",
+      "updateDeniedFolder": "You don't have permission to change “{{name}}” — your unsynced work was saved to Private",
       "deleteDeniedFolder": "“{{name}}” wasn't deleted — only an admin can delete a space folder",
       "conflictBanner": "A newer version of this note exists.",
       "conflictRefresh": "Refresh",
@@ -4094,11 +4378,29 @@
         "loadError": "Couldn't load teams."
       }
     },
+    "deviceNotes": {
+      "title": "On this device",
+      "info": "These notes have not been assigned to an account. Move a note to keep it and edit.",
+      "infoLabel": "About notes on this device",
+      "moveNote": "Move to my Private",
+      "moveFolder": "Move folder to my Private",
+      "moveAll": "Move all to my Private",
+      "moveAllTo": "Move all to folder",
+      "moved": "Moved to your Private",
+      "movedCount_one": "Moved {{count}} note to your Private",
+      "movedCount_other": "Moved {{count}} notes to your Private",
+      "moveFailed": "Couldn't move this note",
+      "moveFolderFailed": "Couldn't move these notes",
+      "banner": "This note isn't assigned to an account yet.",
+      "notesHeading": "Notes",
+      "summaryHeading": "AI summary",
+      "transcriptHeading": "Transcript"
+    },
     "structureIntro": {
       "title": "Where your notes live",
       "description": "OpenWhispr separates private thoughts from shared work so the right people see the right notes.",
       "personal": {
-        "title": "Personal space",
+        "title": "Private",
         "description": "Only you can see the folders and notes here."
       },
       "workspace": {
@@ -4109,7 +4411,7 @@
         "title": "Teamspace",
         "description": "A shared area inside a workspace. Add people or teams to give them access."
       },
-      "contents": "Each space can contain folders and notes.",
+      "contents": "Each space can contain folders and notes, and each folder can have subfolders.",
       "done": "Got it",
       "reopen": "Learn how spaces are organized"
     },
@@ -4122,13 +4424,18 @@
       "title": "Folders",
       "soon": "Soon",
       "folderName": "Folder name",
+      "topLevel": "Top level",
       "couldNotCreate": "Couldn't create folder",
       "couldNotRename": "Couldn't rename folder",
       "couldNotDelete": "Couldn't delete folder",
       "deleteTitle": "Delete folder?",
       "deleteDescription": "This will permanently delete \"{{name}}\" and its {{count}} note(s). This cannot be undone.",
       "deleteDescriptionEmpty": "This will permanently delete \"{{name}}\". This cannot be undone.",
-      "deleteConfirm": "Delete folder and notes"
+      "deleteDescriptionSubfolders": "This will permanently delete \"{{name}}\", including {{subfolders}} and {{notes}}. This cannot be undone.",
+      "subfolderCount_one": "{{count}} subfolder",
+      "subfolderCount_other": "{{count}} subfolders",
+      "deleteConfirm": "Delete folder and notes",
+      "recordingInFolder": "“{{title}}” in this folder is being recorded. Stop the recording, then delete the folder."
     },
     "list": {
       "title": "Notes",
@@ -4203,7 +4510,126 @@
         "taskList": "Checklist",
         "blockquote": "Quote",
         "table": "Insert table"
-      }
+      },
+      "blocks": {
+        "groups": {
+          "basic": "Basic",
+          "blocks": "Blocks",
+          "style": "Style",
+          "tools": "Tools"
+        },
+        "slash": {
+          "heading": "Heading {{level}}",
+          "bulletList": "Bulleted list",
+          "orderedList": "Numbered list",
+          "taskList": "Checkbox task",
+          "quote": "Quote",
+          "divider": "Divider",
+          "table": "Table",
+          "codeBlock": "Code block",
+          "codeHint": "Syntax colours",
+          "noteLink": "Link to note",
+          "noteLinkHint": "or type [[",
+          "toggle": "Toggle",
+          "callout": "Callout: {{type}}",
+          "toc": "Table of contents",
+          "mathBlock": "Math block",
+          "inlineMath": "Inline math",
+          "inlineMathHint": "or type $$x^2$$",
+          "emoji": "Emoji",
+          "emojiHint": "or type :smile:",
+          "highlight": "Highlight",
+          "subscript": "Subscript",
+          "superscript": "Superscript",
+          "color": "Text colour: {{name}}",
+          "font": "Font: {{name}}",
+          "ruby": "Ruby annotation",
+          "rubyHint": "Reading above text",
+          "align": "Align: {{dir}}",
+          "find": "Find and replace",
+          "invisible": "Show/hide invisible characters"
+        },
+        "callout": {
+          "note": "Note",
+          "tip": "Tip",
+          "important": "Important",
+          "warning": "Warning",
+          "caution": "Caution"
+        },
+        "colors": {
+          "default": "Default",
+          "red": "Red",
+          "orange": "Orange",
+          "yellow": "Yellow",
+          "green": "Green",
+          "blue": "Blue",
+          "purple": "Purple",
+          "gray": "Gray"
+        },
+        "fonts": {
+          "default": "Default",
+          "serif": "Serif",
+          "monospace": "Monospace"
+        },
+        "align": {
+          "left": "Left",
+          "center": "Center",
+          "right": "Right",
+          "justify": "Justify"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX, e.g. \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX, e.g. x^2",
+          "emoji": "Emoji name, e.g. rocket",
+          "reading": "Reading, e.g. かんじ",
+          "textReading": "Text|reading, e.g. 漢字|かんじ",
+          "apply": "Enter to apply · Esc to cancel",
+          "mathEdit": "Enter to save · Esc to cancel · empty deletes"
+        },
+        "toolbar": {
+          "highlight": "Highlight",
+          "subscript": "Subscript",
+          "superscript": "Superscript",
+          "color": "Text colour",
+          "font": "Font",
+          "alignment": "Alignment",
+          "ruby": "Ruby text (reading above characters)"
+        },
+        "find": {
+          "find": "Find",
+          "replace": "Replace",
+          "all": "All",
+          "previous": "Previous",
+          "next": "Next",
+          "matchCase": "Match case",
+          "close": "Close"
+        },
+        "count": "Words: {{words}} · Characters: {{chars}}",
+        "link": {
+          "header": "Link to note",
+          "empty": "Type a note title…",
+          "create": "Link to “{{title}}” (no note yet)",
+          "open": "Open “{{title}}”",
+          "missing": "No note titled “{{title}}”"
+        },
+        "backlinks": {
+          "label": "Linked from",
+          "more": "+{{count}} more",
+          "untitled": "Untitled"
+        },
+        "toc": {
+          "title": "Contents",
+          "empty": "Add headings to build the table of contents."
+        }
+      },
+      "lostNoteCopy": {
+        "title": "Your latest edits are in a new note",
+        "description": "“{{title}}” was deleted before they were saved. The new note is in Private.",
+        "open": "Open note"
+      },
+      "muteMic": "Mute microphone",
+      "unmuteMic": "Unmute microphone",
+      "micMuted": "Microphone muted"
     },
     "participants": {
       "attendee": "attendee",
@@ -4343,14 +4769,25 @@
         "title": "Meeting audio has gone quiet",
         "description": "No one has been heard for a few minutes. If the call is still going, check your sound output device."
       },
+      "externalAttendeesBlocked": "This meeting includes people outside your organization. Your organization doesn't allow transcribing it.",
+      "externalAttendeesUnverifiable": "OpenWhispr couldn’t verify everyone on this invite. Your organization only allows transcription of internal meetings.",
+      "externalAttendeesStopped": "Recording stopped because the invite includes someone outside your organization. You can keep taking notes.",
+      "internalAttendeesQuestion": "Is everyone in this meeting from your organization?",
+      "internalAttendeesConfirm": "Yes, start",
       "recordingDisabledByOrg": "Meeting recording is disabled by your organization.",
       "stoppedAccountChanged": "Recording stopped because you signed out or switched accounts.",
       "stoppedPolicyUnresolved": "Recording stopped because your organization's settings couldn't be checked.",
-      "stoppedWorkspaceChanged": "Recording stopped because you switched workspaces."
+      "stoppedWorkspaceChanged": "Recording stopped because you switched workspaces.",
+      "recordingCopy": {
+        "title": "Recording moved to a new note",
+        "description": "“{{title}}” was deleted during the recording. The transcript is saved in a new note in Private.",
+        "open": "Open note"
+      }
     },
     "meetingPill": {
       "returnToNote": "Return to recording",
-      "waitingForMicrophone": "Waiting for microphone"
+      "waitingForMicrophone": "Waiting for microphone",
+      "micMuted": "Microphone muted"
     },
     "empty": {
       "title": "No notes here yet",
@@ -4366,7 +4803,9 @@
       "addExisting": "Add existing",
       "addCount": "Add {{count}} notes",
       "noResults": "No matching notes",
-      "noNotesAvailable": "No other notes available"
+      "noNotesAvailable": "No other notes available",
+      "notAdded_one": "{{count}} note couldn't be added",
+      "notAdded_other": "{{count}} notes couldn't be added"
     },
     "context": {
       "moveToFolder": "Move to folder",
@@ -4375,6 +4814,7 @@
       "searchFolders": "Search folders...",
       "noResults": "No folders found",
       "newFolder": "New folder",
+      "newSubfolder": "New subfolder",
       "showInFileManager": "Show in {{manager}}"
     },
     "actions": {
@@ -4591,6 +5031,7 @@
         "members_one": "{{count}} member",
         "members_other": "{{count}} members"
       },
+      "subfolders": "Subfolders",
       "banner": {
         "title": {
           "team": "Your teamspace",
@@ -4662,6 +5103,7 @@
       "triggerPlaceholder": "e.g. cal link",
       "replacementLabel": "Replacement",
       "replacementPlaceholder": "Text to insert when you say the trigger…",
+      "variablesLabel": "Insert",
       "create": "Create snippet",
       "duplicate": "A snippet with this trigger already exists",
       "emptyTitle": "Stuff you shouldn't have to say",
@@ -4805,7 +5247,6 @@
       },
       "locked": {
         "noWorkspace": "Shared dictionaries are included with Business. Share your team's jargon, product names and acronyms with everyone.",
-        "chooseWorkspace": "You're in Personal. Switch to a workspace to use its shared words.",
         "upgradeAdmin": "Shared dictionaries are included with Business. Upgrade {{workspace}} so everyone gets the same words.",
         "upgradeMember": "Shared dictionaries are included with Business. Ask an admin to upgrade {{workspace}}.",
         "paused_one": "{{workspace}}'s {{count}} shared word is paused. Upgrade to Business to use it in dictation again.",
@@ -5058,12 +5499,24 @@
       "request_accessStatus": "Asking for access...",
       "look_at_screenName": "Look at screen",
       "look_at_screenStatus": "Looking at your screen...",
-      "look_at_screenSuccess": "Read the screen.",
-      "look_at_screenFailed": "The screen couldn't be read.",
       "request_api_keyName": "API key",
       "request_api_keyStatus": "Asking for an API key...",
       "open_settingsName": "Settings",
-      "open_settingsStatus": "Pointing you to Settings..."
+      "open_settingsStatus": "Pointing you to Settings...",
+      "salesforce_search_recordsName": "Search Salesforce",
+      "salesforce_search_recordsStatus": "Searching Salesforce…",
+      "salesforce_get_recordName": "Salesforce record",
+      "salesforce_get_recordStatus": "Reading Salesforce record…",
+      "salesforce_describe_fieldsName": "Opportunity fields",
+      "salesforce_describe_fieldsStatus": "Reading Opportunity fields…",
+      "salesforce_get_briefingName": "Customer briefing",
+      "salesforce_get_briefingStatus": "Preparing customer briefing…",
+      "salesforce_export_conversationName": "Salesforce activity",
+      "salesforce_export_conversationStatus": "Preparing Salesforce activity…",
+      "salesforce_update_fieldsName": "Salesforce field updates",
+      "salesforce_update_fieldsStatus": "Preparing Salesforce field updates…",
+      "salesforce_present_briefingName": "Briefing findings",
+      "salesforce_present_briefingStatus": "Selecting briefing evidence…"
     },
     "turn": {
       "reasoning": "Reasoning",
@@ -5100,7 +5553,8 @@
           "slack": "I can post the message to Slack for you.",
           "linear": "I can find and file Linear issues for you.",
           "github": "I can find and file GitHub issues for you.",
-          "calendar": "I can check your availability and suggest times."
+          "calendar": "I can check your availability and suggest times.",
+          "salesforce": "I can read Salesforce records and save reviewed meeting notes to them."
         }
       },
       "access": {
@@ -5200,6 +5654,7 @@
     "waitingForAnswer": "Waiting for answer"
   },
   "integrations": {
+    "apiAccessDisabled": "Your organization has turned off API and MCP access.",
     "title": "Integrations",
     "googleCalendar": {
       "title": "Google Calendar",
@@ -5322,7 +5777,9 @@
         "default": "Send to {{destination}}",
         "email": "Email to {{destination}}",
         "issue": "Create issue in {{destination}}",
-        "comment": "Comment on {{destination}}"
+        "comment": "Comment on {{destination}}",
+        "salesforceActivity": "Save conversation to {{destination}}",
+        "salesforceFields": "Review Opportunity fields on {{destination}}"
       },
       "identity": "As {{account}}",
       "identityWithWorkspace": "As {{account}} in {{workspace}}",
@@ -5413,6 +5870,31 @@
           "refused": "Linear refused the request. Nothing was sent.",
           "unknown_action": "OpenWhispr can't do that in Linear. Nothing was sent.",
           "generic": "Something went wrong. Nothing was sent to Linear."
+        },
+        "salesforce": {
+          "reconnect_needed": "Salesforce needs to be reconnected in Settings.",
+          "connection_changed": "The Salesforce connection changed before sending, so nothing was sent.",
+          "credential_save_failed": "The Salesforce login couldn't be saved on this computer. Nothing was sent. Try again.",
+          "network": "Salesforce couldn't be reached. Nothing was sent.",
+          "rate_limited": "Salesforce is busy. Try again shortly.",
+          "forbidden": "Your Salesforce account isn't allowed to do that. Nothing was sent.",
+          "invalid_input": "Salesforce couldn't accept this as written. Nothing was sent.",
+          "too_long": "Too long for Salesforce. Nothing was sent.",
+          "refused": "Salesforce refused the request. Nothing was sent.",
+          "unknown_action": "OpenWhispr can't do that in Salesforce. Nothing was sent.",
+          "generic": "Something went wrong. Nothing was sent to Salesforce.",
+          "stale_record": "Salesforce changed since this review. Refresh and review again.",
+          "source_unavailable": "The source note is missing or inaccessible.",
+          "export_required": "Save the activity to this Opportunity before updating its fields.",
+          "duplicate_operation": "This export was saved again since this review, or a save is still in progress. Nothing was sent. Prepare a new review.",
+          "invalid_field": "Choose up to three writable custom Opportunity text fields.",
+          "storage_unavailable": "Local export history is unavailable. No new write was started.",
+          "task_status_unavailable": "Salesforce has no available completed Task status. Ask your Salesforce administrator.",
+          "not_found": "This Salesforce record no longer exists, or you can't access it. Nothing was sent.",
+          "invalid_reference": "Salesforce couldn't accept this as written. Nothing was sent.",
+          "no_fields_selected": "Select at least one field, or cancel.",
+          "record_locked": "This Salesforce record is locked, for example by an approval process. Nothing was sent.",
+          "validation_failed": "A Salesforce validation rule, duplicate rule or required field blocked this. Check the record in Salesforce. Nothing was sent."
         }
       },
       "email": {
@@ -5441,11 +5923,14 @@
       "openIn": {
         "github": "Open in GitHub",
         "gmail": "Open in Gmail",
-        "linear": "Open in Linear"
+        "linear": "Open in Linear",
+        "salesforce": "Open in Salesforce"
       },
       "sendLabel": {
         "issue": "Create issue",
-        "comment": "Comment"
+        "comment": "Comment",
+        "salesforceActivity": "Save activity",
+        "salesforceFields": "Save fields"
       },
       "issue": {
         "created": "Created {{result}}.",
@@ -5488,7 +5973,26 @@
       "identityChanged": "Now sending as {{account}}. Press Send to send it.",
       "connectToSend": "Connect {{name}} to send this",
       "edit": "Edit",
-      "doneEditing": "Done editing"
+      "doneEditing": "Done editing",
+      "salesforce": {
+        "include": "Include {{field}}",
+        "omitted": "Omitted — this field will not change",
+        "before": "Current value",
+        "after": "Proposed replacement",
+        "empty": "Empty",
+        "limit": "{{count}} / {{max}} characters",
+        "noneSelected": "Select at least one field, or cancel.",
+        "tooLong": "A selected field exceeds its character limit.",
+        "salesforceActivity": {
+          "sent": "Activity saved to {{destination}}.",
+          "unknown": "Couldn't confirm the changes. Check {{destination}} in Salesforce before trying again."
+        },
+        "salesforceFields": {
+          "sent": "Fields saved on {{destination}}.",
+          "unknown": "Couldn't confirm the changes. Check {{destination}} in Salesforce before trying again."
+        },
+        "savedLabel": "Saved"
+      }
     },
     "policyOff": "Connectors are turned off by your organization.",
     "email": {
@@ -5664,7 +6168,9 @@
         "slack_send_message": "Message to {{destination}}",
         "gmail_send": "Email to {{destination}}",
         "linear_create_issue": "New issue in {{destination}}",
-        "linear_comment": "Comment on {{destination}}"
+        "linear_comment": "Comment on {{destination}}",
+        "salesforce_export_conversation": "Save conversation to {{destination}}",
+        "salesforce_update_fields": "Review Opportunity fields on {{destination}}"
       },
       "unlabeledActions": {
         "email_draft": "Email draft",
@@ -5673,7 +6179,9 @@
         "slack_send_message": "Slack message",
         "gmail_send": "Gmail email",
         "linear_create_issue": "Linear issue",
-        "linear_comment": "Linear comment"
+        "linear_comment": "Linear comment",
+        "salesforce_export_conversation": "Salesforce activity",
+        "salesforce_update_fields": "Salesforce field updates"
       },
       "states": {
         "pending": "Waiting",
@@ -5775,6 +6283,31 @@
           "refused": "Linear refused the request.",
           "unknown_action": "Not available in Linear.",
           "generic": "That didn't work in Linear."
+        },
+        "salesforce": {
+          "reconnect_needed": "Salesforce needs to be reconnected.",
+          "connection_changed": "The Salesforce connection changed. Nothing was sent.",
+          "credential_save_failed": "Couldn't save the Salesforce login on this computer.",
+          "network": "Couldn't reach Salesforce.",
+          "rate_limited": "Salesforce is busy.",
+          "forbidden": "Not allowed in Salesforce.",
+          "invalid_input": "Salesforce couldn't accept it.",
+          "too_long": "Too long for Salesforce.",
+          "refused": "Salesforce refused the request.",
+          "unknown_action": "Not available in Salesforce.",
+          "generic": "That didn't work in Salesforce.",
+          "stale_record": "Salesforce changed since this review. Refresh and review again.",
+          "source_unavailable": "The source note is missing or inaccessible.",
+          "export_required": "Save the activity to this Opportunity before updating its fields.",
+          "duplicate_operation": "This export was saved again since this review, or a save is still in progress. Nothing was sent.",
+          "invalid_field": "Choose up to three writable custom Opportunity text fields.",
+          "storage_unavailable": "Local export history is unavailable. No new write was started.",
+          "task_status_unavailable": "Salesforce has no available completed Task status. Ask your Salesforce administrator.",
+          "not_found": "Not found in Salesforce.",
+          "invalid_reference": "Salesforce couldn't accept it.",
+          "no_fields_selected": "Select at least one field, or cancel.",
+          "record_locked": "The Salesforce record is locked.",
+          "validation_failed": "Blocked by a Salesforce rule or required field."
         }
       },
       "unknownSent": {
@@ -5787,7 +6320,120 @@
     },
     "beta": "Beta",
     "upsell": "Connectors are included with paid plans. Upgrade to let the assistant work in your tools.",
-    "locked": "Included with paid plans"
+    "locked": "Included with paid plans",
+    "salesforce": {
+      "title": "Salesforce",
+      "description": "Export reviewed conversations and prepare briefings for a selected customer. Note associations are stored only on this device.",
+      "connect": "Connect",
+      "reconnect": "Reconnect",
+      "disconnect": "Disconnect",
+      "connecting": "Finish connecting in your browser…",
+      "connectedAs": "Connected as {{account}} in {{workspace}}",
+      "needsReconnect": "Salesforce needs to be reconnected.",
+      "errors": {
+        "connect_failed": "Couldn't connect Salesforce. Try again.",
+        "disconnect_failed": "Couldn't disconnect Salesforce. Try again.",
+        "oauth_denied": "Salesforce wasn't connected because access wasn't allowed.",
+        "oauth_timeout": "Connecting took too long. Try again.",
+        "oauth_state_mismatch": "That sign-in link was out of date. Try again.",
+        "ports_busy": "Another app is using the ports OpenWhispr needs to connect. Close it and try again.",
+        "token_exchange_failed": "Salesforce didn't finish connecting. Try again.",
+        "not_configured": "Salesforce isn't available in this build.",
+        "connection_changed": "Your account or Salesforce connection changed while connecting. Try again.",
+        "signed_out": "Sign in to OpenWhispr to connect Salesforce.",
+        "policy_blocked": "Connectors are turned off by your organization.",
+        "policy_unavailable": "Couldn't check your organization's settings. Try again.",
+        "permission_not_granted": "Salesforce wasn't connected because not every permission was granted. Connect again and allow all of them.",
+        "invalid_login_domain": "Enter test.salesforce.com or your company's My Domain, like yourcompany.my.salesforce.com."
+      },
+      "browser": {
+        "connectedTitle": "Salesforce is connected",
+        "connectedBody": "You can close this tab and return to OpenWhispr.",
+        "failedTitle": "Salesforce wasn't connected",
+        "failedBody": "Return to OpenWhispr to try again."
+      },
+      "notes": {
+        "updateExisting": "Update the previously saved activity; this will not create another Task.",
+        "earlierAttemptUncertain": "An earlier attempt may already have saved this to Salesforce. Check the record there before sending again.",
+        "replacesMissing": "The activity saved earlier is no longer on this record in Salesforce, or you can no longer see it, so a new one will be created.",
+        "editedInSalesforce": "This activity was edited in Salesforce after OpenWhispr saved it. Sending replaces those edits.",
+        "sourceNote": "From the note “{{title}}”.",
+        "sourceNoteUntitled": "From an untitled note."
+      },
+      "provenance": "Source: OpenWhispr — {{title}}{{date}}",
+      "briefing": {
+        "untitledRecord": "Selected Salesforce record",
+        "retrieved": "Retrieved: {{time}}",
+        "crmFacts": "Current CRM facts",
+        "fields": {
+          "Name": "Name",
+          "PersonName": "Name",
+          "StageName": "Stage",
+          "CloseDate": "Close date",
+          "Amount": "Amount",
+          "CurrencyIsoCode": "Currency",
+          "NextStep": "Next step",
+          "OwnerId": "Owner",
+          "AccountId": "Account",
+          "Type": "Type",
+          "Industry": "Industry",
+          "Website": "Website",
+          "Phone": "Phone",
+          "FirstName": "First name",
+          "LastName": "Last name",
+          "Email": "Email",
+          "Title": "Title",
+          "Company": "Company",
+          "Status": "Status"
+        },
+        "notReturned": "not returned",
+        "notRecorded": "not recorded",
+        "linkedNameUnavailable": "linked; name unavailable",
+        "gaps": "Gaps and customer identity",
+        "identityNotVerified": "Customer identity is not verified by an export association. The notes were linked to the record selected by the user; customer names and account relationships have not been independently matched.",
+        "missingFieldsNote": "Missing or unreturned CRM fields do not establish budget approval, commitments, or agreement with meeting notes.",
+        "unavailableNotes": "Linked notes unavailable in the current workspace: {{count}}.",
+        "partial": "Coverage is partial: note count, source text, transcript or CRM results were limited. Absence from these excerpts does not establish absence from the meetings.",
+        "crmOnly": "No accessible meeting content was retrieved. This is a CRM-only briefing.",
+        "notPrepared": "Meeting findings were not prepared. Available source notes are listed below; no meeting conclusions have been inferred.",
+        "findings": "Meeting findings",
+        "findingsExplainer": "Source excerpts are reproduced below. Status labels are the assistant’s classification; confirmed means reported in the note, not independently verified. Owners and deadlines are only those stated in each excerpt.",
+        "categories": {
+          "takeaway": "Takeaways",
+          "decision": "Decisions",
+          "commitment": "Commitments",
+          "proposal": "Proposals",
+          "risk": "Risks",
+          "question": "Open questions"
+        },
+        "status": {
+          "confirmed": "Confirmed",
+          "proposed": "Proposed",
+          "unknown": "Unknown"
+        },
+        "conflict": "Potential conflict — unresolved",
+        "crmConflictEntry": "Salesforce {{label}}: {{value}}",
+        "sources": "Sources",
+        "noteCreated": "Note created: {{time}}.",
+        "lastEdited": "Last edited: {{time}}.",
+        "addedForBriefing": "Added for this briefing.",
+        "exported": "Exported: {{time}}.",
+        "savedActivity": "Saved Salesforce activity",
+        "sourcesExplainer": "Creation timestamps are not meeting dates. Saved Salesforce activities contain the exported summary; current notes may have changed since export.",
+        "sections": {
+          "personalNotes": "Personal notes",
+          "summary": "Saved AI summary",
+          "transcript": "Transcript characters {{start}}–{{end}}"
+        },
+        "prepared": "Prepared Salesforce briefing"
+      },
+      "loginDomain": {
+        "toggle": "Use a sandbox or company domain",
+        "label": "Salesforce sign-in domain",
+        "placeholder": "test.salesforce.com or yourcompany.my.salesforce.com",
+        "hint": "Leave empty to sign in to a production org."
+      }
+    }
   },
   "skills": {
     "pane": {
@@ -5833,6 +6479,7 @@
       "neverRun": "OpenWhispr never runs scripts",
       "uninstall": "Uninstall",
       "uninstallConfirm": "Uninstall {{name}}? It's removed from this computer.",
+      "uninstallConfirmSynced": "Uninstall {{name}}? It's removed from this computer and your other devices.",
       "problem": "This skill can't be used until it's fixed: {{reason}}",
       "tryNow": "Try now"
     },
@@ -5858,6 +6505,7 @@
     "manage": {
       "title": "Manage skills",
       "description": "Turn skills on or off, or remove the ones you don't use. Each one is saved on this computer.",
+      "descriptionBackedUp": "Turn skills on or off, or remove the ones you don't use. Each one is saved on this computer and backed up with Cloud backup.",
       "noMatches": "No skills match \"{{query}}\".",
       "none": "No skills yet."
     },
@@ -6008,6 +6656,9 @@
       "pasteNote": "Pastes without pressing Enter, so you choose when to run it.",
       "pasted": "Pasted",
       "pasteFailed": "Couldn't paste. The text is on your clipboard."
+    },
+    "sync": {
+      "tooLarge": "Too large to back up"
     }
   },
   "notesView": {
@@ -6211,7 +6862,7 @@
         "FOLDER_UNAVAILABLE": "This destination is unavailable. Choose another folder.",
         "SPACE_UNAVAILABLE": "This destination is unavailable. Choose another folder.",
         "FOLDER_NAME_REQUIRED": "Enter a folder name.",
-        "FOLDER_NAME_TAKEN": "A folder with that name already exists in this location.",
+        "FOLDER_NAME_TAKEN": "A folder with that name already exists in this space.",
         "CREATE_FAILED": "Could not finish. Please retry.",
         "LINKED_NOTE_CHANGED": "Review the destination, then join again.",
         "NOTE_UNAVAILABLE": "This note is unavailable. Retry without creating a replacement.",
@@ -6251,7 +6902,9 @@
       "timeout": "Your server took too long to respond.",
       "unreachable": "Couldn't reach your server. Check that it's running.",
       "noResponse": "Couldn't get a response from your server. Check its API key and that it's running.",
-      "unknown": "Your server returned an unexpected error."
+      "unknown": "Your server returned an unexpected error.",
+      "invalidHeaders": "A custom header for your server isn't valid.",
+      "redirected": "Your server redirected the request. Enter the address it redirects to."
     },
     "openSettings": "Open Settings",
     "copyDetails": "Copy details",
@@ -6344,6 +6997,7 @@
       "saveChanges": "Save Changes",
       "saved": "Tone & Style saved",
       "cleanupOff": "AI cleanup is off, so these tones aren't applied to your dictation. The assistant and chats still use them.",
+      "customPrompt": "You're using a custom cleanup prompt, so these tones aren't applied to your dictation. The assistant and chats still use them.",
       "turnOnCleanup": "Turn on AI cleanup",
       "enabled": "Tones & voices enabled",
       "enabledDescription": "AI cleanup, the assistant and chats use your tone for each kind of app. When this is off, they use the standard tone."
@@ -6444,5 +7098,16 @@
       "bootstrapMismatch": "The bootstrap file doesn't match your account, this workspace or its configured credentials.",
       "testLinkOtherWorkspace": "This test link is for a different workspace. Switch to that workspace and open the link again."
     }
+  },
+  "affiliate": {
+    "remove": "Remove creator link",
+    "haveLink": "Have a creator link?",
+    "label": "Creator link (optional)",
+    "placeholder": "Paste your creator’s link",
+    "saved": "Creator link saved.",
+    "checking": "Checking your link…",
+    "unavailable": "We couldn’t check your link. Try again, or clear the field to continue.",
+    "privacy": "Creator links are unavailable with your current tracking settings. Clear the field to continue.",
+    "review": "Your referral is saved for review."
   }
 }

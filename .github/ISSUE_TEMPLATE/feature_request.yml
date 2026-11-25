@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest an idea or improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please search existing issues first. A useful request names the user action
+        that is currently blocked and why the existing path is not enough.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the problem or user action, not only the proposed solution.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to happen?
+      description: The smallest change that would unblock the user.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Other approaches and why they don't work well enough.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Platform, version, screenshots, or links to prior discussion.

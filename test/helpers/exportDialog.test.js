@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -57,6 +58,7 @@ Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
   if (
     parent?.filename === handlersModulePath &&
+    request !== "./transcriptFormatter" &&
     (request.startsWith("./") || request.startsWith("../"))
   ) {
     return anything();
@@ -85,9 +87,11 @@ test.before(() => {
     _buildSpeakerMappings: () => ({}),
   };
   IPCHandlers.prototype.setupHandlers.call(
-    new Proxy(target, {
-      get: (value, property) => (property in value ? value[property] : anything()),
-    })
+    withDevicePolicy(
+      new Proxy(target, {
+        get: (value, property) => (property in value ? value[property] : anything()),
+      })
+    )
   );
 });
 
@@ -114,6 +118,28 @@ test("Markdown transcript export limits the save dialog to Markdown files", asyn
   });
   assert.deepEqual(result, { success: false });
 });
+
+for (const [description, options, speaker] of [
+  ["a padded label", { recorderLabel: "  Ada Lovelace  " }, "Ada Lovelace"],
+  ["a blank label", { recorderLabel: "   " }, "You"],
+  ["a non-string label", { recorderLabel: 42 }, "You"],
+  ["no label", undefined, "You"],
+]) {
+  test(`transcript export with ${description} names the recorder ${speaker}`, async (t) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-transcript-export-"));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const filePath = path.join(directory, "transcript.txt");
+    note.transcript = JSON.stringify([
+      { source: "mic", speaker: "you", timestamp: 0, text: "Morning." },
+    ]);
+    saveDialogResult = { canceled: false, filePath };
+
+    const result = await handlers.get("export-transcript")({}, 1, "txt", options);
+
+    assert.deepEqual(result, { success: true });
+    assert.ok(fs.readFileSync(filePath, "utf8").includes(`[00:00:00] ${speaker}:\nMorning.`));
+  });
+}
 
 for (const [format, name] of [
   ["md", "Markdown"],

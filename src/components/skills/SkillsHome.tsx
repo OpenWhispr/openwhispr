@@ -23,6 +23,7 @@ import {
 import { useToast } from "../ui/useToast";
 import { IntegrationsPane } from "../integrations/IntegrationsPane";
 import { playSkillIcon, refreshSkills, useSkillsStore } from "../../stores/skillsStore";
+import { syncAfterLocalWrite } from "../../services/syncAfterLocalWrite";
 import { InstalledSkillCard, RecommendedSkillCard } from "./SkillCards";
 import { problemKey, RECOMMENDED_SKILL_IDS, writeFailedToast } from "./skillCopy";
 import { SkillSearchInput } from "./SkillSearchInput";
@@ -124,6 +125,7 @@ export function SkillsHome({
         toast(writeFailedToast(t, result && "error" in result ? result.error : undefined));
         return;
       }
+      syncAfterLocalWrite("syncSkillsNow");
       await refreshSkills();
       setArrivals([result.name]);
       toast({ title: t("skills.toasts.added", { name }), variant: "success" });

@@ -224,3 +224,49 @@ test("unknown settings cannot invoke getters, and refresh errors cannot log secr
     "old-customTranscriptionApiKey"
   );
 });
+
+test("self-hosted headers hydrate, save per server and refresh across windows without localStorage", async (t) => {
+  let stored = JSON.stringify({ dictation: [{ name: "X-API-Key", value: "local-test-key" }] });
+  const saved = [];
+  const context = await loadSettings(t, {
+    getSelfHostedSttHeaders: async () => stored,
+    saveSelfHostedSttHeaders: async (value) => {
+      stored = value;
+      saved.push(value);
+    },
+  });
+  await context.initializeSettings();
+  const state = () => context.useSettingsStore.getState();
+  assert.deepEqual(state().selfHostedSttHeaders, {
+    dictation: [{ name: "X-API-Key", value: "local-test-key" }],
+    upload: [],
+  });
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+
+  // Saving the Upload tab's headers leaves dictation's as they were.
+  state().setSelfHostedSttHeaders("upload", [
+    { name: "X-Upload-Key", value: "upload" },
+    { name: "", value: "" },
+  ]);
+  t.mock.timers.tick(1000);
+  await new Promise(setImmediate);
+  assert.deepEqual(JSON.parse(saved.at(-1)), {
+    dictation: [{ name: "X-API-Key", value: "local-test-key" }],
+    upload: [{ name: "X-Upload-Key", value: "upload" }],
+  });
+  assert.equal(context.storage.getItem("selfHostedSttHeaders"), null);
+
+  // Removing the last header (blank rows left behind included) deletes the secret.
+  state().setSelfHostedSttHeaders("dictation", []);
+  state().setSelfHostedSttHeaders("upload", [{ name: "", value: "" }]);
+  t.mock.timers.tick(1000);
+  await new Promise(setImmediate);
+  assert.equal(saved.at(-1), "");
+
+  stored = JSON.stringify({ upload: [{ name: "X-Other", value: "from-another-window" }] });
+  await context.update("selfHostedSttHeaders");
+  assert.deepEqual(state().selfHostedSttHeaders, {
+    dictation: [],
+    upload: [{ name: "X-Other", value: "from-another-window" }],
+  });
+});

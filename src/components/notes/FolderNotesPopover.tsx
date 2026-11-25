@@ -5,31 +5,42 @@ import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { FileText, FolderOpen, MoreHorizontal, Search, X } from "../icons";
 import { defaultFolderDisplayName } from "./shared";
-import { formatRelativeTime } from "../../utils/dateFormatting";
+import { formatRelativeTime, normalizeDbDate } from "../../utils/dateFormatting";
 import { folderContainerKey, loadContainerNotes } from "../../stores/noteStore";
 import { cn } from "../lib/utils";
 import type { FolderItem, NoteItem } from "../../types/electron";
-import type { RowA11yProps } from "./SpacesTree";
+import type { RowA11yProps, TreeLevel } from "./SpacesTree";
+
+type PopoverNote = Pick<NoteItem, "id" | "title" | "updated_at">;
 
 interface Props {
-  folder: FolderItem;
+  folder: Pick<FolderItem, "id" | "name" | "is_default">;
+  /** Every folder the row stands for, `folder` first (more than one in the Private section). */
+  folderIds?: number[];
+  /** The folder's notes, newest first, when the caller already holds them; otherwise loaded on open. */
+  notes?: PopoverNote[];
   total: number;
   hiddenCount: number;
   activeNoteId: number | null;
-  level: 2 | 3;
+  level: TreeLevel;
+  indentClassName: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   a11y: RowA11yProps;
-  onPick: (note: NoteItem, keyboard: boolean) => void;
-  onOpenFolder: () => void;
+  onPick: (note: PopoverNote, keyboard: boolean) => void;
+  /** Shows "Open folder" when the folder can be opened. */
+  onOpenFolder?: () => void;
 }
 
 export function FolderNotesPopover({
   folder,
+  folderIds = [folder.id],
+  notes,
   total,
   hiddenCount,
   activeNoteId,
   level,
+  indentClassName,
   open,
   onOpenChange,
   a11y,
@@ -37,7 +48,7 @@ export function FolderNotesPopover({
   onOpenFolder,
 }: Props) {
   const { t, i18n } = useTranslation();
-  const [allNotes, setAllNotes] = useState<NoteItem[] | null>(null);
+  const [loadedNotes, setLoadedNotes] = useState<PopoverNote[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState("");
   const [reload, setReload] = useState(0);
@@ -47,18 +58,34 @@ export function FolderNotesPopover({
   const pickedNoteRef = useRef(false);
   const titleId = useId();
   const name = defaultFolderDisplayName(folder, t);
+  const folderIdsKey = folderIds.join(",");
+  const heldNotes = notes !== undefined;
+  const allNotes = notes ?? loadedNotes;
 
   useEffect(() => {
     if (!open) return;
     pickedNoteRef.current = false;
     setQuery("");
+    if (heldNotes) return;
     let stale = false;
-    setAllNotes(null);
+    setLoadedNotes(null);
     setFailed(false);
     // SQLite LIMIT -1 removes the normal 50-note container cap.
-    loadContainerNotes(folderContainerKey(folder.id), null, -1)
-      .then((items) => {
-        if (!stale) setAllNotes(items);
+    Promise.all(
+      folderIdsKey
+        .split(",")
+        .map((id) => loadContainerNotes(folderContainerKey(Number(id)), null, -1))
+    )
+      .then((lists) => {
+        if (stale) return;
+        const items = lists.flat();
+        if (lists.length > 1) {
+          items.sort(
+            (a, b) =>
+              normalizeDbDate(b.updated_at).getTime() - normalizeDbDate(a.updated_at).getTime()
+          );
+        }
+        setLoadedNotes(items);
       })
       .catch(() => {
         if (!stale) setFailed(true);
@@ -66,7 +93,7 @@ export function FolderNotesPopover({
     return () => {
       stale = true;
     };
-  }, [open, folder.id, reload]);
+  }, [open, folderIdsKey, reload, heldNotes]);
 
   const filtered = (allNotes ?? []).filter((note) =>
     note.title
@@ -89,7 +116,7 @@ export function FolderNotesPopover({
       </>
     );
   };
-  const pick = (note: NoteItem, keyboard = true) => {
+  const pick = (note: PopoverNote, keyboard = true) => {
     pickedNoteRef.current = true;
     onPick(note, keyboard);
     onOpenChange(false);
@@ -120,7 +147,7 @@ export function FolderNotesPopover({
           onFocus={a11y.onFocus}
           className={cn(
             "flex h-7 items-center gap-2 rounded-md pe-2 text-xs cursor-pointer select-none outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-ring/30",
-            level === 2 ? "ps-8" : "ps-[42px]",
+            indentClassName,
             open
               ? "bg-foreground/8 text-foreground dark:bg-white/10"
               : "text-foreground/55 hover:bg-foreground/5 hover:text-foreground dark:hover:bg-white/5"
@@ -266,18 +293,20 @@ export function FolderNotesPopover({
             ))
           )}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-2 w-full rounded-full text-xs"
-          onClick={() => {
-            onOpenFolder();
-            onOpenChange(false);
-          }}
-        >
-          <FolderOpen size={13} aria-hidden="true" />
-          {t("notes.folderMore.openFolder")}
-        </Button>
+        {onOpenFolder && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2 w-full rounded-full text-xs"
+            onClick={() => {
+              onOpenFolder();
+              onOpenChange(false);
+            }}
+          >
+            <FolderOpen size={13} aria-hidden="true" />
+            {t("notes.folderMore.openFolder")}
+          </Button>
+        )}
       </PopoverContent>
     </Popover>
   );

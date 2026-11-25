@@ -51,14 +51,24 @@ test("two connectors with one id is a build fault", async () => {
   assert.throws(() => createConnectors(fakeDeps(), [same, same]), /connector id "a" is used twice/);
 });
 
-test("the shipped connectors are email, Slack, Gmail, Linear and GitHub, built from the deps", async () => {
+test("the shipped connectors include Salesforce, built from the same deps", async () => {
   const { createConnectors } = await load();
 
   const connectors = createConnectors(fakeDeps());
   assert.deepEqual(
     connectors.map((connector) => connector.id),
-    ["email", "slack", "gmail", "linear", "github"]
+    ["email", "slack", "gmail", "linear", "github", "salesforce"]
   );
+});
+
+test("Salesforce stays unconfigured until a public client id is supplied", async () => {
+  const { createConnectors } = await load();
+  const env = {};
+  const connector = createConnectors(fakeDeps({ env })).find((entry) => entry.id === "salesforce");
+  assert.ok(connector);
+  assert.equal((await connector.getStatus()).configured, false);
+  env.SALESFORCE_CLIENT_ID = "public-client-id";
+  assert.equal((await connector.getStatus()).configured, true);
 });
 
 // Gmail reads its Google client from deps.env lazily (a getter closure over

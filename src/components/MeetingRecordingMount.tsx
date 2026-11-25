@@ -32,6 +32,9 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   policyRestricted: "notes.meeting.restrictedByOrg",
   // Org-policy refusal codes, from the main process or the server.
   POLICY_MEETING_RECORDING_DISABLED: "notes.meeting.recordingDisabledByOrg",
+  POLICY_EXTERNAL_ATTENDEES: "notes.meeting.externalAttendeesBlocked",
+  POLICY_ATTENDEES_UNVERIFIABLE: "notes.meeting.externalAttendeesUnverifiable",
+  POLICY_EXTERNAL_ATTENDEES_STOPPED: "notes.meeting.externalAttendeesStopped",
   AUDIO_PURPOSE_REQUIRED: "notes.meeting.restrictedByOrg",
   POLICY_UNRESOLVABLE: "common.policyUnresolved",
   POLICY_MODEL_BLOCKED: LOCAL_MODEL_REFUSAL_MESSAGE_KEYS.POLICY_MODEL_BLOCKED,
@@ -78,13 +81,17 @@ export default function MeetingRecordingMount(): null {
 
   useEffect(() => {
     const unsubscribeStop = window.electronAPI?.onMeetingAutoEndRequested?.((request) => {
-      requestMeetingRecordingAutoEnd(request, stopRecording, (error, sessionId) => {
-        logger.error(
-          "Meeting auto-end stop failed; recording is still running",
-          { error: error instanceof Error ? error.message : String(error), sessionId },
-          "meeting"
-        );
-      });
+      requestMeetingRecordingAutoEnd(
+        request,
+        (sessionId) => stopRecording(sessionId, "auto-end"),
+        (error, sessionId) => {
+          logger.error(
+            "Meeting auto-end stop failed; recording is still running",
+            { error: error instanceof Error ? error.message : String(error), sessionId },
+            "meeting"
+          );
+        }
+      );
     });
 
     return () => {

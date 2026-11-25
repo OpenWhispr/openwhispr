@@ -110,6 +110,8 @@ function makeDatabase() {
     ].map((note) => ({ deleted_at: null, account_id: null, ...note })),
     workspaceNames: { "w-acme-1111": "Acme", "w-beta-2222": "Beta" },
     outOfScopeNoteIds: new Set(),
+    speakerMappings: new Map(),
+    pendingAccountRepairNoteIds: new Set(),
     mirrorFiles: new Map(),
   };
 
@@ -119,7 +121,25 @@ function makeDatabase() {
 
   return {
     state,
+    db: {
+      prepare: (query) => {
+        assert.equal(
+          query,
+          "SELECT speaker_id, display_name FROM speaker_mappings WHERE note_id = ?"
+        );
+        return { all: (noteId) => state.speakerMappings.get(noteId) ?? [] };
+      },
+      close: () => {},
+    },
     mergedNotes: [],
+    ensureAccountDefaultFolders: () => {},
+    takeAccountRepairNotes: () => {
+      const notes = state.notes.filter(
+        (note) => state.pendingAccountRepairNoteIds.has(note.id) && !note.deleted_at
+      );
+      state.pendingAccountRepairNoteIds.clear();
+      return notes;
+    },
     getMirrorContainers: () => ({
       spaces: state.spaces.filter((row) => !row.deleted_at),
       folders: state.folders.filter((row) => !row.deleted_at),
@@ -171,6 +191,8 @@ function makeDatabase() {
       return summaries;
     },
     getFolders: () => state.folders.filter((row) => !row.deleted_at),
+    // The stand-in's folders are all top-level.
+    getSubfolders: () => [],
     renameFolder: (id, name) => {
       folder(id).name = name;
       return { success: true, folder: folder(id) };
@@ -302,6 +324,29 @@ function legacyFile(folderName, name, content) {
   const filePath = path.join(dir, name);
   fs.writeFileSync(filePath, content);
   return filePath;
+}
+
+function useRealDatabase(t) {
+  const originalGetPath = electronStub.app.getPath;
+  electronStub.app.getPath = () => basePath;
+  try {
+    const DatabaseManager = require("../../src/helpers/database");
+    const db = new DatabaseManager();
+    target.databaseManager = db;
+    return db;
+  } catch (error) {
+    if (
+      !process.env.REQUIRE_DB_TESTS &&
+      (error?.code === "ERR_DLOPEN_FAILED" ||
+        error.message.includes("Could not locate the bindings file"))
+    ) {
+      t.skip("better-sqlite3 native binding is not available for this Node runtime");
+      return null;
+    }
+    throw error;
+  } finally {
+    electronStub.app.getPath = originalGetPath;
+  }
 }
 
 const legacyNote = (id, title, folder, body) =>
@@ -526,6 +571,64 @@ test("same-named folders in different workspaces get separate directories", asyn
   assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Engineering/General");
   assert.equal(relativeDir(fileOf(101)), "Workspaces/Beta/Teamspaces/Engineering/General");
   assert.equal(relativeDir(fileOf(102)), "Private notes/General");
+});
+
+test("repaired inactive-account transcripts retain their speaker names", async (t) => {
+  const db = useRealDatabase(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const saved = db.saveNote("Repaired meeting", "Meeting notes", "meeting");
+  assert.equal(saved.success, true);
+  const noteId = saved.note.id;
+  db.updateNote(noteId, {
+    transcript: JSON.stringify([
+      { speaker: "SPEAKER_00", timestamp: 0, text: "The decision is recorded." },
+    ]),
+  });
+  db.setSpeakerMapping(noteId, "SPEAKER_00", null, "Dana");
+  db.pendingAccountRepairNoteIds.add(noteId);
+  db.setActiveAccountId("account-b");
+  assert.deepEqual(db.getSpeakerMappings(noteId), [], "the renderer cannot read another account");
+
+  await enableMirror();
+
+  const transcriptPath = allFiles().find(
+    (file) => path.basename(file).startsWith(`${noteId}-`) && file.endsWith("-transcript.md")
+  );
+  assert.ok(transcriptPath);
+  assert.match(fs.readFileSync(transcriptPath, "utf8"), /Dana/);
+  assert.match(fs.readFileSync(transcriptPath, "utf8"), /The decision is recorded/);
+  assert.equal(db.pendingAccountRepairNoteIds.size, 0);
+});
+
+test("account repairs wait for the saved destination and export after window recovery", async () => {
+  const dictation = dictationStartupSender();
+  const controlPanel = controlPanelStartupSender();
+  const destination = unavailableMirrorPath("repairs");
+  const { state } = target.databaseManager;
+  const note = state.notes[0];
+  note.transcript = JSON.stringify([
+    { speaker: "SPEAKER_00", timestamp: 0, text: "An inactive account's meeting." },
+  ]);
+  state.outOfScopeNoteIds.add(note.id);
+  state.speakerMappings.set(note.id, [{ speaker_id: "SPEAKER_00", display_name: "Dana" }]);
+  state.pendingAccountRepairNoteIds.add(note.id);
+
+  assert.equal((await restoreMirror(dictation, true, destination.notesPath)).success, false);
+  target._flushAccountRepairMirrors();
+  await settle();
+  assert.equal(state.pendingAccountRepairNoteIds.has(note.id), true);
+
+  destination.mount();
+  assert.equal((await restoreMirror(controlPanel, true, destination.notesPath)).success, true);
+  await settle();
+
+  const transcript = allFiles(destination.notesPath).find(
+    (file) => path.basename(file).startsWith(`${note.id}-`) && file.endsWith("-transcript.md")
+  );
+  assert.ok(transcript);
+  assert.match(fs.readFileSync(transcript, "utf8"), /Dana/);
+  assert.equal(state.pendingAccountRepairNoteIds.size, 0);
 });
 
 test("renaming a folder leaves another workspace's same-named folder where it is", async () => {
@@ -945,6 +1048,80 @@ test("a Private section bound to its workspace moves there, and back when reloca
   assert.equal(fs.existsSync(path.join(basePath, "Workspaces/Acme/Private")), false);
 });
 
+for (const existingPrivate of [false, true]) {
+  test(`binding Private through IPC moves real files (${existingPrivate ? "existing workspace section" : "pending section"})`, async (t) => {
+    const db = useRealDatabase(t);
+    if (!db) return;
+    db.setActiveAccountId("account-a");
+    db.setWorkspaceNames([{ id: "w-acme-1111", name: "Acme" }]);
+    const pendingId = db.getDefaultPrivateSpaceId();
+    const folder = db.createFolder("General", pendingId).folder;
+    const note = db.saveNote("Pending", "pending body", "personal", null, null, folder.id).note;
+    const root = db.saveNote("Root", "root body", "personal", null, null, null, pendingId).note;
+    db.updateNote(root.id, { folder_id: null });
+    if (existingPrivate) {
+      const destinationId = db.getPrivateSpaceId("w-acme-1111");
+      db.createFolder("General", destinationId);
+    }
+    await enableMirror();
+    assert.equal(relativeDir(fileOf(note.id)), "Private notes/General");
+    assert.equal(relativeDir(fileOf(root.id)), "Private notes");
+
+    const result = await invoke("bind-default-private-space", "w-acme-1111", "account-a");
+    await settle();
+
+    assert.equal(result.success, true);
+    assert.equal(relativeDir(fileOf(note.id)), "Workspaces/Acme/Private/General");
+    assert.equal(relativeDir(fileOf(root.id)), "Workspaces/Acme/Private");
+    assert.equal(frontmatterOf(fileOf(note.id)).workspace, "Acme");
+    assert.match(fs.readFileSync(fileOf(note.id), "utf8"), /pending body$/);
+    assert.equal(db.getNote(note.id).client_note_id, note.client_note_id);
+    assert.equal(fs.existsSync(path.join(basePath, "Private notes")), false);
+  });
+}
+
+test("relocating a lost workspace through IPC moves real Private files and attachments", async (t) => {
+  const db = useRealDatabase(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  db.setWorkspaceNames([
+    { id: "w-acme-1111", name: "Acme" },
+    { id: "w-beta-2222", name: "Beta" },
+  ]);
+  db.bindDefaultPrivateSpace("w-acme-1111");
+  const homeId = db.getDefaultPrivateSpaceId();
+  const lostId = db.getPrivateSpaceId("w-beta-2222");
+  const homeFolder = db.createFolder("General", homeId).folder;
+  const lostFolder = db.createFolder("General", lostId).folder;
+  const homeNote = db.saveNote("Home", "home body", "personal", null, null, homeFolder.id).note;
+  const lostNote = db.saveNote("Lost", "lost body", "personal", null, null, lostFolder.id).note;
+  const root = db.saveNote("Root", "root body", "personal", null, null, null, lostId).note;
+  db.updateNote(root.id, { folder_id: null });
+  await enableMirror();
+  const homeFile = fileOf(homeNote.id);
+  const sourceDirectory = path.dirname(fileOf(lostNote.id));
+  fs.writeFileSync(path.join(sourceDirectory, "diagram.txt"), "user attachment");
+  assert.equal(relativeDir(fileOf(lostNote.id)), "Workspaces/Beta/Private/General");
+
+  const result = await invoke("relocate-private-space", "w-beta-2222", null, "account-a");
+  await settle();
+
+  assert.equal(result.success, true);
+  assert.equal(result.notes, 2);
+  assert.equal(relativeDir(fileOf(lostNote.id)), "Workspaces/Acme/Private/General (2)");
+  assert.equal(relativeDir(fileOf(root.id)), "Workspaces/Acme/Private");
+  assert.equal(fileOf(homeNote.id), homeFile);
+  assert.match(fs.readFileSync(homeFile, "utf8"), /home body$/);
+  assert.match(fs.readFileSync(fileOf(lostNote.id), "utf8"), /lost body$/);
+  assert.equal(
+    fs.readFileSync(path.join(path.dirname(fileOf(lostNote.id)), "diagram.txt"), "utf8"),
+    "user attachment"
+  );
+  assert.equal(db.getNote(lostNote.id).client_note_id, lostNote.client_note_id);
+  assert.equal(db.getNote(lostNote.id).space_id, homeId);
+  assert.equal(fs.existsSync(sourceDirectory), false);
+});
+
 test("a rename made while the mirror was off is picked up when it starts", async () => {
   await enableMirror();
   await invoke("note-files-set-enabled", false);
@@ -1140,6 +1317,9 @@ for (const channel of [
       { speaker: "SPEAKER_00", text: "spoken words", start: 0, end: 1 },
     ]);
     const mappings = { SPEAKER_00: "Alice" };
+    db.state.speakerMappings.set(lastNote.id, [
+      { speaker_id: "SPEAKER_00", display_name: "Alice" },
+    ]);
     target._buildSpeakerMappings = (id) =>
       db.state.notes.some((note) => note.id === id) ? mappings : {};
     const { formatMd } = require("../../src/helpers/transcriptFormatter");
@@ -1227,7 +1407,9 @@ for (const transition of ["account switch", "scope sign-out", "token sign-out"])
 
 for (const mode of ["normal", "update", "held delete"]) {
   const updating = mode === "update";
-  test(`${mode} quit synchronously drains queued and deferred note writes once`, async () => {
+  // Every quit, an update's included, also ends a live meeting as app-quit in
+  // the audit log while its windows are still open.
+  test(`${mode} quit synchronously drains queued and deferred note writes once and closes the audit session`, async () => {
     await enableMirror();
     await invoke("db-upsert-note-from-cloud", { id: 100, content: "body at quit" });
     const db = target.databaseManager;
@@ -1248,6 +1430,7 @@ for (const mode of ["normal", "update", "held delete"]) {
     let prevented = false;
     let exited = false;
     let bodyAtExit;
+    let auditCloses = 0;
     const context = {
       app: {
         on: (event, callback) => callbacks.set(event, callback),
@@ -1258,6 +1441,11 @@ for (const mode of ["normal", "update", "held delete"]) {
       },
       ipcHandlers: target,
       sidecarRegistry: { shutdownAll: async () => {} },
+      meetingAuditLog: {
+        closeOpenSession: async () => {
+          auditCloses++;
+        },
+      },
       updateManager: { isQuittingForUpdate: updating, cleanup: () => {} },
       windowManager:
         mode === "held delete"
@@ -1287,6 +1475,7 @@ for (const mode of ["normal", "update", "held delete"]) {
       "registryLoader",
       "disposeRegistryIpc",
       "wakeRewarmTimer",
+      "whisperManager",
       "authBridgeServer",
       "cliBridge",
       "hotkeyManager",
@@ -1303,6 +1492,7 @@ for (const mode of ["normal", "update", "held delete"]) {
       "windowsLoopbackAudioManager",
       "meetingAecManager",
       "textEditMonitor",
+      "managedDevicePolicy",
     ])
       context[name] = null;
     target._cleanupTextEditMonitor = () => {};
@@ -1314,6 +1504,7 @@ for (const mode of ["normal", "update", "held delete"]) {
     });
     assert.match(fs.readFileSync(fileOf(100), "utf8"), /body at quit$/);
     assert.match(fs.readFileSync(fileOf(101), "utf8"), /local body at quit$/);
+    assert.equal(auditCloses, 1);
     const recordsAtQuit = records;
     await settle();
     assert.equal(
@@ -1328,25 +1519,8 @@ for (const mode of ["normal", "update", "held delete"]) {
 }
 
 test("real local folder deletion cleans unmigrated tombstones omitted from live result IDs", async (t) => {
-  const originalGetPath = electronStub.app.getPath;
-  electronStub.app.getPath = () => basePath;
-  let db;
-  try {
-    const DatabaseManager = require("../../src/helpers/database");
-    db = new DatabaseManager();
-  } catch (error) {
-    if (
-      error?.code === "ERR_DLOPEN_FAILED" ||
-      error.message.includes("Could not locate the bindings file")
-    ) {
-      t.skip("better-sqlite3 native binding is not available for this Node runtime");
-      return;
-    }
-    throw error;
-  } finally {
-    electronStub.app.getPath = originalGetPath;
-  }
-  target.databaseManager = db;
+  const db = useRealDatabase(t);
+  if (!db) return;
   db.setActiveAccountId("account-a");
   const folder = db.createFolder("Archive").folder;
   for (let index = 0; index < 50; index++) db.saveNote(`Live ${index}`, "body", "personal");

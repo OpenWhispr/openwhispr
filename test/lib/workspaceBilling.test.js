@@ -3,9 +3,11 @@ const assert = require("node:assert/strict");
 const {
   canSelfServeEnterprise,
   businessDowngradeAction,
+  businessTileAction,
+  coveringWorkspaces,
   canUpgradeWorkspaceToEnterprise,
   enterpriseManageAction,
-  enterpriseTileCta,
+  enterpriseTileAction,
   entitledWorkspacePlans,
   hasActiveWorkspaceSubscription,
   hasSharedDictionaryPlan,
@@ -81,59 +83,156 @@ test("canUpgradeWorkspaceToEnterprise: an owner's live lower-plan subscription, 
   assert.equal(canUpgradeWorkspaceToEnterprise(business({ stripe_subscription_id: null })), false);
 });
 
-test("enterpriseTileCta: eligible owners get the dialog, first-timers get create, members get the owner", () => {
-  const ws = (id, role, overrides = {}) => ({
-    id,
-    role,
-    billing_manager: null,
-    plan: "free",
-    status: "active",
-    stripe_subscription_id: null,
-    ...overrides,
-  });
+const enterpriseWorkspace = (id, role, overrides = {}) => ({
+  id,
+  role,
+  billing_manager: null,
+  plan: "free",
+  status: "active",
+  stripe_subscription_id: null,
+  ...overrides,
+});
 
-  // Owner with a checkout-eligible (unsubscribed) workspace → dialog.
-  assert.deepEqual(enterpriseTileCta([ws("a", "member"), ws("b", "owner")], null), {
-    action: "openDialog",
+const enterpriseInput = (workspaces, overrides = {}) => ({
+  listLoaded: true,
+  entitledWorkspaceIds: [],
+  workspaces,
+  defaultWorkspaceId: null,
+  activeWorkspaceId: null,
+  ...overrides,
+});
+
+test("enterpriseTileAction: an unloaded list offers nothing", () => {
+  assert.deepEqual(
+    enterpriseTileAction(
+      enterpriseInput([enterpriseWorkspace("a", "owner")], { listLoaded: false })
+    ),
+    { kind: "none" }
+  );
+});
+
+test("enterpriseTileAction: an owner of an eligible workspace is sent to its view, never a checkout", () => {
+  // A free workspace the owner can check out.
+  assert.deepEqual(
+    enterpriseTileAction(
+      enterpriseInput([enterpriseWorkspace("a", "member"), enterpriseWorkspace("b", "owner")])
+    ),
+    { kind: "viewWorkspace", workspaceId: "b" }
+  );
+  // A Stripe Business subscription the owner can upgrade in place.
+  assert.deepEqual(
+    enterpriseTileAction(
+      enterpriseInput([
+        enterpriseWorkspace("a", "owner", { plan: "business", stripe_subscription_id: "s" }),
+      ])
+    ),
+    { kind: "viewWorkspace", workspaceId: "a" }
+  );
+});
+
+test("enterpriseTileAction: a lapsed Business plan with no subscription left is eligible", () => {
+  const lapsed = enterpriseWorkspace("lapsed", "owner", {
+    plan: "business",
+    status: "canceled",
+    has_subscription: false,
   });
-  // Owner with an upgradeable Business subscription → dialog.
-  assert.deepEqual(
-    enterpriseTileCta(
-      [ws("a", "owner", { plan: "business", stripe_subscription_id: "sub_1" })],
-      null
-    ),
-    { action: "openDialog" }
-  );
-  // Owner whose only workspace is already Enterprise → contact sales, and no
-  // ask-owner hint (they are the owner).
-  assert.deepEqual(
-    enterpriseTileCta(
-      [ws("a", "owner", { plan: "enterprise", stripe_subscription_id: "sub_1" })],
-      null
-    ),
-    { action: "contactSales", ownerName: null }
-  );
-  assert.deepEqual(enterpriseTileCta([], null), { action: "createWorkspace" });
-  assert.deepEqual(enterpriseTileCta([ws("a", "admin", { billing_manager: "Alice" })], null), {
-    action: "contactSales",
-    ownerName: "Alice",
+  assert.deepEqual(enterpriseTileAction(enterpriseInput([lapsed])), {
+    kind: "viewWorkspace",
+    workspaceId: "lapsed",
   });
-  // The active workspace's owner wins over the first one.
+});
+
+test("enterpriseTileAction: the default workspace comes before other eligible ones", () => {
+  const workspaces = [enterpriseWorkspace("a", "owner"), enterpriseWorkspace("b", "owner")];
+  assert.deepEqual(enterpriseTileAction(enterpriseInput(workspaces, { defaultWorkspaceId: "b" })), {
+    kind: "viewWorkspace",
+    workspaceId: "b",
+  });
   assert.deepEqual(
-    enterpriseTileCta(
-      [
-        ws("a", "member", { billing_manager: "Alice" }),
-        ws("b", "admin", { billing_manager: "Bob" }),
-      ],
-      "b"
-    ),
-    { action: "contactSales", ownerName: "Bob" }
+    enterpriseTileAction(enterpriseInput(workspaces, { defaultWorkspaceId: "gone" })),
+    {
+      kind: "viewWorkspace",
+      workspaceId: "a",
+    }
   );
-  // Unknown active id falls back to the first workspace; a missing name stays null.
-  assert.deepEqual(enterpriseTileCta([ws("a", "member")], "gone"), {
-    action: "contactSales",
+});
+
+test("enterpriseTileAction: an eligible workspace outranks Enterprise coverage", () => {
+  const workspaces = [
+    enterpriseWorkspace("ent", "member", { plan: "enterprise", stripe_subscription_id: "s" }),
+    enterpriseWorkspace("free", "owner"),
+  ];
+  assert.deepEqual(
+    enterpriseTileAction(enterpriseInput(workspaces, { entitledWorkspaceIds: ["ent"] })),
+    {
+      kind: "viewWorkspace",
+      workspaceId: "free",
+    }
+  );
+});
+
+test("enterpriseTileAction: a covering Enterprise workspace shows the workspace plan", () => {
+  const ent = enterpriseWorkspace("ent", "member", {
+    plan: "enterprise",
+    billing_manager: "Alice",
+  });
+  assert.deepEqual(
+    enterpriseTileAction(enterpriseInput([ent], { entitledWorkspaceIds: ["ent"] })),
+    {
+      kind: "workspacePlan",
+    }
+  );
+  // A Business seat is not Enterprise coverage.
+  const business = enterpriseWorkspace("biz", "member", {
+    plan: "business",
+    billing_manager: "Bo",
+  });
+  assert.deepEqual(
+    enterpriseTileAction(enterpriseInput([business], { entitledWorkspaceIds: ["biz"] })),
+    { kind: "contactSales", ownerName: "Bo" }
+  );
+});
+
+test("enterpriseTileAction: owners with nothing eligible contact sales with no ask-owner hint", () => {
+  const manual = enterpriseWorkspace("a", "owner", { plan: "business", has_subscription: true });
+  const enterprise = enterpriseWorkspace("b", "owner", {
+    plan: "enterprise",
+    stripe_subscription_id: "s",
+  });
+  for (const workspace of [manual, enterprise]) {
+    assert.deepEqual(enterpriseTileAction(enterpriseInput([workspace])), {
+      kind: "contactSales",
+      ownerName: null,
+    });
+  }
+  assert.deepEqual(enterpriseTileAction(enterpriseInput([])), {
+    kind: "contactSales",
     ownerName: null,
   });
+});
+
+test("enterpriseTileAction: members contact sales and are pointed at the active workspace's owner", () => {
+  assert.deepEqual(
+    enterpriseTileAction(
+      enterpriseInput([enterpriseWorkspace("a", "admin", { billing_manager: "Alice" })])
+    ),
+    { kind: "contactSales", ownerName: "Alice" }
+  );
+  const workspaces = [
+    enterpriseWorkspace("a", "member", { billing_manager: "Alice" }),
+    enterpriseWorkspace("b", "admin", { billing_manager: "Bob" }),
+  ];
+  assert.deepEqual(enterpriseTileAction(enterpriseInput(workspaces, { activeWorkspaceId: "b" })), {
+    kind: "contactSales",
+    ownerName: "Bob",
+  });
+  // An unknown active id falls back to the first workspace; a missing name stays null.
+  assert.deepEqual(
+    enterpriseTileAction(
+      enterpriseInput([enterpriseWorkspace("a", "member")], { activeWorkspaceId: "gone" })
+    ),
+    { kind: "contactSales", ownerName: null }
+  );
 });
 
 test("entitledWorkspacePlans: the paid plans of entitled workspaces only", () => {
@@ -274,10 +373,16 @@ test("an owner of a manually provisioned plan stays sales-led", () => {
   });
   assert.equal(canSelfServeEnterprise(manual), false);
   assert.equal(canUpgradeWorkspaceToEnterprise(manual), false);
-  assert.deepEqual(enterpriseTileCta([{ id: "a", ...manual }], null), {
-    action: "contactSales",
-    ownerName: null,
-  });
+  assert.deepEqual(
+    enterpriseTileAction({
+      listLoaded: true,
+      entitledWorkspaceIds: [],
+      workspaces: [{ id: "a", ...manual }],
+      defaultWorkspaceId: null,
+      activeWorkspaceId: null,
+    }),
+    { kind: "contactSales", ownerName: null }
+  );
 });
 
 test("businessDowngradeAction: active eligible billing workspace wins before billing method", () => {
@@ -328,4 +433,88 @@ test("businessDowngradeAction: skips ineligible active workspaces and respects b
     kind: "stripePortal",
     workspaceId: "delegated",
   });
+});
+
+const free = (o = {}) => workspace({ id: "default", ...o });
+const paid = (o = {}) =>
+  workspace({ id: "team", plan: "business", role: "member", stripe_subscription_id: "sub", ...o });
+const tileInput = (o) => ({
+  listLoaded: true,
+  entitledWorkspaceIds: [],
+  workspaces: [],
+  defaultWorkspaceId: null,
+  ...o,
+});
+
+test("a failed workspace list cannot offer Create workspace or Contact sales", () => {
+  for (const entitledWorkspaceIds of [[], ["team"]]) {
+    const input = tileInput({ listError: true, entitledWorkspaceIds });
+    assert.deepEqual(businessTileAction(input), { kind: "none" });
+    assert.deepEqual(enterpriseTileAction(input), { kind: "none" });
+  }
+});
+
+test("businessTileAction: unresolved list offers nothing", () => {
+  assert.deepEqual(businessTileAction(tileInput({ listLoaded: false })), { kind: "none" });
+});
+test("businessTileAction: a solo default workspace gets a view switch, never a checkout", () => {
+  assert.deepEqual(
+    businessTileAction(tileInput({ workspaces: [free()], defaultWorkspaceId: "default" })),
+    { kind: "viewWorkspace", workspaceId: "default" }
+  );
+});
+test("businessTileAction: coverage outranks an owned free default workspace", () => {
+  assert.deepEqual(
+    businessTileAction(
+      tileInput({
+        entitledWorkspaceIds: ["team"],
+        workspaces: [free(), paid()],
+        defaultWorkspaceId: "default",
+      })
+    ),
+    { kind: "workspacePlan" }
+  );
+});
+test("businessTileAction: a seat that isn't billable is not coverage", () => {
+  assert.deepEqual(
+    businessTileAction(
+      tileInput({
+        entitledWorkspaceIds: [],
+        workspaces: [free(), paid()],
+        defaultWorkspaceId: "default",
+      })
+    ),
+    { kind: "viewWorkspace", workspaceId: "default" }
+  );
+});
+test("businessTileAction: Enterprise coverage shows no Business action", () => {
+  assert.deepEqual(
+    businessTileAction(
+      tileInput({ entitledWorkspaceIds: ["team"], workspaces: [paid({ plan: "enterprise" })] })
+    ),
+    { kind: "none" }
+  );
+});
+test("businessTileAction: the default workspace comes before other unpaid ones", () => {
+  assert.equal(
+    businessTileAction(
+      tileInput({
+        workspaces: [free({ id: "other" }), free()],
+        defaultWorkspaceId: "default",
+      })
+    ).workspaceId,
+    "default"
+  );
+});
+test("businessTileAction: nothing to upgrade offers Create workspace", () => {
+  assert.deepEqual(businessTileAction(tileInput({ workspaces: [paid()] })), {
+    kind: "createWorkspace",
+  });
+});
+test("coveringWorkspaces: ids the list doesn't hold are skipped", () => {
+  assert.deepEqual(
+    coveringWorkspaces(["team", "gone"], [paid()]).map((w) => w.id),
+    ["team"]
+  );
+  assert.deepEqual(coveringWorkspaces(undefined, [paid()]), []);
 });

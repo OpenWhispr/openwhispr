@@ -1,0 +1,94 @@
+diff --git a/node_modules/ehbp/dist/cjs/client.js b/node_modules/ehbp/dist/cjs/client.js
+--- a/node_modules/ehbp/dist/cjs/client.js
++++ b/node_modules/ehbp/dist/cjs/client.js
+@@ -88,6 +88,8 @@
+      * Make an encrypted HTTP request.
+      */
+     async request(input, init) {
++        const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
++        signal?.throwIfAborted();
+         // Skip EHBP for non-network URLs (data:, blob:)
+         const inputUrl = input instanceof Request ? input.url : String(input);
+         if (inputUrl.startsWith('data:') || inputUrl.startsWith('blob:')) {
+@@ -124,6 +126,7 @@
+             method,
+             headers,
+             body: requestBody,
++            signal,
+             duplex: 'half',
+         });
+         // Encrypt request (returns context for response decryption)
+@@ -133,6 +136,7 @@
+             ? await (0, identity_js_2.extractSessionRecoveryToken)(context)
+             : undefined;
+         // Make the request
++        signal?.throwIfAborted();
+         const response = await fetch(encryptedRequest);
+         // Bodyless requests: context is null, response is plaintext
+         if (!token) {
+diff --git a/node_modules/ehbp/dist/cjs/identity.js b/node_modules/ehbp/dist/cjs/identity.js
+--- a/node_modules/ehbp/dist/cjs/identity.js
++++ b/node_modules/ehbp/dist/cjs/identity.js
+@@ -195,6 +195,7 @@
+                     method: request.method,
+                     headers: request.headers,
+                     body: null,
++                    signal: request.signal,
+                 }),
+                 context: null,
+             };
+@@ -225,6 +226,7 @@
+                 method: request.method,
+                 headers,
+                 body: chunkedData,
++                signal: request.signal,
+                 duplex: 'half',
+             }),
+             context,
+diff --git a/node_modules/ehbp/dist/esm/client.js b/node_modules/ehbp/dist/esm/client.js
+--- a/node_modules/ehbp/dist/esm/client.js
++++ b/node_modules/ehbp/dist/esm/client.js
+@@ -84,6 +84,8 @@
+      * Make an encrypted HTTP request.
+      */
+     async request(input, init) {
++        const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
++        signal?.throwIfAborted();
+         // Skip EHBP for non-network URLs (data:, blob:)
+         const inputUrl = input instanceof Request ? input.url : String(input);
+         if (inputUrl.startsWith('data:') || inputUrl.startsWith('blob:')) {
+@@ -120,6 +122,7 @@
+             method,
+             headers,
+             body: requestBody,
++            signal,
+             duplex: 'half',
+         });
+         // Encrypt request (returns context for response decryption)
+@@ -129,6 +132,7 @@
+             ? await extractSessionRecoveryToken(context)
+             : undefined;
+         // Make the request
++        signal?.throwIfAborted();
+         const response = await fetch(encryptedRequest);
+         // Bodyless requests: context is null, response is plaintext
+         if (!token) {
+diff --git a/node_modules/ehbp/dist/esm/identity.js b/node_modules/ehbp/dist/esm/identity.js
+--- a/node_modules/ehbp/dist/esm/identity.js
++++ b/node_modules/ehbp/dist/esm/identity.js
+@@ -188,6 +188,7 @@
+                     method: request.method,
+                     headers: request.headers,
+                     body: null,
++                    signal: request.signal,
+                 }),
+                 context: null,
+             };
+@@ -218,6 +219,7 @@
+                 method: request.method,
+                 headers,
+                 body: chunkedData,
++                signal: request.signal,
+                 duplex: 'half',
+             }),
+             context,

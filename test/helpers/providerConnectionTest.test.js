@@ -679,7 +679,7 @@ test("an error body that never arrives is a timeout or a network failure", async
     [aborted, "timeout"],
     [new TypeError("terminated"), "network"],
   ]) {
-    for (const provider of ["gemini", "xai", "corti"]) {
+    for (const provider of ["gemini", "xai", "corti", "elevenlabs"]) {
       const fetchImpl = async () => ({
         ok: false,
         status: 400,
@@ -774,6 +774,7 @@ test("hosted providers refuse redirects; custom servers keep following them", as
     "tinfoil",
     "deepgram",
     "assemblyai",
+    "elevenlabs",
   ];
   for (const provider of hosted) {
     assert.equal(resolveProviderRequest({ provider, apiKey: "k" }).redirect, "error", provider);
@@ -1136,4 +1137,127 @@ test("a model list whose body never arrives is no verdict, not a missing model",
     async () => jsonResponse(200, "not json")
   );
   assert.equal(unreadable.errorCode, "modelNotFound", "a list that can't be read offers nothing");
+});
+
+// What ElevenLabs answers a request that carries no audio, once it has accepted the key.
+const ELEVENLABS_NO_AUDIO = {
+  detail: {
+    type: "validation_error",
+    code: "invalid_parameters",
+    message: "Must provide either file or a URL parameter.",
+    status: "invalid_parameters",
+    param: "file",
+  },
+};
+
+test("ElevenLabs is checked by a transcription request that carries no audio", async () => {
+  const request = resolveProviderRequest({ provider: "elevenlabs", apiKey: "xi-secret" });
+  assert.equal(request.endpoint, "https://api.elevenlabs.io/v1/speech-to-text");
+  assert.equal(request.endpoint.includes("xi-secret"), false);
+  assert.equal(request.headers["xi-api-key"], "xi-secret");
+  assert.equal(request.headers.Authorization, undefined);
+
+  // 402 is a key with no credit left: still the user's key.
+  for (const status of [400, 402, 422]) {
+    const { calls, fetchImpl } = recordingFetch(() => jsonResponse(status, ELEVENLABS_NO_AUDIO));
+    const result = await testProviderConnection({ provider: "elevenlabs", apiKey: "k" }, fetchImpl);
+    assert.deepEqual(result, { success: true }, String(status));
+    assert.equal(calls[0].init.method, "POST");
+    assert.equal(calls[0].init.body.get("model_id"), "scribe_v3");
+    assert.equal(calls[0].init.body.has("file"), false);
+  }
+});
+
+test("ElevenLabs: a refused key fails the check, an exhausted quota does not", async () => {
+  const refused = recordingFetch(() =>
+    jsonResponse(401, { detail: { status: "invalid_api_key", message: "Invalid API key" } })
+  );
+  const result = await testProviderConnection(
+    { provider: "elevenlabs", apiKey: "made-up" },
+    refused.fetchImpl
+  );
+  assert.equal(result.errorCode, "credentialsRejected");
+
+  // Other made-up keys get the 400 of the missing audio, and only the error's code says the
+  // key was the reason.
+  for (const [reason, message] of [
+    ["invalid_api_key", "API key is invalid."],
+    ["invalid_api_key_prefix", "API key must start with 'sk_'."],
+    ["invalid_api_key_length", "API key must be exactly 51 characters, got 13."],
+  ]) {
+    const detail = {
+      type: "authentication_error",
+      code: "invalid_api_key",
+      message,
+      status: reason,
+      param: "api_key",
+    };
+    for (const status of [400, 422]) {
+      const fetchImpl = async () => jsonResponse(status, { detail });
+      assert.deepEqual(
+        await testProviderConnection({ provider: "elevenlabs", apiKey: "made-up" }, fetchImpl),
+        {
+          success: false,
+          errorCode: "credentialsRejected",
+          error: "The provider rejected these credentials.",
+          status,
+        },
+        `${status} ${reason}`
+      );
+    }
+  }
+
+  const quota = recordingFetch(() =>
+    jsonResponse(401, { detail: { status: "quota_exceeded", message: "quota" } })
+  );
+  assert.deepEqual(
+    await testProviderConnection({ provider: "elevenlabs", apiKey: "k" }, quota.fetchImpl),
+    { success: true }
+  );
+
+  const busy = recordingFetch(() => jsonResponse(503, {}));
+  const unverified = await testProviderConnection(
+    { provider: "elevenlabs", apiKey: "k" },
+    busy.fetchImpl
+  );
+  assert.equal(unverified.errorCode, "providerStatus");
+  assert.equal(unverified.unverified, true);
+});
+
+test("ElevenLabs leaves unrelated or unreadable validation responses unverified", async () => {
+  for (const status of [400, 422]) {
+    for (const body of [
+      "<html>Bad Request</html>",
+      "",
+      JSON.stringify({ detail: { code: "invalid_parameters", param: "model_id" } }),
+      JSON.stringify({
+        detail: { code: "invalid_parameters", param: "file", message: "Invalid encoding" },
+      }),
+      JSON.stringify({ detail: [{ loc: ["body", "file"], type: "invalid_type" }] }),
+    ]) {
+      const result = await testProviderConnection(
+        { provider: "elevenlabs", apiKey: "k" },
+        async () => new Response(body, { status })
+      );
+      assert.equal(result.success, false);
+      assert.equal(result.unverified, true);
+      assert.equal(result.status, status);
+    }
+  }
+});
+
+test("ElevenLabs recognizes missing-file validation, quota and legacy key refusals", async () => {
+  const check = (status, detail) =>
+    testProviderConnection({ provider: "elevenlabs", apiKey: "k" }, async () =>
+      Response.json({ detail }, { status })
+    );
+  const missingFile = [{ loc: ["body", "file"], type: "missing" }];
+  assert.deepEqual(await check(422, missingFile), { success: true });
+  for (const status of [400, 401, 422]) {
+    assert.deepEqual(await check(status, { status: "quota_exceeded" }), { success: true });
+    assert.equal(
+      (await check(status, { status: "invalid_api_key" })).errorCode,
+      "credentialsRejected"
+    );
+  }
 });

@@ -223,6 +223,110 @@ for (const prewarm of [false, true]) {
   });
 }
 
+for (const [name, failure, expectedError] of [
+  [
+    "refused key",
+    { success: false, error: "Provider rejected the API key" },
+    "Provider rejected the API key",
+  ],
+  [
+    "classified refused key",
+    {
+      success: false,
+      messageKey: "providerErrors.authFailed",
+      messageParams: { provider: "ElevenLabs" },
+    },
+    "ElevenLabs rejected your API key.",
+  ],
+  ["expired sign-in", { success: false, code: "AUTH_REQUIRED" }, "signInRequired"],
+  ["policy refusal", { success: false, code: "POLICY_MODEL_BLOCKED" }, "POLICY_MODEL_BLOCKED"],
+  [
+    "external guest discovered by the backend",
+    { success: false, code: "POLICY_EXTERNAL_ATTENDEES" },
+    "POLICY_EXTERNAL_ATTENDEES",
+  ],
+  [
+    "thrown policy refusal",
+    Object.assign(new Error("Blocked"), { code: "POLICY_MODEL_BLOCKED" }),
+    "POLICY_MODEL_BLOCKED",
+  ],
+  [
+    "IPC rejection",
+    Object.assign(new Error("Configuration changed"), {
+      messageKey: "common.managedConfigUnavailable",
+    }),
+    "managedConfig:common.managedConfigUnavailable",
+  ],
+]) {
+  test(`${name} ends startup before pending device prompts resolve`, async (t) => {
+    installMicCaptureGlobals(t);
+    const mic = await navigator.mediaDevices.getUserMedia();
+    const stopMic = t.mock.method(mic.getTracks()[0], "stop");
+    const displayTrack = { stop: t.mock.fn() };
+    const display = {
+      getTracks: () => [displayTrack],
+      getAudioTracks: () => [displayTrack],
+      getVideoTracks: () => [],
+    };
+    const micPermission = Promise.withResolvers();
+    const displayPermission = Promise.withResolvers();
+    const requestedMic = Promise.withResolvers();
+    const requestedDisplay = Promise.withResolvers();
+    const startedMain = Promise.withResolvers();
+    const connection = Promise.withResolvers();
+    let sessionId;
+    navigator.mediaDevices.getUserMedia = () => {
+      requestedMic.resolve();
+      return micPermission.promise;
+    };
+    navigator.mediaDevices.getDisplayMedia = () => {
+      requestedDisplay.resolve();
+      return displayPermission.promise;
+    };
+    const stopMain = t.mock.fn(async () => ({ success: true }));
+    const api = {
+      checkSystemAudioAccess: async () => LOOPBACK,
+      meetingTranscriptionStart: (args) => {
+        sessionId = args.sessionId;
+        startedMain.resolve();
+        return connection.promise;
+      },
+      meetingTranscriptionStop: stopMain,
+    };
+    installBrowserGlobals(t, { window: { electronAPI: api, setTimeout } });
+    const vite = await createRendererServer(t, { cachePrefix: "meeting-refused-setup-" });
+    const store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+    const starting = store.startRecording(START_ARGS);
+    await Promise.all([startedMain.promise, requestedMic.promise, requestedDisplay.promise]);
+    try {
+      if (failure instanceof Error) connection.reject(failure);
+      else connection.resolve(failure);
+      await new Promise((resolve) => setImmediate(resolve));
+      const state = store.useMeetingRecordingStore.getState();
+      assert.equal(state.error, expectedError);
+      assert.equal(state.isRecording, false);
+      assert.equal(state.isTranscribing, false);
+      assert.equal(await starting, expectedError !== "POLICY_EXTERNAL_ATTENDEES");
+      if (failure instanceof Error) {
+        assert.deepEqual(
+          stopMain.mock.calls.map(({ arguments: args }) => args),
+          [[sessionId, "error"]]
+        );
+      } else {
+        assert.equal(stopMain.mock.callCount(), 0, "main already rolled back its refusal");
+      }
+    } finally {
+      micPermission.resolve(mic);
+      displayPermission.resolve(display);
+      await starting;
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal(stopMic.mock.callCount(), 1);
+    assert.equal(displayTrack.stop.mock.callCount(), 1);
+    assert.equal(store.useMeetingRecordingStore.getState().error, expectedError);
+  });
+}
+
 test("failed cloud startup discards captured speech and releases the microphone", async (t) => {
   const session = await pendingStartup(t);
   session.speak([1234, -4567]);
@@ -548,4 +652,104 @@ test("consent lost before capture preparation never shows a recording state", as
   });
   assert.equal(started, false);
   assert.equal(states.includes(true), false);
+});
+
+test("every meeting start source waits for admission before requesting microphone, system audio or transcription", async (t) => {
+  const sources = [
+    "record-button",
+    "prompt",
+    "calendar-join",
+    "hotkey",
+    "tray",
+    "pill",
+    "new-note",
+  ];
+  let decision;
+  let requested;
+  let captureRequests = 0;
+  installMicCaptureGlobals(t);
+  navigator.mediaDevices.getUserMedia = async () => {
+    captureRequests++;
+  };
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        checkMeetingRecordingStart: ({ noteId, sessionId }) => {
+          assert.equal(noteId, 11);
+          assert.equal(typeof sessionId, "string");
+          requested.resolve();
+          return decision.promise;
+        },
+        checkSystemAudioAccess: () => {
+          captureRequests++;
+        },
+        meetingTranscriptionStart: () => {
+          captureRequests++;
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t, { cachePrefix: "meeting-admission-sources-" });
+  const store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+  for (const startSource of sources) {
+    decision = Promise.withResolvers();
+    requested = Promise.withResolvers();
+    const start = store.startRecording({ ...START_ARGS, startSource, noteId: 11 });
+    await requested.promise;
+    assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+    assert.equal(captureRequests, 0);
+    decision.resolve({ success: false, code: "POLICY_EXTERNAL_ATTENDEES" });
+    assert.equal(await start, false);
+    assert.equal(store.useMeetingRecordingStore.getState().error, "POLICY_EXTERNAL_ATTENDEES");
+    assert.equal(captureRequests, 0);
+  }
+  decision = Promise.withResolvers();
+  requested = Promise.withResolvers();
+  const start = store.startRecording({ ...START_ARGS, noteId: 11 });
+  await requested.promise;
+  decision.resolve({ success: false, code: "AUDIO_OPERATION_CANCELLED" });
+  assert.equal(await start, "cancelled");
+  assert.equal(captureRequests, 0);
+});
+
+test("a duplicate shares the pending confirmation and a different note supersedes it", async (t) => {
+  const prompts = [];
+  const firstPrompt = Promise.withResolvers();
+  const secondPrompt = Promise.withResolvers();
+  const answers = new Map();
+  let starts = 0;
+  installMicCaptureGlobals(t);
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        checkMeetingRecordingStart: ({ noteId, sessionId }) => {
+          const answer = Promise.withResolvers();
+          answers.set(sessionId, answer);
+          prompts.push(noteId);
+          (noteId === 1 ? firstPrompt : secondPrompt).resolve(answer);
+          return answer.promise;
+        },
+        releaseMeetingRecordingStart: (sessionId) =>
+          answers.get(sessionId)?.resolve({ success: false, code: "AUDIO_OPERATION_CANCELLED" }),
+        meetingTranscriptionStart: () => {
+          starts++;
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t, { cachePrefix: "meeting-superseded-admission-" });
+  const { startRecording } = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+  const first = startRecording({ ...START_ARGS, noteId: 1 });
+  await firstPrompt.promise;
+  const duplicate = startRecording({ ...START_ARGS, noteId: 1 });
+  const replacement = startRecording({ ...START_ARGS, noteId: 2 });
+  const answer = await secondPrompt.promise;
+  answer.resolve({ success: false, code: "POLICY_EXTERNAL_ATTENDEES" });
+  assert.deepEqual(await Promise.all([first, duplicate, replacement]), [
+    "cancelled",
+    "cancelled",
+    false,
+  ]);
+  assert.deepEqual(prompts, [1, 2]);
+  assert.equal(starts, 0);
 });

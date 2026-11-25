@@ -68,12 +68,19 @@ function isValidPolicyShape(policy) {
       typeof policy.features.screenContextEnabled === "boolean") &&
     (policy.features?.connectorsEnabled === undefined ||
       typeof policy.features.connectorsEnabled === "boolean") &&
+    (policy.features?.apiAccessEnabled === undefined ||
+      typeof policy.features.apiAccessEnabled === "boolean") &&
     (policy.meetings === undefined ||
       (policy.meetings !== null &&
         typeof policy.meetings === "object" &&
         !Array.isArray(policy.meetings) &&
         (policy.meetings.transcriptionStart === undefined ||
-          typeof policy.meetings.transcriptionStart === "string"))) &&
+          typeof policy.meetings.transcriptionStart === "string") &&
+        (policy.meetings.externalAttendees === undefined ||
+          typeof policy.meetings.externalAttendees === "string") &&
+        (policy.meetings.internalDomains === undefined ||
+          (Array.isArray(policy.meetings.internalDomains) &&
+            policy.meetings.internalDomains.every((domain) => typeof domain === "string"))))) &&
     SHARING_MODES.includes(policy.sharing?.externalLinkSharing) &&
     LOCAL_HISTORY_MODES.includes(policy.dataRetention?.localHistoryMode) &&
     typeof policy.dataRetention?.cloudBackupAllowed === "boolean" &&
@@ -85,6 +92,11 @@ function isValidPolicyShape(policy) {
     (policy.requiredLocalModels === undefined ||
       (Array.isArray(policy.requiredLocalModels) &&
         policy.requiredLocalModels.every((item) => typeof item === "string"))) &&
+    (policy.updates === undefined ||
+      (policy.updates !== null &&
+        typeof policy.updates === "object" &&
+        !Array.isArray(policy.updates) &&
+        (policy.updates.mode === undefined || typeof policy.updates.mode === "string"))) &&
     (policy.minAppVersion === null || isCanonicalAppVersion(policy.minAppVersion))
   );
 }
