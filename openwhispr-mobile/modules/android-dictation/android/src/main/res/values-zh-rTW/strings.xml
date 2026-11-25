@@ -26,8 +26,8 @@
   <string name="ow_status_no_speech">沒聽清楚</string>
   <string name="ow_status_offline">沒有網路</string>
   <string name="ow_status_retry">重試</string>
-  <string name="ow_status_out_of_words">字數已用完</string>
-  <string name="ow_status_see_plans">查看方案</string>
+  <string name="ow_status_out_of_words">本週雲端字數已用完</string>
+  <string name="ow_status_see_plans">升級到 Pro</string>
   <string name="ow_status_mic_off">麥克風已關閉</string>
   <string name="ow_status_allow">允許</string>
   <string name="ow_status_copied">已複製</string>

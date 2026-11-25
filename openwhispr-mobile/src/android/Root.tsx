@@ -77,7 +77,8 @@ export default function AndroidRoot() {
     // The status tab's other actions open the page that fixes what went wrong.
     const subscriptions = [
       dictationEvents?.addListener('onOpenResult', () => router.navigate('/(tabs)/(record)')),
-      dictationEvents?.addListener('onOpenPlans', () => router.push('/android-pro')),
+      // Out of cloud words · Go Pro: Plan & billing with the out-of-words paywall over it.
+      dictationEvents?.addListener('onOpenPlans', () => router.push('/android-pro?paywall=limit')),
       // An ended session keeps its account, so /auth opens Sign in again (2.5 / 2.5b) for it.
       dictationEvents?.addListener('onOpenSignIn', () => router.push('/auth')),
       dictationEvents?.addListener('onOpenModels', () => router.push('/android-models')),

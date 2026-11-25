@@ -37,6 +37,9 @@ import { getTranscriptionProvider } from '@/lib/inferenceRouting';
 import { accountRequiredForCloud, showAccountRequiredAlert } from '@/lib/accountAccess';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore';
+import { GlassPill, WordsMeter, openUpgrade } from '@/android/plan/parts';
+import { isLowOnWords } from '@/android/plan/planState';
+import { usePlanT } from '@/android/plan/strings';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { buildUsageGateParams, SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import type { Recording } from '../../modules/android-dictation/src';
@@ -104,6 +107,7 @@ export default function AndroidHome() {
   const historyError = useTranscriptStore((s) => s.error);
   const user = useAuthStore((s) => s.user);
   const usage = useUsageStore((s) => s.usage);
+  const planT = usePlanT();
   const { register } = useSuperwallGate();
   const action = useRef(false);
   const scroll = useRef<ScrollView>(null);
@@ -451,6 +455,26 @@ export default function AndroidHome() {
           alignSelf: 'center',
         }}
       >
+        {/* E1: under 10% of the week's cloud words left, the meter comes to Home with a way to Pro. */}
+        {user && !user.isAnonymous && usage && isLowOnWords(usage) ? (
+          <View style={[card, { padding: 14 }]}>
+            <WordsMeter
+              usage={usage}
+              action={
+                <GlassPill
+                  label={planT('goUnlimited')}
+                  onPress={() => {
+                    openUpgrade(
+                      usage,
+                      register,
+                      SUPERWALL_PLACEMENTS.cloudUsageWarningTapped,
+                    ).catch((error: Error) => Alert.alert(t('errorTitle'), error.message));
+                  }}
+                />
+              }
+            />
+          </View>
+        ) : null}
         {/* The notch hangs below the card. While it is out, this wrapper reaches below the
             card far enough to hold it, so its ✕ gets touches and it never covers what comes
             next; the notch opens and closes that room as it moves. */}

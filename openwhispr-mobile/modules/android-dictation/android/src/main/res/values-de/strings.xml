@@ -26,8 +26,8 @@
   <string name="ow_status_no_speech">Nichts gehört</string>
   <string name="ow_status_offline">Keine Verbindung</string>
   <string name="ow_status_retry">Erneut</string>
-  <string name="ow_status_out_of_words">Keine Wörter mehr</string>
-  <string name="ow_status_see_plans">Tarife ansehen</string>
+  <string name="ow_status_out_of_words">Keine Cloud-Wörter mehr diese Woche</string>
+  <string name="ow_status_see_plans">Auf Pro wechseln</string>
   <string name="ow_status_mic_off">Mikrofon aus</string>
   <string name="ow_status_allow">Erlauben</string>
   <string name="ow_status_copied">Kopiert</string>

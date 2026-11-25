@@ -6,6 +6,14 @@ import { requestSync } from '@/sync/syncEngine';
 import SettingsScreen from '../AccountScreen.android';
 
 const mockPush = jest.fn();
+const mockRegister = jest.fn(() => Promise.resolve(true));
+let mockBillingStatus: Record<string, string> = {};
+jest.mock('@/hooks/useSuperwallGate', () => ({
+  useSuperwallGate: () => ({ register: mockRegister }),
+}));
+jest.mock('@/android/billing', () => ({
+  useAndroidBillingStatus: { getState: () => ({ accounts: mockBillingStatus }) },
+}));
 const mockSignOut = jest.fn();
 let mockUser: { id: string; name?: string; email?: string; isAnonymous: boolean } | null;
 jest.mock('@/store/useGoogleCalendarStore', () => {
@@ -110,17 +118,40 @@ it('never shows an unknown plan as Free', () => {
   render(<SettingsScreen />);
   expect(useUsageStore.getState().load).toHaveBeenCalledTimes(1);
   expect(screen.queryByText('free')).toBeNull();
-  expect(screen.queryByText('wordsThisWeek')).toBeNull();
+  expect(screen.queryByText('cloudWordsThisWeek')).toBeNull();
   act(() => useUsageStore.setState({ usage: usage({ isSubscribed: true }) }));
   expect(screen.getAllByText('pro').length).toBeGreaterThan(0);
-  expect(screen.getByText('unlimitedWords')).toBeTruthy();
+  expect(screen.getByText('unlimited')).toBeTruthy();
+  expect(screen.queryByText('goUnlimited')).toBeNull();
 });
 
 it('shows this week’s words for a free plan', () => {
   useUsageStore.setState({ usage: usage({}) });
   render(<SettingsScreen />);
   expect(screen.getByText('1 / 2,000')).toBeTruthy();
-  expect(screen.getByText('wordsLeft')).toBeTruthy();
+  // The meter never says how many are left; the plan row carries only its tag.
+  expect(screen.queryByText('wordsLeft')).toBeNull();
+  expect(screen.getByText('goUnlimited')).toBeTruthy();
+  expect(screen.queryByText('settingsPlanBody')).toBeNull();
+});
+
+it('Go unlimited opens Plan & billing, not a paywall, while a purchase is on its way', () => {
+  mockBillingStatus = { 'billing-a': 'access-pending' };
+  useUsageStore.setState({ usage: usage({ billingUserId: 'billing-a' }) });
+  render(<SettingsScreen />);
+  fireEvent.press(screen.getByText('goUnlimited'));
+  expect(mockPush).toHaveBeenCalledWith('/android-pro');
+  expect(mockRegister).not.toHaveBeenCalled();
+});
+
+it('Go unlimited opens the paywall when no purchase is waiting', () => {
+  mockBillingStatus = {};
+  useUsageStore.setState({ usage: usage({ billingUserId: 'billing-a' }) });
+  render(<SettingsScreen />);
+  fireEvent.press(screen.getByText('goUnlimited'));
+  expect(mockRegister).toHaveBeenCalledWith(
+    expect.objectContaining({ placement: 'account_billing_open' }),
+  );
 });
 
 it('says how many permissions are still off', () => {

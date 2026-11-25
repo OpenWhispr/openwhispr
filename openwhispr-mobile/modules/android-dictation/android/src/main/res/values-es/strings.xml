@@ -26,8 +26,8 @@
   <string name="ow_status_no_speech">No te he oído</string>
   <string name="ow_status_offline">Sin conexión</string>
   <string name="ow_status_retry">Reintentar</string>
-  <string name="ow_status_out_of_words">Sin palabras</string>
-  <string name="ow_status_see_plans">Ver planes</string>
+  <string name="ow_status_out_of_words">Sin palabras en la nube esta semana</string>
+  <string name="ow_status_see_plans">Pasar a Pro</string>
   <string name="ow_status_mic_off">Micrófono desactivado</string>
   <string name="ow_status_allow">Permitir</string>
   <string name="ow_status_copied">Copiado</string>
