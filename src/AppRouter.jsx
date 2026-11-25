@@ -16,6 +16,7 @@ import { useControlPanelWindowDrag } from "./hooks/useControlPanelWindowDrag";
 import { useTheme } from "./hooks/useTheme";
 import { mirrorActiveAccountScope } from "./lib/accountScopeMirror";
 import { usePolicyStore } from "./stores/policyStore";
+import { useSettingsStore } from "./stores/settingsStore";
 import { resolveSettledControlPanelWindowMode } from "./utils/controlPanelWindowMode.ts";
 import { resolveMacAccessibilityReadiness } from "./utils/macAccessibilityReadiness.ts";
 import { isAgentWindow, isControlPanelWindow } from "./utils/windowContext.ts";
@@ -86,6 +87,15 @@ function MainApp() {
   const isDictationPanel = !isControlPanel;
   // Covers every surface this window hosts: onboarding, reauth, the panel.
   useControlPanelWindowDrag(isControlPanel);
+
+  useEffect(() => {
+    // Dictation supplies startup preferences, including on a hidden launch.
+    // Opening the control panel can retry a destination that was unavailable.
+    const { noteFilesEnabled, noteFilesPath } = useSettingsStore.getState();
+    void window.electronAPI?.noteFilesSetEnabled?.(noteFilesEnabled, noteFilesPath || undefined, {
+      startup: true,
+    });
+  }, []);
 
   useEffect(() => {
     if (isControlPanel) {

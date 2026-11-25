@@ -207,16 +207,25 @@ function makeDatabase() {
   };
 }
 
+let IPCHandlers;
 let target;
 let basePath;
 
 test.before(() => {
   delete require.cache[handlersModulePath];
-  const IPCHandlers = require(handlersModulePath);
-  const Ctor = IPCHandlers.default || IPCHandlers;
-  target = Object.create(Ctor.prototype);
+  const handlersModule = require(handlersModulePath);
+  IPCHandlers = handlersModule.default || handlersModule;
+  target = Object.create(IPCHandlers.prototype);
   target._buildSpeakerMappings = () => ({});
-  Ctor.prototype.setupHandlers.call(
+  registerHandlers();
+});
+
+test.after(() => {
+  Module._load = originalLoad;
+});
+
+function registerHandlers() {
+  IPCHandlers.prototype.setupHandlers.call(
     new Proxy(target, {
       get: (value, property) => (property in value ? value[property] : anything()),
       set: (value, property, next) => {
@@ -225,11 +234,7 @@ test.before(() => {
       },
     })
   );
-});
-
-test.after(() => {
-  Module._load = originalLoad;
-});
+}
 
 test.beforeEach(() => {
   basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-note-files-ipc-"));
@@ -301,6 +306,219 @@ function legacyFile(folderName, name, content) {
 
 const legacyNote = (id, title, folder, body) =>
   `---\nid: ${id}\ntitle: ${title}\ntype: personal\nfolder: ${folder}\ncreated: x\nupdated: y\n---\n\n${body}`;
+
+function dictationStartupSender() {
+  // Each startup scenario represents a fresh app launch.
+  registerHandlers();
+  const sender = { mainFrame: {} };
+  target.windowManager = { mainWindow: { webContents: sender, isDestroyed: () => false } };
+  return sender;
+}
+
+function restoreMirror(sender, enabled, customPath = basePath) {
+  return handlers.get("note-files-set-enabled")(
+    { sender, senderFrame: sender.mainFrame },
+    enabled,
+    customPath,
+    { startup: true }
+  );
+}
+
+function controlPanelStartupSender() {
+  const sender = { mainFrame: {} };
+  target.windowManager.controlPanelWindow = {
+    webContents: sender,
+    isDestroyed: () => false,
+  };
+  return sender;
+}
+
+function unavailableMirrorPath(name) {
+  const volume = path.join(basePath, name);
+  fs.writeFileSync(volume, "");
+  return {
+    notesPath: path.join(volume, "notes"),
+    mount() {
+      fs.renameSync(volume, `${volume}-before-mount`);
+      fs.mkdirSync(volume);
+    },
+  };
+}
+
+test("only dictation can restore the mirror and backfill a missed note and transcript", async () => {
+  const dictation = dictationStartupSender();
+  const controlPanel = controlPanelStartupSender();
+  const notification = { mainFrame: {} };
+  target.databaseManager.state.notes[0].transcript = JSON.stringify([
+    { speaker: "SPEAKER_00", text: "missed transcript", start: 0, end: 1 },
+  ]);
+
+  await restoreMirror(controlPanel, true);
+  await restoreMirror(notification, true);
+  await settle();
+  assert.deepEqual(allFiles(), []);
+
+  await restoreMirror(dictation, true);
+  await settle();
+  const files = allFiles().filter((file) => path.basename(file).startsWith("100-"));
+  assert.equal(files.length, 2);
+  assert(files.some((file) => fs.readFileSync(file, "utf8").includes("acme body")));
+  assert(files.some((file) => fs.readFileSync(file, "utf8").includes("missed transcript")));
+});
+
+test("reloading the dictation renderer does not reconcile the mirror again", async () => {
+  const dictation = dictationStartupSender();
+  const controlPanel = controlPanelStartupSender();
+  await restoreMirror(dictation, true);
+  await settle();
+  assert.equal(target.databaseManager.state.summaryReads, 1);
+
+  await restoreMirror(dictation, true);
+  await restoreMirror(controlPanel, true);
+  await settle();
+  assert.equal(target.databaseManager.state.summaryReads, 1);
+});
+
+for (const surface of ["dictation reload", "control panel"]) {
+  test(`${surface} recovers the active destination after it mounts`, async () => {
+    const dictation = dictationStartupSender();
+    const sender = surface === "control panel" ? controlPanelStartupSender() : dictation;
+    const destination = unavailableMirrorPath("mirror");
+    const stalePath = path.join(basePath, "stale");
+
+    assert.equal((await restoreMirror(dictation, true, destination.notesPath)).success, false);
+    assert.equal(target.databaseManager.state.summaryReads, undefined);
+    destination.mount();
+    assert.equal((await restoreMirror(sender, true, stalePath)).success, true);
+    await settle();
+
+    assert.equal(fs.existsSync(stalePath), false);
+    assert.match(fs.readFileSync(fileOf(100), "utf8"), /acme body/);
+    assert.equal(path.relative(destination.notesPath, fileOf(100)).startsWith(".."), false);
+  });
+}
+
+test("window recovery updates a file whose note changed while the destination was unavailable", async () => {
+  const dictation = dictationStartupSender();
+  const volume = path.join(basePath, "mirror");
+  const parkedVolume = path.join(basePath, "unmounted-mirror");
+  const destination = path.join(volume, "notes");
+  await target.noteFiles.enable(destination);
+  target.noteFiles.disable();
+  target._noteFilesSync = undefined;
+  fs.renameSync(volume, parkedVolume);
+  fs.writeFileSync(volume, "");
+
+  assert.equal((await restoreMirror(dictation, true, destination)).success, false);
+  const note = target.databaseManager.getNote(100);
+  note.content = "edited during the outage";
+  target.noteFiles.writeNote(note);
+  await settle();
+
+  fs.renameSync(volume, path.join(basePath, "before-mount"));
+  fs.renameSync(parkedVolume, volume);
+  assert.equal((await restoreMirror(dictation, true, destination)).success, true);
+  await settle();
+
+  assert.match(fs.readFileSync(fileOf(100), "utf8"), /edited during the outage/);
+});
+
+test("rebuilding reports an unavailable destination and succeeds after it mounts", async () => {
+  const dictation = dictationStartupSender();
+  const destination = unavailableMirrorPath("mirror");
+
+  await restoreMirror(dictation, true, destination.notesPath);
+  assert.equal((await invoke("note-files-rebuild")).success, false);
+  destination.mount();
+  assert.equal((await invoke("note-files-rebuild")).success, true);
+  await settle();
+
+  assert.match(fs.readFileSync(fileOf(100), "utf8"), /acme body/);
+});
+
+test("a failed startup retry cannot undo an explicit disable", async () => {
+  const dictation = dictationStartupSender();
+  const destination = unavailableMirrorPath("mirror");
+
+  await restoreMirror(dictation, true, destination.notesPath);
+  await invoke("note-files-set-enabled", false);
+  destination.mount();
+  await restoreMirror(dictation, true, destination.notesPath);
+  await settle();
+
+  assert.equal(fs.existsSync(destination.notesPath), false);
+});
+
+test("recovery uses a newer folder selection even if that selection first failed", async () => {
+  const dictation = dictationStartupSender();
+  const original = unavailableMirrorPath("original");
+  const replacement = unavailableMirrorPath("replacement");
+
+  await restoreMirror(dictation, true, original.notesPath);
+  assert.equal((await invoke("note-files-set-path", replacement.notesPath)).success, false);
+  original.mount();
+  replacement.mount();
+  await restoreMirror(dictation, true, original.notesPath);
+  await settle();
+
+  assert.equal(fs.existsSync(original.notesPath), false);
+  assert.equal(allFiles(replacement.notesPath).filter((file) => file.endsWith(".md")).length, 4);
+});
+
+test("a failed folder switch defers merged-note cleanup until the destination recovers", async () => {
+  const dictation = dictationStartupSender();
+  const replacement = unavailableMirrorPath("replacement");
+  const database = target.databaseManager;
+  await restoreMirror(dictation, true);
+  database.mergedNotes.push({ id: 201, title: "Dup", content: "dup body", note_type: "personal" });
+  const rebuild = invoke("note-files-rebuild");
+  assert.equal((await invoke("note-files-set-path", replacement.notesPath)).success, false);
+  await rebuild;
+  await settle();
+  assert.deepEqual(
+    database.mergedNotes.map((note) => note.id),
+    [201]
+  );
+
+  replacement.mount();
+  const legacyDir = path.join(replacement.notesPath, "General");
+  const duplicateFile = path.join(legacyDir, "201-dup.md");
+  fs.mkdirSync(legacyDir, { recursive: true });
+  fs.writeFileSync(duplicateFile, legacyNote(201, "Dup", "General", "dup body"));
+  assert.equal((await restoreMirror(dictation, true, basePath)).success, true);
+  await settle();
+
+  assert.deepEqual(database.mergedNotes, []);
+  assert.equal(fs.existsSync(duplicateFile), false);
+});
+
+test("a delayed startup restore cannot undo an explicit disable", async () => {
+  const dictation = dictationStartupSender();
+  await invoke("note-files-set-enabled", false);
+
+  await restoreMirror(dictation, true);
+  target.noteFiles.writeNote(target.databaseManager.getNote(100));
+  await settle();
+  assert.deepEqual(allFiles(), []);
+});
+
+test("a folder selected before startup takes precedence over the saved folder", async () => {
+  const dictation = dictationStartupSender();
+  const oldPath = path.join(basePath, "old");
+  const newPath = path.join(basePath, "new");
+  await target.noteFiles.enable(newPath);
+  target.noteFiles.disable();
+  target._noteFilesSync = undefined;
+  target.databaseManager.getNote(100).content = "updated note body";
+
+  assert.equal((await invoke("note-files-set-path", newPath)).success, true);
+  await restoreMirror(dictation, true, oldPath);
+  await settle();
+
+  assert.equal(fs.existsSync(oldPath), false);
+  assert.equal(allFiles(newPath).filter((file) => file.endsWith(".md")).length, 4);
+  assert.match(fs.readFileSync(fileOf(100), "utf8"), /updated note body/);
+});
 
 test("same-named folders in different workspaces get separate directories", async () => {
   await enableMirror();

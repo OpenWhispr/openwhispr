@@ -2209,7 +2209,7 @@ declare global {
       noteFilesSetEnabled?: (
         enabled: boolean,
         customPath?: string,
-        options?: { skipRebuild?: boolean }
+        options?: { skipRebuild?: boolean; startup?: boolean }
       ) => Promise<{ success: boolean; error?: string }>;
       noteFilesSetPath?: (path: string) => Promise<{ success: boolean; error?: string }>;
       noteFilesRebuild?: () => Promise<{ success: boolean; error?: string }>;

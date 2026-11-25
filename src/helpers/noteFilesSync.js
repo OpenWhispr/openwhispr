@@ -27,6 +27,7 @@ function groupByNote(entries) {
 // writes each note whose recorded files aren't where they belong.
 function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = defaultMirror }) {
   let enabled = false;
+  let pendingInitialization = null;
   // Bumped whenever the mirror stops or moves, so a reconcile still running gives up.
   let generation = 0;
   const queuedNoteIds = new Set();
@@ -196,7 +197,7 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
     if (!enabled) return;
     const run = () => {
       if (!pendingWrites.delete(run)) return;
-      if (enabled) guarded("Note file update failed", work);
+      if (enabled && !pendingInitialization) guarded("Note file update failed", work);
     };
     pendingWrites.add(run);
     setImmediate(run);
@@ -251,7 +252,8 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
   // folder directories, and moves files left in the old layout. Another account's
   // notes aren't returned by the database, so their files wait for its turn.
   const runReconcile = async (startedGeneration) => {
-    const stillCurrent = () => enabled && startedGeneration === generation;
+    const stillCurrent = () =>
+      enabled && !pendingInitialization && startedGeneration === generation;
     const db = database();
     reconciledContainers = containersSignature();
     reconcileForced = false;
@@ -313,7 +315,7 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
   const reconcile = () => {
     clearTimeout(reconcileTimer);
     reconcileTimer = null;
-    if (!enabled) return Promise.resolve();
+    if (!enabled || pendingInitialization) return Promise.resolve();
     if (reconcilePromise) {
       reconcileAgain = true;
       return reconcilePromise;
@@ -323,7 +325,7 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
         do {
           reconcileAgain = false;
           await runReconcile(generation);
-        } while (reconcileAgain && enabled);
+        } while (reconcileAgain && enabled && !pendingInitialization);
       } catch (error) {
         debugLogger.error("Note file reconcile failed", { error: error.message }, "note-files");
       } finally {
@@ -345,21 +347,33 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
     return skip ? (reconcilePromise ?? Promise.resolve()) : reconcile();
   };
 
-  const start = (basePath) => {
+  const configurePath = (basePath) => {
     if (mirror.getBasePath() !== basePath) {
       generation++;
       placementSnapshot = null;
     }
+    pendingInitialization = { basePath };
+  };
+
+  const initialize = () => {
     useDatabaseLedger();
-    mirror.init(basePath);
+    mirror.init(pendingInitialization.basePath);
+    pendingInitialization = null;
   };
 
   const rebuild = async () => {
+    if (pendingInitialization) initialize();
     const placements = preparePlacements();
     const notes = database().getNotes(null, ALL_NOTES_LIMIT);
     for (const note of notes) writeOne(note, placements);
     debugLogger.info("Markdown mirror rebuild complete", { count: notes.length }, "note-files");
     await reconcile();
+  };
+
+  const retryInitialization = async () => {
+    if (!enabled || !pendingInitialization) return;
+    // Edits made during the outage may already have files at the expected paths.
+    await rebuild();
   };
 
   return {
@@ -369,18 +383,21 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
 
     async enable(basePath, { skipRebuild = false } = {}) {
       enabled = true;
-      start(basePath);
+      configurePath(basePath);
       if (!skipRebuild) {
         await rebuild();
         return;
       }
-      // Not awaited: a first launch may have thousands of files to move, and
-      // the window asking doesn't wait on them.
+      initialize();
+      // A first launch may have thousands of files to move.
       reconcile();
     },
 
+    retryInitialization,
+
     disable() {
       enabled = false;
+      pendingInitialization = null;
       generation++;
       queuedNoteIds.clear();
       clearTimeout(noteBatchTimer);
@@ -390,7 +407,7 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
     },
 
     async setPath(basePath) {
-      start(basePath);
+      configurePath(basePath);
       await rebuild();
     },
 
@@ -410,6 +427,16 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
       const [note] = deletedRow ? [deletedRow] : database().getNotesForMirror([noteId]);
       const mappings = speakerMappings ?? getSpeakerMappings(noteId);
       whenEnabled(() => mirror.deleteNote(noteId, note ?? null, mappings));
+    },
+
+    // Keep merged rows until a usable destination can check their old files.
+    deleteMergedNotes(mergedNotes) {
+      if (mergedNotes.length === 0) return;
+      whenEnabled(() => {
+        for (const note of mergedNotes.splice(0)) {
+          mirror.deleteNote(note.id, note, note.speakerMappings ?? getSpeakerMappings(note.id));
+        }
+      });
     },
 
     // A note that arrived or changed through sync.
