@@ -10,12 +10,21 @@ const {
 
 async function createRouterHarness(t, initialStorage = {}) {
   let root;
+  const noteFilesRequests = [];
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
   const { storage } = installBrowserGlobals(t, {
     initialStorage,
-    window: { location: { search: "?control-panel=true" } },
+    window: {
+      location: { search: "?control-panel=true" },
+      electronAPI: {
+        noteFilesSetEnabled: (...args) => {
+          noteFilesRequests.push(args);
+          return Promise.resolve({ success: true });
+        },
+      },
+    },
   });
   const container = installHostDom(t);
   const state = {
@@ -51,6 +60,14 @@ async function createRouterHarness(t, initialStorage = {}) {
       "/stores/policyStore": `
         export const usePolicyStore = (selector) => selector(globalThis.__appRouterOnboardingTest.policy);
         usePolicyStore.getState = () => ({ bootstrap: async () => {} });
+      `,
+      "/stores/settingsStore": `
+        export const useSettingsStore = {
+          getState: () => ({
+            noteFilesEnabled: localStorage.getItem("noteFilesEnabled") === "true",
+            noteFilesPath: localStorage.getItem("noteFilesPath") ?? "",
+          }),
+        };
       `,
       "/lib/auth": `export async function signOut() {}`,
       "/components/ui/button": `export function Button({ children }) { return children; }`,
@@ -91,8 +108,31 @@ async function createRouterHarness(t, initialStorage = {}) {
     state.policy.status = "managed";
     await render();
   };
-  return { container, storage, flow, render, reloadAfterSignIn };
+  return {
+    container,
+    storage,
+    flow,
+    render,
+    reloadAfterSignIn,
+    policy: state.policy,
+    noteFilesRequests,
+  };
 }
+
+test("the control panel requests note-file recovery once device policy is ready", async (t) => {
+  const { noteFilesRequests, policy, render } = await createRouterHarness(t, {
+    noteFilesEnabled: "true",
+    noteFilesPath: "/tmp/note-exports",
+  });
+  policy.deviceReady = false;
+  await render();
+  assert.deepEqual(noteFilesRequests, []);
+
+  policy.deviceReady = true;
+  await render();
+  await render();
+  assert.deepEqual(noteFilesRequests, [[true, "/tmp/note-exports", { startup: true }]]);
+});
 
 test("required first sign-in preserves onboarding across the OAuth reload", async (t) => {
   const { container, storage, flow, render, reloadAfterSignIn } = await createRouterHarness(t);

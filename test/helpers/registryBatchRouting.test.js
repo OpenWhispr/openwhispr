@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const seed = require("../../src/models/modelRegistryData.json");
-const { assertCompatibleCatalog } = require("../../src/models/registrySchema.cjs");
+const { acceptCatalog, assertCompatibleCatalog } = require("../../src/models/registrySchema.cjs");
 const { loadAudioManager } = require("./harness/audioManager");
 
 function nextCatalog() {
@@ -48,6 +48,56 @@ test("new batch selections reach the selected provider without a legacy ID rewri
     },
   });
   assert.equal(wrongProvider.model, "whisper-large-v3-turbo");
+});
+
+test("Gemini batch routes honor model retirements after a catalog update", async (t) => {
+  const store = require("../../src/models/registryData.js");
+  const { resolveTranscriptionRoute } = await import("../../src/helpers/transcriptionRoute.ts");
+  const previous = store.getRegistrySnapshot();
+  t.after(() =>
+    store.replaceRegistryData({ ...previous, manifestVersion: store.getRegistryVersion() + 1 })
+  );
+
+  for (const batchSuccessor of ["gemini-next-transcribe", "gemini-next-transcribe-live"]) {
+    await t.test(`retired batch model points to ${batchSuccessor}`, () => {
+      const catalog = nextCatalog();
+      const gemini = catalog.transcriptionProviders.find((provider) => provider.id === "gemini");
+      gemini.models.push({
+        id: "gemini-next-transcribe-live",
+        name: "New Live model",
+        description: "Streaming transcription",
+        streaming: true,
+      });
+      gemini.defaultModel = "gemini-next-transcribe";
+      const oldBatch = gemini.models.find((model) => model.id === "gemini-3.5-transcribe");
+      const oldLive = gemini.models.find((model) => model.id === "gemini-3.5-transcribe-live");
+      Object.assign(oldBatch, { retired: true, replacement: batchSuccessor });
+      Object.assign(oldLive, {
+        retired: true,
+        replacement: "gemini-next-transcribe-live",
+      });
+      assertCompatibleCatalog(catalog, seed);
+      store.replaceRegistryData({
+        data: acceptCatalog(catalog, seed, require("../../package.json").version),
+        manifestVersion: store.getRegistryVersion() + 1,
+      });
+
+      for (const model of [
+        "gemini-next-transcribe-live",
+        "gemini-3.5-transcribe-live",
+        "gemini-3.5-transcribe",
+      ]) {
+        const route = resolveTranscriptionRoute({
+          settings: {
+            transcriptionMode: "providers",
+            cloudTranscriptionProvider: "gemini",
+            cloudTranscriptionModel: model,
+          },
+        });
+        assert.equal(route.model, "gemini-next-transcribe", `batch route for ${model}`);
+      }
+    });
+  }
 });
 
 test("dictation honors a new Gemini batch selection and retains streaming fallbacks", async (t) => {

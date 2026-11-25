@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.2] - 2026-11-25
+
+Subfolders in the notes sidebar, a mic mute during note recordings, and date and time variables in snippets. Organizations can block transcription of meetings with outside guests. This release fixes Windows PCs with Smart App Control that couldn't start the app, Linux apps that crashed from leaked file handles after many dictations, the voice assistant failing on every take with Gemini Live, and lost words in ElevenLabs Note Recording.
+
+### Notes and meetings
+
+- **Subfolders.** Folders can hold one level of subfolders, shown nested in the notes sidebar and synced across devices. (#3002)
+- **Mute your mic during a note recording.** A toggle beside the recording control stops transcribing your microphone while system audio keeps going, without touching the meeting app's own mic. (#3385, thanks @pawisoon)
+- **The note editor keeps Tab in the note,** the formatting toolbar shows only over selected text, and the word count is gone. (#3424)
+- **Exporting a note with only an AI summary as `.txt` writes the summary** instead of an empty file. (#3427)
+- **Notes are saved as files after a tray launch.** With Start minimized or Launch at login, "Save notes as files" didn't apply until the main window opened. (#3233, thanks @stantheman0128)
+- **ElevenLabs Note Recording keeps every word.** Words lost at server cuts, dropped connections and stops are kept, and stopping takes under half a second instead of 4. (#3421)
+
+### Organization controls
+
+- **Block transcription of meetings with outside guests.** When an organization turns this on, recording checks the invite across Google Calendar, Outlook and Apple Calendar before capturing audio, and members can still join and take notes by hand. A guest added mid-recording stops transcription and keeps the note. (#3345)
+
+### Dictation and transcription
+
+- **Date and time variables in snippets.** `{{date}}`, `{{time}}`, `{{datetime}}` and `{{locale}}` are filled each time a snippet is inserted. A `{{date}}` you dictate or the model writes stays as typed. (#3296, thanks @chirag127)
+- **The voice assistant works with Gemini Live transcription.** Every assistant take failed with "Transcription failed" since 1.12.0. Chat mics and History → Retry are fixed too. (#3410)
+- **Disable thinking works for Anthropic models that think by default,** so short cleanups no longer spend their budget thinking or show `<thinking>` text. (#3372, thanks @orshih6)
+- **Notes retry when Anthropic runs out of tokens before answering,** instead of failing. (#3411, thanks @widechaos)
+- **Custom cleanup endpoints whose API isn't under `/v1` work,** by falling back to the base you typed when `/v1` returns 404. (#3340, thanks @dawarravi)
+
+### Windows
+
+- **The app starts on PCs with Smart App Control.** Native modules are now signed, so Windows no longer blocks them at startup. (#3422)
+
+### Linux
+
+- **Dictation no longer leaks file handles into other apps.** Apps like Kate, Dolphin and xdg-desktop-portal-gtk could hit the open-file limit and crash or stall after many dictations. (#3417)
+
 ## [1.12.1] - 2026-11-24
 
 A richer note editor with toggles, callouts, note links and find & replace, a redesigned Plans & Billing, and new speech-to-text options: ElevenLabs Scribe for dictation, uploads and Note Recording, AssemblyAI Dictation, and custom headers for self-hosted servers. Skills now back up with Cloud, Salesforce joins Integrations, workspaces get icons, and dictation starts and stops faster. This release also fixes a Settings bug that moved Note Recording and Upload onto OpenAI, chats whose later messages never backed up, and Kimi K3.1 Pro and Gemini Extra high requests that always failed.

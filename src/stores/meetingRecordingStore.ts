@@ -1,6 +1,7 @@
 import { refreshEnterpriseIdentityForUse } from "./enterpriseIdentityStore";
 import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import { create } from "zustand";
+import i18n from "../i18n";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import { getMeetingStreamingTranscriptionProviders } from "../models/ModelRegistry";
@@ -10,6 +11,7 @@ import { resolvePreferredMicrophone } from "../helpers/microphoneSelection";
 import { ActiveMicRecoveryController } from "../helpers/activeMicRecovery";
 import { getBaseLanguageCode } from "../utils/languageSupport";
 import { getKeytermDictionaryWords } from "../utils/snippets";
+import { describeProviderError } from "../utils/describeProviderError";
 import {
   resolveInitialSpeakerCountOverride,
   resolveParticipantSpeakerCountSync,
@@ -183,15 +185,18 @@ const isSegmentWithinIdentificationWindow = (
 };
 
 // MeetingRecordingMount translates the `managedConfig:<key>` sentinel.
+// It carries only the key, so a key with params is translated here.
 const describeMeetingSetupError = (err: unknown): string => {
-  const { code, error, message, messageKey } = (err ?? {}) as {
+  const { code, error, message, messageKey, messageParams } = (err ?? {}) as {
     code?: string;
     error?: string;
     message?: string;
     messageKey?: string;
+    messageParams?: Record<string, string | number>;
   };
   if (code === "AUTH_EXPIRED" || code === "AUTH_REQUIRED") return "signInRequired";
   if (code && MEETING_POLICY_REFUSALS.has(code)) return code;
+  if (messageKey && messageParams) return describeProviderError(err, i18n.t).description;
   if (messageKey) return `managedConfig:${messageKey}`;
   return message || error || "Failed to start meeting transcription";
 };

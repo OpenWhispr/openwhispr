@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { AppState } from 'react-native';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { captureDictationContext, recordDictationCompleted } from '@/lib/productEvents';
+import { translationFailureReason } from '@/lib/keyboardTranslation';
 import { countSpokenWords } from '@/lib/wordCount';
 import { useAuthStore } from '@/store/useAuthStore';
 import {
@@ -9,7 +10,7 @@ import {
   type AddTranscriptInput,
   type FailedTranscriptInput,
 } from '@/store/useTranscriptStore';
-import type { KeyboardTone } from '@/types';
+import type { KeyboardTone, TranscriptionProvider } from '@/types';
 import { AppGroupStorage } from '../../modules/app-group-storage/src';
 
 /** The keyboard's folder in the App Group container (DirectDictationStore.folderName). */
@@ -32,6 +33,14 @@ interface DirectDictationRecord {
   text?: string | null;
   originalText?: string | null;
   cleanupApplied?: boolean | null;
+  /** "cloud", "parakeet-v2" or "parakeet-v3"; none on records from before Local existed. */
+  engine?: string;
+  /** The keyboard's target when the dictation started. */
+  translationTarget?: string | null;
+  /** Set only when `text` is the translation. */
+  translatedTo?: string | null;
+  /** The take had a target and `text` was left untranslated (an unchanged reply doesn't count). */
+  translationFailed?: boolean | null;
 }
 
 export interface OutboxFiles {
@@ -51,7 +60,12 @@ export interface OutboxDeps {
   hasTranscript: (jobId: string) => Promise<boolean>;
   addTranscript: (input: AddTranscriptInput, mayWrite: () => boolean) => Promise<void>;
   addFailedTranscript: (input: FailedTranscriptInput, mayWrite: () => boolean) => Promise<void>;
-  recordCompleted: (input: { captureId: string; words: number | null; occurredAt: number }) => void;
+  recordCompleted: (input: {
+    captureId: string;
+    words: number | null;
+    occurredAt: number;
+    provider: TranscriptionProvider;
+  }) => void;
   /** Wraps a raw 16 kHz take in a WAV file beside it; false when it couldn't. */
   wrapPcmAsWav: (pcmName: string, wavName: string) => Promise<boolean>;
 }
@@ -80,13 +94,21 @@ function parseRecord(json: string | null): DirectDictationRecord | null {
   }
 }
 
+// A take recorded for the keyboard's own Local engine. It must never reach the network, so its
+// failed row is marked localOnly: Retry then stays On-Device whatever mode is on. Only "cloud" (or
+// no engine, from before Local existed) is Cloud: an engine this build doesn't know stays local.
+function isLocalTake(record: DirectDictationRecord): boolean {
+  return record.engine != null && record.engine !== 'cloud';
+}
+
 function durationSeconds(record: DirectDictationRecord): number | undefined {
   return record.durationMs ? record.durationMs / 1000 : undefined;
 }
 
 /**
  * Brings the keyboard's own dictations into History and the word counters. Usage needs nothing:
- * the server counted the words when it transcribed them.
+ * the server counted the words of a Cloud take, and a Local take uses no plan. A Local take that
+ * failed or was cut off becomes a row that retries On-Device; nothing here uploads anything.
  */
 export async function drainKeyboardDirectOutbox(
   deps: OutboxDeps = defaultOutboxDeps(),
@@ -127,6 +149,7 @@ export async function drainKeyboardDirectOutbox(
       continue;
     }
 
+    const provider: TranscriptionProvider = isLocalTake(record) ? 'local' : 'cloud';
     if (record.status === 'completed' && record.text) {
       const occurredAt = record.completedAtMs ?? record.startedAtMs;
       await deps.addTranscript(
@@ -135,9 +158,15 @@ export async function drainKeyboardDirectOutbox(
           jobId: record.jobId,
           text: record.text,
           originalText: record.originalText ?? record.text,
-          provider: 'cloud',
+          provider,
           requestContext: 'keyboard',
           keyboardTone: (record.tone ?? 'default') as KeyboardTone,
+          translatedTo: record.translatedTo ?? undefined,
+          // The keyboard records no cleanup warning, so the translation's is the row's only one.
+          cleanupWarning:
+            record.translationFailed && record.translationTarget
+              ? translationFailureReason(record.translationTarget)
+              : undefined,
           duration: durationSeconds(record),
           createdAt: occurredAt,
         },
@@ -148,6 +177,7 @@ export async function drainKeyboardDirectOutbox(
         captureId: record.jobId,
         words: countSpokenWords(record.originalText ?? record.text),
         occurredAt,
+        provider,
       });
       await removeJob(record.jobId);
       result.completed += 1;
@@ -172,9 +202,15 @@ export async function drainKeyboardDirectOutbox(
         audioFileName: audio.name,
         audioMimeType: audio.mimeType,
         duration: durationSeconds(record) ?? audio.duration,
-        provider: 'cloud',
+        provider,
+        ...(provider === 'local' ? { localOnly: true } : {}),
         requestContext: 'keyboard',
         keyboardTone: (record.tone ?? 'default') as KeyboardTone,
+        // Nothing was translated yet: the target it was recorded with, so a retry translates it.
+        // A Local take never has one (translating is a network request), so even a record that
+        // claims a target retries on the device without it.
+        translationTarget:
+          provider === 'local' ? undefined : (record.translationTarget ?? undefined),
         errorMessage: FAILED_MESSAGE,
         createdAt: record.startedAtMs,
       },
@@ -248,12 +284,12 @@ function defaultOutboxDeps(): OutboxDeps {
         ? AppGroupStorage.wrapPcmAsWav(`${path}/${pcmName}`, `${path}/${wavName}`)
         : false;
     },
-    recordCompleted: ({ captureId, words, occurredAt }) =>
+    recordCompleted: ({ captureId, words, occurredAt, provider }) =>
       recordDictationCompleted({
         context: captureDictationContext(),
         captureId,
         words,
-        provider: 'cloud',
+        provider,
         source: 'keyboard',
         retranscribe: false,
         occurredAt,

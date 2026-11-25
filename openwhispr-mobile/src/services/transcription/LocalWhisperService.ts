@@ -1,6 +1,7 @@
 import { initWhisper, type WhisperContext } from 'whisper.rn';
 import * as FileSystem from 'expo-file-system/legacy';
 import { TranscriptionResponse } from '../../types';
+import { refreshKeyboardEngine } from './keyboardEngineRefresh';
 
 export interface LocalModelInfo {
   name: string;
@@ -285,6 +286,7 @@ export class LocalWhisperService {
         this.activeModelDownloads.delete(modelName);
       }
     }
+    refreshKeyboardEngine();
   }
 
   static async cancelModelDownload(modelName: string): Promise<void> {
@@ -313,6 +315,7 @@ export class LocalWhisperService {
     }
 
     await FileSystem.deleteAsync(model.path, { idempotent: true });
+    refreshKeyboardEngine();
   }
 
   static getRecommendedModel(): string {

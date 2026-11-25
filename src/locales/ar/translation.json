@@ -283,9 +283,9 @@
         "groq_whisper_large_v3_turbo": "أسرع من الوقت الفعلي بـ216 ضعفًا",
         "mistral_voxtral_mini_latest": "تفريغ سريع متعدد اللغات",
         "gemini_3_5_transcribe": "تحويل الكلام إلى نص من Google Gemini",
-        "elevenlabs_scribe_v3": "أدق نسخ متعدد اللغات",
-        "elevenlabs_scribe_v2": "نسخ دقيق متعدد اللغات",
-        "elevenlabs_scribe_v3_live": "نسخ مباشر لتسجيل الملاحظات",
+        "elevenlabs_scribe_v3": "أدق تفريغ متعدد اللغات",
+        "elevenlabs_scribe_v2": "تفريغ دقيق متعدد اللغات",
+        "elevenlabs_scribe_v3_live": "تفريغ مباشر لتسجيل الملاحظات",
         "gemini_3_5_transcribe_live": "تحويل الكلام إلى نص بالبث في الوقت الفعلي",
         "corti_transcribe": "تفريغ طبي بدرجة سريرية",
         "xai_grok_stt": "تعرف على الكلام بدقة عالية من xAI",
@@ -3428,6 +3428,7 @@
       "generateSummary": "إنشاء ملخص بالذكاء الاصطناعي",
       "generateWithTemplate": "إنشاء باستخدام {{template}}",
       "startWriting": "ابدأ الكتابة...",
+      "tabToLeave": "اضغط على Esc ثم Tab أو Shift+Tab للخروج من المحرر.",
       "staleIndicator": "تم تغيير المحتوى منذ التحسين",
       "live": "مباشر",
       "transcript": "النص المفرَّغ",
@@ -3557,7 +3558,6 @@
           "matchCase": "مطابقة حالة الأحرف",
           "close": "إغلاق"
         },
-        "count": "الكلمات: {{words}} · الأحرف: {{chars}}",
         "link": {
           "header": "ربط ملاحظة",
           "empty": "اكتب عنوان ملاحظة…",

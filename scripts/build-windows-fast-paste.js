@@ -219,7 +219,7 @@ async function main() {
 
   console.warn("[windows-fast-paste] Could not obtain Windows fast-paste binary.");
   console.warn(
-    "[windows-fast-paste] Windows paste will use nircmd/PowerShell fallback; selection editing will type at the cursor."
+    "[windows-fast-paste] Windows paste will use PowerShell fallback; selection editing will type at the cursor."
   );
 }
 

@@ -81,10 +81,11 @@ export const RETIRED_DEFAULT_PROMPT_HASHES: ReadonlySet<string> = new Set([
 ]);
 
 // Hashes of the defaults currently shipped on mobile. Not used by the sweep;
-// the registry test compares these against DEFAULT_CLEANUP_PROMPT so a prompt
+// the registry test compares these against the shipped defaults so a prompt
 // change cannot land without updating the retired set.
 export const CURRENT_DEFAULT_PROMPT_HASHES: Partial<Record<PromptKind, string>> = {
   cleanup: '58ed65fbc679a7bac1483ef850c51ac7932a02d17fab9ca688f4d11f6aa9b7e6',
+  translate: '2acf77e82671cfb27f56210461369cca96da52d68597dd825bb5f3cf7fd4cd47',
 };
 
 const SHA256_HEX = /^[0-9a-f]{64}$/;

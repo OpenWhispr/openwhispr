@@ -5,6 +5,7 @@ const { WebSocketServer } = require("ws");
 const AssemblyAiStreaming = require("../../src/helpers/assemblyAiStreaming");
 const CortiStreaming = require("../../src/helpers/cortiStreaming");
 const DeepgramStreaming = require("../../src/helpers/deepgramStreaming");
+const ElevenLabsStreaming = require("../../src/helpers/elevenLabsStreaming");
 const OpenAIRealtimeStreaming = require("../../src/helpers/openaiRealtimeStreaming");
 
 const clients = [
@@ -12,6 +13,7 @@ const clients = [
   ["AssemblyAI", AssemblyAiStreaming, "notifyConnectionLost"],
   ["Deepgram", DeepgramStreaming, "notifyConnectionLost"],
   ["Corti", CortiStreaming, "notifyConnectionLost"],
+  ["ElevenLabs", ElevenLabsStreaming, "notifyConnectionLost"],
 ];
 
 for (const [name, StreamingClient, notifyMethod] of clients) {

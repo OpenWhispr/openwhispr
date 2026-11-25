@@ -135,15 +135,11 @@ class MarkdownMirror {
     this._deferredCaseRenames.clear();
     this._oldLayoutIndex = null;
     this._oldFolderNames = new Set(["Personal"]);
-    try {
-      fs.mkdirSync(basePath, { recursive: true });
-      // Keep existing ledger keys while using native spelling for filesystem safety.
-      this._ledgerBasePath = fs.realpathSync(basePath);
-      this._baseRealPath = fs.realpathSync.native(basePath);
-      debugLogger.debug("Markdown mirror initialized", { basePath }, "note-files");
-    } catch (err) {
-      debugLogger.error("Failed to init markdown mirror", { error: err.message }, "note-files");
-    }
+    fs.mkdirSync(basePath, { recursive: true });
+    // Keep existing ledger keys while using native spelling for filesystem safety.
+    this._ledgerBasePath = fs.realpathSync(basePath);
+    this._baseRealPath = fs.realpathSync.native(basePath);
+    debugLogger.debug("Markdown mirror initialized", { basePath }, "note-files");
   }
 
   getBasePath() {

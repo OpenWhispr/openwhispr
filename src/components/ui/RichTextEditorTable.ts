@@ -256,8 +256,8 @@ function buildTable(schema: Schema, labels: string[], bodyRows: number): ProseMi
   return table.create(null, [header, ...body]);
 }
 
-/** An empty top-level line: the formatting toolbar shows there, and Insert table replaces it. */
-export const isOnEmptyLine = ({ empty, $from }: Selection) =>
+/** An empty top-level line, which Insert table replaces. */
+const isOnEmptyLine = ({ empty, $from }: Selection) =>
   empty &&
   $from.depth === 1 &&
   $from.parent.type.name === "paragraph" &&
