@@ -130,7 +130,8 @@ function AddLanguageSheet({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={l.scrim}>
-        <View style={[l.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        {/* The list stops the same 12 above the navigation bar as it sits below the search. */}
+        <View style={[l.sheet, { paddingBottom: insets.bottom + 12 }]}>
           <View style={l.grabber} />
           <View style={[s.header, { paddingHorizontal: 0 }]}>
             <Text style={l.sheetTitle}>{t('addLanguageTitle')}</Text>
