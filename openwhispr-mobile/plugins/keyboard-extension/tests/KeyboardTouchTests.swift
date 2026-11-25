@@ -217,6 +217,20 @@ private extension KeyboardViewController {
   func touchTestTextDidChange() { textDidChange(nil) }
   func touchTestInsertTranscript(_ text: String) { insertSmartText(text) }
   func touchTestTapLetter(_ index: Int) { handleCharacterKeyTapped(characterButtons[index]) }
+  /// A finger going down on a letter key, then its lift (inside) or its loss (outside, cancelled).
+  func touchTestPressLetter(_ index: Int) { handleCharacterKeyDown(characterButtons[index]) }
+  func touchTestLiftLetter(_ index: Int) {
+    handleCharacterKeyTapped(characterButtons[index])
+    handleCharacterKeyReleased(characterButtons[index])
+  }
+  func touchTestLoseLetter(_ index: Int) { handleCharacterKeyReleased(characterButtons[index]) }
+  func touchTestPressDelete() { handleOtherKeyDown() }
+  /// The letter's long press starting, as the accent row would open.
+  func touchTestAccentHoldBegins(_ index: Int) {
+    let key = characterButtons[index]
+    if let letter = key.output?.first { beginAccentHold(on: key, letter: letter) }
+  }
+  var touchTestAccentRowOpen: Bool { accentKey != nil }
   func touchTestTapReturn() { handleReturnTapped() }
   func touchTestTapDelete() { handleBackspaceTapped() }
   func touchTestTapMode() { handleModeKeyTapped() }
@@ -305,6 +319,8 @@ private enum KeyboardTouchTests {
     checkFieldAwareKeys(&checks)
     checkLayoutChanges(&checks)
     checkTyping(&checks)
+    checkRollover(&checks)
+    checkEdgeTouchDelay(&checks)
     checkDirectDictation(&checks)
     checkTypingHelp(&checks)
 
@@ -731,6 +747,93 @@ private enum KeyboardTouchTests {
 
   /// Shift, delete and quotes.
   @MainActor
+  /// Rollover: a letter still held when another key goes down types at once, so fast typing
+  /// keeps the order the keys went down in, whatever order the fingers lift.
+  /// Letter indexes on QWERTY: q 0, e 2, h 15.
+  static func checkRollover(_ checks: inout TouchChecks) {
+    TestEnvironment.reset()
+    defer { TestEnvironment.reset() }
+
+    func keyboard() -> (KeyboardViewController, TestTextProxy) {
+      let proxy = TestTextProxy()
+      TestEnvironment.proxy = proxy
+      return (KeyboardViewController.makeLaidOutKeyboard(width: 402), proxy)
+    }
+
+    var (board, proxy) = keyboard()
+    board.touchTestPressLetter(15)
+    board.touchTestLiftLetter(15)
+    checks.check("rollover: a single tap types once (\(proxy.inserted))", proxy.inserted == ["H"])
+
+    (board, proxy) = keyboard()
+    board.touchTestPressLetter(15)
+    board.touchTestPressLetter(2)
+    checks.check("rollover: a held letter types when the next key goes down (\(proxy.inserted))", proxy.inserted == ["H"])
+    board.touchTestLiftLetter(2)
+    board.touchTestLiftLetter(15)
+    checks.check(
+      "rollover: keys keep the order they went down in, lifted in reverse (\(proxy.inserted))",
+      proxy.inserted == ["H", "e"]
+    )
+
+    (board, proxy) = keyboard()
+    board.touchTestPressLetter(15)
+    board.touchTestPressLetter(2)
+    board.touchTestLiftLetter(15)
+    board.touchTestLiftLetter(2)
+    checks.check("rollover: a committed letter isn't typed again at its lift (\(proxy.inserted))", proxy.inserted == ["H", "e"])
+
+    (board, proxy) = keyboard()
+    board.touchTestPressLetter(15)
+    board.touchTestLoseLetter(15)
+    checks.check("rollover: a press that slides off types nothing, as before (\(proxy.inserted))", proxy.inserted.isEmpty)
+
+    (board, proxy) = keyboard()
+    board.touchTestPressLetter(15)
+    board.touchTestPressLetter(2)
+    board.touchTestLoseLetter(15)
+    board.touchTestLiftLetter(2)
+    checks.check("rollover: a committed letter stays typed if its finger slides off (\(proxy.inserted))", proxy.inserted == ["H", "e"])
+
+    (board, proxy) = keyboard()
+    board.touchTestPressLetter(2)
+    board.touchTestPressLetter(15)
+    board.touchTestAccentHoldBegins(2)
+    checks.check("rollover: a committed letter opens no accent row", !board.touchTestAccentRowOpen)
+    board.touchTestLiftLetter(2)
+    board.touchTestLiftLetter(15)
+    checks.check("rollover: and adds nothing at its lift (\(proxy.inserted))", proxy.inserted == ["E", "h"])
+
+    (board, proxy) = keyboard()
+    board.touchTestPressLetter(2)
+    board.touchTestAccentHoldBegins(2)
+    checks.check("rollover: (setup) holding e opens its accent row", board.touchTestAccentRowOpen)
+    board.touchTestPressLetter(15)
+    checks.check("rollover: a letter showing its accent row isn't typed by the next key (\(proxy.inserted))", proxy.inserted.isEmpty)
+
+    (board, proxy) = keyboard()
+    board.touchTestPressLetter(15)
+    board.touchTestPressDelete()
+    checks.check("rollover: delete going down types the held letter first (\(proxy.inserted))", proxy.inserted == ["H"])
+    board.touchTestLiftLetter(15)
+    checks.check("rollover: once (\(proxy.inserted))", proxy.inserted == ["H"])
+  }
+
+  /// iOS holds back touches near the screen's edges while it checks for a system gesture;
+  /// on a phone they reached the keys about 80 ms late. The keyboard turns that off.
+  @MainActor
+  static func checkEdgeTouchDelay(_ checks: inout TouchChecks) {
+    let gate = TestLongPress(target: nil, action: nil)
+    gate.delaysTouchesBegan = true
+    let other = TestLongPress(target: nil, action: nil)
+    other.delaysTouchesBegan = true
+    KeyboardViewController.stopDelayingTouches([gate, other])
+    checks.check("edge touches: the window's gestures no longer hold back touches", !gate.delaysTouchesBegan && !other.delaysTouchesBegan)
+    KeyboardViewController.stopDelayingTouches(nil)
+    checks.check("edge touches: no window is fine", true)
+  }
+
+  @MainActor
   static func checkTyping(_ checks: inout TouchChecks) {
     TestEnvironment.reset()
     defer { TestEnvironment.reset() }
@@ -879,3 +982,6 @@ private func checkDirectDictation(_ checks: inout TouchChecks) {
   checks.check("direct: the keyboard that owns the take going away does", direct.disappears == disappearsBefore + 1)
 }
 
+
+/// A long press whose state a test can set.
+final class TestLongPress: UILongPressGestureRecognizer {}

@@ -1203,6 +1203,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // Long-press accents.
   private let accentPopup = AccentPopupView()
   private weak var accentKey: KeyButton?
+  /// Letter keys with a finger still on them, in the order they went down (`commitHeldLetters`).
+  private var heldLetters: [(key: KeyButton, committed: Bool)] = []
   /// Key feedback; tests swap in a counter, since a simulator has nothing to feel.
   var keyFeedback: KeyFeedbackGenerating = SystemKeyFeedback()
   private let numberPadStack = UIStackView()
@@ -1549,6 +1551,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   override func viewWillDisappear(_ animated: Bool) {
     super.viewWillDisappear(animated)
     logRecordMarker("viewWillDisappear")
+    heldLetters.removeAll()
     directKeyboardWillDisappear()
     stopDeleteRepeating()
     suggestionRestTimer?.invalidate()
@@ -1572,6 +1575,16 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   @objc private func handleCharacterKeyTapped(_ sender: KeyButton) {
+    if let index = heldLetters.firstIndex(where: { $0.key === sender }) {
+      let committed = heldLetters[index].committed
+      heldLetters.remove(at: index)
+      // It went in when the next key went down.
+      if committed { return }
+    }
+    typeCharacterKey(sender)
+  }
+
+  private func typeCharacterKey(_ sender: KeyButton) {
     guard let output = sender.output else { return }
     playKeyClick()
 
@@ -1597,6 +1610,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   @objc private func handleCharacterKeyDown(_ sender: KeyButton) {
+    commitHeldLetters()
+    heldLetters.append((key: sender, committed: false))
     guard let text = sender.title(for: .normal) else { return }
     keyPopup.show(
       text,
@@ -1609,7 +1624,24 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   @objc private func handleCharacterKeyReleased(_ sender: KeyButton) {
+    heldLetters.removeAll { $0.key === sender }
     keyPopup.hide(owner: sender, after: 0.05)
+  }
+
+  /// Another key went down: every letter still held types now, in the order they went down,
+  /// as on Apple's keyboard. Fast typing then keeps the order the keys were pressed in,
+  /// whatever order the fingers lift; a letter's own lift later adds nothing. A letter
+  /// showing its accent row is left to it.
+  private func commitHeldLetters() {
+    for index in heldLetters.indices where !heldLetters[index].committed && heldLetters[index].key !== accentKey {
+      heldLetters[index].committed = true
+      typeCharacterKey(heldLetters[index].key)
+    }
+  }
+
+  /// A key other than a letter went down (delete, return, a shortcut).
+  @objc private func handleOtherKeyDown() {
+    commitHeldLetters()
   }
 
   @objc private func handleShiftTapped() {
@@ -3374,29 +3406,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     guard let key = gesture.view as? KeyButton, let letter = key.output?.first else { return }
     switch gesture.state {
     case .began:
-      let options: [String]
-      if let alternates = key.alternates {
-        options = [String(letter)] + alternates
-      } else {
-        let accents = letterAccents(for: letter)
-        guard !accents.isEmpty else { return }
-        // The key's own letter first, as on Apple's keyboard: holding and letting go types it.
-        options = ([letter] + accents).map { character -> String in
-          let text = String(character)
-          let upper = text.uppercased()
-          return isShiftEnabled && upper.count == 1 ? upper : text
-        }
-      }
-      keyPopup.hide()
-      accentKey = key
-      keyFeedback.tick()
-      accentPopup.show(
-        options,
-        font: metrics.keycaps.lowercase,
-        keyFrame: key.convert(key.bounds, to: rootStack),
-        container: rootStack.layoutMarginsGuide.layoutFrame,
-        cornerRadius: metrics.keyCornerRadius
-      )
+      beginAccentHold(on: key, letter: letter)
     case .changed:
       accentPopup.select(at: gesture.location(in: accentPopup))
     case .ended:
@@ -3410,6 +3420,35 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     default:
       break
     }
+  }
+
+  /// Opens the accent row over a held letter key.
+  private func beginAccentHold(on key: KeyButton, letter: Character) {
+    // Already typed because another key went down while it was held.
+    guard !heldLetters.contains(where: { $0.key === key && $0.committed }) else { return }
+    let options: [String]
+    if let alternates = key.alternates {
+      options = [String(letter)] + alternates
+    } else {
+      let accents = letterAccents(for: letter)
+      guard !accents.isEmpty else { return }
+      // The key's own letter first, as on Apple's keyboard: holding and letting go types it.
+      options = ([letter] + accents).map { character -> String in
+        let text = String(character)
+        let upper = text.uppercased()
+        return isShiftEnabled && upper.count == 1 ? upper : text
+      }
+    }
+    keyPopup.hide()
+    accentKey = key
+    keyFeedback.tick()
+    accentPopup.show(
+      options,
+      font: metrics.keycaps.lowercase,
+      keyFrame: key.convert(key.bounds, to: rootStack),
+      container: rootStack.layoutMarginsGuide.layoutFrame,
+      cornerRadius: metrics.keyCornerRadius
+    )
   }
 
   private func typeAccent(_ text: String) {
@@ -3441,6 +3480,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let time = touch.timestamp
     switch touch.phase {
     case .began:
+      commitHeldLetters()
       trackpadHoldTimer?.invalidate()
       applyTrackpad(trackpadGesture.began(at: point, time: time))
       // A still finger sends no events, so the hold is timed here.
@@ -3800,6 +3840,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     backspace.imageOffsetY = metrics.keycaps.edgeGlyphOffset
     backspace.accessibilityLabel = "delete"
     backspace.addTarget(self, action: #selector(handleBackspaceTapped), for: .touchUpInside)
+    backspace.addTarget(self, action: #selector(handleOtherKeyDown), for: .touchDown)
     let longPress = UILongPressGestureRecognizer(
       target: self,
       action: #selector(handleBackspaceLongPress(_:))
@@ -3848,6 +3889,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   private func rebuildKeyboard() {
     keyPopup.hide()
+    heldLetters.removeAll()
     for stack in [keyboardRowsStack, lettersRowsStack, numbersRowsStack, symbolsRowsStack, numberPadStack] {
       stack.arrangedSubviews.forEach { view in
         stack.removeArrangedSubview(view)
@@ -4270,12 +4312,14 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let shortcuts = (0..<3).map { _ in
       let button = makeKeyButton(display: nil, role: .utility)
       button.addTarget(self, action: #selector(handleShortcutTapped(_:)), for: .touchUpInside)
+      button.addTarget(self, action: #selector(handleOtherKeyDown), for: .touchDown)
       return button
     }
     shortcutButtons = shortcuts
 
     let returnButton = makeKeyButton(display: nil, imageSystemName: "return.left", role: .utility)
     returnButton.addTarget(self, action: #selector(handleReturnTapped), for: .touchUpInside)
+    returnButton.addTarget(self, action: #selector(handleOtherKeyDown), for: .touchDown)
     self.returnButton = returnButton
 
     ([modeButton, globeButton, emojiButton, spaceButton] + shortcuts + [returnButton])
