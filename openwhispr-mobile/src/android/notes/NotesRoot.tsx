@@ -469,7 +469,7 @@ function UpNextCard({
           ]}
         >
           <SystemIcon name="mic" mdName="Mic" size={16} color={n.onGlass} />
-          <Text style={{ color: n.onGlass, fontSize: 15, lineHeight: 20, fontWeight: '600' }}>
+          <Text style={{ color: n.onGlass, fontSize: 15, lineHeight: 20, fontWeight: '500' }}>
             {t('record')}
           </Text>
         </Pressable>

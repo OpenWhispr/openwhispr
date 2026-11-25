@@ -453,7 +453,7 @@ export function NewButton({
       ]}
     >
       <SystemIcon name="plus" mdName="Plus" size={22} color={n.onGlass} />
-      <Text style={{ color: n.onGlass, fontSize: 17, lineHeight: 24, fontWeight: '700' }}>
+      <Text style={{ color: n.onGlass, fontSize: 17, lineHeight: 24, fontWeight: '500' }}>
         {text}
       </Text>
     </Pressable>

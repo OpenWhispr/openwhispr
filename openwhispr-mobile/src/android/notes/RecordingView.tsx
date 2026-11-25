@@ -293,7 +293,7 @@ export function RecordingView({
           ]}
         >
           <View style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: n.onGlass }} />
-          <Text style={{ color: n.onGlass, fontSize: 17, lineHeight: 22, fontWeight: '600' }}>
+          <Text style={{ color: n.onGlass, fontSize: 17, lineHeight: 22, fontWeight: '500' }}>
             {stopLabel ?? t('stopAndSave')}
           </Text>
         </Pressable>

@@ -200,7 +200,7 @@ export function GlassPill({ label, onPress }: { label: string; onPress: () => vo
         pressed && th.glassPressed,
       ]}
     >
-      <Text style={{ color: th.tokens.onGlass, fontSize: 12, lineHeight: 16, fontWeight: '700' }}>
+      <Text style={{ color: th.tokens.onGlass, fontSize: 12, lineHeight: 16, fontWeight: '500' }}>
         {label}
       </Text>
     </Pressable>

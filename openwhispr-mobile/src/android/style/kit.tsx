@@ -508,7 +508,7 @@ export function GlassCta({
         pressed && !disabled && th.glassPressed,
       ]}
     >
-      <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '700', color: k.onGlass }}>
+      <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '500', color: k.onGlass }}>
         {label}
       </Text>
     </Pressable>
