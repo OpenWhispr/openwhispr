@@ -99,7 +99,8 @@ interface NativeDictation {
     undo: string;
     undone: string;
   }): Promise<boolean>;
-  startRecording(): Promise<void>;
+  /** [voiceLevel]: getRecordingLevel follows the voice above the room, as the bubble's bars do. */
+  startRecording(voiceLevel?: boolean): Promise<void>;
   stopRecording(cancel: boolean): Promise<Recording>;
   /** Loudness of the in-app recording, 0..1. Missing on builds before the Home recorder. */
   getRecordingLevel?(): number;

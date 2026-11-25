@@ -46,7 +46,7 @@ class WavRecorder internal constructor(
   private var task: Future<*>? = null
   private var file: File? = null
   private var peak = 0
-  /** Loudness of the latest buffer, 0..1 (-60..-20 dBFS), for an in-app meter. */
+  /** Loudness of the latest buffer, 0..1 ([measure], else -60..-20 dBFS), for an in-app meter. */
   @Volatile var level = 0f
     private set
   private var samples = 0L
@@ -85,9 +85,9 @@ class WavRecorder internal constructor(
               if (count < 0 && !recording) break
               check(count >= 0) { "Microphone interrupted ($count)." }
               if (count == 0) continue
-              val loudness = BubblePolicy.level(buffer, count)
+              val loudness = measure?.invoke(buffer, count) ?: BubblePolicy.level(buffer, count)
               level = loudness
-              onLevel?.invoke(measure?.invoke(buffer, count) ?: loudness)
+              onLevel?.invoke(loudness)
               val bytes = ByteBuffer.allocate(count * 2).order(ByteOrder.LITTLE_ENDIAN)
               for (i in 0 until count) { bytes.putShort(buffer[i]); peak = maxOf(peak, abs(buffer[i].toInt())) }
               val data = bytes.array()

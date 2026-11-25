@@ -53,8 +53,8 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 /**
  * The practice bubble, drawn to match the real one (Variant 1): the app icon when idle; brand glass
- * with bars that follow the voice while listening, and a ✕ beside it; three dots under a turning rim
- * arc while writing.
+ * with the logo's three bars following the voice while listening, and a ✕ beside it; three dots under
+ * a turning rim arc while writing.
  * a ✓ once the words are in. Tapping the listening bubble stops and inserts. With [onHold], holding
  * fills a brand-blue ring (V3) and opens the menu after 400 ms, as on the real bubble; [onHoldStart]
  * and [onHoldCancel] let the screen say "Keep holding…" while the ring fills.
@@ -143,7 +143,7 @@ export function PracticeBubble({
             end={{ x: 1, y: 1 }}
             style={b.glass}
           >
-            {state === 'listening' ? <Bars /> : <Dots still={reduced} />}
+            {state === 'listening' ? <Bars still={reduced} /> : <Dots still={reduced} />}
           </LinearGradient>
           {badge ? (
             <View style={b.badge}>
@@ -229,22 +229,29 @@ export function PracticeBubble({
   );
 }
 
-// A port of the real bubble's bars (BubbleFace): five white bars, tallest in the middle, eased toward
-// the microphone level every frame with a gentle wobble, never flat. Same -60…-20 dBFS level.
-const BAR_SHAPE = [0.55, 0.85, 1, 0.85, 0.55];
-const BAR_MAX = SIZE * 0.39;
-// Writing, as on the real bubble (BubbleFace): the logo's three bars (5 dp wide, 10 apart on a 52 dp
-// bubble) as dots 1.15x their width, under a rim arc 0.58x their width.
+// A port of the real bubble's listening face (BubbleFace, BubblePolicy.bars): the logo's three bars,
+// in dp for a 52 dp bubble, 5 wide and 10 apart, resting 9 / 20 / 9. Each bar rides its own phase of
+// one wave that turns faster the louder the voice; the sides hear the voice 110 / 60 ms after the
+// middle and glide; in silence the bars settle to the logo and breathe ±1 dp every 1.6 s.
+// The level is the bubble's own VoiceMeter (startRecording(true)), read every 20 ms window.
 const UNIT = SIZE / 52;
-const LOGO_BAR_WIDTH = 5 * UNIT;
-const LOGO_BAR_SPACING = 10 * UNIT;
-const DOT_SIZE = LOGO_BAR_WIDTH * 1.15;
-const ARC_WIDTH = LOGO_BAR_WIDTH * 0.58;
+const BAR_WIDTH = 5 * UNIT;
+const BAR_SPACING = 10 * UNIT;
+const BAR_REST = [9, 20, 9];
+const BAR_GROW = [15, 10, 15];
+const BAR_SWAY = [0.45, 0.3, 0.45];
+const WAVE_PHASES = [2.2, 0, 4.3];
+const EASE_MS = [160, 70, 160];
+const LAGS_MS = [110, 0, 60];
+const BREATH_MS = 1600;
+const WAVE_REST_HZ = 0.35;
+const WAVE_VOICE_HZ = 1.1;
+// Writing: each bar folds in place into a dot 1.15x its width, under a rim arc 0.58x its width.
+const DOT_SIZE = BAR_WIDTH * 1.15;
+const ARC_WIDTH = BAR_WIDTH * 0.58;
 
 function useLevel() {
   const target = useSharedValue(0);
-  const level = useSharedValue(0);
-  const phase = useSharedValue(0);
   useEffect(() => {
     const timer = setInterval(() => {
       try {
@@ -252,53 +259,68 @@ function useLevel() {
       } catch {
         target.value = 0;
       }
-    }, 50);
+    }, 20);
     return () => clearInterval(timer);
   }, [target]);
-  useFrameCallback(() => {
-    level.value += (target.value - level.value) * 0.3;
-    phase.value += 0.18;
-  });
-  return { level, phase };
+  return target;
 }
 
 function Halo() {
   const b = useStyles();
-  const { level } = useLevel();
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: 1 + 0.3 * level.value }] }));
+  const level = useLevel();
+  const style = useAnimatedStyle(() => ({
+    transform: [{ scale: withTiming(1 + 0.3 * level.value, { duration: 50 }) }],
+  }));
   return <Animated.View pointerEvents="none" style={[b.halo, style]} />;
 }
 
-function Bars() {
+function Bars({ still }: { still: boolean }) {
   const b = useStyles();
-  const { level, phase } = useLevel();
+  const target = useLevel();
+  const heights = useSharedValue([...BAR_REST]);
+  const heard = useSharedValue<number[]>([]);
+  const wave = useSharedValue(0);
+  useFrameCallback((frame) => {
+    'worklet';
+    const now = frame.timestamp;
+    const dt = Math.min(100, frame.timeSincePreviousFrame ?? 16);
+    const voice = Math.min(1, Math.max(0, target.value));
+    const log = heard.value.concat(now, voice);
+    while (log.length > 4 && log[0] < now - 200) log.splice(0, 2);
+    heard.value = log;
+    wave.value =
+      (wave.value + (dt / 1000) * 2 * Math.PI * (WAVE_REST_HZ + WAVE_VOICE_HZ * voice)) %
+      (2 * Math.PI);
+    const heardAgo = (lag: number) => {
+      let value = 0;
+      for (let i = 0; i < log.length; i += 2) {
+        if (log[i] <= now - lag) value = log[i + 1];
+        else break;
+      }
+      return value;
+    };
+    const levels = LAGS_MS.map((lag) => (still ? 0 : lag === 0 ? voice : heardAgo(lag)));
+    const breath = still
+      ? 0
+      : Math.sin((now * 2 * Math.PI) / BREATH_MS) * (1 - Math.max(...levels));
+    heights.value = heights.value.map((height, i) => {
+      const shape = 1 - (BAR_SWAY[i] * (1 - Math.sin(wave.value + WAVE_PHASES[i]))) / 2;
+      const goal = BAR_REST[i] + BAR_GROW[i] * levels[i] * shape + breath;
+      return height + (goal - height) * (1 - Math.exp(-dt / EASE_MS[i]));
+    });
+  });
   return (
     <View style={b.bars} accessible={false}>
-      {BAR_SHAPE.map((shape, index) => (
-        <Bar key={index} index={index} shape={shape} level={level} phase={phase} />
+      {[0, 1, 2].map((index) => (
+        <Bar key={index} index={index} heights={heights} />
       ))}
     </View>
   );
 }
 
-function Bar({
-  index,
-  shape,
-  level,
-  phase,
-}: {
-  index: number;
-  shape: number;
-  level: SharedValue<number>;
-  phase: SharedValue<number>;
-}) {
+function Bar({ index, heights }: { index: number; heights: SharedValue<number[]> }) {
   const b = useStyles();
-  const style = useAnimatedStyle(() => {
-    const wobble = 0.75 + 0.25 * Math.sin(phase.value + index * 1.3);
-    const value = Math.min(1, Math.max(0, level.value));
-    const height = Math.min(1, Math.max(0.18, 0.18 + 0.82 * value * shape * wobble));
-    return { height: height * BAR_MAX };
-  });
+  const style = useAnimatedStyle(() => ({ height: heights.value[index] * UNIT }));
   return <Animated.View style={[b.bar, style]} />;
 }
 
@@ -391,9 +413,9 @@ const useStyles = makeStyles((t) => ({
     justifyContent: 'center',
     elevation: 2,
   },
-  bars: { flexDirection: 'row', alignItems: 'center', gap: 3, height: BAR_MAX },
-  bar: { width: 3.4, borderRadius: 2, backgroundColor: bubble.onGlass },
-  dots: { flexDirection: 'row', alignItems: 'center', gap: LOGO_BAR_SPACING - DOT_SIZE },
+  bars: { flexDirection: 'row', alignItems: 'center', gap: BAR_SPACING - BAR_WIDTH },
+  bar: { width: BAR_WIDTH, borderRadius: BAR_WIDTH / 2, backgroundColor: bubble.onGlass },
+  dots: { flexDirection: 'row', alignItems: 'center', gap: BAR_SPACING - DOT_SIZE },
   dot: {
     width: DOT_SIZE,
     height: DOT_SIZE,

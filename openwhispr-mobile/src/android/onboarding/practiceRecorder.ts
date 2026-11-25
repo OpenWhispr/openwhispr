@@ -120,11 +120,11 @@ export class PracticeRecorder {
   private async open(): Promise<boolean> {
     const dictation = AndroidDictation!;
     try {
-      await dictation.startRecording();
+      await dictation.startRecording(true);
     } catch (error) {
       if (!ALREADY_ACTIVE.test((error as Error).message)) throw error;
       await discard(await dictation.stopRecording(true).catch(() => null));
-      await dictation.startRecording();
+      await dictation.startRecording(true);
     }
     if (this.cancelRequested) {
       await discard(await dictation.stopRecording(true).catch(() => null));
