@@ -135,6 +135,33 @@ test("each channel reaches the manager, with policy only where something can lea
   assert.equal(policyCalls.length, 3);
 });
 
+test("the Slack window the hotkey was pressed over reaches only Slack's prepare", async () => {
+  const { registerConnectorIpc } = await load();
+  const ipcMain = fakeIpcMain();
+  const manager = fakeManager();
+  const asked = [];
+  registerConnectorIpc({
+    ipcMain,
+    manager,
+    getPolicyState: async () => "allowed",
+    getAccountScope: () => SCOPE,
+    getSlackWindowTitle: async (event) => {
+      asked.push(event);
+      return "eng (Channel) - Acme - Slack";
+    },
+  });
+  const event = { sender: "agent-window" };
+  const prepare = ipcMain.handlers.get("connector-prepare");
+  await prepare(event, "slack", "send_message", { text: "hi" });
+  await prepare(event, "linear", "create_issue", { title: "Bug" });
+
+  assert.deepEqual(
+    manager.calls.map((call) => call.args[3].slackWindowTitle),
+    ["eng (Channel) - Acme - Slack", null]
+  );
+  assert.deepEqual(asked, [event]);
+});
+
 test("a cancel that lands while a direct run waits on policy stops it", async () => {
   const { registerConnectorIpc } = await load();
   const ipcMain = fakeIpcMain();
