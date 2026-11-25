@@ -286,11 +286,11 @@ export function PlanContent({ openPaywall }: { openPaywall?: 'limit' } = {}) {
               busy={busy}
               onPress={() => openPlans(out ? 'limit' : 'billing')}
             />
-            {!out && prices.prices?.annualPerMonth && (
+            {!out && (
               <Text
                 style={[type.footnote, { fontSize: 12, textAlign: 'center', color: c.tertiary }]}
               >
-                {t('fromPrice', { price: prices.prices.annualPerMonth })}
+                {t('cancelAnytime')}
               </Text>
             )}
             <LinkText label={t('restorePurchases')} disabled={busy} onPress={restore} />

@@ -32,8 +32,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     addMeetings: 'Notas de reuniones en la nube',
     addMeetingsBody: 'Transcripciones y resúmenes',
     seeProPlans: 'Ver planes Pro',
-    fromPrice:
-      'Desde {{price}} al mes, facturado anualmente. Cancela cuando quieras en Google Play.',
+    cancelAnytime: 'Cancela cuando quieras en Google Play.',
     restorePurchases: 'Restaurar compras',
     unlockingTitle: 'Activando Pro',
     unlockingBody:
@@ -124,8 +123,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     addMeetings: 'Notes de réunion dans le cloud',
     addMeetingsBody: 'Transcriptions et résumés',
     seeProPlans: 'Voir les offres Pro',
-    fromPrice:
-      'À partir de {{price}} par mois, facturé annuellement. Résiliez à tout moment dans Google Play.',
+    cancelAnytime: 'Résiliez à tout moment dans Google Play.',
     restorePurchases: 'Restaurer les achats',
     unlockingTitle: 'Activation de Pro',
     unlockingBody:
@@ -215,7 +213,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     addMeetings: 'Meeting-Notizen in der Cloud',
     addMeetingsBody: 'Transkripte und Zusammenfassungen',
     seeProPlans: 'Pro-Tarife ansehen',
-    fromPrice: 'Ab {{price}} pro Monat, jährlich abgerechnet. Jederzeit in Google Play kündbar.',
+    cancelAnytime: 'Jederzeit in Google Play kündbar.',
     restorePurchases: 'Käufe wiederherstellen',
     unlockingTitle: 'Pro wird freigeschaltet',
     unlockingBody:
@@ -308,8 +306,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     addMeetings: 'Notas de reuniões na nuvem',
     addMeetingsBody: 'Transcrições e resumos',
     seeProPlans: 'Ver planos Pro',
-    fromPrice:
-      'A partir de {{price}} por mês, cobrado anualmente. Cancele quando quiser no Google Play.',
+    cancelAnytime: 'Cancele quando quiser no Google Play.',
     restorePurchases: 'Restaurar compras',
     unlockingTitle: 'Ativando o Pro',
     unlockingBody:
@@ -399,7 +396,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     addMeetings: 'Note delle riunioni nel cloud',
     addMeetingsBody: 'Trascrizioni e riepiloghi',
     seeProPlans: 'Vedi i piani Pro',
-    fromPrice: 'Da {{price}} al mese, fatturati annualmente. Annulla quando vuoi da Google Play.',
+    cancelAnytime: 'Annulla quando vuoi da Google Play.',
     restorePurchases: 'Ripristina acquisti',
     unlockingTitle: 'Attivazione di Pro',
     unlockingBody:
@@ -489,7 +486,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     addMeetings: 'Облачные заметки о встречах',
     addMeetingsBody: 'Расшифровки и сводки',
     seeProPlans: 'Тарифы Pro',
-    fromPrice: 'От {{price}} в месяц при оплате за год. Отмена в любой момент в Google Play.',
+    cancelAnytime: 'Отмена в любой момент в Google Play.',
     restorePurchases: 'Восстановить покупки',
     unlockingTitle: 'Включаем Pro',
     unlockingBody:
@@ -577,7 +574,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     addMeetings: '云端会议笔记',
     addMeetingsBody: '转写和摘要',
     seeProPlans: '查看 Pro 方案',
-    fromPrice: '每月 {{price}} 起，按年计费。可随时在 Google Play 取消。',
+    cancelAnytime: '可随时在 Google Play 取消。',
     restorePurchases: '恢复购买',
     unlockingTitle: '正在开通 Pro',
     unlockingBody: 'Google Play 已收到你的付款。我们正在为你的账号添加 Pro，通常只需几秒。',
@@ -659,7 +656,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     addMeetings: '雲端會議筆記',
     addMeetingsBody: '逐字稿和摘要',
     seeProPlans: '查看 Pro 方案',
-    fromPrice: '每月 {{price}} 起，按年計費。可隨時在 Google Play 取消。',
+    cancelAnytime: '可隨時在 Google Play 取消。',
     restorePurchases: '恢復購買',
     unlockingTitle: '正在開通 Pro',
     unlockingBody: 'Google Play 已收到你的付款。我們正在為你的帳號加入 Pro，通常只需幾秒。',
@@ -742,7 +739,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     addMeetings: 'クラウドの会議ノート',
     addMeetingsBody: '文字起こしと要約',
     seeProPlans: 'Pro プランを見る',
-    fromPrice: '月額 {{price}} から（年払い）。Google Play でいつでも解約できます。',
+    cancelAnytime: 'Google Play でいつでも解約できます。',
     restorePurchases: '購入を復元',
     unlockingTitle: 'Pro を有効にしています',
     unlockingBody:
@@ -832,8 +829,7 @@ export const planTranslations: Record<string, Partial<Record<PlanKey, string>>> 
     addMeetings: 'ملاحظات الاجتماعات السحابية',
     addMeetingsBody: 'النصوص المكتوبة والملخصات',
     seeProPlans: 'عرض خطط Pro',
-    fromPrice:
-      'ابتداءً من {{price}} شهريًا، تُحاسَب سنويًا. يمكنك الإلغاء في أي وقت من Google Play.',
+    cancelAnytime: 'يمكنك الإلغاء في أي وقت من Google Play.',
     restorePurchases: 'استعادة المشتريات',
     unlockingTitle: 'جارٍ تفعيل Pro',
     unlockingBody: 'استلم Google Play دفعتك. نضيف Pro إلى حسابك الآن. يستغرق هذا عادةً بضع ثوانٍ.',

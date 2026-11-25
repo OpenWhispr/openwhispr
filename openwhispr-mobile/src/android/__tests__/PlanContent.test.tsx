@@ -151,13 +151,13 @@ afterEach(() => {
   Platform.OS = originalPlatform;
 });
 
-it('A · free: the plan, the meter, what Pro adds and the price from Play', () => {
+it('A · free: the plan, the meter, what Pro adds and the cancel line', () => {
   show();
   expect(kind()).toBe('free');
   expect(screen.getByText('chipYourPlan')).toBeTruthy();
   expect(screen.getByText('73 / 2,000')).toBeTruthy();
   expect(screen.getByText('addDevices')).toBeTruthy();
-  expect(screen.getByText('fromPrice:{"price":"$6.58"}')).toBeTruthy();
+  expect(screen.getByText('cancelAnytime')).toBeTruthy();
   // The allowance is a rolling 7 days: no reset day, and never "N left".
   expect(screen.getByText('rollingAllowance')).toBeTruthy();
   fireEvent.press(screen.getByRole('button', { name: 'seeProPlans' }));

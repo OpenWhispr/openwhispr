@@ -37,7 +37,7 @@ export const planEnglish = {
   addMeetings: 'Cloud meeting notes',
   addMeetingsBody: 'Transcripts and summaries',
   seeProPlans: 'See Pro plans',
-  fromPrice: 'From {{price}} a month, billed yearly. Cancel anytime in Google Play.',
+  cancelAnytime: 'Cancel anytime in Google Play.',
   restorePurchases: 'Restore purchases',
   // Confirming a purchase
   unlockingTitle: 'Unlocking Pro',
