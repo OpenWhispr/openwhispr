@@ -157,6 +157,39 @@ test("does not warn when the provider applied its own speaker labels", async (t)
   assert.equal(result.diarizationWarning, undefined);
 });
 
+test("asks ElevenLabs for speaker labels and leaves the local diarizer out", async (t) => {
+  const { window, transcribeFileWithSpeakers } = await loadFileTranscription(t);
+  const config = {
+    ...localConfig(),
+    useLocalWhisper: false,
+    cloudTranscriptionProvider: "elevenlabs",
+  };
+  let diarizeCalls = 0;
+  window.electronAPI.diarizeAudioFile = async () => {
+    diarizeCalls += 1;
+    return { success: false };
+  };
+  let request = null;
+  let reply = { success: true, text: "[Speaker 1] 0:00 - 0:02\nHola", diarized: true };
+  window.electronAPI.transcribeAudioFileByok = async (options) => {
+    request = options;
+    return reply;
+  };
+  const diarization = { enabled: true, localModelsReady: true, numSpeakers: null };
+
+  const labelled = await transcribeFileWithSpeakers("/tmp/audio.wav", config, diarization);
+  assert.equal(request.provider, "elevenlabs");
+  assert.equal(request.diarize, true);
+  assert.equal(diarizeCalls, 0);
+  assert.equal(labelled.diarizationWarning, undefined);
+
+  // A reply that names no speaker comes back plain, and the upload says so.
+  reply = { success: true, text: "Hola" };
+  const plain = await transcribeFileWithSpeakers("/tmp/audio.wav", config, diarization);
+  assert.equal(plain.text, "Hola");
+  assert.equal(plain.diarizationWarning, true);
+});
+
 test("keeps the transcript and warns when the merge throws", async (t) => {
   const { window, transcribeFileWithSpeakers } = await loadFileTranscription(t);
   window.electronAPI.diarizeAudioFile = async () => ({
@@ -200,19 +233,21 @@ test("does not fetch local models when the provider diarizes server-side", async
   const { resolveDiarizationSettings } = await loadFileTranscription(t);
   let ensureCalls = 0;
 
-  const settings = await resolveDiarizationSettings({
-    enabled: true,
-    modelsReady: false,
-    numSpeakers: 2,
-    config: { ...localConfig(), useLocalWhisper: false, cloudTranscriptionProvider: "openai" },
-    ensureModels: async () => {
-      ensureCalls += 1;
-      return true;
-    },
-  });
+  for (const cloudTranscriptionProvider of ["openai", "mistral", "elevenlabs"]) {
+    const settings = await resolveDiarizationSettings({
+      enabled: true,
+      modelsReady: false,
+      numSpeakers: 2,
+      config: { ...localConfig(), useLocalWhisper: false, cloudTranscriptionProvider },
+      ensureModels: async () => {
+        ensureCalls += 1;
+        return true;
+      },
+    });
 
-  assert.equal(ensureCalls, 0);
-  assert.deepEqual(settings, { enabled: true, localModelsReady: false, numSpeakers: 2 });
+    assert.equal(ensureCalls, 0, cloudTranscriptionProvider);
+    assert.deepEqual(settings, { enabled: true, localModelsReady: false, numSpeakers: 2 });
+  }
 });
 
 test("does not fetch local models when speaker detection is off", async (t) => {

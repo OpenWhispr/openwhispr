@@ -31,8 +31,68 @@ function isKeytermRefusal(errorText) {
   return isKeytermField(detail?.param);
 }
 
+// A longer pause between two words ends a segment.
+const MAX_PAUSE_SECONDS = 1;
+// A fluent speaker leaves only about 0.3 s between sentences, so past this length a
+// segment ends with its sentence instead of waiting for a pause.
+const SENTENCE_BREAK_SECONDS = 20;
+// No segment runs longer, wherever its sentence ends.
+const MAX_SEGMENT_SECONDS = 30;
+// A sentence mark of any script, with the quotes or brackets that close after it.
+const SENTENCE_END = /[\p{Sentence_Terminal}…][\p{Pe}\p{Pf}\p{Pi}"']*$/u;
+
+// Groups the words Scribe returns into the timed segments an upload stores, one bubble
+// each in the Transcript tab; a new speaker always starts one. Spacing items hold the
+// whitespace between words. A word without times takes the previous word's end, since
+// one segment without a finite start makes the note drop all its timing.
+function groupWordsIntoSegments(words) {
+  const segments = [];
+  let spacing = "";
+  let previousEnd = 0;
+  let sentenceEnded = false;
+  for (const word of words) {
+    if (typeof word?.text !== "string") continue;
+    if (word.type === "spacing") {
+      spacing += word.text;
+      continue;
+    }
+    const start = Number.isFinite(word.start) ? word.start : previousEnd;
+    const end = Number.isFinite(word.end) ? word.end : start;
+    const segment = segments.at(-1);
+    // A word that names no speaker stays with the speaker before it.
+    const speaker = word.speaker_id || segment?.speaker;
+    if (
+      !segment ||
+      speaker !== segment.speaker ||
+      start - previousEnd > MAX_PAUSE_SECONDS ||
+      end - segment.start > MAX_SEGMENT_SECONDS ||
+      (previousEnd - segment.start > SENTENCE_BREAK_SECONDS && sentenceEnded)
+    ) {
+      segments.push({ text: word.text, start, end, ...(speaker ? { speaker } : {}) });
+    } else {
+      segment.text += spacing + word.text;
+      segment.end = end;
+    }
+    spacing = "";
+    previousEnd = end;
+    sentenceEnded = SENTENCE_END.test(word.text);
+  }
+  return segments;
+}
+
 async function transcribeWithElevenLabs(
-  { audioBuffer, model, fileName, contentType, language, keyterms, apiKey, signal },
+  {
+    audioBuffer,
+    model,
+    fileName,
+    contentType,
+    language,
+    keyterms,
+    diarize,
+    timestamps,
+    apiKey,
+    signal,
+  },
   fetchImpl
 ) {
   if (!apiKey?.trim()) {
@@ -49,6 +109,8 @@ async function transcribeWithElevenLabs(
   const languageCode =
     language && language !== "auto" ? (LANGUAGE_CODES[language] ?? language) : null;
   let terms = sanitizeKeyterms(keyterms);
+  // A speaker is named per word, so speaker labels need the words as much as timestamps do.
+  const requestsWords = diarize || timestamps;
 
   debugLogger.debug(
     "ElevenLabs batch transcription starting",
@@ -64,8 +126,9 @@ async function transcribeWithElevenLabs(
     formData.append("model_id", resolvedModel);
     // Scribe tags non-speech sounds ("(laughter)") unless told not to; those would be pasted.
     formData.append("tag_audio_events", "false");
-    // Only the text is read, and word timings are most of a long file's response.
-    formData.append("timestamps_granularity", "none");
+    // A caller that reads only the text skips the word timings, most of a long file's response.
+    if (!requestsWords) formData.append("timestamps_granularity", "none");
+    if (diarize) formData.append("diarize", "true");
     if (languageCode) formData.append("language_code", languageCode);
     for (const term of sentTerms) {
       formData.append("keyterms", term);
@@ -140,13 +203,21 @@ async function transcribeWithElevenLabs(
       technicalDetails: { underlyingError: "Expected a JSON transcript with a text field." },
     });
   }
+  const segments =
+    requestsWords && Array.isArray(data.words) ? groupWordsIntoSegments(data.words) : [];
   // Scribe can answer silence with "[pause]" instead of an empty string.
   const trimmed = data.text.trim();
   return {
     text: !trimmed || trimmed === SILENCE_MARKER ? "" : data.text,
     model: resolvedModel,
     acceptedKeyterms: terms,
+    ...(segments.length ? { segments } : {}),
   };
 }
 
-module.exports = { transcribeWithElevenLabs, sanitizeKeyterms, SILENCE_MARKER };
+module.exports = {
+  transcribeWithElevenLabs,
+  groupWordsIntoSegments,
+  sanitizeKeyterms,
+  SILENCE_MARKER,
+};

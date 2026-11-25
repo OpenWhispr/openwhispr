@@ -627,6 +627,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     remoteTranscriptionModel,
   });
 
+  // The speaker count caps the local diarizer, which a provider that labels speakers replaces.
+  const byokDiarize = shouldUseByokDiarize(buildTranscriptionConfig(), true);
+
   // Batch counterpart of the single-file size gating above; returns keys under notes.upload.*.
   const getBatchSizeErrorKey = (sizeBytes: number): string | null => {
     if (managedActive) return null;
@@ -1482,7 +1485,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               />
             </div>
 
-            {diarizationEnabled && diarizationModelsReady && (
+            {diarizationEnabled && diarizationModelsReady && !byokDiarize && (
               <div className="flex items-center gap-4 px-5 py-4">
                 <div className="min-w-0 flex-1 ps-7">
                   <label
