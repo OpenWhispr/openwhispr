@@ -96,6 +96,7 @@ class MediaPlayer {
     this._pausedPlayers = []; // MPRIS players we paused (Linux)
     this._didPause = false; // Whether we sent a pause via toggle fallback
     this._pausedWinApps = []; // GSMTC app IDs we paused (Windows)
+    this._winMediaKeyHelper = null; // Promise of the helper path, or null (Windows)
     this._adapterChecked = false;
     this._adapterPaths = null; // { perl, script, framework } once resolved
     this._pausedViaAdapter = false; // macOS: whether we paused via the adapter
@@ -638,7 +639,31 @@ try {
 }`.trim();
   }
 
+  // The signed fast-paste helper sends the key without PowerShell, which App
+  // Control can confine to Constrained Language Mode, where the Add-Type
+  // fallback is blocked. Builds without media-key-v1 ignore the flag and
+  // paste instead, so only a helper that advertises it is used.
+  _resolveWindowsMediaKeyHelper() {
+    this._winMediaKeyHelper ??= (async () => {
+      const candidates = [
+        path.join(process.resourcesPath || "", "bin", "windows-fast-paste.exe"),
+        path.join(__dirname, "..", "..", "resources", "bin", "windows-fast-paste.exe"),
+      ];
+      const binary = candidates.find((candidate) => fs.existsSync(candidate));
+      if (!binary) return null;
+      const result = await spawnAsync(binary, ["--capabilities"], { timeout: 3000 });
+      return result.status === 0 && /\bmedia-key-v1\b/.test(result.stdout) ? binary : null;
+    })();
+    return this._winMediaKeyHelper;
+  }
+
   async _sendWindowsMediaKey() {
+    const helper = await this._resolveWindowsMediaKeyHelper();
+    if (helper) {
+      const result = await spawnAsync(helper, ["--media-play-pause"], { timeout: 3000 });
+      if (result.status === 0) return true;
+    }
+
     const result = await spawnAsync(
       "powershell.exe",
       [

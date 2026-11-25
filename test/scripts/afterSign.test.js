@@ -3,9 +3,11 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { Arch } = require("app-builder-lib");
 const { VmManager } = require("app-builder-lib/out/vm/vm");
 
 const config = require("../../electron-builder.json");
+const afterPack = require("../../scripts/afterPack").default;
 const afterSign = require("../../scripts/afterSign").default;
 const { buildPeImage } = require("../helpers/harness/peFixture");
 
@@ -13,12 +15,20 @@ const appPublisher = config.win.azureSignOptions.publisherName;
 const microsoft =
   "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US";
 
-function buildContext(results, { platform = "win32", forceCodeSigning = true } = {}) {
+function buildContext(
+  results,
+  {
+    platform = "win32",
+    forceCodeSigning = true,
+    appOutDir = path.resolve("fixture's unpacked app"),
+  } = {}
+) {
   const signed = [];
   const commands = [];
   const context = {
     electronPlatformName: platform,
-    appOutDir: path.resolve("fixture's unpacked app"),
+    arch: Arch.x64,
+    appOutDir,
     packager: {
       forceCodeSigning,
       platformSpecificBuildOptions: config.win,
@@ -63,23 +73,66 @@ test("signs unsigned native modules and preserves valid Microsoft signatures", a
     path.join("resources", "bin", "other.dll"),
   ]);
   assert.match(commands[0], /fixture''s unpacked app/);
-  assert.match(commands[0], /\$extensions = '\.dll', '\.node'/);
+  assert.match(commands[0], /\$extensions = '\.dll', '\.node';/);
+  assert.match(commands[0], /verify \/pa \/tw /);
   assert.equal(config.win.signExts, undefined);
 });
 
+test("afterPack signs native modules in the packaged Windows app", async (t) => {
+  const appOutDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-afterpack-"));
+  t.after(() => fs.rmSync(appOutDir, { recursive: true, force: true }));
+  const unpacked = path.join(appOutDir, "resources", "app.asar.unpacked");
+  for (const file of [
+    path.join(unpacked, "node_modules", "ffmpeg-static", "ffmpeg.exe"),
+    path.join(unpacked, "node_modules", "ps-list", "vendor", "fastlist-0.3.0-x64.exe"),
+    path.join(unpacked, "src", "workers", "onnxWorker.js"),
+    path.join(appOutDir, "resources", "bin", "ow-onnxrt.dll"),
+    path.join(appOutDir, "resources", "bin", "windows-key-listener.exe"),
+    path.join(appOutDir, "resources", "bin", "windows-fast-paste.exe"),
+  ]) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, "");
+  }
+  t.mock.method(console, "log", () => {});
+  t.mock.method(console, "warn", () => {});
+  const { context, signed, commands } = buildContext(
+    [{ file: "resources\\app.asar.unpacked\\better_sqlite3.node", error: "No signature found" }],
+    { appOutDir }
+  );
+
+  await afterPack(context);
+
+  assert.deepEqual(signed, [path.join("resources", "app.asar.unpacked", "better_sqlite3.node")]);
+  assert.match(commands[0], /\$extensions = '\.dll', '\.node';/);
+});
+
+test("both signing hooks are registered with electron-builder", () => {
+  const unsignedConfig = require("../../electron-builder.unsigned-win.json");
+  assert.equal(config.afterPack, "scripts/afterPack.js");
+  assert.equal(config.afterSign, "scripts/afterSign.js");
+  assert.equal(unsignedConfig.extends, "electron-builder.json");
+  assert.equal(unsignedConfig.afterPack, undefined);
+  assert.equal(unsignedConfig.afterSign, undefined);
+});
+
 test("rejects final binaries with invalid signatures, timestamp warnings, or unexpected publishers", async () => {
-  const { context } = buildContext([
+  const { context, commands } = buildContext([
     { file: "OpenWhispr.exe", publisher: appPublisher },
     { file: "resources\\bin\\DirectML.DLL", publisher: microsoft },
     { file: "resources\\bad.node", error: "Invalid signature" },
     { file: "resources\\no-timestamp.dll", error: "File is not timestamped" },
     { file: "resources\\wrong.exe", publisher: "CN=Other Publisher" },
+    // A Microsoft signature only counts on a vendor DLL or addon; every
+    // executable we ship must carry the release signature.
+    { file: "resources\\bin\\vendor-tool.exe", publisher: microsoft },
   ]);
 
   await assert.rejects(
     afterSign(context),
-    /bad\.node: Invalid signature[\s\S]*no-timestamp\.dll: File is not timestamped[\s\S]*wrong\.exe: unexpected publisher/
+    /bad\.node: Invalid signature[\s\S]*no-timestamp\.dll: File is not timestamped[\s\S]*wrong\.exe: unexpected publisher[\s\S]*vendor-tool\.exe: unexpected publisher/
   );
+  assert.match(commands[0], /\$extensions = '\.exe', '\.dll', '\.node';/);
+  assert.match(commands[0], /verify \/pa \/tw /);
 });
 
 test("accepts verified release and approved vendor signatures", async () => {

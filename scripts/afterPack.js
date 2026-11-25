@@ -271,6 +271,19 @@ function verifyWindowsKeyListener(binDir) {
   }
 }
 
+// compile:winpaste and download:windows-fast-paste only warn as well. Without
+// the helper every paste goes through PowerShell SendKeys, which is seconds
+// slower and fails where App Control runs PowerShell in Constrained Language
+// Mode; selection editing and the media key lose their native path too.
+function verifyWindowsFastPaste(binDir) {
+  const helperPath = path.join(binDir, "windows-fast-paste.exe");
+  if (!fs.existsSync(helperPath)) {
+    throw new Error(
+      `afterPack: missing ${helperPath} — run npm run compile:winpaste on Windows (downloads the prebuilt binary, or compiles with MSVC, MinGW or Clang); Windows paste would fall back to PowerShell SendKeys`
+    );
+  }
+}
+
 function verifyUnpackedBinaries(context) {
   const unpackedDir = path.join(resolveResourcesDir(context), "app.asar.unpacked");
   const unpackedModulesDir = path.join(unpackedDir, "node_modules");
@@ -310,6 +323,7 @@ function verifyUnpackedBinaries(context) {
     const binDir = path.join(resolveResourcesDir(context), "bin");
     verifyWindowsOnnxRuntimePrivatized(binDir);
     verifyWindowsKeyListener(binDir);
+    verifyWindowsFastPaste(binDir);
   }
 
   console.log("  afterPack: verified unpacked bundled binaries");
@@ -356,4 +370,5 @@ exports.default = async function (context) {
 
 exports.verifyWindowsOnnxRuntimePrivatized = verifyWindowsOnnxRuntimePrivatized;
 exports.verifyWindowsKeyListener = verifyWindowsKeyListener;
+exports.verifyWindowsFastPaste = verifyWindowsFastPaste;
 exports.verifyRegistryPinned = verifyRegistryPinned;

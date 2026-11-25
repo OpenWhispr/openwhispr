@@ -1079,6 +1079,8 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
 - **Code signing**: The Windows release uses Azure Trusted Signing for executables and native modules. Smart App Control can block an unsigned `better_sqlite3.node` during startup.
   - electron-builder signs executables. The `afterPack` hook also signs DLLs and Node addons that lack an approved signature. It preserves verified Microsoft signatures so App Control publisher rules for ONNX Runtime and DirectML still apply.
   - `afterSign` uses Windows SDK SignTool to verify embedded signatures and timestamps on every packaged `.exe`, `.dll` and `.node` before NSIS runs. SignTool must be on PATH or installed with the Windows SDK. Unsigned builds skip both hooks' Windows signing checks.
+- **Fast paste**: `windows-fast-paste.exe` sends paste and copy chords with `SendInput`; without it every paste goes through PowerShell SendKeys, so `afterPack.js` fails a Windows package without it
+  - `--media-play-pause` sends the media key for media pause, ahead of PowerShell's `Add-Type` fallback, which App Control's Constrained Language Mode blocks. `mediaPlayer.js` uses it only when `--capabilities` lists `media-key-v1`, since older builds ignore unknown flags and paste
 - **Push-to-Talk**: Native key listener binary (`windows-key-listener.exe`) enables true push-to-talk
   - Uses Windows Low-Level Keyboard Hook (`WH_KEYBOARD_LL`)
   - Supports compound hotkeys (e.g., `Ctrl+Shift+F11`)
