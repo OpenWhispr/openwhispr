@@ -101,6 +101,26 @@ for (const savedKey of ["assemblyai-test", null]) {
   });
 }
 
+// Main raises the same error for Retry and Upload, so one missing key shows one card.
+test("ElevenLabs dictation without a key reports the classified missing-key error", async (t) => {
+  const { createManager, window } = await loadManager(t);
+  setSettings({
+    cloudTranscriptionProvider: "elevenlabs",
+    cloudTranscriptionModel: "scribe_v3",
+    elevenlabsApiKey: "",
+  });
+  window.electronAPI.getElevenlabsKey = async () => null;
+  const proxy = t.mock.fn(async () => ({ text: "late", acceptedKeyterms: [] }));
+  window.electronAPI.proxyElevenlabsTranscription = proxy;
+
+  await assert.rejects(createManager().processWithOpenAIAPI(audioBlob()), {
+    code: "API_KEY_MISSING",
+    messageKey: "hooks.audioRecording.errorDescriptions.providerKeyMissing",
+    settingsTarget: "speechToText",
+  });
+  assert.equal(proxy.mock.callCount(), 0);
+});
+
 for (const provider of ["openai", "groq"]) {
   for (const restriction of ["mode", "provider"]) {
     for (const stage of ["key loading", "request", "response body", "postprocessing"]) {

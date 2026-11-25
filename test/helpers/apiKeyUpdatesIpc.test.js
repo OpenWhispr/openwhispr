@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
-const { EventEmitter, once } = require("node:events");
+const { once } = require("node:events");
 const { BYOK_API_KEYS } = require("../../src/config/secretKeys");
 const { deferred } = require("./harness/deferred");
 
@@ -28,7 +28,7 @@ const handlers = new Map();
 const eventHandlers = new Map();
 const keys = new Map();
 const notifications = [];
-const editor = Object.assign(new EventEmitter(), { id: 1 });
+const editor = { id: 1 };
 const windows = [1, 2, 3].map((id) => ({
   id,
   isDestroyed: () => id === 3,

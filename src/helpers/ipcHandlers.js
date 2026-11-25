@@ -2153,7 +2153,10 @@ class IPCHandlers {
         const operation = { channel, args, remote, accountId: startedPolicy.accountId };
         // Only the pill's live request belongs to its Cancel button. History and file
         // uploads can later use the same provider through their own IPC channels.
-        if (channel === "proxy-assemblyai-transcription")
+        if (
+          channel === "proxy-assemblyai-transcription" ||
+          channel === "proxy-elevenlabs-transcription"
+        )
           operation.liveDictationSenderId = event.sender.id;
         // Retry and file routing can select a different provider. Capture the
         // owner before dispatch waits, then enforce it only on the AssemblyAI route.
@@ -6995,40 +6998,21 @@ class IPCHandlers {
 
     // ElevenLabs Scribe authenticates with xi-api-key and takes model_id /
     // language_code, so it has no OpenAI-compatible path either.
-    const elevenLabsDictations = new AgentStreamRequestRegistry();
-    const transcribeElevenLabsDictation = createProductHandler(
+    handleProviderTranscription(
       "proxy-elevenlabs-transcription",
-      serializeIpcError(
-        async (_event, { audioBuffer, model, language, keyterms }, cancelSignal) => {
-          return transcribeElevenLabsSpeech({
-            signal: AbortSignal.any([cancelSignal, this._productRequestContext.getStore().signal]),
-            audioBuffer: Buffer.from(audioBuffer),
-            model,
-            fileName: "audio.webm",
-            contentType: "audio/webm",
-            language,
-            keyterms,
-            apiKey: this.environmentManager.getElevenlabsKey(),
-          });
-        }
-      ),
-      true
+      serializeIpcError(async (event, { audioBuffer, model, language, keyterms }, signal) => {
+        return await transcribeElevenLabsSpeech({
+          signal,
+          audioBuffer: Buffer.from(audioBuffer),
+          model,
+          fileName: "audio.webm",
+          contentType: "audio/webm",
+          language,
+          keyterms,
+          apiKey: this.environmentManager.getElevenlabsKey(),
+        });
+      })
     );
-    ipcMain.handle("proxy-elevenlabs-transcription", async (event, options) => {
-      // Register before the policy lookup can yield so an early Cancel cannot miss the upload.
-      const sender = event.sender;
-      const senderId = sender.id;
-      const requestId = crypto.randomUUID();
-      const controller = elevenLabsDictations.begin(senderId, requestId);
-      const abort = () => controller.abort();
-      sender.once("destroyed", abort);
-      try {
-        return await transcribeElevenLabsDictation(event, options, controller.signal);
-      } finally {
-        sender.removeListener("destroyed", abort);
-        elevenLabsDictations.complete(senderId, requestId, controller);
-      }
-    });
 
     // Headers and redirect mode for a request to the self-hosted speech server of `surface`
     // ("dictation" or "upload"), with the custom key for a route that takes one (Orukeet's).
@@ -9590,7 +9574,6 @@ class IPCHandlers {
     });
 
     ipcMain.on("cloud-transcribe-cancel", (event) => {
-      elevenLabsDictations.cancelSender(event.sender.id);
       this._cloudTranscriptionRequests.cancelSender(event.sender.id);
       for (const [controller, operation] of this._productRequests) {
         if (

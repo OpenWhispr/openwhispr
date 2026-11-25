@@ -81,6 +81,8 @@ test("the Note Recording-only rule holds when a publication lists the model", ()
 
   assert.deepEqual(Object.keys(live).sort(), ["description", "id", "name", "streaming"]);
   assert.equal(isNoteRecordingOnlyTranscriptionModel("elevenlabs", live.id), true);
+  // The rule goes by the id, so it holds for a realtime model published later too.
+  assert.equal(isNoteRecordingOnlyTranscriptionModel("elevenlabs", "scribe_v4_live"), true);
   assert.equal(isNoteRecordingOnlyTranscriptionModel("elevenlabs", "scribe_v3"), false);
   assert.equal(isNoteRecordingOnlyTranscriptionModel("gemini", "scribe_v3_live"), false);
 });

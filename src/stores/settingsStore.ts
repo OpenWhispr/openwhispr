@@ -70,8 +70,8 @@ import { queueRetiredModelSwitch, recordRetiredModelSwitch } from "./retiredMode
 import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import {
-  isNoteRecordingOnlyTranscriptionModel,
   isUploadOnlyTranscriptionModel,
+  transcriptionModelsForContext,
 } from "../models/appTranscriptionProviders.js";
 import {
   acceptsUnlistedTranscriptionModel,
@@ -183,13 +183,7 @@ function transcriptionProviderModels(
   const models: Array<{ id: string; streaming?: boolean }> =
     modelRegistryData.transcriptionProviders.find((provider) => provider.id === providerId)
       ?.models ?? [];
-  if (context === "meeting") return models.filter((model) => model.streaming);
-  const batchModels = models.filter(
-    (model) => !isNoteRecordingOnlyTranscriptionModel(providerId, model.id)
-  );
-  if (context === "dictation")
-    return batchModels.filter((model) => !isUploadOnlyTranscriptionModel(providerId, model.id));
-  return batchModels;
+  return transcriptionModelsForContext(providerId, models, context);
 }
 
 // A provider can offer a separate Note Recording model that dictation never selects.
