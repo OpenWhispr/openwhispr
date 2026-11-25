@@ -267,19 +267,30 @@ export const ASSEMBLYAI_DICTATION_LANGUAGES = new Set([
   "zu",
 ]);
 
-// The live catalog decides first: an offered model is sent as is, and a retired one
-// moves to its replacement. The prefix rules then keep a model the catalog does not know
-// yet (a remote addition before its catalog loads) instead of resetting it;
-// transcriptionRouteModelAgreement.test.js pins them to every shipping model.
+// The live catalog decides first: resolve retirements before deciding whether the selected
+// model needs the provider's batch fallback.
+// The prefix rules then keep a model the catalog does not know yet (a remote addition before
+// its catalog loads) instead of resetting it; transcriptionRouteModelAgreement.test.js pins
+// them to every shipping model.
 export function resolveByokModel(provider: string, configuredModel?: string): string {
   const trimmed = (configuredModel || "").trim();
   if (provider === "custom") return trimmed || "whisper-1";
   // A Note Recording-only model has no batch endpoint, so it takes the provider's default.
   if (trimmed && !isNoteRecordingOnlyTranscriptionModel(provider, trimmed)) {
     const catalogProvider = getRegistryData().transcriptionProviders.find((p) => p.id === provider);
-    if (catalogProvider?.models.some((model) => model.id === trimmed)) return trimmed;
     const replacement = retiredReplacement("transcriptionProviders", provider, trimmed);
-    if (replacement) return replacement;
+    const selectedId = replacement ?? trimmed;
+    const listed = catalogProvider?.models.find((model) => model.id === selectedId);
+    if (listed?.streaming && catalogProvider?.batchModel) {
+      const { batchModel, models } = catalogProvider;
+      // A catalog update can retire the bundled batch ID while leaving the alias intact.
+      return (
+        retiredReplacement("transcriptionProviders", provider, batchModel, [
+          { ...catalogProvider, models: models.filter((model) => !model.streaming) },
+        ]) ?? batchModel
+      );
+    }
+    if (replacement || listed) return selectedId;
     const matchesProvider =
       (provider === "groq" && trimmed.startsWith("whisper-large-v3")) ||
       (provider === "openai" &&
