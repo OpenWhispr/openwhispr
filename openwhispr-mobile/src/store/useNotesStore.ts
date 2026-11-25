@@ -14,6 +14,7 @@ import type { Note, Folder, NoteUpdate, Space } from '@/data';
 import type { ConflictedNote, NewSegment, Segment, Speaker, SpeakerProfile } from '@/data/types';
 import type { CalendarParticipant } from '@/data/calendarTypes';
 import type { Diarizer } from '@/lib/diarization/diarizer';
+import { captureMeetingAccount, type MeetingAccountFence } from '@/lib/notes/meetingAccountFence';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useConfigStore } from '@/store/useConfigStore';
@@ -323,7 +324,10 @@ const canUseCloudForMeetingNote = (note: Note | null | undefined): note is Note 
   return !!note && !note.deletedAt && note.noteType === 'meeting' && note.isPrivate !== 1;
 };
 
-const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
+const autoGenerateMeetingNotes = async (
+  noteId: number,
+  fence: MeetingAccountFence = captureMeetingAccount(),
+): Promise<void> => {
   const note = notesRepository.getNoteById(noteId);
   if (!note || note.deletedAt || note.noteType !== 'meeting') return;
   // Generated notes the user already has (edited, or from an action they ran) are never replaced
@@ -356,7 +360,8 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
   if (!generationInput.trim() || note.enhancedAtContentHash === contentHash) return;
 
   const routing = { isPrivateNote: note.isPrivate === 1 };
-  const canUseCloud = canUseCloudForMeetingNote(note);
+  // Another account's credentials never carry this transcript to the cloud.
+  const canUseCloud = fence.isCurrent() && canUseCloudForMeetingNote(note);
   const notesMode = useConfigStore.getState().config?.inference?.notes?.mode;
   // On-Device notes take the chunked local path: a whole meeting rarely fits
   // the on-device context in one request.
@@ -383,6 +388,7 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
   };
 
   const generateCloudOnce = async () => {
+    if (!fence.isCurrent()) return;
     const result = await ReasoningService.processText({
       inferenceScope: 'notes',
       text: generationInput,
@@ -401,7 +407,8 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
   };
 
   if (!canUseCloud && !canUseLocal) {
-    if (isLocalReasoningRequired(routing)) {
+    // A prompt about this meeting would be answered by whoever is signed in now.
+    if (fence.isCurrent() && isLocalReasoningRequired(routing)) {
       const readiness = await getLocalReasoningReadiness();
       const signedIn = !!useAuthStore.getState().user;
       promptLocalReasoningFallback({
@@ -409,7 +416,7 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
         signedIn,
         onEnableLocal: async () => {
           try {
-            await autoGenerateMeetingNotes(noteId);
+            await autoGenerateMeetingNotes(noteId, fence);
           } catch (error) {
             captureError(error);
           }
@@ -448,11 +455,15 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
 
 // Shared finalization tail for both meeting paths (local runMeetingPipeline and cloud
 // finalizeCloudMeeting): auto-title from the transcript, then the AI summary/cleanup pass.
-const finalizeMeetingNoteContent = async (noteId: number): Promise<void> => {
+const finalizeMeetingNoteContent = async (
+  noteId: number,
+  fence: MeetingAccountFence = captureMeetingAccount(),
+): Promise<void> => {
   const currentNote = notesRepository.getNoteById(noteId);
   if (!currentNote || currentNote.deletedAt || currentNote.noteType !== 'meeting') return;
 
-  const canUseCloud = canUseCloudForMeetingNote(currentNote);
+  // The title falls back to the local derivation below when the account has changed.
+  const canUseCloud = fence.isCurrent() && canUseCloudForMeetingNote(currentNote);
 
   // Auto-title from the transcript, matching the action path and the "Auto-generate Note
   // Titles" setting. A selected calendar title is durable until the user clears it back to
@@ -487,7 +498,7 @@ const finalizeMeetingNoteContent = async (noteId: number): Promise<void> => {
       }
     }
   }
-  await autoGenerateMeetingNotes(noteId).catch((error) => {
+  await autoGenerateMeetingNotes(noteId, fence).catch((error) => {
     Sentry.captureException(error, { tags: { feature: 'meeting-auto-notes' } });
   });
 };
@@ -692,6 +703,8 @@ interface NotesStore {
     noteId: number,
     wavUri: string,
     expectedSpeakerCount?: number,
+    /** The account the meeting was recorded under; defaults to the one signed in now. */
+    options?: { fence?: MeetingAccountFence },
   ) => Promise<void>;
   retryMeetingTranscription: (noteId: number) => Promise<void>;
   /**
@@ -704,6 +717,8 @@ interface NotesStore {
     result: CloudMeetingResult,
     /** Audio the mic delivered, in seconds; spreads utterances that carry no timings. */
     capturedSeconds: number,
+    /** The account the meeting was recorded under; defaults to the one signed in now. */
+    options?: { fence?: MeetingAccountFence },
   ) => Promise<{
     /** Audio the note is done without, still to be transcribed from its recording. */
     owedMs: number;
@@ -726,7 +741,10 @@ interface NotesStore {
     },
   ) => Promise<void>;
   /** A meeting with a recording and no transcript: transcribes the whole file through cloud chunks. */
-  transcribeMeetingRecording: (noteId: number) => Promise<void>;
+  transcribeMeetingRecording: (
+    noteId: number,
+    options?: { fence?: MeetingAccountFence },
+  ) => Promise<void>;
   /** Runs the diarizer on the note's recording and labels its segments. Never throws; false when it did nothing. */
   labelMeetingSpeakers: (
     noteId: number,
@@ -737,6 +755,8 @@ interface NotesStore {
        * backfill holds it. For a caller not already holding it (launch recovery).
        */
       exclusive?: boolean;
+      /** Speakers are matched to voice profiles only while the account is unchanged. */
+      fence?: MeetingAccountFence;
     },
   ) => Promise<boolean>;
   /** Deletes a meeting's recording and clears its `sourceFile`. Never throws. */
@@ -1102,7 +1122,8 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     get().loadNotes();
   },
 
-  runMeetingPipeline: async (noteId, wavUri, expectedSpeakerCount) => {
+  runMeetingPipeline: async (noteId, wavUri, expectedSpeakerCount, options = {}) => {
+    const fence = options.fence ?? captureMeetingAccount();
     const { processMeeting, getDiarizer, LocalTranscriptionService } = loadMeetingPipelineDeps();
     notesRepository.updateNoteMeta(noteId, { sourceFile: wavUri });
     try {
@@ -1123,20 +1144,24 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       if (notesRepository.getSegments(noteId).some((segment) => segment.text.trim())) {
         logTranscriptionCompleted({ source: 'meeting', provider: 'local' });
       }
-      set((state) => ({
-        meetingSpeakerEmbeddingsByNoteId: {
-          ...state.meetingSpeakerEmbeddingsByNoteId,
-          [noteId]: result.speakerEmbeddingsByLabel,
-        },
-      }));
-      if (identifyMeetingSpeakers(noteId, result.speakerEmbeddingsByLabel)) {
-        set((state) => ({ transcriptRevision: state.transcriptRevision + 1 }));
+      // Voice profiles are the signed-in account's: another account's profiles are never matched
+      // against this meeting, and its speaker embeddings are not kept for the banner to match.
+      if (fence.isCurrent()) {
+        set((state) => ({
+          meetingSpeakerEmbeddingsByNoteId: {
+            ...state.meetingSpeakerEmbeddingsByNoteId,
+            [noteId]: result.speakerEmbeddingsByLabel,
+          },
+        }));
+        if (identifyMeetingSpeakers(noteId, result.speakerEmbeddingsByLabel)) {
+          set((state) => ({ transcriptRevision: state.transcriptRevision + 1 }));
+        }
       }
       // processMeeting returns only once the note is done, and the diarizer and identification
       // are the recording's last readers (the banner works from the embeddings kept above). A
       // throw above leaves the note failed with its recording, which Retry needs.
       await get().discardMeetingRecording(noteId);
-      await finalizeMeetingNoteContent(noteId);
+      await finalizeMeetingNoteContent(noteId, fence);
     } finally {
       get().loadNotes();
     }
@@ -1159,7 +1184,8 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     await get().runMeetingPipeline(noteId, note.sourceFile, note.expectedSpeakerCount ?? undefined);
   },
 
-  finalizeCloudMeeting: async (noteId, result, capturedSeconds) => {
+  finalizeCloudMeeting: async (noteId, result, capturedSeconds, options = {}) => {
+    const fence = options.fence ?? captureMeetingAccount();
     meetingBackfillsInFlight.add(noteId);
     try {
       get().transitionStatus(noteId, 'transcribing'); // recording -> transcribing
@@ -1177,13 +1203,15 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
         // Nothing heard live (often offline the whole time): the whole file is transcribed.
         // Offline that would only hold the processing screen through upload timeouts, so the
         // note ends failed at once with its recording, which is what the note's Retry needs.
-        if (!(await isDeviceOnline())) {
+        // The same when the account changed: the upload would go out under the new account, so
+        // the recording is kept for a Retry.
+        if (!(await isDeviceOnline()) || !fence.isCurrent()) {
           get().transitionStatus(noteId, 'failed');
           return { owedMs: 0 };
         }
         // A failure leaves the note failed with its recording too.
         await get()
-          .transcribeMeetingRecording(noteId)
+          .transcribeMeetingRecording(noteId, { fence })
           .catch(() => undefined);
         return { owedMs: 0 };
       }
@@ -1198,7 +1226,8 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
         // looks processed. A list that can't be written does not stop the pass.
         owedSaved = await recordOwedAudio(noteId, owed);
         // Offline every piece would wait out its timeouts; the stretches stay owed instead.
-        if (await isDeviceOnline()) {
+        // A changed account leaves the stretches owed, in the list just saved, for launch recovery.
+        if ((await isDeviceOnline()) && fence.isCurrent()) {
           ({ transcript, failedWindows: owed } = await backfillCloudMeeting(
             noteId,
             recordingUri,
@@ -1218,7 +1247,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       const utteranceTimed =
         result.utterances.length > 0 &&
         result.utterances.every((u) => u.startMs != null && u.endMs != null);
-      await get().labelMeetingSpeakers(noteId, { utteranceTimed });
+      await get().labelMeetingSpeakers(noteId, { utteranceTimed, fence });
       get().transitionStatus(noteId, 'done');
       if (transcript.some((segment) => segment.text?.trim())) {
         logTranscriptionCompleted({ source: 'meeting', provider: 'cloud' });
@@ -1235,7 +1264,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
           extra: { failedPieces: owed.length, failedMs: windowsMs(owed) },
         });
       }
-      await finalizeMeetingNoteContent(noteId);
+      await finalizeMeetingNoteContent(noteId, fence);
       const stillOwedMs = isLiveNote(noteId) ? windowsMs(owed) : 0;
       if (stillOwedMs > 0 && !owedSaved) return { owedMs: 0, unsavedOwedMs: stillOwedMs };
       return { owedMs: stillOwedMs };
@@ -1289,7 +1318,8 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     }
   },
 
-  transcribeMeetingRecording: async (noteId) => {
+  transcribeMeetingRecording: async (noteId, options = {}) => {
+    const fence = options.fence ?? captureMeetingAccount();
     try {
       const note = notesRepository.getNoteById(noteId);
       if (!note || note.deletedAt) {
@@ -1304,6 +1334,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       }
       let segments: CloudMeetingSegment[];
       try {
+        if (!fence.isCurrent()) throw new Error('The account changed before the upload.');
         segments = await transcribeRecordingToSegments(
           recordingUri,
           getPreferredTranscriptionLanguage(),
@@ -1337,25 +1368,25 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       notesRepository.replaceSegments(noteId, transcript);
       // Two-minute chunks each hold several speakers, so this labels nothing; it stays so the
       // rule for which transcripts get labelled lives in one place.
-      await get().labelMeetingSpeakers(noteId, { utteranceTimed: false });
+      await get().labelMeetingSpeakers(noteId, { utteranceTimed: false, fence });
       get().transitionStatus(noteId, 'done');
       if (transcript.some((segment) => segment.text?.trim())) {
         logTranscriptionCompleted({ source: 'meeting', provider: 'cloud' });
       }
       await get().discardMeetingRecording(noteId);
-      await finalizeMeetingNoteContent(noteId);
+      await finalizeMeetingNoteContent(noteId, fence);
     } finally {
       get().loadNotes();
     }
   },
 
-  labelMeetingSpeakers: async (noteId, { utteranceTimed, exclusive = false }) => {
+  labelMeetingSpeakers: async (noteId, { utteranceTimed, exclusive = false, fence }) => {
     if (!utteranceTimed) return false;
     if (exclusive) {
       if (meetingBackfillsInFlight.has(noteId)) return false;
       meetingBackfillsInFlight.add(noteId);
       try {
-        return await get().labelMeetingSpeakers(noteId, { utteranceTimed });
+        return await get().labelMeetingSpeakers(noteId, { utteranceTimed, fence });
       } finally {
         meetingBackfillsInFlight.delete(noteId);
       }
@@ -1409,14 +1440,17 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
           embedding,
         ]),
       );
-      set((state) => ({
-        meetingSpeakerEmbeddingsByNoteId: {
-          ...state.meetingSpeakerEmbeddingsByNoteId,
-          [noteId]: speakerEmbeddingsByLabel,
-        },
-      }));
-      if (identifyMeetingSpeakers(noteId, speakerEmbeddingsByLabel)) {
-        set((state) => ({ transcriptRevision: state.transcriptRevision + 1 }));
+      // Plain labels from the diariser use no account data; profiles do.
+      if (fence == null || fence.isCurrent()) {
+        set((state) => ({
+          meetingSpeakerEmbeddingsByNoteId: {
+            ...state.meetingSpeakerEmbeddingsByNoteId,
+            [noteId]: speakerEmbeddingsByLabel,
+          },
+        }));
+        if (identifyMeetingSpeakers(noteId, speakerEmbeddingsByLabel)) {
+          set((state) => ({ transcriptRevision: state.transcriptRevision + 1 }));
+        }
       }
       Sentry.captureMessage('meeting-speaker-pass', {
         level: 'info',

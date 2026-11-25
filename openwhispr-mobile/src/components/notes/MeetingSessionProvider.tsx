@@ -16,6 +16,7 @@ import {
 } from '@/lib/meetingCaptureAlerts';
 import { reportCaptureInterrupted, reportMeetingFinished } from '@/lib/meetingCaptureTelemetry';
 import { registerActiveMeeting } from '@/lib/notes/activeMeeting';
+import { captureMeetingAccount, type MeetingAccountFence } from '@/lib/notes/meetingAccountFence';
 import { captureCoverage, isCloudMeetingCapturing } from '@/lib/notes/meetingCapture';
 import { Sentry } from '@/lib/sentry';
 import { excludeMeetingFileFromBackup, meetingRecordingUri } from '@/lib/transcriptAudio';
@@ -87,6 +88,9 @@ export function MeetingSessionProvider({
   const meetingStartedAtRef = useRef<number | null>(null);
   const expectedSpeakerCountRef = useRef<number | undefined>(undefined);
   const rawNotesRef = useRef('');
+  // The account the meeting was started under, held to the end: processing steps that would use
+  // the signed-in account's credentials or data skip themselves once it changes.
+  const accountFenceRef = useRef<MeetingAccountFence | null>(null);
   // Written with the state so two starts in one tick can't both read 'idle'.
   const phaseRef = useRef<MeetingSessionPhase>('idle');
   // Covers the wait for the recorder in startLocal, before the phase leaves 'idle'.
@@ -231,6 +235,7 @@ export function MeetingSessionProvider({
     setNoteId(note.id);
     meetingStartedAtRef.current = Date.now();
     expectedSpeakerCountRef.current = input.expectedSpeakerCount;
+    accountFenceRef.current = captureMeetingAccount();
     setTitle(input.context?.title ?? null);
     setExpectedSpeakerCount(input.expectedSpeakerCount);
     setMeetingStartedAt(meetingStartedAtRef.current);
@@ -369,7 +374,9 @@ export function MeetingSessionProvider({
       await excludeMeetingFileFromBackup(stableUri);
       // The recorder's own file is a second copy of the meeting that nothing else deletes.
       await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
-      await runMeetingPipeline(noteId, stableUri, expectedSpeakerCount);
+      await runMeetingPipeline(noteId, stableUri, expectedSpeakerCount, {
+        fence: accountFenceRef.current ?? undefined,
+      });
       returnToIdle();
       setFinishedNoteId(noteId);
       reportMeetingFinished({
@@ -420,7 +427,9 @@ export function MeetingSessionProvider({
       return;
     }
     try {
-      const { owedMs, unsavedOwedMs = 0 } = await finalizeCloudMeeting(noteId, result, captured);
+      const { owedMs, unsavedOwedMs = 0 } = await finalizeCloudMeeting(noteId, result, captured, {
+        fence: accountFenceRef.current ?? undefined,
+      });
       returnToIdle();
       setFinishedNoteId(noteId);
       reportMeetingFinished({
@@ -501,7 +510,9 @@ export function MeetingSessionProvider({
     const inFlight = inFlightFinishRef.current;
     if (inFlight == null) return;
     // A cloud finalise needs the session, so sign-out waits for all of it. On-device processing
-    // can take minutes and needs no credentials, so once capture has stopped it carries on alone.
+    // can take minutes, so once capture has stopped it carries on alone. That is safe for the next
+    // account: the pipeline holds the account it started under (accountFenceRef) and skips cloud
+    // calls and voice-profile matching if the account changed; only on-device work continues.
     await (inFlight.path === 'local' ? inFlight.captured : inFlight.done);
   }, []);
   // Nothing is settled when the provider unmounts: it sits above everything, so that only happens

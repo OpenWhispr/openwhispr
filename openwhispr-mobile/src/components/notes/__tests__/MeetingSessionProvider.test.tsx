@@ -130,6 +130,9 @@ jest.mock('@/store/useAuthStore', () => {
     }, []);
     return selector({ user: userId ? { id: userId } : null });
   };
+  useAuthStore.getState = (): { user: { id: string } | null } => ({
+    user: userId ? { id: userId } : null,
+  });
   return {
     useAuthStore,
     __setUser: (next: string | null) => {
@@ -307,6 +310,7 @@ describe('MeetingSessionProvider', () => {
       42,
       expect.objectContaining({ recordingUri: 'file:///docs/meeting-audio/42.wav' }),
       30,
+      expect.objectContaining({ fence: expect.anything() }),
     );
     expect(alertCloudMeetingCapture).toHaveBeenCalledTimes(1);
     expect(session.finishedNoteId).toBe(42);
@@ -332,7 +336,12 @@ describe('MeetingSessionProvider', () => {
     expect(mockDeleteAsync).toHaveBeenCalledWith('file:///tmp/recording.wav', {
       idempotent: true,
     });
-    expect(mockState.runMeetingPipeline).toHaveBeenCalledWith(42, 'file:///docs/meeting-42.wav', 3);
+    expect(mockState.runMeetingPipeline).toHaveBeenCalledWith(
+      42,
+      'file:///docs/meeting-42.wav',
+      3,
+      expect.objectContaining({ fence: expect.anything() }),
+    );
     expect(session.finishedNoteId).toBe(42);
     expect(session.phase).toBe('idle');
   });
@@ -683,6 +692,7 @@ describe('MeetingSessionProvider', () => {
         42,
         'file:///docs/meeting-42.wav',
         3,
+        expect.objectContaining({ fence: expect.anything() }),
       );
     });
 
@@ -722,6 +732,7 @@ describe('MeetingSessionProvider', () => {
         42,
         expect.anything(),
         expect.any(Number),
+        expect.objectContaining({ fence: expect.anything() }),
       );
     });
 

@@ -166,6 +166,7 @@ import type { Speaker } from '@/data/types';
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
 import * as Sentry from '@sentry/react-native';
 import * as meetingPostPass from '@/lib/notes/meetingPostPass';
+import { captureMeetingAccount } from '@/lib/notes/meetingAccountFence';
 
 const speaker = (overrides: Partial<Speaker>): Speaker =>
   ({
@@ -552,6 +553,7 @@ describe('meeting post-pass', () => {
       Parameters<ReturnType<typeof useNotesStore.getState>['finalizeCloudMeeting']>[1]
     >,
     capturedSeconds = 3600,
+    fence?: ReturnType<typeof captureMeetingAccount>,
   ): Promise<{ owedMs: number }> =>
     useNotesStore
       .getState()
@@ -559,6 +561,7 @@ describe('meeting post-pass', () => {
         7,
         { utterances: [], droppedWindows: [], recordingUri: RECORDING, ...result },
         capturedSeconds,
+        { fence },
       );
 
   const savedTexts = (call: number): string[] =>
@@ -856,6 +859,41 @@ describe('meeting post-pass', () => {
       expect(status).toBe('done');
       expect(filesOnDisk.has(RECORDING)).toBe(false);
     });
+  });
+
+  it('leaves a changed account no cloud transcription and keeps the recording', async () => {
+    const fence = captureMeetingAccount();
+    mockAuthState.user = { ...signedInUser, id: 'user-2' };
+
+    await finalize(
+      { utterances: [], droppedWindows: [{ startMs: 0, endMs: 600_000 }] },
+      3600,
+      fence,
+    );
+
+    expect(mockCloudTranscribe).not.toHaveBeenCalled();
+    expect(status).toBe('failed');
+    expect(filesOnDisk.has(RECORDING)).toBe(true);
+  });
+
+  it('leaves the dropped stretches owed, with no upload, when the account changed', async () => {
+    const fence = captureMeetingAccount();
+    mockAuthState.user = { ...signedInUser, id: 'user-2' };
+
+    await finalize(
+      {
+        utterances: [utterance('Live.', 0, 1000)],
+        droppedWindows: [{ startMs: 10_000, endMs: 20_000 }],
+      },
+      3600,
+      fence,
+    );
+
+    expect(mockCloudTranscribe).not.toHaveBeenCalled();
+    expect(status).toBe('done');
+    expect(filesOnDisk.has(RECORDING)).toBe(true);
+    expect(sidecarWindows()).toEqual([{ startMs: 10_000, endMs: 20_000 }]);
+    expect(mockGenerateNoteTitle).not.toHaveBeenCalled();
   });
 
   it('goes straight to the whole file when nothing was heard live', async () => {
@@ -2835,4 +2873,126 @@ it('retains remote deletion retry identifiers when making a note private fails o
   await expect(useNotesStore.getState().setNotePrivacy(1, true)).rejects.toThrow('offline');
   expect(notesRepository.clearNoteRemoteId).not.toHaveBeenCalled();
   expect(notesRepository.clearNoteClientId).not.toHaveBeenCalled();
+});
+
+describe('meeting account fence', () => {
+  const meetingNote = {
+    id: 7,
+    title: 'Untitled meeting',
+    content: '',
+    noteType: 'meeting',
+    diarizationEnabled: 1,
+    isPrivate: 0,
+    deletedAt: null,
+    enhancedContent: null,
+    enhancedAtContentHash: null,
+    calendarEventId: null,
+    participants: null,
+  };
+
+  beforeEach(() => {
+    mockConfigState.config.autoGenerateNoteTitle = true;
+    (notesRepository.getNoteById as jest.Mock).mockReturnValue(meetingNote);
+    (notesRepository.getSegments as jest.Mock).mockReturnValue([segment('Ship the fix.')]);
+    (notesRepository.getActions as jest.Mock).mockReturnValue([
+      {
+        id: 1,
+        name: 'Generate Notes',
+        description: 'Turn rough dictation into clean, structured notes',
+        prompt: 'Transform this meeting into notes.',
+        isDefault: 1,
+        sortOrder: 0,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]);
+    (notesRepository.getSpeakers as jest.Mock).mockReturnValue([
+      speaker({ id: 10, speakerLabel: 'speaker_0' }),
+    ]);
+    (notesRepository.getSpeakerProfiles as jest.Mock).mockReturnValue([
+      {
+        id: 99,
+        displayName: 'Me',
+        email: null,
+        isOwner: 1,
+        embedding: [1, 0],
+        sampleCount: 1,
+        consentAt: '2026-06-19T12:00:00.000Z',
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]);
+  });
+
+  afterEach(() => {
+    (notesRepository.getSegments as jest.Mock).mockReset().mockReturnValue([]);
+  });
+
+  const expectNoAccountUse = (): void => {
+    expect(mockGenerateNoteTitle).not.toHaveBeenCalled();
+    expect(ReasoningService.processText).not.toHaveBeenCalled();
+    expect(notesRepository.updateSpeaker).not.toHaveBeenCalled();
+    expect(notesRepository.updateNote).toHaveBeenCalledWith(7, { title: 'Local fallback title' });
+  };
+
+  it('a local meeting whose account changes during processing uses no cloud or profiles and still finishes', async () => {
+    mockAuthState.user = signedInUser;
+    const fence = captureMeetingAccount();
+    mockAuthState.user = { ...signedInUser, id: 'user-2' };
+
+    await useNotesStore.getState().runMeetingPipeline(7, 'file://meeting.wav', 2, { fence });
+
+    expect(mockProcessMeeting).toHaveBeenCalledTimes(1);
+    expectNoAccountUse();
+    expect(useNotesStore.getState().meetingSpeakerEmbeddingsByNoteId[7]).toBeUndefined();
+  });
+
+  it('keeps the same account unchanged: cloud title, notes and profiles', async () => {
+    mockAuthState.user = signedInUser;
+    const fence = captureMeetingAccount();
+
+    await useNotesStore.getState().runMeetingPipeline(7, 'file://meeting.wav', 2, { fence });
+
+    expect(mockGenerateNoteTitle).toHaveBeenCalledWith('Ship the fix.', {
+      allowCloudFallback: true,
+      isPrivateNote: false,
+    });
+    expect(ReasoningService.processText).toHaveBeenCalledTimes(1);
+    expect(notesRepository.updateSpeaker).toHaveBeenCalledWith(
+      10,
+      expect.objectContaining({ profileId: 99 }),
+    );
+  });
+
+  it('a signed-out start with a sign-in mid-processing makes no cloud calls', async () => {
+    mockAuthState.user = null;
+    const fence = captureMeetingAccount();
+    mockAuthState.user = signedInUser;
+
+    await useNotesStore.getState().runMeetingPipeline(7, 'file://meeting.wav', 2, { fence });
+
+    expectNoAccountUse();
+  });
+
+  it('a cloud meeting whose account changed generates no title or notes and matches no profiles', async () => {
+    mockAuthState.user = signedInUser;
+    const fence = captureMeetingAccount();
+    mockAuthState.user = { ...signedInUser, id: 'user-2' };
+    (notesRepository.getTranscriptionStatus as jest.Mock)
+      .mockReturnValueOnce('recording')
+      .mockReturnValueOnce('transcribing');
+
+    await useNotesStore.getState().finalizeCloudMeeting(
+      7,
+      {
+        utterances: [{ itemId: 'u', text: 'Ship the fix.', startMs: 0, endMs: 2000 }],
+        droppedWindows: [],
+        recordingUri: null,
+      },
+      2,
+      { fence },
+    );
+
+    expectNoAccountUse();
+  });
 });
