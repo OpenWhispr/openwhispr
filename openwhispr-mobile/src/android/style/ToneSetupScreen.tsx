@@ -413,11 +413,8 @@ function KindStep({
         ))}
       </View>
       <View style={{ flex: 1 }} />
-      <View style={{ paddingHorizontal: 20, paddingBottom: 20, gap: 12, alignItems: 'center' }}>
+      <View style={{ paddingHorizontal: 20, paddingBottom: 20, alignItems: 'center' }}>
         <GlassCta label={t('soundsLikeMe')} onPress={() => onPick(options[index])} />
-        <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: k.secondary }}>
-          {t('swipeToCompare')}
-        </Text>
       </View>
     </View>
   );

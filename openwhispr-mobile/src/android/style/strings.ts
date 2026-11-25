@@ -47,7 +47,6 @@ export const styleEnglish = {
   appsEmail: 'Gmail, Outlook, Proton Mail',
   appsOther: 'Notion, ChatGPT and the rest',
   soundsLikeMe: 'Sounds like me',
-  swipeToCompare: 'Swipe to compare tones',
   doneTitle: 'You’re set',
   doneBody: 'Change any of these later in the Style tab.',
   done: 'Done',
