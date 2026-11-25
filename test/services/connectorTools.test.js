@@ -221,6 +221,34 @@ test("slack_send_message prepares in main and passes a clarification through", a
   assert.deepEqual(result.data.candidates, ["Gabe Smith (@gabe)", "Gabriel Stone (@gstone)"]);
 });
 
+test("slack_send_message with no destination leaves it to main: the open Slack conversation, or a question", async (t) => {
+  const prepared = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorPrepare: async (...args) => {
+          prepared.push(args);
+          return {
+            status: "needs_clarification",
+            message: "Ask the user which Slack channel or person to send this to.",
+            candidates: [],
+          };
+        },
+      },
+    },
+  });
+  const { slackSendMessageTool } = await loadSlack();
+  assert.deepEqual(slackSendMessageTool.parameters.required, ["text"]);
+
+  const result = await slackSendMessageTool.execute(
+    { destination: " ", text: "Update" },
+    toolContext("m1", "call-1")
+  );
+
+  assert.deepEqual(prepared, [["slack", "send_message", { text: "Update" }]]);
+  assert.equal(result.data.status, "needs_clarification");
+});
+
 // The Slack tool as a chat that can ask the user offers it.
 const askingSlackTool = async () =>
   (await loadSlack()).slackToolModule.createTools({ emailDraftTarget: "auto", asksUser: true })[0];

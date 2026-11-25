@@ -8933,6 +8933,8 @@ class IPCHandlers {
             ...tokenStore.getState(),
             binding: accountScopeBinding.read(),
           }),
+        getSlackWindowTitle: (event) =>
+          this.windowManager?.agentWindow?.slackWindowTitle(event) ?? null,
         findContacts: (query) =>
           searchContacts(this.databaseManager.getContactLookupSources(), query),
         noteAttendees: createNoteAttendeesLookup({

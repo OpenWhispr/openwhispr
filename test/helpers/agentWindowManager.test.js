@@ -861,3 +861,40 @@ test("on KDE the window stays above each monitor's own panel", async () => {
     plasmaCorrections.clear();
   }
 });
+
+test("a press over Slack keeps its window title for this window's Slack posts while it shows", async (t) => {
+  let context = {
+    appSignature: "Slack com.tinyspeck.slackmacgap",
+    windowTitle: "eng (Channel) - Acme - Slack",
+  };
+  const { manager, win } = await openedManager({
+    windowManager: createWindowManager({
+      selectionManager: { captureTarget: async () => {}, getTargetAppContext: async () => context },
+    }),
+  });
+  t.after(() => manager.dragManager.cleanup());
+  assert.equal(await manager.slackWindowTitle(fromAgent(win)), "eng (Channel) - Acme - Slack");
+  assert.equal(
+    await manager.slackWindowTitle({ sender: {}, senderFrame: {} }),
+    null,
+    "never another window's request"
+  );
+
+  manager.hide(fromAgent(win));
+  assert.equal(await manager.slackWindowTitle(fromAgent(win)), null, "gone once the window hides");
+
+  // A wake word reads the window it was spoken over.
+  manager.deliverCommand({ text: "post my update to Slack" });
+  assert.equal(await manager.slackWindowTitle(fromAgent(win)), "eng (Channel) - Acme - Slack");
+
+  context = { appSignature: "TextEdit com.apple.TextEdit", windowTitle: "eng" };
+  manager.handleHotkey();
+  assert.equal(await manager.slackWindowTitle(fromAgent(win)), null, "a press over another app");
+
+  context = { appSignature: "Slack", windowTitle: "leads (Channel) - Acme - Slack" };
+  manager.handleHotkey();
+  manager._forget();
+  // The tray's Ask assistant makes a new window, which was pressed over nothing.
+  manager.open();
+  assert.equal(await manager.slackWindowTitle(fromAgent(manager.window)), null);
+});
