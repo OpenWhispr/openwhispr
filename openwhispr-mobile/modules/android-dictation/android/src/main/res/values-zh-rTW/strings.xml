@@ -1,6 +1,6 @@
 <resources>
   <string name="ow_insertion_label">OpenWhispr</string>
-  <string name="ow_insertion_description">無障礙功能允許 OpenWhispr 將結果插入目前欄位。開始聽寫時會讀取該欄位，OpenWhispr 輸入文字後的 45 秒內會再次讀取，這樣你在其中修改的字詞就可以加入你的字典。不會讀取其他任何欄位，密碼欄位也被排除在外。它不會傳送訊息。它也會檢查是否有文字欄位處於焦點，只在你輸入時顯示浮動球。</string>
+  <string name="ow_insertion_description">把你的聽寫輸入到你正在輸入的文字方塊。它會讀取：你正在輸入的文字方塊（僅在你使用氣泡時）；你選取的文字（傳送給你的 AI 進行編輯，從不儲存）；你修正的字詞，持續 45 秒（加入你的字典，只留在手機上）；你所在的應用程式（讓氣泡只在你輸入時出現）。絕不讀取密碼。絕不輕點、傳送或出售你的文字。不會儲存到我們的雲端，除非你開啟雲端備份。</string>
   <string name="ow_bubble_ready">OpenWhispr 已就緒</string>
   <string name="ow_bubble_recording">OpenWhispr · 正在聆聽…</string>
   <string name="ow_bubble_notice">點按開啟。在「設定」中關閉浮動按鈕。</string>

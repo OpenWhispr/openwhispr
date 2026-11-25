@@ -68,6 +68,9 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
+// The Accessibility sheet uses the Settings kit, which imports the router and expo-image.
+jest.mock('expo-router', () => ({ router: { back: jest.fn(), push: jest.fn() } }));
+jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('react-native-svg', () => {
   const { View: Shape } = require('react-native');
   const svg = ({ children }: { children?: React.ReactNode }) => <Shape>{children}</Shape>;
@@ -83,6 +86,7 @@ jest.mock('../../../modules/android-dictation/src', () => ({
       microphone: false,
     }),
     getRecordingLevel: () => 0,
+    openSettings: jest.fn(),
   },
   dictationEvents: { addListener: () => ({ remove: jest.fn() }) },
 }));
@@ -215,6 +219,30 @@ describe.each([
     expect(fillOf(row)).toBe(tokens.surface);
     expect(textColour('accessibilityStep1')).toBe(tokens.ink);
     expect(fillOf(screen.getAllByText('1')[0])).toBe(tokens.accentSoft);
+  });
+
+  it('Accessibility: Continue opens the Play disclosure on the page colour; only Agree opens Settings', () => {
+    const { AndroidDictation } = jest.requireMock('../../../modules/android-dictation/src');
+    AndroidDictation.openSettings.mockClear();
+    inTheme(scheme, () => <AccessibilityScreen onBack={jest.fn()} onNext={jest.fn()} />);
+    fireEvent.press(screen.getByRole('button', { name: 'continue' }));
+    expect(screen.getByText('disclosureTitle')).toBeTruthy();
+    for (const key of [
+      'disclosureReads',
+      'disclosureFieldTitle',
+      'disclosureSelectionBody',
+      'disclosureFixesTitle',
+      'disclosureAppTitle',
+      'disclosurePasswordsTitle',
+      'disclosureCloudBody',
+    ])
+      expect(screen.getByText(key)).toBeTruthy();
+    expect(textColour('disclosureFieldTitle')).toBe(tokens.ink);
+    fireEvent.press(screen.getByRole('button', { name: 'notNow' }));
+    expect(AndroidDictation.openSettings).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByRole('button', { name: 'continue' }));
+    fireEvent.press(screen.getByRole('button', { name: 'agreeAndOpen' }));
+    expect(AndroidDictation.openSettings).toHaveBeenCalledWith('accessibility');
   });
 
   it('the practice menu draws its card, tiles and rows like the real hold menu', () => {

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Image, Modal, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AppState, Image, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
@@ -12,7 +11,6 @@ import {
 import {
   AccentText,
   BubbleIcon,
-  CircleButton,
   GlassButton,
   LinkButton,
   PillButton,
@@ -23,7 +21,10 @@ import {
   useOnboardingColors,
   useOnboardingStyles,
 } from './kit';
-import { useOnboardingT } from './strings';
+import { useOnboardingT, type OnboardingKey } from './strings';
+import type { LucideIconName } from '@/components/ui/SystemIcon';
+import { BottomSheet, Group, ListRow, PillAction, TextAction } from '../settings/kit';
+import { CloseButton } from '../style/kit';
 import { appIcon } from './AppsScreen';
 import { makeStyles } from '../ThemeProvider';
 
@@ -184,6 +185,18 @@ function OverlayArt() {
   );
 }
 
+type DisclosureRow = [LucideIconName, OnboardingKey, OnboardingKey];
+const DISCLOSURE_READS: DisclosureRow[] = [
+  ['Keyboard', 'disclosureFieldTitle', 'disclosureFieldBody'],
+  ['Sparkles', 'disclosureSelectionTitle', 'disclosureSelectionBody'],
+  ['BookText', 'disclosureFixesTitle', 'disclosureFixesBody'],
+  ['Smartphone', 'disclosureAppTitle', 'disclosureAppBody'],
+];
+const DISCLOSURE_NEVER: DisclosureRow[] = [
+  ['Lock', 'disclosurePasswordsTitle', 'disclosurePasswordsBody'],
+  ['CloudOff', 'disclosureCloudTitle', 'disclosureCloudBody'],
+];
+
 export function AccessibilityScreen({
   onBack,
   onNext,
@@ -200,7 +213,6 @@ export function AccessibilityScreen({
   const status = useDictationStatus((next) => {
     if (next.accessibility) onNext();
   });
-  const insets = useSafeAreaInsets();
   const steps = [
     {
       title: t('accessibilityStep1'),
@@ -279,46 +291,49 @@ export function AccessibilityScreen({
           </View>
         ))}
       </View>
-      <Modal
+      {/* Google Play's Accessibility disclosure: what the service reads, where it goes, what it
+          never does. Only Agree opens Android's settings. */}
+      <BottomSheet
         visible={notice}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setNotice(false)}
+        onClose={() => setNotice(false)}
+        title={t('disclosureTitle')}
+        trailing={<CloseButton onPress={() => setNotice(false)} />}
       >
-        <View style={p.scrim}>
-          <View style={[p.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-              <AccentText
-                text={t('disclosureTitle')}
-                style={{ flex: 1, fontSize: 24, lineHeight: 30 }}
-              />
-              <CircleButton icon="close" label={t('notNow')} onPress={() => setNotice(false)} />
-            </View>
-            <Text textBreakStrategy="balanced" style={s.body}>
-              {t('disclosureBody')}
-            </Text>
-            <View style={p.disclosure}>
-              <Text style={{ fontSize: 19, color: colors.ink, fontFamily: AppFont.semibold }}>
-                {t('disclosureWhat')}
-              </Text>
-              {(['disclosure1', 'disclosure2', 'disclosure3'] as const).map((key) => (
-                <Text key={key} style={s.body}>
-                  • {t(key)}
-                </Text>
-              ))}
-            </View>
-            <GlassButton
-              label={t('agreeAndOpen')}
-              onPress={() => {
-                setNotice(false);
-                setOpened(true);
-                AndroidDictation?.openSettings('accessibility');
-              }}
+        <Group title={t('disclosureReads')}>
+          {DISCLOSURE_READS.map(([icon, title, subtitle]) => (
+            <ListRow
+              key={title}
+              icon={icon}
+              title={t(title)}
+              subtitle={t(subtitle)}
+              trailing={null}
             />
-            <LinkButton label={t('notNow')} onPress={() => setNotice(false)} />
-          </View>
+          ))}
+        </Group>
+        <Group>
+          {DISCLOSURE_NEVER.map(([icon, title, subtitle]) => (
+            <ListRow
+              key={title}
+              icon={icon}
+              title={t(title)}
+              subtitle={t(subtitle)}
+              trailing={null}
+            />
+          ))}
+        </Group>
+        <View style={{ gap: 4 }}>
+          <PillAction
+            primary
+            label={t('agreeAndOpen')}
+            onPress={() => {
+              setNotice(false);
+              setOpened(true);
+              AndroidDictation?.openSettings('accessibility');
+            }}
+          />
+          <TextAction label={t('notNow')} onPress={() => setNotice(false)} />
         </View>
-      </Modal>
+      </BottomSheet>
     </Screen>
   );
 }
@@ -465,15 +480,6 @@ const useStyles = makeStyles((t) => {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.40)', justifyContent: 'flex-end' },
-    sheet: {
-      backgroundColor: colors.canvas,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      padding: 20,
-      gap: 16,
-    },
-    disclosure: { ...glassEdge, borderRadius: 16, padding: 18, gap: 6 },
     keyboardArt: {
       ...glassEdge,
       borderRadius: 24,

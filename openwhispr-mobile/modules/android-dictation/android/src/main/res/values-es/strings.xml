@@ -1,6 +1,6 @@
 <resources>
   <string name="ow_insertion_label">OpenWhispr</string>
-  <string name="ow_insertion_description">Accesibilidad permite a OpenWhispr insertar el resultado en el campo seleccionado. Ese campo se lee cuando empiezas a dictar y de nuevo durante 45 segundos después de que OpenWhispr escriba en él, para que una palabra que corrijas ahí pueda añadirse a tu diccionario. No se lee ningún otro campo y los campos de contraseña quedan excluidos. Nunca envía mensajes. También comprueba si hay un cuadro de texto activo para mostrar la burbuja solo mientras escribes.</string>
+  <string name="ow_insertion_description">Escribe tu dictado en el cuadro de texto en el que escribes. Qué lee: El cuadro de texto en el que escribes (Solo cuando usas la burbuja); El texto que seleccionas (Se envía a tu IA para editarlo. Nunca se guarda); Las palabras que corriges, durante 45 segundos (Se añaden a tu diccionario, en tu teléfono); La app en la que estás (Para que la burbuja solo aparezca mientras escribes). Nunca lee contraseñas. Nunca toca, envía ni vende tu texto. Nada se guarda en nuestra nube, salvo que actives el Respaldo en la nube.</string>
   <string name="ow_bubble_ready">OpenWhispr está listo</string>
   <string name="ow_bubble_recording">OpenWhispr · Escuchando…</string>
   <string name="ow_bubble_notice">Toca para abrir. Desactiva el botón flotante en Ajustes.</string>

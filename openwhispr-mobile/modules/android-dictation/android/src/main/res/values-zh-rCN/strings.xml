@@ -1,6 +1,6 @@
 <resources>
   <string name="ow_insertion_label">OpenWhispr</string>
-  <string name="ow_insertion_description">无障碍功能允许 OpenWhispr 将结果插入当前输入框。开始听写时会读取该输入框，OpenWhispr 输入文字后的 45 秒内会再次读取，这样你在其中修改的词就可以加入你的词典。不会读取其他任何输入框，密码框也被排除在外。它不会发送消息。它还会检查是否有文本框处于焦点，以便只在你输入时显示悬浮球。</string>
+  <string name="ow_insertion_description">把你的听写输入到你正在输入的文本框。它会读取：你正在输入的文本框（仅在你使用气泡时）；你选择的文字（发送给你的 AI 进行编辑，从不保存）；你改正的词，持续 45 秒（加入你的词典，只留在手机上）；你所在的应用（让气泡只在你输入时出现）。绝不读取密码。绝不点按、发送或出售你的文字。不会保存到我们的云端，除非你开启云备份。</string>
   <string name="ow_bubble_ready">OpenWhispr 已就绪</string>
   <string name="ow_bubble_recording">OpenWhispr · 正在聆听…</string>
   <string name="ow_bubble_notice">点按打开。在“设置”中关闭悬浮按钮。</string>

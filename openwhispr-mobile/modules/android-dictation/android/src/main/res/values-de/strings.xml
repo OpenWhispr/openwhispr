@@ -1,6 +1,6 @@
 <resources>
   <string name="ow_insertion_label">OpenWhispr</string>
-  <string name="ow_insertion_description">Die Bedienungshilfe erlaubt OpenWhispr, das Ergebnis in das ausgewählte Feld einzufügen. Dieses Feld wird gelesen, wenn du mit dem Diktieren beginnst, und danach noch 45 Sekunden lang, nachdem OpenWhispr dort Text eingegeben hat, damit ein Wort, das du dort korrigierst, deinem Wörterbuch hinzugefügt werden kann. Kein anderes Feld wird gelesen, und Passwortfelder sind ausgeschlossen. Sie sendet keine Nachrichten. Sie prüft außerdem, ob ein Textfeld aktiv ist, damit die Blase nur beim Tippen erscheint.</string>
+  <string name="ow_insertion_description">Tippt dein Diktat in das Textfeld, in das du schreibst. Was er liest: Das Textfeld, in das du schreibst (Nur wenn du die Blase nutzt); Text, den du markierst (Zum Bearbeiten an deine KI gesendet. Nie gespeichert); Wörter, die du korrigierst, 45 Sekunden lang (In dein Wörterbuch aufgenommen, auf deinem Handy); Die App, in der du bist (Damit die Blase nur beim Schreiben erscheint). Liest nie Passwörter. Tippt, sendet oder verkauft nie deinen Text. Nichts wird in unserer Cloud gespeichert, außer du schaltest Cloud-Backup ein.</string>
   <string name="ow_bubble_ready">OpenWhispr ist bereit</string>
   <string name="ow_bubble_recording">OpenWhispr · Höre zu…</string>
   <string name="ow_bubble_notice">Zum Öffnen tippen. Die schwebende Schaltfläche lässt sich in den Einstellungen ausschalten.</string>
