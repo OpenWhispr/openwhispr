@@ -673,15 +673,17 @@ final class DirectDictation {
     )
     job = nil
     state = .idle
-    // Typed now when the keyboard is in the take's place; otherwise it waits there.
-    undeliveredText = ResultForInsertion(
-      text: text,
-      place: Place(
-        userId: current.config.userId, documentID: current.documentID, contextBefore: current.contextBefore,
-        atMs: deps.store.now()
-      )
+    let place = Place(
+      userId: current.config.userId, documentID: current.documentID, contextBefore: current.contextBefore,
+      atMs: deps.store.now()
     )
-    if keyboardVisible { deliverHeldTextIfSamePlace() }
+    // Typed now when the keyboard is in the take's place (never held first: the pill would flash
+    // "Insert dictation"); otherwise it waits.
+    if keyboardVisible, isSamePlace(place), deliverableUserId() == place.userId {
+      onText?(text)
+    } else {
+      undeliveredText = ResultForInsertion(text: text, place: place)
+    }
   }
 
   /// Keeps the `.m4a` (or the `.pcm` of a take never encoded, as every Local take), so the app

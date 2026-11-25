@@ -13,6 +13,20 @@ extension DirectDictationTests {
     heldCloudResumesWhenTextUnchanged()
     heldCloudWaitsForTap()
     heldTypingDuringTheTake()
+    heldNeverReportedForAnOrdinaryTake()
+  }
+
+  static func heldNeverReportedForAnOrdinaryTake() {
+    let h = Harness()
+    defer { h.cleanup() }
+    var changes = 0
+    h.dictation.onHeldChange = { changes += 1 }
+    h.useLocal(.parakeetV2)
+    h.record(seconds: 1)
+    h.dictation.confirm()
+    h.transcriber.succeed("hello there")
+    expect(h.texts, ["hello there"], "held: an ordinary take is typed")
+    expect(changes, 0, "held: and the pill never offers to insert it")
   }
 
   /// A Local take stopped by the keyboard being covered, with its text ready.
