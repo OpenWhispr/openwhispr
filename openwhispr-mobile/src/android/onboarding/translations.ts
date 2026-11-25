@@ -58,12 +58,16 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     accessibilityStep3: 'Deja el acceso directo desactivado',
     accessibilityShortcut: 'Acceso directo de {{service}}',
     disclosureTitle: 'Antes de activar Accesibilidad',
-    disclosureBody:
-      'Android muestra una advertencia seria para este ajuste. Esto es exactamente para lo que OpenWhispr lo usa.',
-    disclosureWhat: 'Qué hace',
-    disclosure1: 'Coloca tus palabras donde estás escribiendo',
-    disclosure2: 'Nunca lee contraseñas',
-    disclosure3: 'Nunca envía ni toca nada por ti',
+    disclosureWhat: 'Qué lee',
+    disclosure1: 'El cuadro de texto en el que escribes, solo cuando usas la burbuja',
+    disclosure2:
+      'El texto que seleccionas, enviado con tu voz a la IA que elegiste para editarlo. OpenWhispr nunca lo guarda',
+    disclosure3:
+      'Ese cuadro durante 45 segundos después de escribir, para que tus correcciones se añadan a tu diccionario. Esto se queda en tu teléfono',
+    disclosure4: 'En qué app estás, para que la burbuja solo aparezca mientras escribes',
+    disclosure5:
+      'Nunca lee contraseñas, ni toca ni envía nada, y nunca usa tu texto para anuncios ni lo vende',
+    disclosure6: 'Nada se guarda en nuestra nube salvo que actives el Respaldo en la nube',
     agreeAndOpen: 'Aceptar y abrir Ajustes',
     waitingForSetting: 'Actívalo en Ajustes y vuelve aquí.',
     batteryTitle: 'Mantén la burbuja [lista] cada vez que escribas',
@@ -213,12 +217,17 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     accessibilityStep3: 'Laissez le raccourci désactivé',
     accessibilityShortcut: 'Raccourci {{service}}',
     disclosureTitle: 'Avant d’activer l’accessibilité',
-    disclosureBody:
-      'Android affiche un avertissement sévère pour ce réglage. Voici exactement ce pour quoi OpenWhispr l’utilise.',
-    disclosureWhat: 'Ce qu’il fait',
-    disclosure1: 'Place vos mots là où vous écrivez',
-    disclosure2: 'Ne lit jamais les mots de passe',
-    disclosure3: 'N’envoie ni ne touche jamais rien à votre place',
+    disclosureWhat: 'Ce qu’il lit',
+    disclosure1: 'La zone de texte où vous écrivez, uniquement quand vous utilisez la bulle',
+    disclosure2:
+      'Le texte que vous sélectionnez, envoyé avec votre voix à l’IA que vous avez choisie pour être modifié. OpenWhispr ne le conserve jamais',
+    disclosure3:
+      'Cette zone pendant 45 secondes après la saisie, pour que vos corrections rejoignent votre dictionnaire. Cela reste sur votre téléphone',
+    disclosure4:
+      'L’app dans laquelle vous êtes, pour que la bulle n’apparaisse que pendant que vous écrivez',
+    disclosure5:
+      'Ne lit jamais les mots de passe, ne touche ni n’envoie rien, et n’utilise jamais votre texte pour la publicité ni ne le vend',
+    disclosure6: 'Rien n’est enregistré dans notre cloud, sauf si vous activez la Sauvegarde cloud',
     agreeAndOpen: 'Accepter et ouvrir les Paramètres',
     waitingForSetting: 'Activez-le dans les Paramètres, puis revenez ici.',
     batteryTitle: 'Gardez la bulle [prête] chaque fois que vous écrivez',
@@ -369,12 +378,16 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     accessibilityStep3: 'Lass die Verknüpfung ausgeschaltet',
     accessibilityShortcut: 'Verknüpfung für {{service}}',
     disclosureTitle: 'Bevor du die Bedienungshilfen einschaltest',
-    disclosureBody:
-      'Android zeigt für diesen Schalter eine deutliche Warnung. Hier steht genau, wofür OpenWhispr ihn nutzt.',
-    disclosureWhat: 'Was er tut',
-    disclosure1: 'Fügt deine Worte dort ein, wo du tippst',
-    disclosure2: 'Liest nie Passwörter',
-    disclosure3: 'Sendet oder tippt nie etwas für dich',
+    disclosureWhat: 'Was er liest',
+    disclosure1: 'Das Textfeld, in das du schreibst, nur wenn du die Blase nutzt',
+    disclosure2:
+      'Text, den du markierst, mit deiner Stimme an die gewählte KI gesendet, um ihn zu bearbeiten. OpenWhispr speichert ihn nie',
+    disclosure3:
+      'Dieses Feld 45 Sekunden nach dem Tippen, damit deine Korrekturen in dein Wörterbuch kommen. Das bleibt auf deinem Handy',
+    disclosure4: 'In welcher App du bist, damit die Blase nur beim Schreiben erscheint',
+    disclosure5:
+      'Liest nie Passwörter, tippt oder sendet nichts und nutzt deinen Text nie für Werbung oder verkauft ihn',
+    disclosure6: 'Nichts wird in unserer Cloud gespeichert, außer du schaltest Cloud-Backup ein',
     agreeAndOpen: 'Zustimmen und Einstellungen öffnen',
     waitingForSetting: 'Schalte es in den Einstellungen ein und komm dann hierher zurück.',
     batteryTitle: 'Halte die Blase [bereit], wann immer du tippst',
@@ -526,12 +539,16 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     accessibilityStep3: 'Deixe o atalho desativado',
     accessibilityShortcut: 'Atalho do {{service}}',
     disclosureTitle: 'Antes de ativar a Acessibilidade',
-    disclosureBody:
-      'O Android mostra um aviso forte para essa opção. Veja exatamente para que o OpenWhispr a usa.',
-    disclosureWhat: 'O que ela faz',
-    disclosure1: 'Coloca suas palavras onde você está digitando',
-    disclosure2: 'Nunca lê senhas',
-    disclosure3: 'Nunca envia nem toca em nada por você',
+    disclosureWhat: 'O que ela lê',
+    disclosure1: 'A caixa de texto em que você digita, só quando você usa a bolha',
+    disclosure2:
+      'O texto que você seleciona, enviado com sua voz à IA que você escolheu para ser editado. O OpenWhispr nunca o guarda',
+    disclosure3:
+      'Essa caixa por 45 segundos depois de digitar, para que suas correções entrem no seu dicionário. Isso fica no seu telefone',
+    disclosure4: 'Em qual app você está, para que a bolha só apareça enquanto você digita',
+    disclosure5:
+      'Nunca lê senhas, não toca nem envia nada, e nunca usa seu texto para anúncios nem o vende',
+    disclosure6: 'Nada é salvo na nossa nuvem, a menos que você ative o Backup na nuvem',
     agreeAndOpen: 'Concordar e abrir Configurações',
     waitingForSetting: 'Ative nas Configurações e volte aqui.',
     batteryTitle: 'Deixe a bolha [pronta] sempre que você digitar',
@@ -683,12 +700,17 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     accessibilityStep3: 'Lascia disattivata la scorciatoia',
     accessibilityShortcut: 'Scorciatoia {{service}}',
     disclosureTitle: 'Prima di attivare Accessibilità',
-    disclosureBody:
-      'Android mostra un avviso severo per questa opzione. Ecco esattamente come la usa OpenWhispr.',
-    disclosureWhat: 'Cosa fa',
-    disclosure1: 'Inserisce le tue parole dove stai scrivendo',
-    disclosure2: 'Non legge mai le password',
-    disclosure3: 'Non invia né tocca mai nulla al posto tuo',
+    disclosureWhat: 'Cosa legge',
+    disclosure1: 'La casella di testo in cui scrivi, solo quando usi la bolla',
+    disclosure2:
+      'Il testo che selezioni, inviato con la tua voce all’IA che hai scelto per modificarlo. OpenWhispr non lo conserva mai',
+    disclosure3:
+      'Quella casella per 45 secondi dopo la scrittura, così le tue correzioni entrano nel dizionario. Resta sul tuo telefono',
+    disclosure4: 'In quale app ti trovi, così la bolla compare solo mentre scrivi',
+    disclosure5:
+      'Non legge mai le password, non tocca né invia nulla e non usa mai il tuo testo per pubblicità né lo vende',
+    disclosure6:
+      'Nulla viene salvato nel nostro cloud, a meno che tu non attivi il Backup nel cloud',
     agreeAndOpen: 'Accetta e apri Impostazioni',
     waitingForSetting: 'Attivala nelle Impostazioni, poi torna qui.',
     batteryTitle: 'Tieni la bolla [pronta] ogni volta che scrivi',
@@ -838,12 +860,17 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     accessibilityStep3: 'Оставьте быстрое включение выключенным',
     accessibilityShortcut: 'Быстрое включение {{service}}',
     disclosureTitle: 'Прежде чем включить специальные возможности',
-    disclosureBody:
-      'Android показывает серьёзное предупреждение для этого переключателя. Вот для чего именно OpenWhispr его использует.',
-    disclosureWhat: 'Что он делает',
-    disclosure1: 'Вставляет ваши слова туда, где вы печатаете',
-    disclosure2: 'Никогда не читает пароли',
-    disclosure3: 'Никогда ничего не отправляет и не нажимает за вас',
+    disclosureWhat: 'Что он читает',
+    disclosure1: 'Поле, в котором вы печатаете, только когда вы пользуетесь пузырьком',
+    disclosure2:
+      'Выделенный текст: отправляется с вашим голосом выбранному ИИ для правки. OpenWhispr никогда его не хранит',
+    disclosure3:
+      'То же поле в течение 45 секунд после ввода, чтобы ваши исправления попали в словарь. Это остаётся на телефоне',
+    disclosure4: 'В каком вы приложении, чтобы пузырёк появлялся только во время набора',
+    disclosure5:
+      'Никогда не читает пароли, ничего не нажимает и не отправляет, не использует ваш текст для рекламы и не продаёт его',
+    disclosure6:
+      'Ничего не сохраняется в нашем облаке, пока вы не включите «Облачную копию»',
     agreeAndOpen: 'Согласиться и открыть настройки',
     waitingForSetting: 'Включите его в настройках и вернитесь сюда.',
     batteryTitle: 'Пусть пузырёк будет [готов], когда вы печатаете',
@@ -993,11 +1020,13 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     accessibilityStep3: '保持快捷方式关闭',
     accessibilityShortcut: '{{service}}快捷方式',
     disclosureTitle: '开启无障碍功能之前',
-    disclosureBody: 'Android 会为此开关显示一条严格的警告。下面详细说明 OpenWhispr 用它来做什么。',
-    disclosureWhat: '它的作用',
-    disclosure1: '把你的文字放到你正在输入的位置',
-    disclosure2: '绝不读取密码',
-    disclosure3: '绝不替你发送或点按任何内容',
+    disclosureWhat: '它会读取',
+    disclosure1: '你正在输入的文本框，仅在你使用气泡时',
+    disclosure2: '你选择的文字，会和你的语音一起发送给你选择的 AI 进行编辑。OpenWhispr 从不保存它',
+    disclosure3: '输入后 45 秒内的同一文本框，让你的修改加入词典。这些内容只留在你的手机上',
+    disclosure4: '你所在的应用，让气泡只在你输入时出现',
+    disclosure5: '绝不读取密码，绝不点按或发送，也绝不将你的文字用于广告或出售',
+    disclosure6: '除非你开启云备份，否则不会有任何内容保存到我们的云端',
     agreeAndOpen: '同意并打开设置',
     waitingForSetting: '请在设置中开启，然后回到这里。',
     batteryTitle: '让气泡在你打字时随时[就绪]',
@@ -1140,11 +1169,13 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     accessibilityStep3: '保持捷徑關閉',
     accessibilityShortcut: '{{service}}捷徑',
     disclosureTitle: '開啟無障礙功能之前',
-    disclosureBody: 'Android 會為此開關顯示一則嚴格的警告。以下詳細說明 OpenWhispr 用它來做什麼。',
-    disclosureWhat: '它的作用',
-    disclosure1: '把你的文字放到你正在輸入的位置',
-    disclosure2: '絕不讀取密碼',
-    disclosure3: '絕不替你傳送或輕點任何內容',
+    disclosureWhat: '它會讀取',
+    disclosure1: '你正在輸入的文字方塊，僅在你使用氣泡時',
+    disclosure2: '你選取的文字，會和你的語音一起傳送給你選擇的 AI 進行編輯。OpenWhispr 從不儲存它',
+    disclosure3: '輸入後 45 秒內的同一文字方塊，讓你的修正加入字典。這些內容只留在你的手機上',
+    disclosure4: '你所在的應用程式，讓氣泡只在你輸入時出現',
+    disclosure5: '絕不讀取密碼，絕不輕點或傳送，也絕不將你的文字用於廣告或出售',
+    disclosure6: '除非你開啟雲端備份，否則不會有任何內容儲存到我們的雲端',
     agreeAndOpen: '同意並開啟設定',
     waitingForSetting: '請在設定中開啟，然後回到這裡。',
     batteryTitle: '讓氣泡在你打字時隨時[就緒]',
@@ -1289,12 +1320,16 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     accessibilityStep3: 'ショートカットはオフのままにする',
     accessibilityShortcut: '{{service}}のショートカット',
     disclosureTitle: 'ユーザー補助をオンにする前に',
-    disclosureBody:
-      'Android では、このスイッチに強い警告が表示されます。OpenWhispr が何に使うのかを正確にご説明します。',
-    disclosureWhat: '何をするか',
-    disclosure1: '入力中の場所に言葉を入れます',
-    disclosure2: 'パスワードは読み取りません',
-    disclosure3: '代わりに送信したりタップしたりはしません',
+    disclosureWhat: '読み取るもの',
+    disclosure1: '入力中のテキストボックス（バブルを使うときだけ）',
+    disclosure2:
+      '選択したテキスト。編集のため、音声と一緒に選んだ AI に送られます。OpenWhispr は保存しません',
+    disclosure3:
+      '入力後 45 秒間の同じボックス。修正した単語を辞書に追加するためで、スマートフォンの外には出ません',
+    disclosure4: '使用中のアプリ。入力中だけバブルを表示するためです',
+    disclosure5:
+      'パスワードは読み取らず、タップや送信もせず、テキストを広告に使ったり販売したりしません',
+    disclosure6: 'クラウドバックアップをオンにしない限り、クラウドには何も保存されません',
     agreeAndOpen: '同意して設定を開く',
     waitingForSetting: '設定でオンにしてから、ここに戻ってください。',
     batteryTitle: '入力するときいつでもバブルを[使える]ように',
@@ -1442,12 +1477,16 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     accessibilityStep3: 'اترك الاختصار متوقفًا',
     accessibilityShortcut: 'اختصار {{service}}',
     disclosureTitle: 'قبل تفعيل إمكانية الوصول',
-    disclosureBody:
-      'يعرض Android تحذيرًا شديدًا لهذا المفتاح. إليك بالضبط ما يستخدمه OpenWhispr من أجله.',
-    disclosureWhat: 'ما الذي يفعله',
-    disclosure1: 'يضع كلماتك حيث تكتب',
-    disclosure2: 'لا يقرأ كلمات المرور أبدًا',
-    disclosure3: 'لا يرسل ولا يلمس أي شيء نيابةً عنك أبدًا',
+    disclosureWhat: 'ما الذي يقرؤه',
+    disclosure1: 'مربع النص الذي تكتب فيه، فقط عندما تستخدم الفقاعة',
+    disclosure2:
+      'النص الذي تحدده، يُرسَل مع صوتك إلى الذكاء الاصطناعي الذي اخترته لتعديله. لا يحتفظ به OpenWhispr أبدًا',
+    disclosure3:
+      'المربع نفسه لمدة 45 ثانية بعد الكتابة، لتنضم تصحيحاتك إلى قاموسك. يبقى ذلك على هاتفك',
+    disclosure4: 'التطبيق الذي أنت فيه، حتى لا تظهر الفقاعة إلا أثناء الكتابة',
+    disclosure5:
+      'لا يقرأ كلمات المرور أبدًا، ولا ينقر أو يرسل، ولا يستخدم نصك للإعلانات أو يبيعه أبدًا',
+    disclosure6: 'لا يُحفظ أي شيء في سحابتنا إلا إذا فعّلت النسخ الاحتياطي السحابي',
     agreeAndOpen: 'موافقة وفتح الإعدادات',
     waitingForSetting: 'فعّله من الإعدادات، ثم عُد إلى هنا.',
     batteryTitle: 'أبقِ الفقاعة [جاهزة] كلما كتبت',

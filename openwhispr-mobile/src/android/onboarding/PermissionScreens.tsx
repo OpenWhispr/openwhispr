@@ -294,14 +294,20 @@ export function AccessibilityScreen({
               />
               <CircleButton icon="close" label={t('notNow')} onPress={() => setNotice(false)} />
             </View>
-            <Text textBreakStrategy="balanced" style={s.body}>
-              {t('disclosureBody')}
-            </Text>
             <View style={p.disclosure}>
               <Text style={{ fontSize: 19, color: colors.ink, fontFamily: AppFont.semibold }}>
                 {t('disclosureWhat')}
               </Text>
-              {(['disclosure1', 'disclosure2', 'disclosure3'] as const).map((key) => (
+              {(
+                [
+                  'disclosure1',
+                  'disclosure2',
+                  'disclosure3',
+                  'disclosure4',
+                  'disclosure5',
+                  'disclosure6',
+                ] as const
+              ).map((key) => (
                 <Text key={key} style={s.body}>
                   • {t(key)}
                 </Text>

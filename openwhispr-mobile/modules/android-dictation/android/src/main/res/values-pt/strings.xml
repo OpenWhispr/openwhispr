@@ -1,6 +1,6 @@
 <resources>
   <string name="ow_insertion_label">OpenWhispr</string>
-  <string name="ow_insertion_description">A acessibilidade permite que o OpenWhispr insira o resultado no campo selecionado. Esse campo é lido quando você começa a ditar e novamente por 45 segundos depois que o OpenWhispr digita nele, para que uma palavra que você corrija ali possa ser adicionada ao seu dicionário. Nenhum outro campo é lido e os campos de senha são excluídos. Ele nunca envia mensagens. Também verifica se há um campo de texto ativo, para mostrar a bolha apenas enquanto você digita.</string>
+  <string name="ow_insertion_description">Digita seu ditado na caixa de texto em que você digita. O que ela lê: a caixa de texto em que você digita, só quando você usa a bolha. O texto que você seleciona, enviado com sua voz à IA que você escolheu para ser editado. O OpenWhispr nunca o guarda. Essa caixa por 45 segundos depois de digitar, para que suas correções entrem no seu dicionário. Isso fica no seu telefone. Em qual app você está, para que a bolha só apareça enquanto você digita. Nunca lê senhas, não toca nem envia nada, e nunca usa seu texto para anúncios nem o vende. Nada é salvo na nossa nuvem, a menos que você ative o Backup na nuvem.</string>
   <string name="ow_bubble_ready">OpenWhispr está pronto</string>
   <string name="ow_bubble_recording">OpenWhispr · Ouvindo…</string>
   <string name="ow_bubble_notice">Toque para abrir. Desative o botão flutuante em Configurações.</string>

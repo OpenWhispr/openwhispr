@@ -62,12 +62,15 @@ export const onboardingEnglish = {
   accessibilityStep3: 'Leave the shortcut off',
   accessibilityShortcut: '{{service}} shortcut',
   disclosureTitle: 'Before you turn on Accessibility',
-  disclosureBody:
-    'Android shows a strong warning for this switch. Here is exactly what OpenWhispr uses it for.',
-  disclosureWhat: 'What it does',
-  disclosure1: 'Puts your words where you’re typing',
-  disclosure2: 'Never reads passwords',
-  disclosure3: 'Never sends or taps anything for you',
+  disclosureWhat: 'What it reads',
+  disclosure1: 'The text box you’re typing in, only when you use the bubble',
+  disclosure2:
+    'Text you select, sent with your voice to the AI you chose to be edited. OpenWhispr never stores it',
+  disclosure3:
+    'That box for 45 seconds after typing, so your fixes join your dictionary. This stays on your phone',
+  disclosure4: 'Which app you’re in, so the bubble shows only while you type',
+  disclosure5: 'Never reads passwords, taps or sends, and never uses your text for ads or sells it',
+  disclosure6: 'Nothing is saved to our cloud unless you turn on Cloud backup',
   agreeAndOpen: 'Agree and open Settings',
   waitingForSetting: 'Turn it on in Settings, then come back here.',
   batteryTitle: 'Keep the bubble [ready] whenever you type',
