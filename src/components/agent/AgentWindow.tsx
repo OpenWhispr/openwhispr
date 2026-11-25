@@ -359,7 +359,9 @@ export default function AgentWindow() {
   // asks first keeps its card above the pill, a connector's step that asks to
   // connect included; such a step reports its card just after it starts, so a
   // step gets a moment before it counts. Once per reply: the user opening the
-  // modal counts too, so a reply never reopens a modal the user minimized.
+  // modal counts too, so a reply never reopens a modal the user minimized. An
+  // answer that may still be typed at the caret stays in the pill until its
+  // turn ends; a card waiting on the user means it won't be typed.
   const latest = messages.at(-1);
   const replyId = latest?.role === "assistant" ? latest.id : null;
   const replyShows = replyId !== null && Boolean(latest?.content || latest?.error);
@@ -371,9 +373,14 @@ export default function AgentWindow() {
       )
     );
   const expandedRepliesRef = useRef(new Set<string>());
+  const cardWaits = pendingCard !== null;
+  useEffect(() => {
+    if (cardWaits) cancelCaretDelivery();
+  }, [cancelCaretDelivery, cardWaits]);
   useEffect(() => {
     if (replyId === null || expandedRepliesRef.current.has(replyId)) return;
     if (!replyShows && !replyWorks) return;
+    if (chatBusy && caretDeliveryRef.current) return;
     const expand = () => {
       expandedRepliesRef.current.add(replyId);
       if (stateRef.current.layout !== "modal") dispatch({ type: "expand" });
@@ -384,7 +391,7 @@ export default function AgentWindow() {
     }
     const timer = setTimeout(expand, STEP_SETTLE_MS);
     return () => clearTimeout(timer);
-  }, [dispatch, replyId, replyShows, replyWorks]);
+  }, [cardWaits, chatBusy, dispatch, replyId, replyShows, replyWorks]);
   useEffect(() => {
     if (state.layout === "modal" && replyId !== null) expandedRepliesRef.current.add(replyId);
   }, [replyId, state.layout]);
@@ -838,10 +845,12 @@ export default function AgentWindow() {
     cancelTake();
   }, [cancelCaretDelivery, cancelTake, dispatch]);
   const stopRequest = useCallback(() => {
+    // An answer stopped on its way to the caret stays in the pill.
+    if (caretDeliveryRef.current && replyId) expandedRepliesRef.current.add(replyId);
     cancelCaretDelivery();
     if (selectionEditRef.current) dropTake();
     else cancelTurn();
-  }, [cancelCaretDelivery, cancelTurn, dropTake]);
+  }, [cancelCaretDelivery, cancelTurn, dropTake, replyId]);
   useEffect(
     () =>
       subscribeAuthBoundary(() => {
