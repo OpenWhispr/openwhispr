@@ -62,8 +62,8 @@ const OPENWHISPR_TUNED: CleanupPromptProfile = {
   validateOutput: assertPlausibleCleanupOutput,
 };
 
-// Placeholder: the tuned models aren't in the model registry yet. Their
-// registry ids must start with this for the profile to reach them.
+// Every tuned model's registry id starts with this (model-registry provider
+// "openwhispr-local"); a retrained file gets a new id with the same prefix.
 const OPENWHISPR_TUNED_MODEL_PREFIX = "openwhispr-cleanup-";
 
 const PROFILES: Record<string, CleanupPromptProfile> = {

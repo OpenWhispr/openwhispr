@@ -3711,7 +3711,10 @@
         "mistral_ministral_3_14b_instruct_2512_q4_k_m": "Mistrals 14B-Modell mit Tool-Nutzung, 256K Kontext",
         "mistral_ministral_3_8b_instruct_2512_q4_k_m": "Schnelles Modell ohne Denkphase für Bereinigung und Tools",
         "mistral_ministral_3_3b_instruct_2512_q4_k_m": "Klein und schnell für die Diktatbereinigung",
-        "gemma_gemma_4_12b_it_qat_q4_0": "Offizieller QAT-Build von Google, ideal für Rechner mit 16 GB"
+        "gemma_gemma_4_12b_it_qat_q4_0": "Offizieller QAT-Build von Google, ideal für Rechner mit 16 GB",
+        "openwhispr_cleanup_0_8b_v1_q8_0": "Das schnellste Bereinigungsmodell von OpenWhispr, trainiert für Diktate",
+        "openwhispr_cleanup_2b_v1_q4_k_m": "Das ausgewogene Bereinigungsmodell von OpenWhispr, trainiert für Diktate",
+        "openwhispr_cleanup_4b_v1_q4_k_m": "Das genaueste Bereinigungsmodell von OpenWhispr, trainiert für Diktate"
       }
     },
     "errors": {

@@ -3711,7 +3711,10 @@
         "mistral_ministral_3_14b_instruct_2512_q4_k_m": "Модель Mistral 14B с использованием инструментов, контекст 256K",
         "mistral_ministral_3_8b_instruct_2512_q4_k_m": "Быстрая модель без этапа рассуждений для очистки и инструментов",
         "mistral_ministral_3_3b_instruct_2512_q4_k_m": "Небольшая и быстрая для очистки диктовки",
-        "gemma_gemma_4_12b_it_qat_q4_0": "Официальная сборка QAT от Google, оптимальна для компьютеров с 16 ГБ"
+        "gemma_gemma_4_12b_it_qat_q4_0": "Официальная сборка QAT от Google, оптимальна для компьютеров с 16 ГБ",
+        "openwhispr_cleanup_0_8b_v1_q8_0": "Самая быстрая модель очистки OpenWhispr, обученная для диктовки",
+        "openwhispr_cleanup_2b_v1_q4_k_m": "Сбалансированная модель очистки OpenWhispr, обученная для диктовки",
+        "openwhispr_cleanup_4b_v1_q4_k_m": "Самая точная модель очистки OpenWhispr, обученная для диктовки"
       },
       "diarization": {
         "segmentation": "Обнаружение границ речи для идентификации говорящих",

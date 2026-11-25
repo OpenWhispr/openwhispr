@@ -1978,6 +1978,59 @@
           "hfRepo": "LiquidAI/LFM2.5-230M-GGUF"
         }
       ]
+    },
+    {
+      "id": "openwhispr-local",
+      "name": "OpenWhispr",
+      "defaultModel": "openwhispr-cleanup-0.8b-v1-q8_0",
+      "baseUrl": "https://huggingface.co",
+      "models": [
+        {
+          "name": "OpenWhispr Cleanup 0.8B",
+          "description": "OpenWhispr's fastest cleanup model, trained for dictation",
+          "descriptionKey": "models.descriptions.local.openwhispr_cleanup_0_8b_v1_q8_0",
+          "minAppVersion": "1.12.2",
+          "id": "openwhispr-cleanup-0.8b-v1-q8_0",
+          "size": "0.81GB",
+          "sizeBytes": 811843616,
+          "fileName": "openwhispr-cleanup-0.8b-v1-Q8_0.gguf",
+          "quantization": "q8_0",
+          "contextLength": 262144,
+          "hfRepo": "OpenWhispr/openwhispr-cleanup-0.8b-GGUF",
+          "revision": "45dc9070e12d4f5e5baf176180062b930804f154",
+          "sha256": "6a243402b9b85258f8e3f0dfcd93fd3b13120950d08e7197f7191c24484ed7bf"
+        },
+        {
+          "name": "OpenWhispr Cleanup 2B",
+          "description": "OpenWhispr's balanced cleanup model, trained for dictation",
+          "descriptionKey": "models.descriptions.local.openwhispr_cleanup_2b_v1_q4_k_m",
+          "minAppVersion": "1.12.2",
+          "id": "openwhispr-cleanup-2b-v1-q4_k_m",
+          "size": "1.3GB",
+          "sizeBytes": 1274396672,
+          "fileName": "openwhispr-cleanup-2b-v1-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 262144,
+          "hfRepo": "OpenWhispr/openwhispr-cleanup-2b-GGUF",
+          "revision": "b0e3cdcdc92942cc2a39c629454588545371e3a8",
+          "sha256": "e932e9d0d240cf610cd1dc02fb20a2d39f428eaefdd43e49f22ffa63baa6487c"
+        },
+        {
+          "name": "OpenWhispr Cleanup 4B",
+          "description": "OpenWhispr's most accurate cleanup model, trained for dictation",
+          "descriptionKey": "models.descriptions.local.openwhispr_cleanup_4b_v1_q4_k_m",
+          "minAppVersion": "1.12.2",
+          "id": "openwhispr-cleanup-4b-v1-q4_k_m",
+          "size": "2.7GB",
+          "sizeBytes": 2708804512,
+          "fileName": "openwhispr-cleanup-4b-v1-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 262144,
+          "hfRepo": "OpenWhispr/openwhispr-cleanup-4b-GGUF",
+          "revision": "dbbbacb6d1709ec9c51ecbb677b63f2be5281625",
+          "sha256": "b974dae70e7ae0a8787069f53f2280593153187d82891283b297bf67d10aae8b"
+        }
+      ]
     }
   ],
   "diarizationModels": {

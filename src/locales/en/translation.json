@@ -3711,7 +3711,10 @@
         "mistral_ministral_3_14b_instruct_2512_q4_k_m": "Mistral's 14B model with tool use, 256K context",
         "mistral_ministral_3_8b_instruct_2512_q4_k_m": "Fast non-thinking model for cleanup and tools",
         "mistral_ministral_3_3b_instruct_2512_q4_k_m": "Small and fast for dictation cleanup",
-        "gemma_gemma_4_12b_it_qat_q4_0": "Google's official QAT build, best fit for 16 GB machines"
+        "gemma_gemma_4_12b_it_qat_q4_0": "Google's official QAT build, best fit for 16 GB machines",
+        "openwhispr_cleanup_0_8b_v1_q8_0": "OpenWhispr's fastest cleanup model, trained for dictation",
+        "openwhispr_cleanup_2b_v1_q4_k_m": "OpenWhispr's balanced cleanup model, trained for dictation",
+        "openwhispr_cleanup_4b_v1_q4_k_m": "OpenWhispr's most accurate cleanup model, trained for dictation"
       }
     },
     "errors": {

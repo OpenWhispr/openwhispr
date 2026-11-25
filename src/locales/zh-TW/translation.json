@@ -3613,7 +3613,10 @@
         "mistral_ministral_3_14b_instruct_2512_q4_k_m": "Mistral 的 14B 模型，支援工具呼叫，256K 上下文",
         "mistral_ministral_3_8b_instruct_2512_q4_k_m": "無思考過程的快速模型，適用於清理與工具呼叫",
         "mistral_ministral_3_3b_instruct_2512_q4_k_m": "小巧快速，適合聽寫文字清理",
-        "gemma_gemma_4_12b_it_qat_q4_0": "Google 官方 QAT 建置，最適合 16 GB 裝置"
+        "gemma_gemma_4_12b_it_qat_q4_0": "Google 官方 QAT 建置，最適合 16 GB 裝置",
+        "openwhispr_cleanup_0_8b_v1_q8_0": "OpenWhispr 最快的清理模型，專為聽寫訓練",
+        "openwhispr_cleanup_2b_v1_q4_k_m": "OpenWhispr 均衡的清理模型，專為聽寫訓練",
+        "openwhispr_cleanup_4b_v1_q4_k_m": "OpenWhispr 最準確的清理模型，專為聽寫訓練"
       },
       "diarization": {
         "segmentation": "用於說話者分離的語音邊界偵測",

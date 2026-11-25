@@ -3613,7 +3613,10 @@
         "mistral_ministral_3_14b_instruct_2512_q4_k_m": "ツール使用に対応した Mistral の 14B モデル、256K コンテキスト",
         "mistral_ministral_3_8b_instruct_2512_q4_k_m": "整形とツール向けの思考なし高速モデル",
         "mistral_ministral_3_3b_instruct_2512_q4_k_m": "口述の整形向けの小型で高速なモデル",
-        "gemma_gemma_4_12b_it_qat_q4_0": "Google 公式の QAT ビルド、16 GB マシンに最適"
+        "gemma_gemma_4_12b_it_qat_q4_0": "Google 公式の QAT ビルド、16 GB マシンに最適",
+        "openwhispr_cleanup_0_8b_v1_q8_0": "OpenWhisprの最速のクリーンアップモデル（音声入力向けに学習）",
+        "openwhispr_cleanup_2b_v1_q4_k_m": "OpenWhisprのバランス型クリーンアップモデル（音声入力向けに学習）",
+        "openwhispr_cleanup_4b_v1_q4_k_m": "OpenWhisprの最も正確なクリーンアップモデル（音声入力向けに学習）"
       },
       "diarization": {
         "segmentation": "話者分離のための発話区間検出",

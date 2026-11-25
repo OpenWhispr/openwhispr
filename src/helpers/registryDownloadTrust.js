@@ -6,6 +6,7 @@
 // publisher reaches installs from the app release that lists it.
 const TRUSTED_HF_PUBLISHERS = new Set([
   "LiquidAI",
+  "OpenWhispr",
   "Qwen",
   "bartowski",
   "ggerganov",
