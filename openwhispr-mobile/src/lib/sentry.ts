@@ -45,20 +45,12 @@ export function initSentry(): void {
   Sentry.init({
     dsn,
     sendDefaultPii: false,
-    enableLogs: true,
-    logsOrigin: 'js',
+    // Crash and error reports only, as the privacy policy says: no log lines and
+    // no screen replay, not even on error.
+    enableLogs: false,
     replaysSessionSampleRate: 0,
-    replaysOnErrorSampleRate: 1,
-    integrations: [
-      Sentry.mobileReplayIntegration({
-        maskAllText: true,
-        maskAllImages: true,
-        maskAllVectors: true,
-        beforeErrorSampling: () => analyticsEnabled(),
-      }),
-    ],
+    replaysOnErrorSampleRate: 0,
     beforeSend: (event) => (analyticsEnabled() ? event : null),
-    beforeSendLog: (log) => (analyticsEnabled() ? log : null),
     beforeSendTransaction: (event) => (analyticsEnabled() ? event : null),
     beforeBreadcrumb: (breadcrumb) => (analyticsEnabled() ? breadcrumb : null),
   });
