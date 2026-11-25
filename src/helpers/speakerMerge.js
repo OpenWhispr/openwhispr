@@ -92,11 +92,12 @@ function formatSpeakerTranscript(mergedSegments) {
 
   return mergedSegments
     .map((seg) => {
+      const timeRange = `${formatTimestamp(seg.start)} - ${formatTimestamp(seg.end)}`;
+      if (!seg.speaker) return `${timeRange}\n${seg.text}`;
       if (!speakerMap.has(seg.speaker)) {
         speakerMap.set(seg.speaker, nextIndex++);
       }
       const label = `Speaker ${speakerMap.get(seg.speaker)}`;
-      const timeRange = `${formatTimestamp(seg.start)} - ${formatTimestamp(seg.end)}`;
       return `[${label}] ${timeRange}\n${seg.text}`;
     })
     .join("\n\n");

@@ -126,6 +126,40 @@ test("JSON duration reflects the last merged segment's timestamp", () => {
   assert.equal(JSON.parse(output).metadata.duration_seconds, 3);
 });
 
+test("SRT keeps measured cue boundaries across pauses and overlapping speech", () => {
+  const output = formatSrt(
+    [
+      { timestamp: 0, endTimestamp: 0.25, text: "One." },
+      { timestamp: 1.75, endTimestamp: 3.5, text: "Two." },
+      { timestamp: 3, endTimestamp: 5, speaker: "speaker_0", text: "Three." },
+    ],
+    {}
+  );
+
+  assert.match(output, /^1\n00:00:00,000 --> 00:00:00,250\nUnknown Speaker: One\./);
+  assert.match(output, /\n2\n00:00:01,750 --> 00:00:03,500\nUnknown Speaker: Two\./);
+  assert.match(output, /\n3\n00:00:03,000 --> 00:00:05,000\nSpeaker 1: Three\./);
+});
+
+test("JSON duration includes measured cue ends and trailing audio when known", () => {
+  const segments = [
+    { timestamp: 0, endTimestamp: 4, text: "First." },
+    { timestamp: 8, endTimestamp: 26, text: "Last." },
+  ];
+  for (const [duration, expected] of [
+    [null, 26],
+    [24, 24],
+    [32, 32],
+  ]) {
+    const note = { audio_duration_seconds: duration };
+    const exported = JSON.parse(formatJson(note, segments, {}));
+    assert.equal(exported.metadata.duration_seconds, expected);
+  }
+  const appended = [...segments, { timestamp: 40, source: "mic", text: "Live follow-up." }];
+  const exported = JSON.parse(formatJson({ audio_duration_seconds: 32 }, appended, {}));
+  assert.equal(exported.metadata.duration_seconds, 40);
+});
+
 test("consecutive speaker-less segments within 2s merge across SRT, TXT and Markdown exports", () => {
   const segments = [
     { timestamp: 0, text: "Hello world," },

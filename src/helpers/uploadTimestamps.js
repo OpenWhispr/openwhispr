@@ -25,7 +25,7 @@ export function timestampRequestFields(provider, model) {
 // usable, or when the kept segments don't hold every word of the response's
 // text (whitespace aside, so CJK joins match), so callers fall back to the
 // plain transcript rather than store a timed one with words missing.
-export function mapVerboseSegments(responseData) {
+export function mapVerboseSegments(responseData, { preserveSpeakers = false } = {}) {
   const segments = responseData?.segments;
   if (!Array.isArray(segments)) return null;
 
@@ -40,6 +40,9 @@ export function mapVerboseSegments(responseData) {
       text,
       start,
       end,
+      ...(preserveSpeakers && typeof seg.speaker === "string" && seg.speaker
+        ? { speaker: seg.speaker }
+        : {}),
     });
   }
   if (!mapped.length) return null;

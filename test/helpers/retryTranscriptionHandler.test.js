@@ -1887,7 +1887,7 @@ test("upload: an ElevenLabs reply that names no speaker stays a plain transcript
     text: "Good morning. Hello there.",
     segments: [{ text: "Good morning. Hello there.", start: 0, end: 2.3 }],
   });
-  assert.ok(warnings.includes("ElevenLabs diarization requested but the reply named no speaker"));
+  assert.ok(warnings.includes("ElevenLabs diarization returned no usable speaker segments"));
 });
 
 // As for OpenAI and Mistral, whose uploads label speakers only when asked to.
@@ -1917,11 +1917,39 @@ test("upload: ElevenLabs words that fall short of the text give no segments", as
 
   for (const words of [SCRIBE_WORDS.slice(0, 3), [], undefined]) {
     fetchResponse = () => scribeResponse(words);
-    assert.deepEqual(await invokeUpload({ ...ELEVENLABS_UPLOAD, timestamps: true }), {
-      success: true,
-      text: "Good morning. Hello there.",
-    });
+    for (const diarize of [false, true]) {
+      assert.deepEqual(await invokeUpload({ ...ELEVENLABS_UPLOAD, timestamps: true, diarize }), {
+        success: true,
+        text: "Good morning. Hello there.",
+      });
+    }
   }
+});
+
+test("upload: ElevenLabs preview numbers only the identified speakers", async (t) => {
+  const previous = fetchResponse;
+  t.after(() => {
+    fetchResponse = previous;
+  });
+  fetchResponse = () =>
+    Response.json({
+      text: "Opening. Hello.",
+      words: [
+        { text: "Opening.", type: "word", start: 0, end: 0.5, speaker_id: null },
+        { text: " ", type: "spacing" },
+        { text: "Hello.", type: "word", start: 1, end: 2, speaker_id: "speaker_0" },
+      ],
+    });
+
+  const result = await invokeUpload({ ...ELEVENLABS_UPLOAD, timestamps: true, diarize: true });
+  assert.equal(result.text, "0:00 - 0:00\nOpening.\n\n[Speaker 1] 0:01 - 0:02\nHello.");
+  assert.equal(result.diarized, true);
+  const { buildUploadTranscript } = await import("../../src/services/uploadNotes.ts");
+  const saved = JSON.parse(buildUploadTranscript(result.segments));
+  assert.deepEqual(
+    saved.map((segment) => segment.speaker),
+    [undefined, "speaker_0"]
+  );
 });
 
 // Only an upload reads them, so neither is forwarded, even from a request that names them.

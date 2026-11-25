@@ -74,6 +74,8 @@ export interface TranscriptSegment {
   text: string;
   source: "mic" | "system";
   timestamp?: number;
+  recordingStartTimestamp?: number;
+  endTimestamp?: number;
   speaker?: string;
   speakerName?: string;
   /** Session recorder for self-labelled lines appended to somebody else's note. */

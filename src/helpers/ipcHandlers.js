@@ -14489,22 +14489,23 @@ class IPCHandlers {
                 timestamps,
                 apiKey: apiKey || this.environmentManager.getElevenlabsKey(),
               });
-              // Speakers are labelled only when asked for. A reply that then names none
-              // stays a plain transcript, and the renderer says they could not be applied.
-              if (diarize && grouped?.some((segment) => segment.speaker)) {
+              // The saved segments replace the transcript text, so validate coverage
+              // before accepting either timed or speaker-labelled segments.
+              const segments = mapVerboseSegments(
+                { text, segments: grouped },
+                { preserveSpeakers: diarize }
+              );
+              if (diarize && segments?.some((segment) => segment.speaker)) {
                 return {
                   success: true,
-                  text: formatSpeakerTranscript(grouped),
+                  text: formatSpeakerTranscript(segments),
                   diarized: true,
-                  segments: grouped,
+                  segments,
                 };
               }
               if (diarize) {
-                debugLogger.warn("ElevenLabs diarization requested but the reply named no speaker");
+                debugLogger.warn("ElevenLabs diarization returned no usable speaker segments");
               }
-              // Held to the other providers' rule: segments that don't hold every word of
-              // the text are dropped, and the upload keeps its plain transcript.
-              const segments = mapVerboseSegments({ text, segments: grouped });
               return { success: true, text, ...(segments ? { segments } : {}) };
             }
 
