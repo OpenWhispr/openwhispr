@@ -387,11 +387,6 @@ function useArrival(arriving: boolean) {
 }
 
 /** Where a row's text came from: a dictation (mic) or an uploaded audio file. */
-function SourceTile({ item }: { item: Transcript }) {
-  const { c } = useHome();
-  return <IconTile icon={item.requestContext === 'file' ? 'FileUp' : 'Mic'} color={c.secondary} />;
-}
-
 export function HistoryRow({
   item,
   last,
@@ -424,7 +419,8 @@ export function HistoryRow({
     <View>
       <Animated.View
         style={[
-          { ...ROW, minHeight: 64 },
+          // A long dictation grows the row downwards; Copy (or Retry) stays top right.
+          { ...ROW, minHeight: 64, alignItems: 'flex-start' },
           // The newest row is the card's first: keep the tint inside its rounded top.
           highlighted ? [arrival, { borderTopLeftRadius: 15, borderTopRightRadius: 15 }] : null,
         ]}
@@ -432,21 +428,19 @@ export function HistoryRow({
         <View
           accessible
           accessibilityLabel={`${source}. ${text}. ${failed ? `${when}, ${t('notSent')}` : when}`}
-          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}
+          // The first line sits level with the 36 dp button beside it.
+          style={{ flex: 1, gap: 2, paddingTop: 7 }}
         >
-          <SourceTile item={item} />
-          <View style={{ flex: 1, gap: 2 }}>
-            {/* The whole dictation, wrapped: never cut off (Josh, 25 Nov). */}
-            <Text style={type.rowTitle}>{text}</Text>
-            {item.cleanupWarning ? (
-              <Text accessibilityRole="alert" numberOfLines={2} style={type.footnote}>
-                {item.cleanupWarning}
-              </Text>
-            ) : null}
-            <Text numberOfLines={1} style={type.footnote}>
-              {failed ? `${when} · ${t('notSent')}` : when}
+          {/* The whole dictation, wrapped: never cut off (Josh, 25 Nov). */}
+          <Text style={type.rowTitle}>{text}</Text>
+          {item.cleanupWarning ? (
+            <Text accessibilityRole="alert" numberOfLines={2} style={type.footnote}>
+              {item.cleanupWarning}
             </Text>
-          </View>
+          ) : null}
+          <Text numberOfLines={1} style={type.footnote}>
+            {failed ? `${when} · ${t('notSent')}` : when}
+          </Text>
         </View>
         {failed ? (
           <TileButton
