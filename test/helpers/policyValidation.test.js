@@ -337,12 +337,15 @@ test("meeting attendee policy accepts additive string fields and rejects invalid
   for (const meetings of [
     {},
     { externalAttendees: "future" },
+    { participantNotification: "future" },
     { internalDomains: [] },
     { externalAttendees: "blocked", internalDomains: ["example.com"] },
   ])
     assert.equal(isValidPolicyShape({ ...validPolicy(), meetings }), true);
   for (const meetings of [
     { externalAttendees: false },
+    { participantNotification: false },
+    { participantNotification: null },
     { internalDomains: "example.com" },
     { internalDomains: [null] },
   ])

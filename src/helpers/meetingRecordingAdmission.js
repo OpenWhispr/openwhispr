@@ -1,7 +1,12 @@
 const { meetingAttendeeVerdict, meetingAttendeeRefusalCode } = require("./meetingAttendeePolicy");
+const {
+  requiresParticipantNotification,
+  requiresMeetingAdmission,
+} = require("./meetingRecordingPolicy");
 
 const cancelled = { success: false, code: "AUDIO_OPERATION_CANCELLED" };
 const unverifiable = "POLICY_ATTENDEES_UNVERIFIABLE";
+const noticeRequired = "POLICY_PARTICIPANT_NOTIFICATION_REQUIRED";
 
 function createMeetingRecordingAdmission({
   getPolicy,
@@ -10,6 +15,7 @@ function createMeetingRecordingAdmission({
   getEvent,
   generation,
   confirmInternal,
+  confirmNotification,
   onRevoked,
 }) {
   const pending = new Map();
@@ -35,6 +41,7 @@ function createMeetingRecordingAdmission({
       // Pin the original event even if blocking is turned on later in the call.
       eventId: readInvite(noteId)?.eventId ?? null,
       confirmed: false,
+      notificationMethod: null,
       approved: false,
       refusal: null,
     };
@@ -105,8 +112,20 @@ function createMeetingRecordingAdmission({
       }
       const code = refusal(attempt);
       if (code) return { success: false, code };
+      if (requiresParticipantNotification(getPolicy())) {
+        const told = await confirmNotification(owner, controller.signal);
+        if (!current() || !told) return cancelled;
+        const deniedAfterNotice = await resolveFeature();
+        if (!current()) return cancelled;
+        if (deniedAfterNotice) return deniedAfterNotice;
+        const attendeeRefusal = refusal(attempt);
+        if (attendeeRefusal) return { success: false, code: attendeeRefusal };
+        attempt.notificationMethod = "told-by-member";
+      }
       attempt.approved = true;
-      return { success: true };
+      return attempt.notificationMethod
+        ? { success: true, notificationMethod: attempt.notificationMethod }
+        : { success: true };
     } finally {
       if (!attempt.approved && pending.get(owner) === attempt) release(owner, attempt.sessionId);
     }
@@ -122,6 +141,8 @@ function createMeetingRecordingAdmission({
     const recording = matches ? attempt : newAttempt(owner, options);
     const code = refusal(recording);
     if (code) return { success: false, code };
+    if (requiresParticipantNotification(getPolicy()) && !recording.notificationMethod)
+      return { success: false, code: noticeRequired };
     if (!matches && (getPolicy()?.externalAttendees ?? "allowed") !== "allowed") {
       return { success: false, code: unverifiable };
     }
@@ -133,14 +154,20 @@ function createMeetingRecordingAdmission({
     if (!decision.success) return decision;
     release(owner, options.sessionId);
     active = decision.recording;
-    return { success: true };
+    return { success: true, notificationMethod: active.notificationMethod };
   }
 
   function recheck(noteId) {
     for (const attempt of [...pending.values(), active]) {
       if (!attempt || attempt.refusal || (!attempt.approved && attempt !== active)) continue;
       if (noteId !== undefined && noteId !== attempt.noteId) continue;
-      const code = refusal(attempt);
+      // This policy governs starts. A change while waiting for capture must
+      // invalidate the approval, even if the invite still allows recording.
+      const missingNotice =
+        attempt !== active &&
+        requiresParticipantNotification(getPolicy()) &&
+        !attempt.notificationMethod;
+      const code = refusal(attempt) ?? (missingNotice ? noticeRequired : null);
       if (!code) continue;
       attempt.refusal = code;
       if (attempt !== active) release(attempt.owner, attempt.sessionId);
@@ -157,7 +184,7 @@ function createMeetingRecordingAdmission({
     cancelPending() {
       for (const attempt of pending.values()) {
         release(attempt.owner, attempt.sessionId);
-        if (attempt.approved && (getPolicy()?.externalAttendees ?? "allowed") !== "allowed")
+        if (attempt.approved && requiresMeetingAdmission(getPolicy()))
           onRevoked(attempt, cancelled.code, false);
       }
     },

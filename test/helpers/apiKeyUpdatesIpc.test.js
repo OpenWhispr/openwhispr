@@ -2078,3 +2078,81 @@ test("an in-person confirmation surfaces the control panel before asking", async
     ["sheet", 2],
   ]);
 });
+
+test("copying the notice keeps the gate closed until the member confirms, and only main supplies audit proof", async (t) => {
+  resetMeeting(t);
+  const policy = defaultDevicePolicy();
+  policy.meetings = { participantNotification: "required" };
+  setWorkspacePolicy({ success: true, managed: true, policy });
+  invoke("save-deepgram-key", "A");
+  const options = {
+    provider: "deepgram-realtime",
+    mode: "byok",
+    sessionId: "manual-notice",
+    noteId: 23,
+  };
+  const copied = [];
+  const started = [];
+  const responses = [0, 2, 0, 1];
+  const sheets = [];
+  target.clipboardManager = {
+    writeClipboard: async (text, sender) => {
+      assert.equal(sender, editor);
+      copied.push(text);
+      if (copied.length === 1) throw new Error("Clipboard is unavailable");
+      return { success: true };
+    },
+  };
+  target.meetingAuditLog = {
+    recordingStarted: (entry) => started.push(entry),
+    recordingStopped() {},
+    recordingRefused() {},
+  };
+  electron.dialog.showMessageBox = async (parent, dialog) => {
+    assert.equal(parent, windows[1]);
+    assert.equal(dialog.cancelId, 2);
+    assert.equal(dialog.defaultId, 2);
+    assert.equal(target._meetingAdmission.checkStart(editor, options).success, false);
+    sheets.push(dialog);
+    return { response: responses.shift() };
+  };
+  t.after(() => {
+    delete target.clipboardManager;
+    delete target.meetingAuditLog;
+    delete electron.dialog.showMessageBox;
+  });
+  assert.equal(
+    (await invoke("check-meeting-recording-start", options)).code,
+    "AUDIO_OPERATION_CANCELLED"
+  );
+  assert.equal(
+    (
+      await invoke("meeting-transcription-start", {
+        ...options,
+        notificationMethod: "told-by-member",
+      })
+    ).code,
+    "POLICY_PARTICIPANT_NOTIFICATION_REQUIRED"
+  );
+  assert.deepEqual(started, []);
+  assert.deepEqual(await invoke("check-meeting-recording-start", options), {
+    success: true,
+    notificationMethod: "told-by-member",
+  });
+  assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+  assert.deepEqual(started, [
+    {
+      sessionId: options.sessionId,
+      noteId: 23,
+      trigger: undefined,
+      notificationMethod: "told-by-member",
+    },
+  ]);
+  assert.equal(sheets.length, 4);
+  const notice = i18nMain.t("notes.meeting.participantNotice");
+  assert.ok(sheets.every((sheet) => sheet.detail.includes(notice)));
+  assert.ok(sheets[1].detail.includes(i18nMain.t("notes.meeting.participantNoticeCopyFailed")));
+  assert.ok(sheets[3].detail.includes(i18nMain.t("notes.meeting.participantNoticeCopied")));
+  assert.deepEqual(copied, [notice, notice]);
+  await invoke("meeting-transcription-stop", options.sessionId);
+});

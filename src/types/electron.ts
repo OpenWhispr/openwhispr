@@ -201,6 +201,9 @@ export type TranscriptionErrorCode =
 
 export type MeetingPromptVariant = "detected" | "starting" | "underway";
 
+export type MeetingRecordingAdmissionResult =
+  { success: true; notificationMethod?: "told-by-member" } | { success: false; code: string };
+
 export interface MeetingNotificationData {
   detectionId: string;
   source: string;
@@ -4032,7 +4035,7 @@ declare global {
       checkMeetingRecordingStart?: (options: {
         noteId: number | null;
         sessionId: string;
-      }) => Promise<{ success: true } | { success: false; code: string }>;
+      }) => Promise<MeetingRecordingAdmissionResult>;
       releaseMeetingRecordingStart?: (sessionId: string) => void;
       onMeetingRecordingAdmissionRevoked?: (
         callback: (data: {
@@ -4040,6 +4043,7 @@ declare global {
           code:
             | "POLICY_EXTERNAL_ATTENDEES"
             | "POLICY_ATTENDEES_UNVERIFIABLE"
+            | "POLICY_PARTICIPANT_NOTIFICATION_REQUIRED"
             | "AUDIO_OPERATION_CANCELLED";
         }) => void
       ) => () => void;

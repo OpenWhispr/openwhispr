@@ -76,6 +76,8 @@ function isValidPolicyShape(policy) {
         !Array.isArray(policy.meetings) &&
         (policy.meetings.transcriptionStart === undefined ||
           typeof policy.meetings.transcriptionStart === "string") &&
+        (policy.meetings.participantNotification === undefined ||
+          typeof policy.meetings.participantNotification === "string") &&
         (policy.meetings.externalAttendees === undefined ||
           typeof policy.meetings.externalAttendees === "string") &&
         (policy.meetings.internalDomains === undefined ||

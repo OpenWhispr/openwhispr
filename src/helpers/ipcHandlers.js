@@ -54,6 +54,10 @@ const {
   CONFIG_REFRESH_MS,
 } = require("./enterpriseIdentityManager");
 const { createMeetingRecordingAdmission } = require("./meetingRecordingAdmission");
+const {
+  requiresMeetingAdmission,
+  requiresParticipantNotification,
+} = require("./meetingRecordingPolicy");
 const { createEffectivePolicyManager } = require("./effectivePolicyManager");
 const { devicePolicyNetworkAllowed } = require("./devicePolicyNetwork");
 const {
@@ -8825,6 +8829,13 @@ class IPCHandlers {
       onChange: () => this._syncMeetingDetectorPolicy?.(),
       logger: debugLogger,
     });
+    const admissionDialogParent = (owner, signal) => {
+      const parent = BrowserWindow.fromWebContents(owner);
+      if (!parent || parent.isDestroyed() || signal.aborted) return null;
+      // A meeting hotkey may leave the panel behind the call.
+      if (parent === this.windowManager.controlPanelWindow) this.windowManager.showControlPanel();
+      return parent;
+    };
     this._meetingAdmission = createMeetingRecordingAdmission({
       getPolicy: () => this._audioFeaturePolicy.activeMeetingPolicy(),
       resolveFeature: () =>
@@ -8835,15 +8846,17 @@ class IPCHandlers {
       getEvent: (id) => this.databaseManager.getCalendarEventById(id),
       generation: () => tokenStore.getState().generation,
       confirmInternal: async (owner, signal) => {
-        const parent = BrowserWindow.fromWebContents(owner);
-        if (!parent || parent.isDestroyed() || signal.aborted) return false;
-        // A meeting hotkey leaves the panel behind the call; the question must be seen.
-        if (parent === this.windowManager.controlPanelWindow) this.windowManager.showControlPanel();
+        const parent = admissionDialogParent(owner, signal);
+        if (!parent) return false;
         const { response } = await require("electron").dialog.showMessageBox(parent, {
           type: "question",
           message: i18nMain.t("notes.meeting.internalAttendeesQuestion"),
           buttons: [
-            i18nMain.t("notes.meeting.internalAttendeesConfirm"),
+            i18nMain.t(
+              requiresParticipantNotification(this._audioFeaturePolicy.activeMeetingPolicy())
+                ? "common.continue"
+                : "notes.meeting.internalAttendeesConfirm"
+            ),
             i18nMain.t("common.cancel"),
           ],
           defaultId: 1,
@@ -8851,6 +8864,39 @@ class IPCHandlers {
           signal,
         });
         return response === 0;
+      },
+      confirmNotification: async (owner, signal) => {
+        const parent = admissionDialogParent(owner, signal);
+        if (!parent) return false;
+        const notice = i18nMain.t("notes.meeting.participantNotice");
+        let instructions = i18nMain.t("notes.meeting.participantNoticeInstructions");
+        while (!signal.aborted && !parent.isDestroyed()) {
+          const { response } = await require("electron").dialog.showMessageBox(parent, {
+            type: "question",
+            message: i18nMain.t("notes.meeting.participantNoticeRequired"),
+            detail: `${instructions}\n\n${notice}`,
+            buttons: [
+              i18nMain.t("notes.meeting.copyParticipantNotice"),
+              i18nMain.t("notes.meeting.confirmParticipantNotice"),
+              i18nMain.t("common.cancel"),
+            ],
+            defaultId: 2,
+            cancelId: 2,
+            signal,
+          });
+          if (signal.aborted || response !== 0) return !signal.aborted && response === 1;
+          try {
+            const copy = await this.clipboardManager.writeClipboard(notice, owner);
+            instructions = i18nMain.t(
+              copy.success && !copy.xwaylandOnly
+                ? "notes.meeting.participantNoticeCopied"
+                : "notes.meeting.participantNoticeCopyFailed"
+            );
+          } catch {
+            instructions = i18nMain.t("notes.meeting.participantNoticeCopyFailed");
+          }
+        }
+        return false;
       },
       onRevoked: ({ owner, sessionId }, code, active) => {
         if (active) this._stopMeetingForPolicy(code, sessionId);
@@ -13052,6 +13098,9 @@ class IPCHandlers {
             sessionId,
             noteId: transcriptionOptions.noteId,
             trigger: transcriptionOptions.startSource,
+            ...(admission.notificationMethod && {
+              notificationMethod: admission.notificationMethod,
+            }),
           });
         return result;
       },
@@ -13083,10 +13132,7 @@ class IPCHandlers {
             ? options.sessionId
             : crypto.randomUUID();
         // A refused start must not replace the owner's current recording in the lifecycle queue.
-        if (
-          (this._audioFeaturePolicy.activeMeetingPolicy()?.externalAttendees ?? "allowed") !==
-          "allowed"
-        ) {
+        if (requiresMeetingAdmission(this._audioFeaturePolicy.activeMeetingPolicy())) {
           const admission = this._meetingAdmission.checkStart(event.sender, {
             ...options,
             sessionId,

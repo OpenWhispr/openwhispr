@@ -34,6 +34,7 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   POLICY_MEETING_RECORDING_DISABLED: "notes.meeting.recordingDisabledByOrg",
   POLICY_EXTERNAL_ATTENDEES: "notes.meeting.externalAttendeesBlocked",
   POLICY_ATTENDEES_UNVERIFIABLE: "notes.meeting.externalAttendeesUnverifiable",
+  POLICY_PARTICIPANT_NOTIFICATION_REQUIRED: "notes.meeting.participantNoticeRequired",
   POLICY_EXTERNAL_ATTENDEES_STOPPED: "notes.meeting.externalAttendeesStopped",
   AUDIO_PURPOSE_REQUIRED: "notes.meeting.restrictedByOrg",
   POLICY_UNRESOLVABLE: "common.policyUnresolved",

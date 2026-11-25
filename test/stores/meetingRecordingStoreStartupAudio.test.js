@@ -744,3 +744,113 @@ test("a duplicate shares the pending confirmation and a different note supersede
   assert.deepEqual(prompts, [1, 2]);
   assert.equal(starts, 0);
 });
+
+async function noticeStartup(t) {
+  const captures = [];
+  installMicCaptureGlobals(t);
+  navigator.mediaDevices.getUserMedia = async () => {
+    captures.push("mic");
+  };
+  navigator.mediaDevices.getDisplayMedia = async () => {
+    captures.push("display");
+  };
+  const api = {
+    checkSystemAudioAccess: async () => {
+      captures.push("access");
+      return LOOPBACK;
+    },
+    meetingTranscriptionStart: async () => {
+      captures.push("main");
+      return { success: false };
+    },
+  };
+  installBrowserGlobals(t, { window: { electronAPI: api } });
+  const vite = await createRendererServer(t, { cachePrefix: "meeting-notice-bridge-" });
+  const { startRecording, useMeetingRecordingStore } = await vite.ssrLoadModule(
+    "/stores/meetingRecordingStore.ts"
+  );
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { defaultDevicePolicy } = require("../../src/helpers/managedDevicePolicy");
+  const policy = defaultDevicePolicy();
+  const setMode = (participantNotification) =>
+    usePolicyStore.setState({
+      status: "managed",
+      policy: { ...policy, meetings: { participantNotification } },
+    });
+  setMode("required");
+  return { api, captures, setMode, startRecording, useMeetingRecordingStore };
+}
+
+test("required notice keeps capture off with an absent, failing or outdated admission bridge", async (t) => {
+  const { api, captures, startRecording, useMeetingRecordingStore } = await noticeStartup(t);
+  for (const bridge of [
+    undefined,
+    async () => {
+      throw new Error("unavailable");
+    },
+    async () => ({ success: true }),
+  ]) {
+    api.checkMeetingRecordingStart = bridge;
+    assert.equal(await startRecording(START_ARGS), false);
+    assert.equal(
+      useMeetingRecordingStore.getState().error,
+      "POLICY_PARTICIPANT_NOTIFICATION_REQUIRED"
+    );
+    assert.equal(useMeetingRecordingStore.getState().isRecording, false);
+    assert.deepEqual(captures, []);
+  }
+});
+
+test("a notice newly required before capture releases the note whether renderer or main observes it first", async (t) => {
+  const { api, captures, setMode, startRecording } = await noticeStartup(t);
+  setMode("off");
+  api.checkMeetingRecordingStart = async () => ({ success: true });
+  api.checkSystemAudioAccess = async () => {
+    setMode("required");
+    return LOOPBACK;
+  };
+  assert.equal(await startRecording(START_ARGS), false);
+  assert.deepEqual(captures, []);
+
+  const checking = Promise.withResolvers();
+  const access = Promise.withResolvers();
+  let revoke;
+  let sessionId;
+  api.onMeetingRecordingAdmissionRevoked = (callback) => {
+    revoke = callback;
+    return () => {};
+  };
+  api.checkMeetingRecordingStart = (options) => {
+    sessionId = options.sessionId;
+    return Promise.resolve({ success: true });
+  };
+  setMode("off");
+  api.checkSystemAudioAccess = () => {
+    checking.resolve();
+    return access.promise;
+  };
+  const revoked = startRecording(START_ARGS);
+  await checking.promise;
+  revoke({ sessionId, code: "POLICY_PARTICIPANT_NOTIFICATION_REQUIRED" });
+  access.resolve(LOOPBACK);
+  assert.equal(await revoked, false, "a revoked start must release its note");
+  assert.deepEqual(captures, []);
+});
+
+test("a required notice keeps the timer and capture off until the member confirms", async (t) => {
+  const { api, captures, startRecording, useMeetingRecordingStore } = await noticeStartup(t);
+  const requested = Promise.withResolvers();
+  const answer = Promise.withResolvers();
+  api.checkMeetingRecordingStart = () => {
+    requested.resolve();
+    return answer.promise;
+  };
+  const starting = startRecording(START_ARGS);
+  await requested.promise;
+  assert.equal(useMeetingRecordingStore.getState().recordingStartedAt, null);
+  assert.deepEqual(captures, []);
+  answer.resolve({ success: true, notificationMethod: "told-by-member" });
+  await starting;
+  assert.ok(captures.includes("main"));
+  assert.ok(captures.includes("display"));
+});

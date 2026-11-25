@@ -59,6 +59,8 @@ export interface OrgPolicy {
   meetings?: {
     /** Absent means automatic. Unknown values require a manual start. */
     transcriptionStart?: string;
+    /** Absent means off. Unknown strings require participant notification. */
+    participantNotification?: string;
     /** Absent means allowed. Unknown values require an internal invite. */
     externalAttendees?: string;
     internalDomains?: string[];

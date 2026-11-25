@@ -186,10 +186,8 @@ function createMeetingAuditLog({
           trigger: entry.trigger ?? null,
           reason: entry.reason ?? null,
           durationSec: entry.durationSec ?? null,
-          // Filled in by participant notification (#3031) and the outside-guest
-          // policy (#3025), which define them.
-          participantsNotified: null,
-          notificationMethod: null,
+          participantsNotified: entry.notificationMethod ? true : null,
+          notificationMethod: entry.notificationMethod ?? null,
           externalAttendees: null,
           appVersion,
           deviceUser,
@@ -248,7 +246,7 @@ function createMeetingAuditLog({
     });
   }
 
-  function recordingStarted({ sessionId, noteId, trigger }) {
+  function recordingStarted({ sessionId, noteId, trigger, notificationMethod }) {
     if (!isEnabled()) return;
     const startedAt = now();
     const open = {
@@ -262,7 +260,11 @@ function createMeetingAuditLog({
     session = open;
     recoverInterrupted();
     enqueue(async () => {
-      await append(open.dir, startedAt, { event: "recording.started", ...open });
+      await append(open.dir, startedAt, {
+        event: "recording.started",
+        ...open,
+        notificationMethod: notificationMethod === "told-by-member" ? notificationMethod : null,
+      });
       await writeMarker(open);
     });
     checkpointTimer = setInterval(() => {
