@@ -41,7 +41,6 @@ function orgPolicyKeyPaths() {
 test("merging keeps every OrgPolicy field", () => {
   const policy = JSON.parse(require("./fixtures/admin-mdm-device-values.json").Policy);
   policy.features.memoryEnabled = true;
-  policy.meetings.participantNotification = "required";
   for (const key of orgPolicyKeyPaths())
     assert.ok(
       key.reduce((value, part) => value?.[part], policy) !== undefined,
@@ -589,4 +588,15 @@ test("notification defaults off and either policy can require it, including a fu
       assert.equal(mergePolicies(sources).meetings.participantNotification, "required");
     }
   }
+});
+
+test("an MDM-required notice survives the device reader and a workspace that leaves it off", () => {
+  const device = normalizeDeviceValues(require("./fixtures/admin-mdm-device-values.json"));
+  const workspace = defaultDevicePolicy();
+  workspace.meetings = { participantNotification: "off" };
+  for (const result of [
+    resolveEffectivePolicy(device, null, guest),
+    resolveEffectivePolicy(device, { success: true, managed: true, policy: workspace }, member),
+  ])
+    assert.equal(result.policy.meetings.participantNotification, "required");
 });

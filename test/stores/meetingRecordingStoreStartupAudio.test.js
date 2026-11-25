@@ -782,23 +782,29 @@ async function noticeStartup(t) {
 }
 
 test("required notice keeps capture off with an absent, failing or outdated admission bridge", async (t) => {
-  const { api, captures, startRecording, useMeetingRecordingStore } = await noticeStartup(t);
+  const { api, captures, setMode, startRecording, useMeetingRecordingStore } =
+    await noticeStartup(t);
+  const refused = async (bridge, code) => {
+    api.checkMeetingRecordingStart = bridge;
+    useMeetingRecordingStore.setState({ error: null });
+    assert.equal(await startRecording(START_ARGS), false);
+    assert.equal(useMeetingRecordingStore.getState().error, code);
+    assert.equal(useMeetingRecordingStore.getState().isRecording, false);
+    assert.equal(useMeetingRecordingStore.getState().recordingStartedAt, null);
+    assert.deepEqual(captures, []);
+  };
   for (const bridge of [
     undefined,
     async () => {
       throw new Error("unavailable");
     },
     async () => ({ success: true }),
-  ]) {
-    api.checkMeetingRecordingStart = bridge;
-    assert.equal(await startRecording(START_ARGS), false);
-    assert.equal(
-      useMeetingRecordingStore.getState().error,
-      "POLICY_PARTICIPANT_NOTIFICATION_REQUIRED"
-    );
-    assert.equal(useMeetingRecordingStore.getState().isRecording, false);
-    assert.deepEqual(captures, []);
-  }
+    async () => ({ success: false }),
+  ])
+    await refused(bridge, "POLICY_PARTICIPANT_NOTIFICATION_REQUIRED");
+  // A refusal without a code is still a refusal when no notice is required.
+  setMode("off");
+  await refused(async () => ({ success: false }), "POLICY_ATTENDEES_UNVERIFIABLE");
 });
 
 test("a notice newly required before capture releases the note whether renderer or main observes it first", async (t) => {

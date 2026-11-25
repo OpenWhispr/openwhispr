@@ -2079,6 +2079,37 @@ test("an in-person confirmation surfaces the control panel before asking", async
   ]);
 });
 
+test("the in-person question answers yes, and says continue when a notice follows", async (t) => {
+  const policy = defaultDevicePolicy();
+  target.databaseManager = { getNote: () => ({ calendar_event_id: null }) };
+  target.windowManager = { controlPanelWindow: windows[1], showControlPanel() {} };
+  const dialogs = [];
+  electron.dialog.showMessageBox = async (_parent, dialog) => {
+    dialogs.push(dialog);
+    return { response: 1 };
+  };
+  t.after(() => {
+    delete target.databaseManager;
+    delete target.windowManager;
+    delete electron.dialog.showMessageBox;
+  });
+  for (const participantNotification of ["off", "required"]) {
+    policy.meetings = { externalAttendees: "blocked", participantNotification };
+    setWorkspacePolicy({ success: true, managed: true, policy });
+    await invoke("check-meeting-recording-start", {
+      sessionId: participantNotification,
+      noteId: 41,
+    });
+  }
+  assert.deepEqual(
+    dialogs.map(({ buttons, noLink }) => [buttons[0], noLink]),
+    [
+      [i18nMain.t("notes.meeting.internalAttendeesConfirm"), true],
+      [i18nMain.t("notes.meeting.internalAttendeesContinue"), true],
+    ]
+  );
+});
+
 test("copying the notice keeps the gate closed until the member confirms, and only main supplies audit proof", async (t) => {
   resetMeeting(t);
   const policy = defaultDevicePolicy();
@@ -2093,14 +2124,14 @@ test("copying the notice keeps the gate closed until the member confirms, and on
   };
   const copied = [];
   const started = [];
-  const responses = [0, 2, 0, 1];
+  const responses = [0, 2, 0, 0, 1];
   const sheets = [];
   target.clipboardManager = {
     writeClipboard: async (text, sender) => {
       assert.equal(sender, editor);
       copied.push(text);
       if (copied.length === 1) throw new Error("Clipboard is unavailable");
-      return { success: true };
+      return { success: true, xwaylandOnly: copied.length === 2 };
     },
   };
   target.meetingAuditLog = {
@@ -2111,7 +2142,8 @@ test("copying the notice keeps the gate closed until the member confirms, and on
   electron.dialog.showMessageBox = async (parent, dialog) => {
     assert.equal(parent, windows[1]);
     assert.equal(dialog.cancelId, 2);
-    assert.equal(dialog.defaultId, 2);
+    assert.equal(dialog.defaultId, 0);
+    assert.equal(dialog.noLink, true);
     assert.equal(target._meetingAdmission.checkStart(editor, options).success, false);
     sheets.push(dialog);
     return { response: responses.shift() };
@@ -2148,11 +2180,12 @@ test("copying the notice keeps the gate closed until the member confirms, and on
       notificationMethod: "told-by-member",
     },
   ]);
-  assert.equal(sheets.length, 4);
+  assert.equal(sheets.length, 5);
   const notice = i18nMain.t("notes.meeting.participantNotice");
   assert.ok(sheets.every((sheet) => sheet.detail.includes(notice)));
   assert.ok(sheets[1].detail.includes(i18nMain.t("notes.meeting.participantNoticeCopyFailed")));
-  assert.ok(sheets[3].detail.includes(i18nMain.t("notes.meeting.participantNoticeCopied")));
-  assert.deepEqual(copied, [notice, notice]);
+  assert.ok(sheets[3].detail.includes(i18nMain.t("notes.meeting.participantNoticeCopiedLimited")));
+  assert.ok(sheets[4].detail.includes(i18nMain.t("notes.meeting.participantNoticeCopied")));
+  assert.deepEqual(copied, [notice, notice, notice]);
   await invoke("meeting-transcription-stop", options.sessionId);
 });

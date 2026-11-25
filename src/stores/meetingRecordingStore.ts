@@ -1112,7 +1112,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       requiresParticipantNotification(meetings()) &&
       !(admission?.success && admission.notificationMethod === "told-by-member");
     const refusalCode =
-      admission.success === false ? admission.code : missingNotice() ? noticeRequired : null;
+      admission.success === false
+        ? admission.code || unavailableAdmission().code
+        : missingNotice()
+          ? noticeRequired
+          : null;
     const refuseAdmission = (reason: string): void => {
       recordingDisabled = true;
       reportMeetingError(reason);

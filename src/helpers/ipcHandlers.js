@@ -8854,13 +8854,14 @@ class IPCHandlers {
           buttons: [
             i18nMain.t(
               requiresParticipantNotification(this._audioFeaturePolicy.activeMeetingPolicy())
-                ? "common.continue"
+                ? "notes.meeting.internalAttendeesContinue"
                 : "notes.meeting.internalAttendeesConfirm"
             ),
             i18nMain.t("common.cancel"),
           ],
           defaultId: 1,
           cancelId: 1,
+          noLink: true,
           signal,
         });
         return response === 0;
@@ -8880,17 +8881,21 @@ class IPCHandlers {
               i18nMain.t("notes.meeting.confirmParticipantNotice"),
               i18nMain.t("common.cancel"),
             ],
-            defaultId: 2,
+            defaultId: 0,
             cancelId: 2,
+            noLink: true,
             signal,
           });
           if (signal.aborted || response !== 0) return !signal.aborted && response === 1;
           try {
             const copy = await this.clipboardManager.writeClipboard(notice, owner);
+            // Native Wayland apps can't paste a copy that only XWayland holds.
             instructions = i18nMain.t(
-              copy.success && !copy.xwaylandOnly
-                ? "notes.meeting.participantNoticeCopied"
-                : "notes.meeting.participantNoticeCopyFailed"
+              !copy.success
+                ? "notes.meeting.participantNoticeCopyFailed"
+                : copy.xwaylandOnly
+                  ? "notes.meeting.participantNoticeCopiedLimited"
+                  : "notes.meeting.participantNoticeCopied"
             );
           } catch {
             instructions = i18nMain.t("notes.meeting.participantNoticeCopyFailed");
