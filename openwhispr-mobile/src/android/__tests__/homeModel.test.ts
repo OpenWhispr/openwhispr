@@ -10,6 +10,7 @@ import {
   missingPermissions,
   PERMISSION_ICON,
   relativeDate,
+  uploadProgress,
   wordSafeLines,
 } from '../home/model';
 
@@ -143,6 +144,40 @@ it('lets a label wrap only between words, except in Chinese, Japanese and Korean
   expect(wordSafeLines('Wörterbuch')).toBe(1);
   expect(wordSafeLines('1分あたりの単語')).toBeUndefined();
   expect(wordSafeLines('連續天數')).toBeUndefined();
+});
+
+describe('uploadProgress', () => {
+  it('starts at zero and rises gradually, never reaching the end on its own', () => {
+    const at = (elapsedMs: number) =>
+      uploadProgress({ elapsedMs, sizeBytes: 500_000, done: false });
+    expect(at(0)).toBe(0);
+    expect(at(1000)).toBeGreaterThan(0.1);
+    expect(at(1000)).toBeLessThan(0.3);
+    expect(at(3000)).toBeGreaterThan(at(1000));
+    expect(at(600_000)).toBeLessThanOrEqual(0.9);
+  });
+  it('moves more slowly for a bigger file', () => {
+    const small = uploadProgress({ elapsedMs: 5000, sizeBytes: 200_000, done: false });
+    const big = uploadProgress({ elapsedMs: 5000, sizeBytes: 20_000_000, done: false });
+    expect(big).toBeLessThan(small);
+  });
+  it('enters the last stretch while tidying and never goes backwards', () => {
+    const before = uploadProgress({ elapsedMs: 60_000, sizeBytes: 100_000, done: false });
+    const tidying = uploadProgress({
+      elapsedMs: 60_000,
+      sizeBytes: 100_000,
+      cleaningMs: 0,
+      done: false,
+    });
+    expect(tidying).toBeGreaterThanOrEqual(0.75);
+    expect(tidying).toBeGreaterThanOrEqual(before);
+    expect(
+      uploadProgress({ elapsedMs: 60_000, sizeBytes: 100_000, cleaningMs: 600_000, done: false }),
+    ).toBeLessThan(1);
+  });
+  it('is full once the text has arrived', () => {
+    expect(uploadProgress({ elapsedMs: 10, done: true })).toBe(1);
+  });
 });
 
 it('has every Home string in every language', () => {

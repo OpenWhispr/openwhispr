@@ -147,10 +147,6 @@ jest.mock('@/android/pipeline', () => ({
 }));
 jest.mock('@/hooks/useAppInit', () => ({ useAppInit: jest.fn() }));
 const mockPickFile = jest.fn();
-const mockStartUpload = jest.fn();
-jest.mock('@/android/notes/start', () => ({
-  startUpload: (...args: unknown[]) => mockStartUpload(...args),
-}));
 const mockProcessUpload = jest.fn();
 const mockSaveUpload = jest.fn();
 const mockSaveFailedUpload = jest.fn();
@@ -320,14 +316,130 @@ beforeEach(() => {
   };
 });
 
-it('opens the Notes upload flow, which makes the file a note', async () => {
+it('aborts an initial upload when Home loses focus, without saving a late result', async () => {
+  let signal: AbortSignal | undefined;
+  let finish!: (value: unknown) => void;
+  mockProcessUpload.mockImplementationOnce((_route, options) => {
+    signal = options.signal;
+    return new Promise((resolve) => {
+      finish = resolve;
+    });
+  });
   render(<AndroidHome />);
+  const onFocus = jest.mocked(useFocusEffect).mock.calls.at(-1)![0];
+  let onBlur: ReturnType<typeof onFocus>;
+  act(() => {
+    onBlur = onFocus();
+  });
   await act(async () => fireEvent.press(screen.getByText('uploadAudio')));
-  expect(mockStartUpload).toHaveBeenCalledWith({});
+  expect(screen.getByText('uploadingPercent')).toBeTruthy();
+  // The buttons keep their words while busy.
+  expect(screen.getByText('uploadAudio')).toBeTruthy();
+  expect(screen.getByText('dictate')).toBeTruthy();
+  expect(screen.getByText('input.wav')).toBeTruthy();
+  expect(signal?.aborted).toBe(false);
+  act(() => {
+    if (typeof onBlur === 'function') onBlur();
+  });
+  const abortedOnBlur = signal?.aborted;
+  await act(async () => {
+    finish({
+      text: 'Late result',
+      originalText: 'Late result',
+      transcription: { provider: 'byok' },
+    });
+  });
+  expect(abortedOnBlur).toBe(true);
+  expect(screen.queryByText('uploadingPercent')).toBeNull();
+  expect(screen.queryByText('writingItUpMinute')).toBeNull();
+  expect(mockSaveUpload).not.toHaveBeenCalled();
+  expect(mockSaveFailedUpload).not.toHaveBeenCalled();
+});
+
+it('does not start processing a picker result after Home loses focus', async () => {
+  let finishPicker!: (value: unknown) => void;
+  mockPickFile.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishPicker = resolve;
+      }),
+  );
+  mockProcessUpload.mockResolvedValueOnce({
+    text: 'Unexpected result',
+    transcription: { provider: 'byok' },
+  });
+  render(<AndroidHome />);
+  const onFocus = jest.mocked(useFocusEffect).mock.calls.at(-1)![0];
+  let onBlur: ReturnType<typeof onFocus>;
+  act(() => {
+    onBlur = onFocus();
+  });
+  await act(async () => fireEvent.press(screen.getByText('uploadAudio')));
+  act(() => {
+    if (typeof onBlur === 'function') onBlur();
+  });
+  await act(async () => {
+    finishPicker({
+      canceled: false,
+      assets: [{ uri: 'file://cache/input.wav', name: 'input.wav', size: 64044 }],
+    });
+  });
+  expect(mockProcessUpload).not.toHaveBeenCalled();
+  expect(mockSaveUpload).not.toHaveBeenCalled();
+  expect(mockSaveFailedUpload).not.toHaveBeenCalled();
+  expect(screen.queryByText('uploadingPercent')).toBeNull();
+  expect(screen.queryByText('writingItUpMinute')).toBeNull();
+});
+
+it('ignores a deferred Cloud upload grant from an earlier Home visit', async () => {
+  mockUser = { id: 'a' };
+  mockUploadProvider = 'cloud';
+  let grant!: () => void;
+  mockRegister.mockImplementationOnce(
+    ({ feature }) =>
+      new Promise<void>((resolve) => {
+        grant = () => {
+          feature();
+          resolve();
+        };
+      }),
+  );
+  render(<AndroidHome />);
+  const onFocus = jest.mocked(useFocusEffect).mock.calls.at(-1)![0];
+  let onBlur: ReturnType<typeof onFocus>;
+  act(() => {
+    onBlur = onFocus();
+  });
+  await act(async () => fireEvent.press(screen.getByText('uploadAudio')));
+  act(() => {
+    if (typeof onBlur === 'function') onBlur();
+    onFocus();
+  });
+  await act(async () => grant());
   expect(mockPickFile).not.toHaveBeenCalled();
+  expect(mockProcessUpload).not.toHaveBeenCalled();
   expect(mockSaveUpload).not.toHaveBeenCalled();
 });
 
+it('allows a new Cloud upload after returning to Home', async () => {
+  mockUser = { id: 'a' };
+  mockUploadProvider = 'cloud';
+  render(<AndroidHome />);
+  const onFocus = jest.mocked(useFocusEffect).mock.calls.at(-1)![0];
+  act(() => {
+    const onBlur = onFocus();
+    if (typeof onBlur === 'function') onBlur();
+    onFocus();
+  });
+  await act(async () => fireEvent.press(screen.getByText('uploadAudio')));
+  expect(mockSaveUpload).toHaveBeenCalledWith(
+    expect.objectContaining({ text: 'Fresh upload', provider: 'cloud' }),
+  );
+  // The finished bar stays full for a moment before the card goes.
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 600)));
+  expect(screen.queryByText('uploadingPercent')).toBeNull();
+  expect(screen.queryByText('writingItUpMinute')).toBeNull();
+});
 it('shows unavailable account counts while loading rather than local counts presented as account totals', () => {
   mockUser = { id: 'a' };
   mockSync = true;
@@ -409,6 +521,7 @@ describe('history retry controls', () => {
     expect(screen.getByText('writingItUpMinute')).toBeTruthy();
     await act(async () => fireEvent.press(screen.getByLabelText('cancelUpload')));
     expect(signal?.aborted).toBe(true);
+    expect(screen.queryByText('uploadingPercent')).toBeNull();
     expect(screen.queryByText('writingItUpMinute')).toBeNull();
     expect(screen.getByText('Unreadable audio')).toBeTruthy();
     // The notch slides back rather than vanishing, then goes once it is in.
@@ -473,6 +586,7 @@ it('shows connection recovery guidance when a saved upload retry cannot resolve 
     'errorTitle',
     'No internet connection. Check your connection and try again.',
   );
+  expect(screen.queryByText('uploadingPercent')).toBeNull();
   expect(screen.queryByText('writingItUpMinute')).toBeNull();
   expect(screen.getByLabelText('retry')).toBeTruthy();
   alert.mockRestore();
@@ -537,6 +651,13 @@ it('copies a Try it dictation to the clipboard and says so at the bottom', async
   fireEvent.press(screen.getByText('notch-finished'));
   expect(screen.queryByText('copiedAddedToHistory')).toBeNull();
   expect(screen.getByText('dictate')).toBeTruthy();
+});
+
+it('says Added to History once an upload is written up', async () => {
+  render(<AndroidHome />);
+  await act(async () => fireEvent.press(screen.getByText('uploadAudio')));
+  expect(mockSaveUpload).toHaveBeenCalled();
+  expect(screen.getByText('addedToHistory', { includeHiddenElements: true })).toBeTruthy();
 });
 
 describe('bubble card buttons by screen width', () => {
