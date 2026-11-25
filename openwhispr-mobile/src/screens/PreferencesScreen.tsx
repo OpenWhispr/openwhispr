@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Alert, Platform, Pressable } from 'react-native';
 import { MenuView } from '@react-native-menu/menu';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
 import { SettingsSwitch } from '@/components/ui/SettingsSwitch';
@@ -12,6 +12,11 @@ import { useConfigStore } from '@/store/useConfigStore';
 import { useConfigToggle } from '@/hooks/useConfigToggle';
 import { DEFAULT_LANGUAGE, getLanguage } from '@/lib/languages';
 import { toneLabel, DEFAULT_KEYBOARD_TONE } from '@/lib/keyboardTone';
+import { translationLabel } from '@/lib/keyboardTranslation';
+import {
+  keyboardCanTranslate,
+  reconcileKeyboardTranslationFromAppGroup,
+} from '@/lib/keyboardTranslationSync';
 import { getDictationAgentName } from '@/lib/dictationAgent';
 import {
   KEYBOARD_TYPING_LANGUAGES,
@@ -101,6 +106,14 @@ export default function PreferencesScreen() {
   const autoLearn = config?.autoLearnCorrections ?? true;
   const language = getLanguage(config?.preferredLanguage ?? DEFAULT_LANGUAGE);
   const keyboardTone = config?.keyboardTone ?? DEFAULT_KEYBOARD_TONE;
+  const translationTarget = config?.keyboardTranslationTarget ?? null;
+  // The keyboard can change the language while OpenWhispr stays in front (dictating into the app
+  // itself), which no foreground event reports, so take its choice whenever this screen shows.
+  useFocusEffect(
+    useCallback(() => {
+      reconcileKeyboardTranslationFromAppGroup().catch(() => {});
+    }, []),
+  );
   const agentName = config ? getDictationAgentName(config) : 'OpenWhispr';
   const handleToggleAutoLearn = useConfigToggle('autoLearnCorrections');
   const supportsDirectDictation =
@@ -160,7 +173,7 @@ export default function PreferencesScreen() {
             icon="mic"
             mdIcon="Mic"
             title="Dictate without opening OpenWhispr"
-            description="Beta. Records in the keyboard for OpenWhispr Cloud. Bring Your Own Key, Local Mode, a custom cleanup prompt and the assistant still open the app, and so does dictating while music plays or with Bluetooth audio."
+            description="Beta. Records in the keyboard for OpenWhispr Cloud, and on this iPhone with Parakeet in Local Mode, typed as transcribed without cleanup. Bring Your Own Key, Whisper, a custom cleanup prompt and the assistant still open the app, and so does dictating while music plays or with Bluetooth audio."
             rightElement={
               <SettingsSwitch
                 accessibilityLabel="Dictate without opening OpenWhispr"
@@ -180,6 +193,17 @@ export default function PreferencesScreen() {
           subtitle={toneLabel(keyboardTone)}
           onPress={() => router.push('/(account)/keyboard-tone')}
         />
+        {keyboardCanTranslate() ? (
+          <SettingsRow
+            iconStyle="line"
+            icon="character.bubble"
+            mdIcon="Languages"
+            title="Translate dictation"
+            description="Type keyboard dictation in another language"
+            subtitle={translationTarget ? translationLabel(translationTarget) : 'Off'}
+            onPress={() => router.push('/(account)/keyboard-translation')}
+          />
+        ) : null}
         <SettingsRow
           iconStyle="line"
           icon="person.wave.2"

@@ -184,5 +184,22 @@
     ],
     "text": "",
     "expected": ""
+  },
+  {
+    "name": "variables",
+    "now": [2026, 11, 18, 9, 5],
+    "locale": "en-US",
+    "snippets": [
+      {
+        "trigger": "stamp",
+        "replacement": "Logged {{date}} ({{locale}})"
+      },
+      {
+        "trigger": "raw",
+        "replacement": "{{clipboard}} {{Date}} {{ date }} {date} {{{date}}}"
+      }
+    ],
+    "text": "stamp, raw, then put {{date}} in the template",
+    "expected": "Logged 11/18/2026 (en-US), {{clipboard}} {{Date}} {{ date }} {date} {11/18/2026}, then put {{date}} in the template"
   }
 ]

@@ -148,6 +148,24 @@ private struct BackgroundUploadRecoveryTests {
     precondition(resolvedBody == "{\"text\":\"Live dictation\"}")
     precondition(defaults.string(forKey: "keyboard_pending_transcript") == "Old result")
 
+    // A dictation the server already cleaned but that still has a translation to run stays in the
+    // orphan slot, marked cleaned, for the app's recovery; a raw one clears that mark.
+    precondition(defaults.string(forKey: "keyboard_orphaned_transcript_cleaned_job_id") == nil)
+    defaults.set("es", forKey: "keyboard_recording_translation")
+    defaults.set("translated-job", forKey: "keyboard_recording_translation_job_id")
+    RecoveryTestEnvironment.deliver("{\"text\":\"Cleaned dictation\",\"cleanupApplied\":true}", jobId: "translated-job")
+    precondition(defaults.string(forKey: "keyboard_pending_transcript") == "Cleaned dictation")
+    precondition(defaults.string(forKey: "keyboard_orphaned_raw_transcript") == "Cleaned dictation")
+    precondition(defaults.string(forKey: "keyboard_orphaned_raw_transcript_job_id") == "translated-job")
+    precondition(defaults.string(forKey: "keyboard_orphaned_transcript_cleaned_job_id") == "translated-job")
+    RecoveryTestEnvironment.deliver("{\"text\":\"Raw dictation\"}", jobId: "raw-job")
+    precondition(defaults.string(forKey: "keyboard_orphaned_raw_transcript_job_id") == "raw-job")
+    precondition(defaults.string(forKey: "keyboard_orphaned_transcript_cleaned_job_id") == nil)
+    // The snapshot belongs to another job: a cleaned result is not kept.
+    RecoveryTestEnvironment.deliver("{\"text\":\"Other cleaned\",\"cleanupApplied\":true}", jobId: "other-job")
+    precondition(defaults.string(forKey: "keyboard_orphaned_raw_transcript") == nil)
+    precondition(defaults.string(forKey: "keyboard_orphaned_transcript_cleaned_job_id") == nil)
+
     subscriber.application?(
       UIApplication.shared, handleEventsForBackgroundURLSession: "com.openwhispr.background-uploader",
       completionHandler: { completions += 1 }

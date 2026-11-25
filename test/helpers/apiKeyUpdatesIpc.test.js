@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
-const { EventEmitter, once } = require("node:events");
+const { once } = require("node:events");
 const { BYOK_API_KEYS } = require("../../src/config/secretKeys");
 const { deferred } = require("./harness/deferred");
 
@@ -28,7 +28,7 @@ const handlers = new Map();
 const eventHandlers = new Map();
 const keys = new Map();
 const notifications = [];
-const editor = Object.assign(new EventEmitter(), { id: 1 });
+const editor = { id: 1 };
 const windows = [1, 2, 3].map((id) => ({
   id,
   isDestroyed: () => id === 3,
@@ -129,6 +129,7 @@ const streamingModules = [
   "./assemblyAiStreaming",
   "./deepgramStreaming",
   "./cortiStreaming",
+  "./elevenLabsStreaming",
   "./openaiRealtimeStreaming",
 ];
 const originalLoad = Module._load;
@@ -1178,16 +1179,18 @@ test("an unknown realtime provider still fails closed", async () => {
 });
 
 // provider, the saver of the key both meeting streams authenticate with, the mode,
-// and the session token that key mints. Corti and Tinfoil read their saved
-// credentials whatever the mode says.
+// and the session token that key mints. Corti, Tinfoil and ElevenLabs read their
+// saved credentials whatever the mode says.
 const MEETING = [
   ["openai-realtime", "save-openai-key", "byok", (key) => key],
   ["assemblyai-realtime", "save-assemblyai-key", "byok", (key) => `token-${key}`],
   ["deepgram-realtime", "save-deepgram-key", "byok", (key) => key],
   ["corti-realtime", "save-corti-client-secret", "byok", (key) => `token-${key}`],
   ["tinfoil-realtime", "save-tinfoil-key", "byok", (key) => key],
+  ["elevenlabs-realtime", "save-elevenlabs-key", "byok", (key) => key],
   ["corti-realtime", "save-corti-client-secret", "openwhispr", (key) => `token-${key}`],
   ["tinfoil-realtime", "save-tinfoil-key", "openwhispr", (key) => key],
+  ["elevenlabs-realtime", "save-elevenlabs-key", "openwhispr", (key) => key],
 ];
 const meetingStreams = () => [target._meetingMicStreaming, target._meetingSystemStreaming];
 const assertMeetingStreams = ([mic, system]) => {
@@ -1332,9 +1335,9 @@ for (const [provider, saveChannel, mode] of MEETING.filter(([name]) =>
   });
 }
 
-// Corti and Tinfoil never open a managed connection.
+// Corti, Tinfoil and ElevenLabs never open a managed connection.
 for (const [provider, saveChannel] of MEETING.filter(
-  ([name]) => !["corti-realtime", "tinfoil-realtime"].includes(name)
+  ([name]) => !["corti-realtime", "tinfoil-realtime", "elevenlabs-realtime"].includes(name)
 )) {
   test(`${provider}: a key save leaves a managed prepared meeting in place`, async (t) => {
     withManagedApi(t);
@@ -1377,6 +1380,26 @@ test("a prepare after a mid-meeting renewal leaves the live meeting alone", asyn
     alreadyPrepared: true,
   });
   assertMeetingStreams(renewed);
+});
+
+test("a fatal provider error ends the meeting once without reconnecting", async (t) => {
+  resetMeeting(t);
+  invoke("save-deepgram-key", "A");
+  const options = { provider: "deepgram-realtime", mode: "byok" };
+  await invoke("meeting-transcription-start", options);
+  const live = meetingStreams();
+  const notified = notifications.length;
+  // A used-up quota sits behind both sockets.
+  const error = Object.assign(new Error("Quota used up"), { fatal: true });
+  for (const streaming of live) streaming.onConnectionLost(error);
+  await new Promise(setImmediate);
+  assertMeetingStreams(live);
+  assert.deepEqual(
+    notifications
+      .slice(notified)
+      .filter(([, channel]) => channel === "meeting-transcription-fatal-error"),
+    [[2, "meeting-transcription-fatal-error", "Quota used up"]]
+  );
 });
 
 // Main's base (past the note's stored ids), not the renderer's, numbers the live
