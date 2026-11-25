@@ -31,7 +31,7 @@ export function LocalMeetingRecording({
     <RecordingView
       status="live"
       elapsedSeconds={elapsedSeconds}
-      title={title?.trim() || notesT('recordMeeting')}
+      title={title?.trim() || notesT('untitled')}
       chips={count != null && count > 1 ? [notesT('people', { count })] : []}
       meta={noteId != null ? <RecordingNoteChips noteId={noteId} /> : undefined}
       rawNotes={rawNotes}
