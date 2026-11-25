@@ -149,6 +149,8 @@ final class Harness {
   /// The account the shared session belongs to.
   var cookieUser = "u1"
   var documentID: UUID? = UUID()
+  /// The text before the cursor, as `readContextBefore` reports it.
+  var contextBefore: String?
   let transcriber = FakeLocalTranscriber()
   /// False for a keyboard where Parakeet can't run (takes effect on the next process).
   var transcriberAvailable = true
@@ -199,6 +201,7 @@ final class Harness {
       localTranscriber: transcriberAvailable ? transcriber : nil
     ))
     machine.readDocumentID = { [unowned self] in self.documentID }
+    machine.readContextBefore = { [unowned self] in self.contextBefore }
     machine.onText = { [unowned self] in self.texts.append($0) }
     machine.onStateChange = { [unowned self] in self.states.append($0) }
     machine.onLevel = { [unowned self] in self.levels.append($0) }

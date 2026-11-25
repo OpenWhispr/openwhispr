@@ -1495,6 +1495,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     syncTypingSessionWithField()
     syncShiftWithContextIfNeeded()
     refreshFieldAwareKeys()
+    if isKeyboardOnScreen, Self.directOwner === self { directDictation?.fieldChanged() }
     _ = consumePendingTranscriptIfAvailable(trigger: "textDidChange")
   }
 
@@ -4891,6 +4892,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     recordButton.removeTarget(self, action: #selector(handleDarwinRecordTapped), for: .touchUpInside)
     recordButton.removeTarget(self, action: #selector(handleStopRecordingTapped), for: .touchUpInside)
     recordButton.removeTarget(self, action: #selector(handleDirectRecordTapped), for: .touchUpInside)
+    recordButton.removeTarget(self, action: #selector(handleInsertHeldTapped), for: .touchUpInside)
     recordButton.removeTarget(
       self, action: #selector(handleFullAccessPillTapped), for: .touchUpInside
     )
@@ -4939,6 +4941,20 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // A take the keyboard is recording or transcribing itself owns the pill until it ends.
     if isDirectTakeActive, let direct = directDictation {
       renderDirectState(direct.state)
+      return
+    }
+
+    // A dictation that ended while the keyboard was covered and could not be typed by itself
+    // (iOS gave the field a new ID and the text before the cursor changed): the pill offers it,
+    // and the X discards it.
+    if Self.directOwner === self, let direct = directDictation, direct.hasHeldDictation {
+      dictationLinkHosting?.view.isUserInteractionEnabled = false
+      recordButton.addTarget(self, action: #selector(handleInsertHeldTapped), for: .touchUpInside)
+      applyRecordButtonStyle(title: "Insert dictation", systemImage: "text.insert", solidBackground: Palette.accent)
+      processingCancelButton.isHidden = false
+      resetVoiceMeterBars()
+      refreshAgentButton()
+      logRecordMarker("refreshRecordButton.heldDictation")
       return
     }
 
@@ -5574,6 +5590,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       directDictation?.cancel()
       return
     }
+    if let direct = directDictation, direct.hasHeldDictation {
+      direct.discardHeld()
+      refreshRecordButton()
+      return
+    }
     let provider = KeyboardHandoffProvider.shared
 
     // During agent generation the same X aborts the compose. The app's currency
@@ -5638,6 +5659,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     guard let direct = directDictation else { return }
     Self.directOwner = self
     direct.readDocumentID = { [weak self] in self?.currentDocumentID }
+    // Only while on screen: iOS detaches the field when the keyboard is covered.
+    direct.readContextBefore = { [weak self] in
+      guard let self, self.isKeyboardOnScreen else { return nil }
+      return self.textDocumentProxy.documentContextBeforeInput
+    }
+    direct.onHeldChange = { [weak self] in self?.directHeldChanged() }
     direct.attach(to: view)
     direct.onLocalModelLog = { [weak self] line in self?.logRecordMarker("direct.local", extra: line) }
     direct.onLocalModelReadyChange = { [weak self] in self?.directLocalModelReadyChanged() }
@@ -5706,6 +5733,23 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     case .limitReached: return "Limit reached"
     case .tryAgain: return "Try again"
     }
+  }
+
+  @objc private func handleInsertHeldTapped() {
+    recordButton.removeTarget(self, action: #selector(handleInsertHeldTapped), for: .touchUpInside)
+    logRecordMarker("handleInsertHeldTapped")
+    directDictation?.insertHeld()
+    // Finished text is typed at once; a Cloud take not yet sent shows Transcribing first.
+    if !isDirectTakeActive { refreshRecordButton() }
+  }
+
+  /// A take started or stopped waiting to be inserted: redraw a resting pill.
+  private func directHeldChanged() {
+    guard Self.directOwner === self, hasFullAccess else { return }
+    guard !isDirectTakeActive, !isRemoteRecordingActive, !isDarwinStartPending, !isAgentReviewShown,
+      waitForTranscriptTimer == nil, waitForAgentResultTimer == nil
+    else { return }
+    refreshRecordButton()
   }
 
   @objc private func handleDirectRecordTapped() {

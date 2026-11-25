@@ -25,6 +25,7 @@ enum DirectDictationTests {
     testRoute()
     testCredential()
     testLocal()
+    testHeld()
     print(failures == 0 ? "PASS" : "\(failures) failure(s)")
     exit(failures == 0 ? 0 : 1)
   }

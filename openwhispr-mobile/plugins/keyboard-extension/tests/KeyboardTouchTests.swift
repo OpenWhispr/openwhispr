@@ -49,6 +49,14 @@ private enum TestEnvironment {
 private final class FakeDirectDictation: DirectDictationControlling {
   var canRecordHere = true
   var readDocumentID: (() -> UUID?)?
+  var readContextBefore: (() -> String?)?
+  var hasHeldDictation = false
+  var onHeldChange: (() -> Void)?
+  var heldInserts = 0
+  var heldDiscards = 0
+  func insertHeld() { heldInserts += 1 }
+  func discardHeld() { heldDiscards += 1 }
+  func fieldChanged() {}
   var state: DirectDictationState = .idle
   var onStateChange: ((DirectDictationState) -> Void)?
   var onLevel: ((Float) -> Void)?
@@ -243,6 +251,9 @@ private extension KeyboardViewController {
   var touchTestPillActions: [String] { recordButton.actions(forTarget: self, forControlEvent: .touchUpInside) ?? [] }
   var touchTestCanvasShown: Bool { recordingCanvas.isUserInteractionEnabled }
   func touchTestTapDirectPill() { handleDirectRecordTapped() }
+  func touchTestTapInsertHeld() { handleInsertHeldTapped() }
+  func touchTestTapProcessingCancel() { handleProcessingCancelTapped() }
+  var touchTestProcessingCancelShown: Bool { !processingCancelButton.isHidden }
   func touchTestTapConfirm() { handleStopRecordingTapped() }
   func touchTestTapCancel() { handleCancelRecordingTapped() }
   func touchTestDirectWillDisappear() { directKeyboardWillDisappear() }
@@ -334,6 +345,7 @@ private enum KeyboardTouchTests {
     checkTyping(&checks)
     checkDirectDictation(&checks)
     checkDirectLocalModelReadiness(&checks)
+    checkDirectHeldDictation(&checks)
     checkOptionsButton(&checks)
     checkTranslationSelectionRefreshesPill(&checks)
     checkKeyboardSettingsRefused(&checks)
@@ -866,6 +878,38 @@ private func checkDirectLocalModelReadiness(_ checks: inout TouchChecks) {
   let attachesBeforeTap = direct.attaches
   keyboard.touchTestTapDirectPill()
   checks.check("local ready: a tap attaches before it starts", direct.attachesAtStart == attachesBeforeTap + 1)
+}
+
+/// A dictation that ended while the keyboard was covered and could not be typed by itself is
+/// offered on the pill, with the X to discard it.
+@MainActor
+private func checkDirectHeldDictation(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let direct = FakeDirectDictation()
+  keyboard.touchTestUseDirect(direct)
+  keyboard.touchTestRefreshPill()
+  checks.check("held: nothing waiting reads Tap to speak", keyboard.touchTestPillTitle == "Tap to speak")
+
+  direct.hasHeldDictation = true
+  direct.onHeldChange?()
+  checks.check("held: a waiting dictation reads Insert dictation", keyboard.touchTestPillTitle == "Insert dictation")
+  checks.check("held: the pill inserts it", keyboard.touchTestPillActions == ["handleInsertHeldTapped"])
+  checks.check("held: the X is offered", keyboard.touchTestProcessingCancelShown)
+
+  keyboard.touchTestTapInsertHeld()
+  checks.check("held: a tap asks for the dictation", direct.heldInserts == 1 && direct.starts == 0)
+  direct.hasHeldDictation = false
+  direct.onHeldChange?()
+  checks.check("held: once inserted the pill is back to Tap to speak", keyboard.touchTestPillTitle == "Tap to speak")
+  checks.check("held: and the X is gone", !keyboard.touchTestProcessingCancelShown)
+
+  direct.hasHeldDictation = true
+  direct.onHeldChange?()
+  keyboard.touchTestTapProcessingCancel()
+  checks.check("held: the X discards it", direct.heldDiscards == 1 && direct.heldInserts == 1)
 }
 
 /// The options button shows the translation target as a badge in place of its icon. The

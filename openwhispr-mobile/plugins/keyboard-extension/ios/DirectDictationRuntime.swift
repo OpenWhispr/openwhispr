@@ -8,6 +8,14 @@ protocol DirectDictationControlling: AnyObject {
   var canRecordHere: Bool { get }
   var state: DirectDictationState { get }
   var readDocumentID: (() -> UUID?)? { get set }
+  /// The text before the cursor: what tells a field iOS has renamed is still the same place.
+  var readContextBefore: (() -> String?)? { get set }
+  /// A take waits to be inserted: finished text that was not typed, or a Cloud take not yet sent.
+  var hasHeldDictation: Bool { get }
+  var onHeldChange: (() -> Void)? { get set }
+  func insertHeld()
+  func discardHeld()
+  func fieldChanged()
   var onStateChange: ((DirectDictationState) -> Void)? { get set }
   var onLevel: ((Float) -> Void)? { get set }
   var onText: ((String) -> Void)? { get set }
@@ -129,6 +137,22 @@ extension DirectDictationRuntime: DirectDictationControlling {
     get { dictation.readDocumentID }
     set { dictation.readDocumentID = newValue }
   }
+
+  var readContextBefore: (() -> String?)? {
+    get { dictation.readContextBefore }
+    set { dictation.readContextBefore = newValue }
+  }
+
+  var hasHeldDictation: Bool { dictation.hasHeldDictation }
+
+  var onHeldChange: (() -> Void)? {
+    get { dictation.onHeldChange }
+    set { dictation.onHeldChange = newValue }
+  }
+
+  func insertHeld() { dictation.insertHeld() }
+  func discardHeld() { dictation.discardHeld() }
+  func fieldChanged() { dictation.fieldChanged() }
 
   var onStateChange: ((DirectDictationState) -> Void)? {
     get { dictation.onStateChange }
