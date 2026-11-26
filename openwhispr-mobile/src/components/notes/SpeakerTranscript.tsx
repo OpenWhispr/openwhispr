@@ -4,6 +4,8 @@ import type { TranscriptBlock } from '@/lib/diarization/transcriptDisplay';
 
 interface SpeakerTranscriptProps {
   blocks: TranscriptBlock[];
+  // False on notes with no speakers: every line would carry the "Unknown speaker" placeholder.
+  showSpeakerNames: boolean;
   selectedSpeakerId?: number | null;
   selectable?: boolean;
   onSpeakerPress?: (block: TranscriptBlock) => void;
@@ -11,6 +13,7 @@ interface SpeakerTranscriptProps {
 
 export function SpeakerTranscript({
   blocks,
+  showSpeakerNames,
   selectedSpeakerId,
   selectable = false,
   onSpeakerPress,
@@ -30,24 +33,31 @@ export function SpeakerTranscript({
             testID={`speaker-transcript-block-${block.id}`}
           >
             <View className="mb-2 flex-row items-center gap-2">
-              <View
-                className="h-3 w-3 rounded-full"
-                style={{ backgroundColor: block.speakerColor }}
-                testID={`speaker-color-${block.id}`}
-              />
-              <Pressable
-                disabled={!onSpeakerPress || block.speakerId == null}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel={`Edit ${block.speakerName}`}
-                onPress={() => onSpeakerPress?.(block)}
-                testID={`speaker-button-${block.speakerId ?? block.id}`}
-                className={selected ? 'rounded-md bg-tertiarySystemFill px-1' : 'px-1'}
-              >
-                <Text className="text-[14px] font-semibold" style={{ color: block.speakerColor }}>
-                  {block.speakerName}
-                </Text>
-              </Pressable>
+              {showSpeakerNames ? (
+                <>
+                  <View
+                    className="h-3 w-3 rounded-full"
+                    style={{ backgroundColor: block.speakerColor }}
+                    testID={`speaker-color-${block.id}`}
+                  />
+                  <Pressable
+                    disabled={!onSpeakerPress || block.speakerId == null}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit ${block.speakerName}`}
+                    onPress={() => onSpeakerPress?.(block)}
+                    testID={`speaker-button-${block.speakerId ?? block.id}`}
+                    className={selected ? 'rounded-md bg-tertiarySystemFill px-1' : 'px-1'}
+                  >
+                    <Text
+                      className="text-[14px] font-semibold"
+                      style={{ color: block.speakerColor }}
+                    >
+                      {block.speakerName}
+                    </Text>
+                  </Pressable>
+                </>
+              ) : null}
               <Text className="text-[12px] text-tertiaryLabel">{block.timestamp}</Text>
             </View>
             <Text selectable={selectable} className="text-[16px] leading-6 text-label">

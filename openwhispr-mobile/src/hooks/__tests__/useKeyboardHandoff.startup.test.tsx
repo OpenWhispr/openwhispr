@@ -277,6 +277,10 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('@/components/superwall/OpenWhisprSuperwallProvider', () => ({
   OpenWhisprSuperwallProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
+jest.mock('@/components/notes/MeetingSessionProvider', () => ({
+  MeetingSessionProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('@/components/notes/MeetingInProgressBar', () => ({ MeetingInProgressBar: () => null }));
 jest.mock('@/components/features/AnimatedSplash', () => ({ AnimatedSplash: () => null }));
 jest.mock('@/components/ui/PermissionAlert', () => ({ PermissionAlertMount: () => null }));
 jest.mock('@/screens/AuthScreen', () => () => null);

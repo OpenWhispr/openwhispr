@@ -40,6 +40,7 @@ const mockNotesState = {
   updateNote: mockUpdateNote,
   deleteNote: mockDeleteNote,
   retryMeetingTranscription: mockRetryMeetingTranscription,
+  isMeetingAwaitingConnection: jest.fn(async (_noteId: number) => false),
   getNoteById: jest.fn((id: number) => (mockNote?.id === id ? mockNote : null)),
   getNoteSegments: jest.fn(() => mockSegments),
   getNoteSpeakers: jest.fn(() => mockSpeakers),
@@ -97,6 +98,19 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 const mockPush = jest.fn();
+// Which note the running meeting is recording into, set per test.
+const mockMeetingSession: { liveNoteId: number | null } = { liveNoteId: null };
+jest.mock('@/components/notes/liveMeetingNote', () => ({
+  useLiveMeetingNoteId: () => mockMeetingSession.liveNoteId,
+}));
+let mockLeaseHeld = false;
+jest.mock('@/lib/captureLease', () => ({ isCaptureLeaseHeld: () => mockLeaseHeld }));
+const mockSafeHaptics = jest.fn();
+jest.mock('@/lib/utils', () => ({
+  ...jest.requireActual<typeof import('@/lib/utils')>('@/lib/utils'),
+  safeHaptics: (...args: unknown[]) => mockSafeHaptics(...args),
+}));
+
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: mockRouteNoteId }),
   useRouter: () => ({
@@ -924,6 +938,63 @@ describe('NoteEditorScreen note chat errors', () => {
   });
 });
 
+describe('NoteEditorScreen recording note', () => {
+  beforeEach(() => {
+    mockMeetingSession.liveNoteId = null;
+    mockLeaseHeld = false;
+  });
+
+  it('points a note the live session is recording back to the meeting', () => {
+    mockNote = note({ transcriptionStatus: 'recording' });
+    mockNotesState.notes = [mockNote];
+    mockSegments = [];
+    mockMeetingSession.liveNoteId = 7;
+    const { getByText, getByTestId, queryByText } = render(<NoteEditorScreen />);
+
+    // A recording note opens on its transcript, which shows the status.
+    expect(getByText('This meeting is still recording.')).toBeTruthy();
+    fireEvent.press(getByText('Open meeting'));
+    expect(mockPush).toHaveBeenCalledWith('/(tabs)/(notes)/meeting-record');
+
+    fireEvent.press(getByTestId('note-tab-notes'));
+    expect(getByText('This meeting is still recording.')).toBeTruthy();
+    expect(queryByText('You can edit these notes once the recording stops.')).toBeNull();
+    mockPush.mockClear();
+    fireEvent.press(getByText('Open meeting'));
+    expect(mockPush).toHaveBeenCalledWith('/(tabs)/(notes)/meeting-record');
+  });
+
+  it('refuses Dictate while a meeting holds the lease, before the haptic or the paywall', () => {
+    mockNote = note({ noteType: 'note', transcriptionStatus: 'idle' });
+    mockNotesState.notes = [mockNote];
+    mockSegments = [];
+    mockLeaseHeld = true;
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const { getByLabelText } = render(<NoteEditorScreen />);
+
+    fireEvent.press(getByLabelText('Start dictation'));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Dictation failed',
+      'A meeting is being recorded. End it to dictate.',
+    );
+    expect(mockSafeHaptics).not.toHaveBeenCalled();
+    expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
+  });
+
+  it('keeps today’s text for a stuck recording note the session does not own', () => {
+    mockNote = note({ transcriptionStatus: 'recording' });
+    mockNotesState.notes = [mockNote];
+    mockSegments = [];
+    const { getByText, getByTestId, queryByText } = render(<NoteEditorScreen />);
+
+    expect(getByText('Recording audio...')).toBeTruthy();
+    fireEvent.press(getByTestId('note-tab-notes'));
+    expect(getByText('You can edit these notes once the recording stops.')).toBeTruthy();
+    expect(queryByText('Open meeting')).toBeNull();
+  });
+});
+
 describe('NoteEditorScreen missing note', () => {
   it('keeps a way back when the note is gone, on either stack', () => {
     mockNotesState.notes = [];
@@ -1185,17 +1256,85 @@ describe('NoteEditorScreen body tabs', () => {
     expect(queryByText('Transcribing audio...')).toBeNull();
   });
 
-  it('keeps a failed transcript on its own tab beside the generated notes and My notes', () => {
+  it('keeps a failed transcript on its own tab beside the generated notes and My notes', async () => {
     mockNote = note({ transcriptionStatus: 'failed', enhancedContent: '## Summary' });
     mockNotesState.notes = [mockNote];
     mockSegments = [];
-    const { getByText, getByTestId } = render(<NoteEditorScreen />);
+    const { findByText, getByTestId } = render(<NoteEditorScreen />);
     expect(getByTestId('note-tab-enhanced')).toBeTruthy();
     expect(getByTestId('note-tab-notes')).toBeTruthy();
 
     fireEvent.press(getByTestId('note-tab-transcript'));
 
-    expect(getByText('Transcript failed')).toBeTruthy();
+    expect(await findByText('Transcript failed')).toBeTruthy();
+  });
+
+  describe('a meeting waiting for the connection', () => {
+    const WAITING =
+      "Waiting for a connection. This meeting will be transcribed when you're back online.";
+    const awaiting = mockNotesState.isMeetingAwaitingConnection;
+    let alertSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      awaiting.mockResolvedValue(true);
+      alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+      mockNote = note({ transcriptionStatus: 'failed', sourceFile: 'managed://meeting-7.wav' });
+      mockNotesState.notes = [mockNote];
+      mockSegments = [];
+    });
+    afterEach(() => {
+      awaiting.mockReset().mockResolvedValue(false);
+      alertSpy.mockRestore();
+    });
+
+    it('says it will be transcribed once back online instead of offering Retry', async () => {
+      const { findByText, queryByText } = render(<NoteEditorScreen />);
+
+      expect(await findByText(WAITING)).toBeTruthy();
+      expect(awaiting).toHaveBeenCalledWith(7);
+      expect(queryByText('Transcript failed')).toBeNull();
+      expect(queryByText('Retry transcription')).toBeNull();
+    });
+
+    it('offers Retry for a meeting that is not waiting', async () => {
+      awaiting.mockResolvedValue(false);
+      const { findByText, queryByText } = render(<NoteEditorScreen />);
+
+      expect(await findByText('Retry transcription')).toBeTruthy();
+      expect(queryByText(WAITING)).toBeNull();
+    });
+
+    it('offers Retry once an automatic upload was tried and refused', async () => {
+      const screen = render(<NoteEditorScreen />);
+      expect(await screen.findByText(WAITING)).toBeTruthy();
+
+      mockNote = { ...mockNote, transcriptionStatus: 'transcribing' };
+      mockNotesState.notes = [mockNote];
+      screen.rerender(<NoteEditorScreen />);
+      expect(screen.getByText('Transcribing audio...')).toBeTruthy();
+
+      awaiting.mockResolvedValue(false);
+      mockNote = { ...mockNote, transcriptionStatus: 'failed' };
+      mockNotesState.notes = [mockNote];
+      screen.rerender(<NoteEditorScreen />);
+
+      expect(await screen.findByText('Retry transcription')).toBeTruthy();
+      expect(screen.queryByText(WAITING)).toBeNull();
+    });
+
+    it('says so when Retry finds no connection, and shows the meeting waiting', async () => {
+      awaiting.mockResolvedValueOnce(false).mockResolvedValue(true);
+      mockRetryMeetingTranscription.mockResolvedValueOnce('waiting-for-connection');
+      const { findByText } = render(<NoteEditorScreen />);
+
+      fireEvent.press(await findByText('Retry transcription'));
+
+      expect(await findByText(WAITING)).toBeTruthy();
+      expect(alertSpy).toHaveBeenCalledWith(
+        "You're offline",
+        "This meeting will be transcribed when you're back online.",
+      );
+    });
   });
 
   it('lets an upload with a transcript keep editable notes without changing its transcript', () => {
@@ -1844,8 +1983,15 @@ describe('NoteEditorScreen voice setup', () => {
     expect(mockLoadVoiceProfiles).toHaveBeenCalled();
   });
 
-  it('does not offer it on a meeting recorded elsewhere, or once you have a profile', () => {
-    mockNote = note({ sourceFile: null });
+  it('offers it once the recording is gone, from the samples held in memory', () => {
+    mockNote = note({ sourceFile: null, transcriptionStatus: 'done' });
+    mockNotesState.notes = [mockNote];
+    const { getByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId('voice-setup-banner')).toBeTruthy();
+  });
+
+  it('does not offer it on a meeting without speaker labels, or once you have a profile', () => {
+    mockNote = note({ sourceFile: 'managed://meeting-7.wav', diarizationEnabled: 0 });
     mockNotesState.notes = [mockNote];
     const { queryByTestId, rerender } = render(<NoteEditorScreen />);
     expect(queryByTestId('voice-setup-banner')).toBeNull();

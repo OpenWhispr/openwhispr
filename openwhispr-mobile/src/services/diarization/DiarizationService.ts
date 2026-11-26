@@ -33,6 +33,32 @@ export interface DiarizationDeps {
   };
 }
 
+/**
+ * Adds a provisional speaker row for each label the note doesn't have yet. Existing rows are
+ * never touched, which keeps names and locks the user set.
+ */
+export const insertNewSpeakers = (
+  noteId: number,
+  labels: Iterable<string>,
+  repo: Pick<DiarizationDeps['repo'], 'getSpeakers' | 'upsertSpeakers'>,
+): void => {
+  const existingLabels = new Set(repo.getSpeakers(noteId).map((s) => s.speakerLabel));
+  const newLabels = [...new Set(labels)].filter((l) => !existingLabels.has(l));
+  const newSpeakers: NewSpeaker[] = newLabels.map((label) => {
+    // Route through applyProvisional so new speakers always carry the canonical provisional state.
+    const state = applyProvisional({}, { displayName: null });
+    return {
+      noteId,
+      speakerLabel: label,
+      displayName: state.displayName ?? null,
+      speakerStatus: state.speakerStatus ?? 'provisional',
+      // speakerLocked is an integer (0/1) in SQLite; boolean→int boundary map lives here.
+      speakerLocked: state.speakerLocked ? 1 : 0,
+    };
+  });
+  if (newSpeakers.length > 0) repo.upsertSpeakers(noteId, newSpeakers);
+};
+
 export interface ProcessMeetingInput {
   noteId: number;
   wavUri: string;
@@ -100,24 +126,11 @@ export const processMeeting = async (
     }));
     deps.repo.replaceSegments(noteId, segments);
 
-    // Insert only speakers that don't already exist; never touch existing rows (preserves locks).
-    const existingLabels = new Set(deps.repo.getSpeakers(noteId).map((s) => s.speakerLabel));
-    const newLabels = [...new Set(merged.map((s) => s.speakerLabel))].filter(
-      (l) => !existingLabels.has(l),
+    insertNewSpeakers(
+      noteId,
+      merged.map((s) => s.speakerLabel),
+      deps.repo,
     );
-    const newSpeakers: NewSpeaker[] = newLabels.map((label) => {
-      // Route through applyProvisional so new speakers always carry the canonical provisional state.
-      const state = applyProvisional({}, { displayName: null });
-      return {
-        noteId,
-        speakerLabel: label,
-        displayName: state.displayName ?? null,
-        speakerStatus: state.speakerStatus ?? 'provisional',
-        // speakerLocked is an integer (0/1) in SQLite; boolean→int boundary map lives here.
-        speakerLocked: state.speakerLocked ? 1 : 0,
-      };
-    });
-    if (newSpeakers.length > 0) deps.repo.upsertSpeakers(noteId, newSpeakers);
 
     advance('done');
     return { speakerEmbeddingsByLabel };

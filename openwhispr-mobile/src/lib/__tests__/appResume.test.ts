@@ -11,6 +11,9 @@ jest.mock('@/store/useKeyboardRecoveryStore', () => ({
   isRecoveryHolding: jest.fn(),
   isRecoveryDeepLinkFresh: jest.fn(),
 }));
+jest.mock('@/lib/notes/activeMeeting', () => ({
+  isMeetingActive: jest.fn(),
+}));
 jest.mock('@/lib/keyboardSettingsLink', () => ({
   isKeyboardSettingsLinkFresh: jest.fn(),
 }));
@@ -20,6 +23,7 @@ import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
 import { useUsageStore } from '@/store/useUsageStore';
 import { isRecoveryDeepLinkFresh, isRecoveryHolding } from '@/store/useKeyboardRecoveryStore';
 import { isKeyboardSettingsLinkFresh } from '@/lib/keyboardSettingsLink';
+import { isMeetingActive } from '@/lib/notes/activeMeeting';
 import { resolveResumeAction } from '../appResume';
 
 const handoffState = useHandoffStore.getState as jest.Mock;
@@ -37,6 +41,7 @@ function setStores(overrides?: {
   keyboardRecoveryActive?: boolean;
   keyboardRecoveryDeepLinkFresh?: boolean;
   keyboardSettingsLinkFresh?: boolean;
+  meetingActive?: boolean;
 }): void {
   handoffState.mockReturnValue({
     isActive: overrides?.handoffActive ?? false,
@@ -51,6 +56,7 @@ function setStores(overrides?: {
   recoveryHolding.mockReturnValue(overrides?.keyboardRecoveryActive ?? false);
   recoveryDeepLinkFresh.mockReturnValue(overrides?.keyboardRecoveryDeepLinkFresh ?? false);
   keyboardSettingsLinkFresh.mockReturnValue(overrides?.keyboardSettingsLinkFresh ?? false);
+  (isMeetingActive as jest.Mock).mockReturnValue(overrides?.meetingActive ?? false);
 }
 
 describe('resolveResumeAction', () => {
@@ -72,6 +78,16 @@ describe('resolveResumeAction', () => {
 
     setStores({ checkingInitialUrl: true });
     expect(resolveResumeAction(false)).toEqual({ resetToHome: false, refreshUsage: false });
+  });
+
+  it('stays put while a meeting is active', () => {
+    setStores({ meetingActive: true });
+    expect(resolveResumeAction(false)).toEqual({ resetToHome: false, refreshUsage: false });
+  });
+
+  it('a meeting and a billing session both active still refreshes usage', () => {
+    setStores({ meetingActive: true, billingActive: true });
+    expect(resolveResumeAction(false)).toEqual({ resetToHome: false, refreshUsage: true });
   });
 
   it('stays put during a google calendar auth session', () => {

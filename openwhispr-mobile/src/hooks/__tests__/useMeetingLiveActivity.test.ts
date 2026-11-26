@@ -3,6 +3,7 @@ import { useMeetingLiveActivity, type MeetingActivityPhase } from '@/hooks/useMe
 
 const mockStartMeeting = jest.fn();
 const mockSetMeetingProcessing = jest.fn();
+const mockSetMeetingCapture = jest.fn();
 const mockEndMeeting = jest.fn();
 const mockRemove = jest.fn();
 let mockEndListener: (() => void) | undefined;
@@ -11,6 +12,7 @@ jest.mock('../../../modules/live-activity/src', () => ({
   LiveActivity: {
     startMeeting: (input: unknown) => mockStartMeeting(input),
     setMeetingProcessing: (input: unknown) => mockSetMeetingProcessing(input),
+    setMeetingCapture: (input: unknown) => mockSetMeetingCapture(input),
     endMeeting: () => mockEndMeeting(),
     addEndMeetingListener: (listener: () => void) => {
       mockEndListener = listener;
@@ -23,6 +25,8 @@ type Props = {
   phase: MeetingActivityPhase;
   title: string | null;
   startedAt: number | null;
+  capturing: boolean;
+  capturedSeconds: number;
   onEndRequested: () => void;
 };
 
@@ -37,6 +41,8 @@ function setup(initial: Partial<Props> = {}): Setup {
     phase: 'idle',
     title: null,
     startedAt: null,
+    capturing: true,
+    capturedSeconds: 0,
     onEndRequested,
     ...initial,
   };
@@ -78,11 +84,48 @@ describe('useMeetingLiveActivity', () => {
     expect(mockStartMeeting).toHaveBeenCalledTimes(1);
   });
 
-  it('reports the recorded duration when processing starts', () => {
+  it('reports captured, not wall-clock, seconds when processing starts', () => {
     const { update } = setup();
-    update({ phase: 'recording', startedAt: 958_000 });
-    update({ phase: 'processing' });
-    expect(mockSetMeetingProcessing).toHaveBeenCalledWith({ recordedSeconds: 42 });
+    update({ phase: 'recording', startedAt: 958_000, capturedSeconds: 0 });
+    // 42 s of wall clock, of which the mic captured 30.
+    update({ phase: 'recording', startedAt: 958_000, capturedSeconds: 30 });
+    update({ phase: 'processing', startedAt: 958_000, capturedSeconds: 30 });
+    expect(mockSetMeetingProcessing).toHaveBeenCalledWith({ recordedSeconds: 30 });
+  });
+
+  it('pauses the card when capture stops and resumes it with the captured time', () => {
+    const { update } = setup();
+    update({ phase: 'recording', startedAt: 990_000, capturing: true, capturedSeconds: 539 });
+    update({ phase: 'recording', startedAt: 990_000, capturing: false, capturedSeconds: 540 });
+    expect(mockSetMeetingCapture).toHaveBeenLastCalledWith({
+      capturing: false,
+      recordedSeconds: 540,
+    });
+    update({ phase: 'recording', startedAt: 990_000, capturing: false, capturedSeconds: 540 });
+    update({ phase: 'recording', startedAt: 990_000, capturing: true, capturedSeconds: 540 });
+    expect(mockSetMeetingCapture).toHaveBeenLastCalledWith({
+      capturing: true,
+      recordedSeconds: 540,
+    });
+    expect(mockSetMeetingCapture).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not call setMeetingCapture outside the recording phase', () => {
+    const { update } = setup();
+    update({ phase: 'idle', capturing: false });
+    update({ phase: 'idle', capturing: true });
+    update({ phase: 'recording', startedAt: 990_000, capturing: true, capturedSeconds: 10 });
+    update({ phase: 'processing', startedAt: 990_000, capturing: false, capturedSeconds: 10 });
+    update({ phase: 'processing', startedAt: 990_000, capturing: true, capturedSeconds: 10 });
+    update({ phase: 'idle', capturing: false });
+    expect(mockSetMeetingCapture).not.toHaveBeenCalled();
+  });
+
+  it('does not report the capture state the card started with', () => {
+    const { update } = setup();
+    update({ phase: 'recording', startedAt: 990_000, capturing: true });
+    update({ phase: 'recording', startedAt: 990_000, capturing: true, capturedSeconds: 5 });
+    expect(mockSetMeetingCapture).not.toHaveBeenCalled();
   });
 
   it('ignores processing that was never preceded by a recording', () => {
