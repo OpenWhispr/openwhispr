@@ -163,7 +163,7 @@ export default function SettingsScreen() {
         : t('cloudBackupBody');
 
   const { initials, name } = getAccountDisplay(user, isGuest);
-  // The languages dictation uses now: the onboarding list, an old single pick, or the phone's.
+  // The languages dictation uses now: the onboarding list, or an old single pick from Settings.
   const languageLabels = savedLanguages(config?.languages, config?.preferredLanguage)
     .map((code) => registry.languages.find((item) => item.code === code)?.label)
     .filter(Boolean)
@@ -273,7 +273,7 @@ export default function SettingsScreen() {
         <ListRow
           icon="Globe"
           title={t('language')}
-          value={languageLabels}
+          value={languageLabels || t('autoDetect')}
           onPress={() => router.push('/(account)/transcription-language')}
         />
         <ListRow

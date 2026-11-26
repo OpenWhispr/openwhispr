@@ -49,7 +49,7 @@ export function LanguagesScreen({
   return (
     <Screen
       onBack={onBack}
-      right={<PillButton label={t('skip')} onPress={save} />}
+      right={<PillButton label={t('skip')} onPress={onNext} />}
       footer={
         <>
           <GlassButton label={t('continue')} onPress={save} />
@@ -59,7 +59,7 @@ export function LanguagesScreen({
     >
       <AccentText text={t('languagesTitle')} />
       <Text textBreakStrategy="balanced" style={s.body}>
-        {t('languagesBody')}
+        {t(codes.length ? 'languagesBody' : 'autoDetect')}
       </Text>
       {onSeeHowItWorks && (
         <View style={{ alignItems: 'flex-start', marginTop: -8 }}>
@@ -83,10 +83,7 @@ export function LanguagesScreen({
   );
 }
 
-/**
- * The picked languages, each with its remove button; the last one has none, since there is always
- * one. Settings › Language shows the same list.
- */
+/** The picked languages, each with its remove button. Settings › Language shows the same list. */
 export function LanguageRows({
   codes,
   onRemove,
@@ -106,17 +103,15 @@ export function LanguageRows({
           <View key={code} style={l.row}>
             <Text style={{ fontSize: 18 }}>{language.flag}</Text>
             <Text style={l.label}>{language.label}</Text>
-            {codes.length > 1 && (
-              <Pressable
-                cssInterop={false}
-                accessibilityRole="button"
-                accessibilityLabel={t('removeLanguage', { language: language.label })}
-                onPress={() => onRemove(code)}
-                hitSlop={10}
-              >
-                <SystemIcon name="xmark" mdName="X" size={18} color={colors.tertiary} />
-              </Pressable>
-            )}
+            <Pressable
+              cssInterop={false}
+              accessibilityRole="button"
+              accessibilityLabel={t('removeLanguage', { language: language.label })}
+              onPress={() => onRemove(code)}
+              hitSlop={10}
+            >
+              <SystemIcon name="xmark" mdName="X" size={18} color={colors.tertiary} />
+            </Pressable>
           </View>
         );
       })}
