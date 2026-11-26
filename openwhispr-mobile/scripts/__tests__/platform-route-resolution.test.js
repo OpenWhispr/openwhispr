@@ -34,7 +34,9 @@ function readContext(file) {
   return call;
 }
 
-const iosKeys = routeKeys('app').filter((key) => readContext('router-context.ios.js').regex.test(key));
+const iosKeys = routeKeys('app').filter((key) =>
+  readContext('router-context.ios.js').regex.test(key),
+);
 const android = readContext('router-context.android.js');
 const androidKeys = routeKeys('app-android').filter((key) => android.regex.test(key));
 
