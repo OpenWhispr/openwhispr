@@ -55,7 +55,6 @@ class AgentWindowManager {
         return this._bounds(display);
       },
     });
-    this.slackRead = null;
     this.slackTitle = null;
     this.voiceState = "idle";
     this.voiceAttempt = null;
@@ -298,7 +297,7 @@ class AgentWindowManager {
 
   // The window is gone (crash, failed load): nothing it held may block dictation.
   _forget() {
-    this._forgetSlackTitle();
+    this.slackTitle = null;
     void this.dragManager.stopWindowDrag();
     this.window = null;
     this.ready = false;
@@ -342,32 +341,24 @@ class AgentWindowManager {
   // destination goes to its conversation. Read after the target is captured;
   // a newer press, or one over another app, replaces it.
   _readSlackTitle(targetPidPromise) {
-    this.slackTitle = null;
-    const read = (async () => {
+    this.slackTitle = (async () => {
       await targetPidPromise;
       const context = await this.windowManager.selectionManager
         ?.getTargetAppContext?.()
         .catch(() => null);
-      if (this.slackRead === read) this.slackTitle = slackWindowTitle(context);
+      return slackWindowTitle(context);
     })();
-    this.slackRead = read;
-  }
-
-  _forgetSlackTitle() {
-    this.slackRead = null;
-    this.slackTitle = null;
   }
 
   // Only this window's own requests are spoken over that Slack window; a read
   // still running is waited for.
   async slackWindowTitle(event) {
     if (!isFromWindow(event, this.window)) return null;
-    await this.slackRead;
     return this.slackTitle;
   }
 
   _hide() {
-    this._forgetSlackTitle();
+    this.slackTitle = null;
     const win = this.window;
     if (!win) return;
     void this.dragManager.stopWindowDrag();

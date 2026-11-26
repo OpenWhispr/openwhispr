@@ -37,6 +37,8 @@ test("a title's names leave out Slack, the workspace, unread marks, # and a kind
     "Sam (he/him)",
   ]);
   assert.deepEqual(slackTitleNames("Acme - Slack", "Acme"), []);
+  // "Ana - Design" splits in two, and "Ana" alone could be someone else.
+  assert.deepEqual(slackTitleNames("Ana - Design (DM) - Acme - Slack", "Acme"), []);
 });
 
 test("a title's names stop at the workspace's name, before what a browser adds", () => {

@@ -32,13 +32,15 @@ function slackWindowTitle(context) {
 }
 
 /**
- * The names a Slack window title may give its conversation: each part before
- * the workspace's name, with and without a kind tag after it, without an
- * unread mark or a leading "#", leaving out Slack's own name. Slack puts the
- * conversation before the workspace, whichever end its own name is on
+ * The names a Slack window title may give its conversation: the one part before
+ * the workspace's name besides Slack's own, with and without a kind tag after it,
+ * without an unread mark or a leading "#". Slack puts the conversation before the
+ * workspace, whichever end its own name is on
  * ("eng (Channel) - Acme - 3 new items - Slack", "Slack | #eng | Acme"), and a
  * browser adds its own name and the profile's after ("… - Google Chrome – Sam (acme.com)"),
- * so nothing after the workspace's name counts. None when the title doesn't name it.
+ * so nothing after the workspace's name counts. None when the title doesn't name it,
+ * or when more parts come before it: a name with a dash in it ("Ana - Design") splits
+ * into parts that could each be someone else.
  */
 function slackTitleNames(title, workspaceName) {
   const workspace = String(workspaceName ?? "").toLowerCase();
@@ -46,8 +48,11 @@ function slackTitleNames(title, workspaceName) {
   const workspaceAt = parts.findIndex(
     (part) => workspace && part.trim().toLowerCase() === workspace
   );
+  const before = parts.slice(0, Math.max(workspaceAt, 0));
+  const notSlack = (part) => part.trim().replace(UNREAD, "").toLowerCase() !== "slack";
+  if (before.filter(notSlack).length !== 1) return [];
   const names = new Set();
-  for (const segment of parts.slice(0, Math.max(workspaceAt, 0))) {
+  for (const segment of before) {
     const part = segment.trim().replace(UNREAD, "");
     for (const name of [part, part.replace(KIND_TAG, "")]) {
       const bare = name.replace(/^#/, "").trim();
