@@ -14,6 +14,7 @@ import { useSettingsT } from '@/android/settings/strings';
 import { useNavigationBar } from '@/android/navigationBar';
 import { useSettingsLook } from '@/android/settings/look';
 import { SearchField } from '@/android/controls';
+import { languageChoice } from '@/android/onboarding/languages';
 
 function Divider() {
   const { look } = useSettingsLook();
@@ -31,7 +32,8 @@ export default function LanguageScreen() {
   const [query, setQuery] = useState('');
   // The card stops 16 dp above the gesture handle or the button bar.
   const { buttons, inset } = useNavigationBar();
-  const selected = config?.preferredLanguage ?? 'auto';
+  // What dictation uses now, so a language picked in onboarding shows here too.
+  const selected = languageChoice(config?.languages, config?.preferredLanguage);
   const search = query.trim().toLowerCase();
   const languages = registry.languages.filter(
     (item) =>
