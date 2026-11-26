@@ -829,6 +829,29 @@ test("spoken words that aren't a clear yes or no wait in the composer, and the c
   assert.equal(composerText(), "Change the second line to say Friday");
 });
 
+test("a voice reply uses up the card's nudge, so a minimize after it never reopens the modal by itself", async (t) => {
+  const { view, startReply, say } = await cardWaiting(t);
+  await React.act(async () => view.button("Minimize").click());
+  await view.settle();
+  assert.ok(view.button("Expand").className.includes("agent-expand-cue"), "cued while minimized");
+  await startReply();
+  await say("Change the second line to say Friday");
+  await React.act(async () => view.button("Minimize").click());
+  await view.settle();
+  assert.ok(!view.button("Expand").className.includes("agent-expand-cue"));
+});
+
+test("a voice notice from a take that answers the card times out while the card still waits", async (t) => {
+  const { view, startReply } = await cardWaiting(t);
+  await startReply();
+  await React.act(async () => globalThis.__voice.callbacks.onEmpty());
+  await view.settle();
+  assert.match(view.host.textContent, /Didn't catch that/);
+  await view.wait(5300);
+  await view.settle();
+  assert.doesNotMatch(view.host.textContent, /Didn't catch that/);
+});
+
 test("minimized, the hotkey opens the waiting card before the take, so a yes never sends it unseen", async (t) => {
   const { view, commits, card, startReply, say } = await cardWaiting(t);
   await React.act(async () => view.button("Minimize").click());

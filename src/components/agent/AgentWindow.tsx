@@ -67,6 +67,14 @@ const PRESS_CAPTURE_WAIT_MS = 3000;
 // How long a new step may take to show the card it asks with.
 const STEP_SETTLE_MS = 300;
 const NOTICE_MS = 5000;
+// Notices about a voice take, never about the turn it may run beside.
+const TAKE_NOTICES: ReadonlySet<string> = new Set([
+  "agentWindow.notices.nothingHeard",
+  "agentWindow.notices.transcriptionFailed",
+  "agentWindow.notices.micUnavailable",
+  "agentWindow.notices.dictationActive",
+  "agentWindow.notices.answerAgain",
+]);
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -683,9 +691,9 @@ export default function AgentWindow() {
   const micBlocked = (busy && (!replyCard || editingSelection)) || transcribing;
 
   useEffect(() => {
-    // A notice waits for the turn to end, except asking a question again, which
-    // goes while its card still waits.
-    const waitsForTurn = busy && state.notice !== "agentWindow.notices.answerAgain";
+    // A notice waits for the turn to end, except one about a take, which a
+    // take answering the waiting card raises while the turn still runs.
+    const waitsForTurn = busy && !TAKE_NOTICES.has(state.notice ?? "");
     if (!state.notice || listening || transcribing || waitsForTurn) return;
     const timer = setTimeout(() => dispatch({ type: "notice", notice: null }), NOTICE_MS);
     return () => clearTimeout(timer);
@@ -698,6 +706,7 @@ export default function AgentWindow() {
     paused: listening || transcribing,
     onOpen: () => moveOnItsOwn({ type: "expand" }),
   });
+  const { cancel: cancelNudge } = nudge;
 
   const surface = useAgentSurface({
     visible: state.visible,
@@ -798,10 +807,14 @@ export default function AgentWindow() {
         return;
       }
       stopReading();
-      // A reply to the card reads nothing from the press: no selection, field or screen.
+      // A reply to the card reads nothing from the press: no selection, field
+      // or screen, and an earlier press's capture still running is dropped.
+      // Answering is acting on the card, so its nudge is used up.
       if (replyTo) {
+        pressRef.current += 1;
         editTargetRef.current = null;
         pressCaptureRef.current = null;
+        cancelNudge();
       } else {
         capturePressContext(external, card);
       }
@@ -823,6 +836,7 @@ export default function AgentWindow() {
     },
     [
       busy,
+      cancelNudge,
       capturePressContext,
       dispatch,
       editingSelection,
