@@ -11,6 +11,10 @@ const BYTES_PER_SECOND = SAMPLE_RATE * BYTES_PER_SAMPLE;
 const msToSampleBytes = (ms: number): number =>
   Math.floor((Math.max(0, ms) * SAMPLE_RATE) / 1000) * BYTES_PER_SAMPLE;
 
+/** Whole milliseconds of audio in a 16 kHz mono 16-bit WAV of that size, header included. */
+export const wavDurationMs = (fileBytes: number): number =>
+  Math.max(0, Math.floor((fileBytes - WAV_HEADER_BYTES) / (BYTES_PER_SECOND / 1000)));
+
 /** Byte offsets of [startMs, endMs) in a 16 kHz mono 16-bit WAV, clamped to the file and aligned to whole samples. */
 export function wavByteRange(
   startMs: number,

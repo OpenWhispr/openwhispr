@@ -3,7 +3,7 @@ import * as Network from 'expo-network';
 import type { AudioWindow } from '../../services/transcription/realtimeReconnect';
 import type { TranscriptionResponse } from '../../types';
 import { inSpokenOrder, type CloudMeetingSegment } from './cloudMeetingSegments';
-import { EmptyWavRangeError, WAV_HEADER_BYTES, extractWavRange, splitWindows } from './wavRange';
+import { EmptyWavRangeError, extractWavRange, splitWindows, wavDurationMs } from './wavRange';
 
 /** Two minutes of 16 kHz mono WAV (~3.84 MB) stays under the cloud's inline upload limit. */
 export const BACKFILL_CHUNK_MS = 120_000;
@@ -11,8 +11,6 @@ export const BACKFILL_CHUNK_MS = 120_000;
 export const BACKFILL_MIN_MS = 2000;
 /** A pause in a saved transcript shorter than this is people not talking, not missing audio. */
 export const OWED_GAP_MIN_MS = 15_000;
-
-const RECORDING_BYTES_PER_MS = 32;
 
 export interface PostPassDeps {
   extract(uri: string, startMs: number, endMs: number): Promise<string>;
@@ -198,7 +196,13 @@ export const recordingDurationMs = async (uri: string): Promise<number | null> =
   if (!info) return null;
   if (!info.exists) return 0;
   if (!('size' in info) || typeof info.size !== 'number') return null;
-  return Math.max(0, Math.floor((info.size - WAV_HEADER_BYTES) / RECORDING_BYTES_PER_MS));
+  return wavDurationMs(info.size);
+};
+
+/** A failure's own code for a Sentry tag, or 'unknown'; never its message, which can carry file paths. */
+export const errorCode = (error: unknown): string => {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'string' ? code : 'unknown';
 };
 
 /** Unsure counts as online: a wrong guess costs one failed upload, never an attempt not made. */

@@ -18,6 +18,7 @@ import {
   savePendingBackfill,
 } from '@/lib/transcriptAudio';
 import {
+  errorCode,
   isDeviceOnline,
   owedWindowsFromSegments,
   recordingDurationMs,
@@ -616,12 +617,6 @@ let hasStarted = false;
 
 const PENDING_BACKFILL_FILE = /^meeting-(\d+)\.backfill\.json$/;
 
-const errorCode = (error: unknown): string => {
-  const code = (error as { code?: unknown } | null)?.code;
-  return typeof code === 'string' ? code : 'unknown';
-};
-
-// Fixed strings and codes only: errors here can carry file paths.
 const listPendingBackfillIds = async (directory: string | null): Promise<number[]> =>
   directory
     ? (await FileSystem.readDirectoryAsync(directory)).flatMap((name) => {
@@ -630,6 +625,7 @@ const listPendingBackfillIds = async (directory: string | null): Promise<number[
       })
     : [];
 
+// Fixed strings and codes only: errors here can carry file paths.
 const reportRecoveryError = (error: unknown, noteId?: number): void => {
   Sentry.captureMessage('meeting-recovery-failed', {
     level: 'warning',

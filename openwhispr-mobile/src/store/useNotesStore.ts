@@ -71,6 +71,7 @@ import {
   BACKFILL_MIN_MS,
   backfillDroppedAudio,
   createCloudPostPassDeps,
+  errorCode,
   isDeviceOnline,
   mergeTranscript,
   recordingDurationMs,
@@ -542,11 +543,6 @@ const savedAsNew = (noteId: number, rows: Segment[]): NewSegment[] =>
     speakerLabel: row.speakerLabel,
     sortOrder: row.sortOrder,
   }));
-
-const errorCode = (error: unknown): string => {
-  const code = (error as { code?: unknown } | null)?.code;
-  return typeof code === 'string' ? code : 'unknown';
-};
 
 /**
  * Fills the stretches the live stream missed. Best effort: on any failure the live transcript
@@ -1535,23 +1531,12 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       const transcript =
         segments.length > 0
           ? withNoteId(noteId, segments)
-          : notesRepository.getSegments(noteId).map(
-              (row): NewSegment => ({
-                noteId,
-                text: row.text,
-                startMs: row.startMs,
-                endMs: row.endMs,
-                speakerLabel: row.speakerLabel,
-                sortOrder: row.sortOrder,
-              }),
-            );
+          : savedAsNew(noteId, notesRepository.getSegments(noteId));
       notesRepository.replaceSegments(noteId, transcript);
       // The whole recording is in the transcript, so nothing it owes is left: a mark that it
       // waited for the connection goes even if deleting the recording below fails.
       await clearPendingBackfill(noteId);
-      // Two-minute chunks each hold several speakers, so this labels nothing; it stays so the
-      // rule for which transcripts get labelled lives in one place.
-      await get().labelMeetingSpeakers(noteId, { utteranceTimed: false, fence });
+      // No speaker pass: each segment is a two-minute chunk holding several speakers.
       get().transitionStatus(noteId, 'done');
       if (transcript.some((segment) => segment.text?.trim())) {
         logTranscriptionCompleted({ source: 'meeting', provider: 'cloud' });
