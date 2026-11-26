@@ -1,4 +1,4 @@
-import { mapUtterancesToSegments } from '../cloudMeetingSegments';
+import { inSpokenOrder, mapUtterancesToSegments } from '../cloudMeetingSegments';
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
 
 const utterance = (over: Partial<RealtimeUtterance>): RealtimeUtterance => ({
@@ -45,5 +45,67 @@ describe('mapUtterancesToSegments', () => {
 
   it('returns an empty array for no utterances', () => {
     expect(mapUtterancesToSegments([], 30)).toEqual([]);
+  });
+
+  it('saves utterances in the order spoken, not the order their transcriptions finished', () => {
+    // At a leg rotation the retired leg's last turn finishes after the new leg's first.
+    const segments = mapUtterancesToSegments(
+      [
+        utterance({ text: 'new leg', startMs: 60_000, endMs: 62_000 }),
+        utterance({ text: 'retired leg', startMs: 58_000, endMs: 60_500 }),
+        utterance({ text: 'later', startMs: 63_000, endMs: 64_000 }),
+      ],
+      90,
+    );
+    expect(segments.map((s) => [s.text, s.startMs, s.sortOrder])).toEqual([
+      ['retired leg', 58_000, 0],
+      ['new leg', 60_000, 1],
+      ['later', 63_000, 2],
+    ]);
+  });
+
+  it('never places an untimed utterance before the one that finished ahead of it', () => {
+    const segments = mapUtterancesToSegments(
+      [
+        utterance({ text: 'timed late', startMs: 25_000, endMs: 26_000 }),
+        utterance({ text: 'b' }),
+        utterance({ text: 'timed later', startMs: 28_000, endMs: 29_000 }),
+      ],
+      30,
+    );
+    // Its spread position (10 s) would put it ahead of the 25 s utterance it finished after.
+    expect(segments.map((s) => [s.text, s.startMs, s.sortOrder])).toEqual([
+      ['timed late', 25_000, 0],
+      ['b', 26_000, 1],
+      ['timed later', 28_000, 2],
+    ]);
+  });
+});
+
+describe('inSpokenOrder', () => {
+  it('sorts by start and renumbers, keeping the given order for segments that start together', () => {
+    expect(
+      inSpokenOrder([
+        { id: 'c', startMs: 2000, sortOrder: 0 },
+        { id: 'a', startMs: 1000, sortOrder: 1 },
+        { id: 'b', startMs: 1000, sortOrder: 2 },
+      ]),
+    ).toEqual([
+      { id: 'a', startMs: 1000, sortOrder: 0 },
+      { id: 'b', startMs: 1000, sortOrder: 1 },
+      { id: 'c', startMs: 2000, sortOrder: 2 },
+    ]);
+  });
+
+  it('leaves its input untouched', () => {
+    const segments = [
+      { startMs: 2000, sortOrder: 0 },
+      { startMs: 1000, sortOrder: 1 },
+    ];
+    inSpokenOrder(segments);
+    expect(segments).toEqual([
+      { startMs: 2000, sortOrder: 0 },
+      { startMs: 1000, sortOrder: 1 },
+    ]);
   });
 });

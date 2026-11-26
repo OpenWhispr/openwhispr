@@ -2,7 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Network from 'expo-network';
 import type { AudioWindow } from '../../services/transcription/realtimeReconnect';
 import type { TranscriptionResponse } from '../../types';
-import type { CloudMeetingSegment } from './cloudMeetingSegments';
+import { inSpokenOrder, type CloudMeetingSegment } from './cloudMeetingSegments';
 import { EmptyWavRangeError, WAV_HEADER_BYTES, extractWavRange, splitWindows } from './wavRange';
 
 /** Two minutes of 16 kHz mono WAV (~3.84 MB) stays under the cloud's inline upload limit. */
@@ -101,22 +101,18 @@ export async function backfillDroppedAudio(
 }
 
 /**
- * Live and backfilled segments in time order, sortOrder renumbered. A backfilled piece whose exact
- * window already holds an unlabelled row was merged by an earlier resume that died before it
- * could record so, and is left out.
+ * Live and backfilled segments in spoken order. A backfilled piece whose exact window a row
+ * already holds was merged by an earlier run that died before it could record so, and is left
+ * out. That row may carry a speaker by now, but the speaker pass never moves a row's times.
  */
 export function mergeTranscript(
   live: CloudMeetingSegment[],
   backfilled: CloudMeetingSegment[],
 ): CloudMeetingSegment[] {
-  const merged = new Set(
-    live.filter((row) => row.speakerLabel == null).map((row) => `${row.startMs}:${row.endMs}`),
-  );
+  const merged = new Set(live.map((row) => `${row.startMs}:${row.endMs}`));
   const fresh = backfilled.filter((piece) => !merged.has(`${piece.startMs}:${piece.endMs}`));
-  // Array.prototype.sort is stable, so live text stays ahead of a backfilled piece at the same time.
-  return [...live, ...fresh]
-    .sort((a, b) => a.startMs - b.startMs)
-    .map((segment, index) => ({ ...segment, sortOrder: index }));
+  // Live first, so live text stays ahead of a backfilled piece that starts at the same time.
+  return inSpokenOrder([...live, ...fresh]);
 }
 
 /**

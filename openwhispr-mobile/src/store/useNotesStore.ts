@@ -62,6 +62,7 @@ import {
 } from '@/lib/notes/generateNotesPrompt';
 import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
 import {
+  inSpokenOrder,
   mapUtterancesToSegments,
   type CloudMeetingSegment,
 } from '@/lib/notes/cloudMeetingSegments';
@@ -77,6 +78,7 @@ import {
 } from '@/lib/notes/meetingPostPass';
 import { splitWindows } from '@/lib/notes/wavRange';
 import { DEFAULT_MEETING_TITLE } from '@/lib/notes/meetingConstants';
+import { isRegenerableNoteTitle } from '@/lib/notes/regenerableNoteTitle';
 import { generateLocalMeetingNotes } from '@/lib/notes/localMeetingNotes';
 import {
   getLocalReasoningReadiness,
@@ -466,6 +468,11 @@ const autoGenerateMeetingNotes = async (
 const finalizeMeetingNoteContent = async (
   noteId: number,
   fence: MeetingAccountFence = captureMeetingAccount(),
+  /**
+   * For a pass that runs once the note has been the user's for a while (audio transcribed after
+   * the meeting): the title is replaced only while it is still a placeholder.
+   */
+  { keepNamedTitle = false }: { keepNamedTitle?: boolean } = {},
 ): Promise<void> => {
   const currentNote = notesRepository.getNoteById(noteId);
   if (!currentNote || currentNote.deletedAt || currentNote.noteType !== 'meeting') return;
@@ -482,8 +489,9 @@ const finalizeMeetingNoteContent = async (
       !!currentNote?.calendarEventId &&
       currentTitle.length > 0 &&
       currentTitle !== DEFAULT_MEETING_TITLE;
+    const namedTitleBlocksAutoTitle = keepNamedTitle && !isRegenerableNoteTitle(currentTitle);
 
-    if (!calendarTitleBlocksAutoTitle) {
+    if (!calendarTitleBlocksAutoTitle && !namedTitleBlocksAutoTitle) {
       const transcriptText = notesRepository
         .getSegments(noteId)
         .map((segment) => segment.text)
@@ -502,7 +510,13 @@ const finalizeMeetingNoteContent = async (
               })
             : '';
         const title = generatedTitle || (!canUseCloud ? deriveLocalTitle(transcriptText) : '');
-        if (title) notesRepository.updateNote(noteId, { title });
+        // Read again: the user may have named or deleted the note while the title was generated.
+        const latest = notesRepository.getNoteById(noteId);
+        const stillUnnamed =
+          !!latest &&
+          !latest.deletedAt &&
+          (!keepNamedTitle || isRegenerableNoteTitle(latest.title));
+        if (title && stillUnnamed) notesRepository.updateNote(noteId, { title });
       }
     }
   }
@@ -773,9 +787,10 @@ interface NotesStore {
   /**
    * A done cloud meeting whose backfill fell short: transcribes the stretches its sidecar still
    * owes into the saved transcript, then deletes the recording, or keeps it for what is still
-   * owed. A meeting waiting for the connection gets its whole recording transcribed, under the
-   * account that recorded it and on the same backoff. Uploads nothing for a note that may not
-   * use the cloud. Never throws.
+   * owed, and brings the title (while still a placeholder) and the AI summary (while it has
+   * none) up to date. A meeting waiting for the connection gets its whole recording transcribed,
+   * under the account that recorded it and on the same backoff. Uploads nothing for a note that
+   * may not use the cloud. Never throws.
    */
   resumeMeetingBackfill: (
     noteId: number,
@@ -814,7 +829,10 @@ interface NotesStore {
   ) => void;
   /** recording or transcribing or diarizing → done, keeping the segments already saved. */
   keepCloudMeetingTranscript: (noteId: number) => void;
-  /** Title and AI summary for a recovered meeting. */
+  /**
+   * Title (while still a placeholder) and AI summary (while it has none) for a recovered meeting.
+   * Its backfill resume may already have written both.
+   */
   finishRecoveredMeetingNotes: (noteId: number) => Promise<void>;
   isDiarizerAvailable: () => Promise<boolean>;
   isDiarizerModelReady: () => Promise<boolean>;
@@ -1368,9 +1386,12 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
             owed,
           ));
         }
-        // Before done, so a done note's list never claims less than its recording owes. With
-        // nothing owed the discard below removes the list with the recording.
-        if (owed.length > 0 && isLiveNote(noteId)) {
+        // Before the speaker pass and done: a done note's list never claims less than its
+        // recording owes, and a kill from here on resumes only what is still owed, never the
+        // stretches just transcribed, which would go up again and be merged twice. With nothing
+        // owed the list is emptied, not deleted, or recovery would guess the owed audio from the
+        // transcript's pauses; the discard below removes it with the recording.
+        if ((owedSaved || owed.length > 0) && isLiveNote(noteId)) {
           owedSaved = (await recordOwedAudio(noteId, owed)) || owedSaved;
         }
       }
@@ -1410,6 +1431,10 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   resumeMeetingBackfill: async (noteId, options = {}) => {
     if (meetingBackfillsInFlight.has(noteId)) return;
     meetingBackfillsInFlight.add(noteId);
+    // The account signed in when the run began: the notes made afterwards use the cloud only while
+    // it still is.
+    const fence = captureMeetingAccount();
+    let refreshNotes = false;
     try {
       const note = notesRepository.getNoteById(noteId);
       if (!note || note.deletedAt) return;
@@ -1440,6 +1465,10 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
         pending.windows,
         options.shouldStop,
       );
+      // Any run that added transcript, even one that left pieces owed: a summary is written only
+      // while the note has none, so waiting for every piece could leave it with none at all. A
+      // run paused for a meeting skips it; the run that resumes the rest refreshes instead.
+      refreshNotes = progressed && !stopped;
       let retry: BackfillRetry;
       if (progressed) retry = { attempts: 0, lastAttemptAt: Date.now() };
       // Paused before it tried anything: not a failure.
@@ -1454,6 +1483,17 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       });
     } finally {
       meetingBackfillsInFlight.delete(noteId);
+      get().loadNotes();
+    }
+    if (!refreshNotes) return;
+    // A meeting stopped offline was titled and summarised from what was heard before the
+    // outage, if at all. Outside the guard: this reads no audio and can take minutes on-device,
+    // so it never holds up this note's next run.
+    try {
+      await finalizeMeetingNoteContent(noteId, fence, { keepNamedTitle: true });
+    } catch (error) {
+      Sentry.captureException(error, { tags: { feature: 'meeting-auto-notes' } });
+    } finally {
       get().loadNotes();
     }
   },
@@ -1678,23 +1718,18 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       get().transitionStatus(noteId, 'transcribing');
     }
     get().transitionStatus(noteId, 'done');
-    // Live rows are local drafts; re-saving them makes the kept transcript syncable.
+    // Live rows are local drafts; re-saving them makes the kept transcript syncable. They were
+    // numbered as each utterance finished, which is not always the order it was spoken in.
     notesRepository.replaceSegments(
       noteId,
-      notesRepository.getSegments(noteId).map((row) => ({
-        noteId,
-        text: row.text,
-        startMs: row.startMs,
-        endMs: row.endMs,
-        speakerLabel: row.speakerLabel,
-        sortOrder: row.sortOrder,
-      })),
+      inSpokenOrder(savedAsNew(noteId, notesRepository.getSegments(noteId))),
     );
   },
 
   finishRecoveredMeetingNotes: async (noteId) => {
     try {
-      await finalizeMeetingNoteContent(noteId);
+      // A title the resume already generated, or one the user typed since, is kept.
+      await finalizeMeetingNoteContent(noteId, captureMeetingAccount(), { keepNamedTitle: true });
     } finally {
       get().loadNotes();
     }

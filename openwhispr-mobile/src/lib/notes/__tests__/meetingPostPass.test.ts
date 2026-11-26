@@ -27,6 +27,7 @@ import {
 } from '../meetingPostPass';
 import { EmptyWavRangeError } from '../wavRange';
 import type { CloudMeetingSegment } from '../cloudMeetingSegments';
+import { assignSpeakersToSegments } from '@/lib/diarization/assignSpeakers';
 
 const RECORDING = 'file:///app/documents/meeting-7.wav';
 
@@ -285,10 +286,18 @@ describe('mergeTranscript', () => {
     expect(merged.map((s) => s.text)).toEqual(['live', 'piece', 'new']);
   });
 
-  it('keeps a backfilled piece whose window matches only a labelled row', () => {
-    const labelled = { ...seg('live', 10_000, 0), endMs: 20_000, speakerLabel: 'SPEAKER_00' };
-    const merged = mergeTranscript([labelled], [{ ...labelled, speakerLabel: null, text: 'b' }]);
-    expect(merged.map((s) => s.text)).toEqual(['live', 'b']);
+  it('skips a piece already merged even once the speaker pass labelled it', () => {
+    // Killed during the speaker pass with a list still naming the piece: the next run
+    // transcribes it again, and finds it in the note with a speaker by then.
+    const piece = { ...seg('Backfilled.', 10_000, 0), endMs: 20_000 };
+    const labelled = assignSpeakersToSegments(mergeTranscript([seg('Live.', 0, 0)], [piece]), [
+      { speakerLabel: 'SPEAKER_00', startMs: 9000, endMs: 21_000 },
+    ]);
+    const merged = mergeTranscript(labelled, [{ ...piece, text: 'Backfilled again.' }]);
+    expect(merged.map((s) => [s.text, s.speakerLabel])).toEqual([
+      ['Live.', null],
+      ['Backfilled.', 'SPEAKER_00'],
+    ]);
   });
 
   it('never alters a live segment', () => {

@@ -142,6 +142,13 @@ describe('a whole recording waiting for a connection', () => {
     expect(state).not.toHaveProperty('awaitingConnection');
   });
 
+  it('is never read as an empty list, which would mean nothing is owed', async () => {
+    await savePendingBackfill(7, []);
+    await expect(readPendingBackfill(7)).resolves.toEqual([]);
+    await saveRecordingAwaitingConnection(7, 'user-1');
+    await expect(readPendingBackfill(7)).resolves.toBeNull();
+  });
+
   it.each([
     ['no account', JSON.stringify({ version: 1, windows: [], awaitingConnection: {} })],
     [

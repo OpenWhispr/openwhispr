@@ -194,9 +194,13 @@ export async function readPendingBackfillState(
   }
 }
 
-/** The saved windows, or null when there is no sidecar or it can't be trusted. */
+/**
+ * The saved windows, or null when there is no sidecar, it can't be trusted, or it marks the whole
+ * recording as waiting for the connection: its empty list must never read as nothing owed.
+ */
 export async function readPendingBackfill(noteId: number): Promise<AudioWindow[] | null> {
-  return (await readPendingBackfillState(noteId))?.windows ?? null;
+  const state = await readPendingBackfillState(noteId);
+  return state && !state.awaitingConnection ? state.windows : null;
 }
 
 /**

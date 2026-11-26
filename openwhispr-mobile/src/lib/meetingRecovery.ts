@@ -96,7 +96,10 @@ export interface MeetingRecoveryDeps {
   listProcessedRecordings(): { noteId: number; uri: string }[];
   /** True while the note's sidecar file exists, readable or not. */
   owesBackfill(noteId: number): Promise<boolean>;
-  /** The sidecar's windows, or null when it can't be read. */
+  /**
+   * The sidecar's windows, or null when it can't be read or marks the whole recording as waiting
+   * for the connection, which lists none.
+   */
   readPendingBackfill(noteId: number): Promise<AudioWindow[] | null>;
   /** Null when the length can't be read. */
   recordingDurationMs(uri: string): Promise<number | null>;
@@ -113,6 +116,7 @@ export interface MeetingRecoveryDeps {
 /**
  * Makes sure the note's sidecar lists what its recording still owes; false when it owes nothing.
  * A readable sidecar wins: once written, later launches resume from it rather than derive again.
+ * An empty one, left by a backfill that finished before the app died, owes nothing and goes.
  * Otherwise the windows come from the saved segments against the recording's length, and the
  * sidecar is (re)written, or removed when nothing is owed. Rejects when that write fails.
  * A recording whose length can't be read counts as owing: nothing is derived or removed.
@@ -122,7 +126,11 @@ async function prepareOwedBackfill(
   hasSidecar: boolean,
   deps: MeetingRecoveryDeps,
 ): Promise<boolean> {
-  if (hasSidecar && ((await deps.readPendingBackfill(noteId))?.length ?? 0) > 0) return true;
+  const listed = hasSidecar ? await deps.readPendingBackfill(noteId) : null;
+  if (listed) {
+    if (listed.length === 0) await deps.deletePendingBackfill(noteId);
+    return listed.length > 0;
+  }
   const durationMs = await deps.recordingDurationMs(deps.recordingUri(noteId));
   if (durationMs == null) return true;
   const owed = owedWindowsFromSegments(deps.getSegmentTimes(noteId), durationMs);
@@ -267,7 +275,8 @@ async function repairOrphanRecording(note: Note, deps: MeetingRecoveryDeps): Pro
 
 /**
  * After a kept transcript: speakers from the recording, then the audio the transcript misses
- * (which deletes the recording once nothing is left owed), or the recording goes; then the notes.
+ * (which deletes the recording once nothing is left owed, and may already write the notes), or
+ * the recording goes; then the notes, keeping a title the resume already gave it.
  */
 async function finishKeptMeeting(
   noteId: number,

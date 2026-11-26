@@ -588,14 +588,50 @@ describe('recoverOrphanedMeetings with the meeting recording', () => {
       expect(harness.deps.deletePendingBackfill).not.toHaveBeenCalled();
     });
 
-    it('drops a sidecar that owes nothing, so the recording can go', async () => {
+    it('drops a sidecar that owes nothing, so the recording goes', async () => {
       const harness = makeDeps([note({ id: 75, transcriptionStatus: 'done' })]);
+      const sidecars = new Set([75]);
       (harness.deps.listPendingBackfills as jest.Mock).mockResolvedValue([75]);
       (harness.deps.readPendingBackfill as jest.Mock).mockResolvedValue([]);
+      (harness.deps.deletePendingBackfill as jest.Mock).mockImplementation(async (id: number) => {
+        sidecars.delete(id);
+      });
+      (harness.deps.owesBackfill as jest.Mock).mockImplementation(async (id: number) =>
+        sidecars.has(id),
+      );
+      (harness.deps.listProcessedRecordings as jest.Mock).mockReturnValue([
+        { noteId: 75, uri: 'file:///docs/meeting-75.wav' },
+      ]);
+      // Pauses the transcript doesn't cover: an empty list still says nothing is owed.
+      (harness.deps.getSegmentTimes as jest.Mock).mockReturnValue([{ startMs: 0, endMs: 10_000 }]);
+      (harness.deps.recordingDurationMs as jest.Mock).mockResolvedValue(60_000);
 
       await recoverOrphanedMeetings(harness.deps);
 
       expect(harness.deps.deletePendingBackfill).toHaveBeenCalledWith(75);
+      expect(harness.deps.savePendingBackfill).not.toHaveBeenCalled();
+      expect(harness.deps.resumeBackfill).not.toHaveBeenCalled();
+      expect(harness.deps.discardRecording).toHaveBeenCalledWith(75);
+    });
+
+    it('uploads nothing again for a meeting killed after its backfill finished', async () => {
+      // Killed during the speaker pass: the list was emptied once every stretch was in.
+      const harness = makeDeps([note({ id: 80, transcriptionStatus: 'diarizing' })]);
+      killedWithText(80, harness);
+      (harness.deps.listPendingBackfills as jest.Mock).mockResolvedValue([80]);
+      (harness.deps.readPendingBackfill as jest.Mock).mockResolvedValue([]);
+
+      await recoverOrphanedMeetings(harness.deps);
+
+      expect(harness.calls).toEqual([
+        'keep:80',
+        'clearSidecar:80',
+        'active',
+        'label:80',
+        'discard:80',
+        'finish:80',
+      ]);
+      expect(harness.deps.savePendingBackfill).not.toHaveBeenCalled();
       expect(harness.deps.resumeBackfill).not.toHaveBeenCalled();
     });
 

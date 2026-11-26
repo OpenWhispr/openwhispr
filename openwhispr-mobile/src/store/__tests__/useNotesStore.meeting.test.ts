@@ -647,6 +647,24 @@ describe('meeting post-pass', () => {
     expect(sidecarWindows()).toBeNull();
   });
 
+  it('saves the live transcript in the order spoken when a later turn finished first', async () => {
+    // At a leg rotation the retired leg's last turn finishes after the new leg's first.
+    await finalize({
+      utterances: [
+        utterance('New leg.', 60_000, 62_000),
+        utterance('Retired leg.', 58_000, 60_500),
+      ],
+    });
+
+    const rows = (notesRepository.replaceSegments as jest.Mock).mock.calls[0][1];
+    expect(
+      rows.map((row: { text: string; sortOrder: number }) => [row.text, row.sortOrder]),
+    ).toEqual([
+      ['Retired leg.', 0],
+      ['New leg.', 1],
+    ]);
+  });
+
   it('does not backfill or touch the file when nothing was dropped', async () => {
     await finalize({ utterances: [utterance('All heard.', 0, 1000)] });
 
@@ -1158,6 +1176,25 @@ describe('meeting post-pass', () => {
       });
     });
 
+    it('empties the list beside the recording before the speaker pass once every stretch is in', async () => {
+      let owedAtSpeakerPass: unknown;
+      diarize.mockImplementation(async () => {
+        owedAtSpeakerPass = sidecarWindows();
+        return diarization;
+      });
+
+      await finalize({
+        utterances: [utterance('Hi.', 0, 2000)],
+        droppedWindows: [{ startMs: 10_000, endMs: 20_000 }],
+      });
+
+      // A kill during the pass leaves a list that owes nothing, so recovery uploads nothing again.
+      expect(owedAtSpeakerPass).toEqual([]);
+      expect(status).toBe('done');
+      expect(filesOnDisk.has(RECORDING)).toBe(false);
+      expect(sidecarWindows()).toBeNull();
+    });
+
     it('identifies speakers from saved voice profiles', async () => {
       (notesRepository.getSpeakerProfiles as jest.Mock).mockReturnValue([
         {
@@ -1462,19 +1499,22 @@ describe('meeting post-pass', () => {
       expect(sidecarWindows()).toEqual([{ startMs: 30_000, endMs: 40_000 }]);
     });
 
-    it('does not add a piece a killed earlier resume already merged', async () => {
-      owe([{ startMs: 100_000, endMs: 110_000 }]);
-      (notesRepository.getSegments as jest.Mock).mockReturnValue([
-        liveRow('Before.', 0, 0),
-        { ...liveRow('Merged earlier.', 100_000, 1), endMs: 110_000, speakerLabel: null },
-        liveRow('After.', 200_000, 2),
-      ]);
+    it.each([null, 'SPEAKER_01'])(
+      'does not add a piece a killed earlier run already merged (speaker %s)',
+      async (speakerLabel) => {
+        owe([{ startMs: 100_000, endMs: 110_000 }]);
+        (notesRepository.getSegments as jest.Mock).mockReturnValue([
+          liveRow('Before.', 0, 0),
+          { ...liveRow('Merged earlier.', 100_000, 1), endMs: 110_000, speakerLabel },
+          liveRow('After.', 200_000, 2),
+        ]);
 
-      await useNotesStore.getState().resumeMeetingBackfill(7);
+        await useNotesStore.getState().resumeMeetingBackfill(7);
 
-      expect(savedTexts(0)).toEqual(['Before.', 'Merged earlier.', 'After.']);
-      expect(filesOnDisk.has(RECORDING)).toBe(false);
-    });
+        expect(savedTexts(0)).toEqual(['Before.', 'Merged earlier.', 'After.']);
+        expect(filesOnDisk.has(RECORDING)).toBe(false);
+      },
+    );
 
     it('does nothing for a deleted note, a note not done, or no owed audio', async () => {
       owe([{ startMs: 10_000, endMs: 20_000 }]);
@@ -1637,6 +1677,152 @@ describe('meeting post-pass', () => {
           attempts: 0,
         });
         expect(filesOnDisk.has(RECORDING)).toBe(true);
+      });
+    });
+
+    describe('the title and summary', () => {
+      const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+      const wroteTitle = (): boolean =>
+        (notesRepository.updateNote as jest.Mock).mock.calls.some(
+          ([, updates]) => updates.title !== undefined,
+        );
+
+      beforeEach(() => {
+        mockConfigState.config.autoGenerateNoteTitle = true;
+        (notesRepository.getActions as jest.Mock).mockReturnValue([
+          { id: 1, name: 'Generate Notes', prompt: 'Transform this meeting.', isDefault: 1 },
+        ]);
+        owe([{ startMs: 100_000, endMs: 110_000 }]);
+      });
+
+      it('brings a placeholder title and a missing summary up to date once the audio is in', async () => {
+        // Stopped offline: both failed then, so the note kept the default title and no summary.
+        await useNotesStore.getState().resumeMeetingBackfill(7);
+
+        expect(mockGenerateNoteTitle).toHaveBeenCalledWith('Before. After.', {
+          allowCloudFallback: true,
+          isPrivateNote: false,
+        });
+        expect(notesRepository.updateNote).toHaveBeenCalledWith(7, {
+          title: 'Generated meeting title',
+        });
+        expect(notesRepository.updateNote).toHaveBeenCalledWith(
+          7,
+          expect.objectContaining({ enhancedContent: 'Generated meeting notes' }),
+        );
+      });
+
+      it('keeps a title the user gave the note and a summary it already has', async () => {
+        note = { ...note, title: 'Q3 planning', enhancedContent: '## My notes' };
+
+        await useNotesStore.getState().resumeMeetingBackfill(7);
+
+        expect(mockGenerateNoteTitle).not.toHaveBeenCalled();
+        expect(ReasoningService.processText).not.toHaveBeenCalled();
+        expect(notesRepository.updateNote).not.toHaveBeenCalled();
+      });
+
+      it('keeps a title the user typed while the new one was generated', async () => {
+        mockGenerateNoteTitle.mockImplementationOnce(async () => {
+          note = { ...note, title: 'Renamed' };
+          return 'Generated meeting title';
+        });
+
+        await useNotesStore.getState().resumeMeetingBackfill(7);
+
+        expect(wroteTitle()).toBe(false);
+      });
+
+      it('writes no title to a note deleted while it was generated', async () => {
+        mockGenerateNoteTitle.mockImplementationOnce(async () => {
+          note = { ...note, deletedAt: '2026-11-26T12:00:00.000Z' };
+          return 'Generated meeting title';
+        });
+
+        await useNotesStore.getState().resumeMeetingBackfill(7);
+
+        expect(wroteTitle()).toBe(false);
+      });
+
+      it('keeps the title the resume gave a recovered meeting when recovery finishes its notes', async () => {
+        await useNotesStore.getState().resumeMeetingBackfill(7);
+        note = { ...note, title: 'Generated meeting title' };
+        mockGenerateNoteTitle.mockClear();
+
+        await useNotesStore.getState().finishRecoveredMeetingNotes(7);
+
+        expect(mockGenerateNoteTitle).not.toHaveBeenCalled();
+      });
+
+      it('leaves them alone when nothing got through', async () => {
+        mockCloudTranscribe.mockRejectedValue(new Error('Network request failed'));
+
+        await useNotesStore.getState().resumeMeetingBackfill(7);
+
+        expect(mockGenerateNoteTitle).not.toHaveBeenCalled();
+        expect(ReasoningService.processText).not.toHaveBeenCalled();
+      });
+
+      it('leaves them to the run that finishes the audio when a meeting paused this one', async () => {
+        owe([{ startMs: 0, endMs: 250_000 }]);
+        let capturing = false;
+        mockCloudTranscribe.mockImplementation(async () => {
+          capturing = true;
+          return { text: 'First piece.', duration: 0 };
+        });
+
+        await useNotesStore.getState().resumeMeetingBackfill(7, { shouldStop: () => capturing });
+
+        expect(mockCloudTranscribe).toHaveBeenCalledTimes(1);
+        expect(mockGenerateNoteTitle).not.toHaveBeenCalled();
+        expect(ReasoningService.processText).not.toHaveBeenCalled();
+      });
+
+      it('uses no cloud for them when the account changed during the upload', async () => {
+        mockCloudTranscribe.mockImplementation(async () => {
+          mockAuthState.user = { ...signedInUser, id: 'user-2' };
+          return { text: 'Backfilled.', duration: 0 };
+        });
+
+        await useNotesStore.getState().resumeMeetingBackfill(7);
+
+        expect(mockGenerateNoteTitle).not.toHaveBeenCalled();
+        expect(ReasoningService.processText).not.toHaveBeenCalled();
+        expect(notesRepository.updateNote).toHaveBeenCalledWith(7, {
+          title: 'Local fallback title',
+        });
+      });
+
+      it('lets the next run start while they are generated', async () => {
+        owe([
+          { startMs: 100_000, endMs: 110_000 },
+          { startMs: 150_000, endMs: 160_000 },
+        ]);
+        mockCloudTranscribe.mockImplementation(async ({ audioUri }: { audioUri: string }) => {
+          if (audioUri.endsWith('range-150000.wav')) throw new Error('Network request failed');
+          return { text: 'First.', duration: 0 };
+        });
+        let releaseTitle: (title: string) => void = () => undefined;
+        mockGenerateNoteTitle.mockImplementationOnce(
+          () =>
+            new Promise<string>((resolve) => {
+              releaseTitle = resolve;
+            }),
+        );
+
+        const first = useNotesStore.getState().resumeMeetingBackfill(7);
+        for (let i = 0; i < 50 && mockGenerateNoteTitle.mock.calls.length === 0; i += 1) {
+          await flush();
+        }
+        expect(mockGenerateNoteTitle).toHaveBeenCalledTimes(1);
+
+        mockCloudTranscribe.mockResolvedValue({ text: 'Second.', duration: 0 });
+        await useNotesStore.getState().resumeMeetingBackfill(7);
+
+        expect(mockExtractWavRange).toHaveBeenLastCalledWith(RECORDING, 150_000, 160_000);
+        expect(filesOnDisk.has(RECORDING)).toBe(false);
+        releaseTitle('Late title');
+        await first;
       });
     });
 
@@ -2069,6 +2255,50 @@ describe('live cloud meeting transcript', () => {
     expect(notesRepository.replaceSegments).toHaveBeenCalledWith(7, [
       { noteId: 7, text: 'One.', startMs: 0, endMs: 900, speakerLabel: null, sortOrder: 0 },
       { noteId: 7, text: 'Two.', startMs: 1000, endMs: 2000, speakerLabel: null, sortOrder: 1 },
+    ]);
+  });
+
+  it('keeps a recovered transcript in the order spoken, not the order it was saved in', () => {
+    (notesRepository.getTranscriptionStatus as jest.Mock).mockReset().mockReturnValue('diarizing');
+    // Live rows are numbered as each utterance finishes: a retired leg's last turn comes late.
+    (notesRepository.getSegments as jest.Mock).mockReturnValue([
+      {
+        ...segment('New leg.'),
+        id: 1,
+        startMs: 60_000,
+        endMs: 62_000,
+        speakerLabel: null,
+        sortOrder: 0,
+      },
+      {
+        ...segment('Retired leg.'),
+        id: 2,
+        startMs: 58_000,
+        endMs: 60_500,
+        speakerLabel: null,
+        sortOrder: 1,
+      },
+    ]);
+
+    useNotesStore.getState().keepCloudMeetingTranscript(7);
+
+    expect(notesRepository.replaceSegments).toHaveBeenCalledWith(7, [
+      {
+        noteId: 7,
+        text: 'Retired leg.',
+        startMs: 58_000,
+        endMs: 60_500,
+        speakerLabel: null,
+        sortOrder: 0,
+      },
+      {
+        noteId: 7,
+        text: 'New leg.',
+        startMs: 60_000,
+        endMs: 62_000,
+        speakerLabel: null,
+        sortOrder: 1,
+      },
     ]);
   });
 });
