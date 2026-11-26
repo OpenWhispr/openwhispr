@@ -50,8 +50,8 @@ export interface UserConfig {
   keyboardTone?: KeyboardTone;
   // Language code the keyboard translates dictation into; null or unset is Off.
   keyboardTranslationTarget?: string | null;
-  // Records and transcribes in the keyboard for OpenWhispr Cloud, without opening the app.
-  // Off by default for the first TestFlight build.
+  // Records and transcribes in the keyboard, without opening the app. Unset is on; read it
+  // through keyboardDirectDictationEnabled.
   keyboardDirectDictation?: boolean;
   // The keyboard's typing help (src/lib/keyboardTypingSync.ts), apart from the dictation language.
   // Unset or null follows the device's languages / the typing language; haptics default on.

@@ -19,6 +19,10 @@ import {
 } from '@/lib/keyboardTranslationSync';
 import { getDictationAgentName } from '@/lib/dictationAgent';
 import {
+  keyboardDirectDictationEnabled,
+  keyboardDirectDictationSupported,
+} from '@/lib/keyboardDirectSetting';
+import {
   KEYBOARD_TYPING_LANGUAGES,
   KEYBOARD_TYPING_LAYOUTS,
   clearKeyboardLearnedWords,
@@ -30,7 +34,6 @@ import {
   setKeyboardTypingLayout,
 } from '@/lib/keyboardTypingSync';
 import { safeHaptics } from '@/lib/utils';
-import { AppGroupStorage } from '../../modules/app-group-storage/src';
 import { LiveActivity } from '../../modules/live-activity/src';
 
 const AUTOMATIC = 'automatic';
@@ -101,6 +104,15 @@ function confirmClearLearnedWords(): void {
   );
 }
 
+const DIRECT_DICTATION_HELP_TITLE = 'When OpenWhispr still opens';
+
+function explainDirectDictation(): void {
+  Alert.alert(
+    DIRECT_DICTATION_HELP_TITLE,
+    'Works with OpenWhispr Cloud, and with Parakeet in Local Mode, which types your words without cleanup.\n\nThe app still opens for Bring Your Own Key, Whisper, a custom cleanup prompt and the voice assistant, and when you dictate while music plays or with Bluetooth audio.',
+  );
+}
+
 export default function PreferencesScreen() {
   const config = useConfigStore((state) => state.config);
   const autoLearn = config?.autoLearnCorrections ?? true;
@@ -116,11 +128,8 @@ export default function PreferencesScreen() {
   );
   const agentName = config ? getDictationAgentName(config) : 'OpenWhispr';
   const handleToggleAutoLearn = useConfigToggle('autoLearnCorrections');
-  const supportsDirectDictation =
-    Platform.OS === 'ios' &&
-    Number.parseInt(String(Platform.Version), 10) >= 26 &&
-    AppGroupStorage.supportsKeyboardDirectDictation;
-  const directDictation = config?.keyboardDirectDictation ?? false;
+  const supportsDirectDictation = keyboardDirectDictationSupported();
+  const directDictation = keyboardDirectDictationEnabled(config);
   const handleToggleDirectDictation = useConfigToggle('keyboardDirectDictation');
   const [dictationMode, setDictationMode] = useState(() => LiveActivity.isDictationModeEnabled());
 
@@ -153,8 +162,8 @@ export default function PreferencesScreen() {
           showChevron={false}
         />
       </SettingsSection>
-      <SettingsSection title="Keyboard">
-        {/* First in the section because it is the prerequisite for everything
+      <SettingsSection title="Keyboard setup">
+        {/* The first keyboard row because it is the prerequisite for everything
             below it, and because the person who needs it most is the one whose
             dictation just died. Routes to the recovery screen rather than
             Linking.openSettings(): iOS only ever lands on Settings > OpenWhispr,
@@ -167,13 +176,41 @@ export default function PreferencesScreen() {
           description="Required for keyboard dictation. Tap for setup steps."
           onPress={() => router.push('/keyboard-full-access')}
         />
+        {Platform.OS === 'ios' ? (
+          <SettingsRow
+            iconStyle="line"
+            icon="command"
+            mdIcon="Command"
+            title="Hardware keyboard shortcut"
+            description="Dictate into any app from a Magic Keyboard or other hardware keyboard"
+            onPress={() => router.push('/(account)/hardware-keyboard')}
+          />
+        ) : null}
+      </SettingsSection>
+      <SettingsSection title="Keyboard dictation">
         {supportsDirectDictation ? (
           <SettingsRow
             iconStyle="line"
             icon="mic"
             mdIcon="Mic"
             title="Dictate without opening OpenWhispr"
-            description="Beta. Records in the keyboard for OpenWhispr Cloud, and on this iPhone with Parakeet in Local Mode, typed as transcribed without cleanup. Bring Your Own Key, Whisper, a custom cleanup prompt and the assistant still open the app, and so does dictating while music plays or with Bluetooth audio."
+            description="Beta. Records in the keyboard instead of switching to the app."
+            descriptionAccessory={
+              <Pressable
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={DIRECT_DICTATION_HELP_TITLE}
+                onPress={explainDirectDictation}
+                style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+              >
+                <SystemIcon
+                  name="questionmark.circle"
+                  mdName="CircleHelp"
+                  size={15}
+                  color="secondaryLabel"
+                />
+              </Pressable>
+            }
             rightElement={
               <SettingsSwitch
                 accessibilityLabel="Dictate without opening OpenWhispr"
@@ -184,35 +221,6 @@ export default function PreferencesScreen() {
             showChevron={false}
           />
         ) : null}
-        <SettingsRow
-          iconStyle="line"
-          icon="keyboard"
-          mdIcon="Keyboard"
-          title="Keyboard Tone"
-          description="Applies to keyboard dictation only"
-          subtitle={toneLabel(keyboardTone)}
-          onPress={() => router.push('/(account)/keyboard-tone')}
-        />
-        {keyboardCanTranslate() ? (
-          <SettingsRow
-            iconStyle="line"
-            icon="character.bubble"
-            mdIcon="Languages"
-            title="Translate dictation"
-            description="Type keyboard dictation in another language"
-            subtitle={translationTarget ? translationLabel(translationTarget) : 'Off'}
-            onPress={() => router.push('/(account)/keyboard-translation')}
-          />
-        ) : null}
-        <SettingsRow
-          iconStyle="line"
-          icon="person.wave.2"
-          mdIcon="UserRoundCog"
-          title="Voice Assistant"
-          description="Have the keyboard’s wand write for you"
-          subtitle={agentName}
-          onPress={() => router.push('/(account)/dictation-agent')}
-        />
         <SettingsRow
           iconStyle="line"
           icon="waveform"
@@ -230,16 +238,33 @@ export default function PreferencesScreen() {
           }
           showChevron={false}
         />
-        {Platform.OS === 'ios' ? (
+        <SettingsRow
+          iconStyle="line"
+          icon="keyboard"
+          mdIcon="Keyboard"
+          title="Keyboard Tone"
+          subtitle={toneLabel(keyboardTone)}
+          onPress={() => router.push('/(account)/keyboard-tone')}
+        />
+        {keyboardCanTranslate() ? (
           <SettingsRow
             iconStyle="line"
-            icon="command"
-            mdIcon="Command"
-            title="Hardware keyboard shortcut"
-            description="Dictate into any app from a Magic Keyboard or other hardware keyboard"
-            onPress={() => router.push('/(account)/hardware-keyboard')}
+            icon="character.bubble"
+            mdIcon="Languages"
+            title="Translate dictation"
+            subtitle={translationTarget ? translationLabel(translationTarget) : 'Off'}
+            onPress={() => router.push('/(account)/keyboard-translation')}
           />
         ) : null}
+        <SettingsRow
+          iconStyle="line"
+          icon="person.wave.2"
+          mdIcon="UserRoundCog"
+          title="Voice Assistant"
+          description="Have the keyboard’s wand write for you"
+          subtitle={agentName}
+          onPress={() => router.push('/(account)/dictation-agent')}
+        />
       </SettingsSection>
       {Platform.OS === 'ios' ? (
         <SettingsSection title="Keyboard typing">

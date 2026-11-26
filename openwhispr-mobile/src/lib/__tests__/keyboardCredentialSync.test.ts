@@ -1,9 +1,11 @@
+import { Platform } from 'react-native';
 import { startKeyboardCredentialSync } from '@/lib/keyboardCredentialSync';
 
 const mockSetCredential = jest.fn((_cookie: string | null) => true);
 
 jest.mock('../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: {
+    supportsKeyboardDirectDictation: true,
     setKeyboardSessionCredential: (cookie: string | null) => mockSetCredential(cookie),
   },
 }));
@@ -40,7 +42,20 @@ const realUser = { id: 'u1', email: 'a@b.co', isAnonymous: false };
 // The keyboard only uses the session for the account its snapshot names.
 const credential = (userId: string, cookie: string) => JSON.stringify({ userId, cookie });
 
+const originalOS = Platform.OS;
+const originalVersion = Object.getOwnPropertyDescriptor(Platform, 'Version');
+function setIOSVersion(version: string): void {
+  Object.defineProperty(Platform, 'Version', { configurable: true, value: version });
+}
+
+afterAll(() => {
+  Platform.OS = originalOS;
+  if (originalVersion) Object.defineProperty(Platform, 'Version', originalVersion);
+});
+
 beforeEach(() => {
+  Platform.OS = 'ios';
+  setIOSVersion('26.1');
   useConfigStore.setState({ config: { defaultMode: 'cloud', keyboardDirectDictation: true } });
   mockSetCredential.mockClear();
   useAuthStore.setState({ user: null, sessionCookie: null, isGuest: false, isLoading: false });
@@ -60,7 +75,7 @@ describe('startKeyboardCredentialSync', () => {
   });
 
   it('only shares a session while direct dictation is enabled', () => {
-    useConfigStore.setState({ config: { defaultMode: 'cloud' } });
+    useConfigStore.setState({ config: { defaultMode: 'cloud', keyboardDirectDictation: false } });
     useAuthStore.setState({ user: realUser, sessionCookie: 'a=1' });
     const stop = startKeyboardCredentialSync();
     try {
@@ -70,6 +85,23 @@ describe('startKeyboardCredentialSync', () => {
     } finally {
       stop();
     }
+  });
+
+  it('shares the session by default when the setting was never changed', () => {
+    useConfigStore.setState({ config: { defaultMode: 'cloud' } });
+    useAuthStore.setState({ user: realUser, sessionCookie: 'a=1' });
+    const stop = startKeyboardCredentialSync();
+    expect(mockSetCredential.mock.calls).toEqual([[credential('u1', 'a=1')]]);
+    stop();
+  });
+
+  it('shares nothing with a keyboard that cannot record by itself (iOS 18)', () => {
+    setIOSVersion('18.7');
+    useConfigStore.setState({ config: { defaultMode: 'cloud' } });
+    useAuthStore.setState({ user: realUser, sessionCookie: 'a=1' });
+    const stop = startKeyboardCredentialSync();
+    expect(mockSetCredential.mock.calls).toEqual([[null]]);
+    stop();
   });
 
   it('removes the credential for a guest', () => {
