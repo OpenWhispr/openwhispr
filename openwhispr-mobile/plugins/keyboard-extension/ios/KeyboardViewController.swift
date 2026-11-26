@@ -5935,8 +5935,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     logRecordMarker("handleDirectRecordTapped")
     // A meeting may have started since the pill was drawn.
     if micBlockedByMeeting() { return }
-    // Music or Bluetooth audio may have started since the pill was drawn; recording here would
-    // stop it for good, so the audio is checked at the tap.
+    // Music may have started since the pill was drawn; recording here would stop it for good,
+    // so the audio is checked at the tap.
     guard let direct = directDictation, direct.canRecordHere else {
       refreshRecordButton()
       return

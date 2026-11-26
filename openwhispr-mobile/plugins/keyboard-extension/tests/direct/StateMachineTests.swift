@@ -164,6 +164,8 @@ final class Harness {
   /// The keyboard's effective translation target, as `readTranslation` reports it.
   var translation: (code: String, label: String)?
   var translationReads = 0
+  /// The audio route's port types, as `readRoutePortTypes` reports them.
+  var routePortTypes = ["Speaker"]
   /// Runs after each `readTranslation`, to change the target between two reads.
   var afterTranslationRead: (() -> Void)?
   /// The App Group the capture-lease heartbeat is read from; nil reads as no meeting.
@@ -196,6 +198,7 @@ final class Harness {
         defer { self.afterTranslationRead?() }
         return self.translation
       },
+      readRoutePortTypes: { [unowned self] in self.routePortTypes },
       encode: { [unowned self] pcm, m4a, gain in
         self.encodeGains.append(gain)
         if let error = self.encodeError { throw error }
@@ -275,6 +278,7 @@ extension DirectDictationTests {
   static func testStateMachine() {
     machineHappyPath()
     machineStartTimeout()
+    machineBluetoothStartWaitsLonger()
     machineStartFailure()
     machineEligibleAgainAfterNewSnapshot()
     machineCapAtFiveMinutes()
@@ -1137,6 +1141,28 @@ extension DirectDictationTests {
     expect(h.capture.stopCount >= 1, true, "timeout: capture stopped")
     expect(h.dictation.isEligible, false, "timeout: path off")
     expect(h.files(), [], "timeout: no record left")
+  }
+
+  /// A Bluetooth link can take longer than the built-in mic to start, so a slow start there
+  /// still records instead of dropping the take and turning the path off.
+  static func machineBluetoothStartWaitsLonger() {
+    let h = Harness()
+    defer { h.cleanup() }
+    h.routePortTypes = ["BluetoothA2DPOutput"]
+    h.dictation.start()
+    h.scheduler.advance(seconds: 5)
+    expect(h.state, .starting, "bluetooth: still starting after the default timeout")
+    h.capture.started()
+    expect(h.state, .recording, "bluetooth: a slow start records")
+    expect(h.dictation.isEligible, true, "bluetooth: path stays on")
+
+    let slow = Harness()
+    defer { slow.cleanup() }
+    slow.routePortTypes = ["BluetoothHFP"]
+    slow.dictation.start()
+    slow.scheduler.advance(seconds: 8.01)
+    expect(slow.state, .failed(.captureUnavailable), "bluetooth: a start that never comes still times out")
+    expect(slow.dictation.isEligible, false, "bluetooth timeout: path off")
   }
 
   static func machineStartFailure() {

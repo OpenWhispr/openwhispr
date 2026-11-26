@@ -60,6 +60,8 @@ struct DirectDependencies {
   var readTone: () -> String
   /// The keyboard's effective translation target and its English label; nil when Off.
   var readTranslation: () -> (code: String, label: String)?
+  /// The audio route's port types (`AVAudioSession.Port` raw values), read as a take starts.
+  var readRoutePortTypes: () -> [String]
   /// `DirectAudioEncoder.encodeAAC` in production; a file copy in tests.
   var encode: (_ pcmURL: URL, _ m4aURL: URL, _ gain: Float) throws -> Void
   var makeJobId: () -> String
@@ -76,7 +78,6 @@ struct DirectDependencies {
 /// One per keyboard process: the view controller can be recreated mid-take, so it attaches to
 /// this object rather than owning it. Every call happens on the main thread.
 final class DirectDictation {
-  static let startTimeout: TimeInterval = 3
   static let takeCap: TimeInterval = 300
 
   private(set) var state: DirectDictationState = .idle {
@@ -256,7 +257,8 @@ final class DirectDictation {
     }
     state = .starting
     let token = nextToken
-    startTimer = deps.scheduler.after(Self.startTimeout) { [weak self] in
+    let startTimeout = DirectAudioRoute.startTimeout(portTypes: deps.readRoutePortTypes())
+    startTimer = deps.scheduler.after(startTimeout) { [weak self] in
       guard self?.job?.token == token else { return }
       self?.captureUnavailable()
     }

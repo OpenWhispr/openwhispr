@@ -107,7 +107,7 @@ const DIRECT_DICTATION_HELP_TITLE = 'When OpenWhispr still opens';
 function explainDirectDictation(): void {
   Alert.alert(
     DIRECT_DICTATION_HELP_TITLE,
-    'Works with OpenWhispr Cloud, and with Parakeet in Local Mode, which types your words without cleanup.\n\nThe app still opens for Bring Your Own Key, Whisper, a custom cleanup prompt and the voice assistant, and when you dictate while music plays or with Bluetooth audio.',
+    'Works with OpenWhispr Cloud, and with Parakeet in Local Mode, which types your words without cleanup.\n\nThe app still opens for Bring Your Own Key, Whisper, a custom cleanup prompt and the voice assistant, and when you dictate while music plays.',
   );
 }
 
