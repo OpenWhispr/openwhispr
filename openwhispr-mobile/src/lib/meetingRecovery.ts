@@ -1,6 +1,7 @@
 import 'expo-sqlite/localStorage/install';
 import { AppState, type AppStateStatus } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Network from 'expo-network';
 import type { Note, NotesRepository } from '@/data';
 import { notesRepository } from '@/data';
 import { isCaptureLeaseHeld } from '@/lib/captureLease';
@@ -13,6 +14,7 @@ import {
   meetingRecordingUri,
   hasPendingBackfillFile,
   readPendingBackfill,
+  readPendingBackfillState,
   savePendingBackfill,
 } from '@/lib/transcriptAudio';
 import {
@@ -104,6 +106,8 @@ export interface MeetingRecoveryDeps {
   savePendingBackfill(noteId: number, windows: AudioWindow[]): Promise<void>;
   /** True while a meeting records: owed audio then waits, off the live stream's network. */
   isMeetingCapturing(): boolean;
+  /** True when the note's sidecar marks its whole recording as waiting for the connection. */
+  awaitsConnection(noteId: number): Promise<boolean>;
 }
 
 /**
@@ -198,6 +202,16 @@ async function sweepSettledRecordings(
         }
         return;
       }
+      // Stopped offline with nothing heard live: the whole recording goes up through the same
+      // resume, which keeps to the account that recorded it and to the backoff.
+      if (
+        note.transcriptionStatus === 'failed' &&
+        pendingBackfills.has(note.id) &&
+        (await deps.awaitsConnection(note.id))
+      ) {
+        backfills.push(note.id);
+        return;
+      }
       if (!hasSidecar) return;
       if (await prepareOwedBackfill(note.id, hasSidecar, deps)) {
         backfills.push(note.id);
@@ -280,6 +294,8 @@ async function finishKeptMeeting(
 async function recoverOrphan(
   note: Note,
   pendingBackfills: ReadonlySet<number>,
+  /** Notes this adds are resumed through their mark with the settled ones. */
+  awaitingConnection: number[],
   deps: MeetingRecoveryDeps,
 ): Promise<void> {
   const markerKey = `${MEETING_RESUME_MARKER_PREFIX}${note.id}`;
@@ -335,6 +351,19 @@ async function recoverOrphan(
     return;
   }
 
+  // Killed while uploading a recording that waited for the connection: its mark, not Retry,
+  // knows the account it may go up under and how often it was tried.
+  if (
+    hasRecording &&
+    !hasTranscript &&
+    pendingBackfills.has(note.id) &&
+    (await deps.awaitsConnection(note.id))
+  ) {
+    if (alreadyAttempted) deps.storage.removeItem(markerKey);
+    awaitingConnection.push(note.id);
+    return;
+  }
+
   // Never over saved segments: a resume transcribes the whole file again and replaces them.
   if (!hasRecording || hasTranscript || alreadyAttempted) {
     if (alreadyAttempted) deps.storage.removeItem(markerKey);
@@ -366,7 +395,8 @@ async function recoverOrphan(
  *   that itself kills the app is not retried on the next launch.
  * - Anything else is marked failed, which surfaces the note's Retry.
  * - A failed meeting's recording older than STALE_RECORDING_MS is deleted, and a done meeting
- *   that still owes audio from its recording gets it transcribed when online.
+ *   that still owes audio from its recording gets it transcribed when online, as does a meeting
+ *   whose whole recording waits for the connection (killed mid-upload included).
  * - Any other done meeting's recording is deleted: a processed meeting keeps no audio.
  *
  * Safe to run twice; one note's failure never stops the others.
@@ -394,7 +424,7 @@ export async function recoverOrphanedMeetings(deps: MeetingRecoveryDeps): Promis
     // Before its wait for the app to be active, which a foreground resume can start in.
     notesInLaunchRecovery.add(note.id);
     try {
-      await attempt(deps, note.id, () => recoverOrphan(note, pendingBackfills, deps));
+      await attempt(deps, note.id, () => recoverOrphan(note, pendingBackfills, backfills, deps));
     } finally {
       notesInLaunchRecovery.delete(note.id);
     }
@@ -424,17 +454,28 @@ export interface ForegroundBackfillDeps {
   isMeetingCapturing(): boolean;
   /** Notes launch recovery is still finishing; defaults to this launch's own recovery. */
   isFinishingLaunchRecovery?(noteId: number): boolean;
+  /** Whether the app is in the foreground now; a connection back in the background waits for it. */
+  isAppActive?(): boolean;
+}
+
+export interface ForegroundBackfillResumer {
+  /** The app-state listener. */
+  (state: AppStateStatus): void;
+  /** The network-state listener: `isConnected` as the platform reports it, unknown included. */
+  onNetworkChange(isConnected: boolean | null | undefined): void;
 }
 
 /**
- * A done meeting that still owes audio would otherwise wait for the next cold launch, which on
- * a phone can be days away. Returns an app-state listener that resumes every owed backfill when
- * the app comes back from the background online: one pass per return, one pass at a time.
+ * A done meeting that still owes audio, or one whose whole recording waits for the connection,
+ * would otherwise wait for the next cold launch, which on a phone can be days away. Resumes every
+ * owed backfill when the app comes back from the background online, and when the connection
+ * comes back while the app is in the foreground: one pass per return, one pass at a time.
  */
 export function createForegroundBackfillResumer(
   deps: ForegroundBackfillDeps,
-): (state: AppStateStatus) => void {
+): ForegroundBackfillResumer {
   let wasInBackground = false;
+  let wasOffline = false;
   let running = false;
   const isRecovering = deps.isFinishingLaunchRecovery ?? isFinishingLaunchRecovery;
   const runPass = async (): Promise<void> => {
@@ -452,14 +493,7 @@ export function createForegroundBackfillResumer(
       deps.reportError(error, 0);
     }
   };
-  return (state) => {
-    if (state === 'background') {
-      wasInBackground = true;
-      return;
-    }
-    // 'inactive' → 'active' alone is Control Centre or a system alert, not a return.
-    if (state !== 'active' || !wasInBackground || running) return;
-    wasInBackground = false;
+  const start = (): void => {
     running = true;
     runPass()
       .catch(() => undefined)
@@ -467,6 +501,28 @@ export function createForegroundBackfillResumer(
         running = false;
       });
   };
+  const onAppStateChange = (state: AppStateStatus): void => {
+    if (state === 'background') {
+      wasInBackground = true;
+      return;
+    }
+    // 'inactive' → 'active' alone is Control Centre or a system alert, not a return.
+    if (state !== 'active' || !wasInBackground || running) return;
+    wasInBackground = false;
+    start();
+  };
+  const onNetworkChange = (isConnected: boolean | null | undefined): void => {
+    // Unknown is not a return: only a phone seen offline coming back online is.
+    if (isConnected !== true) {
+      if (isConnected === false) wasOffline = true;
+      return;
+    }
+    // In the background iOS would suspend the uploads; the return to the app runs the pass.
+    if (!wasOffline || running || !(deps.isAppActive?.() ?? true)) return;
+    wasOffline = false;
+    start();
+  };
+  return Object.assign(onAppStateChange, { onNetworkChange });
 }
 
 const MEETING_RECORDING_FILE = /^meeting-(\d+)\.wav$/;
@@ -624,7 +680,11 @@ export function createMeetingRecoveryDeps(input: {
     hasTranscript: (noteId) => repository.getSegments(noteId).length > 0,
     keepTranscript: (noteId) => useNotesStore.getState().keepCloudMeetingTranscript(noteId),
     finishNotes: (noteId) => useNotesStore.getState().finishRecoveredMeetingNotes(noteId),
-    resume: (noteId) => useNotesStore.getState().retryMeetingTranscription(noteId),
+    resume: (noteId) =>
+      useNotesStore
+        .getState()
+        .retryMeetingTranscription(noteId)
+        .then(() => undefined),
     storage: localStorage,
     reportError: reportRecoveryError,
     repairRecording: (uri) => LivePCMStreaming.repairRecording(uri),
@@ -675,6 +735,8 @@ export function createMeetingRecoveryDeps(input: {
       repository.getSegments(noteId).map(({ startMs, endMs }) => ({ startMs, endMs })),
     savePendingBackfill,
     isMeetingCapturing: isCaptureLeaseHeld,
+    awaitsConnection: async (noteId) =>
+      !!(await readPendingBackfillState(noteId))?.awaitingConnection,
   };
 }
 
@@ -684,17 +746,23 @@ export function startMeetingRecoveryOnce(): void {
   hasStarted = true;
   const directory = FileSystem.documentDirectory;
   // For the app's lifetime. The store runs one backfill per note at a time, so a return to
-  // the foreground while the launch pass below is still uploading starts nothing twice.
-  AppState.addEventListener(
-    'change',
-    createForegroundBackfillResumer({
-      listPendingBackfills: () => listPendingBackfillIds(directory),
-      isOnline: isDeviceOnline,
-      resumeBackfill: resumeOwedBackfill,
-      reportError: reportRecoveryError,
-      isMeetingCapturing: isCaptureLeaseHeld,
-    }),
-  );
+  // the foreground or of the connection while the launch pass below is still uploading starts
+  // nothing twice.
+  const resumer = createForegroundBackfillResumer({
+    listPendingBackfills: () => listPendingBackfillIds(directory),
+    isOnline: isDeviceOnline,
+    resumeBackfill: resumeOwedBackfill,
+    reportError: reportRecoveryError,
+    isMeetingCapturing: isCaptureLeaseHeld,
+    isAppActive: () => AppState.currentState === 'active',
+  });
+  AppState.addEventListener('change', resumer);
+  try {
+    Network.addNetworkStateListener(({ isConnected }) => resumer.onNetworkChange(isConnected));
+  } catch (error) {
+    // Without it, a return to the app still resumes the work.
+    reportRecoveryError(error);
+  }
   // A recording found again can make its meeting resumable, so this runs first.
   const repaired: Promise<number[]> = directory
     ? repairMeetingRecordings(createMeetingRecordingRepairDeps(directory, notesRepository)).catch(

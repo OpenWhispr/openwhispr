@@ -601,6 +601,34 @@ describe('useCloudMeeting', () => {
     );
   });
 
+  it('says the meeting is recording until its recording fails, and again for a later session', async () => {
+    const { result, setEnabled } = setup(true, 'file:///docs/meeting-7.wav');
+    await goLive();
+    expect(result.current.recording).toBe(true);
+
+    act(() => {
+      mockFailedListeners[0]();
+    });
+    expect(result.current.recording).toBe(false);
+
+    setEnabled(false);
+    setEnabled(true);
+    await goLive();
+    expect(result.current.recording).toBe(true);
+    // A late event from the first session's listener must not mark the second.
+    act(() => {
+      mockFailedListeners[0]();
+    });
+    expect(result.current.recording).toBe(true);
+  });
+
+  it('says a meeting with no recording requested is not recording', async () => {
+    const { result } = setup();
+    await goLive();
+
+    expect(result.current.recording).toBe(false);
+  });
+
   it('returns no recording when none was requested', async () => {
     const { result } = setup();
     await goLive();

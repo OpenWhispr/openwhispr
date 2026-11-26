@@ -50,7 +50,7 @@ const mockConfigState: {
   config: {
     autoGenerateNoteTitle: boolean;
     appleLocalIntelligenceEnabled?: boolean;
-    inference?: { notes?: { mode: 'local' } };
+    inference?: { notes?: { mode: 'local' | 'providers' } };
   };
 } = {
   config: { autoGenerateNoteTitle: false },
@@ -842,15 +842,46 @@ describe('meeting post-pass', () => {
       expect(outcome).toEqual({ owedMs: 60_000 });
     });
 
-    it('ends failed with the recording and Retry when nothing was heard live', async () => {
+    it('waits for the connection with the recording when nothing was heard live', async () => {
       note = { ...note, sourceFile: null };
 
       await finalize({ utterances: [], droppedWindows: [{ startMs: 0, endMs: 600_000 }] });
 
       expect(mockCloudTranscribe).not.toHaveBeenCalled();
+      // Settled, so nothing holds the processing screen, but not presented as a failure.
       expect(status).toBe('failed');
       expect(filesOnDisk.has(RECORDING)).toBe(true);
       expect(note?.sourceFile).toBe(RECORDING);
+      expect(JSON.parse(fileContents.get(SIDECAR) ?? '{}')).toEqual({
+        version: 1,
+        windows: [],
+        awaitingConnection: { accountId: 'user-1' },
+      });
+      await expect(useNotesStore.getState().isMeetingAwaitingConnection(7)).resolves.toBe(true);
+    });
+
+    it('marks the meeting waiting before it settles, so a kill in between resumes it', async () => {
+      const statusAtWrite: string[] = [];
+      mockWriteAsStringAsync.mockImplementation(async (uri: string, content: string) => {
+        statusAtWrite.push(status);
+        filesOnDisk.add(uri);
+        fileContents.set(uri, content);
+      });
+
+      await finalize({ utterances: [] });
+
+      expect(statusAtWrite).toEqual(['transcribing']);
+      expect(status).toBe('failed');
+    });
+
+    it('ends failed with Retry when the waiting mark cannot be written', async () => {
+      mockWriteAsStringAsync.mockRejectedValue(new Error('disk full'));
+
+      await finalize({ utterances: [] });
+
+      expect(status).toBe('failed');
+      expect(filesOnDisk.has(RECORDING)).toBe(true);
+      await expect(useNotesStore.getState().isMeetingAwaitingConnection(7)).resolves.toBe(false);
     });
 
     it('still finishes a meeting that dropped nothing', async () => {
@@ -874,6 +905,21 @@ describe('meeting post-pass', () => {
     expect(mockCloudTranscribe).not.toHaveBeenCalled();
     expect(status).toBe('failed');
     expect(filesOnDisk.has(RECORDING)).toBe(true);
+    // Retry, not a wait that would upload under whoever is signed in.
+    expect(filesOnDisk.has(SIDECAR)).toBe(false);
+    await expect(useNotesStore.getState().isMeetingAwaitingConnection(7)).resolves.toBe(false);
+  });
+
+  it('leaves a changed account Retry even when offline at Stop', async () => {
+    const fence = captureMeetingAccount();
+    mockAuthState.user = { ...signedInUser, id: 'user-2' };
+    mockNetworkState.mockResolvedValue({ isConnected: false });
+
+    await finalize({ utterances: [] }, 3600, fence);
+
+    expect(status).toBe('failed');
+    expect(filesOnDisk.has(SIDECAR)).toBe(false);
+    await expect(useNotesStore.getState().isMeetingAwaitingConnection(7)).resolves.toBe(false);
   });
 
   it('leaves the dropped stretches owed, with no upload, when the account changed', async () => {
@@ -974,6 +1020,9 @@ describe('meeting post-pass', () => {
     expect(status).toBe('failed');
     expect(mockDeleteAsync).not.toHaveBeenCalled();
     expect(note?.sourceFile).toBe(RECORDING);
+    // Online and refused: Retry, as before, not a wait for a connection it already had.
+    expect(filesOnDisk.has(SIDECAR)).toBe(false);
+    await expect(useNotesStore.getState().isMeetingAwaitingConnection(7)).resolves.toBe(false);
   });
 
   it('ends done and empty when the recording holds no speech', async () => {
@@ -1655,6 +1704,258 @@ describe('meeting post-pass', () => {
 
       expect(mockProcessMeeting).toHaveBeenCalled();
       expect(mockCloudTranscribe).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a meeting waiting for the connection', () => {
+    const NOW = 50_000_000;
+    const MIN = 60_000;
+    let nowSpy: jest.SpyInstance<number, []>;
+    const sidecar = (): Record<string, unknown> => JSON.parse(fileContents.get(SIDECAR) ?? '{}');
+    const awaitConnection = (
+      accountId: string | null = 'user-1',
+      retry: { attempts: number; lastAttemptAt: number } | null = null,
+    ): void => {
+      filesOnDisk.add(SIDECAR);
+      fileContents.set(
+        SIDECAR,
+        JSON.stringify({
+          version: 1,
+          windows: [],
+          awaitingConnection: { accountId },
+          ...(retry ?? {}),
+        }),
+      );
+    };
+    const resume = (shouldStop?: () => boolean): Promise<void> =>
+      useNotesStore.getState().resumeMeetingBackfill(7, { shouldStop });
+    const waiting = (): Promise<boolean> => useNotesStore.getState().isMeetingAwaitingConnection(7);
+
+    beforeEach(() => {
+      status = 'failed';
+      awaitConnection();
+      nowSpy = jest.spyOn(Date, 'now').mockReturnValue(NOW);
+    });
+    afterEach(() => nowSpy.mockRestore());
+
+    it('transcribes the whole recording once online, then finishes like any meeting', async () => {
+      await resume();
+
+      expect(mockCloudTranscribe).toHaveBeenCalledTimes(1);
+      expect(mockCloudTranscribe).toHaveBeenCalledWith(
+        expect.objectContaining({ audioUri: RECORDING, provider: 'cloud', purpose: 'meeting' }),
+      );
+      expect(savedTexts(0)).toEqual(['Whole recording.']);
+      expect(status).toBe('done');
+      expect(mockLogTranscriptionCompleted).toHaveBeenCalledWith({
+        source: 'meeting',
+        provider: 'cloud',
+      });
+      expect(filesOnDisk.has(RECORDING)).toBe(false);
+      expect(filesOnDisk.has(SIDECAR)).toBe(false);
+      expect(note?.sourceFile).toBeNull();
+      await expect(waiting()).resolves.toBe(false);
+    });
+
+    it('is transcribing, never done, while the upload runs', async () => {
+      let statusDuringUpload = '';
+      mockCloudTranscribe.mockImplementation(async () => {
+        statusDuringUpload = status;
+        return { text: 'Whole recording.', duration: 0 };
+      });
+
+      await resume();
+
+      expect(statusDuringUpload).toBe('transcribing');
+    });
+
+    it('keeps waiting offline, uploading nothing and counting nothing', async () => {
+      mockNetworkState.mockResolvedValue({ isConnected: false });
+
+      await resume();
+
+      expect(mockCloudTranscribe).not.toHaveBeenCalled();
+      expect(status).toBe('failed');
+      expect(filesOnDisk.has(RECORDING)).toBe(true);
+      expect(sidecar().attempts ?? 0).toBe(0);
+      await expect(waiting()).resolves.toBe(true);
+    });
+
+    it('runs once when two triggers arrive together', async () => {
+      await Promise.all([
+        resume(),
+        resume(),
+        useNotesStore.getState().retryMeetingTranscription(7),
+      ]);
+
+      expect(mockCloudTranscribe).toHaveBeenCalledTimes(1);
+      expect(status).toBe('done');
+    });
+
+    it('does not start while a meeting is being captured, and counts nothing', async () => {
+      await resume(() => true);
+
+      expect(mockCloudTranscribe).not.toHaveBeenCalled();
+      expect(sidecar().attempts ?? 0).toBe(0);
+    });
+
+    it('ends failed with Retry after a server failure, and waits out the backoff', async () => {
+      mockCloudTranscribe.mockRejectedValue(new Error('Server refused'));
+
+      await resume();
+      expect(mockCloudTranscribe).toHaveBeenCalledTimes(1);
+      expect(status).toBe('failed');
+      expect(filesOnDisk.has(RECORDING)).toBe(true);
+      expect(sidecar()).toMatchObject({ attempts: 1, lastAttemptAt: NOW });
+      // Online and refused: no longer just waiting for a connection.
+      await expect(waiting()).resolves.toBe(false);
+
+      nowSpy.mockReturnValue(NOW + 5 * MIN - 1);
+      await resume();
+      expect(mockCloudTranscribe).toHaveBeenCalledTimes(1);
+
+      nowSpy.mockReturnValue(NOW + 5 * MIN);
+      await resume();
+      expect(mockCloudTranscribe).toHaveBeenCalledTimes(2);
+      expect(sidecar()).toMatchObject({ attempts: 2, lastAttemptAt: NOW + 5 * MIN });
+    });
+
+    it('counts an attempt before the upload, so one that kills the app still backs off', async () => {
+      let attemptsAtUpload: unknown = null;
+      mockCloudTranscribe.mockImplementation(async () => {
+        attemptsAtUpload = sidecar().attempts;
+        return { text: 'Whole recording.', duration: 0 };
+      });
+
+      await resume();
+
+      expect(attemptsAtUpload).toBe(1);
+    });
+
+    it('never uploads under another account, and leaves the note Retry', async () => {
+      awaitConnection('user-2');
+
+      await resume();
+
+      expect(mockCloudTranscribe).not.toHaveBeenCalled();
+      expect(status).toBe('failed');
+      expect(filesOnDisk.has(RECORDING)).toBe(true);
+      expect(filesOnDisk.has(SIDECAR)).toBe(false);
+      await expect(waiting()).resolves.toBe(false);
+    });
+
+    it('keeps waiting while signed out, for the next sign-in to decide', async () => {
+      // Your own provider keys keep the cloud allowed with no one signed in.
+      mockConfigState.config.inference = { notes: { mode: 'providers' } };
+      mockAuthState.user = null;
+
+      await resume();
+
+      expect(mockCloudTranscribe).not.toHaveBeenCalled();
+      expect(filesOnDisk.has(SIDECAR)).toBe(true);
+    });
+
+    it('uploads nothing for a meeting that may not use the cloud', async () => {
+      note = { ...note, isPrivate: 1 };
+
+      await resume();
+
+      expect(mockCloudTranscribe).not.toHaveBeenCalled();
+      expect(filesOnDisk.has(SIDECAR)).toBe(true);
+    });
+
+    it('drops the mark once the transcript is in, even if the recording stays on disk', async () => {
+      mockDeleteAsync.mockImplementation(async (uri: string) => {
+        if (uri !== RECORDING) filesOnDisk.delete(uri);
+      });
+
+      await resume();
+
+      expect(status).toBe('done');
+      expect(filesOnDisk.has(SIDECAR)).toBe(false);
+    });
+
+    it('leaves a note whose Retry is running to that Retry', async () => {
+      status = 'transcribing';
+
+      await resume();
+
+      expect(mockCloudTranscribe).not.toHaveBeenCalled();
+    });
+
+    describe('Retry', () => {
+      it('offline uploads nothing and keeps the note waiting', async () => {
+        mockNetworkState.mockResolvedValue({ isConnected: false });
+
+        await expect(useNotesStore.getState().retryMeetingTranscription(7)).resolves.toBe(
+          'waiting-for-connection',
+        );
+
+        expect(mockCloudTranscribe).not.toHaveBeenCalled();
+        expect(status).toBe('failed');
+        await expect(waiting()).resolves.toBe(true);
+      });
+
+      it('offline after a server failure waits for the connection again', async () => {
+        fileContents.delete(SIDECAR);
+        filesOnDisk.delete(SIDECAR);
+        mockNetworkState.mockResolvedValue({ isConnected: false });
+
+        await useNotesStore.getState().retryMeetingTranscription(7);
+
+        expect(sidecar()).toEqual({
+          version: 1,
+          windows: [],
+          awaitingConnection: { accountId: 'user-1' },
+        });
+        await expect(waiting()).resolves.toBe(true);
+      });
+
+      it('offline says so, uploading nothing, when the wait cannot be recorded', async () => {
+        mockNetworkState.mockResolvedValue({ isConnected: false });
+        mockWriteAsStringAsync.mockRejectedValue(new Error('disk full'));
+
+        await expect(useNotesStore.getState().retryMeetingTranscription(7)).rejects.toThrow(
+          "You're offline",
+        );
+
+        expect(mockCloudTranscribe).not.toHaveBeenCalled();
+        expect(status).toBe('failed');
+      });
+
+      it('online transcribes at once', async () => {
+        await expect(useNotesStore.getState().retryMeetingTranscription(7)).resolves.toBe(
+          'transcribed',
+        );
+
+        expect(status).toBe('done');
+        expect(filesOnDisk.has(SIDECAR)).toBe(false);
+      });
+
+      it('offline still runs an on-device meeting, which needs no connection', async () => {
+        note = { ...note, diarizationEnabled: 1 };
+        mockNetworkState.mockResolvedValue({ isConnected: false });
+
+        await useNotesStore.getState().retryMeetingTranscription(7);
+
+        expect(mockProcessMeeting).toHaveBeenCalled();
+      });
+    });
+
+    describe('isMeetingAwaitingConnection', () => {
+      it('is false for a done note, a note with no mark, or owed windows', async () => {
+        status = 'done';
+        await expect(waiting()).resolves.toBe(false);
+        status = 'failed';
+        filesOnDisk.delete(SIDECAR);
+        await expect(waiting()).resolves.toBe(false);
+        filesOnDisk.add(SIDECAR);
+        fileContents.set(
+          SIDECAR,
+          JSON.stringify({ version: 1, windows: [{ startMs: 0, endMs: 1 }] }),
+        );
+        await expect(waiting()).resolves.toBe(false);
+      });
     });
   });
 });

@@ -58,7 +58,7 @@ export interface MeetingSession {
   starting: boolean;
   cloud: Pick<
     CloudMeeting,
-    'status' | 'error' | 'startFailure' | 'utterances' | 'partialText' | 'liveSinceMs'
+    'status' | 'error' | 'startFailure' | 'utterances' | 'partialText' | 'liveSinceMs' | 'recording'
   >;
   rawNotes: string;
   setRawNotes: (text: string) => void;
@@ -735,6 +735,7 @@ export function MeetingSessionProvider({
       utterances: cloudMeeting.utterances,
       partialText: cloudMeeting.partialText,
       liveSinceMs: cloudMeeting.liveSinceMs,
+      recording: cloudMeeting.recording,
     },
     rawNotes,
     setRawNotes,

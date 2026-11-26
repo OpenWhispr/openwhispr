@@ -53,6 +53,7 @@ beforeEach(() => {
       utterances: [],
       partialText: '',
       liveSinceMs: null,
+      recording: false,
     },
     stop,
   };

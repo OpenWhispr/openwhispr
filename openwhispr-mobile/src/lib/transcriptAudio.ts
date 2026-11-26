@@ -76,6 +76,12 @@ export interface BackfillRetry {
 
 export interface PendingBackfillState extends BackfillRetry {
   windows: AudioWindow[];
+  /**
+   * Set instead of windows for a cloud meeting stopped offline with nothing heard live: the whole
+   * recording waits for a connection, to go up only under the account that recorded it (null for
+   * a signed-out session).
+   */
+  awaitingConnection?: { accountId: string | null };
 }
 
 /** The wait after the first resume that got nothing through; it doubles per failed attempt. */
@@ -98,6 +104,26 @@ export function isBackfillRetryDue(retry: BackfillRetry, nowMs: number): boolean
   return nowMs - retry.lastAttemptAt >= backfillRetryDelayMs(retry.attempts);
 }
 
+const writePendingBackfill = async (
+  noteId: number,
+  windows: AudioWindow[],
+  retry: BackfillRetry | undefined,
+  extra: { awaitingConnection?: { accountId: string | null } },
+): Promise<void> => {
+  const uri = meetingBackfillUri(noteId);
+  await FileSystem.writeAsStringAsync(
+    uri,
+    JSON.stringify({
+      version: PENDING_BACKFILL_VERSION,
+      windows: windows.map(({ startMs, endMs }) => ({ startMs, endMs })),
+      ...extra,
+      ...(retry ? { attempts: retry.attempts, lastAttemptAt: retry.lastAttemptAt } : {}),
+    }),
+  );
+  // After every write: a file replaced on disk loses the mark.
+  await excludeMeetingFileFromBackup(uri);
+};
+
 /** Rejects when it cannot be written, so the caller knows nothing on disk names the owed audio. */
 export async function savePendingBackfill(
   noteId: number,
@@ -105,17 +131,20 @@ export async function savePendingBackfill(
   /** Absent for audio no resume has tried yet. */
   retry?: BackfillRetry,
 ): Promise<void> {
-  const uri = meetingBackfillUri(noteId);
-  await FileSystem.writeAsStringAsync(
-    uri,
-    JSON.stringify({
-      version: PENDING_BACKFILL_VERSION,
-      windows: windows.map(({ startMs, endMs }) => ({ startMs, endMs })),
-      ...(retry ? { attempts: retry.attempts, lastAttemptAt: retry.lastAttemptAt } : {}),
-    }),
-  );
-  // After every write: a file replaced on disk loses the mark.
-  await excludeMeetingFileFromBackup(uri);
+  await writePendingBackfill(noteId, windows, retry, {});
+}
+
+/**
+ * Marks the whole recording as waiting for a connection, beside it where launch recovery and the
+ * resumers already look. Rejects when it cannot be written.
+ */
+export async function saveRecordingAwaitingConnection(
+  noteId: number,
+  accountId: string | null,
+  /** Absent until an upload has been tried. */
+  retry?: BackfillRetry,
+): Promise<void> {
+  await writePendingBackfill(noteId, [], retry, { awaitingConnection: { accountId } });
 }
 
 const isWindow = (value: unknown): value is AudioWindow => {
@@ -146,14 +175,20 @@ export async function readPendingBackfillState(
       windows?: unknown;
       attempts?: unknown;
       lastAttemptAt?: unknown;
+      awaitingConnection?: unknown;
     } | null;
     if (parsed?.version !== PENDING_BACKFILL_VERSION || !Array.isArray(parsed.windows)) return null;
     if (!parsed.windows.every(isWindow)) return null;
-    return {
+    const state: PendingBackfillState = {
       windows: parsed.windows.map(({ startMs, endMs }) => ({ startMs, endMs })),
       attempts: Math.floor(nonNegativeNumber(parsed.attempts)),
       lastAttemptAt: nonNegativeNumber(parsed.lastAttemptAt),
     };
+    if (parsed.awaitingConnection === undefined) return state;
+    // An owner that can't be read must never be taken for the account signed in now.
+    const accountId = (parsed.awaitingConnection as { accountId?: unknown } | null)?.accountId;
+    if (accountId !== null && typeof accountId !== 'string') return null;
+    return { ...state, awaitingConnection: { accountId } };
   } catch {
     return null;
   }

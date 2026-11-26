@@ -4,7 +4,9 @@ import {
   isManagedMeetingAudioUri,
   readPendingBackfillState,
   savePendingBackfill,
+  saveRecordingAwaitingConnection,
   type BackfillRetry,
+  type PendingBackfillState,
 } from '@/lib/transcriptAudio';
 import { create } from 'zustand';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -14,7 +16,11 @@ import type { Note, Folder, NoteUpdate, Space } from '@/data';
 import type { ConflictedNote, NewSegment, Segment, Speaker, SpeakerProfile } from '@/data/types';
 import type { CalendarParticipant } from '@/data/calendarTypes';
 import type { Diarizer } from '@/lib/diarization/diarizer';
-import { captureMeetingAccount, type MeetingAccountFence } from '@/lib/notes/meetingAccountFence';
+import {
+  captureMeetingAccount,
+  meetingAccountFenceFor,
+  type MeetingAccountFence,
+} from '@/lib/notes/meetingAccountFence';
 import { activeMeetingNoteId } from '@/lib/notes/activeMeeting';
 import { alertMeetingNoteNotDeletable } from '@/lib/alerts';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -600,6 +606,24 @@ const recordOwedAudio = async (
   }
 };
 
+/** Marks the whole recording as waiting for a connection; false when it could not be written. */
+const recordAwaitingConnection = async (
+  noteId: number,
+  accountId: string | null,
+  retry?: BackfillRetry,
+): Promise<boolean> => {
+  try {
+    await saveRecordingAwaitingConnection(noteId, accountId, retry);
+    return true;
+  } catch (error) {
+    Sentry.captureMessage('meeting-backfill-sidecar-failed', {
+      level: 'warning',
+      tags: { feature: 'meeting-post-pass', error_code: errorCode(error) },
+    });
+    return false;
+  }
+};
+
 /**
  * Brings the list beside the recording up to what is still owed after a backfill, and deletes
  * the recording once nothing is. A recording that still owes audio is always kept, even when
@@ -626,8 +650,17 @@ const settleMeetingRecording = async (
 // One backfill per note at a time: launch recovery, a return to the foreground and Stop can
 // all reach the same note, and two runs would upload and merge the same stretches twice.
 // Launch recovery's speaker pass takes it too: a backfill that finishes deletes the recording
-// the diarizer is reading.
+// the diarizer is reading. So does the upload of a recording waiting for the connection, which
+// a resume, a return of the connection and the note's Retry can all start.
 const meetingBackfillsInFlight = new Set<number>();
+
+export type MeetingRetryOutcome =
+  /** The transcription ran (a failure throws instead). */
+  | 'transcribed'
+  /** Offline: nothing was uploaded, and the recording waits for the connection. */
+  | 'waiting-for-connection'
+  /** Another run already has the note. */
+  | 'already-running';
 
 interface NotesStore {
   /** The active workspace's Private folders (see NotesRepository.getPrivateFolders) — every UI
@@ -708,11 +741,18 @@ interface NotesStore {
     /** The account the meeting was recorded under; defaults to the one signed in now. */
     options?: { fence?: MeetingAccountFence },
   ) => Promise<void>;
-  retryMeetingTranscription: (noteId: number) => Promise<void>;
+  retryMeetingTranscription: (noteId: number) => Promise<MeetingRetryOutcome>;
+  /**
+   * A cloud meeting stopped offline with nothing heard live, whose recording is waiting to be
+   * transcribed once the phone is back online: shown as waiting rather than failed. False once an
+   * upload has been tried and refused (the note offers Retry again) or the account changed.
+   */
+  isMeetingAwaitingConnection: (noteId: number) => Promise<boolean>;
   /**
    * Saves the live transcript, fills what the stream missed from the recording, and deletes
    * the recording once the note is done. A note with a recording and no text at all ends
-   * failed with its recording kept, so Retry can try again.
+   * failed with its recording kept, so Retry can try again; stopped offline, it waits for the
+   * connection instead (see isMeetingAwaitingConnection).
    */
   finalizeCloudMeeting: (
     noteId: number,
@@ -733,7 +773,9 @@ interface NotesStore {
   /**
    * A done cloud meeting whose backfill fell short: transcribes the stretches its sidecar still
    * owes into the saved transcript, then deletes the recording, or keeps it for what is still
-   * owed. Uploads nothing for a note that may not use the cloud. Never throws.
+   * owed. A meeting waiting for the connection gets its whole recording transcribed, under the
+   * account that recorded it and on the same backoff. Uploads nothing for a note that may not
+   * use the cloud. Never throws.
    */
   resumeMeetingBackfill: (
     noteId: number,
@@ -807,6 +849,41 @@ interface NotesStore {
   relabelMeetingSpeakers: (noteId: number, profileId: number) => void;
   mergeSpeakers: (noteId: number, sourceSpeakerId: number, targetSpeakerId: number) => void;
 }
+
+/**
+ * Uploads the whole recording of a meeting that was waiting for the connection, once the phone
+ * is back online. The attempt is counted before the upload, so one that kills the app still
+ * waits out the backoff; a success removes the mark with the recording.
+ */
+const transcribeAwaitedRecording = async (
+  store: NotesStore,
+  noteId: number,
+  awaiting: { accountId: string | null },
+  retry: PendingBackfillState,
+  { shouldStop }: { shouldStop?: () => boolean },
+): Promise<void> => {
+  // Anything else is a Retry or another run already transcribing it.
+  if (notesRepository.getTranscriptionStatus(noteId) !== 'failed') return;
+  const fence = meetingAccountFenceFor(awaiting.accountId);
+  if (!fence.isCurrent()) {
+    // Never under another account: as at Stop, the note keeps its recording for a Retry. Signed
+    // out (or not restored yet) it waits for whoever signs in next.
+    if (useAuthStore.getState().user) await clearPendingBackfill(noteId);
+    return;
+  }
+  if (shouldStop?.() || !isBackfillRetryDue(retry, Date.now())) return;
+  if (!(await isDeviceOnline())) return;
+  // A count that can't be saved would let a run that kills the app repeat on every launch.
+  const counted = await recordAwaitingConnection(noteId, fence.accountId, {
+    attempts: retry.attempts + 1,
+    lastAttemptAt: Date.now(),
+  });
+  if (!counted) return;
+  if (notesRepository.getTranscriptionStatus(noteId) !== 'failed' || !fence.isCurrent()) return;
+  store.transitionStatus(noteId, 'transcribing'); // failed -> transcribing, as Retry does
+  // A failure leaves the note failed with its recording, the count kept for the backoff.
+  await store.transcribeMeetingRecording(noteId, { fence }).catch(() => undefined);
+};
 
 export const useNotesStore = create<NotesStore>((set, get) => ({
   folders: [],
@@ -1192,10 +1269,45 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     // A cloud meeting's recording goes back to the cloud; the on-device pipeline would
     // diarize a meeting the user never chose to process on this phone.
     if (canUseCloudForMeetingNote(note) && note.diarizationEnabled === 0) {
-      await get().transcribeMeetingRecording(noteId);
-      return;
+      if (meetingBackfillsInFlight.has(noteId)) return 'already-running';
+      meetingBackfillsInFlight.add(noteId);
+      try {
+        if (!(await isDeviceOnline())) {
+          // The upload would only spin through its timeouts. The recording waits for the
+          // connection instead, under the account retrying it.
+          if (!(await recordAwaitingConnection(noteId, captureMeetingAccount().accountId))) {
+            throw new Error("You're offline. Try again once you're back online.");
+          }
+          return 'waiting-for-connection';
+        }
+        await get().transcribeMeetingRecording(noteId);
+        return 'transcribed';
+      } finally {
+        meetingBackfillsInFlight.delete(noteId);
+      }
     }
     await get().runMeetingPipeline(noteId, note.sourceFile, note.expectedSpeakerCount ?? undefined);
+    return 'transcribed';
+  },
+
+  isMeetingAwaitingConnection: async (noteId) => {
+    try {
+      const note = notesRepository.getNoteById(noteId);
+      if (!note || note.deletedAt || !isManagedMeetingAudioUri(noteId, note.sourceFile)) {
+        return false;
+      }
+      if (notesRepository.getTranscriptionStatus(noteId) !== 'failed') return false;
+      const pending = await readPendingBackfillState(noteId);
+      if (!pending?.awaitingConnection) return false;
+      // After a refused upload the note offers Retry again, and uploads go on behind it on the
+      // backoff. Another account's recording never goes up, so that note is a failure too.
+      return (
+        pending.attempts === 0 &&
+        meetingAccountFenceFor(pending.awaitingConnection.accountId).isCurrent()
+      );
+    } catch {
+      return false;
+    }
   },
 
   finalizeCloudMeeting: async (noteId, result, capturedSeconds, options = {}) => {
@@ -1215,11 +1327,18 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       const heardLive = live.some((segment) => segment.text?.trim());
       if (recordingUri && !heardLive) {
         // Nothing heard live (often offline the whole time): the whole file is transcribed.
-        // Offline that would only hold the processing screen through upload timeouts, so the
-        // note ends failed at once with its recording, which is what the note's Retry needs.
-        // The same when the account changed: the upload would go out under the new account, so
-        // the recording is kept for a Retry.
-        if (!(await isDeviceOnline()) || !fence.isCurrent()) {
+        // When the account changed the upload would go out under the new account, so the note
+        // ends failed at once with its recording, which is what the note's Retry needs.
+        if (!fence.isCurrent()) {
+          get().transitionStatus(noteId, 'failed');
+          return { owedMs: 0 };
+        }
+        if (!(await isDeviceOnline())) {
+          // Offline the upload would only hold the processing screen through its timeouts. The
+          // note settles with its recording and, written first so a kill in between leaves it,
+          // a mark that it waits for the connection, which the resumers and launch recovery act
+          // on. A mark that can't be written leaves a plain failure with Retry.
+          await recordAwaitingConnection(noteId, fence.accountId);
           get().transitionStatus(noteId, 'failed');
           return { owedMs: 0 };
         }
@@ -1297,11 +1416,18 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       // The recording of a meeting that may not use the cloud (signed out, Private) never
       // leaves the phone. Only a cloud meeting has a sidecar at all, which is read below.
       if (!canUseCloudForMeetingNote(note)) return;
-      if (notesRepository.getTranscriptionStatus(noteId) !== 'done') return;
       const recordingUri = note.sourceFile;
       if (!recordingUri || !isManagedMeetingAudioUri(noteId, recordingUri)) return;
       const pending = await readPendingBackfillState(noteId);
-      if (!pending || pending.windows.length === 0) return;
+      if (!pending) return;
+      if (pending.awaitingConnection) {
+        await transcribeAwaitedRecording(get(), noteId, pending.awaitingConnection, pending, {
+          shouldStop: options.shouldStop,
+        });
+        return;
+      }
+      if (notesRepository.getTranscriptionStatus(noteId) !== 'done') return;
+      if (pending.windows.length === 0) return;
       // A piece the server keeps refusing would otherwise go up again on every return to the app.
       if (!isBackfillRetryDue(pending, Date.now())) return;
       // Re-read at merge time: the note is done, so the user may be editing it meanwhile.
@@ -1380,6 +1506,9 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
               }),
             );
       notesRepository.replaceSegments(noteId, transcript);
+      // The whole recording is in the transcript, so nothing it owes is left: a mark that it
+      // waited for the connection goes even if deleting the recording below fails.
+      await clearPendingBackfill(noteId);
       // Two-minute chunks each hold several speakers, so this labels nothing; it stays so the
       // rule for which transcripts get labelled lives in one place.
       await get().labelMeetingSpeakers(noteId, { utteranceTimed: false, fence });

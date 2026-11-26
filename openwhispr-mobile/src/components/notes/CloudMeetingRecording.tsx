@@ -33,6 +33,11 @@ interface CloudMeetingRecordingProps {
    * and says why in an alert; until then nothing claims recording has stopped.
    */
   startFailed?: boolean;
+  /**
+   * The meeting is being written to a healthy recording, so speech the live stream misses
+   * during an outage is transcribed from it after Stop.
+   */
+  recording?: boolean;
   /** Audio the mic actually captured, so the clock stops while nothing is recorded. */
   capturedSeconds: number;
   rawNotes: string;
@@ -53,6 +58,7 @@ export function CloudMeetingRecording({
   captureStarted,
   error,
   startFailed = false,
+  recording = false,
   capturedSeconds,
   rawNotes,
   onChangeRawNotes,
@@ -102,7 +108,9 @@ export function CloudMeetingRecording({
       ) : null}
       {status === 'reconnecting' ? (
         <Text className="mx-4 mt-2 text-[13px] text-systemOrange">
-          {"Connection lost. Reconnecting… speech isn't being transcribed right now."}
+          {recording
+            ? "Connection lost. Still recording — this part will be transcribed when you're back online."
+            : "Connection lost. Reconnecting… speech isn't being transcribed right now."}
         </Text>
       ) : null}
 

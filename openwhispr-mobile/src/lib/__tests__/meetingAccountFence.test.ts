@@ -8,7 +8,7 @@ jest.mock('@/sync/syncIdentity', () => ({
   isAccountLink: (from: string, to: string) => mockLinks.has(`${from}>${to}`),
 }));
 
-import { captureMeetingAccount } from '@/lib/notes/meetingAccountFence';
+import { captureMeetingAccount, meetingAccountFenceFor } from '@/lib/notes/meetingAccountFence';
 
 beforeEach(() => {
   mockUser = null;
@@ -55,5 +55,24 @@ describe('captureMeetingAccount', () => {
     expect(fence.accountId).toBe('real');
     mockUser = { id: 'other' };
     expect(fence.isCurrent()).toBe(false);
+  });
+});
+
+describe('meetingAccountFenceFor', () => {
+  it('fences a saved owner against the account signed in now', () => {
+    mockUser = { id: 'a' };
+    expect(meetingAccountFenceFor('a').isCurrent()).toBe(true);
+    expect(meetingAccountFenceFor('b').isCurrent()).toBe(false);
+    expect(meetingAccountFenceFor(null).isCurrent()).toBe(false);
+    mockUser = null;
+    expect(meetingAccountFenceFor(null).isCurrent()).toBe(true);
+  });
+
+  it('follows a saved anonymous owner to the account it became', () => {
+    mockLinks.add('anon>real');
+    mockUser = { id: 'real' };
+    const fence = meetingAccountFenceFor('anon');
+    expect(fence.isCurrent()).toBe(true);
+    expect(fence.accountId).toBe('real');
   });
 });

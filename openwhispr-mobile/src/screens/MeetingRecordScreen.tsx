@@ -420,6 +420,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
         captureStarted={session.cloud.liveSinceMs !== null}
         error={session.cloud.error}
         startFailed={session.cloud.startFailure != null}
+        recording={session.cloud.recording}
         capturedSeconds={session.capturedSeconds}
         rawNotes={session.rawNotes}
         onChangeRawNotes={session.setRawNotes}

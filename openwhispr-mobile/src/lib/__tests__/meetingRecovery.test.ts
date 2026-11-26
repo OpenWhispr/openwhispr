@@ -112,6 +112,7 @@ function makeDeps(notes: Note[], initialStorage: Record<string, string> = {}): H
       calls.push(`save:${id}`);
     }),
     isMeetingCapturing: jest.fn(() => false),
+    awaitsConnection: jest.fn(async () => false),
   };
   return { deps, store, calls };
 }
@@ -653,6 +654,83 @@ describe('recoverOrphanedMeetings with the meeting recording', () => {
     expect(harness.deps.discardRecording).not.toHaveBeenCalled();
   });
 
+  describe('a meeting waiting for the connection', () => {
+    const waitingNote = (id: number): Note => note({ id, transcriptionStatus: 'failed' });
+    const markWaiting = (deps: MeetingRecoveryDeps, ids: number[]): void => {
+      (deps.listPendingBackfills as jest.Mock).mockResolvedValue(ids);
+      (deps.awaitsConnection as jest.Mock).mockImplementation(async (id: number) =>
+        ids.includes(id),
+      );
+    };
+
+    it('transcribes it once the app is active and online, through its mark', async () => {
+      const { deps, calls } = makeDeps([waitingNote(40)]);
+      markWaiting(deps, [40]);
+      (deps.waitUntilActive as jest.Mock).mockImplementation(async () => {
+        calls.push('active');
+      });
+
+      await recoverOrphanedMeetings(deps);
+
+      expect(calls).toEqual(['active', 'backfill:40']);
+      expect(deps.resume).not.toHaveBeenCalled();
+      expect(deps.discardRecording).not.toHaveBeenCalled();
+      expect(deps.deletePendingBackfill).not.toHaveBeenCalled();
+    });
+
+    it('leaves it waiting offline, with its recording', async () => {
+      const { deps } = makeDeps([waitingNote(41)]);
+      markWaiting(deps, [41]);
+      (deps.isOnline as jest.Mock).mockResolvedValue(false);
+
+      await recoverOrphanedMeetings(deps);
+
+      expect(deps.resumeBackfill).not.toHaveBeenCalled();
+      expect(deps.discardRecording).not.toHaveBeenCalled();
+    });
+
+    it('leaves a plain failed meeting to its Retry', async () => {
+      const { deps } = makeDeps([waitingNote(42)]);
+      (deps.listPendingBackfills as jest.Mock).mockResolvedValue([42]);
+
+      await recoverOrphanedMeetings(deps);
+
+      expect(deps.resumeBackfill).not.toHaveBeenCalled();
+    });
+
+    it('still deletes a recording older than 7 days', async () => {
+      const { deps } = makeDeps([waitingNote(43)]);
+      markWaiting(deps, [43]);
+      (deps.recordingAgeMs as jest.Mock).mockResolvedValue(8 * DAY);
+
+      await recoverOrphanedMeetings(deps);
+
+      expect(deps.discardRecording).toHaveBeenCalledWith(43);
+      expect(deps.resumeBackfill).not.toHaveBeenCalled();
+    });
+
+    it('resumes one killed mid-upload through its mark, not a plain Retry', async () => {
+      const { deps, calls } = makeDeps([note({ id: 44, transcriptionStatus: 'transcribing' })]);
+      markWaiting(deps, [44]);
+
+      await recoverOrphanedMeetings(deps);
+
+      // The mark keeps the account it may go up under and its backoff; Retry would use neither.
+      expect(calls).toEqual(['failed:44', 'backfill:44']);
+      expect(deps.resume).not.toHaveBeenCalled();
+    });
+
+    it('leaves one killed mid-upload waiting when offline', async () => {
+      const { deps, calls } = makeDeps([note({ id: 45, transcriptionStatus: 'transcribing' })]);
+      markWaiting(deps, [45]);
+      (deps.isOnline as jest.Mock).mockResolvedValue(false);
+
+      await recoverOrphanedMeetings(deps);
+
+      expect(calls).toEqual(['failed:45']);
+    });
+  });
+
   describe('a done meeting that still owes audio', () => {
     const owing = (id: number): Note => note({ id, transcriptionStatus: 'done' });
 
@@ -1062,6 +1140,76 @@ describe('createForegroundBackfillResumer', () => {
     await flushMicrotasks();
 
     expect((deps.resumeBackfill as jest.Mock).mock.calls).toEqual([[30]]);
+  });
+
+  describe('when the connection comes back', () => {
+    const makeNetworkResumer = (active = true) => {
+      const deps = {
+        listPendingBackfills: jest.fn(async () => [30]),
+        isOnline: jest.fn(async () => true),
+        resumeBackfill: jest.fn(async (_noteId: number): Promise<void> => undefined),
+        reportError: jest.fn(),
+        isMeetingCapturing: jest.fn(() => false),
+        isAppActive: jest.fn(() => active),
+      };
+      return { deps, resumer: createForegroundBackfillResumer(deps) };
+    };
+
+    it('resumes owed work when the phone comes back online in the foreground', async () => {
+      const { deps, resumer } = makeNetworkResumer();
+
+      resumer.onNetworkChange(false);
+      resumer.onNetworkChange(true);
+      await flushMicrotasks();
+
+      expect(deps.resumeBackfill).toHaveBeenCalledWith(30);
+    });
+
+    it('does nothing for an update that was never offline, or one that is offline', async () => {
+      const { deps, resumer } = makeNetworkResumer();
+
+      resumer.onNetworkChange(true);
+      resumer.onNetworkChange(true);
+      resumer.onNetworkChange(false);
+      await flushMicrotasks();
+
+      expect(deps.resumeBackfill).not.toHaveBeenCalled();
+    });
+
+    it('waits for the foreground: a return to the app runs it then', async () => {
+      const { deps, resumer } = makeNetworkResumer(false);
+
+      resumer.onNetworkChange(false);
+      resumer.onNetworkChange(true);
+      await flushMicrotasks();
+      expect(deps.resumeBackfill).not.toHaveBeenCalled();
+
+      resumer('background');
+      resumer('active');
+      await flushMicrotasks();
+      expect(deps.resumeBackfill).toHaveBeenCalledTimes(1);
+    });
+
+    it('shares one pass with a return to the foreground', async () => {
+      const { deps, resumer } = makeNetworkResumer();
+      let release: () => void = () => undefined;
+      deps.resumeBackfill.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            release = resolve;
+          }),
+      );
+
+      resumer('background');
+      resumer('active');
+      await flushMicrotasks();
+      resumer.onNetworkChange(false);
+      resumer.onNetworkChange(true);
+      await flushMicrotasks();
+      expect(deps.resumeBackfill).toHaveBeenCalledTimes(1);
+      release();
+      await flushMicrotasks();
+    });
   });
 
   it('reports a failed resume and goes on', async () => {

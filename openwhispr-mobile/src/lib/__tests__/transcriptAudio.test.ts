@@ -36,6 +36,7 @@ import {
   readPendingBackfill,
   readPendingBackfillState,
   savePendingBackfill,
+  saveRecordingAwaitingConnection,
 } from '@/lib/transcriptAudio';
 
 describe('meetingRecordingUri', () => {
@@ -103,6 +104,59 @@ describe('pending backfill sidecar', () => {
   it('rejects when the sidecar cannot be saved', async () => {
     jest.mocked(FileSystem.writeAsStringAsync).mockRejectedValueOnce(new Error('full'));
     await expect(savePendingBackfill(7, [{ startMs: 0, endMs: 1 }])).rejects.toThrow('full');
+  });
+});
+
+describe('a whole recording waiting for a connection', () => {
+  beforeEach(() => mockFiles.clear());
+
+  it('round-trips the account it may go up under, with no windows', async () => {
+    await saveRecordingAwaitingConnection(7, 'user-1');
+    expect(JSON.parse(mockFiles.get(meetingBackfillUri(7)) ?? '')).toEqual({
+      version: 1,
+      windows: [],
+      awaitingConnection: { accountId: 'user-1' },
+    });
+    await expect(readPendingBackfillState(7)).resolves.toEqual({
+      windows: [],
+      attempts: 0,
+      lastAttemptAt: 0,
+      awaitingConnection: { accountId: 'user-1' },
+    });
+    expect(mockExcludeFromBackup).toHaveBeenCalledWith(meetingBackfillUri(7));
+  });
+
+  it('keeps a signed-out owner and the attempts', async () => {
+    await saveRecordingAwaitingConnection(7, null, { attempts: 2, lastAttemptAt: 5_000 });
+    await expect(readPendingBackfillState(7)).resolves.toEqual({
+      windows: [],
+      attempts: 2,
+      lastAttemptAt: 5_000,
+      awaitingConnection: { accountId: null },
+    });
+  });
+
+  it('reads an owed-audio list as not waiting', async () => {
+    await savePendingBackfill(7, [{ startMs: 0, endMs: 1000 }]);
+    const state = await readPendingBackfillState(7);
+    expect(state).not.toHaveProperty('awaitingConnection');
+  });
+
+  it.each([
+    ['no account', JSON.stringify({ version: 1, windows: [], awaitingConnection: {} })],
+    [
+      'a non-string account',
+      JSON.stringify({ version: 1, windows: [], awaitingConnection: { accountId: 4 } }),
+    ],
+    ['a non-object', JSON.stringify({ version: 1, windows: [], awaitingConnection: true })],
+  ])('reads null for %s, so nothing goes up under a guessed account', async (_label, content) => {
+    mockFiles.set(meetingBackfillUri(7), content);
+    await expect(readPendingBackfillState(7)).resolves.toBeNull();
+  });
+
+  it('rejects when it cannot be saved', async () => {
+    jest.mocked(FileSystem.writeAsStringAsync).mockRejectedValueOnce(new Error('full'));
+    await expect(saveRecordingAwaitingConnection(7, 'user-1')).rejects.toThrow('full');
   });
 });
 

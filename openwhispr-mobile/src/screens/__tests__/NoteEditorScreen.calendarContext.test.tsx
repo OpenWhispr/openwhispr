@@ -40,6 +40,7 @@ const mockNotesState = {
   updateNote: mockUpdateNote,
   deleteNote: mockDeleteNote,
   retryMeetingTranscription: mockRetryMeetingTranscription,
+  isMeetingAwaitingConnection: jest.fn(async (_noteId: number) => false),
   getNoteById: jest.fn((id: number) => (mockNote?.id === id ? mockNote : null)),
   getNoteSegments: jest.fn(() => mockSegments),
   getNoteSpeakers: jest.fn(() => mockSpeakers),
@@ -1255,17 +1256,85 @@ describe('NoteEditorScreen body tabs', () => {
     expect(queryByText('Transcribing audio...')).toBeNull();
   });
 
-  it('keeps a failed transcript on its own tab beside the generated notes and My notes', () => {
+  it('keeps a failed transcript on its own tab beside the generated notes and My notes', async () => {
     mockNote = note({ transcriptionStatus: 'failed', enhancedContent: '## Summary' });
     mockNotesState.notes = [mockNote];
     mockSegments = [];
-    const { getByText, getByTestId } = render(<NoteEditorScreen />);
+    const { findByText, getByTestId } = render(<NoteEditorScreen />);
     expect(getByTestId('note-tab-enhanced')).toBeTruthy();
     expect(getByTestId('note-tab-notes')).toBeTruthy();
 
     fireEvent.press(getByTestId('note-tab-transcript'));
 
-    expect(getByText('Transcript failed')).toBeTruthy();
+    expect(await findByText('Transcript failed')).toBeTruthy();
+  });
+
+  describe('a meeting waiting for the connection', () => {
+    const WAITING =
+      "Waiting for a connection. This meeting will be transcribed when you're back online.";
+    const awaiting = mockNotesState.isMeetingAwaitingConnection;
+    let alertSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      awaiting.mockResolvedValue(true);
+      alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+      mockNote = note({ transcriptionStatus: 'failed', sourceFile: 'managed://meeting-7.wav' });
+      mockNotesState.notes = [mockNote];
+      mockSegments = [];
+    });
+    afterEach(() => {
+      awaiting.mockReset().mockResolvedValue(false);
+      alertSpy.mockRestore();
+    });
+
+    it('says it will be transcribed once back online instead of offering Retry', async () => {
+      const { findByText, queryByText } = render(<NoteEditorScreen />);
+
+      expect(await findByText(WAITING)).toBeTruthy();
+      expect(awaiting).toHaveBeenCalledWith(7);
+      expect(queryByText('Transcript failed')).toBeNull();
+      expect(queryByText('Retry transcription')).toBeNull();
+    });
+
+    it('offers Retry for a meeting that is not waiting', async () => {
+      awaiting.mockResolvedValue(false);
+      const { findByText, queryByText } = render(<NoteEditorScreen />);
+
+      expect(await findByText('Retry transcription')).toBeTruthy();
+      expect(queryByText(WAITING)).toBeNull();
+    });
+
+    it('offers Retry once an automatic upload was tried and refused', async () => {
+      const screen = render(<NoteEditorScreen />);
+      expect(await screen.findByText(WAITING)).toBeTruthy();
+
+      mockNote = { ...mockNote, transcriptionStatus: 'transcribing' };
+      mockNotesState.notes = [mockNote];
+      screen.rerender(<NoteEditorScreen />);
+      expect(screen.getByText('Transcribing audio...')).toBeTruthy();
+
+      awaiting.mockResolvedValue(false);
+      mockNote = { ...mockNote, transcriptionStatus: 'failed' };
+      mockNotesState.notes = [mockNote];
+      screen.rerender(<NoteEditorScreen />);
+
+      expect(await screen.findByText('Retry transcription')).toBeTruthy();
+      expect(screen.queryByText(WAITING)).toBeNull();
+    });
+
+    it('says so when Retry finds no connection, and shows the meeting waiting', async () => {
+      awaiting.mockResolvedValueOnce(false).mockResolvedValue(true);
+      mockRetryMeetingTranscription.mockResolvedValueOnce('waiting-for-connection');
+      const { findByText } = render(<NoteEditorScreen />);
+
+      fireEvent.press(await findByText('Retry transcription'));
+
+      expect(await findByText(WAITING)).toBeTruthy();
+      expect(alertSpy).toHaveBeenCalledWith(
+        "You're offline",
+        "This meeting will be transcribed when you're back online.",
+      );
+    });
   });
 
   it('lets an upload with a transcript keep editable notes without changing its transcript', () => {

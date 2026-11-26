@@ -38,6 +38,7 @@ const mockNotesState = {
   updateNote: mockUpdateNote,
   deleteNote: mockDeleteNote,
   retryMeetingTranscription: mockRetryMeetingTranscription,
+  isMeetingAwaitingConnection: jest.fn(async (_noteId: number) => false),
   getNoteById: jest.fn((id: number) => (mockNote?.id === id ? mockNote : null)),
   getNoteSegments: jest.fn(() => mockSegments),
   getNoteSpeakers: jest.fn(() => mockSpeakers),

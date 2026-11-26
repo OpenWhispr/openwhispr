@@ -94,7 +94,11 @@ import {
 import { ChatEmptyAnswerError, toChatErrorMessage } from '@/lib/chat/chatErrorMessage';
 import { providerDisplayName } from '@/lib/mobileProviders';
 import { promptLocalReasoningFallback } from '@/lib/localReasoningFallback';
-import { confirmCloudOnce, confirmDestructive } from '@/lib/alerts';
+import {
+  alertMeetingWaitingForConnection,
+  confirmCloudOnce,
+  confirmDestructive,
+} from '@/lib/alerts';
 import { randomUUID } from '@/lib/uuid';
 import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
 import { isDefaultGenerateNotesAction } from '@/lib/notes/generateNotesPrompt';
@@ -177,6 +181,7 @@ export default function NoteEditorScreen({
   const getNoteSegments = useNotesStore((s) => s.getNoteSegments);
   const getNoteSpeakers = useNotesStore((s) => s.getNoteSpeakers);
   const retryMeetingTranscription = useNotesStore((s) => s.retryMeetingTranscription);
+  const isMeetingAwaitingConnection = useNotesStore((s) => s.isMeetingAwaitingConnection);
   const renameSpeaker = useNotesStore((s) => s.renameSpeaker);
   const mergeSpeakers = useNotesStore((s) => s.mergeSpeakers);
   const confirmSpeakerSuggestion = useNotesStore((s) => s.confirmSpeakerSuggestion);
@@ -255,6 +260,12 @@ export default function NoteEditorScreen({
   const [chatLastQuestion, setChatLastQuestion] = useState('');
   const [isChatProcessing, setIsChatProcessing] = useState(false);
   const [isRetryingTranscript, setIsRetryingTranscript] = useState(false);
+  // What a failed meeting's mark said, for the read it answers.
+  const [awaitingConnectionRead, setAwaitingConnectionRead] = useState<{
+    key: string;
+    waiting: boolean;
+  } | null>(null);
+  const [awaitingConnectionCheck, setAwaitingConnectionCheck] = useState(0);
   const keyboardHeight = useKeyboardHeight();
   const insets = useSafeAreaInsets();
 
@@ -544,6 +555,32 @@ export default function NoteEditorScreen({
   const shouldRenderPlainEditorRef = useRef(shouldRenderPlainEditor);
   shouldRenderPlainEditorRef.current = shouldRenderPlainEditor;
   const transcriptPending = shouldShowTranscriptStatus || shouldShowTranscriptFailed;
+  // A failed meeting may only be waiting for the connection. Until its mark is read this is
+  // null, so neither Retry nor the wait flashes up first.
+  const awaitingConnectionKey = shouldShowTranscriptFailed
+    ? `${noteId}:${note?.sourceFile ?? ''}:${awaitingConnectionCheck}`
+    : null;
+  const awaitingConnection =
+    awaitingConnectionKey == null
+      ? false
+      : awaitingConnectionRead?.key === awaitingConnectionKey
+        ? awaitingConnectionRead.waiting
+        : null;
+  useEffect(() => {
+    // Read again each time the note fails: an upload tried meanwhile changes the answer.
+    if (awaitingConnectionKey == null) {
+      setAwaitingConnectionRead(null);
+      return;
+    }
+    let cancelled = false;
+    const settle = (waiting: boolean): void => {
+      if (!cancelled) setAwaitingConnectionRead({ key: awaitingConnectionKey, waiting });
+    };
+    isMeetingAwaitingConnection(noteId).then(settle, () => settle(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [awaitingConnectionKey, isMeetingAwaitingConnection, noteId]);
   const hasEnhanced = !!note?.enhancedContent;
   // An open editor keeps its tab, so clearing the notes to rewrite them doesn't close it.
   const hasEnhancedTab = hasEnhanced || enhancedEditing;
@@ -1195,7 +1232,11 @@ export default function NoteEditorScreen({
     safeHaptics('medium');
     setIsRetryingTranscript(true);
     try {
-      await retryMeetingTranscription(note.id);
+      const outcome = await retryMeetingTranscription(note.id);
+      if (outcome === 'waiting-for-connection') {
+        alertMeetingWaitingForConnection();
+        setAwaitingConnectionCheck((check) => check + 1);
+      }
     } catch (error) {
       Alert.alert(
         'Retry failed',
@@ -1527,6 +1568,16 @@ export default function NoteEditorScreen({
                     : transcriptStatusText(transcriptStatus)}
                 </Text>
                 {isLiveMeetingNote ? <OpenMeetingButton onPress={openMeeting} /> : null}
+              </View>
+            ) : shouldShowTranscriptFailed && awaitingConnection !== false ? (
+              <View className="min-h-[180px] justify-center">
+                {awaitingConnection ? (
+                  <Text className="text-[15px] leading-5 text-secondaryLabel">
+                    {
+                      "Waiting for a connection. This meeting will be transcribed when you're back online."
+                    }
+                  </Text>
+                ) : null}
               </View>
             ) : shouldShowTranscriptFailed ? (
               <View className="min-h-[180px] justify-center">

@@ -85,3 +85,41 @@ describe('CloudMeetingRecording error line', () => {
     expect(screen.queryByText(/Session activation failed/)).toBeNull();
   });
 });
+
+const renderReconnecting = (recording: boolean) =>
+  render(
+    <CloudMeetingRecording
+      status="reconnecting"
+      captureStarted
+      recording={recording}
+      error={null}
+      capturedSeconds={0}
+      rawNotes=""
+      onChangeRawNotes={jest.fn()}
+      utterances={[]}
+      partialText=""
+      onStop={jest.fn()}
+    />,
+  );
+
+describe('CloudMeetingRecording reconnecting line', () => {
+  it('says the outage is transcribed later while the recording is healthy', () => {
+    const screen = renderReconnecting(true);
+
+    expect(
+      screen.getByText(
+        "Connection lost. Still recording — this part will be transcribed when you're back online.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/isn't being transcribed/)).toBeNull();
+  });
+
+  it('says the speech is lost when there is no healthy recording', () => {
+    const screen = renderReconnecting(false);
+
+    expect(
+      screen.getByText("Connection lost. Reconnecting… speech isn't being transcribed right now."),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Still recording/)).toBeNull();
+  });
+});

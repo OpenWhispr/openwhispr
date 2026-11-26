@@ -26,6 +26,7 @@ const createSession = (overrides: Partial<MeetingSession> = {}): MeetingSession 
     utterances: [],
     partialText: '',
     liveSinceMs: null,
+    recording: false,
   },
   rawNotes: '',
   setRawNotes: jest.fn(),
@@ -203,6 +204,7 @@ describe('MeetingRecordScreen', () => {
         utterances: utterances as MeetingSession['cloud']['utterances'],
         partialText: 'and then',
         liveSinceMs: 1000,
+        recording: true,
       },
     });
 
@@ -211,6 +213,7 @@ describe('MeetingRecordScreen', () => {
 
     expect(screen.queryByTestId('speaker-count-submit')).toBeNull();
     expect(mockCloudRecordingProps).toMatchObject({
+      recording: true,
       utterances,
       partialText: 'and then',
       capturedSeconds: 42,

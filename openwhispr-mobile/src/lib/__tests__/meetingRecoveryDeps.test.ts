@@ -4,6 +4,7 @@ jest.mock('expo-file-system/legacy', () => ({
   getInfoAsync: jest.fn(),
   deleteAsync: jest.fn(async () => undefined),
   readDirectoryAsync: jest.fn(async () => []),
+  readAsStringAsync: jest.fn(async () => ''),
 }));
 // The app's repository opens expo-sqlite at import; these tests pass an in-memory one.
 jest.mock('@/data', () => ({ notesRepository: {} }));
@@ -40,6 +41,7 @@ Object.defineProperty(globalThis, 'localStorage', {
 const RUNTIME_STARTED_AT_MS = Date.parse('2026-11-24T10:00:00Z');
 const BEFORE_RUNTIME = '2026-11-24T09:00:00Z';
 const getInfo = FileSystem.getInfoAsync as jest.Mock;
+const readFile = FileSystem.readAsStringAsync as jest.Mock;
 const deleteFile = FileSystem.deleteAsync as jest.Mock;
 const wav = (id: number): string => `file:///docs/meeting-${id}.wav`;
 const sidecar = (id: number): string => `file:///docs/meeting-${id}.backfill.json`;
@@ -154,6 +156,24 @@ describe('createMeetingRecoveryDeps', () => {
       getInfo.mockResolvedValueOnce({ exists: false });
       await expect(deps.recordingExists(3)).resolves.toBe(false);
       expect(getInfo).toHaveBeenLastCalledWith(wav(3));
+    });
+  });
+
+  describe('awaitsConnection', () => {
+    it('is true only for a sidecar that marks the whole recording as waiting', async () => {
+      const { deps } = setUp();
+      getInfo.mockResolvedValue({ exists: true });
+      readFile.mockResolvedValueOnce(
+        JSON.stringify({ version: 1, windows: [], awaitingConnection: { accountId: 'u' } }),
+      );
+      await expect(deps.awaitsConnection(3)).resolves.toBe(true);
+      expect(readFile).toHaveBeenLastCalledWith(sidecar(3));
+      readFile.mockResolvedValueOnce(
+        JSON.stringify({ version: 1, windows: [{ startMs: 0, endMs: 1 }] }),
+      );
+      await expect(deps.awaitsConnection(3)).resolves.toBe(false);
+      readFile.mockRejectedValueOnce(new Error('io'));
+      await expect(deps.awaitsConnection(3)).resolves.toBe(false);
     });
   });
 

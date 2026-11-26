@@ -65,6 +65,11 @@ export interface CloudMeeting {
    * connect come before it, so a meeting's recorded share is measured from here.
    */
   liveSinceMs: number | null;
+  /**
+   * The session is also writing the meeting to its recording and the file hasn't failed, so
+   * anything the live stream misses can still be transcribed from it after Stop.
+   */
+  recording: boolean;
   /** Stops the session, waits for the last turn, and returns every finalized utterance. */
   stop: () => Promise<CloudMeetingResult>;
 }
@@ -115,6 +120,7 @@ export function useCloudMeeting({
   // Only a recorded meeting returns its session before the first socket is accepted.
   const [connected, setConnected] = useState(true);
   const [liveSinceMs, setLiveSinceMs] = useState<number | null>(null);
+  const [recording, setRecording] = useState(false);
 
   // Which session the state above describes. Changed during render, not in an effect, so the
   // first render of a new session (or of idle) is already empty instead of showing the previous
@@ -147,6 +153,7 @@ export function useCloudMeeting({
       // Only a recorded meeting returns its session before the first socket is accepted.
       setConnected(!(shownSession === 'live' && recordingUri));
       setLiveSinceMs(null);
+      setRecording(false);
     }
   }
 
@@ -185,11 +192,14 @@ export function useCloudMeeting({
     captureLostReasonRef.current = null;
     recordingFailedRef.current = false;
     recordingUriRef.current = recordingUri;
+    setRecording(!!recordingUri);
     connectedRef.current = !recordingUri;
     // Attached before start: a file that can't be opened is reported before start resolves.
     // The generation check keeps an earlier session's late event off this one.
     const failedSubscription = addRecordingFailedListener(() => {
-      if (generationRef.current === generation) recordingFailedRef.current = true;
+      if (generationRef.current !== generation) return;
+      recordingFailedRef.current = true;
+      setRecording(false);
     });
     let endReported = false;
     // Once per session: a close and a rejected start can both describe the same end.
@@ -360,6 +370,7 @@ export function useCloudMeeting({
     interruptions,
     reconnects,
     liveSinceMs,
+    recording,
     stop,
   };
 }

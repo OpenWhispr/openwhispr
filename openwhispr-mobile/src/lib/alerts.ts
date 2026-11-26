@@ -42,6 +42,12 @@ export function alertMeetingStartFailed(message: string): void {
   Alert.alert("Recording didn't start", message);
 }
 
+// Retry found no connection: nothing was uploaded, and the note now says it is waiting, so the
+// user isn't left watching an upload that could only time out.
+export function alertMeetingWaitingForConnection(): void {
+  Alert.alert("You're offline", "This meeting will be transcribed when you're back online.");
+}
+
 // The store keeps renewing a subscription after the account behind it is gone,
 // and the server cannot cancel it, so the user has to before deleting.
 function storeSubscriptionWarning(): string {

@@ -17,7 +17,12 @@ export interface MeetingAccountFence {
 const currentAccountId = (): string | null => useAuthStore.getState().user?.id ?? null;
 
 export function captureMeetingAccount(): MeetingAccountFence {
-  let owner = currentAccountId();
+  return meetingAccountFenceFor(currentAccountId());
+}
+
+/** A fence for an owner saved earlier, possibly by a process that has since been killed. */
+export function meetingAccountFenceFor(savedOwner: string | null): MeetingAccountFence {
+  let owner = savedOwner;
   return {
     get accountId(): string | null {
       return owner;
