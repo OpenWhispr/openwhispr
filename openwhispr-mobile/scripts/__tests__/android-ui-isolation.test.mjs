@@ -124,6 +124,19 @@ test('a new patch may only touch Android parts or packages iOS does not link', (
   );
 });
 
+test('a pull request stacked on another Android branch is Android work', () => {
+  assert.deepEqual(
+    fileViolations([change('M', 'src/lib/utils.ts', 'edited', 'original')], {
+      target: 'chore/android-ios-isolation-guard',
+    }).length,
+    1,
+  );
+  assert.deepEqual(
+    fileViolations([change('A', 'src/android/x.ts', 'a', null)], { target: 'feat/some-split' }),
+    [],
+  );
+});
+
 test('docs change freely', () => {
   assert.deepEqual(
     fileViolations(

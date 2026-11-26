@@ -143,28 +143,28 @@ jobs:
       - name: Keep files on their own side
         run: node scripts/check-android-ui-isolation.mjs files --base "$BASE_SHA" --target "$BASE_REF"
       - name: Find the fork point with main
-        if: startsWith(github.event.pull_request.base.ref, 'android/')
+        if: github.event.pull_request.base.ref != 'main'
         id: fork
         run: echo "sha=$(git merge-base origin/main HEAD)" >> "$GITHUB_OUTPUT"
       - name: Install locked dependencies without lifecycle scripts
-        if: startsWith(github.event.pull_request.base.ref, 'android/')
+        if: github.event.pull_request.base.ref != 'main'
         run: npm ci --ignore-scripts --no-audit --no-fund && node_modules/.bin/patch-package --error-on-fail
       - name: Bundle iOS as plain JS
-        if: startsWith(github.event.pull_request.base.ref, 'android/')
+        if: github.event.pull_request.base.ref != 'main'
         run: node_modules/.bin/expo export --platform ios --no-bytecode --source-maps --max-workers 2 --output-dir "$RUNNER_TEMP/ios-head"
       - name: Fingerprint the iOS app
-        if: startsWith(github.event.pull_request.base.ref, 'android/')
+        if: github.event.pull_request.base.ref != 'main'
         run: node scripts/check-android-ui-isolation.mjs fingerprint --project . --export-dir "$RUNNER_TEMP/ios-head" --out "$RUNNER_TEMP/ios-head.json"
       # The fork point's fingerprint only changes when the fork point or the fingerprint code does.
       - name: Restore the fork point's iOS fingerprint
-        if: startsWith(github.event.pull_request.base.ref, 'android/')
+        if: github.event.pull_request.base.ref != 'main'
         id: fork-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/ios-fork.json
           key: ios-fork-fingerprint-${{ steps.fork.outputs.sha }}-${{ hashFiles('openwhispr-mobile/scripts/check-android-ui-isolation.mjs') }}
       - name: Fingerprint the iOS app at the fork point
-        if: startsWith(github.event.pull_request.base.ref, 'android/') && steps.fork-cache.outputs.cache-hit != 'true'
+        if: github.event.pull_request.base.ref != 'main' && steps.fork-cache.outputs.cache-hit != 'true'
         env:
           FORK_SHA: ${{ steps.fork.outputs.sha }}
         run: |
@@ -177,15 +177,15 @@ jobs:
       # Every difference from main's iOS app must be listed in scripts/android-ios-known-ios-diffs.json,
       # and listed ones that are gone must be removed. The list only shrinks.
       - name: Keep the iOS app as main has it
-        if: startsWith(github.event.pull_request.base.ref, 'android/')
+        if: github.event.pull_request.base.ref != 'main'
         run: node scripts/check-android-ui-isolation.mjs compare-ios --head "$RUNNER_TEMP/ios-head.json" --fork "$RUNNER_TEMP/ios-fork.json"
       - name: Bundle Android with source maps
-        if: startsWith(github.event.pull_request.base.ref, 'android/')
+        if: github.event.pull_request.base.ref != 'main'
         run: node_modules/.bin/expo export --platform android --source-maps --max-workers 2 --output-dir "$RUNNER_TEMP/android-head"
       # Android must end up loading no file iOS loads. scripts/android-ios-shared-baseline.txt lists
       # the ones it still does; the list only shrinks.
       - name: Keep Android off files iOS loads
-        if: startsWith(github.event.pull_request.base.ref, 'android/')
+        if: github.event.pull_request.base.ref != 'main'
         run: node scripts/check-android-ui-isolation.mjs shared --ios-export "$RUNNER_TEMP/ios-head" --android-export "$RUNNER_TEMP/android-head"
 
   native-transport:

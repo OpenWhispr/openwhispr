@@ -94,7 +94,8 @@ function blob(ref, file) {
 // change: { status: 'A' | 'M' | 'D', file, head: blob|null, fork: blob|null }
 export function fileViolations(changes, { target, iosExcludedPackages: excluded = [] }) {
   const problems = [];
-  const intoMain = !/android/i.test(target);
+  // Everything that isn't main is Android work (android/beta, or a PR stacked on one into it).
+  const intoMain = target === 'main';
   for (const { status, file, head, fork, patchTargets: patched = [] } of changes) {
     if (intoMain) {
       if (isAndroidOnly(file))
