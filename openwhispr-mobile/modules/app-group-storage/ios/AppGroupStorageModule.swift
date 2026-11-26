@@ -1063,18 +1063,50 @@ public class AppGroupStorageModule: Module {
 
   // MARK: - Audio Engine
 
+  // The warm mic keeps this session live for minutes after a take, so these
+  // options decide how the user's music sounds all that time. Bluetooth HFP
+  // alone (call mode) left AirPods muffled and mono while the mic was warm.
+  // On iOS 26, AirPods that support high-quality recording record and play
+  // at full bandwidth instead; iOS falls back to HFP for any headset that
+  // doesn't, so its mic is still used. A2DP only reaches output-only devices
+  // (speakers, car audio), since iOS prefers HFP on a device that has both.
+  private static var captureCategoryOptions: AVAudioSession.CategoryOptions {
+    var options: AVAudioSession.CategoryOptions = [
+      .defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP, .mixWithOthers,
+    ]
+    if #available(iOS 26.0, *) {
+      options.insert(.bluetoothHighQualityRecording)
+    }
+    return options
+  }
+
+  // Which mic the session got and, for a Bluetooth one, whether it records at
+  // full bandwidth or fell back to call mode. Port types only, never names.
+  private func logCaptureRoute(_ session: AVAudioSession) {
+    guard let input = session.currentRoute.inputs.first else {
+      logMarker("audioSession.route", extra: "input=none")
+      return
+    }
+    var extra = "input=\(input.portType.rawValue)"
+    if #available(iOS 26.0, *), let bluetooth = input.bluetoothMicrophoneExtension {
+      let quality = bluetooth.highQualityRecording
+      extra += " hqSupported=\(quality.isSupported) hqEnabled=\(quality.isEnabled)"
+    }
+    logMarker("audioSession.route", extra: extra)
+  }
+
   private func configureAudioSessionForCapture() throws {
     let session = AVAudioSession.sharedInstance()
     // .default (not .measurement) so iOS applies its normal input gain/AGC to
     // the mic. .measurement disables that conditioning for "raw" audio, which
     // captured voice so quietly (~-40 dB peak, only ~12 dB over the noise floor)
     // that the speech-activity check discarded it as no-speech unless the user
-    // nearly shouted. If this still isn't loud enough, .voiceChat applies
-    // stronger voice AGC.
+    // nearly shouted. Keep .default: .bluetoothHighQualityRecording works with
+    // no other mode.
     try session.setCategory(
       .playAndRecord,
       mode: .default,
-      options: [.defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers]
+      options: Self.captureCategoryOptions
     )
 
     // During a cold launch handed off from another app — and equally during a
@@ -1089,6 +1121,7 @@ public class AppGroupStorageModule: Module {
         if attempt > 0 {
           logMarker("audioSession.activatedAfterRetry", extra: "attempt=\(attempt)")
         }
+        logCaptureRoute(session)
         return
       } catch {
         lastError = error

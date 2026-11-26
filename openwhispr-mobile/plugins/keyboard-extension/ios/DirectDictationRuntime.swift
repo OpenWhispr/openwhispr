@@ -102,10 +102,8 @@ final class DirectDictationRuntime {
     guard hasContainer, readDocumentID?() != nil, dictation.isEligible, AVAudioApplication.shared.recordPermission == .granted else {
       return false
     }
-    let session = AVAudioSession.sharedInstance()
     return !DirectAudioRoute.blocksDirectCapture(
-      otherAudioPlaying: session.isOtherAudioPlaying,
-      outputPortTypes: session.currentRoute.outputs.map { $0.portType.rawValue }
+      otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying
     )
   }
 

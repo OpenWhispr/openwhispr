@@ -5842,8 +5842,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   @objc private func handleDirectRecordTapped() {
     recordButton.removeTarget(self, action: #selector(handleDirectRecordTapped), for: .touchUpInside)
     logRecordMarker("handleDirectRecordTapped")
-    // Music or Bluetooth audio may have started since the pill was drawn; recording here would
-    // stop it for good, so the audio is checked at the tap.
+    // Music may have started since the pill was drawn; recording here would stop it for good,
+    // so the audio is checked at the tap.
     guard let direct = directDictation, direct.canRecordHere else {
       refreshRecordButton()
       return
