@@ -7,7 +7,6 @@ import {
   fileViolations,
   isAndroidOnly,
   normaliseSource,
-  ratchet,
   sharedFiles,
   styleEntries,
 } from '../check-android-ui-isolation.mjs';
@@ -27,7 +26,7 @@ test('recognises files only Android loads', () => {
     'app/(tabs)/(style)/index.tsx',
     'assets/android/adaptive-icon-foreground.png',
     'plugins/android-billing/withAndroidBilling.js',
-    'scripts/android-ios-shared-baseline.txt',
+    'scripts/android-build-check.mjs',
     'config/router-context.android.js',
   ]) {
     assert.equal(isAndroidOnly(file), true, file);
@@ -223,11 +222,6 @@ test('the fingerprint skips the isolation plumbing and records versions, config 
     'module:src/lib/utils.ts',
     'package:node_modules/nativewind',
   ]);
-});
-
-test('the known-differences and shared lists only shrink', () => {
-  assert.deepEqual(ratchet(['a', 'c'], ['a', 'b']), { added: ['c'], stale: ['b'] });
-  assert.deepEqual(ratchet(['a'], ['a']), { added: [], stale: [] });
 });
 
 test('shared files are app files both bundles contain', () => {
