@@ -386,7 +386,6 @@ function useArrival(arriving: boolean) {
   };
 }
 
-/** Where a row's text came from: a dictation (mic) or an uploaded audio file. */
 export function HistoryRow({
   item,
   last,
