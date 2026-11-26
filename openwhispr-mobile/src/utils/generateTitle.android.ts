@@ -1,11 +1,2 @@
-import type { ReasoningRoutingOptions } from '@/types';
-import { generateNoteTitleCore } from './generateTitleCore';
-export { deriveLocalTitle } from './generateTitleCore';
-
-export function generateNoteTitle(
-  text: string,
-  routing?: ReasoningRoutingOptions,
-  signal?: AbortSignal,
-): Promise<string> {
-  return generateNoteTitleCore(text, routing, { signal });
-}
+// Android's copy lives in src/android; shared files still import it from here.
+export * from '@/android/utils/generateTitle';

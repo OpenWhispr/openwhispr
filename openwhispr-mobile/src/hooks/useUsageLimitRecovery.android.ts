@@ -1,5 +1,2 @@
-import { useUsageLimitRecoveryCore } from './useUsageLimitRecoveryCore';
-
-export function useUsageLimitRecovery() {
-  return useUsageLimitRecoveryCore('Turn on Local Mode');
-}
+// Android's copy lives in src/android; shared files still import it from here.
+export * from '@/android/hooks/useUsageLimitRecovery';

@@ -6,7 +6,7 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { GlassIconButton } from '@/components/ui/GlassIconButton';
 import type { CalendarParticipant } from '@/data/calendarTypes';
-import { attendeeName, sortAttendees } from '@/lib/notes/noteMeta';
+import { attendeeName, sortAttendees } from '@/android/lib/notes/noteMeta';
 import { GroupedList } from './GroupedList';
 import { useIosColor } from '@/config/colors.android';
 

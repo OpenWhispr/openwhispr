@@ -9,7 +9,7 @@ import {
   buildCalendarMeetingContext,
   parseCalendarParticipants,
 } from '@/lib/calendar/meetingContext';
-import { formatNoteMetaDate, markViewer, noteTakenAt } from '@/lib/notes/noteMeta';
+import { formatNoteMetaDate, markViewer, noteTakenAt } from '@/android/lib/notes/noteMeta';
 import { Sentry } from '@/lib/sentry';
 import { safeHaptics } from '@/lib/utils';
 import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';

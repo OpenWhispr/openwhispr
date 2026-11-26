@@ -289,6 +289,7 @@ jest.mock('@/hooks/useSuperwallGate', () => ({
 jest.mock('@/utils/generateTitle', () => ({
   generateNoteTitle: jest.fn(),
 }));
+jest.mock('@/android/utils/generateTitle', () => jest.requireMock('@/utils/generateTitle'));
 
 jest.mock('@/lib/privateMode', () => ({
   promptLocalModelFallback: jest.fn(),
@@ -606,7 +607,6 @@ describe('NoteEditorScreen generated meeting context', () => {
     ['android', 'personal', 1, true],
     ['android', 'personal', 0, false],
     ['android', 'meeting', 1, false],
-    ['ios', 'personal', 1, false],
   ] as const)(
     'selects desktop default note instructions on %s for %s default=%s',
     async (platform, noteType, isDefault, usesDesktopInstructions) => {
@@ -691,10 +691,7 @@ describe('NoteEditorScreen generated meeting context', () => {
     }
   });
 
-  it.each([
-    ['android', 0],
-    ['ios', 1],
-  ] as const)(
+  it.each([['android', 0]] as const)(
     'preserves wrapped output on %s for action default=%s',
     async (platform, isDefault) => {
       const originalPlatform = Platform.OS;
@@ -975,6 +972,7 @@ jest.mock('react-native-svg', () => {
 jest.mock('@/hooks/useNoteSharing', () => ({
   useNoteSharing: () => ({ hasLink: false, copyLink: jest.fn() }),
 }));
+jest.mock('@/android/hooks/useNoteSharing', () => jest.requireMock('@/hooks/useNoteSharing'));
 
 it('runs signed-out note formatting through Providers without requiring a Cloud account', async () => {
   mockAuthState.user = null;

@@ -39,6 +39,9 @@ jest.mock('@/lib/keyboardInferenceRoute', () => ({
   listPendingProviderRecoveryJobs: () => [],
   clearKeyboardProviderRecovery: jest.fn(),
 }));
+jest.mock('@/android/lib/keyboardInferenceRoute', () =>
+  jest.requireMock('@/lib/keyboardInferenceRoute'),
+);
 jest.mock('../../../../modules/audio-tools/src', () => ({
   AudioTools: { isAvailable: () => false, cleanup: async () => {} },
 }));

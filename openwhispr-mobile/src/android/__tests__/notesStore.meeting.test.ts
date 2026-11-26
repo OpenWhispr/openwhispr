@@ -118,6 +118,7 @@ jest.mock('@/utils/generateTitle', () => ({
   generateNoteTitle: mockGenerateNoteTitle,
   deriveLocalTitle: mockDeriveLocalTitle,
 }));
+jest.mock('@/android/utils/generateTitle', () => jest.requireMock('@/utils/generateTitle'));
 jest.mock('@/lib/localReasoningFallback', () => ({
   promptLocalReasoningFallback: (...args: unknown[]) => mockPromptLocalReasoningFallback(...args),
 }));
@@ -138,6 +139,9 @@ jest.mock('@/android/reasoning/ReasoningService', () =>
 jest.mock('@/lib/notes/localMeetingNotes', () => ({
   generateLocalMeetingNotes: jest.fn(),
 }));
+jest.mock('@/android/lib/notes/localMeetingNotes', () =>
+  jest.requireMock('@/lib/notes/localMeetingNotes'),
+);
 jest.mock('@/services/diarization/DiarizationService', () => ({
   processMeeting: mockProcessMeeting,
 }));

@@ -28,8 +28,8 @@ jest.mock('@/services/reasoning/buildProviderPrompt', () =>
 jest.mock('@/services/agent/composerPrompt', () =>
   jest.requireActual('@/android/reasoning/composerPrompt'),
 );
-jest.mock('@/lib/meetingRecoveryLifecycle', () =>
-  jest.requireActual('@/lib/meetingRecoveryLifecycle.android'),
+jest.mock('@/android/lib/meetingRecoveryLifecycle', () =>
+  jest.requireActual('@/android/lib/meetingRecoveryLifecycle'),
 );
 jest.mock('@/lib/transcriptAudio', () => jest.requireActual('@/lib/transcriptAudio.android'));
 jest.mock('@/store/useTranscriptStore', () =>
@@ -215,7 +215,7 @@ it("does not sweep another account's meeting recordings after restoring a differ
   expect(new LocalMeetingRecorder(81, () => {}).uri).toMatch(
     /^file:\/\/\/docs\/account-audio\/[0-9a-f-]{36}\/meeting-81\.wav$/,
   );
-  require('@/lib/meetingRecovery').startMeetingRecoveryOnce();
+  require('@/android/lib/meetingRecovery').startMeetingRecoveryOnce();
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(mockReadAudio).not.toHaveBeenCalledWith('file:///docs/');
   expect(mockDeleteAudio).not.toHaveBeenCalledWith(
@@ -666,7 +666,7 @@ it('does not delete audio when an old directory scan resolves after an account s
       resolveFiles = resolve;
     }),
   );
-  require('@/lib/meetingRecovery').startMeetingRecoveryOnce();
+  require('@/android/lib/meetingRecovery').startMeetingRecoveryOnce();
   await Promise.resolve();
   await useAuthStore.getState().signIn('account-b', 'synthetic');
   resolveFiles(['meeting-81.wav']);

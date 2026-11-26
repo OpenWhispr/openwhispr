@@ -1,11 +1,8 @@
-import { Platform } from 'react-native';
 jest.mock('@/lib/appleLLM', () => ({
   AppleLLM: {
     generateMeetingNotes: jest.fn(),
   },
 }));
-
-jest.mock('@/android/LocalTextModel', () => ({ LocalTextModel: { processText: jest.fn() } }));
 
 jest.mock('@/data', () => ({
   notesRepository: {
@@ -30,29 +27,25 @@ jest.mock('@/lib/localReasoning', () => ({
     typeof error === 'object' &&
     error !== null &&
     'code' in error &&
-    ['APPLE_LLM_CONTEXT_LIMIT', 'LOCAL_CONTEXT_LIMIT'].includes(
-      String((error as { code?: unknown }).code),
-    ),
+    (error as { code?: unknown }).code === 'APPLE_LLM_CONTEXT_LIMIT',
   isLocalOutputLimitError: (error: unknown) =>
     typeof error === 'object' &&
     error !== null &&
     'code' in error &&
     (error as { code?: unknown }).code === 'APPLE_LLM_OUTPUT_LIMIT',
-  toLocalReasoningError: jest.fn((error: unknown) => error),
+  toLocalReasoningError: (error: unknown) => error,
 }));
 
 import {
   generateLocalMeetingNotes,
   renderStructuredMeetingNotesToMarkdown,
 } from '../localMeetingNotes';
-import { LocalTextModel } from '@/android/LocalTextModel';
 import { AppleLLM } from '@/lib/appleLLM';
 import { notesRepository } from '@/data';
 import {
   countLocalInputTokens,
   fitsLocalReasoningBudget,
   getLocalInputTokenBudget,
-  toLocalReasoningError,
 } from '@/lib/localReasoning';
 
 const mockGenerateMeetingNotes = AppleLLM.generateMeetingNotes as jest.Mock;
@@ -349,272 +342,4 @@ describe('local meeting notes', () => {
     expect(mapPrompts).toHaveLength(4);
     expect(mapPrompts.flatMap(wordsIn)).toEqual(words);
   });
-});
-
-describe('Android local meeting formatting', () => {
-  const result = {
-    summary: 'The team planned the launch.',
-    keyDiscussionPoints: [],
-    decisions: [],
-    actionItems: [{ text: 'Confirm the checklist.', owner: 'Alice' }],
-    followUps: [],
-  };
-  it('uses the downloaded Android engine for meeting notes without calling Apple', async () => {
-    const original = Platform.OS;
-    Platform.OS = 'android';
-    (LocalTextModel.processText as jest.Mock).mockResolvedValue({ text: JSON.stringify(result) });
-    try {
-      const text = await generateLocalMeetingNotes(7);
-      expect(text).toContain('Alice: Confirm the checklist.');
-      expect(LocalTextModel.processText).toHaveBeenCalledWith(
-        expect.objectContaining({
-          systemPrompt: expect.stringContaining('Return only a JSON object'),
-        }),
-      );
-      expect((LocalTextModel.processText as jest.Mock).mock.calls[0][0].systemPrompt).not.toContain(
-        'notes in markdown',
-      );
-      expect(mockGenerateMeetingNotes).not.toHaveBeenCalled();
-    } finally {
-      Platform.OS = original;
-    }
-  });
-  it('splits an oversized Android transcript line and merges the smaller results', async () => {
-    const original = Platform.OS;
-    Platform.OS = 'android';
-    const generate = LocalTextModel.processText as jest.Mock;
-    generate
-      .mockRejectedValueOnce(
-        Object.assign(new Error('Context is full'), { code: 'LOCAL_CONTEXT_LIMIT' }),
-      )
-      .mockResolvedValue({ text: JSON.stringify(result) });
-    try {
-      await expect(generateLocalMeetingNotes(7)).resolves.toContain('Confirm the checklist.');
-      expect(generate).toHaveBeenCalledTimes(4);
-      expect(generate.mock.calls[1][0].text).not.toBe(generate.mock.calls[2][0].text);
-      expect(mockGenerateMeetingNotes).not.toHaveBeenCalled();
-    } finally {
-      Platform.OS = original;
-    }
-  });
-  it('rejects malformed Android output without calling Apple or saving invented notes', async () => {
-    const original = Platform.OS;
-    Platform.OS = 'android';
-    (LocalTextModel.processText as jest.Mock).mockResolvedValue({ text: '{"summary": 42}' });
-    try {
-      await expect(generateLocalMeetingNotes(7)).rejects.toThrow();
-      expect(mockGenerateMeetingNotes).not.toHaveBeenCalled();
-    } finally {
-      Platform.OS = original;
-    }
-  });
-
-  it('splits a native output-limited chunk and retains both halves in the merge', async () => {
-    const original = Platform.OS;
-    Platform.OS = 'android';
-    mockGetSegments.mockReturnValue(segmentsOf(2));
-    const generate = LocalTextModel.processText as jest.Mock;
-    generate
-      .mockReset()
-      .mockRejectedValueOnce(Object.assign(new Error('Output cap'), { code: 'LOCAL_OUTPUT_LIMIT' }))
-      .mockResolvedValueOnce({ text: JSON.stringify(partialNotes('First half')) })
-      .mockResolvedValueOnce({ text: JSON.stringify(partialNotes('Second half')) })
-      .mockResolvedValueOnce({ text: JSON.stringify(partialNotes('Combined notes')) });
-    try {
-      await expect(generateLocalMeetingNotes(7)).resolves.toBe('Combined notes');
-      expect(generate).toHaveBeenCalledTimes(4);
-      expect(generate.mock.calls[1][0].text).toContain('Line 0');
-      expect(generate.mock.calls[1][0].text).not.toContain('Line 1');
-      expect(generate.mock.calls[2][0].text).toContain('Line 1');
-      expect(generate.mock.calls[3][0].text).toContain('First half');
-      expect(generate.mock.calls[3][0].text).toContain('Second half');
-      expect(mockGenerateMeetingNotes).not.toHaveBeenCalled();
-    } finally {
-      Platform.OS = original;
-    }
-  });
-
-  it('bounds repeated native output-limit splitting', async () => {
-    const original = Platform.OS;
-    Platform.OS = 'android';
-    const failure = Object.assign(new Error('Output cap'), { code: 'LOCAL_OUTPUT_LIMIT' });
-    mockGetSegments.mockReturnValue(segmentsOf(8));
-    const generate = (LocalTextModel.processText as jest.Mock)
-      .mockReset()
-      .mockRejectedValue(failure);
-    try {
-      await expect(generateLocalMeetingNotes(7)).rejects.toBe(failure);
-      expect(generate).toHaveBeenCalledTimes(3);
-    } finally {
-      Platform.OS = original;
-    }
-  });
-
-  it('preserves an unsplittable native output-limit error before generic normalization', async () => {
-    const original = Platform.OS;
-    Platform.OS = 'android';
-    const failure = Object.assign(new Error('Output cap'), { code: 'LOCAL_OUTPUT_LIMIT' });
-    const normalize = toLocalReasoningError as jest.Mock;
-    normalize.mockImplementation(() =>
-      Object.assign(new Error('Normalized'), { code: 'LOCAL_REASONING_FAILED' }),
-    );
-    const generate = (LocalTextModel.processText as jest.Mock)
-      .mockReset()
-      .mockRejectedValue(failure);
-    try {
-      await expect(generateLocalMeetingNotes(7)).rejects.toBe(failure);
-      expect(generate).toHaveBeenCalledTimes(1);
-      expect(normalize).not.toHaveBeenCalled();
-    } finally {
-      normalize.mockImplementation((error: unknown) => error);
-      Platform.OS = original;
-    }
-  });
-
-  it('keeps the completed chunks when native output limits prevent the merge', async () => {
-    const original = Platform.OS;
-    Platform.OS = 'android';
-    mockGetSegments.mockReturnValue(segmentsOf(2));
-    mockFitsBudget.mockImplementation(
-      async ({ prompt }: { prompt: string }) =>
-        prompt.includes('Merge these') || !(prompt.includes('Line 0') && prompt.includes('Line 1')),
-    );
-    const generate = (LocalTextModel.processText as jest.Mock)
-      .mockReset()
-      .mockResolvedValueOnce({
-        text: JSON.stringify(partialNotes('First chunk.', ['Ship Friday.'])),
-      })
-      .mockResolvedValueOnce({
-        text: JSON.stringify(partialNotes('Second chunk.', ['Alice owns QA.'])),
-      })
-      .mockRejectedValueOnce(
-        Object.assign(new Error('Output cap'), { code: 'LOCAL_OUTPUT_LIMIT' }),
-      );
-    try {
-      const markdown = await generateLocalMeetingNotes(7);
-      expect(generate).toHaveBeenCalledTimes(3);
-      expect(markdown).toContain('First chunk. Second chunk.');
-      expect(markdown).toContain('- Ship Friday.\n- Alice owns QA.');
-    } finally {
-      Platform.OS = original;
-    }
-  });
-
-  it('honors cancellation before retrying a native output-limited chunk', async () => {
-    const original = Platform.OS;
-    Platform.OS = 'android';
-    mockGetSegments.mockReturnValue(segmentsOf(2));
-    let cancelled = false;
-    const abort = new Error('Meeting cancelled');
-    const generate = (LocalTextModel.processText as jest.Mock)
-      .mockReset()
-      .mockImplementation(async () => {
-        cancelled = true;
-        throw Object.assign(new Error('Output cap'), { code: 'LOCAL_OUTPUT_LIMIT' });
-      });
-    try {
-      await expect(
-        generateLocalMeetingNotes(7, {
-          checkpoint: () => {
-            if (cancelled) throw abort;
-          },
-        }),
-      ).rejects.toBe(abort);
-      expect(generate).toHaveBeenCalledTimes(1);
-    } finally {
-      Platform.OS = original;
-    }
-  });
-
-  it('honors cancellation while checking the merge budget before starting generation', async () => {
-    const original = Platform.OS;
-    Platform.OS = 'android';
-    mockGetSegments.mockReturnValue(segmentsOf(2));
-    let cancelled = false;
-    const abort = new Error('Meeting cancelled');
-    mockFitsBudget.mockImplementation(async ({ prompt }: { prompt: string }) => {
-      if (prompt.includes('Merge these')) {
-        cancelled = true;
-        return true;
-      }
-      return !(prompt.includes('Line 0') && prompt.includes('Line 1'));
-    });
-    const generate = (LocalTextModel.processText as jest.Mock)
-      .mockReset()
-      .mockResolvedValue({ text: JSON.stringify(partialNotes('A completed chunk')) });
-    try {
-      await expect(
-        generateLocalMeetingNotes(7, {
-          checkpoint: () => {
-            if (cancelled) throw abort;
-          },
-        }),
-      ).rejects.toBe(abort);
-      expect(generate).toHaveBeenCalledTimes(2);
-    } finally {
-      Platform.OS = original;
-    }
-  });
-});
-
-it('does not treat an Android output-limit code as recoverable in the default iOS adapter', async () => {
-  const original = Platform.OS;
-  Platform.OS = 'ios';
-  const failure = Object.assign(new Error('Unexpected native code'), {
-    code: 'LOCAL_OUTPUT_LIMIT',
-  });
-  mockGetSegments.mockReturnValue(segmentsOf(2));
-  mockGenerateMeetingNotes.mockRejectedValue(failure);
-  try {
-    await expect(generateLocalMeetingNotes(7)).rejects.toBe(failure);
-    expect(mockGenerateMeetingNotes).toHaveBeenCalledTimes(1);
-  } finally {
-    Platform.OS = original;
-  }
-});
-
-jest.mock('../generateNotesPrompt', () => ({
-  ...jest.requireActual<typeof import('../generateNotesPrompt')>('../generateNotesPrompt'),
-  buildActionSystemPrompt: (
-    input: Parameters<
-      (typeof import('../generateNotesPrompt.android'))['buildActionSystemPrompt']
-    >[0],
-  ) => {
-    const os = jest.requireActual<typeof import('react-native')>('react-native').Platform.OS;
-    return os === 'android'
-      ? jest
-          .requireActual<
-            typeof import('../generateNotesPrompt.android')
-          >('../generateNotesPrompt.android')
-          .buildActionSystemPrompt(input)
-      : jest
-          .requireActual<typeof import('../generateNotesPrompt')>('../generateNotesPrompt')
-          .buildActionSystemPrompt(input);
-  },
-}));
-
-jest.mock('../localMeetingNotesPlatform', () => {
-  const selected =
-    (): (typeof import('../localMeetingNotesPlatform'))['localMeetingNotesPlatform'] => {
-      const os = jest.requireActual<typeof import('react-native')>('react-native').Platform.OS;
-      return os === 'android'
-        ? jest.requireActual<typeof import('../localMeetingNotesPlatform.android')>(
-            '../localMeetingNotesPlatform.android',
-          ).localMeetingNotesPlatform
-        : jest.requireActual<typeof import('../localMeetingNotesPlatform')>(
-            '../localMeetingNotesPlatform',
-          ).localMeetingNotesPlatform;
-    };
-  return {
-    localMeetingNotesPlatform: {
-      get modelName() {
-        return selected().modelName;
-      },
-      buildInstructions: (actionPrompt: string) => selected().buildInstructions(actionPrompt),
-      generateNotes: (input: { instructions: string; prompt: string }) =>
-        selected().generateNotes(input),
-      getCheckpoint: (options: { checkpoint?: () => void }) => selected().getCheckpoint(options),
-      isOutputLimitError: (error: unknown) => selected().isOutputLimitError?.(error) ?? false,
-    },
-  };
 });

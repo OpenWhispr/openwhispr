@@ -3,7 +3,10 @@ import { isChatEnabled } from '@/lib/dictationAgent';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import type { ChatSendGateLifecycle, ChatSendGateOptions } from '@/hooks/useChatSendGateCore';
+import type {
+  ChatSendGateLifecycle,
+  ChatSendGateOptions,
+} from '@/android/hooks/useChatSendGateCore';
 
 export type AndroidChatSendGateOptions = ChatSendGateOptions & {
   isCurrent?: () => boolean;

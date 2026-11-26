@@ -19,7 +19,7 @@ import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { BRAND } from '@/config/colors';
 import { useIosColor } from '@/config/colors.android';
 import type { ChatOverNoteMessage } from '@/lib/notes/chatOverNote';
-import type { NoteChatSuggestion } from '@/lib/notes/noteChatSuggestions';
+import type { NoteChatSuggestion } from '@/android/lib/notes/noteChatSuggestions';
 
 const INPUT_KEYBOARD_GAP = 10;
 

@@ -1,4 +1,4 @@
-import type { NoteSharingFeedbackCode } from '@/lib/notes/noteSharingMessages';
+import type { NoteSharingFeedbackCode } from '@/android/lib/notes/noteSharingMessages';
 import * as Network from 'expo-network';
 import { notesRepository, type Note } from '@/data';
 import { useAuthStore } from '@/android/store/useAuthStore';

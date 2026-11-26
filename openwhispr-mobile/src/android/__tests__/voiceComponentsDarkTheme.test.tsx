@@ -47,6 +47,7 @@ jest.mock('@/hooks/useAudioRecording', () => ({
     cancelRecording: jest.fn(),
   }),
 }));
+jest.mock('@/android/hooks/useAudioRecording', () => jest.requireMock('@/hooks/useAudioRecording'));
 jest.mock('@/hooks/useAudioWaveform', () => ({
   useAudioWaveform: () => ({ currentAmplitude: 0, waveformData: [] }),
 }));

@@ -103,6 +103,7 @@ jest.mock('@/hooks/useNoteSharing', () => ({
   INVALID_EMAIL_ERROR: 'Enter a valid email address.',
   useNoteSharing: () => mockController,
 }));
+jest.mock('@/android/hooks/useNoteSharing', () => jest.requireMock('@/hooks/useNoteSharing'));
 jest.mock('@/data/remote/noteSharingApi', () => ({ searchNoteAccessPrincipals: jest.fn() }));
 jest.mock('@react-native-menu/menu', () => ({
   MenuView: jest.fn(require('./menuViewMock').MenuView),

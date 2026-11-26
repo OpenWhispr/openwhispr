@@ -17,7 +17,7 @@ import { GlassButton, OutlineButton } from './processingFable/look';
 import { ProcessingWaveform } from '@/components/features/WaveformVisualizer';
 import { notesRepository } from '@/data';
 import type { Note } from '@/data/types';
-import { useAudioRecording } from '@/hooks/useAudioRecording';
+import { useAudioRecording } from '@/android/hooks/useAudioRecording';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';

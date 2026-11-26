@@ -15,7 +15,7 @@ import { GlassIconButton } from '@/components/ui/GlassIconButton';
 import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
-import { useSheetDragToDismiss } from '@/hooks/useSheetDragToDismiss';
+import { useSheetDragToDismiss } from '@/android/hooks/useSheetDragToDismiss';
 import { makeStyles } from '@/android/ThemeProvider';
 import { useIosColor } from '@/config/colors.android';
 

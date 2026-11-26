@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Share } from 'react-native';
-import { useNoteSharing } from '@/hooks/useNoteSharing';
+import { useNoteSharing } from '@/android/hooks/useNoteSharing';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
@@ -27,7 +27,7 @@ import { showLearnedToast } from '@/android/dictionary/learnedToast';
 import { applyTranscriptFix, FixWordCard, type FixTarget } from '@/android/dictionary/FixWord';
 import { countWord } from '@/android/dictionary/transcriptFix';
 import { buildDictationHintTiers, buildEffectiveDictionaryWords } from '@/lib/dictationHints';
-import { useActionProcessing } from '@/hooks/useActionProcessing';
+import { useActionProcessing } from '@/android/hooks/useActionProcessing';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { SummaryEditor, type SummaryEditorHandle } from '@/android/notes/SummaryEditor';
 import { LiveMarkdown, NotesReadView } from '@/android/notes/liveMarkdown';
@@ -40,7 +40,7 @@ import { ThatsMeSheet } from '@/components/notes/ThatsMeSheet';
 import { shouldOfferVoiceSetup, voiceSetupCandidates } from '@/lib/notes/voiceSetupPrompt';
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/android/data/notesRepository';
 import { VOICE_ALREADY_TAUGHT_ALERT } from '@/lib/voiceEnrollmentMessages';
-import { formatNoteMetaDate, markViewer, noteTakenAt } from '@/lib/notes/noteMeta';
+import { formatNoteMetaDate, markViewer, noteTakenAt } from '@/android/lib/notes/noteMeta';
 import { SpeakerRenameSheet } from '@/components/notes/SpeakerRenameSheet';
 import { SpeakerMergeSheet } from '@/components/notes/SpeakerMergeSheet';
 import { VoiceprintSuggestionSheet } from '@/components/notes/VoiceprintSuggestionSheet';
@@ -65,7 +65,7 @@ import { providerDisplayName } from '@/android/providers/mobileProviders';
 import { promptLocalReasoningFallback } from '@/android/dictation/localReasoningFallback';
 import { confirmCloudOnce, confirmDestructive } from '@/lib/alerts';
 import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
-import { isDefaultGenerateNotesAction } from '@/lib/notes/generateNotesPrompt';
+import { isDefaultGenerateNotesAction } from '@/android/lib/notes/generateNotesPrompt';
 import { isRegenerableNoteTitle } from '@/lib/notes/regenerableNoteTitle';
 import {
   getCalendarSpeakerLabelSuggestions,

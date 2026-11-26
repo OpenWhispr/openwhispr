@@ -1,7 +1,7 @@
 const mockBaseline = jest.fn();
 const mockRepair = jest.fn();
 let mockAudio: { namespace: string; key: string; isCurrent(): boolean };
-jest.mock('@/lib/meetingRecovery.ts', () => ({
+jest.mock('@/android/lib/meetingRecovery', () => ({
   startMeetingRecoveryOnce: (...args: unknown[]) => mockBaseline(...args),
 }));
 jest.mock('@/lib/meetingAudioStorage', () => ({ meetingAudioContext: () => mockAudio }));

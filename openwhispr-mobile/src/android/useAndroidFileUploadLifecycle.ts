@@ -13,7 +13,7 @@ import type {
   CommonFileUploadOptions,
   FileUploadLifecycle,
   FileUploadState,
-} from '../hooks/useFileUploadCore';
+} from '@/android/hooks/useFileUploadCore';
 
 export interface AndroidFileUploadOptions extends CommonFileUploadOptions {
   onComplete?: (text: string, fileName: string) => void;

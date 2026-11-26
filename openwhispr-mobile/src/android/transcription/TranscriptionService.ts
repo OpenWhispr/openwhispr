@@ -1131,7 +1131,7 @@ export class TranscriptionService {
           // Silence leaves nothing to recover, and every caller discards the audio.
           if (recoveryJobId && (error as { code?: unknown })?.code === 'NO_SPEECH') {
             const { clearKeyboardProviderRecovery } =
-              require('@/lib/keyboardInferenceRoute') as typeof import('@/lib/keyboardInferenceRoute');
+              require('@/android/lib/keyboardInferenceRoute') as typeof import('@/android/lib/keyboardInferenceRoute');
             clearKeyboardProviderRecovery(recoveryJobId);
           }
           throw error;

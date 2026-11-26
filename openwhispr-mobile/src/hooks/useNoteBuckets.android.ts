@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { Note } from '@/data';
-import { groupNotesByDate } from '@/lib/groupNotesByDate.android';
+import { groupNotesByDate } from '@/android/lib/groupNotesByDate';
 import { useAndroidCopy } from './useAndroidCopy';
 
 /** Keep date grouping identical while presenting Android headings in the app locale. */

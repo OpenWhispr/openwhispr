@@ -28,11 +28,11 @@ import { SpeakerProfileOwnerAlreadyExistsError } from '@/android/data/notesRepos
 import {
   buildActionSystemPrompt,
   isDefaultGenerateNotesAction,
-} from '@/lib/notes/generateNotesPrompt';
+} from '@/android/lib/notes/generateNotesPrompt';
 import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
 import { mapUtterancesToSegments } from '@/lib/notes/cloudMeetingSegments';
 import { DEFAULT_MEETING_TITLE } from '@/lib/notes/meetingConstants';
-import { generateLocalMeetingNotes } from '@/lib/notes/localMeetingNotes';
+import { generateLocalMeetingNotes } from '@/android/lib/notes/localMeetingNotes';
 import {
   getLocalReasoningReadiness,
   isLocalReasoningRequired,
@@ -525,7 +525,7 @@ export function createNotesStore(
           .trim();
         if (transcriptText) {
           const { deriveLocalTitle, generateNoteTitle } =
-            require('@/utils/generateTitle') as typeof import('@/utils/generateTitle');
+            require('@/android/utils/generateTitle') as typeof import('@/android/utils/generateTitle');
           const routing = { isPrivateNote: currentNote.isPrivate === 1 };
           const canUseLocalTitle = await shouldUseLocalReasoning(routing);
           checkpoint();
