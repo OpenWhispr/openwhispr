@@ -32,7 +32,7 @@ jest.mock('../../../modules/live-activity/src', () => ({
   LiveActivity: { isDictationModeEnabled: () => false, setDictationMode: jest.fn() },
 }));
 
-import PreferencesScreen from '../PreferencesScreen';
+import KeyboardSettingsScreen from '../KeyboardSettingsScreen';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -40,15 +40,15 @@ beforeEach(() => {
   mockFocusEffects.length = 0;
 });
 
-describe('PreferencesScreen — Translate dictation', () => {
+describe('KeyboardSettingsScreen — Translate dictation', () => {
   it('shows the stored language', () => {
-    render(<PreferencesScreen />);
+    render(<KeyboardSettingsScreen />);
     expect(screen.getByText('Translate dictation')).toBeTruthy();
     expect(screen.getByText('Spanish')).toBeTruthy();
   });
 
   it('takes a language picked in the keyboard each time the screen shows', () => {
-    render(<PreferencesScreen />);
+    render(<KeyboardSettingsScreen />);
     expect(mockFocusEffects.length).toBeGreaterThan(0);
     mockFocusEffects[mockFocusEffects.length - 1]();
     expect(mockReconcile).toHaveBeenCalledTimes(1);
@@ -56,7 +56,7 @@ describe('PreferencesScreen — Translate dictation', () => {
 
   it('is hidden on a build whose keyboard predates translation', () => {
     mockCanTranslate.mockReturnValue(false);
-    render(<PreferencesScreen />);
+    render(<KeyboardSettingsScreen />);
     expect(screen.queryByText('Translate dictation')).toBeNull();
   });
 });

@@ -32,7 +32,7 @@ function HeaderBackButton() {
 }
 
 // Every screen here gets Back, even with nothing beneath it: the keyboard's Keyboard Settings…
-// opens Preferences alone at a cold launch, and Back then goes to Account.
+// opens the Keyboard screen alone at a cold launch, and Back then goes to Account.
 function renderHeaderLeft() {
   return <HeaderBackButton />;
 }
@@ -81,6 +81,7 @@ export default function AccountLayout() {
         name="preferences"
         options={{ title: 'Preferences', headerLargeTitle: false }}
       />
+      <Stack.Screen name="keyboard" options={{ title: 'Keyboard', headerLargeTitle: false }} />
       <Stack.Screen
         name="google-calendar"
         options={{ title: 'Google Calendar', headerLargeTitle: false }}

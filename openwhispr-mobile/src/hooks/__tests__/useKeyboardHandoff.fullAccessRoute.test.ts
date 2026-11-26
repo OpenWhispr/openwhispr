@@ -307,8 +307,8 @@ describe('useKeyboardHandoff — keyboard-full-access route', () => {
 });
 
 describe('useKeyboardHandoff — keyboard-settings route', () => {
-  // Keyboard Settings… opens Preferences through expo-router; the hook only stamps the link so a
-  // concurrent warm resume doesn't replace Preferences with Home.
+  // Keyboard Settings… opens the Keyboard screen through expo-router; the hook only stamps the link
+  // so a concurrent warm resume doesn't replace that screen with Home.
   it('stamps the link and starts no recording', async () => {
     mountWithInitialUrl('openwhispr://keyboard-settings');
 

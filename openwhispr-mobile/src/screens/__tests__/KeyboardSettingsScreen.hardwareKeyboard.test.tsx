@@ -27,15 +27,15 @@ jest.mock('../../../modules/live-activity/src', () => ({
   LiveActivity: { isDictationModeEnabled: () => false, setDictationMode: jest.fn() },
 }));
 
-import PreferencesScreen from '../PreferencesScreen';
+import KeyboardSettingsScreen from '../KeyboardSettingsScreen';
 
 beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe('PreferencesScreen — hardware keyboard shortcut', () => {
+describe('KeyboardSettingsScreen — hardware keyboard shortcut', () => {
   it('offers the setup guide in the Keyboard section', () => {
-    render(<PreferencesScreen />);
+    render(<KeyboardSettingsScreen />);
     fireEvent.press(screen.getByText('Hardware keyboard shortcut'));
     expect(mockRouterPush).toHaveBeenCalledWith('/(account)/hardware-keyboard');
   });

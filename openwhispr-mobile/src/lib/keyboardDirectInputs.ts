@@ -9,6 +9,7 @@ import {
   refreshKeyboardLocalEngine,
   subscribeKeyboardLocalEngine,
 } from '@/lib/keyboardLocalEngine';
+import { keyboardDirectDictationEnabled } from '@/lib/keyboardDirectSetting';
 import { isToneApplicable } from '@/lib/keyboardTone';
 import { isTranslationApplicable } from '@/lib/keyboardTranslation';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
@@ -58,7 +59,7 @@ export function gatherKeyboardDirectInputs(): KeyboardDirectInputs {
   const route = dictationRoute();
   const guest = requiresRealAccount(user);
   return {
-    settingEnabled: config?.keyboardDirectDictation === true,
+    settingEnabled: keyboardDirectDictationEnabled(config),
     userId: guest ? null : (user?.id ?? null),
     hasSessionCookie: Boolean(sessionCookie?.trim()),
     route,

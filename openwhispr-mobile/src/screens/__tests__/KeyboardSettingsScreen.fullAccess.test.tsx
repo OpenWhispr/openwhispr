@@ -28,7 +28,7 @@ jest.mock('../../../modules/live-activity/src', () => ({
   LiveActivity: { isDictationModeEnabled: () => false, setDictationMode: jest.fn() },
 }));
 
-import PreferencesScreen from '../PreferencesScreen';
+import KeyboardSettingsScreen from '../KeyboardSettingsScreen';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -37,9 +37,9 @@ beforeEach(() => {
 // The banner is inferential and dismissible, so it cannot be the only door to
 // recovery: a mid-version revoke, or one dismissal, leaves the keyboard panel
 // telling users to open an app that then shows them nothing.
-describe('PreferencesScreen — Full Access entry point', () => {
+describe('KeyboardSettingsScreen — Full Access entry point', () => {
   it('offers a permanent Full Access row in the Keyboard section', () => {
-    render(<PreferencesScreen />);
+    render(<KeyboardSettingsScreen />);
     expect(screen.getByText('Full Access')).toBeTruthy();
   });
 
@@ -47,7 +47,7 @@ describe('PreferencesScreen — Full Access entry point', () => {
     // Linking.openSettings() only reaches Settings > OpenWhispr; Full Access is
     // two levels deeper, so the row must go through the screen that teaches the
     // taps and plays the PiP tutorial over Settings.
-    render(<PreferencesScreen />);
+    render(<KeyboardSettingsScreen />);
     fireEvent.press(screen.getByText('Full Access'));
     expect(mockRouterPush).toHaveBeenCalledWith('/keyboard-full-access');
   });
