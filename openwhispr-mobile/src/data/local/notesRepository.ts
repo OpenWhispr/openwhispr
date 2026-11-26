@@ -1,4 +1,4 @@
-import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
+import { clearPendingBackfill, isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
 import {
   eq,
   ne,
@@ -670,6 +670,8 @@ export class LocalNotesRepository implements NotesRepository {
       .get();
     if (row?.sourceFile && isManagedMeetingAudioUri(id, row.sourceFile)) {
       FileSystem.deleteAsync(row.sourceFile, { idempotent: true }).catch(() => {});
+      // What the recording still owed the transcript goes with it.
+      clearPendingBackfill(id).catch(() => {});
     }
     this.database.delete(transcriptSegments).where(eq(transcriptSegments.noteId, id)).run();
     this.database.delete(speakers).where(eq(speakers.noteId, id)).run();
@@ -1656,6 +1658,7 @@ export class LocalNotesRepository implements NotesRepository {
     for (const row of rows) {
       if (row.sourceFile && isManagedMeetingAudioUri(row.id, row.sourceFile)) {
         FileSystem.deleteAsync(row.sourceFile, { idempotent: true }).catch(() => {});
+        clearPendingBackfill(row.id).catch(() => {});
       }
     }
     this.database.delete(transcriptSegments).run();
@@ -1700,6 +1703,20 @@ export class LocalNotesRepository implements NotesRepository {
       });
     });
     this.markNoteTranscriptDirty(noteId);
+  }
+
+  // Live meeting transcription saves each utterance as it arrives. The rows stay
+  // clean (pendingSync 0) because getPendingNotes admits any note with a pending
+  // segment, and a half-recorded meeting must not be pushed; the final
+  // replaceSegments does that.
+  appendSegments(noteId: number, segments: NewSegment[]): void {
+    this.database.transaction((tx) => {
+      segments.forEach((seg, index) => {
+        tx.insert(transcriptSegments)
+          .values({ ...seg, noteId, sortOrder: seg.sortOrder ?? index, pendingSync: 0 })
+          .run();
+      });
+    });
   }
 
   // A transcript edit (segments/speakers) must dirty the parent note so the sync

@@ -40,6 +40,8 @@ import { initSyncTriggers } from '@/sync/syncEngine';
 import { initProductEvents } from '@/lib/productEvents';
 import { getCachedSession, type CachedSession } from '@/lib/authClient';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
+import { MeetingInProgressBar } from '@/components/notes/MeetingInProgressBar';
+import { MeetingSessionProvider } from '@/components/notes/MeetingSessionProvider';
 import { startKeyboardToneSync } from '@/lib/keyboardToneSync';
 import { startKeyboardTranslationSync } from '@/lib/keyboardTranslationSync';
 import { startKeyboardAgentSync } from '@/lib/keyboardAgentSync';
@@ -280,7 +282,13 @@ function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <OpenWhisprSuperwallProvider>
-        <SafeAreaProvider>{renderInner()}</SafeAreaProvider>
+        <SafeAreaProvider>
+          {/* Above the auth and onboarding switch, so a sign-out never unmounts a meeting. */}
+          <MeetingSessionProvider>
+            {renderInner()}
+            <MeetingInProgressBar />
+          </MeetingSessionProvider>
+        </SafeAreaProvider>
         <PermissionAlertMount />
         {showSplash && <AnimatedSplash appReady={appReady} onFinish={() => setShowSplash(false)} />}
       </OpenWhisprSuperwallProvider>

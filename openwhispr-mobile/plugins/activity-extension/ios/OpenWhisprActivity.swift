@@ -171,7 +171,7 @@ struct MeetingLockScreenView: View {
         MeetingSubtitle(state: state, size: 13)
       }
       Spacer(minLength: 8)
-      if state.phase == .recording {
+      if state.phase == .recording || state.phase == .paused {
         EndButton()
       }
     }
@@ -189,6 +189,17 @@ struct MeetingSubtitle: View {
       Text("Recorded \(state.recordedDurationLabel)")
         .font(.system(size: size))
         .foregroundColor(.white.opacity(0.6))
+    } else if state.phase == .paused {
+      // No live timer: the mic isn't capturing, so the clock holds at the captured time.
+      HStack(spacing: 5) {
+        Circle()
+          .fill(Color.white.opacity(0.45))
+          .frame(width: size * 0.54, height: size * 0.54)
+        Text("Paused · \(state.recordedDurationLabel)")
+          .monospacedDigit()
+          .font(.system(size: size))
+          .foregroundColor(.white.opacity(0.6))
+      }
     } else {
       HStack(spacing: 5) {
         RecordingDot(size: size * 0.54)
@@ -289,7 +300,7 @@ struct RecordingLiveActivity: Widget {
         }
       }
       DynamicIslandExpandedRegion(.trailing) {
-        if state.phase == .recording {
+        if state.phase == .recording || state.phase == .paused {
           EndButton()
         }
       }
@@ -299,6 +310,14 @@ struct RecordingLiveActivity: Widget {
       if state.phase == .recording {
         // Meetings run past an hour, and "1:02:03" is wider than the 44 pt slot.
         ElapsedText(startedAt: state.startedAt, color: recordingRed, span: meetingTimerSpan)
+          .lineLimit(1)
+          .minimumScaleFactor(0.6)
+          .frame(maxWidth: 44)
+      } else if state.phase == .paused {
+        Text(state.recordedDurationLabel)
+          .monospacedDigit()
+          .font(.system(size: 15, weight: .semibold))
+          .foregroundColor(.white.opacity(0.6))
           .lineLimit(1)
           .minimumScaleFactor(0.6)
           .frame(maxWidth: 44)

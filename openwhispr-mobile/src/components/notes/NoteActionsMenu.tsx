@@ -21,7 +21,8 @@ interface NoteActionsMenuProps {
   onCopyGeneratedNote?: () => void;
   onViewTranscript?: () => void;
   onShare: () => void;
-  onDelete: () => void;
+  /** Omitted to leave Delete out, e.g. for the note a live meeting records into. */
+  onDelete?: () => void;
 }
 
 const MANAGE_ID = '__manage';
@@ -113,15 +114,19 @@ export function NoteActionsMenu({
       image: isPrivate ? 'icloud' : 'icloud.slash',
       imageColor: iconColor,
     },
-    {
-      id: DELETE_ID,
-      title: 'Delete',
-      image: 'trash',
-      // Hex literal — @react-native-menu/menu's processColor can't serialize
-      // PlatformColor/iosColor; passing one collapses to imageColor=0 (transparent).
-      imageColor: '#FF3B30',
-      attributes: { destructive: true },
-    },
+    ...(onDelete
+      ? [
+          {
+            id: DELETE_ID,
+            title: 'Delete',
+            image: 'trash',
+            // Hex literal — @react-native-menu/menu's processColor can't serialize
+            // PlatformColor/iosColor; passing one collapses to imageColor=0 (transparent).
+            imageColor: '#FF3B30',
+            attributes: { destructive: true },
+          },
+        ]
+      : []),
   ];
 
   const handlePress = ({ nativeEvent }: { nativeEvent: { event: string } }) => {
@@ -160,7 +165,7 @@ export function NoteActionsMenu({
       return;
     }
     if (id === DELETE_ID) {
-      onDelete();
+      onDelete?.();
       return;
     }
 

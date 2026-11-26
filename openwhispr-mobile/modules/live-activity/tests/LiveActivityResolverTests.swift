@@ -41,6 +41,16 @@ struct LiveActivityResolverTests {
       }
     }
 
+    // A paused meeting shows the paused phase with its recorded time, and still wins over the keyboard.
+    let paused = MeetingSnapshot(title: "Weekly", startedAt: start, phase: .paused(recordedSeconds: 540))
+    let pausedState = LiveActivityResolver.resolve(
+      meeting: paused, keyboardRecording: true, dictationMode: true, appAwake: true, now: now)
+    check(
+      pausedState?.mode == .meeting && pausedState?.phase == .paused
+        && pausedState?.recordedSeconds == 540, "paused meeting")
+    check(pausedState?.displayTitle == "Recording paused", "paused title")
+    check(pausedState?.recordedDurationLabel == "9:00", "paused recorded label")
+
     // Without a meeting: keyboard recording > dictation idle > nothing.
     let keyboardOnly = RecordingActivityContentState(phase: .recording, startedAt: now)
     check(
@@ -114,6 +124,12 @@ struct LiveActivityResolverTests {
     let roundTripped = try JSONDecoder().decode(
       RecordingActivityContentState.self, from: JSONEncoder().encode(full))
     check(roundTripped == full, "round trip")
+    let pausedFull = RecordingActivityContentState(
+      mode: .meeting, phase: .paused, startedAt: start, title: "Sync", recordedSeconds: 540)
+    check(
+      try JSONDecoder().decode(
+        RecordingActivityContentState.self, from: JSONEncoder().encode(pausedFull)) == pausedFull,
+      "paused round trip")
 
     if failures > 0 {
       print("\(failures) failure(s)")

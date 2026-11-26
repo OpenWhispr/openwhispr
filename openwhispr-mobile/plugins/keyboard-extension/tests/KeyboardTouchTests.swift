@@ -292,6 +292,18 @@ private extension KeyboardViewController {
   var touchTestPillActions: [String] { recordButton.actions(forTarget: self, forControlEvent: .touchUpInside) ?? [] }
   var touchTestCanvasShown: Bool { recordingCanvas.isUserInteractionEnabled }
   func touchTestTapDirectPill() { handleDirectRecordTapped() }
+  func touchTestTapDarwinPill() { handleDarwinRecordTapped() }
+  func touchTestTapMeetingPill() { handleMeetingRecordingTapped() }
+  func touchTestTapAgentButton() { handleAgentButtonTapped() }
+  func touchTestTapFollowUp() { handleAgentReviewFollowUpTapped() }
+  var touchTestReviewShown: Bool { isAgentReviewShown }
+  /// The note the review card flashes in its header; nil while none shows.
+  var touchTestReviewNote: String? { agentReviewHeaderLabel.isHidden ? nil : agentReviewHeaderLabel.text }
+  var touchTestAgentRecordingActive: Bool { isAgentRecordingActive }
+  func touchTestPoll() { pollRecordingState() }
+  var touchTestDarwinStartPending: Bool { isDarwinStartPending }
+  /// The SwiftUI link over the pill takes the tap and opens OpenWhispr.
+  var touchTestPillLinkLive: Bool { dictationLinkHosting?.view.isUserInteractionEnabled == true }
   func touchTestTapInsertHeld() { handleInsertHeldTapped() }
   func touchTestTapProcessingCancel() { handleProcessingCancelTapped() }
   var touchTestProcessingCancelShown: Bool { !processingCancelButton.isHidden }
@@ -389,6 +401,8 @@ private enum KeyboardTouchTests {
     checkDirectDictation(&checks)
     checkDirectLocalModelReadiness(&checks)
     checkDirectHeldDictation(&checks)
+    checkMeetingHoldsMicrophone(&checks)
+    checkMeetingHoldsAssistantMicrophone(&checks)
     checkOptionsButton(&checks)
     checkTranslationSelectionRefreshesPill(&checks)
     checkKeyboardSettingsRefused(&checks)
@@ -1378,6 +1392,168 @@ private func checkDirectDictation(_ checks: inout TouchChecks) {
   checks.check("direct: the keyboard that owns the take going away does", direct.disappears == disappearsBefore + 1)
 }
 
+
+/// While the app records a meeting it writes a capture-lease heartbeat to the App Group; the
+/// keyboard must start no audio: no take of its own, no start notification to the app's warm mic,
+/// no link into the app. The heartbeat is written to the App Group suite itself, as the app would.
+@MainActor
+private func checkMeetingHoldsMicrophone(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+  guard let defaults = KeyboardHandoffProvider.shared.sharedDefaults() else {
+    checks.check("meeting: the App Group suite opens", false)
+    return
+  }
+  let keys = [MeetingCaptureLease.heartbeatKey, "keyboard_recording_job_id"]
+  let saved = keys.map { defaults.object(forKey: $0) }
+  defer {
+    for (key, value) in zip(keys, saved) {
+      if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) }
+    }
+  }
+  func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
+  func startMeeting() { defaults.set(String(nowMs()), forKey: MeetingCaptureLease.heartbeatKey) }
+  defaults.removeObject(forKey: MeetingCaptureLease.heartbeatKey)
+  defaults.set("before-meeting", forKey: "keyboard_recording_job_id")
+
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let direct = FakeDirectDictation()
+  keyboard.touchTestUseDirect(direct)
+
+  // Drawn during a meeting: the pill's tap only explains.
+  startMeeting()
+  keyboard.touchTestRefreshPill()
+  checks.check(
+    "meeting: the pill starts nothing (got \(keyboard.touchTestPillActions))",
+    keyboard.touchTestPillActions == ["handleMeetingRecordingTapped"]
+  )
+  checks.check("meeting: the link into the app is off", !keyboard.touchTestPillLinkLive && !keyboard.touchTestPillOpensApp)
+  keyboard.touchTestTapMeetingPill()
+  checks.check(
+    "meeting: a tap shows the hint (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    keyboard.touchTestPillTitle == "Unavailable while a meeting is recording"
+  )
+  checks.check("meeting: a tap starts no direct take", direct.starts == 0)
+  checks.check("meeting: a tap leaves no pending start", !keyboard.touchTestDarwinStartPending)
+
+  // Drawn before the meeting began, for the app's warm mic: the tap checks again.
+  defaults.removeObject(forKey: MeetingCaptureLease.heartbeatKey)
+  keyboard.touchTestSetHostIsOwnApp(true)
+  keyboard.touchTestRefreshPill()
+  checks.check("meeting: with none, an alive app records in place", keyboard.touchTestPillActions == ["handleDarwinRecordTapped"])
+  startMeeting()
+  keyboard.touchTestTapDarwinPill()
+  checks.check(
+    "a mic tap during a meeting posts no start notification",
+    defaults.string(forKey: "keyboard_recording_job_id") == "before-meeting" && !keyboard.touchTestDarwinStartPending
+  )
+  checks.check("meeting: a warm-mic tap shows the hint", keyboard.touchTestPillTitle == "Unavailable while a meeting is recording")
+  keyboard.touchTestSetHostIsOwnApp(false)
+
+  // Drawn before the meeting began, for a take of the keyboard's own.
+  defaults.removeObject(forKey: MeetingCaptureLease.heartbeatKey)
+  keyboard.touchTestRefreshPill()
+  checks.check("meeting: with none, the keyboard records itself", keyboard.touchTestPillActions == ["handleDirectRecordTapped"])
+  startMeeting()
+  keyboard.touchTestTapDirectPill()
+  checks.check("meeting: a direct tap starts no take", direct.starts == 0)
+
+  // Drawn before the meeting began, for the link into the app: the poll turns it off.
+  defaults.removeObject(forKey: MeetingCaptureLease.heartbeatKey)
+  direct.canRecordHere = false
+  keyboard.touchTestRefreshPill()
+  checks.check("meeting: with none, the pill opens the app", keyboard.touchTestPillLinkLive)
+  startMeeting()
+  keyboard.touchTestPoll()
+  checks.check(
+    "a mic tap during a meeting opens no handoff (link live: \(keyboard.touchTestPillLinkLive))",
+    !keyboard.touchTestPillLinkLive && keyboard.touchTestPillActions == ["handleMeetingRecordingTapped"]
+  )
+
+  // The app crashed mid-meeting: 15 s on, the heartbeat is stale and the poll reopens the route.
+  defaults.set(String(nowMs() - 15_001), forKey: MeetingCaptureLease.heartbeatKey)
+  keyboard.touchTestPoll()
+  checks.check("meeting: a stale heartbeat reopens the link", keyboard.touchTestPillLinkLive)
+  direct.canRecordHere = true
+  startMeeting()
+  keyboard.touchTestRefreshPill()
+  // The meeting ended: the app removed the key. A tap on the pill drawn for it redraws, never hints.
+  defaults.removeObject(forKey: MeetingCaptureLease.heartbeatKey)
+  keyboard.touchTestTapMeetingPill()
+  checks.check(
+    "meeting: once it ends, a tap redraws the open route (got \(keyboard.touchTestPillActions))",
+    keyboard.touchTestPillActions == ["handleDirectRecordTapped"] && keyboard.touchTestPillTitle == "Tap to speak"
+  )
+  keyboard.touchTestTapDirectPill()
+  checks.check("meeting: once it ends, dictation works again", direct.starts == 1)
+}
+
+/// The voice assistant and the review card's follow-up record too, so a meeting refuses them. The
+/// app holding the lease also stops its keep-alive heartbeat, so the app reads as not alive here,
+/// as it does on a phone during a meeting.
+@MainActor
+private func checkMeetingHoldsAssistantMicrophone(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+  guard let defaults = KeyboardHandoffProvider.shared.sharedDefaults() else {
+    checks.check("meeting assistant: the App Group suite opens", false)
+    return
+  }
+  let keys = [
+    MeetingCaptureLease.heartbeatKey, "keyboard_recording_job_id", "keyboard_agent_request",
+    "keyboard_agent_enabled", "keyboard_agent_applicable",
+  ]
+  let saved = keys.map { defaults.object(forKey: $0) }
+  defer {
+    for (key, value) in zip(keys, saved) {
+      if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) }
+    }
+  }
+  defaults.set("1", forKey: "keyboard_agent_enabled")
+  defaults.set("1", forKey: "keyboard_agent_applicable")
+  defaults.set("before-meeting", forKey: "keyboard_recording_job_id")
+  defaults.removeObject(forKey: "keyboard_agent_request")
+  defaults.set(String(Int64(Date().timeIntervalSince1970 * 1000)), forKey: MeetingCaptureLease.heartbeatKey)
+
+  func nothingStarted(_ keyboard: KeyboardViewController) -> Bool {
+    defaults.string(forKey: "keyboard_agent_request") == nil
+      && defaults.string(forKey: "keyboard_recording_job_id") == "before-meeting"
+      && !keyboard.touchTestDarwinStartPending && !keyboard.touchTestAgentRecordingActive
+  }
+
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let direct = FakeDirectDictation()
+  keyboard.touchTestUseDirect(direct)
+  keyboard.touchTestRefreshPill()
+
+  // Voice assistant with the pill at rest: nothing starts and the pill says why.
+  keyboard.touchTestTapAgentButton()
+  checks.check("meeting: the voice assistant starts nothing", nothingStarted(keyboard) && direct.starts == 0)
+  checks.check(
+    "meeting: the voice assistant shows the hint on a resting pill (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    keyboard.touchTestPillTitle == "Unavailable while a meeting is recording"
+  )
+
+  // A take of the keyboard's own owns the pill: the assistant's tap leaves it showing.
+  keyboard.touchTestRefreshPill()
+  direct.push(.transcribing)
+  keyboard.touchTestTapAgentButton()
+  checks.check(
+    "meeting: the voice assistant keeps a busy pill (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    keyboard.touchTestPillTitle == "Transcribing" && nothingStarted(keyboard)
+  )
+  direct.push(.idle)
+
+  // The review card's follow-up: the card stays, says why, and nothing records.
+  keyboard.touchTestShowAgentResult()
+  keyboard.touchTestTapFollowUp()
+  checks.check(
+    "meeting: the follow-up shows the hint on the card (got \(keyboard.touchTestReviewNote ?? "nil"))",
+    keyboard.touchTestReviewShown && keyboard.touchTestReviewNote == "Unavailable while a meeting is recording"
+  )
+  checks.check("meeting: the follow-up starts nothing", nothingStarted(keyboard))
+  keyboard.touchTestDismissCard()
+}
 
 /// A long press whose state a test can set.
 final class TestLongPress: UILongPressGestureRecognizer {}

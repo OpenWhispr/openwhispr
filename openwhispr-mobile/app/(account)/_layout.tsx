@@ -104,6 +104,10 @@ export default function AccountLayout() {
         options={{ title: 'Parakeet Benchmark', headerLargeTitle: false }}
       />
       <Stack.Screen
+        name="meeting-debug"
+        options={{ title: 'Meeting Debug', headerLargeTitle: false }}
+      />
+      <Stack.Screen
         name="licenses"
         options={{ title: 'Licenses & Attribution', headerLargeTitle: false }}
       />

@@ -7,6 +7,14 @@ import { isMicPermissionError } from '@/lib/permissions';
 // it away and keep these tests on the one branch Apple rejected us over.
 jest.mock('expo-file-system/legacy', () => ({ getInfoAsync: jest.fn() }));
 
+// Meetings' capture lease reaches Sentry and the native module, neither of which loads under
+// Jest; dictation never touches it.
+jest.mock('@/lib/captureLease', () => ({
+  acquireCaptureLease: jest.fn(),
+  releaseCaptureLease: jest.fn(),
+  isCaptureLeaseHeld: jest.fn(() => false),
+}));
+
 // permissions.ts re-exports the alert helper, which reaches nativewind through
 // the UI layer — untransformable here and irrelevant to the branch under test.
 jest.mock('@/components/ui/PermissionAlert', () => ({ showPermissionAlert: jest.fn() }));

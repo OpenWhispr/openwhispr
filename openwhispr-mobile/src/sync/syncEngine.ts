@@ -32,6 +32,7 @@ import {
   clearAnonymousLink,
   getLastSyncedUserId,
   isLinkFromAnonymous,
+  recordAccountLink,
   recordAnonymousUser,
   setLastSyncedUserId,
 } from './syncIdentity';
@@ -227,6 +228,7 @@ function reconcileSyncIdentity(auth: ReturnType<typeof useAuthStore.getState>): 
         message: `anonymous ${lastUserId} linked to ${userId}; re-adopting local rows`,
         level: 'info',
       });
+      recordAccountLink(lastUserId, userId);
       notesRepository.dropRemoteIdsForAccountLink();
       clearPrivateNoteDeletionQueue();
       resetAllPullCursors();

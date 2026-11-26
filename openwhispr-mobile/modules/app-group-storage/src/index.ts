@@ -23,6 +23,8 @@ interface AppGroupStorageModule {
   stopNativeRecording(): void;
   endProcessingTask(): void;
   armWarmMic(): void;
+  acquireCaptureLease(owner: string): Promise<void>;
+  releaseCaptureLease(owner: string): void;
   isHardwareKeyboardConnected(): boolean;
   markHotkeyJsReady(): void;
   setKeyboardSessionCredential?(cookie: string | null): boolean;
@@ -213,6 +215,23 @@ export const AppGroupStorage = {
     NativeModule.armWarmMic();
   },
 
+  /**
+   * Parks the keyboard's warm mic while `owner` captures audio. The warm mic
+   * shares the app's audio session, and its idle teardown would otherwise
+   * deactivate the session under a meeting recording. Resolves once parked,
+   * so start capture only after it settles.
+   */
+  async acquireCaptureLease(owner: string): Promise<void> {
+    if (!NativeModule) return;
+    await NativeModule.acquireCaptureLease(owner);
+  },
+
+  /** Ends `owner`'s hold; the last release re-arms the warm mic in the foreground. */
+  releaseCaptureLease(owner: string): void {
+    if (!NativeModule) return;
+    NativeModule.releaseCaptureLease(owner);
+  },
+
   /** True while a hardware keyboard (e.g. a Magic Keyboard) is attached. */
   isHardwareKeyboardConnected(): boolean {
     if (!NativeModule) return false;
@@ -331,6 +350,9 @@ export const APP_GROUP_KEYS = {
   // useKeyboardHandoff's recording listeners are subscribed; the hotkey's cold
   // start waits for it. Native clears it at launch.
   HOTKEY_JS_READY_AT_MS: 'hotkey_js_ready_at_ms',
+  // Native → keyboard: epoch ms, refreshed every 5 s while a meeting holds the capture lease
+  // (removed on the last release and at launch). Older than 15 s counts as not held.
+  CAPTURE_LEASE_HEARTBEAT_MS: 'capture_lease_heartbeat_ms',
   // Agent mode — config mirrors (app → keyboard; persisted across launches like tone keys)
   KEYBOARD_AGENT_ENABLED: 'keyboard_agent_enabled',
   KEYBOARD_AGENT_APPLICABLE: 'keyboard_agent_applicable',
