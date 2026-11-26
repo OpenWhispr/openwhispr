@@ -80,6 +80,18 @@ public class AppleLLMModule: Module {
       #endif
     }
 
+    AsyncFunction("getSupportedLanguages") { (promise: Promise) in
+      #if canImport(FoundationModels)
+      if #available(iOS 26.0, *) {
+        promise.resolve(Self.supportedLanguageCodes())
+      } else {
+        promise.resolve([String]())
+      }
+      #else
+      promise.resolve([String]())
+      #endif
+    }
+
     AsyncFunction("countTokens") { (request: AppleLLMTokenCountRequest, promise: Promise) in
       #if canImport(FoundationModels)
       guard #available(iOS 26.4, *) else {
@@ -171,6 +183,12 @@ public class AppleLLMModule: Module {
   }
 
   #if canImport(FoundationModels)
+  // Base language codes only: the model lists regional variants (en_IN), and callers pick by language.
+  @available(iOS 26.0, *)
+  private static func supportedLanguageCodes() -> [String] {
+    SystemLanguageModel.default.supportedLanguages.compactMap { $0.languageCode?.identifier }
+  }
+
   @available(iOS 26.0, *)
   private static func availabilityPayload() -> [String: Any] {
     let model = SystemLanguageModel.default

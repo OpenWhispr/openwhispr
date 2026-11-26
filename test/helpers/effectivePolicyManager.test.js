@@ -73,6 +73,7 @@ test("effective merge intersects permissions without granting disjoint modes", (
   workspace.transcription.allowedModes = ["local"];
   device.transcription.allowedByokProviders = [];
   device.features.meetingRecordingEnabled = false;
+  workspace.features.apiAccessEnabled = false;
   device.dataRetention.audioRetentionMaxDays = 7;
   workspace.dataRetention.localHistoryMode = "always_off";
   device.requiredLocalModels = ["tiny"];
@@ -82,6 +83,7 @@ test("effective merge intersects permissions without granting disjoint modes", (
   const result = mergePolicies([device, workspace]);
   assert.deepEqual(result.transcription.allowedByokProviders, []);
   assert.equal(result.features.meetingRecordingEnabled, false);
+  assert.equal(result.features.apiAccessEnabled, false);
   assert.equal(result.dataRetention.audioRetentionMaxDays, 7);
   assert.equal(result.dataRetention.localHistoryMode, "always_off");
   assert.deepEqual(result.requiredLocalModels, ["base", "tiny"]);
@@ -540,4 +542,33 @@ test("pending workspace decisions intersect device changes with held account res
     assert.equal(manager.invalidate().policy, null, "another account inherits no held policy");
     manager.stop();
   }
+});
+
+test("effective attendee policy preserves both sources and reloads legacy cached policy", async () => {
+  const device = defaultDevicePolicy();
+  const workspace = defaultDevicePolicy();
+  device.meetings = { externalAttendees: "future", internalDomains: ["SUB.Example.com"] };
+  workspace.meetings = {
+    externalAttendees: "allowed",
+    internalDomains: ["example.com", "sub.example.com"],
+  };
+  assert.equal(mergePolicies([device]).meetings.externalAttendees, "blocked");
+  assert.equal(mergePolicies([workspace]).meetings.externalAttendees, "allowed");
+  assert.deepEqual(mergePolicies([workspace, device]).meetings, {
+    transcriptionStart: "automatic",
+    externalAttendees: "blocked",
+    internalDomains: ["example.com", "sub.example.com"],
+  });
+  const legacy = defaultDevicePolicy();
+  delete legacy.meetings;
+  const manager = createEffectivePolicyManager({
+    devicePolicy: { getSnapshot: () => absentDevice, subscribe: () => () => {} },
+    workspacePolicyManager: {
+      heldPolicy: () => ({ ...member, success: true, managed: true, policy: legacy }),
+    },
+    getScope: () => member,
+  });
+  const result = await manager.getPolicy({ held: true });
+  assert.equal(result.policy.meetings.externalAttendees, "allowed");
+  assert.deepEqual(result.policy.meetings.internalDomains, []);
 });

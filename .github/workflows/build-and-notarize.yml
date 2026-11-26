@@ -1,5 +1,9 @@
 name: Build and Notarize
 
+# These builds are for testing, not release: they bundle the catalog in model-registry/ as
+# version 0 with no signed publication, so they take the live publication at runtime.
+# Only release.yml pins a signed publication (npm run model-registry:pin-release).
+
 on:
   push:
     branches: [main, develop]
@@ -236,6 +240,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The release pins the catalog on this platform too, and starts with this check.
+      - name: Check the bundled model catalog on a Windows checkout
+        run: node scripts/sync-model-registry.mjs --check
+
+      - name: Verify Windows Authenticode checks
+        run: node --test test/scripts/afterSign.test.js
+
       - name: Verify Windows hotwords file ACLs
         # Match the powershell.exe subprocess so it inherits compatible module paths.
         shell: powershell
@@ -279,11 +290,6 @@ jobs:
 
       - name: Download meeting AEC helper
         run: node scripts/download-meeting-aec-helper.js --current
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
-
-      - name: Download nircmd.exe
-        run: node scripts/download-nircmd.js
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 

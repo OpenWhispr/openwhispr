@@ -1,5 +1,6 @@
 import { cn } from "../lib/utils";
-import type { FolderItem } from "../../types/electron";
+import { localMutationErrorKey } from "../../lib/localMutationError";
+import type { FolderItem, FolderNameClash } from "../../types/electron";
 import type { MeetingRecordingRefusal, PolicyDecisionSnapshot } from "../../stores/policyRules";
 
 import {
@@ -39,6 +40,90 @@ export function folderMatchesQuery(
   );
 }
 
+// A subfolder whose parent isn't a loaded top-level folder of its space (a
+// transient sync state) shows as top level, so no folder is ever hidden.
+function loadedParent(folder: FolderItem, folders: FolderItem[]): FolderItem | undefined {
+  if (folder.parent_folder_id == null) return undefined;
+  return folders.find(
+    (f) =>
+      f.id === folder.parent_folder_id &&
+      f.space_id === folder.space_id &&
+      f.parent_folder_id == null
+  );
+}
+
+// Each top-level folder with its subfolders, both in main's sort order.
+export function folderTree(
+  folders: FolderItem[]
+): Array<{ folder: FolderItem; subfolders: FolderItem[] }> {
+  const nodes = new Map<number, { folder: FolderItem; subfolders: FolderItem[] }>();
+  const nested: Array<[FolderItem, FolderItem]> = [];
+  for (const folder of folders) {
+    const parent = loadedParent(folder, folders);
+    if (parent) nested.push([parent, folder]);
+    else nodes.set(folder.id, { folder, subfolders: [] });
+  }
+  for (const [parent, folder] of nested) nodes.get(parent.id)!.subfolders.push(folder);
+  return [...nodes.values()];
+}
+
+export function orderFoldersAsTree(folders: FolderItem[]): FolderItem[] {
+  return folderTree(folders).flatMap(({ folder, subfolders }) => [folder, ...subfolders]);
+}
+
+const FOLDER_PATH_SEPARATOR = " / ";
+
+export function joinFolderPath(parentName: string, name: string): string {
+  return `${parentName}${FOLDER_PATH_SEPARATOR}${name}`;
+}
+
+// Splits at the last separator, since subfolders go one level deep: only the
+// last segment can name a subfolder.
+export function splitFolderPath(path: string): { parentName: string; name: string } | null {
+  const separatorAt = path.lastIndexOf(FOLDER_PATH_SEPARATOR);
+  if (separatorAt < 0) return null;
+  return {
+    parentName: path.slice(0, separatorAt).trim(),
+    name: path.slice(separatorAt + FOLDER_PATH_SEPARATOR.length).trim(),
+  };
+}
+
+export function folderPathLabel(
+  folder: FolderItem,
+  folders: FolderItem[],
+  t: (key: string) => string
+): string {
+  const parent = loadedParent(folder, folders);
+  const name = defaultFolderDisplayName(folder, t);
+  return parent ? joinFolderPath(defaultFolderDisplayName(parent, t), name) : name;
+}
+
+// Why a folder change failed. A name clash says where the name is used, unless
+// it's a folder right beside this one, where the plain message is already clear.
+export function folderMutationErrorDescription(
+  result: { error?: string } & FolderNameClash,
+  folders: FolderItem[],
+  t: (key: string, options?: Record<string, string>) => string,
+  attempt?: { name: string; nested: boolean }
+): string {
+  const { takenName, takenInFolderId, reservedName } = result;
+  if (reservedName) {
+    return t("notes.mutationErrors.reservedSubfolderName", { name: reservedName });
+  }
+  if (takenName && takenInFolderId != null) {
+    const parent = folders.find((folder) => folder.id === takenInFolderId);
+    if (parent) {
+      return t("notes.mutationErrors.folderNameTakenIn", {
+        name: takenName,
+        parent: defaultFolderDisplayName(parent, t),
+      });
+    }
+  } else if (takenName && attempt && (attempt.nested || attempt.name !== takenName)) {
+    return t("notes.mutationErrors.folderNameTakenTopLevel", { name: takenName });
+  }
+  return t(localMutationErrorKey(result.error));
+}
+
 // Folders arrive account-scoped, so an attributed default is the active
 // account's own; a device-owned (NULL account) one only stands in for it.
 export function findDefaultFolder(folders: FolderItem[]): FolderItem | undefined {
@@ -47,9 +132,10 @@ export function findDefaultFolder(folders: FolderItem[]): FolderItem | undefined
 }
 
 // URL downloads route to "Videos" by name: a pre-existing user-created folder with
-// that name is used as-is (the migration never promotes or replaces it).
+// that name is used as-is (the migration never promotes or replaces it), but only
+// at the top level, so a "Videos" subfolder of Meetings never takes uploads.
 export function findVideosFolder(folders: FolderItem[]): FolderItem | undefined {
-  const videos = folders.filter((f) => f.name === VIDEOS_FOLDER_NAME);
+  const videos = folders.filter((f) => f.name === VIDEOS_FOLDER_NAME && f.parent_folder_id == null);
   return videos.find((f) => f.account_id) ?? videos[0];
 }
 

@@ -20,6 +20,8 @@ env:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    outputs:
+      registry_publication: ${{ steps.registry.outputs.publication }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -44,8 +46,13 @@ jobs:
         run: npm run apply:patches
       - name: Run quality checks
         run: npm run quality-check
-      - name: Check the model registry serves this build
-        run: npm run model-registry:release-check
+      # Bundles the signed publication of this commit's catalog; fails when the catalog
+      # is not published yet or the registry would stop serving this build.
+      - name: Pin the signed model catalog
+        id: registry
+        run: |
+          npm run model-registry:pin-release
+          echo "publication=$(node -p "require('./src/models/registryMetadata.json').publicationCommit")" >> "$GITHUB_OUTPUT"
       - name: Check translations
         run: npm run i18n:check
       - name: Audit dependencies
@@ -91,6 +98,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+      # The same publication the tests job checked, so every platform bundles one catalog.
+      - name: Pin the signed model catalog
+        run: npm run model-registry:pin-release -- --revision ${{ needs.tests.outputs.registry_publication }}
 
       - name: Install platform-specific native binaries
         run: npm install @rollup/rollup-linux-x64-gnu lightningcss-linux-x64-gnu @tailwindcss/oxide-linux-x64-gnu --no-save
@@ -202,6 +212,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+      # The same publication the tests job checked, so every platform bundles one catalog.
+      - name: Pin the signed model catalog
+        run: npm run model-registry:pin-release -- --revision ${{ needs.tests.outputs.registry_publication }}
 
       - name: Install platform-specific native binaries
         run: npm install @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc @tailwindcss/oxide-win32-x64-msvc --no-save
@@ -239,11 +252,6 @@ jobs:
 
       - name: Download meeting AEC helper
         run: node scripts/download-meeting-aec-helper.js --current
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-
-      - name: Download nircmd.exe
-        run: node scripts/download-nircmd.js
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
@@ -318,6 +326,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+      # The same publication the tests job checked, so every platform bundles one catalog.
+      - name: Pin the signed model catalog
+        run: npm run model-registry:pin-release -- --revision ${{ needs.tests.outputs.registry_publication }}
 
       - name: Install ffmpeg-static for target architecture
         if: matrix.arch == 'x64'

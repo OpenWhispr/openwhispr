@@ -7,6 +7,8 @@ const {
   loadAssemblyAiDictationCatalog,
   setManagedBedrockCleanup,
 } = require("../helpers/harness/policyFixtures");
+const { BYOK_API_KEYS } = require("../../src/config/secretKeys");
+const { bundledRegistryData } = require("../../src/models/registryData.js");
 
 const PICKER = "/components/TranscriptionModelPicker.tsx";
 const KEY = "common.apiKey";
@@ -65,6 +67,36 @@ test("a key is checked with the panel's model, or alone under a browsed tab", as
     apiKey: "sk-saved",
     model: "",
   });
+});
+
+// The tabs are a hand-kept list, and it does not fail loudly for a provider it does
+// not know: Settings shows no tab, or a tab with OpenAI's key field that checks with
+// OpenAI's key. The bundled catalog is read so the providers the app ships itself count.
+test("Settings gives every provider a tab, checked with credentials of its own", async (t) => {
+  // Each saved credential names its slot, so a check shows whose it carries.
+  const slots = [...BYOK_API_KEYS.map((key) => key.storeKey), "cortiClientId", "cortiClientSecret"];
+  const panel = await mount(t, {
+    secrets: Object.fromEntries(slots.map((slot) => [slot, `saved in ${slot}`])),
+  });
+
+  const checkedWith = new Map();
+  for (const { id } of bundledRegistryData.transcriptionProviders) {
+    const tabs = panel.find((node) => node.props?.providers?.some?.((tab) => tab.id === id));
+    assert.equal(tabs.length, 1, `${id} has no tab`);
+    await panel.selectTab(id);
+    await panel.wait(0);
+    const request = panel.requests().at(-1);
+    assert.equal(request.provider, id, `${id} is not checked`);
+    const credentials = Object.values(request).filter((value) =>
+      String(value).startsWith("saved in ")
+    );
+    assert.notEqual(credentials.length, 0, `${id} is checked without credentials`);
+    for (const credential of credentials) {
+      const owner = checkedWith.get(credential) ?? id;
+      assert.equal(owner, id, `${id} is checked with the credential ${owner} is, ${credential}`);
+      checkedWith.set(credential, id);
+    }
+  }
 });
 
 test("a hidden picker sends nothing until it is shown, then asks again", async (t) => {

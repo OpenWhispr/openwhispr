@@ -12,11 +12,17 @@ const UNSAFE_NAME_CHARACTERS = new RegExp(UNSAFE_NAME_CHARACTER.source, "g");
 // What a name made safe ends with, so a name typed that way is made safe too
 // and can never land on another's directory.
 const SAFE_NAME_SUFFIX = / \([0-9a-f]{8}\)$/i;
+// A folder's directory sits beside note files (its space's root notes, or its
+// parent folder's), so a name that reads as one, or as one kept aside, is made
+// safe too and never takes a note file's name.
+const NOTE_FILE_NAME = /^(?:edited-(?:\d+-)?)?\d+-.*\.(?:md|txt)$/i;
 // Leaves room in a 255-byte file name for the note id, "-transcript.md" and a
 // temporary file's suffix.
 const MAX_SLUG_BYTES = 150;
 
 const CASE_RENAME_RETRY_MS = 1000;
+// "<name> (moving)", then "(moving 2)" and on: a folder stepping aside needs one free.
+const MAX_PARKING_NAMES = 20;
 const BUSY_DIRECTORY_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
 
 const SYSTEM_LEFTOVERS = new Set([".DS_Store", "Thumbs.db", "desktop.ini"]);
@@ -129,15 +135,11 @@ class MarkdownMirror {
     this._deferredCaseRenames.clear();
     this._oldLayoutIndex = null;
     this._oldFolderNames = new Set(["Personal"]);
-    try {
-      fs.mkdirSync(basePath, { recursive: true });
-      // Keep existing ledger keys while using native spelling for filesystem safety.
-      this._ledgerBasePath = fs.realpathSync(basePath);
-      this._baseRealPath = fs.realpathSync.native(basePath);
-      debugLogger.debug("Markdown mirror initialized", { basePath }, "note-files");
-    } catch (err) {
-      debugLogger.error("Failed to init markdown mirror", { error: err.message }, "note-files");
-    }
+    fs.mkdirSync(basePath, { recursive: true });
+    // Keep existing ledger keys while using native spelling for filesystem safety.
+    this._ledgerBasePath = fs.realpathSync(basePath);
+    this._baseRealPath = fs.realpathSync.native(basePath);
+    debugLogger.debug("Markdown mirror initialized", { basePath }, "note-files");
   }
 
   getBasePath() {
@@ -157,7 +159,8 @@ class MarkdownMirror {
       Buffer.byteLength(raw, "utf8") > MAX_FOLDER_NAME_BYTES ||
       UNSAFE_NAME_CHARACTER.test(raw) ||
       WINDOWS_RESERVED_NAME.test(raw) ||
-      SAFE_NAME_SUFFIX.test(raw);
+      SAFE_NAME_SUFFIX.test(raw) ||
+      NOTE_FILE_NAME.test(raw);
     if (!needsChange) return raw;
 
     let readable = "";
@@ -324,6 +327,17 @@ class MarkdownMirror {
   recordedFiles() {
     if (!this._baseRealPath) return [];
     return this._ledger.files(this._ledgerBasePath);
+  }
+
+  // A relocation leaves a note's old row, without a hash, until the note is written
+  // again; once its file is gone it holds nothing.
+  isEmptyRecord(entry) {
+    if (!this._baseRealPath || entry.kind === "dir" || entry.hash !== null) return false;
+    try {
+      return !fs.lstatSync(this._absolutePath(entry.relPath), { throwIfNoEntry: false });
+    } catch {
+      return false;
+    }
   }
 
   _recorded(noteId, kind) {
@@ -667,6 +681,29 @@ class MarkdownMirror {
     }
   }
 
+  isSameDirectory(leftPath, rightPath) {
+    return !!leftPath && !!rightPath && this._isSameFile(leftPath, rightPath);
+  }
+
+  // Moves a folder's directory aside to a free sibling, "<name> (moving)", for a
+  // move that has to free the spelling first; the folder then moves on from there.
+  // Answers where it went, or null where it stayed.
+  parkFolderDir(oldRelPath, location, folderId) {
+    const { segments } = this._toLocation(location);
+    for (let attempt = 1; attempt <= MAX_PARKING_NAMES; attempt++) {
+      const suffix = attempt === 1 ? " (moving)" : ` (moving ${attempt})`;
+      const parked = {
+        ...location,
+        segments: [...segments.slice(0, -1), segments.at(-1) + suffix],
+      };
+      if (this.getFolderPath(parked)) continue;
+      if (!this.relocateFolderDir(oldRelPath, parked, folderId)) return null;
+      const parkedPath = this._resolveFolderPath(parked);
+      return parkedPath ? this._relPath(parkedPath) : null;
+    }
+    return null;
+  }
+
   // The coordinator proves exclusive ownership before moving a whole folder.
   // Keep old file records until their metadata is refreshed, including after a restart.
   relocateFolderDir(oldRelPath, location, folderId) {
@@ -685,6 +722,13 @@ class MarkdownMirror {
         fs.lstatSync(this._absolutePath(desiredRelPath), { throwIfNoEntry: false })
       )
         return false;
+      // Never into itself or one of its subfolders' directories, however this disk
+      // spells them: a destination whose existing ancestor is the source stays put.
+      for (let depth = 1; depth < location.segments.length; depth++) {
+        const ancestor = this._resolveFolderPath({ segments: location.segments.slice(0, depth) });
+        if (!ancestor) break;
+        if (this._isSameFile(ancestor, oldPath)) return false;
+      }
       const parent = this._resolveFolderPath(
         { segments: location.segments.slice(0, -1) },
         { create: true }
@@ -694,6 +738,9 @@ class MarkdownMirror {
       // Resolving the parent can recase an ancestor and rebase its ledger rows.
       oldPath = this._resolveExistingFolderPath(oldPath);
       oldRelPath = this._relPath(oldPath);
+      const fromOld = path.relative(oldPath, newPath);
+      if (fromOld !== ".." && !fromOld.startsWith(`..${path.sep}`) && !path.isAbsolute(fromOld))
+        return false;
       const entries = this.recordedFiles().filter(
         (entry) => entry.relPath === oldRelPath || entry.relPath.startsWith(`${oldRelPath}/`)
       );

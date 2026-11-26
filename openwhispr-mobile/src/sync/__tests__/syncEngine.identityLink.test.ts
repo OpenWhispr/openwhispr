@@ -103,6 +103,7 @@ jest.mock('../initialBackfill', () => ({ runInitialBackfillIfNeeded: jest.fn() }
 jest.mock('../pullSharedDictionary', () => ({ pullSharedDictionary: jest.fn() }));
 
 import { initSyncTriggers, requestSync, teardownSyncTriggers } from '../syncEngine';
+import { isAccountLink } from '../syncIdentity';
 import { notesRepository } from '@/data';
 import { fetchUsage } from '@/data/remote/usageApi';
 import { runInitialBackfillIfNeeded } from '../initialBackfill';
@@ -202,6 +203,8 @@ describe('syncEngine identity transitions', () => {
     expect(state['sync.user_id']).toBe('real-user');
     // The link is consumed: a later switch away from this account must wipe.
     expect(state['sync.anonymous_user_id']).toBeUndefined();
+    // Still known for the rest of the run, so a meeting started anonymously stays its owner's.
+    expect(isAccountLink('anon-user', 'real-user')).toBe(true);
   });
 
   it('still wipes when switching between two real accounts', async () => {
@@ -215,6 +218,7 @@ describe('syncEngine identity transitions', () => {
     // The previous account's chats quote its notes, so they go too.
     expect(mockClearChatHistory).toHaveBeenCalledTimes(1);
     expect(mockRepo.dropRemoteIdsForAccountLink).not.toHaveBeenCalled();
+    expect(isAccountLink('first-user', 'second-user')).toBe(false);
   });
 
   it('fills the shared store from the stored row before any network call', async () => {

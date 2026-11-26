@@ -24,6 +24,7 @@ Input (stdin):
 Requires: python3-atspi / pyatspi (gi.repository.Atspi)
 """
 
+import os
 import sys
 import signal
 import threading
@@ -124,6 +125,10 @@ def main():
         print("NO_ELEMENT", flush=True)
         sys.exit(1)
 
+    # Keeps libatspi off direct app connections (linux-fast-paste.c explains
+    # why). Only libatspi 2.61+ reads this; unlike linux-text-monitor.c, this
+    # fallback can't refuse the ones older releases still open.
+    os.environ["ATSPI_DISABLE_P2P"] = "1"
     Atspi.init()
     if probe_editable:
         Atspi.set_timeout(PROBE_ATSPI_CALL_TIMEOUT_MS, -1)

@@ -109,6 +109,36 @@ test("a level saved for a cloud provider never reaches a self-hosted server", as
   assert.equal(chosenReasoningEffort("lan", "openai/gpt-oss-120b", config), undefined);
 });
 
+for (const [host, endpoint, options, suppressed, savedNone, automatic] of [
+  ["Tinfoil", "https://inference.tinfoil.sh/v1", ["low", "high"], "low", "high", "high"],
+  ["Verda", "https://inference.verda.com/v1", ["none", "low", "high"], "none", "none", undefined],
+]) {
+  test(`Custom Kimi K3.1 on ${host} uses the same effort policy in Settings, Chat and Responses`, async () => {
+    const { applyChatCompletionsParams, selectableReasoningEffort, responsesReasoningEffort } =
+      await import("../../src/services/ai/chatRequestBody.ts");
+    const model = "kimi-k3-1-pro";
+    assert.deepEqual(selectableReasoningEffort("custom", model, {}, endpoint)?.options, options);
+
+    for (const [config, expected] of [
+      [{ disableThinking: true }, suppressed],
+      [CHOSEN("none"), savedNone],
+      [CHOSEN("low"), "low"],
+      [{}, automatic],
+    ]) {
+      const body = { model, messages: [] };
+      applyChatCompletionsParams(body, {
+        model,
+        provider: "custom",
+        endpoint,
+        config,
+        maxTokens: 4096,
+      });
+      assert.equal(body.reasoning_effort, expected);
+      assert.equal(responsesReasoningEffort(model, "custom", config, endpoint), expected);
+    }
+  });
+}
+
 test("Responses effort: OpenAI sends the chosen level the model offers", async () => {
   const { responsesReasoningEffort } = await import("../../src/services/ai/chatRequestBody.ts");
 
@@ -210,7 +240,7 @@ test("Gemini 3.1 Flash Lite: no toggle, so a chosen level beats the minimal floo
   assert.equal(requests[1].generationConfig.thinkingConfig.thinkingLevel, "minimal");
 });
 
-async function streamRequestBody(t, { provider, model, config, tools, keys = {} }) {
+async function streamRequestBody(t, { provider, model, config, tools, keys = {}, editCatalog }) {
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
@@ -226,6 +256,12 @@ async function streamRequestBody(t, { provider, model, config, tools, keys = {} 
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
   usePolicyStore.setState({ status: "unmanaged", appVersion: "1.8.3", policy: null });
   t.after(() => reasoningService.destroy());
+  if (editCatalog) {
+    const store = await vite.ssrLoadModule("/models/registryData.js");
+    const data = structuredClone(store.getRegistrySnapshot().data);
+    editCatalog(data);
+    store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  }
 
   const bodies = [];
   const originalFetch = globalThis.fetch;
@@ -317,6 +353,34 @@ test("streaming: Gemini gets the chosen thinkingLevel", async (t) => {
   });
   assert.deepEqual(body.generationConfig.thinkingConfig, {
     thinkingLevel: "low",
+    includeThoughts: false,
+  });
+});
+
+// The AI SDK validates thinkingLevel against its own enum and throws before any
+// request on a level it doesn't know; 3.0.88 had no xhigh (Gemini 4 Neon/Hydrogen).
+test("streaming: Gemini gets xhigh when the catalog offers it", async (t) => {
+  const body = await streamRequestBody(t, {
+    provider: "gemini",
+    model: "gemini-4-neon",
+    config: CHOSEN("xhigh"),
+    editCatalog: (data) => {
+      const gemini = data.cloudProviders.find((provider) => provider.id === "gemini");
+      gemini.models = [
+        ...gemini.models.filter((model) => model.id !== "gemini-4-neon"),
+        {
+          id: "gemini-4-neon",
+          name: "Gemini 4 Neon",
+          description: "Gemini 4 Neon",
+          supportsThinking: true,
+          reasoningEffort: { options: ["low", "medium", "high", "xhigh"], defaultValue: "high" },
+          thinkingFloor: { level: "low" },
+        },
+      ];
+    },
+  });
+  assert.deepEqual(body?.generationConfig.thinkingConfig, {
+    thinkingLevel: "xhigh",
     includeThoughts: false,
   });
 });

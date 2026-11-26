@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { createTranscriptId, useTranscriptStore } from '../store/useTranscriptStore';
@@ -17,6 +17,11 @@ import {
   NO_SPEECH_ERROR_MESSAGE,
 } from '../lib/permissions';
 import { getPreferredTranscriptionLanguage } from '../lib/transcriptionLanguage';
+import {
+  isMeetingRecordingRefusal,
+  MEETING_RECORDING_REFUSAL,
+} from '../lib/meetingRecordingRefusal';
+import { acquireCaptureLease, isCaptureLeaseHeld, releaseCaptureLease } from '../lib/captureLease';
 import { toFriendlyTranscriptionErrorMessage } from '../lib/transcriptionErrors';
 import { deleteManagedTranscriptAudio, retainTranscriptAudio } from '../lib/transcriptAudio';
 import { isUsageLimitError, type UsageLimitError } from '../lib/usageLimitError';
@@ -105,6 +110,10 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   // Whether the recording this hook started is still open. A call or Siri pauses the recorder,
   // which then reports not recording, so cancel can't read that from the recorder.
   const openRef = useRef(false);
+  // Meetings (background recording) park the keyboard's warm mic for as long as they capture.
+  const leaseHeldRef = useRef(false);
+  // An acquire can still be pending when the hook unmounts; it must not leave the lease held.
+  const mountedRef = useRef(true);
 
   const recorderOptions = getDefaultRecorderOptions();
   const audioRecorder = useAudioRecorder(recorderOptions);
@@ -113,6 +122,23 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   const saveToHistory = options.saveToHistory !== false;
   const cleanup = options.cleanup !== false;
   const isCancelled = (): boolean => options.shouldCancel?.() === true;
+
+  // Call only once the native recorder has stopped: releasing sooner lets the warm mic re-arm
+  // while this recorder's teardown is still deactivating the shared audio session.
+  const releaseLease = (): void => {
+    if (!leaseHeldRef.current) return;
+    leaseHeldRef.current = false;
+    releaseCaptureLease('meeting-local');
+  };
+
+  // The recorder belongs to this hook and goes down with it, so the lease must too.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      releaseLease();
+    };
+  }, []);
 
   const ensureAudioSupport = () => {
     if (!isSupported || !expoAudio || !audioRecorder) {
@@ -128,7 +154,15 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   };
 
   const startRecording = async () => {
+    // A second start while a capture is open reuses its lease, so only the call that acquired
+    // may release it when it fails.
+    let acquiredHere = false;
     try {
+      // Before any audio-session call. The meeting recorder holds this lease itself, so only
+      // hooks that are not the meeting recorder are refused.
+      if (!allowsBackgroundRecording && isCaptureLeaseHeld()) {
+        throw new Error(MEETING_RECORDING_REFUSAL);
+      }
       const { expoAudio: audioModule, audioRecorder: recorder } = ensureAudioSupport();
 
       // Check status before requesting: iOS shows its system dialog only on
@@ -154,6 +188,17 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
           throw new Error(
             'Notification permission is required to keep recording in the background.',
           );
+        }
+      }
+
+      if (allowsBackgroundRecording && !leaseHeldRef.current) {
+        await acquireCaptureLease('meeting-local');
+        leaseHeldRef.current = true;
+        acquiredHere = true;
+        if (!mountedRef.current) {
+          releaseLease();
+          // Reject so the caller doesn't create a meeting note for a recording that never began.
+          throw new Error('Recording was abandoned before it started');
         }
       }
 
@@ -188,9 +233,10 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       setIsRecording(true);
       setCurrentText('');
     } catch (error) {
+      if (acquiredHere) releaseLease();
       // Permission denial is a normal user state — surfaced by onError as a
       // friendly alert. Skip console.error so dev LogBox doesn't show a red toast.
-      if (!isMicPermissionError(error)) {
+      if (!isMicPermissionError(error) && !isMeetingRecordingRefusal(error)) {
         console.error('[audio] Start recording error:', error);
       }
       if (error instanceof Error) {
@@ -217,6 +263,8 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         openRef.current = false;
       } finally {
         stoppingRef.current = false;
+        // Also on a rejected stop: a failed stop must not leave the keyboard's mic parked.
+        releaseLease();
       }
 
       const uri = recorder.uri;
@@ -516,6 +564,9 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         await audioRecorder.stop();
       } catch (stopError) {
         if (!paused) throw stopError;
+      } finally {
+        // Also on a rejected stop: a failed stop must not leave the keyboard's mic parked.
+        releaseLease();
       }
       openRef.current = false;
       if (uri) {
@@ -530,19 +581,35 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   };
 
   // Meeting-specific: stops recording and returns the raw URI without running the dictation finalize path.
+  // A call or Siri may have paused the recorder, so "open" comes from openRef, not from the recorder:
+  // the audio captured up to the pause must still reach the caller.
   const stopRecordingRaw = async (): Promise<string | null> => {
-    if (!audioRecorder.isRecording) return null;
+    if (!openRef.current) {
+      // Nothing to stop, but never leave the keyboard's mic parked.
+      releaseLease();
+      return null;
+    }
     stoppingRef.current = true;
+    const paused = !audioRecorder.isRecording;
     try {
+      // A paused recorder may refuse to stop even though its file is complete; keep the file.
       await audioRecorder.stop();
+      openRef.current = false;
+    } catch (stopError) {
+      if (!paused) throw stopError;
       openRef.current = false;
     } finally {
       stoppingRef.current = false;
+      releaseLease();
     }
     setIsRecording(false);
     setIsProcessing(false);
     return audioRecorder.uri ?? null;
   };
+
+  // Reads the refs at call time so a caller can hold one identity: asking a recorder to resume
+  // while a stop is awaiting it would restart the recording the user is ending.
+  const canResumeRecording = (): boolean => openRef.current && !stoppingRef.current;
 
   return {
     isRecording,
@@ -553,6 +620,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
     stopRecording,
     stopRecordingRaw,
     cancelRecording,
+    canResumeRecording,
     audioRecorder,
   };
 }

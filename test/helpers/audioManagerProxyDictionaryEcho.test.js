@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadAudioManager } = require("./harness/audioManager");
 const { deferred } = require("./harness/deferred");
+const { ELEVENLABS_KEYTERM_REFUSALS } = require("./harness/elevenLabsAnswers");
 const { transcribeWithElevenLabs } = require("../../src/helpers/elevenLabsTranscription");
 
 // #2581 through the proxied providers: a model recites the dictionary in the
@@ -51,7 +52,7 @@ async function setUp(t) {
         const terms = init.body.getAll("keyterms");
         submittedKeyterms.push(terms);
         if (rejectHints && terms.length) {
-          return Response.json({ detail: "invalid keyterms" }, { status: 422 });
+          return Response.json(ELEVENLABS_KEYTERM_REFUSALS[0], { status: 400 });
         }
         return Response.json({ text });
       });
@@ -103,6 +104,10 @@ test("Scribe dictation filters echoes only against hints accepted with the trans
     assert.deepEqual(retried.submittedKeyterms, [["Piha", "Biscuit"], []]);
     assert.equal(retried.result.rawText, text);
   }
+
+  // A result that names no accepted keyterms is filtered against none.
+  const unnamed = await transcribe("elevenlabs", { text: `${SPEECH} Piha, Biscuit.` }, shared);
+  assert.equal(unnamed.result.rawText, `${SPEECH} Piha, Biscuit.`);
 });
 
 test("Scribe keeps dictation that uses only one accepted keyterm", async (t) => {

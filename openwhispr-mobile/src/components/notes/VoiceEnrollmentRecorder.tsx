@@ -1,3 +1,7 @@
+import {
+  isMeetingRecordingRefusal,
+  MEETING_RECORDING_REFUSAL,
+} from '@/lib/meetingRecordingRefusal';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type React from 'react';
 import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
@@ -385,6 +389,9 @@ export function VoiceEnrollmentRecorder({
         // Same rule as dictation: only point at Settings when iOS couldn't ask itself.
         if (!caught.nativePromptShown) showMicPermissionAlert();
         fail(MIC_PERMISSION_FAILURE);
+      } else if (isMeetingRecordingRefusal(caught)) {
+        // Expected while a meeting records, not a fault worth reporting.
+        fail(MEETING_RECORDING_REFUSAL);
       } else {
         reportFailure(caught, 'start');
         fail(MIC_START_FAILURE);

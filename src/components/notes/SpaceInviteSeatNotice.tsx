@@ -4,6 +4,7 @@ import { useInviteSeatLines } from "../../hooks/useInviteSeatLines";
 import { workspaceCan } from "../../lib/capabilities";
 import { seatsWarningMessage, shortfall } from "../../lib/inviteFlow";
 import { WorkspaceErrorBar } from "../workspace/WorkspaceErrorBar";
+import { seatNoticeBillingTarget } from "./seatNoticeBillingTarget";
 
 interface SpaceInviteSeatNoticeProps {
   workspaceId: string;
@@ -44,7 +45,10 @@ export function SpaceInviteSeatNotice({
                   label: t("workspaces.invite.upgrade"),
                   // A named section remounts Settings, which closes a dialog hosted there. One
                   // hosted by the sidebar or a note stays open underneath Billing.
-                  onClick: () => void window.electronAPI?.openSettingsSection?.("plansBilling"),
+                  onClick: () =>
+                    void window.electronAPI?.openSettingsSection?.(
+                      seatNoticeBillingTarget(workspace)
+                    ),
                 }
               : undefined
           }

@@ -5,7 +5,7 @@ import AudioManager from "../helpers/audioManager";
 import logger from "../utils/logger";
 import { playStartCue, playStopCue } from "../utils/dictationCues";
 import { getSettings } from "../stores/settingsStore";
-import { expandSnippets } from "../utils/snippets";
+import { expandSnippets, snippetLocale } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { providerErrorActions } from "../utils/describeProviderError";
 import {
@@ -812,7 +812,9 @@ export const useAudioRecording = (toast, options = {}) => {
           // expansion is a dictation convenience and can otherwise mutate a
           // legitimate replacement that happens to contain a snippet trigger.
           if (!result.selectionEdit?.sessionId && !outlivedAccount) {
-            result.text = expandSnippets(result.text, getSettings().snippets);
+            result.text = expandSnippets(result.text, getSettings().snippets, {
+              locale: snippetLocale(getSettings().uiLanguage),
+            });
           }
 
           setTranscript(result.text);
@@ -842,7 +844,9 @@ export const useAudioRecording = (toast, options = {}) => {
             window.electronAPI?.hideDictationPreview?.();
             const { screenContext, transcript, selectedContext } = result.assistantConversation;
             const command = {
-              text: expandSnippets(transcript, getSettings().snippets),
+              text: expandSnippets(transcript, getSettings().snippets, {
+                locale: snippetLocale(getSettings().uiLanguage),
+              }),
               attachment: screenContext
                 ? { image: screenContext.data, mediaType: screenContext.mediaType }
                 : null,

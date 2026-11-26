@@ -5,7 +5,8 @@ import { detectEndpointDialect, suppressThinking } from "./thinkingSuppressionDi
 
 /**
  * Whether Settings offers "Disable thinking output" for this route: any
- * endpoint that may honour it, but a known model only when it can think on request.
+ * endpoint that may honour it, but a known model only when it can think on request
+ * or turn off the thinking it does unasked.
  */
 export function offersThinkingToggle(
   mode: InferenceMode,
@@ -14,8 +15,12 @@ export function offersThinkingToggle(
 ): boolean {
   if (mode === "self-hosted") return true;
   if (mode === "providers") {
+    const cloudModel = getCloudModel(model);
     return (
-      provider === "custom" || provider === "openrouter" || !!getCloudModel(model)?.supportsThinking
+      provider === "custom" ||
+      provider === "openrouter" ||
+      !!cloudModel?.supportsThinking ||
+      !!cloudModel?.thinkingOff
     );
   }
   return mode === "local" && !!getLocalModel(model)?.supportsThinking;
@@ -46,6 +51,6 @@ export function applyThinkingSuppression(
 
   // A known endpoint host wins over the generic provider dialect.
   const providerKey = detectEndpointDialect(baseUrl)?.key ?? provider.toLowerCase();
-  suppressThinking(requestBody, providerKey, model);
+  suppressThinking(requestBody, providerKey, model, baseUrl);
   return true;
 }

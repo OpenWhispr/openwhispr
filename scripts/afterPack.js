@@ -18,6 +18,7 @@ const path = require("path");
 const { execFileSync } = require("child_process");
 const { Arch } = require("app-builder-lib");
 const { buildLinuxWrapperScript } = require("./lib/linux-launcher");
+const { signWindowsNativeModules } = require("./lib/windows-signatures");
 const {
   shouldVerifyLinuxSqliteBaseline,
   verifyLinuxSqliteBaseline,
@@ -270,6 +271,19 @@ function verifyWindowsKeyListener(binDir) {
   }
 }
 
+// compile:winpaste and download:windows-fast-paste only warn as well. Without
+// the helper every paste goes through PowerShell SendKeys, which is seconds
+// slower and fails where App Control runs PowerShell in Constrained Language
+// Mode; selection editing and the media key lose their native path too.
+function verifyWindowsFastPaste(binDir) {
+  const helperPath = path.join(binDir, "windows-fast-paste.exe");
+  if (!fs.existsSync(helperPath)) {
+    throw new Error(
+      `afterPack: missing ${helperPath} — run npm run compile:winpaste on Windows (downloads the prebuilt binary, or compiles with MSVC, MinGW or Clang); Windows paste would fall back to PowerShell SendKeys`
+    );
+  }
+}
+
 function verifyUnpackedBinaries(context) {
   const unpackedDir = path.join(resolveResourcesDir(context), "app.asar.unpacked");
   const unpackedModulesDir = path.join(unpackedDir, "node_modules");
@@ -309,9 +323,32 @@ function verifyUnpackedBinaries(context) {
     const binDir = path.join(resolveResourcesDir(context), "bin");
     verifyWindowsOnnxRuntimePrivatized(binDir);
     verifyWindowsKeyListener(binDir);
+    verifyWindowsFastPaste(binDir);
   }
 
   console.log("  afterPack: verified unpacked bundled binaries");
+}
+
+// ---------------------------------------------------------------------------
+// Model catalog pin
+// ---------------------------------------------------------------------------
+
+// Only release.yml pins the signed publication of the bundled catalog. Any other build
+// bundles it as version 0, which every cached publication overrides, even an older one.
+function verifyRegistryPinned(argv, metadata) {
+  if (metadata.publicationCommit) return;
+  const index = argv.findIndex(
+    (arg) => arg === "--publish" || arg === "-p" || arg.startsWith("--publish=")
+  );
+  const policy = index === -1 ? null : (argv[index].split("=")[1] ?? argv[index + 1]);
+  if (policy && policy !== "never") {
+    throw new Error(
+      "afterPack: this build publishes but bundles model catalog version 0. Run `npm run model-registry:pin-release` first."
+    );
+  }
+  console.warn(
+    "  afterPack: model catalog not pinned (version 0); fine for testing, not for release"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -319,6 +356,7 @@ function verifyUnpackedBinaries(context) {
 // ---------------------------------------------------------------------------
 
 exports.default = async function (context) {
+  verifyRegistryPinned(process.argv, require("../src/models/registryMetadata.json"));
   stripOnnxruntimeBinaries(context);
   wrapLinuxBinary(context);
   verifyMeetingAecHelper(context);
@@ -327,7 +365,10 @@ exports.default = async function (context) {
     verifyLinuxSqliteBaseline(context.appOutDir, `${context.packager.executableName}-app`);
   }
   registerMacResourceBinariesForSigning(context);
+  await signWindowsNativeModules(context);
 };
 
 exports.verifyWindowsOnnxRuntimePrivatized = verifyWindowsOnnxRuntimePrivatized;
 exports.verifyWindowsKeyListener = verifyWindowsKeyListener;
+exports.verifyWindowsFastPaste = verifyWindowsFastPaste;
+exports.verifyRegistryPinned = verifyRegistryPinned;

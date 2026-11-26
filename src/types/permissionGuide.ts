@@ -7,6 +7,7 @@ export interface PermissionGuideState {
   needsRelaunch: boolean;
   busy: boolean;
   error: boolean;
+  selectApp?: boolean;
   canDrag?: boolean;
   appIcon?: string;
 }

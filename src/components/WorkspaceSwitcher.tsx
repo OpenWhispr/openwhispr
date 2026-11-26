@@ -41,7 +41,7 @@ const chevronClass =
 const MEMBER_COUNT_TTL_MS = 5 * 60_000;
 
 /** A quiet line about the list, with Retry; the menu stays open while it reloads. */
-function RetryMenuItem({
+export function RetryMenuItem({
   message,
   loading,
   onRetry,

@@ -350,7 +350,7 @@ test("the find panel mounts before the editor view does and unmounts after it is
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   const React = require("react");
   const { createRoot } = require("react-dom/client");
-  const { FindReplacePanel, WordCount } =
+  const { FindReplacePanel } =
     await import("../../src/components/ui/editorBlocks/FindReplacePanel.tsx");
   // element: null leaves the editor unmounted, as React's first effects see it.
   const editor = new Editor({
@@ -363,14 +363,7 @@ test("the find panel mounts before the editor view does and unmounts after it is
   const root = createRoot(host);
   try {
     await React.act(async () => {
-      root.render(
-        React.createElement(
-          React.Fragment,
-          null,
-          React.createElement(FindReplacePanel, { editor }),
-          React.createElement(WordCount, { editor })
-        )
-      );
+      root.render(React.createElement(FindReplacePanel, { editor }));
     });
   } finally {
     // useEditor can hand the panel an editor it already destroyed.

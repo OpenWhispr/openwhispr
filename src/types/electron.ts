@@ -211,7 +211,10 @@ export interface MeetingNotificationData {
   /** Set while the org refuses meeting recording: the card can only join. */
   recordingRefusal?: Extract<
     MeetingError,
-    "POLICY_MEETING_RECORDING_DISABLED" | "POLICY_UNRESOLVABLE"
+    | "POLICY_MEETING_RECORDING_DISABLED"
+    | "POLICY_UNRESOLVABLE"
+    | "POLICY_EXTERNAL_ATTENDEES"
+    | "POLICY_ATTENDEES_UNVERIFIABLE"
   >;
 }
 
@@ -260,6 +263,8 @@ export type MeetingError =
   | "NOTE_UNAVAILABLE"
   | "START_FAILED"
   | "POLICY_MEETING_RECORDING_DISABLED"
+  | "POLICY_EXTERNAL_ATTENDEES"
+  | "POLICY_ATTENDEES_UNVERIFIABLE"
   | "POLICY_UNRESOLVABLE";
 
 export type MeetingResult<T> =
@@ -475,6 +480,14 @@ export interface Leaderboard {
   refreshAfterSeconds: number;
 }
 
+// Where a folder name is already used in the space: a parent's id, or null at the
+// top level. Or a default folder's name, which no subfolder in Private takes.
+export interface FolderNameClash {
+  takenName?: string;
+  takenInFolderId?: number | null;
+  reservedName?: string;
+}
+
 export interface DeviceNoteFolder {
   id: number;
   name: string;
@@ -561,7 +574,8 @@ export interface NoteItem {
   created_at: string;
   updated_at: string;
   client_note_id: string;
-  sync_status: "synced" | "pending" | "error";
+  // folder_link_pending: nothing changed but the folder link still to send.
+  sync_status: "synced" | "pending" | "error" | "folder_link_pending";
   deleted_at: string | null;
   // Computed by getNoteByClientId and getNoteForCloudRow while a parent folder
   // DELETE awaits its server result. Held notes stay hidden and must not be
@@ -609,6 +623,13 @@ export type NotePushSnapshot = Pick<
 
 export type NoteCreateSnapshot = NotePushSnapshot;
 export type NoteUpdateSnapshot = NotePushSnapshot;
+
+// The copy a pulled delete decided from. Must mirror NOTE_PULLED_DELETE_FIELDS
+// in src/helpers/database.js.
+export type NoteDeleteExpectation = Pick<
+  NoteItem,
+  "client_note_id" | "cloud_id" | "sync_status" | "deleted_at" | "updated_at"
+>;
 
 export interface NoteCreateAckResult {
   success: boolean;
@@ -722,6 +743,7 @@ export interface FolderItem {
   is_default: number;
   sort_order: number;
   space_id: number;
+  parent_folder_id: number | null;
   created_at: string;
   updated_at: string;
   client_folder_id: string;
@@ -743,6 +765,7 @@ export type FolderPushSnapshot = Pick<
   | "is_default"
   | "sort_order"
   | "space_id"
+  | "parent_folder_id"
   | "created_at"
   | "updated_at"
   | "sync_status"
@@ -936,6 +959,10 @@ export interface Workspace {
   role: WorkspaceRole;
   is_billable?: boolean;
   billing_manager?: string | null;
+  // Absent before API release 4.
+  billing_manager_email?: string | null;
+  member_count?: number;
+  invitation_count?: number;
   // Absent on API responses that predate capabilities; read through workspaceCan().
   capabilities?: WorkspaceCapabilities;
   has_subscription?: boolean;
@@ -1916,7 +1943,11 @@ declare global {
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
       openSettingsSection?: (
-        section: SettingsTarget | ProviderSettingsTarget | "plansBilling"
+        section:
+          | SettingsTarget
+          | ProviderSettingsTarget
+          | "plansBilling"
+          | `plansBilling:workspace:${string}`
       ) => Promise<{ success: boolean }>;
       captureDictationTarget?: () => Promise<{ success: boolean; pid: number | null }>;
       captureDictationAppCategory?: () => Promise<ToneAppCategory>;
@@ -1952,7 +1983,7 @@ declare global {
       >;
 
       // Org policy (see src/types/policy.ts)
-      getEffectivePolicy?: () => Promise<EffectivePolicySnapshot>;
+      getEffectivePolicy?: (options?: { refresh?: boolean }) => Promise<EffectivePolicySnapshot>;
       onEffectivePolicyChanged?: (
         callback: (snapshot: EffectivePolicySnapshot) => void
       ) => () => void;
@@ -2261,23 +2292,33 @@ declare global {
       createFolder: (
         name: string,
         spaceId?: number | null,
-        writeGuard?: NoteWriteGuard
-      ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
-      deleteFolder: (id: number) => Promise<{ success: boolean; error?: string }>;
+        writeGuard?: NoteWriteGuard,
+        parentFolderId?: number | null
+      ) => Promise<{ success: boolean; folder?: FolderItem; error?: string } & FolderNameClash>;
+      deleteFolder: (
+        id: number
+      ) => Promise<{ success: boolean; error?: string; noteIds?: number[] }>;
       renameFolder: (
         id: number,
         name: string
-      ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
+      ) => Promise<{ success: boolean; folder?: FolderItem; error?: string } & FolderNameClash>;
       moveFolderToSpace: (
         id: number,
         spaceId: number
-      ) => Promise<{
-        success: boolean;
-        folder?: FolderItem;
-        notes?: NoteItem[];
-        error?: string;
-        code?: MoveRefusalCode;
-      }>;
+      ) => Promise<
+        {
+          success: boolean;
+          folder?: FolderItem;
+          notes?: NoteItem[];
+          error?: string;
+          code?: MoveRefusalCode;
+        } & FolderNameClash
+      >;
+      setFolderParent: (
+        id: number,
+        parentFolderId: number | null,
+        writeGuard?: NoteWriteGuard
+      ) => Promise<{ success: boolean; folder?: FolderItem; error?: string } & FolderNameClash>;
       getFolderNoteCounts: () => Promise<
         Array<{ space_id: number; folder_id: number | null; count: number }>
       >;
@@ -2406,7 +2447,7 @@ declare global {
       noteFilesSetEnabled?: (
         enabled: boolean,
         customPath?: string,
-        options?: { skipRebuild?: boolean }
+        options?: { skipRebuild?: boolean; startup?: boolean }
       ) => Promise<{ success: boolean; error?: string }>;
       noteFilesSetPath?: (path: string) => Promise<{ success: boolean; error?: string }>;
       noteFilesRebuild?: () => Promise<{ success: boolean; error?: string }>;
@@ -2523,7 +2564,10 @@ declare global {
       onNoteDeleted?: (callback: (payload: { id: number }) => void) => () => void;
       onNoteSynced?: (callback: (note: NoteItem) => void) => () => void;
       onFolderSynced?: (callback: (folder: FolderItem) => void) => () => void;
-      onFolderDeleted?: (callback: (payload: { id: number }) => void) => () => void;
+      // noteIds: the notes the delete took with the folder (main's own delete and pulled ones).
+      onFolderDeleted?: (
+        callback: (payload: { id: number; noteIds?: number[] }) => void
+      ) => () => void;
 
       // Cross-window sync events
       emitSyncEvent?: (name: string, payload?: unknown) => Promise<{ success: boolean }>;
@@ -2964,12 +3008,6 @@ declare global {
         language?: string;
         keyterms?: string[];
       }) => Promise<ProxyTranscriptionResult>;
-      proxyElevenlabsTranscription?: (data: {
-        audioBuffer: ArrayBuffer;
-        model?: string;
-        language?: string;
-        keyterms?: string[];
-      }) => Promise<ProxyTranscriptionResult<{ acceptedKeyterms: string[] }>>;
 
       // Groq API key management
       getGroqKey: () => Promise<string | null>;
@@ -3033,6 +3071,12 @@ declare global {
       }) => Promise<ProxyTranscriptionResult & { cleanedText?: string }>;
       getElevenlabsKey?: () => Promise<string | null>;
       saveElevenlabsKey?: (key: string) => Promise<void>;
+      proxyElevenlabsTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        model?: string;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<ProxyTranscriptionResult<{ acceptedKeyterms: string[] }>>;
 
       // Custom endpoint API keys
       getSelfHostedSttHeaders?: () => Promise<string | null>;
@@ -3398,7 +3442,7 @@ declare global {
         error?: string;
         code?: string;
       }>;
-      cloudBillingPortal?: () => Promise<{
+      cloudBillingPortal?: (expectedAuthGeneration?: number) => Promise<{
         success: boolean;
         url?: string;
         error?: string;
@@ -4004,6 +4048,20 @@ declare global {
           speakerIndexBase?: number;
         } & PolicyFailureMetadata
       >;
+      checkMeetingRecordingStart?: (options: {
+        noteId: number | null;
+        sessionId: string;
+      }) => Promise<{ success: true } | { success: false; code: string }>;
+      releaseMeetingRecordingStart?: (sessionId: string) => void;
+      onMeetingRecordingAdmissionRevoked?: (
+        callback: (data: {
+          sessionId: string;
+          code:
+            | "POLICY_EXTERNAL_ATTENDEES"
+            | "POLICY_ATTENDEES_UNVERIFIABLE"
+            | "AUDIO_OPERATION_CANCELLED";
+        }) => void
+      ) => () => void;
       isMeetingRecordingDisabled?: () => Promise<boolean>;
       meetingRecordingRefused?: (details: {
         noteId: number | null;
@@ -4018,6 +4076,10 @@ declare global {
       meetingTranscriptionSetSystemAudioAvailable?: (
         sessionId: string,
         available: boolean
+      ) => Promise<{ success: boolean; reason?: "stale-session" }>;
+      meetingTranscriptionSetMicMuted?: (
+        sessionId: string,
+        muted: boolean
       ) => Promise<{ success: boolean; reason?: "stale-session" }>;
       meetingTranscriptionStop?: (
         expectedSessionId?: string,
@@ -4310,7 +4372,8 @@ declare global {
         status?: "ready" | "cancel"
       ) => Promise<MeetingResult<NoteItem>>;
       joinCalendarMeeting?: (
-        eventId: string
+        eventId: string,
+        notesOnly?: boolean
       ) => Promise<{ success: boolean; code?: string; error?: string }>;
       // Resolves with nothing once started, or with why it could not start.
       startManualMeeting?: () => Promise<{ success: false; code?: string; error: string } | void>;
@@ -4436,11 +4499,23 @@ declare global {
       countTeamNotesMissingOwner?: () => Promise<number>;
       countNotesMissingRevision?: (scope?: "private" | "team" | null) => Promise<number>;
       markNoteSyncError?: (id: number) => Promise<void>;
-      restoreNoteAfterDeniedDelete?: (id: number) => Promise<{ success: boolean; id: number }>;
+      keepDeletedNoteTranscript?: (
+        id: number,
+        transcript: string,
+        writeGuard: NoteWriteGuard
+      ) => Promise<{ success: boolean; id?: number; code?: "note_live"; error?: string }>;
+      restoreNoteAfterDeniedDelete?: (
+        id: number
+      ) => Promise<{ success: boolean; id: number; pending?: boolean }>;
+      // A pulled delete passes the copy it decided from: a row written since
+      // stays (code "note_changed") for the pull to decide again.
       hardDeleteNote?: (
         id: number,
-        expectedAuthGeneration?: number
-      ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
+        expectedAuthGeneration?: number,
+        options?: { expected?: NoteDeleteExpectation }
+      ) => Promise<
+        { success: boolean; id: number; code?: "note_changed"; error?: string } | StaleSyncWrite
+      >;
 
       // An omitted scope includes personal folders for consented Backup.
       getPendingFolders?: (scope?: "private" | "team" | null) => Promise<FolderItem[]>;
@@ -4475,20 +4550,42 @@ declare global {
         expectedScope: ActiveAccountScope
       ) => Promise<void>;
       getFolderIdMap?: () => Promise<FolderItem[]>;
+      applyCloudFolderParents?: (
+        links: Array<{
+          cloudId: string;
+          parentCloudId: string | null;
+          snapshot: FolderPushSnapshot;
+          adoptIfPending?: boolean;
+        }>,
+        expectedAuthGeneration?: number
+      ) => Promise<void | StaleSyncWrite>;
       getPendingFolderDeletes?: () => Promise<FolderItem[]>;
       restoreFolderAfterDeniedDelete?: (id: number) => Promise<{
         success: boolean;
         id: number;
         folder?: FolderItem;
         notes?: NoteItem[];
+        subfolders?: FolderItem[];
         conversationIds?: number[];
         reason?: "name-taken";
         error?: string;
       }>;
       hardDeleteFolder?: (
         id: number,
-        expectedAuthGeneration?: number
-      ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
+        expectedAuthGeneration?: number,
+        options?: { preserveDirtyNotes?: boolean }
+      ) => Promise<
+        | {
+            success: boolean;
+            id: number;
+            noteIds?: number[];
+            relocatedNotes?: NoteItem[];
+            preservedNotes?: NoteItem[];
+            unfiledNotes?: NoteItem[];
+            error?: string;
+          }
+        | StaleSyncWrite
+      >;
       // A new client identity and no cloud link: the folder's cloud row is
       // left to whoever still has it.
       forkFolderIdentity?: (id: number) => Promise<{ success: boolean }>;

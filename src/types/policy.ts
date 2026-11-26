@@ -47,6 +47,8 @@ export interface OrgPolicy {
      * servers that predate the field; absent means allowed.
      */
     connectorsEnabled?: boolean;
+    /** Personal API keys and MCP access. Absent on older servers means allowed. */
+    apiAccessEnabled?: boolean;
     /**
      * Retired agent-memory gate: the API stopped using it when it removed
      * assistant memory (openwhispr-api#243), but older API versions may still
@@ -54,8 +56,13 @@ export interface OrgPolicy {
      */
     memoryEnabled?: boolean;
   };
-  /** Absent on older servers; absent means automatic. Unknown strings suppress auto-start. */
-  meetings?: { transcriptionStart?: string };
+  meetings?: {
+    /** Absent means automatic. Unknown values require a manual start. */
+    transcriptionStart?: string;
+    /** Absent means allowed. Unknown values require an internal invite. */
+    externalAttendees?: string;
+    internalDomains?: string[];
+  };
   sharing: {
     externalLinkSharing: ExternalSharingMode;
   };

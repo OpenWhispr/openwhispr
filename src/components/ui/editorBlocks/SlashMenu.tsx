@@ -331,8 +331,26 @@ export const SlashMenu = Extension.create({
         allow: ({ state, range }) =>
           !isInTable(state) && !state.doc.resolve(range.from).parent.type.spec.code,
         items: ({ query }) => filterItems(query),
-        command: ({ editor, range, props }: { editor: Editor; range: Range; props: SlashItem }) => {
-          editor.chain().focus().deleteRange(range).run();
+        command: ({
+          editor,
+          range,
+          props,
+        }: {
+          editor: Editor;
+          range: Range;
+          props: SlashItem;
+        }): void => {
+          const removeQuery = editor.chain().focus().deleteRange(range);
+          if (props.group === "style") {
+            const { state } = editor;
+            const marks = state.storedMarks ?? state.doc.resolve(range.from).nodeAfter?.marks ?? [];
+            // In a blank paragraph the query is the only text carrying the previous style.
+            removeQuery.command(({ tr }): boolean => {
+              tr.ensureMarks(marks);
+              return true;
+            });
+          }
+          removeQuery.run();
           void props.run(editor);
         },
         render,

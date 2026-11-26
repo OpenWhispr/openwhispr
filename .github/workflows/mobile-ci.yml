@@ -125,6 +125,22 @@ jobs:
         run: python3 openwhispr-mobile/plugins/keyboard-extension/tests/run-keyboard-touch-tests.py
       - name: Run keyboard capitalization tests
         run: sh openwhispr-mobile/scripts/test-keyboard-capitalization.sh
+      - name: Run keyboard options menu tests
+        run: sh openwhispr-mobile/scripts/test-keyboard-options.sh
+      - name: Run keyboard typing-engine tests
+        run: sh openwhispr-mobile/scripts/test-keyboard-typing.sh test
+      - name: Run keyboard direct-dictation tests
+        run: sh openwhispr-mobile/scripts/test-keyboard-direct.sh
+      - name: Run meeting capture lease tests
+        run: bash openwhispr-mobile/modules/app-group-storage/tests/run-capture-lease-tests.sh
+      - name: Run meeting capture health tests
+        run: sh openwhispr-mobile/modules/live-pcm-streaming/tests/run-capture-health-tests.sh
+      - name: Run meeting recording writer tests
+        run: sh openwhispr-mobile/modules/live-pcm-streaming/tests/run-meeting-recording-writer-tests.sh
+      - name: Run WAV header tests
+        run: sh openwhispr-mobile/modules/live-pcm-streaming/tests/run-wav-header-tests.sh
+      - name: Run meeting start rejection tests
+        run: sh openwhispr-mobile/modules/live-pcm-streaming/tests/run-start-rejection-tests.sh
 
   mobile-status:
     name: Mobile CI

@@ -1,6 +1,5 @@
 /**
- * find & replace panel (Tiptap FindAndReplace) and the
- * word count shown under the note. Opened with ⌘F or "/Find and replace".
+ * find & replace panel (Tiptap FindAndReplace). Opened with ⌘F or "/Find and replace".
  */
 import { useTranslation } from "react-i18next";
 import { useEffect, useRef, useState } from "react";
@@ -155,39 +154,6 @@ export function FindReplacePanel({ editor }: { editor: Editor }) {
           {tb("find.all")}
         </button>
       </div>
-    </div>
-  );
-}
-
-/**
- * Word / character count, recomputed at most every 400 ms after the document
- * changes (not on every transaction), and only for editable notes.
- */
-export function WordCount({ editor }: { editor: Editor }) {
-  useTranslation(); // re-render on UI language change
-  const [counts, setCounts] = useState<{ words: number; chars: number } | null>(null);
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const compute = () => {
-      const storage: any = (editor.storage as any).characterCount;
-      if (editor.isDestroyed) return;
-      setCounts({ words: storage.words(), chars: storage.characters() });
-    };
-    const schedule = () => {
-      clearTimeout(timer);
-      timer = setTimeout(compute, 400);
-    };
-    compute();
-    editor.on("update", schedule);
-    return () => {
-      clearTimeout(timer);
-      editor.off("update", schedule);
-    };
-  }, [editor]);
-  if (!counts?.words) return null;
-  return (
-    <div className="rte-word-count" aria-live="off">
-      {tb("count", { words: counts.words, chars: counts.chars })}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Check, Loader2, Sparkles, Users, X } from "../icons";
+import { Check, Loader2, MicOff, Sparkles, Users, X } from "../icons";
 import { useStickToBottom } from "../../hooks/useStickToBottom";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 import { Toggle } from "../ui/toggle";
@@ -874,6 +874,8 @@ interface MeetingTranscriptChatProps {
   contentClassName?: string;
   /** Label for the recorder's own lines; "You" unless the note is someone else's. */
   recorderLabel?: string;
+  /** The live recording's microphone is muted; system audio is still transcribed. */
+  micMuted?: boolean;
 }
 
 export function MeetingTranscriptChat({
@@ -900,6 +902,7 @@ export function MeetingTranscriptChat({
   onToggleSelect,
   contentClassName,
   recorderLabel: recorderLabelProp,
+  micMuted = false,
 }: MeetingTranscriptChatProps) {
   const { t } = useTranslation();
   const hasContent = segments.length > 0 || Boolean(micPartial) || Boolean(systemPartial);
@@ -982,13 +985,24 @@ export function MeetingTranscriptChat({
     return map;
   }, [speakerProfiles]);
 
+  const micMutedStatus = isRecording && micMuted && (
+    <span
+      role="status"
+      className="flex items-center gap-1 rounded-md bg-amber-500/12 px-1.5 py-0.5 text-xs text-amber-700 dark:text-amber-400"
+    >
+      <MicOff size={12} className="shrink-0" />
+      {t("notes.editor.micMuted")}
+    </span>
+  );
+
   if (!hasContent) {
     return (
       <div className="h-full flex flex-col">
-        <div className="flex-1 flex items-center justify-center px-5">
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 px-5">
           <p className="text-xs text-muted-foreground/70 select-none">
             {t("notes.editor.conversationWillAppear")}
           </p>
+          {micMutedStatus}
         </div>
       </div>
     );
@@ -1031,6 +1045,7 @@ export function MeetingTranscriptChat({
                 </span>
               )}
             </div>
+            {micMutedStatus}
             <div className="flex-1" />
             {!isDiarizing && sessionDiarizationEnabled && (
               <div className="flex items-center gap-1.5">

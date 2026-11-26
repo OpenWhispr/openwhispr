@@ -834,6 +834,29 @@ body:has(.onboarding-canvas) kbd {
   mask-composite: intersect;
 }
 
+/* The native range retains Electron's keyboard and high-contrast behavior. */
+@media (forced-colors: none) {
+  .billing-seat-range {
+    appearance: none;
+    background: transparent;
+  }
+
+  .billing-seat-range::-webkit-slider-runnable-track {
+    height: 6px;
+    background: transparent;
+  }
+
+  .billing-seat-range::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -5px;
+    border: 3px solid var(--color-primary);
+    border-radius: 50%;
+    background: white;
+  }
+}
+
 /* OpenWhispr Brand Typography */
 .brand-heading {
   font-family: var(--font-family-display);
@@ -1171,18 +1194,6 @@ a:hover {
 }
 
 /* Model picker LED pulse animation */
-@keyframes pulse-glow {
-  0%,
-  100% {
-    box-shadow: 0 0 6px oklch(0.65 0.2 260 / 0.4);
-    opacity: 0.8;
-  }
-  50% {
-    box-shadow: 0 0 8px oklch(0.65 0.2 260 / 0.6);
-    opacity: 1;
-  }
-}
-
 /* Spinner rotation for downloading state */
 @keyframes spinner-rotate {
   from {

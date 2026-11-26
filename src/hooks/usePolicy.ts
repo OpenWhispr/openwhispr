@@ -11,6 +11,7 @@ import {
   useSettingsStore,
 } from "../stores/settingsStore";
 import {
+  apiAccessRestriction,
   filterModeOptionsByPolicy,
   getTranscriptionSelection,
   isByokTranscriptionAllowed,
@@ -22,6 +23,7 @@ import {
   isTranscriptionContextAllowed,
   reconcilePolicyModeSelection,
   transcriptionChoiceRefusal,
+  type ApiAccessRestriction,
   type LocalModelRefusal,
   type PolicyDecisionSnapshot,
   type TranscriptionPolicyContext,
@@ -35,6 +37,10 @@ export function usePolicySnapshot(): PolicyDecisionSnapshot {
   const policy = usePolicyStore((state) => state.policy);
   const appVersion = usePolicyStore((state) => state.appVersion);
   return useMemo(() => ({ status, policy, appVersion }), [status, policy, appVersion]);
+}
+
+export function useApiAccessRestriction(): ApiAccessRestriction | null {
+  return usePolicyStore(apiAccessRestriction);
 }
 
 export function useByokTranscriptionModelAllowed(

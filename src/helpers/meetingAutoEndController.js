@@ -82,6 +82,9 @@ const createMeetingAutoEndController = ({ now = Date.now, onStop }) => {
 
     if (session.micActive || session.systemActive) return;
     const fastArmed = session.fastArmAt !== null;
+    // A muted mic can't establish room silence. A meeting process exiting
+    // supplies independent evidence, still subject to actual channel activity.
+    if (session.micMuted && !fastArmed) return;
     const quietStart = fastArmed
       ? Math.max(session.quietSince, session.fastArmAt)
       : session.quietSince;
@@ -94,6 +97,7 @@ const createMeetingAutoEndController = ({ now = Date.now, onStop }) => {
     eligible,
     reliable,
     externalMicActive,
+    micMuted = false,
     micActive = false,
     systemActive = false,
   }) => {
@@ -106,6 +110,7 @@ const createMeetingAutoEndController = ({ now = Date.now, onStop }) => {
       mode: ownership ? "ownership" : "fallback",
       externalMicActive: ownership,
       externalMicActiveSince: ownership ? nowMs : null,
+      micMuted,
       micActive,
       systemActive,
       quietSince: nowMs,
@@ -174,6 +179,14 @@ const createMeetingAutoEndController = ({ now = Date.now, onStop }) => {
     evaluate();
   };
 
+  const handleMicMuteChanged = ({ sessionId, micMuted }) => {
+    const nowMs = observeClock();
+    if (!isLive(sessionId) || session.micMuted === micMuted) return;
+    session.micMuted = micMuted;
+    // Only time we could hear the room counts toward an ordinary silence stop.
+    if (!micMuted && session.fastArmAt === null) session.quietSince = nowMs;
+  };
+
   const endSession = (sessionId) => {
     if (!session || session.sessionId !== sessionId) return;
     session = null;
@@ -188,6 +201,7 @@ const createMeetingAutoEndController = ({ now = Date.now, onStop }) => {
     beginSession,
     handleExternalMicState,
     handleAudioActivity,
+    handleMicMuteChanged,
     handleMeetingProcessExit,
     endSession,
     tick,

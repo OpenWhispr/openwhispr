@@ -29,6 +29,8 @@ type SuperwallGateContextValue = {
   state: PaywallState;
   /** False until the SDK's configure round trip completes; true when Superwall is off in this build. */
   isConfigured: boolean;
+  /** True only when the Superwall bridge publishes a billing identity; callers skip waiting for one otherwise. */
+  requiresIdentity: boolean;
 };
 
 // Default mirrors DisabledSuperwallGateProvider's fail-open semantics so a
@@ -43,6 +45,7 @@ export const SuperwallGateContext = createContext<SuperwallGateContextValue>({
   },
   state: { status: 'idle' },
   isConfigured: true,
+  requiresIdentity: false,
 });
 
 export function useSuperwallGate(): SuperwallGateContextValue {

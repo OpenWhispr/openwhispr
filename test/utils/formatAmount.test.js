@@ -87,3 +87,22 @@ test("formats negative cents amounts", async () => {
     (-123.45).toLocaleString(undefined, { style: "currency", currency: "USD" })
   );
 });
+
+test("uses Stripe charge units for zero-decimal currencies and their compatibility exceptions", async () => {
+  const { formatAmount } = await load();
+  for (const [currency, rawAmount, expectedAmount] of [
+    ["JPY", 2000, 2000],
+    ["KRW", -12000, -12000],
+    ["VND", 0, 0],
+    ["ISK", 1000, 10],
+    ["UGX", 1000, 10],
+    ["TWD", 1234, 12.34],
+    ["HUF", 1234, 12.34],
+  ]) {
+    assert.equal(
+      formatAmount(rawAmount, currency.toLowerCase()),
+      expectedAmount.toLocaleString(undefined, { style: "currency", currency }),
+      currency
+    );
+  }
+});

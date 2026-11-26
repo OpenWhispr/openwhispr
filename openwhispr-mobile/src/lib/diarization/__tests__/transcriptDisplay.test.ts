@@ -5,6 +5,7 @@ import {
   getSpeakerDisplayColor,
   getSpeakerDisplayName,
   groupTranscriptSegments,
+  UNLABELED_BLOCK_MAX_MS,
 } from '../transcriptDisplay';
 
 const speaker = (overrides: Partial<Speaker>): Speaker =>
@@ -204,5 +205,115 @@ describe('transcriptDisplay', () => {
         '[0:02] Alice: I will review it.\n\n' +
         '[0:04] Speaker 2: I will publish it.',
     );
+  });
+});
+
+describe('groupTranscriptSegments unlabeled blocks', () => {
+  it('starts a new unlabeled block after a 2 s pause', () => {
+    const blocks = groupTranscriptSegments(
+      [
+        segment({ id: 1, startMs: 0, endMs: 3_000, text: 'one' }),
+        segment({ id: 2, startMs: 3_500, endMs: 6_000, text: 'two' }),
+        segment({ id: 3, startMs: 8_000, endMs: 9_000, text: 'three' }),
+      ],
+      [],
+    );
+    expect(blocks.map((block) => block.timestamp)).toEqual(['0:00', '0:08']);
+    expect(blocks[0].text).toBe('one two');
+  });
+
+  it('starts a new unlabeled block once one has run for a minute', () => {
+    const segments = Array.from({ length: 13 }, (_, index) =>
+      segment({
+        id: index + 1,
+        startMs: index * 10_000,
+        endMs: (index + 1) * 10_000,
+        text: `s${index}`,
+      }),
+    );
+    const blocks = groupTranscriptSegments(segments, []);
+    expect(blocks.map((block) => block.timestamp)).toEqual(['0:00', '1:00', '2:00']);
+    expect(UNLABELED_BLOCK_MAX_MS).toBe(60_000);
+  });
+
+  it('still merges consecutive segments of a labeled speaker', () => {
+    const segments = Array.from({ length: 13 }, (_, index) =>
+      segment({
+        id: index + 1,
+        startMs: index * 20_000,
+        endMs: index * 20_000 + 1_000,
+        text: `s${index}`,
+        speakerLabel: 'SPEAKER_00',
+      }),
+    );
+    const blocks = groupTranscriptSegments(segments, [speaker({})]);
+    expect(blocks).toHaveLength(1);
+  });
+
+  it('keeps unlabeled segments with identical fallback timings in one block', () => {
+    const blocks = groupTranscriptSegments(
+      [
+        segment({ id: 1, startMs: 0, endMs: 0, text: 'one' }),
+        segment({ id: 2, startMs: 0, endMs: 0, text: 'two' }),
+        segment({ id: 3, startMs: 0, endMs: 0, text: 'three' }),
+      ],
+      [],
+    );
+    expect(blocks).toHaveLength(1);
+  });
+
+  it('keeps an overlapping unlabeled segment in the same block', () => {
+    const blocks = groupTranscriptSegments(
+      [
+        segment({ id: 1, startMs: 0, endMs: 5_000, text: 'one' }),
+        segment({ id: 2, startMs: 4_000, endMs: 6_000, text: 'two' }),
+      ],
+      [],
+    );
+    expect(blocks).toHaveLength(1);
+  });
+
+  it('starts a new unlabeled block when the timeline jumps backwards', () => {
+    const blocks = groupTranscriptSegments(
+      [
+        segment({ id: 1, sortOrder: 0, startMs: 1_800_000, endMs: 1_801_000, text: 'before' }),
+        segment({ id: 2, sortOrder: 1, startMs: 500, endMs: 1_500, text: 'after' }),
+      ],
+      [],
+    );
+    expect(blocks.map((block) => block.text)).toEqual(['before', 'after']);
+    expect(blocks.map((block) => block.timestamp)).toEqual(['30:00', '0:00']);
+  });
+
+  it('splits unlabeled lines on a pause inside a note that has speakers', () => {
+    const blocks = groupTranscriptSegments(
+      [
+        segment({
+          id: 1,
+          sortOrder: 0,
+          startMs: 0,
+          endMs: 1_000,
+          text: 'a1',
+          speakerLabel: 'SPEAKER_00',
+        }),
+        segment({
+          id: 2,
+          sortOrder: 1,
+          startMs: 20_000,
+          endMs: 21_000,
+          text: 'a2',
+          speakerLabel: 'SPEAKER_00',
+        }),
+        segment({ id: 3, sortOrder: 2, startMs: 22_000, endMs: 23_000, text: 'u1' }),
+        segment({ id: 4, sortOrder: 3, startMs: 23_500, endMs: 24_000, text: 'u2' }),
+        segment({ id: 5, sortOrder: 4, startMs: 27_000, endMs: 28_000, text: 'u3' }),
+      ],
+      [speaker({ displayName: 'Alice' })],
+    );
+    expect(blocks.map((block) => [block.speakerName, block.text])).toEqual([
+      ['Alice', 'a1 a2'],
+      ['Unknown speaker', 'u1 u2'],
+      ['Unknown speaker', 'u3'],
+    ]);
   });
 });

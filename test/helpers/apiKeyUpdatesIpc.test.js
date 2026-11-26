@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
-const { EventEmitter, once } = require("node:events");
+const { once } = require("node:events");
 const { BYOK_API_KEYS } = require("../../src/config/secretKeys");
 const { deferred } = require("./harness/deferred");
 
@@ -50,7 +50,7 @@ const handlers = new Map();
 const eventHandlers = new Map();
 const keys = new Map();
 const notifications = [];
-const editor = Object.assign(new EventEmitter(), { id: 1 });
+const editor = { id: 1 };
 const windows = [1, 2, 3].map((id) => ({
   id,
   isDestroyed: () => id === 3,
@@ -157,6 +157,7 @@ const streamingModules = [
   "./assemblyAiStreaming",
   "./deepgramStreaming",
   "./cortiStreaming",
+  "./elevenLabsStreaming",
   "./openaiRealtimeStreaming",
 ];
 const originalLoad = Module._load;
@@ -1288,16 +1289,18 @@ test("an unknown realtime provider still fails closed", async () => {
 });
 
 // provider, the saver of the key both meeting streams authenticate with, the mode,
-// and the session token that key mints. Corti and Tinfoil read their saved
-// credentials whatever the mode says.
+// and the session token that key mints. Corti, Tinfoil and ElevenLabs read their
+// saved credentials whatever the mode says.
 const MEETING = [
   ["openai-realtime", "save-openai-key", "byok", (key) => key],
   ["assemblyai-realtime", "save-assemblyai-key", "byok", (key) => `token-${key}`],
   ["deepgram-realtime", "save-deepgram-key", "byok", (key) => key],
   ["corti-realtime", "save-corti-client-secret", "byok", (key) => `token-${key}`],
   ["tinfoil-realtime", "save-tinfoil-key", "byok", (key) => key],
+  ["elevenlabs-realtime", "save-elevenlabs-key", "byok", (key) => key],
   ["corti-realtime", "save-corti-client-secret", "openwhispr", (key) => `token-${key}`],
   ["tinfoil-realtime", "save-tinfoil-key", "openwhispr", (key) => key],
+  ["elevenlabs-realtime", "save-elevenlabs-key", "openwhispr", (key) => key],
 ];
 const meetingStreams = () => [target._meetingMicStreaming, target._meetingSystemStreaming];
 const assertMeetingStreams = ([mic, system]) => {
@@ -1442,9 +1445,9 @@ for (const [provider, saveChannel, mode] of MEETING.filter(([name]) =>
   });
 }
 
-// Corti and Tinfoil never open a managed connection.
+// Corti, Tinfoil and ElevenLabs never open a managed connection.
 for (const [provider, saveChannel] of MEETING.filter(
-  ([name]) => !["corti-realtime", "tinfoil-realtime"].includes(name)
+  ([name]) => !["corti-realtime", "tinfoil-realtime", "elevenlabs-realtime"].includes(name)
 )) {
   test(`${provider}: a key save leaves a managed prepared meeting in place`, async (t) => {
     withManagedApi(t);
@@ -1487,6 +1490,26 @@ test("a prepare after a mid-meeting renewal leaves the live meeting alone", asyn
     alreadyPrepared: true,
   });
   assertMeetingStreams(renewed);
+});
+
+test("a fatal provider error ends the meeting once without reconnecting", async (t) => {
+  resetMeeting(t);
+  invoke("save-deepgram-key", "A");
+  const options = { provider: "deepgram-realtime", mode: "byok" };
+  await invoke("meeting-transcription-start", options);
+  const live = meetingStreams();
+  const notified = notifications.length;
+  // A used-up quota sits behind both sockets.
+  const error = Object.assign(new Error("Quota used up"), { fatal: true });
+  for (const streaming of live) streaming.onConnectionLost(error);
+  await new Promise(setImmediate);
+  assertMeetingStreams(live);
+  assert.deepEqual(
+    notifications
+      .slice(notified)
+      .filter(([, channel]) => channel === "meeting-transcription-fatal-error"),
+    [[2, "meeting-transcription-fatal-error", "Quota used up"]]
+  );
 });
 
 // Main's base (past the note's stored ids), not the renderer's, numbers the live
@@ -2104,5 +2127,87 @@ test("a meeting start the policy blocks for its provider reaches the audit log",
   assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
   assert.deepEqual(audit, [
     ["refused", { noteId: 5, trigger: "hotkey", reason: "DEVICE_POLICY_BLOCKED" }],
+  ]);
+});
+
+test("a calendar guest revokes the admitted recording and the backend refuses a direct restart", async (t) => {
+  resetMeeting(t);
+  const invite = { attendees: '[{"email":"member@internal.test"}]', attendees_count: 1 };
+  const policy = defaultDevicePolicy();
+  policy.meetings = { externalAttendees: "blocked", internalDomains: ["internal.test"] };
+  setWorkspacePolicy({ success: true, managed: true, policy });
+  // Only note/event lookups are real inputs to this policy. Other meeting
+  // setup calls use the same stand-ins as the provider lifecycle tests.
+  target.databaseManager = new Proxy(
+    {
+      getNote: () => ({ calendar_event_id: "invite" }),
+      getCalendarEventById: () => invite,
+    },
+    { get: (value, property) => (property in value ? value[property] : anything()) }
+  );
+  const notices = [];
+  editor.send = (channel, payload) => notices.push([channel, payload]);
+  t.after(() => {
+    delete target.databaseManager;
+    delete editor.send;
+  });
+  invoke("save-deepgram-key", "A");
+  const options = {
+    provider: "deepgram-realtime",
+    mode: "byok",
+    sessionId: "guest-check",
+    noteId: 37,
+  };
+  assert.deepEqual(await invoke("check-meeting-recording-start", options), { success: true });
+  assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+  const streams = meetingStreams();
+  invite.attendees = '[{"email":"guest@other.test"}]';
+  target._meetingAdmission.recheck();
+  target._meetingAdmission.recheck();
+  assert.ok(streams.every((stream) => !stream.isConnected));
+  assert.deepEqual(
+    notices.filter(([channel]) => channel === "meeting-recording-admission-revoked"),
+    [
+      [
+        "meeting-recording-admission-revoked",
+        { sessionId: "guest-check", code: "POLICY_EXTERNAL_ATTENDEES" },
+      ],
+    ]
+  );
+  await invoke("meeting-transcription-stop", options.sessionId, "policy");
+  assert.equal(
+    (await invoke("check-meeting-recording-start", options)).code,
+    "POLICY_EXTERNAL_ATTENDEES"
+  );
+  assert.equal((await invoke("meeting-transcription-start", options)).success, false);
+});
+
+test("an in-person confirmation surfaces the control panel before asking", async (t) => {
+  const policy = defaultDevicePolicy();
+  policy.meetings = { externalAttendees: "blocked", internalDomains: ["internal.test"] };
+  setWorkspacePolicy({ success: true, managed: true, policy });
+  const calls = [];
+  target.databaseManager = { getNote: () => ({ calendar_event_id: null }) };
+  // The meeting hotkey leaves the panel behind the call it was pressed in.
+  target.windowManager = {
+    controlPanelWindow: windows[1],
+    showControlPanel: (options) => calls.push(["panel", options]),
+  };
+  electron.dialog.showMessageBox = async (parent) => {
+    calls.push(["sheet", parent.id]);
+    return { response: 1 };
+  };
+  t.after(() => {
+    delete target.databaseManager;
+    delete target.windowManager;
+    delete electron.dialog.showMessageBox;
+  });
+  assert.equal(
+    (await invoke("check-meeting-recording-start", { sessionId: "in-person", noteId: 41 })).code,
+    "AUDIO_OPERATION_CANCELLED"
+  );
+  assert.deepEqual(calls, [
+    ["panel", undefined],
+    ["sheet", 2],
   ]);
 });

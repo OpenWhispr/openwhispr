@@ -68,6 +68,14 @@ test("ignores stale additive analytics metadata", () => {
   assert.equal(isValidPolicyShape(policy), true);
 });
 
+test("personal API access accepts an optional boolean", () => {
+  for (const value of [undefined, true, false, null, 0, "false"]) {
+    const policy = validPolicy();
+    policy.features.apiAccessEnabled = value;
+    assert.equal(isValidPolicyShape(policy), value === undefined || typeof value === "boolean");
+  }
+});
+
 test("accepts screenContextEnabled as an optional boolean", () => {
   for (const value of [true, false]) {
     const policy = validPolicy();
@@ -323,4 +331,20 @@ test("update policy is additive and future string modes do not invalidate manage
   for (const updates of [null, [], "it_managed", { mode: 1 }, { mode: null }]) {
     assert.equal(isValidPolicyShape({ ...validPolicy(), updates }), false);
   }
+});
+
+test("meeting attendee policy accepts additive string fields and rejects invalid shapes", () => {
+  for (const meetings of [
+    {},
+    { externalAttendees: "future" },
+    { internalDomains: [] },
+    { externalAttendees: "blocked", internalDomains: ["example.com"] },
+  ])
+    assert.equal(isValidPolicyShape({ ...validPolicy(), meetings }), true);
+  for (const meetings of [
+    { externalAttendees: false },
+    { internalDomains: "example.com" },
+    { internalDomains: [null] },
+  ])
+    assert.equal(isValidPolicyShape({ ...validPolicy(), meetings }), false);
 });

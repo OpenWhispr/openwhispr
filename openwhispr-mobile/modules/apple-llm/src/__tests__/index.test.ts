@@ -1,6 +1,7 @@
 const mockNative: {
   generateText: jest.Mock;
   cancelGeneration?: jest.Mock;
+  getSupportedLanguages?: jest.Mock;
 } = {
   generateText: jest.fn(),
   cancelGeneration: jest.fn(),
@@ -30,6 +31,23 @@ function pendingNative(): { reject: (error: Error) => void } {
 beforeEach(() => {
   jest.clearAllMocks();
   mockNative.cancelGeneration = jest.fn();
+  delete mockNative.getSupportedLanguages;
+});
+
+describe('getSupportedLanguages', () => {
+  it('returns [] when the native binary predates the method', async () => {
+    await expect(AppleLLM.getSupportedLanguages()).resolves.toEqual([]);
+  });
+
+  it('lower-cases and de-duplicates what the model reports', async () => {
+    mockNative.getSupportedLanguages = jest.fn().mockResolvedValue(['en', 'EN', 'es']);
+    await expect(AppleLLM.getSupportedLanguages()).resolves.toEqual(['en', 'es']);
+  });
+
+  it('returns [] when the native call fails', async () => {
+    mockNative.getSupportedLanguages = jest.fn().mockRejectedValue(new Error('boom'));
+    await expect(AppleLLM.getSupportedLanguages()).resolves.toEqual([]);
+  });
 });
 
 it('sends the request unchanged when there is no signal', async () => {

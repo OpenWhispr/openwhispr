@@ -408,6 +408,8 @@ export interface NotesRepository {
   getSegments(noteId: number): Segment[];
   /** Atomically replaces ALL segments for a note (hard-deletes existing, then inserts). Use after a diarize/merge pass. */
   replaceSegments(noteId: number, segments: NewSegment[]): void;
+  /** Inserts local-only draft segments (pendingSync 0) without touching existing ones or the note's sync flag, so a half-recorded meeting is never pushed. replaceSegments, at Stop or in recovery, makes the transcript syncable. */
+  appendSegments(noteId: number, segments: NewSegment[]): void;
 
   // Cross-device transcript sync (desktop <-> mobile via notes.transcript)
   /** Rebuilds a note's segments + speakers from desktop-shape transcript JSON and stores the raw string. */
