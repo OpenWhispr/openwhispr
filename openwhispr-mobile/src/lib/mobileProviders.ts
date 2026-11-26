@@ -66,44 +66,6 @@ export type MobileInferenceScope = Exclude<InferenceScope, 'meeting'>;
 // providers need their own adapters and device verification first.
 export const MOBILE_PROVIDER_IDS: readonly string[] = ['openai', 'groq', 'openrouter', 'custom'];
 
-/** What a platform transcription client gets for one recording or file. */
-export interface PlatformTranscriptionInput {
-  apiKey: string;
-  modelId: string;
-  audioUri: string;
-  mimeType?: string;
-  language?: string;
-  /** Dictionary hints, as the OpenAI-compatible prompt carries them. */
-  prompt?: string;
-  signal?: AbortSignal;
-}
-
-/**
- * A transcription provider with its own client rather than the OpenAI-compatible one (Android
- * adds Deepgram and AssemblyAI). Nothing is registered on iOS, so its providers are unchanged.
- */
-export interface PlatformTranscriptionProvider extends ProviderDefinition {
-  transcribe(input: PlatformTranscriptionInput): Promise<{ text: string; duration: number }>;
-}
-
-const platformTranscription = new Map<string, PlatformTranscriptionProvider>();
-
-export function registerTranscriptionProvider(provider: PlatformTranscriptionProvider): void {
-  platformTranscription.set(provider.id, provider);
-}
-
-export function platformTranscriptionProvider(
-  providerId: string | undefined,
-): PlatformTranscriptionProvider | undefined {
-  return providerId ? platformTranscription.get(providerId) : undefined;
-}
-
-export function isMobileProviderId(providerId: string | undefined): boolean {
-  return (
-    MOBILE_PROVIDER_IDS.includes(providerId ?? '') || platformTranscription.has(providerId ?? '')
-  );
-}
-
 const TEXT_ENDPOINTS: Record<string, string> = {
   openai: 'https://api.openai.com/v1',
   groq: 'https://api.groq.com/openai/v1',
@@ -144,7 +106,6 @@ export function getMobileProvidersForScope(scope: InferenceScope): ProviderDefin
       endpoint: provider.baseUrl,
       models: provider.models,
     })),
-    ...platformTranscription.values(),
     CUSTOM_PROVIDER,
   ];
 }
@@ -159,7 +120,6 @@ export function providerDisplayName(providerId: string): string {
   if (providerId === 'custom') return 'Custom server';
   return (
     getMobileProvidersForScope('cleanup').find((provider) => provider.id === providerId)?.name ??
-    platformTranscription.get(providerId)?.name ??
     providerId
   );
 }
@@ -183,7 +143,7 @@ export function resolveMobileInferenceRoute(input: {
   policy: InferencePolicy;
 }): RouteResolution {
   const { scope, selection, policy } = input;
-  if (selection.mode === 'providers' && !isMobileProviderId(selection.providerId))
+  if (selection.mode === 'providers' && !MOBILE_PROVIDER_IDS.includes(selection.providerId ?? ''))
     return { ok: false, code: 'PROVIDER_UNSUPPORTED' };
   if (input.privateContent && selection.mode !== 'local')
     return { ok: false, code: 'PRIVATE_CONTENT' };

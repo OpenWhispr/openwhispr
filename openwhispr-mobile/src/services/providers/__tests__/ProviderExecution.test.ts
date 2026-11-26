@@ -1,12 +1,3 @@
-jest.mock('../providerFailureMessages', () => ({
-  get providerFailureMessages() {
-    return jest.requireActual(
-      jest.requireActual('react-native').Platform.OS === 'android'
-        ? '../providerFailureMessages.android'
-        : '../providerFailureMessages',
-    ).providerFailureMessages;
-  },
-}));
 const mockCredentialListeners = new Set<(reference: string | null) => void>();
 jest.mock('../ProviderCredentials', () => ({
   getProviderCredential: jest.fn(),
@@ -30,7 +21,6 @@ afterAll(() => {
   globalThis.DOMException = nodeDOMException;
 });
 import type { InferenceRoute } from '@/lib/mobileProviders';
-import { Platform } from 'react-native';
 import {
   createProviderExecution,
   ProviderExecutionError,
@@ -493,35 +483,6 @@ describe('ProviderExecution security and errors', () => {
     ).rejects.toMatchObject({ code, message, retryable: false });
   });
 
-  test.each(['android', 'ios'] as const)(
-    'certificate rejection names %s without leaking native details',
-    async (platform) => {
-      const os = jest.replaceProperty(Platform, 'OS', platform);
-      try {
-        const execution = createProviderExecution({
-          ...makeDependencies([], []),
-          request: async () => {
-            throw Object.assign(new Error('native detail with sensitive URL'), {
-              code: 'PROVIDER_CERTIFICATE_UNTRUSTED',
-            });
-          },
-        });
-        await expect(
-          execution.processProviderText({ route: route(), text: 'input', systemPrompt: 'system' }),
-        ).rejects.toMatchObject({
-          code: 'PROVIDER_CERTIFICATE_UNTRUSTED',
-          message:
-            platform === 'android'
-              ? "Couldn't connect securely to this server. Check that its certificate is valid and trusted by Android."
-              : "Couldn't connect securely to this server. Check that its certificate is valid and trusted by iOS.",
-          retryable: false,
-        });
-      } finally {
-        os.restore();
-      }
-    },
-  );
-
   test.each([
     ['openai', 'OpenAI rejected the configured credential.'],
     ['custom', 'Custom server rejected the configured credential.'],
@@ -888,46 +849,3 @@ test.each(['provider.openai', 'custom.another-endpoint'])(
     expect(request).not.toHaveBeenCalled();
   },
 );
-
-describe('ProviderExecution platform transcription providers', () => {
-  test('hands the file and the saved key to a provider the platform registered', async () => {
-    const { registerTranscriptionProvider } =
-      jest.requireActual<typeof import('@/lib/mobileProviders')>('@/lib/mobileProviders');
-    const transcribe = jest.fn(async () => ({ text: 'fixture transcript', duration: 3 }));
-    registerTranscriptionProvider({
-      id: 'fixture-asr',
-      name: 'Fixture ASR',
-      endpoint: 'https://asr.example/v1',
-      models: [{ id: 'fixture-model', name: 'Fixture model' }],
-      transcribe,
-    });
-    const fileRequests: FileRequest[] = [];
-    const execution = createProviderExecution(makeDependencies([], [], fileRequests));
-
-    await expect(
-      execution.transcribeWithProvider({
-        route: route({
-          scope: 'dictation',
-          providerId: 'fixture-asr',
-          modelId: 'fixture-model',
-          endpoint: 'https://asr.example/v1',
-        }),
-        audioUri: 'file:///recording.wav',
-        mimeType: 'audio/wav',
-        language: 'en',
-        prompt: 'OpenWhispr',
-      }),
-    ).resolves.toEqual({ text: 'fixture transcript', duration: 3 });
-    expect(transcribe).toHaveBeenCalledWith(
-      expect.objectContaining({
-        apiKey: 'fixture-key',
-        modelId: 'fixture-model',
-        audioUri: 'file:///recording.wav',
-        language: 'en',
-        prompt: 'OpenWhispr',
-      }),
-    );
-    // Its own client sends the audio: no OpenAI-compatible multipart request.
-    expect(fileRequests).toHaveLength(0);
-  });
-});

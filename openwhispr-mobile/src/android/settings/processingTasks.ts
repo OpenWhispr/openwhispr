@@ -3,7 +3,7 @@ import { Alert } from 'react-native';
 import { useConfigStore } from '@/store/useConfigStore';
 import { workflowSelection } from '@/lib/aiWorkflows';
 import type { CloudAccess } from '@/lib/inferenceModes';
-import { providerDisplayName } from '@/lib/mobileProviders';
+import { providerDisplayName } from '@/android/providers/mobileProviders';
 import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
 import type { ProcessingMode, UserConfig } from '@/types';
 import { speechModelSupportsLanguages } from '../speechCapabilities';

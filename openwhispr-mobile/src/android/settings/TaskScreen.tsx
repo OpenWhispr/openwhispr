@@ -7,7 +7,7 @@ import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useCustomPromptsStore } from '@/store/useCustomPromptsStore';
 import { resolveCustomPrompt } from '@/config/prompts/registry';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
-import { providerDisplayName, type InferenceMode } from '@/lib/mobileProviders';
+import { providerDisplayName, type InferenceMode } from '@/android/providers/mobileProviders';
 import { switchWorkflowMode } from '@/lib/workflowModeSwitch.android';
 import { BottomSheet, Group, ListRow, SettingsPage, useReduceMotion, useSettings } from './kit';
 import { useKeyCheckColors } from './KeyCheckMark';

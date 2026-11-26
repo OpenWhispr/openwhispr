@@ -72,7 +72,7 @@ import {
   type InferenceMode,
   type InferenceSelection,
   type MobileInferenceScope,
-} from '@/lib/mobileProviders';
+} from '@/android/providers/mobileProviders';
 
 type Picker = 'provider' | 'model';
 // How often an open page checks whether Apple Intelligence finished downloading its model.

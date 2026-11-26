@@ -31,9 +31,6 @@ const BUILT_IN_REFERENCES: readonly string[] = [
     ...modelCatalog.cloudProviders.map((provider) => provider.id),
     ...modelCatalog.transcriptionProviders.map((provider) => provider.id),
     'openrouter',
-    // Android's own transcription clients (registerTranscriptionProvider).
-    'deepgram',
-    'assemblyai',
   ]),
 ].map((providerId) => `provider.${providerId}`);
 const changeListeners = new Set<CredentialChangeListener>();

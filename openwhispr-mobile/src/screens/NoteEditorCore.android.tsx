@@ -61,7 +61,7 @@ import {
   isLocalReasoningRequired,
   shouldUseLocalReasoning,
 } from '@/lib/localReasoning';
-import { providerDisplayName } from '@/lib/mobileProviders';
+import { providerDisplayName } from '@/android/providers/mobileProviders';
 import { promptLocalReasoningFallback } from '@/lib/localReasoningFallback';
 import { confirmCloudOnce, confirmDestructive } from '@/lib/alerts';
 import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';

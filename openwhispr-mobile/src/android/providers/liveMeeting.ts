@@ -1,5 +1,5 @@
 import { useConfigStore } from '@/store/useConfigStore';
-import type { InferenceSelection } from '@/lib/mobileProviders';
+import type { InferenceSelection } from '@/android/providers/mobileProviders';
 import {
   getProviderCredential,
   getProviderCredentialReference,

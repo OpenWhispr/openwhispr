@@ -116,7 +116,6 @@ src/lib/localModelCatalog.ts
 src/lib/localReasoning.ts
 src/lib/localReasoningFallback.ts
 src/lib/meetingRecovery.ts
-src/lib/mobileProviders.ts
 src/lib/noteExport.ts
 src/lib/notes/chatOverNote.ts
 src/lib/notes/cloudMeetingSegments.ts
@@ -170,7 +169,6 @@ src/lib/voiceEnrollmentMessages.ts
 src/lib/wordCount.ts
 src/lib/workflowModeSwitchCore.ts
 src/services/agent/AgentComposerService.ts
-src/services/agent/AgentStreamClient.ts
 src/services/agent/composerPrompt.ts
 src/services/calendar/GoogleCalendarService.ts
 src/services/calendar/googleCalendarApi.ts
@@ -178,11 +176,7 @@ src/services/calendar/googleCalendarSync.ts
 src/services/calendar/googleCalendarTelemetry.ts
 src/services/diarization/DiarizationService.ts
 src/services/diarization/VoiceprintService.ts
-src/services/providers/NativeProviderTransportCore.ts
 src/services/providers/ProviderCredentialScope.ts
-src/services/providers/ProviderCredentials.ts
-src/services/providers/ProviderExecution.ts
-src/services/providers/ProviderExecutionError.ts
 src/services/providers/ProviderPolicy.ts
 src/services/reasoning/ReasoningService.ts
 src/services/reasoning/buildProviderPrompt.ts

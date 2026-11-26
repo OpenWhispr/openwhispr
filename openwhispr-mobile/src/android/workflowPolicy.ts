@@ -1,5 +1,5 @@
 import type { InferenceMode, UserConfig } from '@/types';
-import type { MobileInferenceScope } from '@/lib/mobileProviders';
+import type { MobileInferenceScope } from '@/android/providers/mobileProviders';
 import { MODE_LABELS } from '@/lib/inferenceModes';
 import type { AiWorkflowPolicy } from '../lib/aiWorkflowsCore';
 

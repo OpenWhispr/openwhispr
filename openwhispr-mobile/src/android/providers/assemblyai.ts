@@ -1,5 +1,5 @@
-import type { PlatformTranscriptionProvider } from '@/lib/mobileProviders';
-import { ProviderExecutionError } from '@/services/providers/ProviderExecutionError';
+import type { PlatformTranscriptionProvider } from '@/android/providers/mobileProviders';
+import { ProviderExecutionError } from '@/android/providers/ProviderExecutionError';
 import { liveAdapter } from './liveAdapter';
 import { noSpeech, promptTerms, requestJson, uploadFile } from './http';
 

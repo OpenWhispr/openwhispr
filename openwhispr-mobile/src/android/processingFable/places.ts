@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import type { CloudAccess } from '@/lib/inferenceModes';
-import { getMobileProvidersForScope, type InferenceSelection } from '@/lib/mobileProviders';
+import { getMobileProvidersForScope, type InferenceSelection } from '@/android/providers/mobileProviders';
 import {
   getProviderCredential,
   getProviderCredentialReference,

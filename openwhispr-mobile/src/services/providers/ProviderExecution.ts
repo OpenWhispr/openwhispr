@@ -1,8 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { providerFailureMessages } from './providerFailureMessages';
 import { createProviderCredentialScope } from './ProviderCredentialScope';
-import { ProviderExecutionError } from './ProviderExecutionError';
-export { ProviderExecutionError } from './ProviderExecutionError';
 import {
   buildApiUrl,
   getModelListBaseCandidates,
@@ -11,9 +8,8 @@ import {
 } from '@/lib/providerEndpoints';
 import modelCatalog from '@/config/providerCatalog.json';
 import {
-  isMobileProviderId,
+  MOBILE_PROVIDER_IDS,
   isTranscriptionScope,
-  platformTranscriptionProvider,
   providerDisplayName,
   type InferenceRoute,
 } from '@/lib/mobileProviders';
@@ -106,6 +102,24 @@ export interface ProviderConnectionResult {
   endpoint: string;
 }
 
+export class ProviderExecutionError extends Error {
+  public readonly code: string;
+  public readonly status?: number;
+  public readonly retryable: boolean;
+
+  public constructor(
+    code: string,
+    message: string,
+    options: { status?: number; retryable?: boolean } = {},
+  ) {
+    super(message);
+    this.name = 'ProviderExecutionError';
+    this.code = code;
+    this.status = options.status;
+    this.retryable = options.retryable ?? false;
+  }
+}
+
 function errorForStatus(providerId: string, status: number): ProviderExecutionError {
   if (status === 401 || status === 403) {
     return new ProviderExecutionError(
@@ -150,7 +164,7 @@ function errorForStatus(providerId: string, status: number): ProviderExecutionEr
 }
 
 function assertSupportedProvider(route: ProviderRoute): void {
-  if (!isMobileProviderId(route.providerId)) {
+  if (!MOBILE_PROVIDER_IDS.includes(route.providerId)) {
     throw new ProviderExecutionError(
       'PROVIDER_UNSUPPORTED',
       `${providerDisplayName(route.providerId)} is not available on this device.`,
@@ -275,8 +289,7 @@ function normalizeTransportFailure(error: unknown, providerId: string): Error {
   if (nativeCode === 'PROVIDER_CANCELLED') return abortError();
   if (nativeCode === 'PROVIDER_AUDIO_TOO_LARGE') return audioTooLargeError();
   if (typeof nativeCode === 'string' && FINAL_NATIVE_FAILURES[nativeCode]) {
-    const message = providerFailureMessages[nativeCode] ?? FINAL_NATIVE_FAILURES[nativeCode];
-    return new ProviderExecutionError(nativeCode, message);
+    return new ProviderExecutionError(nativeCode, FINAL_NATIVE_FAILURES[nativeCode]);
   }
   if (nativeCode === 'PROVIDER_LOCAL_NETWORK_ERROR') {
     return new ProviderExecutionError(
@@ -448,24 +461,6 @@ async function transcribe(
   const { endpoint, apiKey } = await prepareRoute(route, dependencies.getCredential);
   const size = await dependencies.fileSize(input.audioUri);
   if (size !== undefined && size > PROVIDER_AUDIO_LIMIT_BYTES) throw audioTooLargeError();
-  // A provider with its own client (registered by the platform) takes the file itself.
-  const platform = platformTranscriptionProvider(route.providerId);
-  if (platform) {
-    if (!apiKey)
-      throw new ProviderExecutionError(
-        'CREDENTIAL_MISSING',
-        `Configure credentials for ${providerDisplayName(route.providerId)}.`,
-      );
-    return platform.transcribe({
-      apiKey,
-      modelId: route.modelId,
-      audioUri: input.audioUri,
-      mimeType: input.mimeType,
-      language: input.language,
-      prompt: input.prompt,
-      signal: input.signal,
-    });
-  }
   const parameters: Record<string, string> = { model: route.modelId };
   if (input.language && input.language !== 'auto') parameters.language = input.language;
   if (input.prompt) parameters.prompt = input.prompt;
