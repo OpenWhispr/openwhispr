@@ -74,7 +74,6 @@ src/lib/affiliateAttribution.ts
 src/lib/affiliateLink.ts
 src/lib/affiliateOffer.ts
 src/lib/affiliatePaywall.ts
-src/lib/aiWorkflowsCore.ts
 src/lib/alerts.ts
 src/lib/apiClient.ts
 src/lib/apiErrorBody.ts
@@ -106,8 +105,6 @@ src/lib/dictationMilestone.ts
 src/lib/fonts.ts
 src/lib/formatNoteRowTimeCore.ts
 src/lib/groupNotesByDateCore.ts
-src/lib/inferenceModesCore.ts
-src/lib/inferenceRoutingCore.ts
 src/lib/keyboardAgentSync.ts
 src/lib/keyboardInferenceRoute.ts
 src/lib/keyboardTone.ts
@@ -152,7 +149,6 @@ src/lib/spacePermissions.ts
 src/lib/speechActivity.ts
 src/lib/superwall.ts
 src/lib/trackingTransparency.ts
-src/lib/transcriptAudioCore.ts
 src/lib/transcriptionErrors.ts
 src/lib/transcriptionLanguage.ts
 src/lib/transcriptionPromptCap.ts
@@ -162,7 +158,6 @@ src/lib/utils.ts
 src/lib/uuid.ts
 src/lib/voiceEnrollmentMessages.ts
 src/lib/wordCount.ts
-src/lib/workflowModeSwitchCore.ts
 src/services/agent/AgentComposerService.ts
 src/services/calendar/GoogleCalendarService.ts
 src/services/calendar/googleCalendarApi.ts

@@ -1,6 +1,6 @@
-import { createInferenceRouting } from './inferenceRoutingCore';
+import { createInferenceRouting } from '@/android/lib/inferenceRoutingCore';
 import { androidRoutingPolicy } from '../android/routingPolicy';
-export type { ProviderRoute, TranscriptionJobRoute } from './inferenceRoutingCore';
+export type { ProviderRoute, TranscriptionJobRoute } from '@/android/lib/inferenceRoutingCore';
 
 export const {
   getInferenceSelection,

@@ -15,8 +15,11 @@ jest.mock('expo-file-system/legacy', () => ({
   },
   deleteAsync: (uri: string) => mockDelete(uri),
 }));
-jest.mock('../meetingAudioStorage', () => ({ meetingAudioDirectory: () => '' }));
-import { garbageCollectTranscriptAudio, retainTranscriptAudio } from '../transcriptAudio.android';
+jest.mock('@/lib/meetingAudioStorage', () => ({ meetingAudioDirectory: () => '' }));
+import {
+  garbageCollectTranscriptAudio,
+  retainTranscriptAudio,
+} from '@/lib/transcriptAudio.android';
 
 beforeEach(() => {
   jest.clearAllMocks();

@@ -1,5 +1,5 @@
-import * as ios from '../transcriptAudio';
-import * as android from '../transcriptAudio.android';
+import * as ios from '@/lib/transcriptAudio';
+import * as android from '@/lib/transcriptAudio.android';
 
 const mockFiles = new Set<string>();
 const directory = 'file:///cache/transcript-audio/';
@@ -21,7 +21,7 @@ jest.mock('expo-file-system/legacy', () => ({
   copyAsync: (input: { to: string }) => mockCopy(input),
   deleteAsync: (uri: string) => mockDelete(uri),
 }));
-jest.mock('../meetingAudioStorage', () => ({
+jest.mock('@/lib/meetingAudioStorage', () => ({
   meetingAudioDirectory: () => 'file:///docs/account-audio/fixture/',
 }));
 

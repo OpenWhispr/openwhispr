@@ -1,4 +1,4 @@
-import type { InferenceRoutingPolicy } from '../lib/inferenceRoutingCore';
+import type { InferenceRoutingPolicy } from '@/android/lib/inferenceRoutingCore';
 
 export const androidRoutingPolicy: InferenceRoutingPolicy = {
   privateUploadsStayLocal: true,

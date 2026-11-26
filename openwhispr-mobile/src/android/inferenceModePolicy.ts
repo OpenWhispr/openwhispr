@@ -5,7 +5,7 @@ import type {
   DictationModeConfig,
   InferenceModeHelpers,
   InferenceModePolicy,
-} from '../lib/inferenceModesCore';
+} from '@/android/lib/inferenceModesCore';
 
 export function createAndroidInferencePolicy({
   localModeDefault,

@@ -1,11 +1,11 @@
 import { meetingAudioDirectory } from './meetingAudioStorage';
-import { createTranscriptAudio } from './transcriptAudioCore';
+import { createTranscriptAudio } from '@/android/lib/transcriptAudioCore';
 export {
   extensionForAudio,
   isManagedTranscriptAudioUri,
   isWavAudioFile,
   RETAINED_AUDIO_MAX_AGE_MS,
-} from './transcriptAudioCore';
+} from '@/android/lib/transcriptAudioCore';
 
 // Protect copied audio until history owns it, including during account reloads.
 export const {

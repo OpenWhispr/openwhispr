@@ -1,7 +1,7 @@
 jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
 
-import { noteChatSplitConfig } from '../inferenceModes';
-import { noteChatSplitConfig as androidNoteChatSplitConfig } from '../inferenceModes.android';
+import { noteChatSplitConfig } from '@/lib/inferenceModes';
+import { noteChatSplitConfig as androidNoteChatSplitConfig } from '@/lib/inferenceModes.android';
 import type { UserConfig } from '@/types';
 
 it.each([

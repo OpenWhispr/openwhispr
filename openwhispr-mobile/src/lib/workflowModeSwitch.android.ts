@@ -1,9 +1,9 @@
-import { createWorkflowModeSwitch } from './workflowModeSwitchCore';
+import { createWorkflowModeSwitch } from '@/android/lib/workflowModeSwitchCore';
 import {
   androidWorkflowSwitchPolicy,
   createAndroidPrivateModeToggle,
 } from '../android/workflowSwitch';
-export type { ModeSwitchResult } from './workflowModeSwitchCore';
+export type { ModeSwitchResult } from '@/android/lib/workflowModeSwitchCore';
 
 export const { switchWorkflowMode, pickLocalModel } = createWorkflowModeSwitch(
   androidWorkflowSwitchPolicy,
