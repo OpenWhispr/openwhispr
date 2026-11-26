@@ -123,12 +123,12 @@ test("every config refetch bypasses the HTTP cache and declares the client capab
       [
         "https://api.openwhispr.test/api/stt-config",
         "no-store",
-        "orukeet,orukeet-pipeline-v2,orukeet-language-routing,enterprise-audio-v1,private-workspace-placement",
+        "orukeet,orukeet-pipeline-v2,orukeet-language-routing,enterprise-audio-v1,private-workspace-placement,participant-notice-v1",
       ],
       [
         "https://api.openwhispr.test/api/note-recording-config",
         "no-store",
-        "orukeet,orukeet-pipeline-v2,orukeet-language-routing,enterprise-audio-v1,private-workspace-placement",
+        "orukeet,orukeet-pipeline-v2,orukeet-language-routing,enterprise-audio-v1,private-workspace-placement,participant-notice-v1",
       ],
     ]
   );
