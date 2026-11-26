@@ -224,7 +224,6 @@ for (const [label, platform, backend, expectedDispatches] of [
   ["macOS retry delay", "darwin", "retry", 1],
   ["Windows fast-paste delay", "win32", "fast", 0],
   ["Windows fallback delay", "win32", "fallback", 1],
-  ["Windows nircmd delay", "win32", "nircmd", 0],
   ["Windows PowerShell delay", "win32", "powershell", 0],
   ["Linux modifier wait", "linux", "modifiers", 0],
   ["Linux tool delay", "linux", "xdotool", 0],
@@ -251,7 +250,6 @@ for (const [label, platform, backend, expectedDispatches] of [
       backend === "retry" ? "/mock/mac-paste" : null;
     clipboardManager.resolveWindowsFastPasteBinary = () =>
       ["fast", "fallback"].includes(backend) ? "/mock/windows-paste" : null;
-    clipboardManager.getNircmdPath = () => (backend === "powershell" ? null : "/mock/nircmd");
     clipboardManager.resolveLinuxFastPasteBinary = () =>
       backend === "fallback" ? "/mock/linux-paste" : null;
     clipboardManager.commandExists = (command) => command === "xdotool";
@@ -3140,7 +3138,6 @@ for (const [label, platform, backend] of [
   ["macOS retry", "darwin", "retry"],
   ["Windows fast-paste delay", "win32", "fast"],
   ["Windows fallback", "win32", "fallback"],
-  ["Windows nircmd delay", "win32", "nircmd"],
   ["Windows PowerShell delay", "win32", "powershell"],
   ["Linux tool delay", "linux", "xdotool"],
   ["Linux fallback", "linux", "fallback"],
@@ -3166,7 +3163,6 @@ for (const [label, platform, backend] of [
       backend === "retry" ? "/mock/mac-paste" : null;
     clipboardManager.resolveWindowsFastPasteBinary = () =>
       ["fast", "fallback"].includes(backend) ? "/mock/windows-paste" : null;
-    clipboardManager.getNircmdPath = () => (backend === "powershell" ? null : "/mock/nircmd");
     clipboardManager.resolveLinuxFastPasteBinary = () =>
       backend === "fallback" ? "/mock/linux-paste" : null;
     clipboardManager.commandExists = (command) => command === "xdotool";

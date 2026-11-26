@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { CURRENT_DEFAULT_PROMPT_HASHES } from '@/config/prompts/retiredPrompts';
 import {
   AGENT_NAME_PLACEHOLDER,
   DEFAULT_CLEANUP_PROMPT,
+  DEFAULT_TRANSLATE_PROMPT,
   PROMPT_KIND_LIST,
   hasAgentNamePlaceholder,
   normalizeCustomPromptForSave,
@@ -20,6 +24,14 @@ const sha256 = (text: string): string => createHash('sha256').update(text, 'utf8
 describe('prompt registry', () => {
   it('ships the same default cleanup prompt as desktop and the API, byte for byte', () => {
     expect(sha256(DEFAULT_CLEANUP_PROMPT)).toBe(SHIPPED_CLEANUP_PROMPT_SHA256);
+  });
+
+  it('ships the desktop translate prompt byte for byte and records its hash', () => {
+    const desktopPrompts: { translatePrompt: string } = JSON.parse(
+      readFileSync(path.resolve(__dirname, '../../../../../src/locales/en/prompts.json'), 'utf8'),
+    );
+    expect(DEFAULT_TRANSLATE_PROMPT).toBe(desktopPrompts.translatePrompt);
+    expect(CURRENT_DEFAULT_PROMPT_HASHES.translate).toBe(sha256(DEFAULT_TRANSLATE_PROMPT));
   });
 
   it('keeps exactly one agent-name placeholder in the default cleanup prompt', () => {

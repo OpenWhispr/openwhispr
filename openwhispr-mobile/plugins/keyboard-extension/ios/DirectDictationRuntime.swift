@@ -8,10 +8,29 @@ protocol DirectDictationControlling: AnyObject {
   var canRecordHere: Bool { get }
   var state: DirectDictationState { get }
   var readDocumentID: (() -> UUID?)? { get set }
+  /// The text before the cursor: what tells a field iOS has renamed is still the same place.
+  var readContextBefore: (() -> String?)? { get set }
+  /// A take waits to be inserted: finished text that was not typed, or a Cloud take not yet sent.
+  var hasHeldDictation: Bool { get }
+  var onHeldChange: (() -> Void)? { get set }
+  func insertHeld()
+  func discardHeld()
+  func fieldChanged()
   var onStateChange: ((DirectDictationState) -> Void)? { get set }
   var onLevel: ((Float) -> Void)? { get set }
   var onText: ((String) -> Void)? { get set }
+  /// One line per on-device model load or transcription (timings and MB, never text). The runtime
+  /// also keeps them in `direct-dictations/local-model.log` in the App Group.
+  var onLocalModelLog: ((String) -> Void)? { get set }
+  /// The on-device model became ready or stopped being ready (loaded, released, swapped), so
+  /// whether the keyboard can dictate this way may have changed. Called on the main thread,
+  /// never from inside an eligibility read.
+  var onLocalModelReadyChange: (() -> Void)? { get set }
   func attach(to view: UIView)
+  /// Starts loading the on-device model a Local snapshot names, so the next tap can use it.
+  func warmUp()
+  /// A memory warning: lets go of the on-device model once no transcription needs it.
+  func releaseLocalModelWhenIdle()
   func start()
   func confirm()
   func cancel()
@@ -29,6 +48,12 @@ final class DirectDictationRuntime {
   let dictation: DirectDictation
   private let capture = WebAudioCapture()
   private let hasContainer: Bool
+  #if canImport(FluidAudio)
+  private let parakeet: KeyboardParakeetTranscriber
+  /// Every model line also goes to the App Group file, which a Release build can be read from.
+  private let localModelLog: DirectLocalModelLog?
+  private var localModelLogListener: ((String) -> Void)?
+  #endif
 
   private init() {
     let appGroupId = "group.\(Self.containingAppBundleIdentifier)"
@@ -39,6 +64,14 @@ final class DirectDictationRuntime {
       .appendingPathComponent(DirectDictationStore.folderName, isDirectory: true)
     let store = DirectDictationStore(directory: folder, now: { Int64(Date().timeIntervalSince1970 * 1000) })
     store.prune()
+    #if canImport(FluidAudio)
+    let parakeet = KeyboardParakeetTranscriber(appGroupContainer: container)
+    self.parakeet = parakeet
+    localModelLog = container.map { _ in DirectLocalModelLog(url: folder.appendingPathComponent(DirectLocalModelLog.fileName)) }
+    let localTranscriber: DirectLocalTranscriber? = parakeet
+    #else
+    let localTranscriber: DirectLocalTranscriber? = nil
+    #endif
 
     dictation = DirectDictation(DirectDependencies(
       capture: capture,
@@ -48,11 +81,19 @@ final class DirectDictationRuntime {
       readConfigJSON: { defaults?.string(forKey: "keyboard_direct_config") },
       readCookie: { userId in KeyboardCredentialStore.readCookie(accessGroup: appGroupId, userId: userId) },
       readTone: { defaults?.string(forKey: "keyboard_dictation_tone") ?? "default" },
+      readTranslation: { directDictationTranslation() },
       encode: { pcm, m4a, gain in try DirectAudioEncoder.encodeAAC(pcmURL: pcm, m4aURL: m4a, gain: gain) },
       // The job id format the keyboard already uses: <ms>-<UUID>.
       makeJobId: { "\(Int64(Date().timeIntervalSince1970 * 1000))-\(UUID().uuidString)" },
-      makeBoundary: { "OpenWhispr-\(UUID().uuidString)" }
+      makeBoundary: { "OpenWhispr-\(UUID().uuidString)" },
+      localTranscriber: localTranscriber
     ))
+    #if canImport(FluidAudio)
+    parakeet.log = { [weak self] line in
+      self?.localModelLog?.append(line, at: Date())
+      self?.localModelLogListener?(line)
+    }
+    #endif
   }
 
   /// The path is usable right now: the snapshot and the session allow it, OpenWhispr has the
@@ -71,7 +112,7 @@ final class DirectDictationRuntime {
   /// Moves the hidden web view into this controller's view. The web view is only made for a
   /// keyboard that can dictate this way.
   func attach(to view: UIView) {
-    guard dictation.isEligible else { return }
+    guard dictation.isEligibleIgnoringTranslation else { return }
     capture.attach(to: view)
   }
 
@@ -97,6 +138,22 @@ extension DirectDictationRuntime: DirectDictationControlling {
     set { dictation.readDocumentID = newValue }
   }
 
+  var readContextBefore: (() -> String?)? {
+    get { dictation.readContextBefore }
+    set { dictation.readContextBefore = newValue }
+  }
+
+  var hasHeldDictation: Bool { dictation.hasHeldDictation }
+
+  var onHeldChange: (() -> Void)? {
+    get { dictation.onHeldChange }
+    set { dictation.onHeldChange = newValue }
+  }
+
+  func insertHeld() { dictation.insertHeld() }
+  func discardHeld() { dictation.discardHeld() }
+  func fieldChanged() { dictation.fieldChanged() }
+
   var onStateChange: ((DirectDictationState) -> Void)? {
     get { dictation.onStateChange }
     set { dictation.onStateChange = newValue }
@@ -110,6 +167,45 @@ extension DirectDictationRuntime: DirectDictationControlling {
   var onText: ((String) -> Void)? {
     get { dictation.onText }
     set { dictation.onText = newValue }
+  }
+
+  var onLocalModelLog: ((String) -> Void)? {
+    get {
+      #if canImport(FluidAudio)
+      return localModelLogListener
+      #else
+      return nil
+      #endif
+    }
+    set {
+      #if canImport(FluidAudio)
+      localModelLogListener = newValue
+      #endif
+    }
+  }
+
+  var onLocalModelReadyChange: (() -> Void)? {
+    get {
+      #if canImport(FluidAudio)
+      return parakeet.onReadyChange
+      #else
+      return nil
+      #endif
+    }
+    set {
+      #if canImport(FluidAudio)
+      parakeet.onReadyChange = newValue
+      #endif
+    }
+  }
+
+  // Reading eligibility asks the transcriber to prepare a Local snapshot's model.
+  func warmUp() { _ = dictation.isEligible }
+
+  func releaseLocalModelWhenIdle() {
+    #if canImport(FluidAudio)
+    parakeet.releaseWhenIdle()
+    #endif
   }
 
   func start() { dictation.start() }

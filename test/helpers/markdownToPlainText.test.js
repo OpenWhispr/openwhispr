@@ -82,6 +82,22 @@ test("links keep their text and their url; images keep their alt text", async ()
   assert.equal(markdownToPlainText("![a chart](chart.png)"), "a chart");
 });
 
+test("mentions keep their @name and drop the internal mention id", async () => {
+  const { markdownToPlainText } = await helperModule;
+  const { buildMentionMarkdown } = await import("../../src/utils/mentionMarkdown.ts");
+  const sam = buildMentionMarkdown({ name: "Sam Lee", email: "sam@acme.com" });
+  const sato = buildMentionMarkdown({ name: "佐藤 健", email: null });
+  const ops = buildMentionMarkdown({ name: "O'Brien (Ops)", email: null });
+  assert.equal(
+    markdownToPlainText(`- [ ] Send the proposal — ${sam}, ${sato}\n- [ ] Book a room — ${ops}`),
+    "- [ ] Send the proposal — @Sam Lee, @佐藤 健\n- [ ] Book a room — @O'Brien (Ops)"
+  );
+  assert.equal(
+    markdownToPlainText(`${sam} shared [the docs](https://x.y/d)`),
+    "@Sam Lee shared the docs (https://x.y/d)"
+  );
+});
+
 test("star bullets become dashes; plus, dashes and numbers stay as typed", async () => {
   const { markdownToPlainText } = await helperModule;
   assert.equal(

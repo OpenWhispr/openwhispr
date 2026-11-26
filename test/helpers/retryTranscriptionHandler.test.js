@@ -3,7 +3,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 const fs = require("node:fs");
-const { EventEmitter } = require("node:events");
 const path = require("node:path");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
@@ -850,7 +849,7 @@ test("ElevenLabs dictation cancellation stops only the sender's request before a
     return Response.json(ELEVENLABS_KEYTERM_REFUSALS[0], { status: 400 });
   };
 
-  const sender = Object.assign(new EventEmitter(), { id: 17 });
+  const sender = { id: 17 };
   const pending = handlers.get("proxy-elevenlabs-transcription")(
     { sender },
     { audioBuffer: new ArrayBuffer(4), keyterms: ["OpenWhispr"] }
@@ -863,9 +862,8 @@ test("ElevenLabs dictation cancellation stops only the sender's request before a
   response.resolve();
   const result = await pending;
   assert.equal(signal.aborted, true);
-  assert.ok(result.error);
+  assert.equal(result.code, "TRANSCRIPTION_CANCELLED");
   assert.equal(fetches.length, 1);
-  assert.equal(sender.listenerCount("destroyed"), 0);
 });
 
 test("a dictation cancelled while policy is loading never reaches ElevenLabs", async (t) => {
@@ -882,7 +880,7 @@ test("a dictation cancelled while policy is loading never reaches ElevenLabs", a
   tokenState = { ...tokenState, generation: tokenState.generation + 1 };
   const refreshing = fakeThis.refreshEffectivePolicy();
   assert.equal(fakeThis.effectivePolicyManager.getCurrent().status, "loading");
-  const sender = Object.assign(new EventEmitter(), { id: 17 });
+  const sender = { id: 17 };
   fetches.length = 0;
   const pending = handlers.get("proxy-elevenlabs-transcription")(
     { sender },
@@ -891,9 +889,8 @@ test("a dictation cancelled while policy is loading never reaches ElevenLabs", a
   eventHandlers.get("cloud-transcribe-cancel")({ sender });
   lookup.resolve();
   await refreshing;
-  assert.ok((await pending).error);
+  assert.equal((await pending).code, "TRANSCRIPTION_CANCELLED");
   assert.equal(fetches.length, 0);
-  assert.equal(sender.listenerCount("destroyed"), 0);
 });
 
 test("retry: a recording over the upload cap still goes to ElevenLabs", async (t) => {
@@ -1134,8 +1131,7 @@ test("proxy transcription handlers resolve to structured errors instead of rejec
     ]) {
       const fn = handlers.get(channel);
       assert.ok(fn, `${channel} must be registered`);
-      const sender = Object.assign(new EventEmitter(), { id: 1 });
-      const result = await fn({ sender }, { audioBuffer: new ArrayBuffer(4) });
+      const result = await fn({ sender: {} }, { audioBuffer: new ArrayBuffer(4) });
       assert.equal(typeof result.error, "string", channel);
     }
   } finally {
@@ -1983,6 +1979,155 @@ test("upload: ElevenLabs gets the file at its own endpoint, with no language hin
   assert.ok(fetches[0].init.signal instanceof AbortSignal);
 });
 
+// Scribe's words for two speakers; it names the speaker only when the request asks.
+// A space carries the speaker of the word before it, also where the speaker changes.
+const SCRIBE_WORDS = [
+  { text: "Good", type: "word", start: 0, end: 0.3, speaker_id: "speaker_0" },
+  { text: " ", type: "spacing", start: 0.3, end: 0.4, speaker_id: "speaker_0" },
+  { text: "morning.", type: "word", start: 0.4, end: 0.9, speaker_id: "speaker_0" },
+  { text: " ", type: "spacing", start: 0.9, end: 0.9, speaker_id: "speaker_0" },
+  { text: "Hello", type: "word", start: 1.4, end: 1.8, speaker_id: "speaker_1" },
+  { text: " ", type: "spacing", start: 1.8, end: 1.9, speaker_id: "speaker_1" },
+  { text: "there.", type: "word", start: 1.9, end: 2.3, speaker_id: "speaker_1" },
+];
+const UNLABELLED_WORDS = SCRIBE_WORDS.map(({ speaker_id: _speaker, ...word }) => word);
+const scribeResponse = (words) => Response.json({ text: "Good morning. Hello there.", words });
+const ELEVENLABS_UPLOAD = { provider: "elevenlabs", transcriptionMode: "providers" };
+
+test("upload: ElevenLabs returns timed segments, with speakers when Speaker detection asks", async (t) => {
+  const previous = fetchResponse;
+  t.after(() => {
+    fetchResponse = previous;
+  });
+  fetchResponse = (_url, { body }) =>
+    scribeResponse(body.has("diarize") ? SCRIBE_WORDS : UNLABELLED_WORDS);
+
+  fetches.length = 0;
+  const timed = await invokeUpload({ ...ELEVENLABS_UPLOAD, timestamps: true });
+  assert.deepEqual(timed, {
+    success: true,
+    text: "Good morning. Hello there.",
+    segments: [{ text: "Good morning. Hello there.", start: 0, end: 2.3 }],
+  });
+  assert.equal(fetches[0].init.body.has("timestamps_granularity"), false);
+  assert.equal(fetches[0].init.body.has("diarize"), false);
+
+  fetches.length = 0;
+  const labelled = await invokeUpload({ ...ELEVENLABS_UPLOAD, timestamps: true, diarize: true });
+  assert.deepEqual(labelled, {
+    success: true,
+    // Numbered by first appearance, as the Transcript tab numbers its speakers.
+    text: "[Speaker 1] 0:00 - 0:00\nGood morning.\n\n[Speaker 2] 0:01 - 0:02\nHello there.",
+    diarized: true,
+    segments: [
+      { text: "Good morning.", start: 0, end: 0.9, speaker: "speaker_0" },
+      { text: "Hello there.", start: 1.4, end: 2.3, speaker: "speaker_1" },
+    ],
+  });
+  assert.equal(fetches[0].init.body.get("diarize"), "true");
+  assert.equal(fetches[0].init.body.has("timestamps_granularity"), false);
+});
+
+// The renderer then warns that speaker labels could not be applied.
+test("upload: an ElevenLabs reply that names no speaker stays a plain transcript", async (t) => {
+  const debugLogger = require("../../src/helpers/debugLogger");
+  const warnings = [];
+  t.mock.method(debugLogger, "warn", (message) => warnings.push(message));
+  const previous = fetchResponse;
+  t.after(() => {
+    fetchResponse = previous;
+  });
+  fetchResponse = () => scribeResponse(UNLABELLED_WORDS);
+
+  assert.deepEqual(await invokeUpload({ ...ELEVENLABS_UPLOAD, diarize: true }), {
+    success: true,
+    text: "Good morning. Hello there.",
+    segments: [{ text: "Good morning. Hello there.", start: 0, end: 2.3 }],
+  });
+  assert.ok(warnings.includes("ElevenLabs diarization returned no usable speaker segments"));
+});
+
+// As for OpenAI and Mistral, whose uploads label speakers only when asked to.
+test("upload: speakers ElevenLabs names unasked are left out", async (t) => {
+  const previous = fetchResponse;
+  t.after(() => {
+    fetchResponse = previous;
+  });
+  fetchResponse = () => scribeResponse(SCRIBE_WORDS);
+
+  assert.deepEqual(await invokeUpload({ ...ELEVENLABS_UPLOAD, timestamps: true }), {
+    success: true,
+    text: "Good morning. Hello there.",
+    segments: [
+      { text: "Good morning.", start: 0, end: 0.9 },
+      { text: "Hello there.", start: 1.4, end: 2.3 },
+    ],
+  });
+});
+
+// The segments become the note's only copy of the text.
+test("upload: ElevenLabs words that fall short of the text give no segments", async (t) => {
+  const previous = fetchResponse;
+  t.after(() => {
+    fetchResponse = previous;
+  });
+
+  for (const words of [SCRIBE_WORDS.slice(0, 3), [], undefined]) {
+    fetchResponse = () => scribeResponse(words);
+    for (const diarize of [false, true]) {
+      assert.deepEqual(await invokeUpload({ ...ELEVENLABS_UPLOAD, timestamps: true, diarize }), {
+        success: true,
+        text: "Good morning. Hello there.",
+      });
+    }
+  }
+});
+
+test("upload: ElevenLabs preview numbers only the identified speakers", async (t) => {
+  const previous = fetchResponse;
+  t.after(() => {
+    fetchResponse = previous;
+  });
+  fetchResponse = () =>
+    Response.json({
+      text: "Opening. Hello.",
+      words: [
+        { text: "Opening.", type: "word", start: 0, end: 0.5, speaker_id: null },
+        { text: " ", type: "spacing" },
+        { text: "Hello.", type: "word", start: 1, end: 2, speaker_id: "speaker_0" },
+      ],
+    });
+
+  const result = await invokeUpload({ ...ELEVENLABS_UPLOAD, timestamps: true, diarize: true });
+  assert.equal(result.text, "0:00 - 0:00\nOpening.\n\n[Speaker 1] 0:01 - 0:02\nHello.");
+  assert.equal(result.diarized, true);
+  const { buildUploadTranscript } = await import("../../src/services/uploadNotes.ts");
+  const saved = JSON.parse(buildUploadTranscript(result.segments));
+  assert.deepEqual(
+    saved.map((segment) => segment.speaker),
+    [undefined, "speaker_0"]
+  );
+});
+
+// Only an upload reads them, so neither is forwarded, even from a request that names them.
+test("ElevenLabs dictation and Retry never ask for speaker labels or word times", async () => {
+  const asked = { diarize: true, timestamps: true };
+  fetches.length = 0;
+  const dictation = await handlers.get("proxy-elevenlabs-transcription")(
+    { sender: {} },
+    { audioBuffer: new ArrayBuffer(4), ...asked }
+  );
+  const retry = await invoke({ ...ELEVENLABS_SETTINGS, ...asked });
+
+  assert.equal(dictation.text, "transcribed");
+  assert.equal(retry.success, true);
+  assert.equal(fetches.length, 2);
+  for (const { init } of fetches) {
+    assert.equal(init.body.get("timestamps_granularity"), "none");
+    assert.equal(init.body.has("diarize"), false);
+  }
+});
+
 test("ElevenLabs dictation, Retry and Upload distinguish silence from an invalid provider response", async (t) => {
   const previous = fetchResponse;
   t.after(() => {
@@ -1995,15 +2140,13 @@ test("ElevenLabs dictation, Retry and Upload distinguish silence from an invalid
   ]) {
     fetchResponse = response;
     textUpdates.length = 0;
-    const sender = Object.assign(new EventEmitter(), { id: 17 });
     const dictation = await handlers.get("proxy-elevenlabs-transcription")(
-      { sender },
+      { sender: {} },
       { audioBuffer: new ArrayBuffer(4) }
     );
     assert.equal(dictation.code, expectedCode);
-    assert.equal(sender.listenerCount("destroyed"), 0);
     const retry = await invoke(ELEVENLABS_SETTINGS);
-    const upload = await invokeUpload({ provider: "elevenlabs", transcriptionMode: "providers" });
+    const upload = await invokeUpload(ELEVENLABS_UPLOAD);
     for (const result of [retry, upload]) {
       assert.equal(result.success, false);
       assert.equal(result.code, expectedCode);

@@ -426,6 +426,7 @@ const {
   formatSpeakerTranscript,
 } = require("./speakerMerge");
 const { dropNoSpeechSegments } = require("./noSpeechSegments");
+const { SCRIBE_SILENCE_MARKER } = require("../utils/scribeSilence.js");
 const {
   supportsWhisperSegments,
   timestampRequestFields,
@@ -951,8 +952,8 @@ class IPCHandlers {
     }
   }
 
-  createFolderWithEffects(name, spaceId) {
-    const result = this.databaseManager.createFolder(name, spaceId);
+  createFolderWithEffects(name, spaceId, parentFolderId) {
+    const result = this.databaseManager.createFolder(name, spaceId, parentFolderId);
     if (result?.success && result?.folder) {
       setImmediate(() => {
         broadcastToWindows("folder-created", result.folder);
@@ -1528,11 +1529,10 @@ class IPCHandlers {
   }
 
   _flushAccountRepairMirrors() {
-    if (!this.noteFiles.enabled) return;
-    for (const note of this.databaseManager.takeAccountRepairNotes()) {
-      this.noteFiles.writeNote(note);
-    }
-    this.noteFiles.containersChanged();
+    const { noteFiles } = this;
+    if (!noteFiles.enabled) return;
+    noteFiles.queueAccountRepairNotes();
+    noteFiles.containersChanged();
   }
 
   _captureMirrorDeletionNotes(filter) {
@@ -1573,6 +1573,15 @@ class IPCHandlers {
       if (!note.deleted_at) this._asyncMirrorWrite(note);
     }
     this.noteFiles.containersChanged();
+  }
+
+  // Deleting a folder deletes its subfolders, and their notes, with it.
+  _captureSubfolderDeletionNotes(folderId, snapshots) {
+    if (!this.noteFiles.enabled) return;
+    for (const subfolder of this.databaseManager.getSubfolders(folderId)) {
+      const subfolderSnapshots = this._captureMirrorDeletionNotes({ folder_id: subfolder.id });
+      for (const [noteId, snapshot] of subfolderSnapshots) snapshots.set(noteId, snapshot);
+    }
   }
 
   _buildSpeakerMappings(noteId) {
@@ -2219,7 +2228,8 @@ class IPCHandlers {
         // uploads can later use the same provider through their own IPC channels.
         if (
           channel === "proxy-assemblyai-transcription" ||
-          channel === "proxy-sarvam-transcription"
+          channel === "proxy-sarvam-transcription" ||
+          channel === "proxy-elevenlabs-transcription"
         )
           operation.liveDictationSenderId = event.sender.id;
         // Retry and file routing can select a different provider. Capture the
@@ -3694,19 +3704,27 @@ class IPCHandlers {
       return { claimed };
     });
 
-    ipcMain.handle("db-create-folder", (_event, name, spaceId, writeGuard) =>
+    ipcMain.handle("db-create-folder", (_event, name, spaceId, writeGuard, parentFolderId) =>
       isStaleNoteWrite(writeGuard)
         ? { success: false, error: "Account changed" }
-        : this.createFolderWithEffects(name, spaceId)
+        : this.createFolderWithEffects(name, spaceId, parentFolderId)
     );
 
     ipcMain.handle("db-delete-folder", async (event, id) => {
       const snapshots = this._captureMirrorDeletionNotes({ folder_id: id });
+      this._captureSubfolderDeletionNotes(id, snapshots);
       const result = this.databaseManager.deleteFolder(id);
       if (result?.success) {
         this.notifyVectorChanges();
         this._mirrorRemovedFolder(result, snapshots);
-        setImmediate(() => broadcastToWindows("folder-deleted", { id }));
+        // Subfolders first, as the database deleted them. Each event names every
+        // note the delete took, so a recording in one of them hears of it.
+        const noteIds = result.noteIds ?? [];
+        setImmediate(() => {
+          for (const folderId of result.folderIds ?? [id]) {
+            broadcastToWindows("folder-deleted", { id: folderId, noteIds });
+          }
+        });
       }
       return result;
     });
@@ -3729,6 +3747,16 @@ class IPCHandlers {
         if (result.folder) {
           setImmediate(() => broadcastToWindows("folder-synced", result.folder));
         }
+      }
+      return result;
+    });
+
+    ipcMain.handle("db-set-folder-parent", async (event, id, parentFolderId, writeGuard) => {
+      if (isStaleNoteWrite(writeGuard)) return { success: false, error: "Account changed" };
+      const result = this.databaseManager.setFolderParent(id, parentFolderId ?? null);
+      if (result?.success && result?.folder) {
+        this.noteFiles.containersChanged();
+        setImmediate(() => broadcastToWindows("folder-synced", result.folder));
       }
       return result;
     });
@@ -4504,17 +4532,32 @@ class IPCHandlers {
     ipcMain.handle("db-mark-note-sync-error", (_, id) =>
       this.databaseManager.markNoteSyncError(id)
     );
+    // No broadcast or mirror write: the note stays deleted until its delete is answered.
+    ipcMain.handle("db-keep-deleted-note-transcript", (_, id, transcript, writeGuard) => {
+      if (writeGuard === undefined || isStaleNoteWrite(writeGuard)) {
+        return { success: false, error: "Account changed" };
+      }
+      return this.databaseManager.keepTranscriptOnDeletedNote(id, transcript);
+    });
     ipcMain.handle("db-restore-note-after-denied-delete", (_, id) => {
       const result = this.databaseManager.restoreNoteAfterDeniedDelete(id);
       // Its files went when the delete was made locally.
       if (result?.success) this.noteFiles.queueNote(id);
+      // A synced restore reaches its windows with the snapshot pull that replaces
+      // it. A pending one keeps its own text, which that pull leaves alone.
+      const restored = result?.pending ? this.databaseManager.getNote(id) : null;
+      if (restored) setImmediate(() => broadcastToWindows("note-synced", restored));
       return result;
     });
-    ipcMain.handle("db-hard-delete-note", (_, id, expectedAuthGeneration) => {
+    // A pulled delete names the copy it decided from (options.expected); main
+    // leaves a row written since, so its text is decided again, not deleted.
+    ipcMain.handle("db-hard-delete-note", (_, id, expectedAuthGeneration, options) => {
       if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
         return STALE_SYNC_ACK;
+      const expected =
+        options?.expected && typeof options.expected === "object" ? options.expected : undefined;
       const snapshots = this._captureMirrorDeletionNotes({ id });
-      const result = this.databaseManager.hardDeleteNote(id);
+      const result = this.databaseManager.hardDeleteNote(id, { expected });
       if (result?.success) {
         this.notifyVectorChanges();
         this._asyncMirrorDelete(id, snapshots);
@@ -4605,6 +4648,17 @@ class IPCHandlers {
       });
     });
     ipcMain.handle("db-get-folder-id-map", () => this.databaseManager.getFolderIdMap());
+    ipcMain.handle("db-apply-cloud-folder-parents", (_, links, expectedAuthGeneration) => {
+      if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
+        return STALE_SYNC_ACK;
+      const changed = this.databaseManager.applyCloudFolderParents(links);
+      if (changed.length > 0) this.noteFiles.containersChanged();
+      setImmediate(() => {
+        for (const folder of changed) {
+          broadcastToWindows("folder-synced", folder);
+        }
+      });
+    });
     ipcMain.handle("db-get-pending-folder-deletes", () =>
       this.databaseManager.getPendingFolderDeletes()
     );
@@ -4621,21 +4675,32 @@ class IPCHandlers {
       const notes = (result.notes ?? []).filter((note) => this.databaseManager.getNote(note.id));
       setImmediate(() => {
         if (result.folder) broadcastToWindows("folder-synced", result.folder);
+        for (const subfolder of result.subfolders ?? []) {
+          broadcastToWindows("folder-synced", subfolder);
+        }
         for (const note of notes) {
           broadcastToWindows("note-synced", note);
         }
       });
       return { ...result, notes };
     });
-    ipcMain.handle("db-hard-delete-folder", (_, id, expectedAuthGeneration) => {
+    ipcMain.handle("db-hard-delete-folder", (_, id, expectedAuthGeneration, options) => {
       if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
         return STALE_SYNC_ACK;
       const snapshots = this._captureMirrorDeletionNotes({ folder_id: id });
-      const result = this.databaseManager.hardDeleteFolder(id);
+      const result = this.databaseManager.hardDeleteFolder(id, options);
       if (result?.success) {
         this.notifyVectorChanges();
+        // Notes a pulled delete unfiled to their space's top level are among the
+        // relocated notes, so _mirrorRemovedFolder writes them.
         this._mirrorRemovedFolder(result, snapshots);
-        setImmediate(() => broadcastToWindows("folder-deleted", { id }));
+        setImmediate(() => {
+          // Before the folder goes, so a window showing one of them keeps it open.
+          for (const note of [...(result.preservedNotes ?? []), ...(result.unfiledNotes ?? [])]) {
+            broadcastToWindows("note-updated", note);
+          }
+          broadcastToWindows("folder-deleted", { id, noteIds: result.noteIds ?? [] });
+        });
       }
       return result;
     });
@@ -4652,7 +4717,8 @@ class IPCHandlers {
         // folder, so rewrite the relocated notes and drop the server-owned ones.
         this.notifyVectorChanges();
         this.noteFiles.containersChanged();
-        for (const note of result.relocatedNotes ?? []) {
+        const movedNotes = [...(result.relocatedNotes ?? []), ...(result.unfiledNotes ?? [])];
+        for (const note of movedNotes) {
           this._asyncMirrorWrite(note);
         }
         for (const noteId of result.deletedNoteIds ?? []) {
@@ -4661,7 +4727,7 @@ class IPCHandlers {
         setImmediate(() => {
           if (result.folder) broadcastToWindows("folder-synced", result.folder);
           else broadcastToWindows("folder-deleted", { id });
-          for (const note of result.relocatedNotes ?? []) {
+          for (const note of movedNotes) {
             broadcastToWindows("note-updated", note);
           }
           for (const noteId of result.deletedNoteIds ?? []) {
@@ -4837,6 +4903,9 @@ class IPCHandlers {
         if (format === "txt") {
           const { markdownToPlainText } = await import("./markdownToPlainText.ts");
           exportContent = markdownToPlainText(note.content || "");
+          if (!exportContent.trim() && note.enhanced_content) {
+            exportContent = markdownToPlainText(note.enhanced_content);
+          }
         } else {
           exportContent = note.enhanced_content || note.content;
         }
@@ -7062,40 +7131,21 @@ class IPCHandlers {
 
     // ElevenLabs Scribe authenticates with xi-api-key and takes model_id /
     // language_code, so it has no OpenAI-compatible path either.
-    const elevenLabsDictations = new AgentStreamRequestRegistry();
-    const transcribeElevenLabsDictation = createProductHandler(
+    handleProviderTranscription(
       "proxy-elevenlabs-transcription",
-      serializeIpcError(
-        async (_event, { audioBuffer, model, language, keyterms }, cancelSignal) => {
-          return transcribeElevenLabsSpeech({
-            signal: AbortSignal.any([cancelSignal, this._productRequestContext.getStore().signal]),
-            audioBuffer: Buffer.from(audioBuffer),
-            model,
-            fileName: "audio.webm",
-            contentType: "audio/webm",
-            language,
-            keyterms,
-            apiKey: this.environmentManager.getElevenlabsKey(),
-          });
-        }
-      ),
-      true
+      serializeIpcError(async (event, { audioBuffer, model, language, keyterms }, signal) => {
+        return await transcribeElevenLabsSpeech({
+          signal,
+          audioBuffer: Buffer.from(audioBuffer),
+          model,
+          fileName: "audio.webm",
+          contentType: "audio/webm",
+          language,
+          keyterms,
+          apiKey: this.environmentManager.getElevenlabsKey(),
+        });
+      })
     );
-    ipcMain.handle("proxy-elevenlabs-transcription", async (event, options) => {
-      // Register before the policy lookup can yield so an early Cancel cannot miss the upload.
-      const sender = event.sender;
-      const senderId = sender.id;
-      const requestId = crypto.randomUUID();
-      const controller = elevenLabsDictations.begin(senderId, requestId);
-      const abort = () => controller.abort();
-      sender.once("destroyed", abort);
-      try {
-        return await transcribeElevenLabsDictation(event, options, controller.signal);
-      } finally {
-        sender.removeListener("destroyed", abort);
-        elevenLabsDictations.complete(senderId, requestId, controller);
-      }
-    });
 
     // Headers and redirect mode for a request to the self-hosted speech server of `surface`
     // ("dictation" or "upload"), with the custom key for a route that takes one (Orukeet's).
@@ -7896,6 +7946,7 @@ class IPCHandlers {
           if (outputText === null) {
             throw Object.assign(new Error(describeMissingAnthropicText(data)), {
               messageKey: CLEANUP_EMPTY_REPLY_MESSAGE_KEY,
+              code: data?.stop_reason === "max_tokens" ? "OUTPUT_LIMIT_BEFORE_ANSWER" : undefined,
             });
           }
           return { success: true, text: outputText };
@@ -9656,7 +9707,6 @@ class IPCHandlers {
     });
 
     ipcMain.on("cloud-transcribe-cancel", (event) => {
-      elevenLabsDictations.cancelSender(event.sender.id);
       this._cloudTranscriptionRequests.cancelSender(event.sender.id);
       for (const [controller, operation] of this._productRequests) {
         if (
@@ -10101,7 +10151,7 @@ class IPCHandlers {
           return { success: false, error: "No transcription engine available" };
         }
         // ElevenLabs Scribe answers silence with "[pause]" instead of nothing.
-        if (!result.text || result.text.trim() === "[pause]") {
+        if (!result.text || result.text.trim() === SCRIBE_SILENCE_MARKER) {
           throw Object.assign(new Error("No speech detected in audio"), {
             code: "NO_SPEECH_DETECTED",
           });
@@ -10659,7 +10709,9 @@ class IPCHandlers {
       if (!meetingReconnectReplaySources.has(source)) return;
       const copy = Buffer.from(buffer);
       const queue = meetingReconnectAudioBuffers[source];
-      queue.push({ buffer: copy, capturedAt });
+      // A chunk with no capture time is queued within a third of a second of its
+      // capture, and the replay must time it from then rather than from the hand-over.
+      queue.push({ buffer: copy, capturedAt: capturedAt ?? Date.now() });
       meetingReconnectAudioBytes[source] += copy.length;
       while (
         meetingReconnectAudioBytes[source] > MEETING_RECONNECT_BUFFER_MAX_BYTES &&
@@ -10667,6 +10719,15 @@ class IPCHandlers {
       ) {
         meetingReconnectAudioBytes[source] -= queue.shift().buffer.length;
         meetingReplayIncomplete = true;
+      }
+    };
+
+    // A client that queues what it takes still holds some of it when its session ends
+    // unasked. That audio leads the replay, or it would reach no session.
+    const requeueUnsentMeetingAudio = (source, streaming) => {
+      if (!meetingReconnectReplaySources.has(source)) return;
+      for (const { buffer, capturedAt } of streaming?.takeUnsentAudio?.() ?? []) {
+        queueMeetingReconnectAudio(source, buffer, capturedAt);
       }
     };
 
@@ -10727,6 +10788,8 @@ class IPCHandlers {
           ...(!oldMic?.isConnected ? ["mic"] : []),
           ...(oldSystem && !oldSystem.isConnected ? ["system"] : []),
         ]);
+        requeueUnsentMeetingAudio("mic", oldMic);
+        requeueUnsentMeetingAudio("system", oldSystem);
         let newMic = null;
         let newSystem = null;
         const discardReplacements = () => {
@@ -11435,6 +11498,7 @@ class IPCHandlers {
       // this block and any track that drops while its peer is reconnecting.
       if (meetingReconnectPromise && !streaming.isConnected) {
         meetingReconnectReplaySources.add(source);
+        requeueUnsentMeetingAudio(source, streaming);
       }
       queueMeetingReconnectAudio(source, outbound, capturedAt);
       if (synthetic) return;
@@ -14898,15 +14962,34 @@ class IPCHandlers {
             if (route.transport === "proxied" && route.provider === "elevenlabs") {
               // No language hint, as for the other uploads: a file is often not
               // in the dictation language.
-              const { text } = await transcribeElevenLabsSpeech({
+              const { text, segments: grouped } = await transcribeElevenLabsSpeech({
                 audioBuffer: fs.readFileSync(realByok),
                 signal,
                 model: route.model,
                 fileName: path.basename(realByok),
                 contentType: providerContentType(realByok),
+                diarize,
+                timestamps,
                 apiKey: apiKey || this.environmentManager.getElevenlabsKey(),
               });
-              return { success: true, text };
+              // The saved segments replace the transcript text, so validate coverage
+              // before accepting either timed or speaker-labelled segments.
+              const segments = mapVerboseSegments(
+                { text, segments: grouped },
+                { preserveSpeakers: diarize }
+              );
+              if (diarize && segments?.some((segment) => segment.speaker)) {
+                return {
+                  success: true,
+                  text: formatSpeakerTranscript(segments),
+                  diarized: true,
+                  segments,
+                };
+              }
+              if (diarize) {
+                debugLogger.warn("ElevenLabs diarization returned no usable speaker segments");
+              }
+              return { success: true, text, ...(segments ? { segments } : {}) };
             }
 
             if (!apiKey && route.provider !== "custom") {
@@ -16703,20 +16786,39 @@ class IPCHandlers {
     });
 
     // Note files (markdown mirror) handlers
-    ipcMain.handle("note-files-set-enabled", async (_event, enabled, customPath, options) => {
+    let awaitingNoteFilesStartup = true;
+    let pendingNoteFilesPath;
+    const finishNoteFilesSetup = () => {
+      this._noteFilesSync?.deleteMergedNotes(this.databaseManager.mergedNotes);
+      this._flushAccountRepairMirrors();
+    };
+    ipcMain.handle("note-files-set-enabled", async (event, enabled, customPath, options) => {
+      const startup = options?.startup === true;
+      const fromDictation = startup && isFromWindow(event, this.windowManager?.mainWindow);
+      if (
+        startup &&
+        !fromDictation &&
+        !isFromWindow(event, this.windowManager?.controlPanelWindow)
+      ) {
+        return { success: true };
+      }
       try {
-        if (!enabled) {
-          this.noteFiles.disable();
+        if (startup && (!fromDictation || !awaitingNoteFilesStartup)) {
+          if (await this._noteFilesSync?.retryInitialization()) finishNoteFilesSetup();
           return { success: true };
         }
-        const basePath = customPath || path.join(app.getPath("userData"), "notes");
-        await this.noteFiles.enable(basePath, { skipRebuild: Boolean(options?.skipRebuild) });
-        // Their rows are gone, and an old-layout file is only removed when it
-        // matches one.
-        for (const note of this.databaseManager.mergedNotes.splice(0)) {
-          this.noteFiles.deleteNote(note.id, note, note.speakerMappings);
+        // Later window requests can retry the current destination using main's settings.
+        awaitingNoteFilesStartup = false;
+        if (!enabled) {
+          if (!startup) this.noteFiles.disable();
+          return { success: true };
         }
-        this._flushAccountRepairMirrors();
+        const requestedPath = startup ? (pendingNoteFilesPath ?? customPath) : customPath;
+        const basePath = requestedPath || path.join(app.getPath("userData"), "notes");
+        await this.noteFiles.enable(basePath, {
+          skipRebuild: startup ? pendingNoteFilesPath === undefined : Boolean(options?.skipRebuild),
+        });
+        finishNoteFilesSetup();
         return { success: true };
       } catch (error) {
         debugLogger.error(
@@ -16730,9 +16832,14 @@ class IPCHandlers {
 
     ipcMain.handle("note-files-set-path", async (_event, newPath) => {
       try {
+        // A folder selection can arrive while the dictation renderer is still starting.
+        if (awaitingNoteFilesStartup) {
+          pendingNoteFilesPath = newPath;
+          return { success: true };
+        }
         if (!this.noteFiles.enabled) return { success: false, error: "Note files not enabled" };
         await this.noteFiles.setPath(newPath);
-        this._flushAccountRepairMirrors();
+        finishNoteFilesSetup();
         return { success: true };
       } catch (error) {
         debugLogger.error("Failed to set note-files path", { error: error.message }, "note-files");
@@ -16744,7 +16851,7 @@ class IPCHandlers {
       try {
         if (!this.noteFiles.enabled) return { success: false, error: "Note files not enabled" };
         await this.noteFiles.rebuild();
-        this._flushAccountRepairMirrors();
+        finishNoteFilesSetup();
         return { success: true };
       } catch (error) {
         debugLogger.error("Failed to rebuild note files", { error: error.message }, "note-files");

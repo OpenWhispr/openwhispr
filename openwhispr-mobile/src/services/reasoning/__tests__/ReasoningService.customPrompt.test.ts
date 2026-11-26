@@ -79,4 +79,23 @@ describe('ReasoningService custom cleanup prompt on the wire', () => {
     expect(body).not.toHaveProperty('customPrompt');
     expect(body).not.toHaveProperty('promptMode');
   });
+
+  // The API runs a translation on its own path only when it is told the purpose; a systemPrompt
+  // alone is the generic action override.
+  it('sends purpose translation with the systemPrompt and no promptMode', async () => {
+    await ReasoningService.processText({
+      text: 'Hello',
+      systemPrompt: 'Translate to Spanish.',
+      purpose: 'translation',
+    });
+    const body = lastBody();
+    expect(body.purpose).toBe('translation');
+    expect(body.systemPrompt).toBe('Translate to Spanish.');
+    expect(body).not.toHaveProperty('promptMode');
+  });
+
+  it('sends no purpose when the caller names none', async () => {
+    await ReasoningService.processText({ text: 'hi', systemPrompt: 'raw override' });
+    expect(lastBody()).not.toHaveProperty('purpose');
+  });
 });

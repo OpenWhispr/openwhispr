@@ -109,7 +109,7 @@ export function batchTranscriptionHttpError(
 // has to fail closed: the fall-through at the end of resolveTranscriptionRoute
 // would otherwise POST the user's audio to api.openai.com with their OpenAI key.
 // Hand-maintained rather than derived from the registry: Corti's only model is
-// realtime too, yet it batches through the proxy. The upload picker and selector
+// realtime too, yet it batches through the proxy. Audio Upload's list and selector
 // read this set; dictation and voice takes ask isStreamingOnlySelection, which
 // knows the one exception.
 export const STREAMING_ONLY_PROVIDERS = new Set(["deepgram", "assemblyai"]);
@@ -273,23 +273,30 @@ export const ASSEMBLYAI_DICTATION_LANGUAGES = new Set([
   "zu",
 ]);
 
-// The live catalog decides first: an offered model is sent as is, and a retired one
-// moves to its replacement. The prefix rules then keep a model the catalog does not know
-// yet (a remote addition before its catalog loads) instead of resetting it;
-// transcriptionRouteModelAgreement.test.js pins them to every shipping model.
+// The live catalog decides first: resolve retirements before deciding whether the selected
+// model needs the provider's batch fallback.
+// The prefix rules then keep a model the catalog does not know yet (a remote addition before
+// its catalog loads) instead of resetting it; transcriptionRouteModelAgreement.test.js pins
+// them to every shipping model.
 export function resolveByokModel(provider: string, configuredModel?: string): string {
   const trimmed = (configuredModel || "").trim();
   if (provider === "custom") return trimmed || "whisper-1";
-  if (trimmed) {
+  // A Note Recording-only model has no batch endpoint, so it takes the provider's default.
+  if (trimmed && !isNoteRecordingOnlyTranscriptionModel(provider, trimmed)) {
     const catalogProvider = getRegistryData().transcriptionProviders.find((p) => p.id === provider);
-    // A Note Recording-only model has no batch endpoint, so it falls to the rules below.
-    if (
-      !isNoteRecordingOnlyTranscriptionModel(provider, trimmed) &&
-      catalogProvider?.models.some((model) => model.id === trimmed)
-    )
-      return trimmed;
     const replacement = retiredReplacement("transcriptionProviders", provider, trimmed);
-    if (replacement) return replacement;
+    const selectedId = replacement ?? trimmed;
+    const listed = catalogProvider?.models.find((model) => model.id === selectedId);
+    if (listed?.streaming && catalogProvider?.batchModel) {
+      const { batchModel, models } = catalogProvider;
+      // A catalog update can retire the bundled batch ID while leaving the alias intact.
+      return (
+        retiredReplacement("transcriptionProviders", provider, batchModel, [
+          { ...catalogProvider, models: models.filter((model) => !model.streaming) },
+        ]) ?? batchModel
+      );
+    }
+    if (replacement || listed) return selectedId;
     const matchesProvider =
       (provider === "groq" && trimmed.startsWith("whisper-large-v3")) ||
       (provider === "openai" &&
@@ -303,11 +310,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
       (provider === "mistral" && trimmed.startsWith("voxtral-")) ||
       (provider === "corti" && trimmed.startsWith("corti-")) ||
       (provider === "gemini" && trimmed.startsWith("gemini-")) ||
-      // The realtime models have no batch endpoint; resolving one falls back to scribe_v3.
-      (provider === "elevenlabs" &&
-        trimmed.startsWith("scribe_") &&
-        !trimmed.endsWith("_realtime") &&
-        !trimmed.endsWith("_live")) ||
+      (provider === "elevenlabs" && trimmed.startsWith("scribe_")) ||
       (provider === "deepgram" && (trimmed.startsWith("nova-") || trimmed.startsWith("flux-"))) ||
       (provider === "assemblyai" &&
         (trimmed.startsWith("universal-") ||
@@ -474,22 +477,13 @@ export function resolveTranscriptionRoute({
   // Sarvam audio is converted locally and sent in 30-second pieces, so no file cap applies.
   if (provider === "sarvam")
     return { transport: "proxied", provider, model, language, sizeCapBytes: null };
-  if (provider === "gemini") {
+  if (provider === "gemini" || provider === "elevenlabs") {
     return {
       transport: "proxied",
       provider,
       model,
       language,
-      sizeCapBytes: GEMINI_FILE_SIZE_LIMIT,
-    };
-  }
-  if (provider === "elevenlabs") {
-    return {
-      transport: "proxied",
-      provider,
-      model,
-      language,
-      sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
+      sizeCapBytes: byokFileSizeLimit(provider),
     };
   }
   if (provider === "corti") {

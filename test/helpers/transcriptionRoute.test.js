@@ -134,6 +134,15 @@ test("proxied providers carry their quirks as route data", async () => {
     14 * 1024 * 1024,
     "inline base64 audio must fit Gemini's 20 MB request cap"
   );
+  const geminiLive = await resolve({
+    cloudTranscriptionProvider: "gemini",
+    cloudTranscriptionModel: "gemini-3.5-transcribe-live",
+  });
+  assert.equal(
+    geminiLive.model,
+    "gemini-3.5-transcribe",
+    "the Live model streams only; a batch request takes the batch model"
+  );
 
   const elevenlabs = await resolve({ cloudTranscriptionProvider: "elevenlabs" });
   assert.equal(elevenlabs.transport, "proxied");

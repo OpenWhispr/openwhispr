@@ -196,3 +196,16 @@ test("a refusal's words follow the policy's state", () => {
   );
   assert.equal(policyRefusalKey(undefined), "common.policyUnresolved");
 });
+
+test("policy judges a saved-key provider as bring-your-own-key whatever mode the start names", () => {
+  const { SAVED_KEY_PROVIDERS, realtimeSelection } = require("../../src/helpers/productPolicy");
+
+  assert.ok(SAVED_KEY_PROVIDERS.has("elevenlabs-realtime"));
+  for (const provider of SAVED_KEY_PROVIDERS) {
+    assert.deepEqual(
+      realtimeSelection({ provider, mode: "openwhispr" }),
+      { mode: "providers", provider: provider.replace(/-realtime$/, "") },
+      provider
+    );
+  }
+});

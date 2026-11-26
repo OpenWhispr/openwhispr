@@ -1,4 +1,5 @@
 import { requiresRealAccount } from '@/lib/accountAccess';
+import { keyboardDirectDictationEnabled } from '@/lib/keyboardDirectSetting';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { AppGroupStorage } from '../../modules/app-group-storage/src';
@@ -23,7 +24,7 @@ function keyboardCredential({ user, sessionCookie }: AuthSnapshot): string | nul
 export function startKeyboardCredentialSync(): () => void {
   let written: string | null | undefined;
   const sync = (): void => {
-    const enabled = useConfigStore.getState().config?.keyboardDirectDictation === true;
+    const enabled = keyboardDirectDictationEnabled(useConfigStore.getState().config);
     const next = enabled ? keyboardCredential(useAuthStore.getState()) : null;
     if (next === written) return;
     if (AppGroupStorage.setKeyboardSessionCredential(next)) written = next;

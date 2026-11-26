@@ -32,6 +32,7 @@ import AssemblyAiStreaming from "../src/helpers/assemblyAiStreaming.js";
 import DeepgramStreaming from "../src/helpers/deepgramStreaming.js";
 import { loadCanaryCatalog } from "./lib/canary-catalog.mjs";
 import { probeElevenLabsBatch } from "./lib/elevenlabs-batch-probe.mjs";
+import { probeElevenLabsRealtime } from "./lib/elevenlabs-realtime-probe.mjs";
 
 const { fetchRealtimeTokenForProvider } = tokenProviders;
 const { pcm16ToWav } = audioUtils;
@@ -241,6 +242,7 @@ const tokenDeps = (key) => ({
     getDeepgramKey: () => key,
     getAssemblyAIKey: () => key,
     getGeminiKey: () => key,
+    getElevenlabsKey: () => key,
   },
   proxyFetch: fetch,
 });
@@ -331,6 +333,19 @@ const PROBES = [
     id: "gemini-batch-webm",
     keyEnv: "STT_CANARY_GEMINI_KEY",
     run: (key) => probeGeminiBatch(key, toWebmOpus(SILENT_WAV()), "audio/webm"),
+  },
+  {
+    id: "elevenlabs-realtime",
+    keyEnv: "STT_CANARY_ELEVENLABS_KEY",
+    // Scribe takes an xi-api-key header and names its events in `message_type`,
+    // neither of which probeWebSocket speaks, so the shipped client dials.
+    run: async (key) => {
+      const token = await fetchRealtimeTokenForProvider("elevenlabs-realtime", tokenDeps(key), {
+        mode: "byok",
+        purpose: "meeting",
+      });
+      return probeElevenLabsRealtime(token);
+    },
   },
   {
     id: "elevenlabs-batch-webm",
