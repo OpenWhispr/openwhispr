@@ -114,11 +114,11 @@ test("icon.ico has entries from 16 to 256 px, including 72 and 96 px for desktop
   }
 });
 
-// Entries under 48 px are left out, since they may be hand-tuned. This measures how closely an
-// entry follows icon.png, not how sharp it is. The limit of 4 sits between Pillow's and ffmpeg's
-// Lanczos, bicubic, bilinear and area downscales of icon.png (up to about 2.2) and the blurry ICO
-// this replaced (7.1 and up), so a nearest-neighbour downscale still passes, and a sharp macOS
-// sips rebuild, whose art comes out slightly smaller, fails at 48 px (5.5).
+// Entries under 48 px are left out: they may be hand-tuned, and Lanczos scores 4.25 at 16 px. This
+// measures how closely an entry follows icon.png, not how sharp it is. The limit of 4 sits between
+// Pillow's and ffmpeg's Lanczos, bicubic, bilinear and area downscales of icon.png (up to about
+// 2.2) and the blurry ICO this replaced (7.1 and up). At 48 px a nearest-neighbour downscale passes
+// (3.9), and a sharp macOS sips rebuild, whose art comes out slightly smaller, fails (5.5).
 test("every icon.ico entry of 48 px and up matches icon.png scaled to its size", () => {
   const art = decodePng(fs.readFileSync(path.join(ASSETS, "icon.png")));
   for (const { size, data } of iconEntries.filter((entry) => entry.size >= 48)) {
