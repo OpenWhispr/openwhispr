@@ -12,7 +12,7 @@ import { WaveformVisualizer } from '@/components/features/WaveformVisualizer';
 import { useAudioRecording } from '@/hooks/useAudioRecording';
 import { useAudioWaveform } from '@/hooks/useAudioWaveform';
 import { useTheme } from '@/android/ThemeProvider';
-import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
+import { SpeakerProfileOwnerAlreadyExistsError } from '@/android/data/notesRepository';
 import {
   VOICE_ENROLLMENT_DIARIZER_MODEL_REQUIRED,
   VoiceEnrollmentError,

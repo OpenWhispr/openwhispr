@@ -24,7 +24,7 @@ import {
   l2Normalize,
   runningMeanEmbedding,
 } from '@/lib/diarization/voiceprints';
-import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
+import { SpeakerProfileOwnerAlreadyExistsError } from '@/android/data/notesRepository';
 import {
   buildActionSystemPrompt,
   isDefaultGenerateNotesAction,

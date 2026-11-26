@@ -20,7 +20,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useTranscriptStore } from '@/android/store/useTranscriptStore';
 import { useNotesStore } from '@/android/store/useNotesStore';
 import { startMeetingRecoveryOnce } from '@/lib/meetingRecovery';
-import { initSyncTriggers } from '@/sync/syncEngine';
+import { initSyncTriggers } from '@/android/sync/syncEngine';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
 import { OpenWhisprSuperwallProvider } from '@/components/superwall/OpenWhisprSuperwallProvider';
 import { useRevenueCatIdentity } from '@/hooks/useRevenueCatIdentity';

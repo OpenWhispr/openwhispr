@@ -55,6 +55,7 @@ jest.mock('@/data', () => ({ notesRepository: { getSpeakerProfiles: () => [] } }
 jest.mock('@/data/local/notesRepository', () => ({
   SpeakerProfileOwnerAlreadyExistsError: class extends Error {},
 }));
+jest.mock('@/android/data/notesRepository', () => jest.requireMock('@/data/local/notesRepository'));
 jest.mock('@/components/notes/VoiceEnrollmentRecorder', () => ({
   VoiceEnrollmentRecorder: () => null,
 }));

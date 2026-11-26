@@ -7,7 +7,7 @@ import { VoiceEnrollmentRecorder } from '@/components/notes/VoiceEnrollmentRecor
 import { useNotesStore } from '@/android/store/useNotesStore';
 import { notesRepository } from '@/data';
 import type { SpeakerProfile } from '@/data/types';
-import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
+import { SpeakerProfileOwnerAlreadyExistsError } from '@/android/data/notesRepository';
 import {
   VOICE_ENROLLMENT_PROFILE_NOT_FOUND,
   VoiceEnrollmentError,

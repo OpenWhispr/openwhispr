@@ -38,7 +38,7 @@ import { ConflictBanner } from '@/components/notes/ConflictBanner';
 import { VoiceSetupBanner } from '@/components/notes/VoiceSetupBanner';
 import { ThatsMeSheet } from '@/components/notes/ThatsMeSheet';
 import { shouldOfferVoiceSetup, voiceSetupCandidates } from '@/lib/notes/voiceSetupPrompt';
-import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
+import { SpeakerProfileOwnerAlreadyExistsError } from '@/android/data/notesRepository';
 import { VOICE_ALREADY_TAUGHT_ALERT } from '@/lib/voiceEnrollmentMessages';
 import { formatNoteMetaDate, markViewer, noteTakenAt } from '@/lib/notes/noteMeta';
 import { SpeakerRenameSheet } from '@/components/notes/SpeakerRenameSheet';

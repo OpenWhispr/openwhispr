@@ -2102,7 +2102,7 @@ describe('NoteEditorScreen voice setup', () => {
 
   it("doesn't suggest the script when you already have a voice profile", () => {
     const { SpeakerProfileOwnerAlreadyExistsError } = jest.requireActual(
-      '@/data/local/notesRepository',
+      '@/android/data/notesRepository',
     );
     mockClaimSpeakerAsMe.mockImplementationOnce(() => {
       throw new SpeakerProfileOwnerAlreadyExistsError();

@@ -2,8 +2,8 @@ import {
   getMeetingTranscriptionId,
   meetingTranscriptionIdKey,
 } from '@/lib/notes/meetingTranscriptionId';
-import { LocalNotesRepository } from '../notesRepository';
-import { createMemoryRepository } from './testDb';
+import { LocalNotesRepository } from '@/data/local/notesRepository';
+import { createMemoryRepository } from '@/android/data/__tests__/testDb';
 
 it('reads the same meeting identity from a fresh repository after privacy and sync identity changes', () => {
   const { repo, db } = createMemoryRepository();
@@ -51,6 +51,3 @@ it.each(['deleteNote', 'hardDeleteNote', 'wipeAllSyncableData'] as const)(
 );
 
 // These recovery/retry cases exercise the Android repository policy.
-jest.mock('../notesRepositoryPlatform', () =>
-  jest.requireActual('../notesRepositoryPlatform.android'),
-);

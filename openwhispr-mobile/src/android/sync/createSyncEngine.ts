@@ -1,41 +1,41 @@
-import { clearPrivateNoteDeletionQueue, pushPrivateNoteDeletes } from './privateNoteDeletion';
-import { createSyncContext } from './createSyncContext';
-import { SyncCancelledError, SyncStalledError, type SyncCheckpoint } from './syncContext';
+import { clearPrivateNoteDeletionQueue, pushPrivateNoteDeletes } from '@/sync/privateNoteDeletion';
+import { createSyncContext } from '@/sync/createSyncContext';
+import { SyncCancelledError, SyncStalledError, type SyncCheckpoint } from '@/sync/syncContext';
 import * as Sentry from '@sentry/react-native';
 import { AppState, type AppStateStatus } from 'react-native';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useConfigStore } from '@/store/useConfigStore';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 import { notesRepository } from '@/data';
-import { fetchUsage } from '@/data/remote/usageApi';
-import { pullFolders } from './pullFolders';
-import { pullFoldersTeam } from './pullFoldersTeam';
-import { pullNotes } from './pullNotes';
-import { pullNotesTeam } from './pullNotesTeam';
-import { pushFolders } from './pushFolders';
-import { pushNotes } from './pushNotes';
-import { pullDictionary } from './pullDictionary';
-import { pushDictionary } from './pushDictionary';
-import { pullSnippets } from './pullSnippets';
-import { pushSnippets } from './pushSnippets';
-import { syncSpaces, type SyncSpacesResult } from './syncSpaces';
-import { pullSharedDictionary } from './pullSharedDictionary';
-import { useDictionaryStore } from '@/store/useDictionaryStore';
+import { fetchUsage } from '@/android/remote/usageApi';
+import { pullFolders } from '@/sync/pullFolders';
+import { pullFoldersTeam } from '@/sync/pullFoldersTeam';
+import { pullNotes } from '@/sync/pullNotes';
+import { pullNotesTeam } from '@/sync/pullNotesTeam';
+import { pushFolders } from '@/sync/pushFolders';
+import { pushNotes } from '@/sync/pushNotes';
+import { pullDictionary } from '@/sync/pullDictionary';
+import { pushDictionary } from '@/sync/pushDictionary';
+import { pullSnippets } from '@/sync/pullSnippets';
+import { pushSnippets } from '@/sync/pushSnippets';
+import { syncSpaces, type SyncSpacesResult } from '@/sync/syncSpaces';
+import { pullSharedDictionary } from '@/android/sync/pullSharedDictionary';
+import { useDictionaryStore } from '@/android/store/useDictionaryStore';
 import {
   loadSharedDictionaryIfOwnedBy,
   useSharedDictionaryStore,
 } from '@/store/useSharedDictionaryStore';
-import { useSnippetsStore } from '@/store/useSnippetsStore';
-import { runInitialBackfillIfNeeded } from './initialBackfill';
-import { resetAllPullCursors } from './pullCursors';
+import { useSnippetsStore } from '@/android/store/useSnippetsStore';
+import { runInitialBackfillIfNeeded } from '@/sync/initialBackfill';
+import { resetAllPullCursors } from '@/sync/pullCursors';
 import {
   clearAnonymousLink,
   getLastSyncedUserId,
   isLinkFromAnonymous,
   recordAnonymousUser,
   setLastSyncedUserId,
-} from './syncIdentity';
-import { useSyncStore } from './useSyncStore';
+} from '@/sync/syncIdentity';
+import { useSyncStore } from '@/sync/useSyncStore';
 import { ApiError, isPolicyCloudBackupBlockedError } from '@/lib/apiClient';
 import { withChatHistory } from '@/lib/chat/withChatHistory';
 

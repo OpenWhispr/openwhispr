@@ -20,7 +20,7 @@ import '@/hooks/useRevenueCatIdentity';
 import { runMigrations } from '@/db/migrate';
 import { initSentry } from '@/lib/sentry';
 import { initAppsFlyer } from '@/lib/appsflyer';
-import '@/sync/syncEngine';
+import '@/android/sync/syncEngine';
 import '@/lib/productEvents';
 import { initDictationMilestone } from '@/lib/dictationMilestone';
 import '@/lib/authClient';

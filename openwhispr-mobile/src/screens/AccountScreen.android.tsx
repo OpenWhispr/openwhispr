@@ -12,7 +12,7 @@ import { needsReconnect } from '@/android/calendar/connect';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
 import { useSyncStore } from '@/sync/useSyncStore';
-import { requestSync } from '@/sync/syncEngine';
+import { requestSync } from '@/android/sync/syncEngine';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { getAccountDisplay } from '@/lib/accountDisplay';
 import { safeHaptics } from '@/lib/utils';

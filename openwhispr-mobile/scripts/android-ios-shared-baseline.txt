@@ -37,7 +37,6 @@ src/data/calendarRepository.ts
 src/data/index.ts
 src/data/local/calendarRepository.ts
 src/data/local/chatRepository.ts
-src/data/local/notesRepository.ts
 src/data/local/spacesRepository.ts
 src/data/remote/billingApi.ts
 src/data/remote/dictionaryApi.ts
@@ -184,8 +183,6 @@ src/store/useModelDownloadStore.ts
 src/store/useOnboardingStore.ts
 src/store/useProcessingModeStore.ts
 src/store/useSharedDictionaryStore.ts
-src/sync/createSyncEngine.ts
-src/sync/ensureNoteSyncedCore.ts
 src/sync/initialBackfill.ts
 src/sync/noteCreateAttempts.ts
 src/sync/privateNoteDeletion.ts
@@ -196,7 +193,6 @@ src/sync/pullFoldersTeam.ts
 src/sync/pullNotes.ts
 src/sync/pullNotesTeam.ts
 src/sync/pullParkTracker.ts
-src/sync/pullSharedDictionary.ts
 src/sync/pullSnippets.ts
 src/sync/pushDictionary.ts
 src/sync/pushErrorCodes.ts
