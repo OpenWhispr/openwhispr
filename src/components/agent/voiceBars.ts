@@ -1,6 +1,6 @@
-// The call pill's four Sound bars: they rest level, and while the call listens or speaks, sound
-// lifts each one by how loud it was a moment ago, so the wave ripples with the real audio. In
-// every other state they sink back to rest, as after a silence.
+// A call's or a take's four Sound bars: they rest level, and while they follow sound (a call
+// listening or speaking, a take recording), sound lifts each one by how loud it was a moment ago,
+// so the wave ripples with the real audio. Otherwise they sink back to rest, as after a silence.
 const REST_PX = 8;
 const PEAK_PX = 28;
 const REACH = [0.75, 1, 0.9, 0.65];

@@ -11,8 +11,7 @@ import {
  * Paints the Sound bars' lifts (`--voice-bar-<index>`) and the sound's level
  * (`--voice-level`) on `target`, following `readLevel` while `active` and
  * otherwise sinking back to rest as after a silence, from wherever the bars
- * were. They hold still under reduced motion, and an animation ending never
- * changes the caller's state.
+ * were. They hold still under reduced motion.
  */
 export function useSoundMeter(
   target: RefObject<HTMLElement | null>,

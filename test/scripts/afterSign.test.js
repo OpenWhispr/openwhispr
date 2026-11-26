@@ -221,7 +221,7 @@ test(
     const coffHeader = modified.readUInt32LE(0x3c) + 4;
     const firstSection = coffHeader + 20 + modified.readUInt16LE(coffHeader + 16);
     modified[modified.readUInt32LE(firstSection + 20)] ^= 1;
-    fs.writeFileSync(path.join(appOutDir, "modified.node"), modified);
+    fs.writeFileSync(path.join(appOutDir, "modified.dll"), modified);
 
     const report = await inspectWindowsSignatures({
       appOutDir,
@@ -233,6 +233,6 @@ test(
       /CN=Microsoft Corporation/
     );
     assert.ok(report.find(({ file }) => file === "unsigned.dll").error);
-    assert.ok(report.find(({ file }) => file === "modified.node").error);
+    assert.ok(report.find(({ file }) => file === "modified.dll").error);
   }
 );

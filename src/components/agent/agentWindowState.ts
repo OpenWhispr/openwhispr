@@ -352,9 +352,9 @@ export type AgentPillButton = "expand" | "call" | "mic" | "keyboard" | "stop" | 
 
 export interface AgentPillControls {
   waveform: boolean;
-  /** "Thinking…" in place of the waveform. */
+  /** "Thinking…" in place of the Sound bars. */
   thinking: boolean;
-  /** "Waiting for answer" in place of the waveform. */
+  /** "Waiting for answer" in place of the Sound bars. */
   waiting: boolean;
   buttons: AgentPillButton[];
 }

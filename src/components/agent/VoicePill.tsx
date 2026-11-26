@@ -66,7 +66,7 @@ interface VoicePillProps {
   notice?: string | null;
   /** The reply's or the microphone's level, for the Sound bars and the speaking glow. */
   readLevel: () => number;
-  /** The Sound bars follow sound while the call listens or speaks; dimmed while the microphone is off and nothing plays. */
+  /** False dims the Sound bars: the call isn't running, or its microphone is off and nothing plays. */
   waveformActive: boolean;
   micMuted: boolean;
   sessionControl: VoiceSessionControl;
@@ -122,11 +122,10 @@ export function VoicePill({
   // A turn at work: a blue wave runs across the bars, as the shimmer does across "Thinking…".
   const busy = status === "working" || status === "sendingEmail" || status === "sendingMessage";
   const glow = !inModal && status === "speaking" && !notice;
-  const levelActive = glow || (live && waveformActive);
   const pillRef = useRef<HTMLDivElement>(null);
   // The Sound bars and the glow follow the reply or the microphone as it is
   // heard (--voice-level) while the call listens or speaks.
-  useSoundMeter(pillRef, levelActive, readLevel);
+  useSoundMeter(pillRef, live, readLevel);
 
   const surface = inModal ? "bg-surface-1 dark:bg-surface-2" : "agent-panel bg-surface-0";
   const capFill = inModal ? "fill-surface-1 dark:fill-surface-2" : "fill-[var(--color-surface-0)]";

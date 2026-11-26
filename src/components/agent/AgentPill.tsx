@@ -23,7 +23,7 @@ interface AgentPillProps {
   /** The Sound bars follow the microphone only while the take records. */
   recording: boolean;
   readLevel: () => number;
-  /** Shown in place of the waveform (already translated). */
+  /** Shown in place of the Sound bars (already translated). */
   notice?: string | null;
   /** The provider or microphone failure behind a voice notice. */
   noticeDetail?: string;

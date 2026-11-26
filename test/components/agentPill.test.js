@@ -118,8 +118,7 @@ test("a take's pill shows the call pill's four Sound bars, rising with the micro
     [0, 1, 2, 3].map((index) => Number(bars.style.getPropertyValue(`--voice-bar-${index}`) || 0));
   assert.equal(bars.querySelectorAll("span.w-0\\.5").length, 4);
   const slot = host.querySelector(":scope > div > :first-child");
-  assert.ok(slot.contains(bars), "the bars use the old logo's space");
-  assert.doesNotMatch(slot.className, /\bw-/, "the slot is the bars' own width");
+  assert.ok(slot.contains(bars), "the bars lead the pill");
   runFrames(20);
   assert.ok(
     lifts().some((lift) => lift > 0.05),

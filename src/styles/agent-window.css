@@ -268,7 +268,7 @@
 }
 
 /* A call's turn at work: each Sound bar turns blue and back in turn
-   (VoicePill staggers them), a wave across the bars like the shimmer on
+   (SoundBars staggers them), a wave across the bars like the shimmer on
    "Thinking…", on the same 2.4 s loop. */
 .voice-bar-shimmer {
   animation: voice-bar-shimmer 2.4s linear infinite;
