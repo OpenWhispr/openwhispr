@@ -137,6 +137,9 @@ test("ignoring the app behind an audio prompt closes it without a mic cooldown",
   engine.setPreferences({ audioDetection: true, processDetection: true });
   audioDetector.emit("sustained-audio-detected", { durationMs: 2000, detectedAt: 0, apps: [app] });
   assert.deepEqual(shown[0].apps, [app], "the card must know which app to offer");
+  // The card's "Don't ask for Orca": the list syncs, then the card answers.
+  engine.setIgnoredApps(["orca.exe"]);
+  assert.deepEqual(audioDetector.ignoredApps, ["orca.exe"]);
   const owner = { prompt: shown[0], detection: engine.activeDetections.get(shown[0].detectionId) };
   const result = await engine.handleNotificationResponse(shown[0].detectionId, "ignore", {}, owner);
 
@@ -144,9 +147,6 @@ test("ignoring the app behind an audio prompt closes it without a mic cooldown",
   assert.equal(audioDetector.dismissals, 0, "a real meeting right after must still prompt");
   assert.equal(audioDetector.releases, 1, "a call held back by this prompt must get its own");
   assert.equal(engine.activeDetections.size, 0);
-
-  engine.setIgnoredApps(["orca.exe"]);
-  assert.deepEqual(audioDetector.ignoredApps, ["orca.exe"]);
 });
 
 test("a detection card closed without a response allows the next prompt", () => {

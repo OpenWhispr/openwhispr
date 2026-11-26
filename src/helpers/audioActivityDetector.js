@@ -82,7 +82,7 @@ class AudioActivityDetector extends EventEmitter {
     super();
     this._getExcludedProcessIds = getExcludedProcessIds;
     this._isMeetingAppRunning = isMeetingAppRunning;
-    this._resolveCaptureAppsFor = resolveCaptureApps;
+    this._resolveCaptureApps = resolveCaptureApps;
     this._ignoredAppIds = new Set();
     // pid -> { id, name }, or null once a lookup found nothing.
     this._captureApps = new Map();
@@ -762,7 +762,7 @@ class AudioActivityDetector extends EventEmitter {
         { error: err.message },
         "meeting"
       );
-      return false;
+      return;
     }
 
     const externalPids = [...this._activeMicPids].filter(
@@ -780,11 +780,10 @@ class AudioActivityDetector extends EventEmitter {
     const externalMicActive = externalPids.length > 0;
     if (!this._pidScopedCapability || !this._isOwnershipSnapshotLive()) {
       this._setExternalMicSnapshot(false, false, emitChange);
-      return externalMicActive;
+      return;
     }
 
     this._setExternalMicSnapshot(true, externalMicActive, emitChange);
-    return externalMicActive;
   }
 
   _isIgnoredCapture(processId) {
@@ -801,8 +800,7 @@ class AudioActivityDetector extends EventEmitter {
     const pending = externalPids.filter((processId) => !this._captureApps.has(processId));
     if (!pending.length || this._resolvingCaptureApps || !this._running) return;
     this._resolvingCaptureApps = true;
-    Promise.resolve()
-      .then(() => this._resolveCaptureAppsFor(pending))
+    this._resolveCaptureApps(pending)
       .catch((err) => {
         debugLogger.debug("Failed to name microphone apps", { error: err.message }, "meeting");
         return new Map();

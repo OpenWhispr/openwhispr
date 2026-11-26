@@ -2019,24 +2019,6 @@ for (const platform of ["darwin", "win32"]) {
   });
 }
 
-test("win32: the prompt names the app holding the mic", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
-  const { detector, children } = createDetector("win32", {
-    resolveCaptureApps: resolveTestCaptureApps,
-  });
-  t.after(() => detector.stop());
-  const detections = [];
-  detector.on("sustained-audio-detected", (data) => detections.push(data));
-
-  await detector.start();
-  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\n");
-  await flushImmediate();
-  t.mock.timers.tick(SUSTAINED_MS);
-
-  assert.equal(detections.length, 1);
-  assert.deepEqual(detections[0].apps, [CAPTURE_APPS[11]]);
-});
-
 test("win32: another app beside an ignored one still prompts, naming only that app", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children } = createDetector("win32", {

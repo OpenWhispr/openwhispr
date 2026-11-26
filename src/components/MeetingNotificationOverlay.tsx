@@ -21,8 +21,8 @@ import { MeetingNotificationCard } from "./MeetingNotificationCard";
 import { MeetingNotificationFolderPicker } from "./MeetingNotificationFolderPicker";
 import { meetingFolderLabel } from "./meetingFolderLabel";
 import { Check, ChevronDown } from "./icons";
-import "../styles/meeting-notification.css";
 import { useSettingsStore } from "../stores/settingsStore";
+import "../styles/meeting-notification.css";
 import {
   getMeetingNotificationPresentation,
   initializeMeetingNotificationOverlay,
