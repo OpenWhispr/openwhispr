@@ -153,6 +153,7 @@ jest.mock('@/sync/useSyncStore', () => ({
     selector({ subscriptionRequired: mockSubscriptionRequired }),
 }));
 jest.mock('@/sync/syncEngine', () => ({ requestSync: jest.fn() }));
+jest.mock('@/android/sync/syncEngine', () => jest.requireMock('@/sync/syncEngine'));
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({ register: mockRegisterGate }),
 }));

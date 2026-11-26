@@ -7,7 +7,7 @@ import { useSyncStore } from '@/sync/useSyncStore';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { useUsageStore } from '@/android/store/useUsageStore';
-import { requestSync } from '@/sync/syncEngine';
+import { requestSync } from '@/android/sync/syncEngine';
 import { notesRepository } from '@/data';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { formatRelativeTime, safeHaptics } from '@/lib/utils';

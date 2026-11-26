@@ -11,8 +11,9 @@ const androidTranscript = jest.requireActual<typeof import('@/lib/notes/remoteTr
 jest.doMock('@/lib/notes/remoteTranscript', () => androidTranscript);
 const { serializeSegmentsForSync } = androidTranscript;
 const { LocalNotesRepository } =
-  require('../notesRepository') as typeof import('../notesRepository');
-const { createMemoryRepository } = require('./testDb') as typeof import('./testDb');
+  require('@/data/local/notesRepository') as typeof import('@/data/local/notesRepository');
+const { createMemoryRepository } =
+  require('@/data/local/__tests__/testDb') as typeof import('@/data/local/__tests__/testDb');
 
 // Same synthetic transcript as the prepared installed segmented-upload fixture.
 const transcript = JSON.stringify([

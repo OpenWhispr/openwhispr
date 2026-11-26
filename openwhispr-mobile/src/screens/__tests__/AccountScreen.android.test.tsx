@@ -93,6 +93,7 @@ jest.mock('@/sync/useSyncStore', () => ({
   }),
 }));
 jest.mock('@/sync/syncEngine', () => ({ requestSync: jest.fn(async () => undefined) }));
+jest.mock('@/android/sync/syncEngine', () => jest.requireMock('@/sync/syncEngine'));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));
 
 const updateConfig = jest.fn(async (change: object) => {

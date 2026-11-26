@@ -27,7 +27,7 @@ import { isValidEmail } from '@/lib/utils';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { useNotesStore } from '@/android/store/useNotesStore';
 import { useUsageStore } from '@/android/store/useUsageStore';
-import { requestSync } from '@/sync/syncEngine';
+import { requestSync } from '@/android/sync/syncEngine';
 import { useSyncStore } from '@/sync/useSyncStore';
 import { emailDomain, isPersonalEmailDomain } from '@/lib/notes/noteShareDomains';
 import { isShareVisibilityAllowed } from '@/lib/notes/noteSharePolicy';

@@ -136,7 +136,7 @@ export function createSnippetsStore({
   // Dynamic import to avoid a circular dep — syncEngine imports this store.
   // Fire-and-forget: callers don't need to await or handle rejection.
   function triggerSync(): void {
-    import('@/sync/syncEngine')
+    import('@/android/sync/syncEngine')
       .then(({ requestSync }) => requestSync('after-write'))
       .catch(() => {});
   }

@@ -1,6 +1,2 @@
-import { androidSyncPolicy } from '@/android/syncPolicy';
-import { createSyncEngine } from './createSyncEngine';
-
-export type { SyncReason } from './createSyncEngine';
-export const { subscribeSyncCompletion, requestSync, initSyncTriggers, teardownSyncTriggers } =
-  createSyncEngine(androidSyncPolicy);
+// Android's copy lives in src/android; shared files still import it from here.
+export * from '@/android/sync/syncEngine';

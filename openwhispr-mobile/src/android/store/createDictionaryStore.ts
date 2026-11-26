@@ -164,7 +164,9 @@ function softDeleteOne(word: string): boolean {
 // Dynamic import to avoid a circular dep — syncEngine imports this store.
 // Fire-and-forget: callers don't need to await or handle rejection.
 function triggerSync(): void {
-  import('@/sync/syncEngine').then(({ requestSync }) => requestSync('after-write')).catch(() => {});
+  import('@/android/sync/syncEngine')
+    .then(({ requestSync }) => requestSync('after-write'))
+    .catch(() => {});
 }
 
 // Wraps the per-word loop in a single transaction so concurrent writers

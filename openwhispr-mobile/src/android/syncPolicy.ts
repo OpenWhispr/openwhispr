@@ -1,5 +1,5 @@
 import { isCloudBackupEnabled } from '@/lib/cloudBackup.android';
-import type { SyncPlatformPolicy } from '@/sync/createSyncEngine';
+import type { SyncPlatformPolicy } from '@/android/sync/createSyncEngine';
 
 export const androidSyncPolicy: SyncPlatformPolicy = {
   isCloudBackupEnabled,

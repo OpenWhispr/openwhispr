@@ -118,6 +118,7 @@ jest.mock('@/store/useNotesStore', () => ({
 }));
 jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 jest.mock('@/sync/syncEngine', () => ({ initSyncTriggers: jest.fn() }));
+jest.mock('@/android/sync/syncEngine', () => jest.requireMock('@/sync/syncEngine'));
 jest.mock('@/components/ui/PermissionAlert', () => ({ PermissionAlertMount: () => null }));
 jest.mock('@/components/superwall/OpenWhisprSuperwallProvider', () => ({
   OpenWhisprSuperwallProvider: require('react-native').View,

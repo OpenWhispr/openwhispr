@@ -1,5 +1,5 @@
 import { folders, spaces } from '@/db/schema';
-import { createMemoryRepository } from './testDb';
+import { createMemoryRepository } from '@/data/local/__tests__/testDb';
 
 describe('upstream iOS note repository boundary', () => {
   it('retains upstream folder 1 when no folder was supplied', () => {
