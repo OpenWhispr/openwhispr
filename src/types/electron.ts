@@ -1820,6 +1820,8 @@ declare global {
       }) => Promise<boolean>;
       agentWindowHide?: () => Promise<boolean>;
       agentWindowSetDragging?: (dragging: boolean) => void;
+      /** A new request: its Slack posts go to the conversation the latest press was over. */
+      agentWindowRequestStarted?: () => void;
       /** False refuses a recording while dictation is using the microphone. */
       agentWindowSetVoiceState?: (state: AgentVoiceState, attempt: string) => Promise<boolean>;
       openAgentWindow?: () => Promise<boolean>;

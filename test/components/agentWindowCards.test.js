@@ -113,13 +113,16 @@ async function mountWindow(t, { platform } = {}) {
     turn.abort();
   });
   const happyWindow = await installHappyDom(t);
-  const main = { layouts: [], handlers: {} };
+  const main = { layouts: [], handlers: {}, requestsStarted: 0 };
   const on = (name) => (callback) => {
     main.handlers[name] = callback;
     return () => {};
   };
   happyWindow.electronAPI = {
     agentWindowReady() {},
+    agentWindowRequestStarted: () => {
+      main.requestsStarted += 1;
+    },
     agentWindowSetLayout: async (request) => {
       main.layouts.push(request);
       return true;
@@ -806,6 +809,8 @@ test("a spoken yes sends the waiting Slack card, with nothing sent to the chat",
   assert.deepEqual(commits, [["act-1", { body: SLACK_PREVIEW.body }]]);
   assert.deepEqual(globalThis.__chat.sent, []);
   assert.equal(composerText(), "");
+  // So main keeps the running request's Slack window, not the answering press's.
+  assert.equal(view.main.requestsStarted, 0, "a reply starts no request");
 });
 
 test("a spoken no cancels the waiting Slack card", async (t) => {
@@ -1651,6 +1656,20 @@ test("Close starts a new chat, and a command that arrives after it goes to that 
   assert.deepEqual(globalThis.__chat.sent, ["What's next?"]);
   assert.deepEqual(globalThis.__chat.sentAfterNewChats, [1], "sent in the new chat");
   assert.equal(globalThis.__chat.newChats, 1, "only one new chat");
+  assert.equal(view.main.requestsStarted, 1, "main hears of the new request");
+});
+
+test("Continue carries on a paused turn, keeping that turn's Slack window", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({
+    messages: [user, { ...finished, turn: { startedAt: 1, status: "step_limit" } }],
+  });
+  await React.act(async () => view.button("Continue").click());
+  await view.settle();
+  assert.equal(globalThis.__chat.sent.length, 1, "the turn carries on");
+  assert.equal(view.main.requestsStarted, 0, "as the same request");
 });
 
 test("Esc on an idle window starts a new chat; over a running reply it only stops the reply", async (t) => {

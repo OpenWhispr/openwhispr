@@ -55,6 +55,7 @@ class AgentWindowManager {
         return this._bounds(display);
       },
     });
+    this.pressSlackTitle = null;
     this.slackTitle = null;
     this.voiceState = "idle";
     this.voiceAttempt = null;
@@ -297,6 +298,7 @@ class AgentWindowManager {
 
   // The window is gone (crash, failed load): nothing it held may block dictation.
   _forget() {
+    this.pressSlackTitle = null;
     this.slackTitle = null;
     void this.dragManager.stopWindowDrag();
     this.window = null;
@@ -336,18 +338,23 @@ class AgentWindowManager {
     win.moveTop?.();
   }
 
-  // The title of the Slack window the hotkey was pressed over (or a wake word
-  // spoken over), kept while the window shows: a Slack post that names no
-  // destination goes to its conversation. Read after the target is captured;
-  // a newer press, or one over another app, replaces it.
+  // The title of the Slack window the latest press was over (or a wake word
+  // spoken over), read after the target is captured. Only a request the
+  // window starts afterwards takes it (requestStarted), so a press that just
+  // answers a card or shows a running reply never moves that reply's post.
   _readSlackTitle(targetPidPromise) {
-    this.slackTitle = (async () => {
+    this.pressSlackTitle = (async () => {
       await targetPidPromise;
-      const context = await this.windowManager.selectionManager
-        ?.getTargetAppContext?.()
-        .catch(() => null);
-      return slackWindowTitle(context);
-    })();
+      return slackWindowTitle(await this.windowManager.selectionManager?.getTargetAppContext?.());
+    })().catch(() => null);
+  }
+
+  // The window started a new request: a Slack post that names no destination
+  // goes to the conversation the latest press was over, until the next
+  // request or a hide.
+  requestStarted(event) {
+    if (!isFromWindow(event, this.window)) return;
+    this.slackTitle = this.pressSlackTitle;
   }
 
   // Only this window's own requests are spoken over that Slack window; a read
@@ -358,6 +365,7 @@ class AgentWindowManager {
   }
 
   _hide() {
+    this.pressSlackTitle = null;
     this.slackTitle = null;
     const win = this.window;
     if (!win) return;

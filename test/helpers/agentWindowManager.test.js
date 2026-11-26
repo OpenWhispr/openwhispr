@@ -862,39 +862,80 @@ test("on KDE the window stays above each monitor's own panel", async () => {
   }
 });
 
-test("a press over Slack keeps its window title for this window's Slack posts while it shows", async (t) => {
-  let context = {
+test("a request takes the Slack window title of the latest press, and keeps it while the window shows", async (t) => {
+  const eng = {
     appSignature: "Slack com.tinyspeck.slackmacgap",
     windowTitle: "eng (Channel) - Acme - Slack",
   };
+  let context = eng;
   const { manager, win } = await openedManager({
     windowManager: createWindowManager({
       selectionManager: { captureTarget: async () => {}, getTargetAppContext: async () => context },
     }),
   });
   t.after(() => manager.dragManager.cleanup());
-  assert.equal(await manager.slackWindowTitle(fromAgent(win)), "eng (Channel) - Acme - Slack");
-  assert.equal(
-    await manager.slackWindowTitle({ sender: {}, senderFrame: {} }),
-    null,
-    "never another window's request"
-  );
+  const title = () => manager.slackWindowTitle(fromAgent(win));
+  const startRequest = () => manager.requestStarted(fromAgent(win));
+  const otherWindow = { sender: {}, senderFrame: {} };
+
+  assert.equal(await title(), null, "a press alone starts no request");
+  manager.requestStarted(otherWindow);
+  assert.equal(await title(), null, "only this window starts its requests");
+  startRequest();
+  assert.equal(await title(), eng.windowTitle);
+  assert.equal(await manager.slackWindowTitle(otherWindow), null, "never another window's request");
+
+  // A press that starts no request (answering a card by voice, showing the
+  // running reply) never moves the running request's post.
+  context = { appSignature: "Slack", windowTitle: "random (Channel) - Acme - Slack" };
+  manager.handleHotkey();
+  assert.equal(await title(), eng.windowTitle, "the running request keeps its press");
+  startRequest();
+  assert.equal(await title(), "random (Channel) - Acme - Slack", "the next request takes it");
 
   manager.hide(fromAgent(win));
-  assert.equal(await manager.slackWindowTitle(fromAgent(win)), null, "gone once the window hides");
+  assert.equal(await title(), null, "gone once the window hides");
+  startRequest();
+  assert.equal(await title(), null, "a request after the hide was pressed over nothing");
 
   // A wake word reads the window it was spoken over.
+  context = eng;
   manager.deliverCommand({ text: "post my update to Slack" });
-  assert.equal(await manager.slackWindowTitle(fromAgent(win)), "eng (Channel) - Acme - Slack");
+  startRequest();
+  assert.equal(await title(), eng.windowTitle);
 
   context = { appSignature: "TextEdit com.apple.TextEdit", windowTitle: "eng" };
   manager.handleHotkey();
-  assert.equal(await manager.slackWindowTitle(fromAgent(win)), null, "a press over another app");
+  startRequest();
+  assert.equal(await title(), null, "a press over another app");
 
   context = { appSignature: "Slack", windowTitle: "leads (Channel) - Acme - Slack" };
   manager.handleHotkey();
   manager._forget();
   // The tray's Ask assistant makes a new window, which was pressed over nothing.
   manager.open();
+  manager.requestStarted(fromAgent(manager.window));
   assert.equal(await manager.slackWindowTitle(fromAgent(manager.window)), null);
+});
+
+test("a Slack window title that can't be read is no title, and nothing is left unhandled", async (t) => {
+  const unhandled = [];
+  const onUnhandled = (reason) => unhandled.push(reason);
+  process.on("unhandledRejection", onUnhandled);
+  t.after(() => process.off("unhandledRejection", onUnhandled));
+  const { manager, win } = await openedManager({
+    windowManager: createWindowManager({
+      selectionManager: {
+        captureTarget: async () => {},
+        getTargetAppContext: () => {
+          throw new Error("helper gone");
+        },
+      },
+    }),
+  });
+  t.after(() => manager.dragManager.cleanup());
+  manager.requestStarted(fromAgent(win));
+  assert.equal(await manager.slackWindowTitle(fromAgent(win)), null);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(unhandled, []);
 });

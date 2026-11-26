@@ -90,6 +90,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   agentWindowSetLayout: (request) => ipcRenderer.invoke("agent-window-set-layout", request),
   agentWindowHide: () => ipcRenderer.invoke("agent-window-hide"),
   agentWindowSetDragging: (dragging) => ipcRenderer.send("agent-window-drag", dragging),
+  agentWindowRequestStarted: () => ipcRenderer.send("agent-window-request-started"),
   agentWindowSetVoiceState: (state, attempt) =>
     ipcRenderer.invoke("agent-window-voice-state", state, attempt),
   openAgentWindow: () => ipcRenderer.invoke("open-agent-window"),

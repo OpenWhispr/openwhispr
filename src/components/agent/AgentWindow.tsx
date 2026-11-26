@@ -75,6 +75,8 @@ interface RequestExtras {
   attachment?: ChatImageAttachment | null;
   /** Another app's writable field from the press, with nothing selected: the answer is typed there. */
   caretSessionId?: string;
+  /** Carries on a turn that paused at the step cap, which keeps that turn's press. */
+  continues?: boolean;
 }
 
 type SelectionEditTarget =
@@ -446,6 +448,8 @@ export default function AgentWindow() {
         return;
       }
       busyRef.current = true;
+      // Main points this request's Slack posts at the latest press's window.
+      if (!extras?.continues) window.electronAPI?.agentWindowRequestStarted?.();
       stopReading();
       openedByTakeRef.current = false;
       const press = pressRef.current;
@@ -1086,7 +1090,7 @@ export default function AgentWindow() {
   );
 
   const continueTurn = useCallback(() => {
-    submit(t("agentMode.turn.continueMessage"), true, {});
+    submit(t("agentMode.turn.continueMessage"), true, { continues: true });
   }, [submit, t]);
 
   const switchChat = useCallback(
