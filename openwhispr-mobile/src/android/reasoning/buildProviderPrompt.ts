@@ -6,7 +6,7 @@ import {
   TONE_PRIORITY_INSTRUCTION,
 } from '@/android/reasoning/composerPrompt';
 import { sharedDictionaryHint } from '@/lib/sharedDictionaryHints';
-import type { ReasoningRequest } from '@/types';
+import type { ReasoningRequest } from '@/android/types';
 
 export interface ProviderPrompt {
   systemPrompt: string;

@@ -1,7 +1,6 @@
 [
   "config:development:infoPlist.NSAdvertisingAttributionReportEndpoint",
   "config:production:infoPlist.NSAdvertisingAttributionReportEndpoint",
-  "module:src/types/index.ts",
   "native:OpenWhispr/Info.plist",
   "style:0:order",
   "style:0:rule:!hidden",

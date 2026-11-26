@@ -1,4 +1,4 @@
-import type { UserConfig } from '@/types';
+import type { UserConfig } from '@/android/types';
 import type { TrackingAuthorizationStatus } from '@/lib/trackingTransparency';
 
 type AppsFlyerModule = typeof import('@/android/lib/appsflyer');

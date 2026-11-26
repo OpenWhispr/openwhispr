@@ -19,7 +19,7 @@ import {
 } from './models';
 import { Button, Card, Row, useUiStyles } from './ui';
 import type { AndroidSpeechModelId } from './speechSelection';
-import type { UserConfig } from '@/types';
+import type { UserConfig } from '@/android/types';
 import { speechModelSupportsLanguages } from './speechCapabilities';
 import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
 export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) {

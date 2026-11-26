@@ -1,5 +1,5 @@
 import { androidCopy } from './androidCopy';
-import type { LocalReasoningReadiness, ReasoningRoutingOptions } from '@/types';
+import type { LocalReasoningReadiness, ReasoningRoutingOptions } from '@/android/types';
 
 const upstream: typeof import('./localReasoning') = require('./localReasoning.ts');
 
@@ -78,11 +78,13 @@ export function toLocalReasoningError(error: unknown): LocalReasoningError {
   if (result.code === 'APPLE_LLM_CANCELLED') return result;
   const code =
     typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : undefined;
+  // The shared class is typed with the iOS codes; Android adds LOCAL_REASONING_FAILED.
+  type Code = ConstructorParameters<typeof LocalReasoningError>[0];
   if (code === 'LOCAL_CONTEXT_LIMIT' || code === 'LOCAL_REASONING_FAILED') {
-    return new LocalReasoningError(code, result.message);
+    return new LocalReasoningError(code as Code, result.message);
   }
   return result.code === 'APPLE_LLM_FAILED' && code !== 'APPLE_LLM_FAILED'
-    ? new LocalReasoningError('LOCAL_REASONING_FAILED', result.message)
+    ? new LocalReasoningError('LOCAL_REASONING_FAILED' as Code, result.message)
     : result;
 }
 

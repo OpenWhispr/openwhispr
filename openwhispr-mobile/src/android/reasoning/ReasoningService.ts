@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import type { ReasoningRequest, ReasoningResponse, ReasoningRoutingOptions } from '@/types';
+import type { ReasoningRequest, ReasoningResponse, ReasoningRoutingOptions } from '@/android/types';
 import type { InferenceSelection } from '@/android/providers/mobileProviders';
 import { buildProviderPrompt, stripThinkingTags } from '@/android/reasoning/buildProviderPrompt';
 import { api } from '@/android/lib/apiClient';

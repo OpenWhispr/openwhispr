@@ -7,7 +7,7 @@ import {
   workflowSelection,
   workflowSummary,
 } from '@/lib/aiWorkflows';
-import type { UserConfig } from '@/types';
+import type { UserConfig } from '@/android/types';
 
 jest.mock('@/lib/inferenceModes', () => {
   const { Platform: runtimePlatform } = require('react-native') as typeof import('react-native');

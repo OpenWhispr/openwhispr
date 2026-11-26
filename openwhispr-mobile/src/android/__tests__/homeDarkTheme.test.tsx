@@ -52,7 +52,7 @@ import { darkTheme, lightTheme } from '../theme';
 import { IconTile, PillButton, SectionHeader, TileButton, useHome } from '../home/kit';
 import { HistoryCard, Stats } from '../home/Sections';
 import { OlderRecordingsRow } from '../home/OlderRecordings';
-import type { Transcript } from '@/types';
+import type { Transcript } from '@/android/types';
 
 const mockScheme = useColorScheme as jest.MockedFunction<typeof useColorScheme>;
 const flat = (style: unknown) => StyleSheet.flatten(style as never) as Record<string, unknown>;

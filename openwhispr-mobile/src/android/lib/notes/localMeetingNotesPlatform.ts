@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { LOCAL_OUTPUT_TOKEN_RESERVE } from '@/lib/localReasoning';
 import { buildActionSystemPrompt } from '@/android/lib/notes/generateNotesPrompt';
-import type { StructuredMeetingNotes } from '@/types';
+import type { StructuredMeetingNotes } from '@/android/types';
 
 export interface LocalMeetingNotesPlatform {
   modelName: string;

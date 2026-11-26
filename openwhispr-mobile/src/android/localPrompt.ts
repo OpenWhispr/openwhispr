@@ -1,5 +1,5 @@
 import { DEFAULT_CLEANUP_PROMPT } from '@/config/prompts/registry';
-import type { ReasoningRequest } from '@/types';
+import type { ReasoningRequest } from '@/android/types';
 
 // Small CPU models spend most of a short dictation evaluating instructions.
 // Condense only the built-in cleanup template; keep explicit prompts and the

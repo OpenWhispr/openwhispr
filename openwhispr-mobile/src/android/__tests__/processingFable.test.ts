@@ -1,4 +1,4 @@
-import type { UserConfig } from '@/types';
+import type { UserConfig } from '@/android/types';
 
 const mockDiscover = jest.fn();
 jest.mock('@/services/providers/ProviderExecution', () => ({

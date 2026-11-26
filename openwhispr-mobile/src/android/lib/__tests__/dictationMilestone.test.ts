@@ -1,4 +1,4 @@
-import type { UserConfig } from '@/types';
+import type { UserConfig } from '@/android/types';
 
 type MilestoneModule = typeof import('@/android/lib/dictationMilestone');
 type DictationInput = Parameters<MilestoneModule['recordDictationMilestone']>[0];

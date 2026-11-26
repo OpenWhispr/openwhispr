@@ -1,6 +1,6 @@
 import type { BubbleStatus } from '../../../modules/android-dictation/src';
 import type { InsightEvent } from '../insights';
-import type { Transcript } from '@/types';
+import type { Transcript } from '@/android/types';
 import type { HomeKey } from './strings';
 import type { LucideIconName } from '@/components/ui/SystemIcon';
 

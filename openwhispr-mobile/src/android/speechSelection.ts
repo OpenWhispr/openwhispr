@@ -1,5 +1,5 @@
 import { useConfigStore } from '@/android/store/useConfigStore';
-import type { UserConfig } from '@/types';
+import type { UserConfig } from '@/android/types';
 import { ANDROID_MODELS, modelReady, modelSupported, type AndroidModelId } from './models';
 import { speechModelSupportsLanguages } from './speechCapabilities';
 

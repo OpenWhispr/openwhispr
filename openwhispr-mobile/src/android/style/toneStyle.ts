@@ -1,5 +1,5 @@
 import { useConfigStore } from '@/android/store/useConfigStore';
-import type { KeyboardTone, UserConfig } from '@/types';
+import type { KeyboardTone, UserConfig } from '@/android/types';
 
 /**
  * Tone & Style on Android: the tone cleanup writes in, picked per kind of app. Categories, tones

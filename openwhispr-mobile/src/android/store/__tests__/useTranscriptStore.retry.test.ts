@@ -100,7 +100,7 @@ jest.mock('../../../../modules/audio-tools/src', () => ({
   },
 }));
 
-import type { Transcript } from '@/types';
+import type { Transcript } from '@/android/types';
 import { withActiveProviderJob } from '@/lib/providerJobActivity';
 
 const { useTranscriptStore } =

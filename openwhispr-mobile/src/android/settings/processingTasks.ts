@@ -5,7 +5,7 @@ import { workflowSelection } from '@/lib/aiWorkflows';
 import type { CloudAccess } from '@/lib/inferenceModes';
 import { providerDisplayName } from '@/android/providers/mobileProviders';
 import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
-import type { ProcessingMode, UserConfig } from '@/types';
+import type { ProcessingMode, UserConfig } from '@/android/types';
 import { speechModelSupportsLanguages } from '../speechCapabilities';
 import type { AndroidSpeechModelId } from '../speechSelection';
 import type { AndroidModelId } from '../models';

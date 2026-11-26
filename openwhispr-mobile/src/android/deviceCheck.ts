@@ -10,7 +10,7 @@ import { buildProviderPrompt } from '@/android/reasoning/buildProviderPrompt';
 import { buildDictationHints } from '@/lib/dictationHints';
 import { getActiveCustomCleanupPrompt } from '@/store/useCustomPromptsStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import type { KeyboardTone } from '@/types';
+import type { KeyboardTone } from '@/android/types';
 import { dictationToneStyle } from './style/toneStyle';
 import i18n from './strings';
 

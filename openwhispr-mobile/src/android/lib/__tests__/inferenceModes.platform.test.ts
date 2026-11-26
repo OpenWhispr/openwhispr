@@ -2,7 +2,7 @@ jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
 
 import { noteChatSplitConfig } from '@/lib/inferenceModes';
 import { noteChatSplitConfig as androidNoteChatSplitConfig } from '@/lib/inferenceModes.android';
-import type { UserConfig } from '@/types';
+import type { UserConfig } from '@/android/types';
 
 it.each([
   ['cloud', { mode: 'openwhispr' as const }],

@@ -9,7 +9,7 @@ import { Sentry } from '@/android/lib/sentry';
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
 import { createMeetingRecoveryLifecycle } from '@/android/lib/meetingRecoveryLifecycle';
 import { useNotesStore } from '@/android/store/useNotesStore';
-import type { TranscriptionStatus } from '@/types';
+import type { TranscriptionStatus } from '@/android/types';
 
 export const MEETING_RESUME_MARKER_PREFIX = 'meetingResumeAttempted:';
 

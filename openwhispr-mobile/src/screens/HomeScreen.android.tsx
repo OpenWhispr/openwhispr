@@ -1,6 +1,6 @@
 import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
 import { StorageService } from '@/services/storage/StorageService.android';
-import type { Transcript } from '@/types';
+import type { Transcript } from '@/android/types';
 import {
   AccessibilityInfo,
   Animated,

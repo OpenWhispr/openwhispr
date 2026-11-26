@@ -45,7 +45,7 @@ import { deleteNotesWithUndo } from '@/android/notes/pendingDeletes';
 import { lightTheme } from '@/android/theme';
 import type { Action, Note, Segment, Speaker, SpeakerProfile } from '@/data/types';
 import type { Folder, Space } from '@/data';
-import type { UserConfig } from '@/types';
+import type { UserConfig } from '@/android/types';
 
 type RenderedNode = { children: (RenderedNode | string)[] };
 /** The notes input shows its text as styled children (no `value`); join them back. */

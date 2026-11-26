@@ -19,7 +19,7 @@ import {
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { snapshotTextInference, snapshotTranscriptionJob } from '@/lib/inferenceRouting';
 import { logTranscriptionCompleted } from '@/android/lib/appsflyer';
-import type { KeyboardTone, Transcript, TranscriptionProvider } from '@/types';
+import type { KeyboardTone, Transcript, TranscriptionProvider } from '@/android/types';
 import type {
   TranscriptLifecycle,
   TranscriptLifecycleContext,

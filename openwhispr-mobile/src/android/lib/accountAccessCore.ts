@@ -4,7 +4,7 @@ import { isAccountRequiredError } from '@/lib/accountRequiredError';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import type { AuthUser } from '@/android/lib/authClient';
-import type { ProcessingMode } from '@/types';
+import type { ProcessingMode } from '@/android/types';
 
 export interface AccountAccessPresentation {
   localModeAction: string;

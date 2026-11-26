@@ -1,5 +1,5 @@
 import type { ReactNativeOptions } from '@sentry/react-native';
-import type { UserConfig } from '@/types';
+import type { UserConfig } from '@/android/types';
 
 type SentryModule = typeof import('@/android/lib/sentry');
 type ErrorEvent = Parameters<NonNullable<ReactNativeOptions['beforeSend']>>[0];

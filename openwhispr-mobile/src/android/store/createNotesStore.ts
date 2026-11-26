@@ -12,7 +12,7 @@ import { useConfigStore } from '@/android/store/useConfigStore';
 import { deletePrivateNoteCloudCopy, queuePrivateNoteDeletion } from '@/sync/privateNoteDeletion';
 import { createSyncContext } from '@/sync/createSyncContext';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
-import type { TranscriptionStatus } from '@/types';
+import type { TranscriptionStatus } from '@/android/types';
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
 import { assertTransition } from '@/lib/diarization/transcriptionStatus';
 import { formatTranscriptForExport } from '@/lib/diarization/transcriptDisplay';
