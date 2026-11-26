@@ -177,7 +177,7 @@ it('uses the same Cloud choice when model discovery fails', async () => {
 it('reasserts Local before continuing with a completed model', async () => {
   setDownload('parakeet-v2', { status: 'completed', progress: 1 });
   render(<PrivateDownloadStep />);
-  fireEvent.press(await screen.findByText('Continue with Private'));
+  fireEvent.press(await screen.findByText('Continue with Local Mode'));
   await waitFor(() => expect(mockChooseMode).toHaveBeenCalledWith('private', 'private-download'));
 });
 
@@ -189,7 +189,7 @@ describe('PrivateDownloadStep — switching to Cloud', () => {
     render(<PrivateDownloadStep />);
     await screen.findByText('Parakeet v2');
 
-    fireEvent.press(screen.getByText("Don't use Private — switch to Cloud"));
+    fireEvent.press(screen.getByText("Don't use Local Mode — switch to Cloud"));
 
     await waitFor(() => expect(mockCancelDownload).toHaveBeenCalledWith('parakeet-v2'));
     expect(mockChooseMode).toHaveBeenCalledWith('cloud', 'private-download');
@@ -268,7 +268,7 @@ it('stops a stale download even when the new recommendation is already installed
 
   render(<PrivateDownloadStep />);
 
-  await screen.findByText('Continue with Private');
+  await screen.findByText('Continue with Local Mode');
   await waitFor(() =>
     expect(useModelDownloadStore.getState().downloads['parakeet-v2'].status).toBe('idle'),
   );

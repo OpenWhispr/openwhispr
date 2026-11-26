@@ -34,6 +34,11 @@ function pinToBottom(node: HTMLElement): void {
   if (bottom > 0 && Math.abs(node.scrollTop - bottom) > 1) node.scrollTop = bottom;
 }
 
+// How long an upward gesture an inner scroller took stays its own between
+// events. Chromium keeps a whole gesture, momentum included, on the scroller it
+// started in, even once that scroller reaches its top.
+const INNER_GESTURE_MS = 200;
+
 // Portaled descendants (e.g. a popover opened from a row) bubble synthetic
 // events through the React tree while their DOM target lives outside the
 // scroller; wheeling there scrolls another surface, not the stream.
@@ -41,6 +46,31 @@ function isReaderGesture(node: HTMLElement, target: EventTarget | null): boolean
   return (
     node.scrollHeight - node.clientHeight > 1 && target instanceof Node && node.contains(target)
   );
+}
+
+// A clipped box scrolled by scrollIntoView has a scrollTop too, but a wheel
+// over it scrolls the stream.
+function scrollsVertically(el: Element): boolean {
+  const overflowY = el.ownerDocument.defaultView?.getComputedStyle(el).overflowY ?? "";
+  return el.scrollHeight > el.clientHeight && /^(?:auto|scroll)$/.test(overflowY);
+}
+
+// An upward gesture moves the reader up the stream, unless a scroller inside
+// it that can still scroll up (a card's long body) takes it, or it goes on from
+// a gesture such a scroller took (`innerGestureAt` holds when it last did).
+function leavesBottom(
+  node: HTMLElement,
+  target: EventTarget | null,
+  at: number,
+  innerGestureAt: { current: number }
+): boolean {
+  if (!isReaderGesture(node, target)) return false;
+  let inner = at - innerGestureAt.current < INNER_GESTURE_MS;
+  for (let el = target as Node | null; !inner && el && el !== node; el = el.parentNode) {
+    inner = el instanceof Element && el.scrollTop > 0 && scrollsVertically(el);
+  }
+  if (inner) innerGestureAt.current = at;
+  return !inner;
 }
 
 /**
@@ -55,6 +85,7 @@ export function useStickToBottom<T extends HTMLElement>(
   const scrollRef = useRef<T>(null);
   const followerRef = useRef<ScrollFollowController | null>(null);
   const touchYRef = useRef<number | null>(null);
+  const innerGestureAtRef = useRef(Number.NEGATIVE_INFINITY);
   if (!followerRef.current) {
     followerRef.current = createScrollFollowController({
       nearBottomThreshold: PIN_THRESHOLD_PX,
@@ -75,8 +106,11 @@ export function useStickToBottom<T extends HTMLElement>(
     const ro = new ResizeObserver(() => {
       if (followerRef.current?.isFollowing()) pinToBottom(node);
     });
-    ro.observe(node);
-    // Border box, so bottom padding that makes room for an overlay (the chat composer) re-pins too.
+    // The scroller's own border box: a resized viewport re-pins, but padding the scroller
+    // makes for an overlay over the page (the note chat over a transcript) doesn't move it.
+    ro.observe(node, { box: "border-box" });
+    // The content's border box, so bottom padding that makes room for the chat's own
+    // composer re-pins, keeping the last lines above it.
     if (content) ro.observe(content, { box: "border-box" });
     return () => ro.disconnect();
   }, [dep, resetToTop]);
@@ -89,7 +123,11 @@ export function useStickToBottom<T extends HTMLElement>(
 
   const handleWheel = useCallback((event: WheelEvent<T>) => {
     const node = scrollRef.current;
-    if (event.deltaY < 0 && node && isReaderGesture(node, event.target)) {
+    if (
+      event.deltaY < 0 &&
+      node &&
+      leavesBottom(node, event.target, event.timeStamp, innerGestureAtRef)
+    ) {
       followerRef.current?.leaveBottom();
     }
   }, []);
@@ -103,7 +141,12 @@ export function useStickToBottom<T extends HTMLElement>(
     const previousY = touchYRef.current;
     if (nextY == null) return;
     const node = scrollRef.current;
-    if (previousY != null && nextY > previousY && node && isReaderGesture(node, event.target)) {
+    if (
+      previousY != null &&
+      nextY > previousY &&
+      node &&
+      leavesBottom(node, event.target, event.timeStamp, innerGestureAtRef)
+    ) {
       followerRef.current?.leaveBottom();
     }
     touchYRef.current = nextY;

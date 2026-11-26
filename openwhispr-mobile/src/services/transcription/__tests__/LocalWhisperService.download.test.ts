@@ -10,7 +10,12 @@ jest.mock('expo-file-system/legacy', () => ({
   makeDirectoryAsync: jest.fn(async () => undefined),
 }));
 
+jest.mock('@/lib/keyboardLocalEngine', () => ({
+  refreshKeyboardLocalEngine: jest.fn(async () => undefined),
+}));
+
 import * as FileSystem from 'expo-file-system/legacy';
+import { refreshKeyboardLocalEngine } from '@/lib/keyboardLocalEngine';
 import { LocalWhisperService } from '../LocalWhisperService';
 
 const mockCreateDownloadResumable = FileSystem.createDownloadResumable as jest.MockedFunction<
@@ -76,5 +81,37 @@ describe('LocalWhisperService model downloads', () => {
 
     await expect(LocalWhisperService.downloadModel('base')).resolves.toBeUndefined();
     expect(mockDeleteAsync).not.toHaveBeenCalled();
+  });
+
+  // Whisper base being on disk changes which engine Local Mode resolves to, so the keyboard's
+  // snapshot must follow a download or delete made while the app stays open.
+  it("refreshes the keyboard's Local engine after a download and after a delete", async () => {
+    mockDownloadAsync.mockResolvedValue({
+      status: 200,
+      uri: '/doc/whisper-models/base.bin',
+      headers: {},
+      mimeType: 'application/octet-stream',
+    });
+    await LocalWhisperService.downloadModel('base');
+    expect(refreshKeyboardLocalEngine).toHaveBeenCalledTimes(1);
+
+    jest
+      .spyOn(LocalWhisperService, 'getAvailableModels')
+      .mockResolvedValue([
+        { name: 'base', size: 1, downloaded: true, path: '/doc/whisper-models/base.bin' },
+      ]);
+    await LocalWhisperService.deleteModel('base');
+    expect(refreshKeyboardLocalEngine).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not refresh after a failed download', async () => {
+    mockDownloadAsync.mockResolvedValue({
+      status: 404,
+      uri: '/doc/whisper-models/base.bin',
+      headers: {},
+      mimeType: 'text/html',
+    });
+    await expect(LocalWhisperService.downloadModel('base')).rejects.toThrow(/HTTP 404/);
+    expect(refreshKeyboardLocalEngine).not.toHaveBeenCalled();
   });
 });

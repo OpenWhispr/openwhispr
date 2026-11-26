@@ -58,8 +58,11 @@ class TinfoilRealtimeStreaming extends OpenAIRealtimeStreaming {
     const model = options.model || TINFOIL_REALTIME_MODEL;
     return super.connect({
       ...options,
+      // voxtral's support for a pinned language is unverified, so meetings keep
+      // auto-detection like dictation does.
+      language: undefined,
       model,
-      createSocket: () => this._createSocketImpl({ model, apiKey }),
+      createSocket: (signal) => this._createSocketImpl({ model, apiKey, signal }),
     });
   }
 
@@ -205,8 +208,12 @@ class TinfoilRealtimeStreaming extends OpenAIRealtimeStreaming {
     this._commitDrain = null;
   }
 
-  async disconnect() {
+  async disconnect({ commit = true } = {}) {
     this._stopCommitTimer();
+    if (!commit) {
+      this._settleCommit();
+      return super.disconnect({ commit: false });
+    }
     const deadline = Date.now() + COMMIT_DRAIN_TIMEOUT_MS;
     if (!(await this._waitForCommitDrain(deadline))) {
       return super.disconnect({ commit: false });

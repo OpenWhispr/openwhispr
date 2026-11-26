@@ -12,6 +12,7 @@ const SECRET_KEYS = [
   "CORTI_CLIENT_ID",
   "CORTI_CLIENT_SECRET",
   "CUSTOM_TRANSCRIPTION_API_KEY",
+  "SELF_HOSTED_STT_HEADERS",
   "CUSTOM_CLEANUP_API_KEY",
   "BEDROCK_ACCESS_KEY_ID",
   "BEDROCK_SECRET_ACCESS_KEY",
@@ -59,6 +60,10 @@ const PERSISTED_KEYS = [
   "AZURE_OPENAI_API_VERSION",
   "VERTEX_PROJECT",
   "VERTEX_LOCATION",
+  // Written by the Settings debug toggle (set-debug-logging)
+  "OPENWHISPR_LOG_LEVEL",
+  // "bundled" turns off model catalog updates (Settings privacy toggle, or managed installs)
+  "OPENWHISPR_MODEL_REGISTRY_MODE",
 ];
 
 // Module-level so writes are serialized across all instances — hotkeyManager
@@ -236,7 +241,11 @@ class EnvironmentManager {
     for (const key of PERSISTED_KEYS) {
       if (stripSecrets && SECRET_KEY_SET.has(key)) continue;
       if (process.env[key]) {
-        envContent += `${key}=${process.env[key]}\n`;
+        const value =
+          key === "SELF_HOSTED_STT_HEADERS" && !process.env[key].startsWith("base64:")
+            ? `base64:${Buffer.from(process.env[key], "utf8").toString("base64")}`
+            : process.env[key];
+        envContent += `${key}=${value}\n`;
       }
     }
     const tmpPath = `${envPath}.tmp`;
@@ -279,6 +288,17 @@ class EnvironmentManager {
 
   saveCortiClientSecret(key) {
     return this._saveKey("CORTI_CLIENT_SECRET", key);
+  }
+
+  getSelfHostedSttHeaders() {
+    const value = this._getKey("SELF_HOSTED_STT_HEADERS");
+    return value.startsWith("base64:")
+      ? Buffer.from(value.slice(7), "base64").toString("utf8")
+      : value;
+  }
+
+  saveSelfHostedSttHeaders(value) {
+    return this._saveKey("SELF_HOSTED_STT_HEADERS", value);
   }
 
   getCustomTranscriptionKey() {
@@ -488,6 +508,50 @@ class EnvironmentManager {
     return { success: true, path: envPath };
   }
 
+  saveDebugLogging(enabled) {
+    const logLevel = enabled ? "debug" : "info";
+    const envPath = path.join(app.getPath("userData"), ".env");
+    // Queue the entire read-modify-write so other saves cannot restore a stale level.
+    envWriteQueue = envWriteQueue
+      .catch(() => {})
+      .then(async () => {
+        let content = "";
+        try {
+          content = await fsPromises.readFile(envPath, "utf8");
+        } catch (error) {
+          if (error.code !== "ENOENT") throw error;
+        }
+
+        const lines = content.split("\n");
+        const logLevelIndex = lines.findIndex((line) =>
+          line.trim().startsWith("OPENWHISPR_LOG_LEVEL=")
+        );
+        const logLevelLine = `OPENWHISPR_LOG_LEVEL=${logLevel}`;
+        if (logLevelIndex !== -1) {
+          lines[logLevelIndex] = logLevelLine;
+        } else {
+          if (lines[lines.length - 1] !== "") lines.push("");
+          lines.push(logLevelLine);
+        }
+
+        const tmpPath = `${envPath}.tmp`;
+        await fsPromises.writeFile(tmpPath, lines.join("\n"), "utf8");
+        await fsPromises.rename(tmpPath, envPath);
+        process.env.OPENWHISPR_LOG_LEVEL = logLevel;
+      });
+    return envWriteQueue;
+  }
+
+  // Off keeps the app on its bundled model catalog: no cached update, no network check.
+  saveModelRegistryUpdates(enabled) {
+    if (enabled) {
+      delete process.env.OPENWHISPR_MODEL_REGISTRY_MODE;
+      return this.removeKeyFromEnvFile("OPENWHISPR_MODEL_REGISTRY_MODE");
+    }
+    process.env.OPENWHISPR_MODEL_REGISTRY_MODE = "bundled";
+    return this._writeEnvFileAtomic(path.join(app.getPath("userData"), ".env"));
+  }
+
   async clearAllPersistedData() {
     for (const envVarName of PERSISTED_KEYS) {
       delete process.env[envVarName];
@@ -503,8 +567,8 @@ class EnvironmentManager {
 
   // Removes a single key's line from .env, preserving every other line
   // verbatim. saveAllKeysToEnvFile() would instead regenerate the file from
-  // PERSISTED_KEYS, dropping hand-added lines (e.g. OPENWHISPR_LOG_LEVEL) and
-  // materializing session/shell env values into the file.
+  // PERSISTED_KEYS, dropping hand-added lines and materializing session/shell
+  // env values into the file.
   removeKeyFromEnvFile(key) {
     const envPath = path.join(app.getPath("userData"), ".env");
     envWriteQueue = envWriteQueue.catch(() => {}).then(() => this._removeKeyLine(envPath, key));

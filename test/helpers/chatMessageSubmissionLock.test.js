@@ -48,6 +48,7 @@ test("message sender reports whether the submission lock accepted the send", asy
     resolveCreate = resolve;
   });
   const persistence = {
+    conversationId: null,
     messages: [],
     setMessages() {},
     async saveUserMessage() {},
@@ -72,4 +73,54 @@ test("message sender reports whether the submission lock accepted the send", asy
   assert.equal(await second, false);
   resolveCreate(1);
   assert.equal(await first, true);
+});
+
+test("leaving a session while its message saves prevents inference and releases the send lock", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t);
+  const { useChatMessageSender } = await vite.ssrLoadModule(
+    "/components/chat/useChatMessageSender.ts"
+  );
+  let version = 0;
+  let releaseSave;
+  let saveStarted = Promise.withResolvers();
+  let streams = 0;
+  const persistence = {
+    conversationId: 1,
+    messages: [],
+    getSessionVersion: () => version,
+    setMessages() {},
+    saveUserMessage: () =>
+      new Promise((resolve) => {
+        releaseSave = resolve;
+        saveStarted.resolve();
+      }),
+  };
+  let sendMessage;
+  function Harness() {
+    sendMessage = useChatMessageSender({
+      conversationId: 1,
+      persistence,
+      streaming: {
+        sendToAI: async () => {
+          streams += 1;
+        },
+      },
+      createConversation: async () => 1,
+    });
+    return null;
+  }
+  renderToStaticMarkup(React.createElement(Harness));
+  const first = sendMessage("Old request");
+  await saveStarted.promise;
+  version += 1;
+  releaseSave();
+  assert.equal(await first, false);
+  assert.equal(streams, 0);
+  saveStarted = Promise.withResolvers();
+  const next = sendMessage("New request");
+  await saveStarted.promise;
+  releaseSave();
+  assert.equal(await next, true);
+  assert.equal(streams, 1);
 });

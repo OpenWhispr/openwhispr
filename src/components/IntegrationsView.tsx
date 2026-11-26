@@ -1,19 +1,26 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { ExternalLink } from "./icons";
+import { Plus } from "./icons";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { useSettingsStore } from "../stores/settingsStore";
 import { ensureConnectorStatus, useConnectorStatusStore } from "../stores/connectorStatusStore";
 import { useConnectorAccess } from "../hooks/useConnectorAccess";
+import { useApiAccessRestriction } from "../hooks/usePolicy";
+import { usePolicyStore } from "../stores/policyStore";
+import { isPolicyActionAllowed } from "../stores/policyRules";
 import ApiKeysSection from "./ApiKeysSection";
 import { ConnectorsSection } from "./ConnectorsSection";
+import { BetaBadge } from "./connectors/BetaBadge";
 import { CONNECTOR_ROWS } from "./connectors/connectorRows";
 import { IntegrationsNav } from "./integrations/IntegrationsNav";
 import { IntegrationsPane, UpsellBar } from "./integrations/IntegrationsPane";
 import { CalendarsPane } from "./integrations/CalendarsPane";
+import { SkillsPane } from "./integrations/SkillsPane";
 import { McpPane } from "./integrations/McpPane";
 import { CliPane } from "./integrations/CliPane";
+import { ApiAccessNotice } from "./integrations/ApiAccessNotice";
+import type { SkillChatStart, SkillOpenRequest } from "../types/skills";
 import {
   INTEGRATIONS_SECTION_ICONS,
   INTEGRATIONS_SECTIONS,
@@ -30,6 +37,10 @@ interface IntegrationsViewProps {
   onUpgrade: () => void;
   section: IntegrationsSection;
   onSectionChange: (section: IntegrationsSection) => void;
+  /** Absent where the assistant isn't allowed: the Skills page then offers no chat. */
+  onStartSkillChat?: (start: SkillChatStart) => void;
+  openSkillRequest?: SkillOpenRequest | null;
+  onOpenSkillRequestHandled?: () => void;
 }
 
 export default function IntegrationsView({
@@ -37,10 +48,15 @@ export default function IntegrationsView({
   onUpgrade,
   section,
   onSectionChange,
+  onStartSkillChat,
+  openSkillRequest,
+  onOpenSkillRequestHandled,
 }: IntegrationsViewProps): ReactElement {
   const { t } = useTranslation();
   const isMac = window.electronAPI?.getPlatform?.() === "darwin";
   const connectorAccess = useConnectorAccess();
+  const apiRestriction = useApiAccessRestriction();
+  const policyActionsAllowed = usePolicyStore(isPolicyActionAllowed);
   const readyConnectors = useConnectorStatusStore(
     (state) =>
       CONNECTOR_ROWS.filter((row) => {
@@ -64,6 +80,7 @@ export default function IntegrationsView({
   );
   if (!mounted.has(section)) setMounted(new Set(mounted).add(section));
   const [createKeyRequest, setCreateKeyRequest] = useState(0);
+  const [canCreateKey, setCanCreateKey] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const paneElements = useRef<Partial<Record<IntegrationsSection, HTMLDivElement | null>>>({});
   const focusOpenedSection = useRef(false);
@@ -92,6 +109,7 @@ export default function IntegrationsView({
       id,
       sectionMeta(id, {
         isPaid,
+        apiAccessRestricted: apiRestriction !== null,
         connectors: { ...connectorAccess, ready: readyConnectors },
         connectedCalendars,
       }),
@@ -103,57 +121,88 @@ export default function IntegrationsView({
     connectors: (
       <IntegrationsPane
         title={titleOf("connectors")}
+        titleBadge={<BetaBadge />}
         description={t("integrations.connectors.description")}
       >
         <ConnectorsSection onUpgrade={onUpgrade} />
       </IntegrationsPane>
+    ),
+    skills: (
+      <SkillsPane
+        title={titleOf("skills")}
+        active={section === "skills"}
+        onStartSkillChat={onStartSkillChat}
+        openSkillRequest={openSkillRequest}
+        onOpenSkillRequestHandled={onOpenSkillRequestHandled}
+      />
     ),
     calendars: <CalendarsPane title={titleOf("calendars")} />,
     api: (
       <IntegrationsPane
         title={titleOf("api")}
         description={t("integrations.api.description")}
+        docsUrl={API_DOCS_URL}
         actions={
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => window.electronAPI?.openExternal?.(API_DOCS_URL)}
-            className="gap-1.5 text-muted-foreground"
-          >
-            {t("apiKeysSection.docsLink")}
-            <ExternalLink className="h-3 w-3" />
-          </Button>
+          isPaid &&
+          !apiRestriction && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!canCreateKey}
+              onClick={() => setCreateKeyRequest((request) => request + 1)}
+            >
+              <Plus className="h-3.5 w-3.5 me-1.5" />
+              {t("apiKeysSection.createButton")}
+            </Button>
+          )
         }
       >
+        {apiRestriction && <ApiAccessNotice restriction={apiRestriction} />}
+        {/* Existing keys stay listed while access is off, so a leaked one can still be revoked.
+            A policy that refuses actions blocks the list too: hidden, but kept mounted so a
+            remount doesn't replay a settled create request. */}
         {isPaid ? (
           <>
-            <ApiKeysSection createRequest={createKeyRequest} />
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 ps-1 text-xs text-muted-foreground">
-              <span>{t("integrations.api.useWith")}</span>
-              {(
-                [
-                  ["mcp", McpIcon],
-                  ["cli", CliIcon],
-                ] as const
-              ).map(([id, Icon]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => openSection(id)}
-                  className="inline-flex items-center gap-1 rounded-sm text-primary/80 hover:text-primary outline-none focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors"
-                >
-                  <Icon size={13} />
-                  {titleOf(id)}
-                </button>
-              ))}
-            </div>
+            <ApiKeysSection
+              createRequest={createKeyRequest}
+              onCanCreateChange={setCanCreateKey}
+              allowCreate={!apiRestriction}
+              listBlocked={apiRestriction !== null && !policyActionsAllowed}
+            />
+            {!apiRestriction && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 ps-1 text-xs text-muted-foreground">
+                <span>{t("integrations.api.useWith")}</span>
+                {(
+                  [
+                    ["mcp", McpIcon],
+                    ["cli", CliIcon],
+                  ] as const
+                ).map(([id, Icon]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => openSection(id)}
+                    className="inline-flex items-center gap-1 rounded-sm text-primary/80 hover:text-primary outline-none focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors"
+                  >
+                    <Icon size={13} />
+                    {titleOf(id)}
+                  </button>
+                ))}
+              </div>
+            )}
           </>
         ) : (
-          <UpsellBar message={t("integrations.api.proRequired")} onUpgrade={onUpgrade} />
+          !apiRestriction && (
+            <UpsellBar message={t("integrations.api.proRequired")} onUpgrade={onUpgrade} />
+          )
         )}
       </IntegrationsPane>
     ),
-    mcp: (
+    mcp: apiRestriction ? (
+      <IntegrationsPane title={titleOf("mcp")} description={t("integrations.mcp.description")}>
+        <ApiAccessNotice restriction={apiRestriction} />
+      </IntegrationsPane>
+    ) : (
       <McpPane
         title={titleOf("mcp")}
         isPaid={isPaid}
@@ -164,7 +213,14 @@ export default function IntegrationsView({
         }}
       />
     ),
-    cli: <CliPane title={titleOf("cli")} isPaid={isPaid} onUpgrade={onUpgrade} />,
+    cli: (
+      <CliPane
+        title={titleOf("cli")}
+        isPaid={isPaid}
+        onUpgrade={onUpgrade}
+        apiRestriction={apiRestriction}
+      />
+    ),
   };
 
   return (
@@ -178,7 +234,7 @@ export default function IntegrationsView({
 
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Outside the scroller, so it stays in view and keeps focus after a pick. */}
-        <div className="px-5 pt-2 pb-2 @2xl:hidden">
+        <div className="px-5 pt-6 pb-2 @2xl:hidden">
           <Select
             value={section}
             onValueChange={(value) => onSectionChange(value as IntegrationsSection)}
@@ -199,7 +255,7 @@ export default function IntegrationsView({
           </Select>
         </div>
 
-        <div ref={scroller} className="flex-1 min-h-0 overflow-y-auto px-8 pt-2 pb-6 @max-2xl:px-5">
+        <div ref={scroller} className="flex-1 min-h-0 overflow-y-auto px-8 pt-6 pb-6 @max-2xl:px-5">
           <div className="max-w-[760px]">
             {INTEGRATIONS_SECTIONS.filter((id) => mounted.has(id)).map((id) => (
               <div

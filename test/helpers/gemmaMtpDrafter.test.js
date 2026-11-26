@@ -6,7 +6,6 @@ const os = require("node:os");
 const path = require("node:path");
 
 const modelManagerModulePath = require.resolve("../../src/helpers/modelManagerBridge.js");
-const modelDirUtilsModulePath = require.resolve("../../src/helpers/modelDirUtils.js");
 const originalLoad = Module._load;
 let electronHome = os.tmpdir();
 
@@ -15,7 +14,6 @@ const NON_QAT_ID = "gemma-4-e2b-it-q4_k_m";
 
 function loadModelManager() {
   delete require.cache[modelManagerModulePath];
-  delete require.cache[modelDirUtilsModulePath];
 
   Module._load = function loadWithMocks(request) {
     if (request === "electron") {
@@ -32,12 +30,12 @@ function loadModelManager() {
   };
 
   try {
-    // modelManagerBridge requires modelDirUtils lazily (inside getModelsDir),
-    // after this mock is uninstalled — load it now so its electron binding is
-    // the stub and modelsDir resolves inside the per-test temp home instead of
-    // the real ~/.cache/openwhispr (where deleteModel would touch real files).
-    require("../../src/helpers/modelDirUtils.js");
-    return require("../../src/helpers/modelManagerBridge.js").default;
+    const modelManager = require("../../src/helpers/modelManagerBridge.js").default;
+    // Pin modelsDir to the temp home. getCacheRoot() prefers OPENWHISPR_CACHE_ROOT,
+    // XDG_CACHE_HOME (linux) and USERPROFILE (win32) over the stubbed home, and
+    // migrates model folders when they differ, so it must not run here (#3244).
+    modelManager.getModelsDir = () => path.join(electronHome, ".cache", "openwhispr", "models");
+    return modelManager;
   } finally {
     Module._load = originalLoad;
   }

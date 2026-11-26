@@ -66,13 +66,15 @@ test("a settled session with no validated credential offers a way out", () => {
     "an unvalidated credential only reads as loading while the session is unsettled"
   );
   assert.ok(
-    section.includes('setAccessError(authSettled ? "auth" : null)'),
-    "once settled it becomes the retry surface, which already offers Sign in"
+    section.includes('setAccessError(authSettled ? (accountOffline ? "generic" : "auth") : null)'),
+    "once settled it becomes the retry surface, which offers Sign in unless the account is offline"
   );
   assert.ok(
-    section.includes("[accountId, authGeneration, authSettled]"),
+    section.includes("[accountId, accountOffline, authGeneration, authSettled]"),
     "the loader has to re-run when the session settles"
   );
   assert.ok(view.includes("isLoaded: authSettled"), "useAuth's isLoaded is what settled means");
   assert.ok(view.includes("authSettled={authSettled}"));
+  // An account shown offline is already signed in: Sign in would not help.
+  assert.ok(view.includes("accountOffline={isOfflineAccount}"));
 });

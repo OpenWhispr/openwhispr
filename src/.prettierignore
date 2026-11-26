@@ -1,2 +1,10 @@
 dist/
 data/emoji/
+
+# Generated from model-registry/ by model-registry:sync; verified by model-registry:verify.
+models/registrySchema.cjs
+models/registryEnvelope.cjs
+models/registrySelection.js
+models/modelRegistryData.json
+models/registryMetadata.json
+models/registryBundle.json

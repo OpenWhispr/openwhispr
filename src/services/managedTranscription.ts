@@ -1,9 +1,36 @@
 import { getSettings } from "../stores/settingsStore";
+import {
+  isAssemblyAiRewriteAllowedByPolicy,
+  isByokTranscriptionAllowed,
+} from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 import type { ManagedTranscriptionResolution } from "../helpers/transcriptionRoute";
 import {
   getManagedScopeResolution,
   useEnterpriseIdentityStore,
 } from "../stores/enterpriseIdentityStore";
+
+export function canUseAssemblyAiRewrite(): boolean {
+  return (
+    isAssemblyAiRewriteAllowedByPolicy(usePolicyStore.getState()) &&
+    getManagedScopeResolution("dictationCleanup", getSettings().enterpriseSetupMode).kind ===
+      "manual"
+  );
+}
+
+// Admission mirrors main: an optional managed cleanup can still process the verbatim transcript.
+export function allowsPersonalDictationCleanup(): boolean {
+  return getManagedScopeResolution("dictationCleanup", "manual").kind === "manual";
+}
+
+export function isByokTranscriptionModelAllowed(provider: string, model?: string): boolean {
+  return isByokTranscriptionAllowed(
+    usePolicyStore.getState(),
+    provider,
+    model,
+    allowsPersonalDictationCleanup
+  );
+}
 
 /**
  * True when managed STT resolves for this user. Dictation gates OR this with
@@ -21,12 +48,15 @@ export function isManagedTranscriptionActive(): boolean {
  * transcription applies and personal routing proceeds; the context mirrors
  * `getEnterpriseCallSettings` so the main process can re-validate it.
  */
-export function getManagedTranscriptionResolution(): ManagedTranscriptionResolution | undefined {
+export function getManagedTranscriptionResolution(
+  operation: "batch" | "realtime" = "batch"
+): ManagedTranscriptionResolution | undefined {
   const settings = getSettings();
   const state = useEnterpriseIdentityStore.getState();
   const resolution = getManagedScopeResolution(
     "transcription",
-    settings.enterpriseTranscriptionSetupMode
+    settings.enterpriseTranscriptionSetupMode,
+    operation
   );
   if (resolution.kind === "error") {
     return {
@@ -38,7 +68,7 @@ export function getManagedTranscriptionResolution(): ManagedTranscriptionResolut
   }
   if (
     resolution.kind !== "managed" ||
-    resolution.provider !== "azure" ||
+    !["azure", "openai-compatible"].includes(resolution.provider) ||
     !state.config ||
     !state.accountId ||
     !state.workspaceId ||
@@ -48,7 +78,7 @@ export function getManagedTranscriptionResolution(): ManagedTranscriptionResolut
   }
   return {
     kind: "managed",
-    provider: "azure",
+    provider: resolution.provider as "azure" | "openai-compatible",
     deployment: resolution.model,
     context: {
       accountId: state.accountId,
@@ -56,9 +86,10 @@ export function getManagedTranscriptionResolution(): ManagedTranscriptionResolut
       authGeneration: state.authGeneration,
       setupMode: settings.enterpriseTranscriptionSetupMode,
       inferenceScope: "transcription",
-      provider: "azure",
+      provider: resolution.provider as "azure" | "openai-compatible",
       generation: state.config.generation,
       providerVersion: resolution.record.version,
+      operation,
     },
   };
 }

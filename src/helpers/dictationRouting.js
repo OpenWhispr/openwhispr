@@ -161,20 +161,11 @@ export function resolveWakeWordLanguage(
   return typeof uiLanguage === "string" ? uiLanguage : undefined;
 }
 
-// The renderer-side source of truth for what the main process gates the Agent
-// companion pill on. Assistant wins over translation: a voice-agent request is
-// explicit user intent even if a stale translation flag survived.
-export function resolveLifecycleInputKind({ voiceAgentRequested, translationRequested }) {
-  if (voiceAgentRequested) return "assistant";
-  if (translationRequested) return "translation";
-  return "dictation";
-}
-
 // Decides which reasoning path ("translation" | "agent" | "cleanup" | "skip")
 // a finished dictation takes. A recording started via the voice assistant
 // hotkey always takes the agent path — no wake word needed, and it wins over
-// translation, as in resolveLifecycleInputKind. Standalone commands stream into
-// the assistant panel (which resolves the Voice Assistant scope itself and
+// a stale translation flag. Standalone commands stream into
+// the agent window (which resolves the Voice Assistant scope itself and
 // reports configuration problems in-conversation), so the dictation
 // agent's reachability only gates selection edits — that check happens at the
 // selection disposition, not here. A translation recording degrades to
@@ -202,4 +193,55 @@ export function resolveDictationRouteKind({
     return "cleanup";
   }
   return "skip";
+}
+
+// Whether text a transcription provider already rewrote (AssemblyAI Dictation)
+// stands in for the app's own cleanup, sparing a second model call. The user's
+// cleanup prompt and Tone & Style only reach the app's cleanup, so that runs
+// when it can; with nothing to run it, the provider's text still beats the raw
+// transcript. `providerLlmAllowed` is the org's verdict on a provider-run model:
+// a workspace that keeps AI processing on the device gets no cloud rewrite.
+export function providerCleanupStandsIn(settings, { cleanupReachable, providerLlmAllowed }) {
+  if (!settings.useCleanupModel || !providerLlmAllowed) return false;
+  const usesOwnCleanup = !!settings.customPrompts?.cleanup || !!settings.toneStyleEnabled;
+  return !(cleanupReachable && usesOwnCleanup);
+}
+
+// A dictation skipped while cleanup is switched on goes out raw, which looks like
+// a cleanup that changed nothing, so it carries a notice. `shownKey` names the
+// broken setup the user was last warned about: the same one warns once, while a
+// different mode or provider, or signing out, warns again. Once cleanup is off or
+// reachable the warning is forgotten (`forget`), so the next broken setup warns.
+// Signed out of OpenWhispr Cloud gets its own message, since the fix is signing in,
+// and so does a model the org blocked, since the fix is choosing an approved one.
+// The "llm" surface gives it the same friendly cleanup toast as a provider failure.
+export function cleanupUnconfiguredNotice(shownKey, { skipped, cleanupReachable, settings }) {
+  if (!settings.useCleanupModel || cleanupReachable) return { forget: true, notice: null };
+  if (!skipped) return { forget: false, notice: null };
+  const signedOut =
+    settings.cleanupMode === "openwhispr" &&
+    settings.cleanupCloudMode === "openwhispr" &&
+    !settings.isSignedIn;
+  const policyBlocked = !!settings.policyBlockedLocalScopes?.includes("dictationCleanup");
+  const setupKey = [
+    signedOut ? "signedOut" : policyBlocked ? "policyBlocked" : "unconfigured",
+    settings.cleanupMode || "",
+    settings.cleanupProvider || "",
+  ].join("\0");
+  if (setupKey === shownKey) return { forget: false, notice: null };
+  const [message, messageKey] = signedOut
+    ? [
+        "AI cleanup uses OpenWhispr Cloud, but you're signed out.",
+        "hooks.audioRecording.cleanupSignedOut",
+      ]
+    : policyBlocked
+      ? ["Choose a local model your organization has approved.", "models.policy.modelBlocked"]
+      : [
+          "AI cleanup is on, but no cleanup model is set up.",
+          "hooks.audioRecording.cleanupUnconfigured",
+        ];
+  return {
+    forget: false,
+    notice: { message, messageKey, surface: "llm", settingsTarget: "llms", setupKey },
+  };
 }

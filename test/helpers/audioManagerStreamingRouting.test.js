@@ -45,7 +45,7 @@ test("OpenAI dictation realtime requests identify the token provider", async (t)
     return { success: true };
   };
 
-  const provider = manager.getStreamingProvider();
+  const provider = manager.getStreamingProvider(manager.getStreamingProviderName());
   const options = {
     model: "gpt-4o-mini-transcribe",
     mode: "byok",
@@ -77,7 +77,7 @@ test("Gemini's live model routes onto the gemini-streaming-* channels", async (t
   };
 
   assert.equal(manager.getStreamingProviderName(), "gemini");
-  const provider = manager.getStreamingProvider();
+  const provider = manager.getStreamingProvider("gemini");
   assert.equal(provider.awaitsFinalTranscript, true);
   // Pinned to geminiLiveStreaming.js's DISCONNECT_TIMEOUT_MS: both sides
   // measure the same 3s from audioStreamEnd.
@@ -158,6 +158,65 @@ test("managed OpenWhispr Cloud still respects its batch configuration", async (t
   assert.equal(manager.shouldUseStreaming(), false);
 });
 
+test("after Cloud onboarding, dictation follows the server's streaming configuration", async (t) => {
+  const manager = await loadManager(t);
+  setSettings({
+    transcriptionMode: "openwhispr",
+    cloudTranscriptionMode: "openwhispr",
+    cloudTranscriptionProvider: "openwhispr",
+    cloudTranscriptionModel: "gpt-4o-mini-transcribe",
+  });
+
+  for (const streamingProvider of ["deepgram", "openai-realtime"]) {
+    manager.sttConfig = { dictation: { mode: "streaming" }, streamingProvider };
+    assert.equal(manager.shouldUseStreaming(), true, streamingProvider);
+    assert.equal(manager.getStreamingProviderName(), streamingProvider);
+  }
+
+  manager.sttConfig = { dictation: { mode: "batch" }, streamingProvider: "deepgram" };
+  assert.equal(manager.shouldUseStreaming(), false);
+});
+
+test("new BYOK streaming models never override managed cloud routing", async (t) => {
+  const { createManager, vite } = await loadAudioManager(t, {
+    cachePrefix: "registry-streaming-boundary-",
+    settingsKey: "__streamingRoutingSettings",
+  });
+  const manager = createManager();
+  manager.sttConfig = { dictation: { mode: "batch" }, streamingProvider: "openai-realtime" };
+  const store = await vite.ssrLoadModule("/models/registryData.js");
+  const data = structuredClone(store.getRegistryData());
+  for (const provider of ["openai", "gemini"]) {
+    data.transcriptionProviders
+      .find((p) => p.id === provider)
+      .models.push({
+        id: `${provider}-future-live`,
+        name: "Future",
+        description: "Fixture",
+        streaming: true,
+      });
+  }
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  for (const provider of ["openai", "gemini"]) {
+    setSettings({
+      cloudTranscriptionProvider: provider,
+      cloudTranscriptionModel: `${provider}-future-live`,
+      geminiApiKey: "test",
+    });
+    assert.equal(manager.shouldUseStreaming(), true, `${provider} BYOK`);
+    assert.equal(
+      manager.getStreamingProviderName(),
+      provider === "openai" ? "openai-realtime" : "gemini"
+    );
+    setSettings({
+      cloudTranscriptionMode: "openwhispr",
+      cloudTranscriptionProvider: provider,
+      cloudTranscriptionModel: `${provider}-future-live`,
+    });
+    assert.equal(manager.shouldUseStreaming(), false, `${provider} managed batch`);
+  }
+});
+
 test("explicit Orukeet custom endpoint uses PCM streaming without cloud login", async (t) => {
   const manager = await loadManager(t);
   setSettings({
@@ -170,7 +229,7 @@ test("explicit Orukeet custom endpoint uses PCM streaming without cloud login", 
   });
   assert.equal(manager.shouldUseStreaming(), true);
   assert.equal(manager.getStreamingProviderName(), "orukeet");
-  assert.equal(manager.getStreamingProvider().finalizeAcknowledged, true);
+  assert.equal(manager.getStreamingProvider("orukeet").finalizeAcknowledged, true);
   setSettings({
     transcriptionMode: "self-hosted",
     cloudTranscriptionProvider: "custom",
@@ -326,9 +385,12 @@ test("the STT config goes stale after fifteen minutes and immediately when inval
   assert.equal(manager.isSttConfigStale(fetchedAt + 14 * 60 * 1000), false);
   assert.equal(manager.isSttConfigStale(fetchedAt + 15 * 60 * 1000 + 1), true);
 
+  const generation = manager.sttConfigGeneration;
   manager.invalidateSttConfig();
   assert.equal(manager.sttConfig, null);
   assert.equal(manager.isSttConfigStale(fetchedAt), true);
+  // Invalidating also bumps the generation a fetch compares against.
+  assert.equal(manager.sttConfigGeneration, generation + 1);
 });
 
 test("a cloud upload reports why it was batch instead of the managed Orukeet stream", async (t) => {
@@ -613,3 +675,27 @@ for (const translationRequested of [false, true]) {
     }
   });
 }
+
+test("opt-in language routing refreshes within 30 seconds for rollback without changing normal cache TTL", async (t) => {
+  const manager = await loadManager(t);
+  for (const mode of ["shadow", "supported-0.30", "supported-0.10"]) {
+    manager.setSttConfig({ orukeetLanguageRouting: mode });
+    const at = manager.sttConfigFetchedAt;
+    assert.equal(manager.isSttConfigStale(at + 30000), false);
+    assert.equal(manager.isSttConfigStale(at + 30001), true);
+  }
+  for (const mode of [undefined, "off", "invalid"]) {
+    manager.setSttConfig({ orukeetLanguageRouting: mode });
+    const at = manager.sttConfigFetchedAt;
+    assert.equal(manager.isSttConfigStale(at + 30001), false);
+    assert.equal(manager.isSttConfigStale(at + 900001), true);
+  }
+});
+
+test("combined-pipeline config expires after 30 seconds even when language routing is off", async (t) => {
+  const manager = await loadManager(t);
+  manager.setSttConfig({ orukeetLanguageRouting: "off", orukeetPipeline: "gemma12" });
+  const at = manager.sttConfigFetchedAt;
+  assert.equal(manager.isSttConfigStale(at + 30000), false);
+  assert.equal(manager.isSttConfigStale(at + 30001), true);
+});

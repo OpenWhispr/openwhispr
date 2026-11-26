@@ -102,6 +102,62 @@ test("a cached catalog does not displace the named Tinfoil default", async (t) =
   assert.equal(effective.cleanupModel, "glm-5-3");
 });
 
+test("policy fallback and provider memory follow Tinfoil's live catalog when its seed default retires", async (t) => {
+  const live = [{ id: "live-new-model", name: "Live model", description: "Fixture" }];
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _llmScopeKeysMigrated: "1",
+      tinfoilModels: JSON.stringify({ models: live, fetchedAt: Date.now() }),
+      cleanupMode: "providers",
+      cleanupProvider: "openai",
+      cleanupModel: "gpt-5-mini",
+    },
+  });
+  const vite = await createRendererServer(t, { cachePrefix: "registry-tinfoil-overlay-" });
+  const registry = await vite.ssrLoadModule("/models/ModelRegistry.ts");
+  const { useSettingsStore, selectPolicyEffectiveSettings } = await vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+  const snapshot = {
+    status: "managed",
+    appVersion: "1.10.3",
+    policy: {
+      version: 1,
+      transcription: { allowedModes: ["local"], allowedByokProviders: [] },
+      llm: {
+        allowedModes: ["providers"],
+        allowedByokProviders: ["tinfoil"],
+        allowedEnterpriseProviders: [],
+      },
+      features: { agentEnabled: true, webSearchEnabled: true },
+      sharing: { externalLinkSharing: "allowed" },
+      dataRetention: {
+        audioRetentionMaxDays: null,
+        localHistoryMode: "user_choice",
+        cloudBackupAllowed: true,
+      },
+      minAppVersion: null,
+    },
+  };
+  assert.equal(
+    selectPolicyEffectiveSettings(useSettingsStore.getState(), snapshot).cleanupModel,
+    "live-new-model"
+  );
+  registry.applyTinfoilModels([{ id: "live-next-model", name: "Next", description: "Fixture" }]);
+  assert.equal(
+    selectPolicyEffectiveSettings(useSettingsStore.getState(), snapshot).cleanupModel,
+    "live-next-model"
+  );
+  useSettingsStore
+    .getState()
+    .switchReasoningProvider("dictationCleanup", "tinfoil", "live-next-model");
+  useSettingsStore.getState().switchReasoningProvider("dictationCleanup", "openai", "gpt-5-mini");
+  useSettingsStore
+    .getState()
+    .switchReasoningProvider("dictationCleanup", "tinfoil", "wrong-fallback");
+  assert.equal(useSettingsStore.getState().cleanupModel, "live-next-model");
+});
+
 test("a persisted glm-5-2 selection is repointed before any request", async (t) => {
   installBrowserGlobals(t, {
     initialStorage: {
@@ -166,16 +222,18 @@ test("the retirement notice fires when the startup sweep is what moved the user"
     cachePrefix: "openwhispr-tinfoil-sweep-notice-test-",
   });
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  const { consumeTinfoilModelSwitches } = await vite.ssrLoadModule(
-    "/stores/tinfoilModelSwitchStore.ts"
+  const { consumeRetiredModelSwitches } = await vite.ssrLoadModule(
+    "/stores/retiredModelSwitchStore.ts"
   );
 
   assert.equal(useSettingsStore.getState().cleanupModel, "glm-5-3");
   // Two scopes moved, but the user is told about the model once.
-  assert.deepEqual(consumeTinfoilModelSwitches(), [{ from: "GLM-5.2", to: "GLM-5.3" }]);
+  assert.deepEqual(consumeRetiredModelSwitches(), [
+    { provider: "tinfoil", from: "GLM-5.2", to: "GLM-5.3" },
+  ]);
 });
 
-test("a Groq remap is not announced as a Tinfoil retirement", async (t) => {
+test("a Groq remap is announced as Groq's retirement, not Tinfoil's", async (t) => {
   installBrowserGlobals(t, {
     initialStorage: {
       _llmScopeKeysMigrated: "1",
@@ -188,12 +246,14 @@ test("a Groq remap is not announced as a Tinfoil retirement", async (t) => {
     cachePrefix: "openwhispr-groq-sweep-notice-test-",
   });
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  const { consumeTinfoilModelSwitches } = await vite.ssrLoadModule(
-    "/stores/tinfoilModelSwitchStore.ts"
+  const { consumeRetiredModelSwitches } = await vite.ssrLoadModule(
+    "/stores/retiredModelSwitchStore.ts"
   );
 
   assert.equal(useSettingsStore.getState().cleanupModel, "openai/gpt-oss-120b");
-  assert.deepEqual(consumeTinfoilModelSwitches(), []);
+  assert.deepEqual(consumeRetiredModelSwitches(), [
+    { provider: "groq", from: "llama-3.3-70b-versatile", to: "GPT-OSS 120B" },
+  ]);
 });
 
 // Every live site that resolves a provider's default reads the name the
@@ -213,7 +273,10 @@ test("a provider's named default beats its list position", async (t) => {
     // The seed leads with its own default, so only a list that doesn't can
     // tell the two rules apart.
     assert.equal(
-      pickDefaultModelId({ models: [{ id: "listed-first" }, { id: "named" }], defaultModel: "named" }),
+      pickDefaultModelId({
+        models: [{ id: "listed-first" }, { id: "named" }],
+        defaultModel: "named",
+      }),
       "named"
     );
     assert.equal(pickDefaultModelId(byId.tinfoil), "glm-5-3");
@@ -232,23 +295,45 @@ test("a replacement with no curated name is still announced, by id", async (t) =
   installBrowserGlobals(t, {
     initialStorage: {
       _llmScopeKeysMigrated: "1",
-      tinfoilModels: JSON.stringify({
-        models: [{ id: "kimi-k2-6", name: "Kimi K2.6", description: "", supportsThinking: true }],
-        fetchedAt: Date.now(),
-      }),
       cleanupMode: "providers",
       cleanupProvider: "tinfoil",
-      cleanupModel: "kimi-k2-6",
+      cleanupModel: "deepseek-v4-pro",
     },
   });
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-tinfoil-unnamed-replacement-test-",
   });
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  const { consumeTinfoilModelSwitches } = await vite.ssrLoadModule(
-    "/stores/tinfoilModelSwitchStore.ts"
+  const { consumeRetiredModelSwitches } = await vite.ssrLoadModule(
+    "/stores/retiredModelSwitchStore.ts"
   );
 
-  assert.equal(useSettingsStore.getState().cleanupModel, "kimi-k3");
-  assert.deepEqual(consumeTinfoilModelSwitches(), [{ from: "Kimi K2.6", to: "kimi-k3" }]);
+  assert.equal(useSettingsStore.getState().cleanupModel, "deepseek-v4-1-flash");
+  assert.deepEqual(consumeRetiredModelSwitches(), [
+    { provider: "tinfoil", from: "DeepSeek V4 Pro", to: "deepseek-v4-1-flash" },
+  ]);
+});
+
+// Kimi K3, the sweep's target for Kimi K2.6, is itself retired, so neither the live
+// catalogue nor the cache names it any more.
+test("a Kimi K2.6 selection is announced moving to Kimi K3 by name", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _llmScopeKeysMigrated: "1",
+      cleanupMode: "providers",
+      cleanupProvider: "tinfoil",
+      cleanupModel: "kimi-k2-6",
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-tinfoil-kimi-k3-name-test-",
+  });
+  await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const { consumeRetiredModelSwitches } = await vite.ssrLoadModule(
+    "/stores/retiredModelSwitchStore.ts"
+  );
+
+  assert.deepEqual(consumeRetiredModelSwitches(), [
+    { provider: "tinfoil", from: "Kimi K2.6", to: "Kimi K3" },
+  ]);
 });

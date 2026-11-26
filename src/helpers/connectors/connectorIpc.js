@@ -57,6 +57,8 @@ function createConnectorPolicyResolver({
   peekPolicy,
   getAuthGeneration,
   timeoutMs = POLICY_TIMEOUT_MS,
+  classifySnapshot = connectorPolicyState,
+  fallbackOnUnavailable = false,
 }) {
   // The deadline and the failure handling cover the whole resolution,
   // including the auth-header lookup: nothing here can hang or throw.
@@ -74,7 +76,9 @@ function createConnectorPolicyResolver({
       // Assigned before the fetch: the deadline's fallback peeks this request.
       request = { expectedAuthGeneration, authHeaders };
       const snapshot = await getPolicy(request);
-      return connectorPolicyState(snapshot);
+      return expectedAuthGeneration === getAuthGeneration()
+        ? classifySnapshot(snapshot)
+        : "unavailable";
     })().catch(() => "unavailable");
 
     let timer;
@@ -83,11 +87,13 @@ function createConnectorPolicyResolver({
     });
     try {
       const state = await Promise.race([resolution, deadline]);
-      if (state !== null) return state;
+      if (state !== null && !(fallbackOnUnavailable && state === "unavailable")) return state;
       // A refresh that outlives the deadline must not override the verdict
       // already held for this account; with none held, fail closed.
       try {
-        return request && peekPolicy ? connectorPolicyState(peekPolicy(request)) : "unavailable";
+        return request && request.expectedAuthGeneration === getAuthGeneration() && peekPolicy
+          ? classifySnapshot(peekPolicy(request))
+          : "unavailable";
       } catch {
         return "unavailable";
       }
@@ -209,8 +215,12 @@ function registerConnectorIpc({
   // flow that then polls for 15 minutes with nothing on screen.
   const pendingConnects = new Set();
 
-  ipcMain.handle("connector-connect", async (event, connectorId) => {
+  ipcMain.handle("connector-connect", async (event, connectorId, options) => {
     if (!isNonEmptyString(connectorId)) return { status: "unavailable", reason: "invalid_request" };
+    // The one connect option: a sign-in host, which the connector validates.
+    const loginDomain = options?.loginDomain;
+    if (loginDomain !== undefined && (typeof loginDomain !== "string" || loginDomain.length > 300))
+      return { status: "unavailable", reason: "invalid_request" };
     const pending = { connectorId, controller: new AbortController() };
     pendingConnects.add(pending);
     let policyState;
@@ -223,7 +233,7 @@ function registerConnectorIpc({
     if (pending.controller.signal.aborted) {
       return { status: "failed", errorCode: "oauth_cancelled" };
     }
-    return manager.connect(connectorId, policyState);
+    return manager.connect(connectorId, policyState, loginDomain ? { loginDomain } : {});
   });
 
   // Stopping a connect is always allowed, so it skips the policy check too.
@@ -288,6 +298,7 @@ function registerConnectorIpc({
 }
 
 module.exports = {
+  POLICY_TIMEOUT_MS,
   registerConnectorIpc,
   createConnectorPolicyResolver,
   createConnectorAuthLookup,

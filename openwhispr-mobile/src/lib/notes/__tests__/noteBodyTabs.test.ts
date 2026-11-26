@@ -7,6 +7,7 @@ import {
 } from '@/lib/notes/noteBodyTabs';
 
 const tabInput = (overrides: Partial<NoteBodyTabInput> = {}): NoteBodyTabInput => ({
+  isUpload: false,
   usesSegmentTranscript: false,
   transcriptPending: false,
   contentIsTranscript: false,
@@ -44,7 +45,7 @@ describe('getNoteBodyTabs', () => {
   });
 
   it('never shows an upload body beside its transcript', () => {
-    const upload = { contentIsTranscript: true };
+    const upload = { isUpload: true, contentIsTranscript: true };
     expect(getNoteBodyTabs(tabInput({ ...upload, usesSegmentTranscript: true }))).toEqual([
       'transcript',
     ]);
@@ -54,6 +55,15 @@ describe('getNoteBodyTabs', () => {
     expect(getNoteBodyTabs(tabInput({ ...upload, transcriptPending: true }))).toEqual([
       'transcript',
     ]);
+  });
+
+  it('keeps an upload transcript beside its own notes before and after generation', () => {
+    const upload = tabInput({ isUpload: true, usesSegmentTranscript: true });
+    expect(getNoteBodyTabs(upload)).toEqual(['transcript', 'notes']);
+    const generated = { ...upload, hasEnhanced: true };
+    expect(getNoteBodyTabs(generated)).toEqual(['enhanced', 'transcript', 'notes']);
+    expect(resolveNoteBodyView('transcript', generated)).toBe('transcript');
+    expect(resolveNoteBodyView('notes', generated)).toBe('notes');
   });
 
   it('shows an upload without segments as its editable body', () => {

@@ -2,9 +2,8 @@ import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Lock } from "../icons";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { SettingsPanelRow } from "../ui/SettingsSection";
-import { RecentActions } from "./RecentActions";
-import { BetaBadge } from "./BetaBadge";
 import { ensureConnectorStatus, useConnectorStatusStore } from "../../stores/connectorStatusStore";
 import type { ConnectorRowSpec } from "./connectorRows";
 
@@ -28,6 +27,8 @@ const ROW_ERRORS = new Set([
   "permission_not_granted",
   "email_not_verified",
   "domain_policy",
+  // Salesforce: the typed sign-in domain isn't a Salesforce one.
+  "invalid_login_domain",
   // GitHub's device flow: the code wasn't entered in time, or the GitHub App
   // has the device flow turned off.
   "code_expired",
@@ -46,7 +47,7 @@ export interface ConnectorLoginRowProps {
 
 /**
  * One connector's login in Settings → Connectors: Connect, Reconnect,
- * Disconnect, the locked state on a free plan and its recent actions. Copy
+ * Disconnect and the locked state on a free plan. Copy
  * lives under `connectors.<connectorId>.*`.
  */
 export function ConnectorLoginRow({
@@ -79,6 +80,9 @@ export function ConnectorLoginRow({
   const wasConnecting = useRef(false);
   // Set when Connect or Reconnect had focus as the connect started.
   const focusConnectingDetail = useRef(false);
+  // A sandbox or My Domain to sign in at (rows with loginDomain), once asked for.
+  const [domainOpen, setDomainOpen] = useState(false);
+  const [loginDomain, setLoginDomain] = useState("");
 
   // Loaded for every plan: a lapsed plan must still see, and remove, its login.
   useEffect(() => {
@@ -156,7 +160,12 @@ export function ConnectorLoginRow({
       ? () => void window.electronAPI?.connectorCancelConnect?.(connectorId)
       : null;
     try {
-      const result = await window.electronAPI?.connectorConnect?.(connectorId);
+      const domain =
+        row.loginDomain && domainOpen && (!connected || needsReconnect) ? loginDomain.trim() : "";
+      const result = await window.electronAPI?.connectorConnect?.(
+        connectorId,
+        domain ? { loginDomain: domain } : undefined
+      );
       if (!isLatest()) return;
       if (!result) setErrorCode("connect_failed");
       else if (result.status === "failed" && result.errorCode !== "oauth_cancelled") {
@@ -224,10 +233,7 @@ export function ConnectorLoginRow({
         </div>
         <div className="flex-1 min-w-0">
           <div className={dimmed}>
-            <div className="flex items-center gap-1.5">
-              <p className="text-xs font-semibold text-foreground">{copy("title")}</p>
-              <BetaBadge />
-            </div>
+            <p className="text-xs font-semibold text-foreground">{copy("title")}</p>
             <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed" dir="auto">
               {summary}
             </p>
@@ -237,6 +243,38 @@ export function ConnectorLoginRow({
               <ConnectingDetail connectorId={connectorId} />
             </div>
           )}
+          {/* Left empty, a Reconnect signs in where the login was made; that host may have moved. */}
+          {row.loginDomain &&
+            offerConnect &&
+            (!connected || needsReconnect) &&
+            (domainOpen ? (
+              <div className="mt-2 max-w-xs">
+                <Input
+                  value={loginDomain}
+                  onChange={(event) => setLoginDomain(event.target.value)}
+                  aria-label={copy("loginDomain.label")}
+                  placeholder={copy("loginDomain.placeholder")}
+                  dir="ltr"
+                  spellCheck={false}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  className="h-8 text-xs"
+                />
+                {!connected && (
+                  <p className="text-xs text-muted-foreground/70 mt-1">
+                    {copy("loginDomain.hint")}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setDomainOpen(true)}
+                className="mt-1 rounded-sm text-xs text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
+              >
+                {copy("loginDomain.toggle")}
+              </button>
+            ))}
           {disconnected && !connected && DisconnectedDetail && (
             <DisconnectedDetail connectorId={connectorId} />
           )}
@@ -285,12 +323,6 @@ export function ConnectorLoginRow({
           )}
         </div>
       </div>
-      {connected && (
-        <RecentActions
-          connectorId={connectorId}
-          refreshKey={`${status?.accountLabel ?? ""}:${status?.workspaceLabel ?? ""}`}
-        />
-      )}
     </SettingsPanelRow>
   );
 }

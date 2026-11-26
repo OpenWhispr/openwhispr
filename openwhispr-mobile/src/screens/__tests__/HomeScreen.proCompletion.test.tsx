@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import type { Transcript } from '@/types';
 
 let mockRouteParams: { proCompletion?: string } = {};
 const mockRouterSetParams = jest.fn();
@@ -11,7 +12,7 @@ const mockProcessingModeStoreState = {
   setActiveMode: jest.fn(),
 };
 const mockTranscriptStoreState = {
-  transcripts: [],
+  transcripts: [] as Transcript[],
   deleteTranscript: jest.fn(),
   retryTranscript: jest.fn(),
 };
@@ -150,13 +151,38 @@ jest.mock('@/components/ui/SwipeableCard', () => ({
   SwipeableCard: ({ children }: { children: React.ReactNode }) => children,
 }));
 jest.mock('@/components/ui/Glass', () => ({ Glass: () => null }));
-jest.mock('@/components/ui/CloudIcon', () => ({ CloudIcon: () => null }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/DictationModeControl', () => ({ DictationModeControl: () => null }));
 jest.mock('@/components/ui/UsageMeter', () => ({ UsageLimitBanner: () => null }));
 jest.mock('@/components/ui/GradientGlassSurface', () => ({ GradientGlassSurface: () => null }));
 
 import HomeScreen from '../HomeScreen';
+
+describe('HomeScreen recent transcriptions', () => {
+  afterEach(() => {
+    mockTranscriptStoreState.transcripts = [];
+  });
+
+  it('shows the newest 30 entries in descending order', () => {
+    mockTranscriptStoreState.transcripts = Array.from(
+      { length: 31 },
+      (_, index): Transcript => ({
+        id: String(index),
+        text: `Dictation ${index}`,
+        createdAt: index,
+        updatedAt: index,
+        provider: 'cloud',
+      }),
+    );
+    render(<HomeScreen />);
+
+    const rows = screen.getAllByText(/^Dictation \d+$/);
+    expect(rows).toHaveLength(30);
+    expect(rows[0]).toHaveTextContent('Dictation 30');
+    expect(rows[29]).toHaveTextContent(/^Dictation 1$/);
+    expect(screen.queryByText('Dictation 0')).toBeNull();
+  });
+});
 
 describe('HomeScreen Pro completion', () => {
   beforeEach(() => {
@@ -193,34 +219,26 @@ describe('HomeScreen Pro completion', () => {
   });
 });
 
-describe('HomeScreen mode control', () => {
+// Private mode is set in AI Models; Home only shows that it's on.
+describe('HomeScreen Local Mode badge', () => {
   afterEach(() => {
     mockProcessingModeStoreState.activeMode = 'cloud';
   });
 
-  it('is a button that opens the Dictation page in Bring Your Own Key mode', () => {
-    mockProcessingModeStoreState.activeMode = 'providers';
+  it('opens AI Models from the badge while Local Mode is on', () => {
+    mockProcessingModeStoreState.activeMode = 'private';
     render(<HomeScreen />);
-    const control = screen.getByLabelText('Transcription: Bring Your Own Key');
-    expect(control.props.accessibilityRole).toBe('button');
-    expect(control.props.accessibilityState?.checked).toBeUndefined();
-    expect(control.props.accessibilityHint).toBe('Opens Dictation settings.');
+    const badge = screen.getByLabelText('Local Mode is on');
+    expect(badge.props.accessibilityRole).toBe('button');
+    fireEvent.press(badge);
+    expect(require('expo-router').router.push).toHaveBeenCalledWith('/(account)/ai-models');
   });
 
-  it('is a Cloud switch otherwise', () => {
+  it.each(['cloud', 'providers'])('shows no mode switch or badge in %s mode', (mode) => {
+    mockProcessingModeStoreState.activeMode = mode;
     render(<HomeScreen />);
-    const control = screen.getByLabelText('Cloud transcription');
-    expect(control.props.accessibilityRole).toBe('switch');
-    expect(control.props.accessibilityState).toMatchObject({ checked: true });
-  });
-
-  it('opens the Dictation page when dictation uses your own key', () => {
-    mockProcessingModeStoreState.activeMode = 'providers';
-    render(<HomeScreen />);
-    fireEvent.press(screen.getByLabelText('Transcription: Bring Your Own Key'));
-    expect(require('expo-router').router.push).toHaveBeenCalledWith({
-      pathname: '/(account)/ai-workflow',
-      params: { scope: 'dictation' },
-    });
+    expect(screen.queryByLabelText('Local Mode is on')).toBeNull();
+    expect(screen.queryByLabelText('Cloud transcription')).toBeNull();
+    expect(screen.queryByLabelText('Transcription: Bring Your Own Key')).toBeNull();
   });
 });

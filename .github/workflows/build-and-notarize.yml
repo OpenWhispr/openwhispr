@@ -1,5 +1,9 @@
 name: Build and Notarize
 
+# These builds are for testing, not release: they bundle the catalog in model-registry/ as
+# version 0 with no signed publication, so they take the live publication at runtime.
+# Only release.yml pins a signed publication (npm run model-registry:pin-release).
+
 on:
   push:
     branches: [main, develop]
@@ -28,7 +32,7 @@ jobs:
     outputs:
       build: ${{ github.event_name != 'pull_request' || (github.base_ref == 'main' && needs.changes.outputs.build == 'true') }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-node@v7
@@ -37,37 +41,76 @@ jobs:
           cache: "npm"
       - name: Install dependencies
         run: npm ci --ignore-scripts
+      - name: Apply dependency patches
+        run: npm run apply:patches
       - name: Run quality checks
         run: npm run quality-check
       - name: Check translations
         run: npm run i18n:check
       - name: Audit dependencies
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
+
+  test:
+    # Apart from quality, so drift in its gates (a format nit, a missing locale
+    # key, a fresh advisory) never leaves main untested (#1735).
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Apply dependency patches
+        run: npm run apply:patches
+      - name: Install Linux native test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libatspi2.0-dev libglib2.0-dev libx11-dev libxtst-dev libxext-dev xvfb
       - name: Build better-sqlite3 for the runner's node
         # --ignore-scripts skips the native build; DB-backed tests silently
         # skip without it. This job is the only test gate on push to main.
-        # Guarded like the test step below, or the rebuild is skipped and the
-        # suite then fails REQUIRE_DB_TESTS on a missing binding instead.
-        if: ${{ !cancelled() }}
         run: npm rebuild better-sqlite3
-      - name: Run tests
-        # The gates above fail on drift that has nothing to do with the suite —
-        # a stray format nit, a missing locale key, a fresh advisory. Without
-        # this, main goes untested for as long as the drift stands (#1735).
-        if: ${{ !cancelled() }}
+      - name: Run tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
         run: npm test
         env:
+          # npm test -- --test-shard would land after the file glob, where node ignores it
+          NODE_OPTIONS: --test-shard=${{ matrix.shard }}/${{ strategy.job-total }}
           # keeps require("electron") from throwing when postinstall was skipped
           ELECTRON_OVERRIDE_DIST_PATH: /tmp
           # a skipped DB test here means the rebuild step above is gone: fail instead
           REQUIRE_DB_TESTS: "1"
 
   build-linux:
-    needs: quality
-    if: needs.quality.outputs.build == 'true'
-    runs-on: ubuntu-latest
+    # Surface packaging failures while tests run; Desktop CI still requires both.
+    needs: changes
+    if: >-
+      needs.changes.outputs.desktop == 'true' &&
+      (github.event_name != 'pull_request' ||
+      (github.base_ref == 'main' && needs.changes.outputs.build == 'true'))
+    # SQLite is compiled here and links the runner's glibc: on 24.04 or later it
+    # needs GLIBC_2.38 and the app no longer starts on Ubuntu 22.04 (#3114). The
+    # 26.04 runner's amd64v3 loader also cannot run the older-CPU checks.
+    runs-on: ubuntu-22.04
+    env:
+      # SQLite is loaded before windows open, including on CPUs without AVX2 (#3038).
+      CFLAGS: "-march=x86-64 -mtune=generic"
+      CXXFLAGS: "-march=x86-64 -mtune=generic"
+      # gcc 11 and 12 on this runner reject Electron 43's V8 headers; clang 15 ships with it.
+      CC: clang-15
+      CXX: clang++-15
+      OPENWHISPR_VERIFY_SQLITE_BASELINE: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -125,7 +168,23 @@ jobs:
       - name: Install Linux build and packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm libx11-dev libxtst-dev libatspi2.0-dev libglib2.0-dev libpipewire-0.3-dev pkg-config
+          sudo apt-get install -y rpm libx11-dev libxtst-dev libatspi2.0-dev libglib2.0-dev libpipewire-0.3-dev pkg-config libgtk-3-0 libnss3 libasound2
+
+      - name: Install current QEMU for SQLite CPU checks
+        # Jammy's QEMU 6.2 misexecutes Electron's JavaScript. Copy only a static
+        # emulator so the app keeps the older build host's glibc baseline.
+        run: |
+          qemu_dir="$RUNNER_TEMP/sqlite-qemu"
+          mkdir -p "$qemu_dir"
+          docker run --rm -v "$qemu_dir:/output" debian:trixie-slim sh -ec '
+            apt-get update
+            cd /tmp
+            apt-get download qemu-user
+            dpkg-deb --extract qemu-user_*.deb /tmp/qemu
+            cp /tmp/qemu/usr/bin/qemu-x86_64 /output/qemu-x86_64
+          '
+          "$qemu_dir/qemu-x86_64" --version
+          echo "$qemu_dir" >> "$GITHUB_PATH"
 
       - name: Create runtime env
         run: |
@@ -134,6 +193,7 @@ jobs:
           echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
           echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
           echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "SALESFORCE_CLIENT_ID=${{ secrets.SALESFORCE_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
@@ -166,7 +226,7 @@ jobs:
     if: needs.quality.outputs.build == 'true'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -179,6 +239,20 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # The release pins the catalog on this platform too, and starts with this check.
+      - name: Check the bundled model catalog on a Windows checkout
+        run: node scripts/sync-model-registry.mjs --check
+
+      - name: Verify Windows Authenticode checks
+        run: node --test test/scripts/afterSign.test.js
+
+      - name: Verify Windows hotwords file ACLs
+        # Match the powershell.exe subprocess so it inherits compatible module paths.
+        shell: powershell
+        run: >-
+          node --import tsx --test --test-name-pattern="current-user-only ACL"
+          test/helpers/parakeetWsStartup.test.js
 
       - name: Install platform-specific native binaries
         run: npm install @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc @tailwindcss/oxide-win32-x64-msvc --no-save
@@ -219,11 +293,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
-      - name: Download nircmd.exe
-        run: node scripts/download-nircmd.js
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
-
       - name: Download windows-fast-paste.exe
         run: node scripts/download-windows-fast-paste.js
         env:
@@ -250,6 +319,7 @@ jobs:
           echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
           echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
           echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "SALESFORCE_CLIENT_ID=${{ secrets.SALESFORCE_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
@@ -287,7 +357,7 @@ jobs:
       matrix:
         arch: [x64, arm64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -392,6 +462,7 @@ jobs:
           echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
           echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
           echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "SALESFORCE_CLIENT_ID=${{ secrets.SALESFORCE_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
@@ -414,7 +485,7 @@ jobs:
       - name: Verify packaged macOS native binaries
         run: |
           APP_PATH=$(ls -d dist/mac*/OpenWhispr.app | head -n1)
-          for bin in macos-audio-tap macos-globe-listener macos-fast-paste macos-mic-listener macos-calendar-listener macos-text-monitor macos-window-bounds macos-media-remote; do
+          for bin in macos-audio-tap macos-globe-listener macos-fast-paste macos-mic-listener macos-calendar-listener macos-text-monitor macos-window-bounds macos-media-remote macos-managed-policy; do
             test -x "$APP_PATH/Contents/Resources/bin/$bin" || { echo "Missing in bundle: $bin"; exit 1; }
           done
           test -x "$APP_PATH/Contents/Resources/bin/MediaRemoteAdapter.framework/Versions/A/MediaRemoteAdapter" || { echo "Missing in bundle: MediaRemoteAdapter.framework"; exit 1; }
@@ -438,7 +509,7 @@ jobs:
 
   desktop-status:
     name: Desktop CI
-    needs: [changes, quality, build-linux, build-windows, build-macos]
+    needs: [changes, quality, test, build-linux, build-windows, build-macos]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -449,6 +520,7 @@ jobs:
           CHANGES_RESULT: ${{ needs.changes.result }}
           DESKTOP: ${{ needs.changes.outputs.desktop }}
           QUALITY_RESULT: ${{ needs.quality.result }}
+          TEST_RESULT: ${{ needs.test.result }}
           BUILD: ${{ needs.quality.outputs.build }}
           LINUX_RESULT: ${{ needs.build-linux.result }}
           WINDOWS_RESULT: ${{ needs.build-windows.result }}
@@ -457,6 +529,7 @@ jobs:
           test "$CHANGES_RESULT" = success
           if [ "$DESKTOP" = true ]; then
             test "$QUALITY_RESULT" = success
+            test "$TEST_RESULT" = success
             if [ "$BUILD" = true ]; then
               test "$LINUX_RESULT" = success
               test "$WINDOWS_RESULT" = success

@@ -16,13 +16,22 @@ export const PROVIDER_ERROR_CODES = Object.freeze({
   TIMEOUT: "PROVIDER_TIMEOUT",
   UNREACHABLE: "PROVIDER_UNREACHABLE",
   NO_RESPONSE: "PROVIDER_NO_RESPONSE",
+  INVALID_HEADERS: "PROVIDER_INVALID_HEADERS",
+  REDIRECTED: "PROVIDER_REDIRECTED",
   ERROR: "PROVIDER_ERROR",
   KEY_MISSING: "API_KEY_MISSING",
 });
 
 const C = PROVIDER_ERROR_CODES;
 
-const PROVIDER_SETTINGS_TARGETS = Object.freeze(["speechToText", "llms"]);
+// "noteFormatting" opens Language Models on its Note Formatting tab, and
+// "noteRecording" opens Speech-to-Text on its Note Recording tab.
+const PROVIDER_SETTINGS_TARGETS = Object.freeze([
+  "speechToText",
+  "llms",
+  "noteFormatting",
+  "noteRecording",
+]);
 
 export const isProviderSettingsTarget = (value) => PROVIDER_SETTINGS_TARGETS.includes(value);
 
@@ -36,6 +45,8 @@ const FIXABLE = new Set([
   C.MODEL_NOT_FOUND,
   C.NO_RESPONSE,
   C.KEY_MISSING,
+  C.INVALID_HEADERS,
+  C.REDIRECTED,
 ]);
 
 const MESSAGE_KEYS = {
@@ -50,6 +61,9 @@ const MESSAGE_KEYS = {
   [C.TIMEOUT]: "providerErrors.timeout",
   [C.UNREACHABLE]: "providerErrors.unreachable",
   [C.NO_RESPONSE]: "providerErrors.noResponse",
+  // Only a self-hosted server takes custom headers, and only its refused redirect is named.
+  [C.INVALID_HEADERS]: "providerErrors.selfHosted.invalidHeaders",
+  [C.REDIRECTED]: "providerErrors.selfHosted.redirected",
   [C.ERROR]: "providerErrors.unknown",
 };
 
@@ -75,7 +89,7 @@ const ENGLISH = {
     "Couldn't get a response from {{provider}}. Check your API key and connection.",
   "providerErrors.unknown": "{{provider}} returned an unexpected error.",
   "providerErrors.keyMissing":
-    "No API key is set for {{provider}}. Add it in Settings → Language Models.",
+    "No API key is set for {{provider}}. Add it in Settings → Language Model.",
   "providerErrors.selfHosted.authFailed": "Your server rejected the API key.",
   "providerErrors.selfHosted.accessDenied":
     "Your server denied access. The key may not include this model.",
@@ -95,6 +109,9 @@ const ENGLISH = {
   "providerErrors.selfHosted.noResponse":
     "Couldn't get a response from your server. Check its API key and that it's running.",
   "providerErrors.selfHosted.unknown": "Your server returned an unexpected error.",
+  "providerErrors.selfHosted.invalidHeaders": "A custom header for your server isn't valid.",
+  "providerErrors.selfHosted.redirected":
+    "Your server redirected the request. Enter the address it redirects to.",
   "hooks.audioRecording.errorDescriptions.providerRateLimited":
     "{{provider}} rate-limited the request. Wait a moment and try again.",
   "hooks.audioRecording.errorDescriptions.providerKeyMissing":
@@ -110,8 +127,16 @@ const INVALID_KEY_SIGNAL =
 // your plan and billing details" and Groq's links to its /settings/billing page.
 const QUOTA_SIGNAL =
   /insufficient_quota|credit balance|insufficient (credits|balance|funds)|out of credits|payment required/i;
+// ElevenLabs' older answer to an exhausted character quota is a 401, which its
+// error reference grouped under 400/401, so it is read before the status alone
+// can call it a refused key or a bad request.
+const ELEVENLABS_QUOTA_SIGNAL = /"status"\s*:\s*"quota_exceeded"/;
+// It also answers 401 for a valid key that lacks the permission for the request,
+// which re-entering the key would not fix.
+const ELEVENLABS_PERMISSION_SIGNAL = /"status"\s*:\s*"missing_permissions"/;
 const MODEL_SIGNAL =
   /model_not_found|model[^.\n]{0,80}(not found|does not exist|not available|is not supported)|(unknown|invalid|unsupported) model/i;
+const MISSING_ITEM_SIGNAL = /\bitem with id\b[^.\n]{0,80}\bnot found\b/i;
 
 const NETWORK_CODES = new Set([
   "ENOTFOUND",
@@ -137,6 +162,17 @@ function electronNetError(err) {
   return match && match[0] !== "net::ERR_ABORTED" ? match[0] : null;
 }
 
+// A redirect refused under redirect: "error", as Electron's net.fetch and Node's fetch word
+// it. Chromium's renderer fetch reports it as a plain network failure instead, so the
+// renderer asks for the redirect as a response ("manual") and names it there.
+const REFUSED_REDIRECT = /redirect policy was 'error'|unexpected redirect/i;
+
+export function isRefusedRedirect(err) {
+  return [err?.message, err?.cause?.message].some(
+    (message) => typeof message === "string" && REFUSED_REDIRECT.test(message)
+  );
+}
+
 const MAX_DETAIL_CHARS = 500;
 
 const SECRET_PATTERNS = [
@@ -145,6 +181,9 @@ const SECRET_PATTERNS = [
   [/\bgsk_[A-Za-z0-9*]{4,}/g, "[redacted]"],
   [/\bAIza[A-Za-z0-9_-]{4,}/g, "[redacted]"],
   [/\bxai-[A-Za-z0-9*]{4,}/g, "[redacted]"],
+  // ElevenLabs keys are sk_ plus letters and digits, kept apart from the sk- row, whose
+  // wider alphabet would also redact a word such as sk_SK.UTF-8.
+  [/\bsk_[A-Za-z0-9*]{4,}/g, "[redacted]"],
 ];
 
 function bodyToText(body) {
@@ -178,6 +217,10 @@ function requestIdFrom(headers) {
 }
 
 function codeForStatus(status, text, selfHosted) {
+  if ((status === 400 || status === 401) && ELEVENLABS_QUOTA_SIGNAL.test(text)) {
+    return C.QUOTA_EXHAUSTED;
+  }
+  if (status === 401 && ELEVENLABS_PERMISSION_SIGNAL.test(text)) return C.ACCESS_DENIED;
   if (status === 401) return C.AUTH_FAILED;
   if ((status === 400 || status === 403) && INVALID_KEY_SIGNAL.test(text)) return C.AUTH_FAILED;
   if (status === 402) return C.QUOTA_EXHAUSTED;
@@ -185,6 +228,8 @@ function codeForStatus(status, text, selfHosted) {
   if (status === 403) return C.ACCESS_DENIED;
   if (status === 429) return C.RATE_LIMITED;
   if (status === 404) {
+    // OpenAI 404s an input item it no longer holds; the model itself is fine.
+    if (MISSING_ITEM_SIGNAL.test(text)) return C.BAD_REQUEST;
     // A self-hosted 404 is far more often a wrong URL than a wrong model.
     return selfHosted && !MODEL_SIGNAL.test(text) ? C.ERROR : C.MODEL_NOT_FOUND;
   }
@@ -218,7 +263,11 @@ function buildClassification(code, { provider, model, surface, selfHosted, techn
   }
   // "Your server" takes a different case or article in each sentence in many
   // languages (Russian, German), so self-hosted errors have their own sentences.
-  if (selfHosted && messageKey.startsWith("providerErrors.")) {
+  if (
+    selfHosted &&
+    messageKey.startsWith("providerErrors.") &&
+    !messageKey.startsWith("providerErrors.selfHosted.")
+  ) {
     messageKey = messageKey.replace("providerErrors.", "providerErrors.selfHosted.");
   }
   const settingsTarget = FIXABLE.has(code) ? SETTINGS_TARGET_BY_SURFACE[surface] : undefined;
@@ -280,6 +329,10 @@ export function asProviderError(err, ctx) {
     });
   } else if (inner.code === LLM_REQUEST_TIMEOUT_CODE || inner.name === "TimeoutError") {
     classified = providerError(C.TIMEOUT, ctx);
+  } else if (isRefusedRedirect(inner)) {
+    // Only a self-hosted server's address is the user's to correct. A hosted provider's
+    // endpoint never redirects, so something else answered in its place.
+    classified = providerError(ctx?.selfHosted ? C.REDIRECTED : C.UNREACHABLE, ctx);
   } else if (netError) {
     classified = providerError(ELECTRON_NET_TIMEOUTS.has(netError) ? C.TIMEOUT : C.UNREACHABLE, {
       ...ctx,

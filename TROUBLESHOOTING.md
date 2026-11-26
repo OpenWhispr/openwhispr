@@ -145,7 +145,7 @@ On GNOME and KDE, the first automatic paste can show a remote-interaction permis
 
 The interface then composites on the CPU, so hover effects and scrolling can feel slower. Delete the line to undo it.
 
-When you report the flicker, add `--log-level=debug` on its own line in the same file, restart, and attach the newest `~/.config/OpenWhispr/logs/debug-*.log`. Its "Linux GPU compositing" line shows which mode OpenWhispr started in.
+When you report the flicker, add `--log-level=debug` on its own line in the same file, restart, and attach the newest `~/.config/open-whispr/logs/debug-*.log` (under `$XDG_CONFIG_HOME` if you set it). Its "Linux GPU compositing" line shows which mode OpenWhispr started in.
 
 ### Linux System Audio PipeWire Issues
 
@@ -226,13 +226,17 @@ Windows may ask whether to allow `sherpa-onnx-ws-win32-x64` on public and privat
 **Complete reset (after uninstalling):**
 
 ```batch
-rd /s /q "%APPDATA%\OpenWhispr"
-rd /s /q "%LOCALAPPDATA%\OpenWhispr"
+rd /s /q "%APPDATA%\open-whispr"
+rd /s /q "%LOCALAPPDATA%\open-whispr-updater"
+rd /s /q "%USERPROFILE%\.cache\openwhispr"
+del "%USERPROFILE%\.openwhispr\cli-bridge.json"
 ```
+
+The third line removes downloaded models and the local search index. If your user folder path has spaces or non-ASCII characters, models are in `C:\ProgramData\OpenWhispr\cache` (or `C:\OpenWhispr\cache`) instead.
 
 Then reinstall.
 
-**Logs location:** `%APPDATA%\OpenWhispr\logs\`
+**Logs location:** `%APPDATA%\open-whispr\logs\` (development and staging builds use `%APPDATA%\OpenWhispr-development` and `%APPDATA%\OpenWhispr-staging`)
 
 ## Enable Debug Mode
 

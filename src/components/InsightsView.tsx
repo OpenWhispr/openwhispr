@@ -5,10 +5,21 @@ import { useAuth } from "../hooks/useAuth";
 import { useHotkey } from "../hooks/useHotkey";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useSettings } from "../hooks/useSettings";
-import { hasValidatedAuthContext } from "../lib/authRequestContext";
+import { getValidatedAuthGeneration, hasValidatedAuthContext } from "../lib/authRequestContext";
+import {
+  cacheInsightsSummary,
+  forgetCachedInsightsSummary,
+  getInsightsCacheVersion,
+  isInsightFresh,
+  isInsightsCacheCurrent,
+  readCachedInsightsSummary,
+  subscribeToInsightsCacheInvalidation,
+} from "../lib/insightsCache";
 import {
   getAccountAnalyticsSummary,
+  hasPendingAnalyticsErasures,
   subscribeToAnalyticsRefresh,
+  type AccountSummaryCache,
 } from "../services/AnalyticsService";
 import { syncService } from "../services/SyncService";
 import { buildAnalyticsActivityDays } from "../helpers/analytics";
@@ -371,7 +382,12 @@ function YourUsage({
   syncActive: boolean;
 }) {
   const { t } = useTranslation();
-  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  // Reopening Insights shows this session's last account summary while the next one loads.
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(() =>
+    isLoaded && syncActive && accountId
+      ? (readCachedInsightsSummary(accountId)?.value ?? null)
+      : null
+  );
   const [loading, setLoading] = useState(true);
   const [syncError, setSyncError] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -380,51 +396,104 @@ function YourUsage({
   // A superseded load also bails before syncing, so two passes cannot share a
   // batch and leave the winner reading a summary the other has not finished.
   const requestIdRef = useRef(0);
+  const accountReadFailedRef = useRef(false);
+  const [cacheInvalidationRevision, setCacheInvalidationRevision] = useState(0);
 
-  const load = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    setLoading(true);
-    setSyncError(false);
+  useEffect(
+    () =>
+      subscribeToInsightsCacheInvalidation((scope) => {
+        if (scope !== "all") return;
+        requestIdRef.current += 1;
+        setSummary(null);
+        setCacheInvalidationRevision((revision) => revision + 1);
+      }),
+    []
+  );
 
-    // The device read stands on its own. Folding it into the same catch as the
-    // cloud fetch meant a failed local read fell through to a summary of
-    // zeros — under a confident "On this device", with no error anywhere — and
-    // told the user their history was empty.
-    let local: AnalyticsSummary;
-    try {
-      local = await window.electronAPI.getAnalyticsSummary();
-    } catch (error) {
-      if (requestId !== requestIdRef.current) return;
-      console.error("Reading local Insights failed:", error);
-      setLoadFailed(true);
-      setLoading(false);
-      return;
-    }
-    if (requestId !== requestIdRef.current) return;
-    setLoadFailed(false);
+  const load = useCallback(
+    async (cache: AccountSummaryCache = "refresh") => {
+      const requestId = ++requestIdRef.current;
+      const cacheVersion = accountId ? getInsightsCacheVersion(accountId) : null;
+      setLoading(true);
+      setSyncError(false);
 
-    try {
-      if (isLoaded && syncActive) {
-        if (!(await syncService.syncAnalyticsNow())) {
-          throw new Error("Insights uploads are not enabled for this account");
-        }
-        const account = await getAccountAnalyticsSummary(accountId);
+      // The device read stands on its own. Folding it into the same catch as the
+      // cloud fetch meant a failed local read fell through to a summary of
+      // zeros — under a confident "On this device", with no error anywhere — and
+      // told the user their history was empty.
+      let local: AnalyticsSummary;
+      try {
+        local = await window.electronAPI.getAnalyticsSummary();
+      } catch (error) {
         if (requestId !== requestIdRef.current) return;
-        setSummary(account);
-      } else {
-        setSummary(local);
+        console.error("Reading local Insights failed:", error);
+        setLoadFailed(true);
+        setLoading(false);
+        return;
       }
-    } catch {
       if (requestId !== requestIdRef.current) return;
-      // Real device data, and the pill says the cloud is the part that failed.
-      setSummary(local);
-      setSyncError(true);
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
-    }
-  }, [accountId, isLoaded, syncActive]);
+      setLoadFailed(false);
 
-  useEffect(() => subscribeToAnalyticsRefresh(load, syncActive), [load, syncActive]);
+      try {
+        if (isLoaded && syncActive) {
+          if (!(await syncService.syncAnalyticsNow())) {
+            throw new Error("Insights uploads are not enabled for this account");
+          }
+          // Asked before the read: when nothing is owed now, the totals read next
+          // reflect every erasure. Not knowing counts as owed, since keeping the
+          // totals is only a shortcut.
+          const authGeneration = getValidatedAuthGeneration();
+          const erasuresPending =
+            accountId && authGeneration != null
+              ? await hasPendingAnalyticsErasures({ accountId, authGeneration }).catch(() => true)
+              : true;
+          if (requestId !== requestIdRef.current) return;
+          const account = await getAccountAnalyticsSummary(accountId, cache);
+          if (requestId !== requestIdRef.current) return;
+          if (accountId && cacheVersion != null) {
+            if (!isInsightsCacheCurrent(accountId, cacheVersion)) return;
+            // Totals the cloud may not have erased yet are shown but never kept, so
+            // a remount doesn't repaint them and the next focus check, which retries
+            // the erasure, isn't skipped.
+            if (erasuresPending) forgetCachedInsightsSummary(accountId);
+            else cacheInsightsSummary(accountId, account);
+          }
+          accountReadFailedRef.current = false;
+          setSummary(account);
+        } else {
+          setSummary(local);
+        }
+      } catch {
+        if (requestId !== requestIdRef.current) return;
+        // Real device data, and the pill says the cloud is the part that failed.
+        accountReadFailedRef.current = true;
+        setSummary(local);
+        setSyncError(true);
+      } finally {
+        if (requestId === requestIdRef.current) setLoading(false);
+      }
+    },
+    [accountId, isLoaded, syncActive]
+  );
+
+  useEffect(() => {
+    const unsubscribe = subscribeToAnalyticsRefresh((dataChanged) => {
+      // A check for other devices' changes can wait out a summary this fresh,
+      // unless the last account read failed.
+      if (
+        !dataChanged &&
+        !accountReadFailedRef.current &&
+        accountId &&
+        isInsightFresh(readCachedInsightsSummary(accountId))
+      )
+        return;
+      return load(dataChanged ? "refresh" : "allow");
+    }, syncActive);
+    return () => {
+      requestIdRef.current += 1;
+      unsubscribe();
+    };
+  }, [accountId, cacheInvalidationRevision, load, syncActive]);
 
   useEffect(() => {
     onSyncErrorChange(syncError);
@@ -506,12 +575,12 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
   return (
     <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex min-h-full flex-col px-6 py-6")}>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-1 flex-col">
-        <div className="flex min-h-8 items-center justify-between gap-4">
-          <TabsList className="h-7 p-0.5 rounded-[7px]">
-            <TabsTrigger value="usage" className="h-6 px-2.5 text-xs rounded-[5px]">
+        <div className="flex min-h-10 flex-wrap items-center justify-between gap-4">
+          <TabsList variant="pill">
+            <TabsTrigger value="usage" variant="pill">
               {t("insights.yourUsage")}
             </TabsTrigger>
-            <TabsTrigger value="leaderboard" className="h-6 px-2.5 text-xs rounded-[5px]">
+            <TabsTrigger value="leaderboard" variant="pill">
               {t("insights.leaderboard.title")}
             </TabsTrigger>
           </TabsList>

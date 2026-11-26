@@ -104,7 +104,7 @@ test("the Linear row comes just before GitHub and names the user and the workspa
   const { container, row, rows } = await renderLinearRow(t, { status: LINEAR });
 
   assert.deepEqual(
-    rows.slice(-2).map((entry) => entry.id),
+    rows.slice(2, 4).map((entry) => entry.id),
     ["linear", "github"]
   );
   assert.deepEqual(row.accountSummary(LINEAR), { account: "Dana", workspace: "Acme" });

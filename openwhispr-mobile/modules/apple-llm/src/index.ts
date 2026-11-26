@@ -11,7 +11,13 @@ import type {
 interface NativeAppleLLM {
   getAvailability(): Promise<AppleLLMAvailability>;
   countTokens(request: AppleLLMTokenCountRequest): Promise<number | null>;
-  generateText(request: AppleLLMGenerateTextRequest): Promise<AppleLLMGenerateTextResponse>;
+  generateText(
+    request: AppleLLMGenerateTextRequest & { requestId?: string },
+  ): Promise<AppleLLMGenerateTextResponse>;
+  // Missing on binaries built before it shipped; an OTA update can run this code there.
+  cancelGeneration?(requestId: string): void;
+  // Same reason: absent on binaries built before it shipped.
+  getSupportedLanguages?(): Promise<string[]>;
   generateMeetingNotes(
     request: AppleLLMGenerateTextRequest,
   ): Promise<AppleLLMGenerateMeetingNotesResponse>;
@@ -28,6 +34,16 @@ const NativeModule: NativeAppleLLM | null = (() => {
   }
 })();
 
+let requestSequence = 0;
+
+// Hermes has no DOMException global, so cancellations use a plain Error that
+// callers recognise by name, as they would a fetch AbortError.
+function abortError(): Error {
+  const error = new Error('Apple Foundation Models request cancelled.');
+  error.name = 'AbortError';
+  return error;
+}
+
 export const AppleLLM = {
   isAvailable(): boolean {
     return NativeModule !== null;
@@ -43,15 +59,55 @@ export const AppleLLM = {
     return NativeModule.getAvailability();
   },
 
+  // Whether this binary has getSupportedLanguages, as opposed to an over-the-air update running on
+  // a build from before it.
+  hasSupportedLanguages(): boolean {
+    return Boolean(NativeModule?.getSupportedLanguages);
+  },
+
+  // An empty array means unknown (no module, old binary, model or OS unavailable), not "none".
+  async getSupportedLanguages(): Promise<string[]> {
+    if (!NativeModule?.getSupportedLanguages) return [];
+    try {
+      const languages = await NativeModule.getSupportedLanguages();
+      return [...new Set(languages.map((code) => code.toLowerCase()))];
+    } catch {
+      return [];
+    }
+  },
+
   async countTokens(request: AppleLLMTokenCountRequest): Promise<number | null> {
     return NativeModule ? NativeModule.countTokens(request) : null;
   },
 
-  async generateText(request: AppleLLMGenerateTextRequest): Promise<AppleLLMGenerateTextResponse> {
+  async generateText(
+    request: AppleLLMGenerateTextRequest,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<AppleLLMGenerateTextResponse> {
     if (!NativeModule) {
       throw new Error('Apple Foundation Models are not linked in this build.');
     }
-    return NativeModule.generateText(request);
+    const { signal } = options;
+    if (!signal) return NativeModule.generateText(request);
+    if (signal.aborted) throw abortError();
+
+    requestSequence += 1;
+    // The time keeps an id unique across JS reloads, which restart the counter but not native.
+    const requestId = `apple-llm-${Date.now()}-${requestSequence}`;
+    // Settle on abort without waiting for native: an older binary can't stop the
+    // run, and a newer one reports the cancellation only once the model yields.
+    return new Promise<AppleLLMGenerateTextResponse>((resolve, reject) => {
+      const onAbort = (): void => {
+        NativeModule.cancelGeneration?.(requestId);
+        reject(abortError());
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      NativeModule.generateText({ ...request, requestId })
+        .then(resolve, reject)
+        .finally(() => {
+          signal.removeEventListener('abort', onAbort);
+        });
+    });
   },
 
   async generateMeetingNotes(

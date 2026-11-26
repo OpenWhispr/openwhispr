@@ -2,6 +2,8 @@ import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
 import { useHandoffStore } from '@/store/useHandoffStore';
 import { isRecoveryDeepLinkFresh, isRecoveryHolding } from '@/store/useKeyboardRecoveryStore';
 import { useUsageStore } from '@/store/useUsageStore';
+import { isAffiliateArrivalFresh } from './affiliateLink';
+import { isKeyboardSettingsLinkFresh } from './keyboardSettingsLink';
 
 export interface ResumeDecision {
   /** Reset the stack to Home — the default for a warm resume. */
@@ -35,6 +37,10 @@ export function resolveResumeAction(alreadyOnHome: boolean): ResumeDecision {
   // this handler can otherwise replace the screen with Home before it is seen.
   if (isRecoveryDeepLinkFresh()) return STAY;
 
+  // The keyboard's Keyboard Settings… just opened the Keyboard screen, ahead of `didBecomeActive`
+  // as above.
+  if (isKeyboardSettingsLinkFresh()) return STAY;
+
   if (useGoogleCalendarStore.getState().isAuthSessionActive) return STAY;
 
   // Returning from the external billing portal: stay on Account and refresh
@@ -42,6 +48,9 @@ export function resolveResumeAction(alreadyOnHome: boolean): ResumeDecision {
   if (useUsageStore.getState().isBillingSessionActive) {
     return { resetToHome: false, refreshUsage: true };
   }
+
+  // A creator link just arrived: the app opened for it, so leave the screen alone.
+  if (isAffiliateArrivalFresh()) return STAY;
 
   // Already on Home → skip the redundant replace that would slide Home over itself.
   return { resetToHome: !alreadyOnHome, refreshUsage: false };

@@ -11,11 +11,15 @@ jest.mock('@/store/useKeyboardRecoveryStore', () => ({
   isRecoveryHolding: jest.fn(),
   isRecoveryDeepLinkFresh: jest.fn(),
 }));
+jest.mock('@/lib/keyboardSettingsLink', () => ({
+  isKeyboardSettingsLinkFresh: jest.fn(),
+}));
 
 import { useHandoffStore } from '@/store/useHandoffStore';
 import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
 import { useUsageStore } from '@/store/useUsageStore';
 import { isRecoveryDeepLinkFresh, isRecoveryHolding } from '@/store/useKeyboardRecoveryStore';
+import { isKeyboardSettingsLinkFresh } from '@/lib/keyboardSettingsLink';
 import { resolveResumeAction } from '../appResume';
 
 const handoffState = useHandoffStore.getState as jest.Mock;
@@ -23,6 +27,7 @@ const calendarState = useGoogleCalendarStore.getState as jest.Mock;
 const usageState = useUsageStore.getState as jest.Mock;
 const recoveryHolding = isRecoveryHolding as jest.Mock;
 const recoveryDeepLinkFresh = isRecoveryDeepLinkFresh as jest.Mock;
+const keyboardSettingsLinkFresh = isKeyboardSettingsLinkFresh as jest.Mock;
 
 function setStores(overrides?: {
   handoffActive?: boolean;
@@ -31,6 +36,7 @@ function setStores(overrides?: {
   billingActive?: boolean;
   keyboardRecoveryActive?: boolean;
   keyboardRecoveryDeepLinkFresh?: boolean;
+  keyboardSettingsLinkFresh?: boolean;
 }): void {
   handoffState.mockReturnValue({
     isActive: overrides?.handoffActive ?? false,
@@ -44,6 +50,7 @@ function setStores(overrides?: {
   });
   recoveryHolding.mockReturnValue(overrides?.keyboardRecoveryActive ?? false);
   recoveryDeepLinkFresh.mockReturnValue(overrides?.keyboardRecoveryDeepLinkFresh ?? false);
+  keyboardSettingsLinkFresh.mockReturnValue(overrides?.keyboardSettingsLinkFresh ?? false);
 }
 
 describe('resolveResumeAction', () => {
@@ -101,5 +108,10 @@ describe('resolveResumeAction', () => {
 
   it('does not refresh usage for a billing session that never started', () => {
     expect(resolveResumeAction(false).refreshUsage).toBe(false);
+  });
+
+  it('stays put while the keyboard has just opened Preferences', () => {
+    setStores({ keyboardSettingsLinkFresh: true });
+    expect(resolveResumeAction(false)).toEqual({ resetToHome: false, refreshUsage: false });
   });
 });

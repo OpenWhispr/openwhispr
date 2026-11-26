@@ -17,6 +17,11 @@
  * was in, even when something stole the foreground during transcription. This
  * mirrors the macOS PID capture/activate path and the Linux --window path.
  *
+ * --media-play-pause sends the play/pause media key instead, so media control
+ * keeps working where App Control runs PowerShell in Constrained Language
+ * Mode and blocks its Add-Type fallback. Callers must see media-key-v1 in
+ * --capabilities first: older builds ignore unknown flags and paste.
+ *
  * Compile with: cl /O2 windows-fast-paste.c /Fe:windows-fast-paste.exe user32.lib
  * Or with MinGW: gcc -O2 windows-fast-paste.c -o windows-fast-paste.exe -luser32
  */
@@ -81,6 +86,26 @@ static BOOL GetExeName(HWND hwnd, char* exeName, DWORD exeNameSize) {
 
     strncpy(exeName, baseName, exeNameSize - 1);
     exeName[exeNameSize - 1] = '\0';
+    return TRUE;
+}
+
+/* The window title as one UTF-8 line, for the Tone & Style app classifier: a
+   browser's title names the site it shows. Control characters and the
+   Unicode line separators become spaces, so a title can't start a line of
+   its own in this output. */
+static BOOL GetWindowTitleUtf8(HWND hwnd, char* title, int titleSize) {
+    wchar_t wideTitle[512];
+    int wideLen = GetWindowTextW(hwnd, wideTitle, 512);
+    if (wideLen <= 0) return FALSE;
+    for (int i = 0; i < wideLen; i++) {
+        if (wideTitle[i] < 0x20 || wideTitle[i] == 0x2028 || wideTitle[i] == 0x2029) {
+            wideTitle[i] = L' ';
+        }
+    }
+
+    int len = WideCharToMultiByte(CP_UTF8, 0, wideTitle, wideLen, title, titleSize - 1, NULL, NULL);
+    if (len <= 0) return FALSE;
+    title[len] = '\0';
     return TRUE;
 }
 
@@ -233,10 +258,23 @@ static int SendCopyTerminal(void) {
     return (SendInput(6, inputs, sizeof(INPUT)) == 6) ? 0 : 1;
 }
 
+/* The media key goes to the system's media session rather than the focused
+   window, so it needs no target restore or modifier release. */
+static int SendMediaPlayPause(void) {
+    INPUT inputs[2];
+    ZeroMemory(inputs, sizeof(inputs));
+
+    SetKey(&inputs[0], VK_MEDIA_PLAY_PAUSE, KEYEVENTF_EXTENDEDKEY);
+    SetKey(&inputs[1], VK_MEDIA_PLAY_PAUSE, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP);
+
+    return (SendInput(2, inputs, sizeof(INPUT)) == 2) ? 0 : 1;
+}
+
 int main(int argc, char* argv[]) {
     BOOL detectOnly = FALSE;
     BOOL copyMode = FALSE;
     BOOL capabilitiesOnly = FALSE;
+    BOOL mediaPlayPause = FALSE;
     HWND restoreWindow = NULL;
 
     for (int i = 1; i < argc; i++) {
@@ -246,6 +284,8 @@ int main(int argc, char* argv[]) {
             copyMode = TRUE;
         } else if (strcmp(argv[i], "--capabilities") == 0) {
             capabilitiesOnly = TRUE;
+        } else if (strcmp(argv[i], "--media-play-pause") == 0) {
+            mediaPlayPause = TRUE;
         } else if (strcmp(argv[i], "--restore-window") == 0 && i + 1 < argc) {
             /* Base 16: the handle comes back exactly as --detect-only printed
                it with "TARGET %p" (hex, with or without an 0x prefix). */
@@ -254,7 +294,15 @@ int main(int argc, char* argv[]) {
     }
 
     if (capabilitiesOnly) {
-        printf("paste-v1 selection-copy-v1 target-identity-v1 focus-restore-v1\n");
+        printf("paste-v1 selection-copy-v1 target-identity-v1 focus-restore-v1 media-key-v1\n");
+        return 0;
+    }
+
+    if (mediaPlayPause) {
+        if (SendMediaPlayPause() != 0) {
+            fprintf(stderr, "ERROR: SendInput failed (error %lu)\n", GetLastError());
+            return 1;
+        }
         return 0;
     }
 
@@ -295,6 +343,11 @@ int main(int argc, char* argv[]) {
         printf("WINDOW_CLASS %s\n", className);
         if (gotExeName) {
             printf("EXE_NAME %s\n", exeName);
+        }
+        /* 511 UTF-16 units take at most 1533 UTF-8 bytes. */
+        char title[1536];
+        if (GetWindowTitleUtf8(hwnd, title, sizeof(title))) {
+            printf("WINDOW_TITLE %s\n", title);
         }
         printf("IS_TERMINAL %s\n", isTerminal ? "true" : "false");
         fflush(stdout);

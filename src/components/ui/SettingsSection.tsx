@@ -91,37 +91,32 @@ export const SettingsRow: React.FC<SettingsRowProps> = ({
 export function SettingsPanel({
   children,
   className = "",
-  as: Element = "div",
-}: {
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & {
   children: React.ReactNode;
   className?: string;
-  /** "ol" for a panel of numbered steps, whose rows are then "li". */
-  as?: "div" | "ol";
 }) {
   return (
-    <Element
+    <div
+      {...props}
       className={`rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 divide-y divide-border/60 dark:divide-border-subtle/50 ${className}`}
     >
       {children}
-    </Element>
+    </div>
   );
 }
 
 export function SettingsPanelRow({
   children,
   className = "",
-  as: Element = "div",
 }: {
   children: React.ReactNode;
   className?: string;
-  as?: "div" | "li";
 }) {
   const { isCompact } = useSettingsLayout();
 
   return (
-    <Element className={`${isCompact ? "px-3 py-2.5" : "px-4 py-3"} ${className}`}>
-      {children}
-    </Element>
+    <div className={`${isCompact ? "px-3 py-2.5" : "px-4 py-3"} ${className}`}>{children}</div>
   );
 }
 
@@ -159,7 +154,9 @@ export function InferenceModeSelector({
   modes,
   activeMode,
   onSelect,
+  selectedLabel,
 }: {
+  selectedLabel?: string;
   modes: InferenceModeOption[];
   activeMode: InferenceMode | null;
   onSelect: (mode: InferenceMode) => void;
@@ -203,7 +200,7 @@ export function InferenceModeSelector({
                   <span className="text-xs font-medium text-foreground">{mode.label}</span>
                   {isActive && !isDisabled && (
                     <span className="text-xs font-medium text-primary bg-primary/10 dark:bg-primary/15 px-1.5 py-px rounded-sm">
-                      {t("common.active")}
+                      {selectedLabel ?? t("common.active")}
                     </span>
                   )}
                   {mode.signInRequired && (

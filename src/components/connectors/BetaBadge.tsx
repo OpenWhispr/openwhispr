@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "../ui/badge";
 
-/** The pill beside every connector's name while connectors are in beta. */
+/** The pill beside the Connectors title while connectors are in beta. */
 export function BetaBadge(): ReactElement {
   const { t } = useTranslation();
   return (

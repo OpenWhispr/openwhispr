@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronLeft } from "../icons";
+import { ArrowLeft } from "../icons";
 import type { PermissionGuideAction, PermissionGuideState } from "../../types/permissionGuide";
 
 interface CardProps {
@@ -13,7 +13,11 @@ export function PermissionGuideCard({ state, onAction, onDrag }: CardProps): Rea
   const { t } = useTranslation();
   const instructions = {
     microphone: t("onboarding.permissionGuide.microphone"),
-    accessibility: t("onboarding.permissionGuide.accessibility"),
+    accessibility: t(
+      state.selectApp
+        ? "onboarding.permissionGuide.selectApp"
+        : "onboarding.permissionGuide.accessibility"
+    ),
     "system-audio": t("onboarding.permissionGuide.systemAudio"),
     "screen-context": t("onboarding.permissionGuide.screenContext"),
   };
@@ -22,6 +26,7 @@ export function PermissionGuideCard({ state, onAction, onDrag }: CardProps): Rea
   const dragStep =
     !state.granted &&
     !state.error &&
+    !state.selectApp &&
     (state.permission === "accessibility" || state.permission === "screen-context");
   const interactive = { WebkitAppRegion: "no-drag" } as CSSProperties;
   const button =
@@ -40,7 +45,7 @@ export function PermissionGuideCard({ state, onAction, onDrag }: CardProps): Rea
         onClick={() => onAction("close")}
         aria-label={t("onboarding.permissionGuide.return")}
       >
-        <ChevronLeft className="size-4 rtl:rotate-180" />
+        <ArrowLeft className="size-4 rtl:rotate-180" />
       </button>
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-2 text-sm leading-5" aria-live="polite">

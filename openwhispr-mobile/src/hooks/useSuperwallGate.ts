@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import type { AffiliateOffer } from '@/lib/affiliateOffer';
 import type { PaywallState } from 'expo-superwall';
 import {
   isTransactionalSuperwallPlacement,
@@ -10,12 +11,16 @@ export type SuperwallPurchaseCompletion = 'purchased' | 'restored';
 
 export type RegisterSuperwallGateOptions = {
   placement: SuperwallPlacement;
+  /** Verified app-owned offer from an explicit creator submission; never sent to Superwall. */
+  creatorOffer?: AffiliateOffer;
   params?: Partial<SuperwallAttributes> & Record<string, unknown>;
   feature?: () => void;
   onAccessGrantedWithoutPurchase?: () => void;
   onPurchaseComplete?: (completion: SuperwallPurchaseCompletion) => void;
+  /** Called once the native paywall is on screen. */
+  onPresent?: () => void;
   requiresAccount?: boolean;
-  /** Cancels the optional onboarding offer when its screen is left. */
+  /** Cancels the registration when its screen is left. */
   signal?: AbortSignal;
 };
 
@@ -24,6 +29,8 @@ type SuperwallGateContextValue = {
   state: PaywallState;
   /** False until the SDK's configure round trip completes; true when Superwall is off in this build. */
   isConfigured: boolean;
+  /** True only when the Superwall bridge publishes a billing identity; callers skip waiting for one otherwise. */
+  requiresIdentity: boolean;
 };
 
 // Default mirrors DisabledSuperwallGateProvider's fail-open semantics so a
@@ -38,6 +45,7 @@ export const SuperwallGateContext = createContext<SuperwallGateContextValue>({
   },
   state: { status: 'idle' },
   isConfigured: true,
+  requiresIdentity: false,
 });
 
 export function useSuperwallGate(): SuperwallGateContextValue {

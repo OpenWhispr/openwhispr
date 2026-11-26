@@ -2,13 +2,17 @@ const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const DeepgramStreaming = require("./deepgramStreaming");
 const CortiStreaming = require("./cortiStreaming");
+const ElevenLabsStreaming = require("./elevenLabsStreaming");
 const { TinfoilRealtimeStreaming } = require("./tinfoilRealtimeStreaming");
+const { SAVED_KEY_PROVIDERS } = require("./productPolicy");
 
 const STREAMING_CLIENT_BY_PROVIDER = {
   "openai-realtime": OpenAIRealtimeStreaming,
+  "enterprise-realtime": OpenAIRealtimeStreaming,
   "assemblyai-realtime": AssemblyAiStreaming,
   "deepgram-realtime": DeepgramStreaming,
   "corti-realtime": CortiStreaming,
+  "elevenlabs-realtime": ElevenLabsStreaming,
   "tinfoil-realtime": TinfoilRealtimeStreaming,
 };
 
@@ -22,9 +26,6 @@ const getMeetingStreamingClient = (provider) => {
   return StreamingClient;
 };
 
-// These authenticate with saved credentials whatever the mode says.
-const SAVED_KEY_PROVIDERS = new Set(["corti-realtime", "tinfoil-realtime"]);
-
 // A connection that authenticates with a saved key also records the count of key
 // saves it opened under, so a start never reuses one opened before a save.
 const getMeetingConnectionKey = (options = {}, credentialGeneration = null) =>
@@ -36,8 +37,12 @@ const getMeetingConnectionKey = (options = {}, credentialGeneration = null) =>
     environment: options.environment,
     tenant: options.tenant,
     keyterms: options.keyterms,
+    managedContext: options.managedContext,
+    enterpriseConnection: options.enterpriseConnection,
     credentialGeneration:
-      options.mode === "byok" || SAVED_KEY_PROVIDERS.has(options.provider)
+      options.mode === "enterprise" ||
+      options.mode === "byok" ||
+      SAVED_KEY_PROVIDERS.has(options.provider)
         ? credentialGeneration
         : null,
   });

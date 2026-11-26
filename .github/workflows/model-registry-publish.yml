@@ -1,0 +1,138 @@
+name: Publish model registry
+
+# Signs model-registry/ and publishes it to the model-registry-published branch, which
+# installed apps poll. It runs only when the registry folder changes on main, never as
+# part of an app release, and waits for the registry-publish environment's reviewers.
+# Run by hand with a version, it rolls back instead: that version's data is republished
+# under a new version number. Anything retired or added since stays retired, so the
+# result is still a valid publication.
+run-name: ${{ inputs.rollback_to && format('Roll back model registry to version {0}', inputs.rollback_to) || '' }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "model-registry/**"
+  workflow_dispatch:
+    inputs:
+      rollback_to:
+        description: To roll back, the published version whose data to restore. Empty publishes main.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-registry-publication
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  # Tests and checks that fetch from the network run here, in a job that holds neither the
+  # signing key nor a token that can write. The publish job still installs and runs the
+  # lockfile-pinned zod and the registry's own code with both keys. Nothing is cached: a
+  # cache can be written by any workflow on main.
+  check:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: source/model-registry/.nvmrc
+          # setup-node caches on its own once a package.json declares packageManager.
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts && npm test && npm run validate
+        working-directory: source/model-registry
+      # A rollback republishes data that passed these when it was first published, and must
+      # not wait on a download that has since gone missing.
+      - if: ${{ !inputs.rollback_to }}
+        run: node scripts/check-compat.cjs && node scripts/check-artifacts.cjs
+        working-directory: source/model-registry
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  publish:
+    needs: check
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: registry-publish
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          persist-credentials: false
+          # The registry's source commit is the last one that changed its folder.
+          fetch-depth: 0
+      # The job has no token that can write. Only the environment's deploy key may update
+      # the published branch, and only the steps that push are given it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: model-registry-published
+          path: publication
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: source/model-registry/.nvmrc
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+        working-directory: source/model-registry
+      # Until OpenWhispr/model-registry stops publishing itself, it may hold a version this
+      # branch lacks. Taking it in first keeps one version sequence; histories that have
+      # diverged stop the run instead of publishing a second version of the same number.
+      # It is verified first: a signed manifest, not older than this branch's, made from a
+      # commit on main.
+      - name: Take in anything the old repository published
+        working-directory: publication
+        env:
+          REGISTRY_PUBLISH_DEPLOY_KEY: ${{ secrets.REGISTRY_PUBLISH_DEPLOY_KEY }}
+        run: |
+          git fetch --quiet https://github.com/OpenWhispr/model-registry.git published
+          if git merge-base --is-ancestor FETCH_HEAD HEAD; then
+            echo "The old repository holds nothing this branch lacks."
+            exit 0
+          fi
+          git worktree add --quiet --detach "$RUNNER_TEMP/incoming" FETCH_HEAD
+          (cd "$GITHUB_WORKSPACE/source/model-registry" &&
+            node scripts/verify-publication.cjs "$RUNNER_TEMP/incoming" "$GITHUB_WORKSPACE/publication")
+          git merge --ff-only FETCH_HEAD
+          bash "$GITHUB_WORKSPACE/source/model-registry/scripts/with-deploy-key.sh" REGISTRY_PUBLISH_DEPLOY_KEY \
+            git push "git@github.com:$GITHUB_REPOSITORY.git" HEAD:model-registry-published
+      # Nothing else may update model-registry-published, so without the deploy key the step
+      # stops before it signs.
+      - name: Sign and publish the registry at main, or the rollback
+        working-directory: source/model-registry
+        env:
+          PUBLICATION_DIR: ${{ github.workspace }}/publication
+          REGISTRY_SIGNING_KEY: ${{ secrets.REGISTRY_SIGNING_KEY }}
+          REGISTRY_PUBLISH_DEPLOY_KEY: ${{ secrets.REGISTRY_PUBLISH_DEPLOY_KEY }}
+          ROLLBACK_TO: ${{ inputs.rollback_to }}
+        run: |
+          git -C "$PUBLICATION_DIR" remote set-url --push origin "git@github.com:$GITHUB_REPOSITORY.git"
+          bash scripts/with-deploy-key.sh REGISTRY_PUBLISH_DEPLOY_KEY node scripts/publish.cjs
+      # Apps released before the move read OpenWhispr/model-registry's `published` branch.
+      # It gets exactly the commit this repository serves, whether or not this run published,
+      # and only after that commit is verified: signed, and not older than what they read now.
+      # Without the mirror key, installed apps would stop receiving the catalog.
+      - name: Mirror to the address installed apps read
+        if: ${{ !cancelled() }}
+        working-directory: publication
+        env:
+          LEGACY_REGISTRY_DEPLOY_KEY: ${{ secrets.LEGACY_REGISTRY_DEPLOY_KEY }}
+        run: |
+          git fetch --quiet origin model-registry-published
+          git worktree add --quiet --detach "$RUNNER_TEMP/served" FETCH_HEAD
+          git fetch --quiet https://github.com/OpenWhispr/model-registry.git published
+          git worktree add --quiet --detach "$RUNNER_TEMP/read-now" FETCH_HEAD
+          (cd "$GITHUB_WORKSPACE/source/model-registry" &&
+            node scripts/verify-publication.cjs "$RUNNER_TEMP/served" "$RUNNER_TEMP/read-now")
+          bash "$GITHUB_WORKSPACE/source/model-registry/scripts/with-deploy-key.sh" LEGACY_REGISTRY_DEPLOY_KEY \
+            git -C "$RUNNER_TEMP/served" push git@github.com:OpenWhispr/model-registry.git HEAD:refs/heads/published

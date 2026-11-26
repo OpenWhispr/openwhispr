@@ -8,6 +8,8 @@ import {
 export function useAudioWaveform(
   audioRecorder: { getStatus: () => { metering?: number } } | null | undefined,
   isRecording: boolean,
+  /** How many recent levels to keep, one per bar drawn. */
+  historyLength: number = KEYBOARD_RECORDING_WAVEFORM.barCount,
 ) {
   const [waveformData, setWaveformData] = useState<number[]>([]);
   const [currentAmplitude, setCurrentAmplitude] = useState(0);
@@ -41,17 +43,14 @@ export function useAudioWaveform(
         smoothedAmplitudeRef.current = smoothed;
 
         setCurrentAmplitude(smoothed);
-        setWaveformData((prev) => [
-          ...prev.slice(-(KEYBOARD_RECORDING_WAVEFORM.barCount - 1)),
-          smoothed,
-        ]);
+        setWaveformData((prev) => [...prev.slice(-(historyLength - 1)), smoothed]);
       } catch {
         // Recorder may not be ready yet
       }
     }, KEYBOARD_RECORDING_WAVEFORM.pollIntervalMs);
 
     return stopMonitoring;
-  }, [isRecording, audioRecorder, stopMonitoring]);
+  }, [isRecording, audioRecorder, stopMonitoring, historyLength]);
 
   const reset = useCallback(() => {
     setWaveformData([]);

@@ -76,6 +76,24 @@ test("auth and quota doom the job; a no-speech chunk is nonfatal", () => {
   assert.equal(FATAL_CHUNK_CODES.has("NO_SPEECH_DETECTED"), false);
 });
 
+test("an org audio policy refusal dooms the job instead of failing chunk by chunk", () => {
+  // Swallowed per chunk, the job ended as a codeless "All chunks failed",
+  // so the policy was never refreshed and the org's reason never shown.
+  for (const code of [
+    "POLICY_AUDIO_UPLOAD_DISABLED",
+    "POLICY_MEETING_RECORDING_DISABLED",
+    "AUDIO_PURPOSE_REQUIRED",
+    "POLICY_UNRESOLVABLE",
+  ]) {
+    assert.equal(FATAL_CHUNK_CODES.has(code), true, code);
+    assert.equal(
+      isTransientChunkError(Object.assign(new Error("x"), { code, statusCode: 403 })),
+      false,
+      code
+    );
+  }
+});
+
 test("createAbortError mirrors the DOMException shape fetch rejects with", () => {
   const err = createAbortError();
   assert.equal(err.name, "AbortError");

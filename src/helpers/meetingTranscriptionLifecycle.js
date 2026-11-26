@@ -36,7 +36,8 @@ function createMeetingTranscriptionLifecycle({ start, stop, onError = () => {} }
     return sessions.values().next().value ?? null;
   };
 
-  const stopSession = (expectedSessionId) => {
+  // The first stop's reason is the one that ended the session.
+  const stopSession = (expectedSessionId, reason) => {
     const session = resolveSession(expectedSessionId);
     if (!session) {
       return Promise.resolve({ success: false, reason: "stale-session" });
@@ -48,7 +49,7 @@ function createMeetingTranscriptionLifecycle({ start, stop, onError = () => {} }
     session.stopPromise = enqueue(async () => {
       try {
         if (!session.startSucceeded) return { success: true };
-        return await stop(session.sessionId);
+        return await stop(session.sessionId, reason);
       } finally {
         removeSession(session);
       }
@@ -66,7 +67,9 @@ function createMeetingTranscriptionLifecycle({ start, stop, onError = () => {} }
         session.ownerWebContents === ownerWebContents &&
         session.state !== "stopping"
       ) {
-        void stopSession(session.sessionId).catch((error) => onError(error, session.sessionId));
+        void stopSession(session.sessionId, "window-lost").catch((error) =>
+          onError(error, session.sessionId)
+        );
       }
     }
     const operationInProgress = [...sessions.values()].some(
@@ -111,7 +114,7 @@ function createMeetingTranscriptionLifecycle({ start, stop, onError = () => {} }
     });
 
     const handleOwnerLoss = () => {
-      void stopSession(sessionId).catch((error) => {
+      void stopSession(sessionId, "window-lost").catch((error) => {
         onError(error, sessionId);
       });
     };

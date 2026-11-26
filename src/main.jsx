@@ -1,10 +1,11 @@
+import "./models/registryBootstrap.js";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { I18nextProvider } from "react-i18next";
 import AppRouter from "./AppRouter.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
 import CleanupFailureToastListener from "./components/CleanupFailureToastListener.tsx";
-import TinfoilModelSwitchToastListener from "./components/TinfoilModelSwitchToastListener.tsx";
+import RetiredModelSwitchToastListener from "./components/RetiredModelSwitchToastListener.tsx";
 import GpuPackMigrationToastListener from "./components/GpuPackMigrationToastListener.tsx";
 import { I18nDirectionProvider } from "./components/I18nDirectionProvider.tsx";
 import { ToastProvider } from "./components/ui/Toast.tsx";
@@ -31,7 +32,7 @@ root.render(
         <I18nDirectionProvider>
           <SettingsProvider>
             <ToastProvider>
-              <TinfoilModelSwitchToastListener />
+              <RetiredModelSwitchToastListener />
               <CleanupFailureToastListener />
               <GpuPackMigrationToastListener />
               <AppRouter />

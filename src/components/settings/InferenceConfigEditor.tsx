@@ -1,4 +1,5 @@
-import { useCallback } from "react";
+import { useRegistryVersion } from "../../hooks/useRegistryVersion";
+import { useCallback, type RefObject } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from "../icons";
@@ -18,35 +19,31 @@ import ReasoningModelSelector from "../ReasoningModelSelector";
 import EnterpriseSection from "../EnterpriseSection";
 import OpenAICompatiblePanel from "../OpenAICompatiblePanel";
 import { Toggle } from "../ui/toggle";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import type { InferenceMode } from "../../types/electron";
 import {
   INFERENCE_SCOPES,
   type InferenceScope,
   type InferenceScopeDefinition,
 } from "../../config/inferenceScopes";
-import {
-  isProviderValidForMode,
-  getCloudModel,
-  getLocalModel,
-  enterpriseProviderName,
-} from "../../models/ModelRegistry";
+import { enterpriseProviderName } from "../../models/ModelRegistry";
+import { AUTO_REASONING_EFFORT, isReasoningEffortSupported } from "../../models/reasoningEffort";
+import { selectableReasoningEffort } from "../../services/ai/chatRequestBody";
+import { offersThinkingToggle } from "../../services/ai/thinkingSuppression";
 import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
+import { modeSwitchPatch } from "../../utils/llmModeSwitch";
 import { requestSignIn } from "../../utils/requestSignIn";
 import TestConnectionButton from "../TestConnectionButton";
 import { getEnterpriseCallSettings } from "../../services/ai/enterpriseSettings";
 import { Button } from "../ui/button";
 
-const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
-  dictationCleanup: "settingsPage.aiModels.modes",
-  noteFormatting: "settingsPage.aiModels.modes",
-  dictationAgent: "dictationAgent.modes",
-  dictationAgentVision: "dictationAgent.modes",
-  chatIntelligence: "agentMode.settings.modes",
-  dictationTranslation: "settingsPage.aiModels.modes",
-};
+// Radix Select can't hold an empty value, so Auto ("") gets a sentinel.
+const AUTO_REASONING_EFFORT_VALUE = "__auto__";
 
 interface InferenceConfigEditorProps {
   scope: InferenceScope;
+  selectedLabel?: string;
+  localPickerRef?: RefObject<HTMLDivElement | null>;
   onModeChange?: (mode: InferenceMode) => void;
   /** Restrict the selectable modes (e.g. vision override offers cloud/BYOK only). */
   allowedModes?: InferenceMode[];
@@ -56,14 +53,17 @@ export default function InferenceConfigEditor({
   scope,
   onModeChange,
   allowedModes,
+  selectedLabel,
+  localPickerRef,
 }: InferenceConfigEditorProps) {
+  useRegistryVersion();
   const { t } = useTranslation();
   const policyState = usePolicySnapshot();
+  const definition: InferenceScopeDefinition = INFERENCE_SCOPES[scope];
   const config = useSettingsStore(
     useShallow((settings): ResolvedLLMConfig => {
       const effective = selectPolicyEffectiveSettings(settings, policyState);
       const resolved = selectResolvedLLMConfig(effective, scope);
-      const definition: InferenceScopeDefinition = INFERENCE_SCOPES[scope];
       // Inherited runtime defaults are not an explicit selection in an optional picker.
       return definition.optional
         ? { ...resolved, model: effective[definition.storeKeys.model] as string }
@@ -78,40 +78,39 @@ export default function InferenceConfigEditor({
   const managed = useManagedScopeResolution(scope, enterpriseSetupMode);
   const managedAvailable = useManagedScopeResolution(scope, "managed");
 
-  const prefix = MODE_LABEL_PREFIX[scope];
   const { modes, effectiveMode, isModeAllowed } = usePolicyModeOptions<InferenceModeOption>(
     (
       [
         {
           id: "openwhispr",
-          label: t(`${prefix}.openwhispr`),
-          description: t(`${prefix}.openwhisprDesc`),
+          label: t("settingsPage.aiModels.modes.openwhispr"),
+          description: t("settingsPage.aiModels.modes.openwhisprDesc"),
           icon: <Cloud className="w-4 h-4" />,
           disabled: !isSignedIn,
           signInRequired: !isSignedIn,
         },
         {
           id: "providers",
-          label: t(`${prefix}.providers`),
-          description: t(`${prefix}.providersDesc`),
+          label: t("settingsPage.aiModels.modes.providers"),
+          description: t("settingsPage.aiModels.modes.providersDesc"),
           icon: <Key className="w-4 h-4" />,
         },
         {
           id: "local",
-          label: t(`${prefix}.local`),
-          description: t(`${prefix}.localDesc`),
+          label: t("settingsPage.aiModels.modes.local"),
+          description: t("settingsPage.aiModels.modes.localDesc"),
           icon: <Cpu className="w-4 h-4" />,
         },
         {
           id: "self-hosted",
-          label: t(`${prefix}.selfHosted`),
-          description: t(`${prefix}.selfHostedDesc`),
+          label: t("settingsPage.aiModels.modes.selfHosted"),
+          description: t("settingsPage.aiModels.modes.selfHostedDesc"),
           icon: <Network className="w-4 h-4" />,
         },
         {
           id: "enterprise",
-          label: t(`${prefix}.enterprise`),
-          description: t(`${prefix}.enterpriseDesc`),
+          label: t("settingsPage.aiModels.modes.enterprise"),
+          description: t("settingsPage.aiModels.modes.enterpriseDesc"),
           icon: <Building2 className="w-4 h-4" />,
         },
       ] as InferenceModeOption[]
@@ -141,18 +140,13 @@ export default function InferenceConfigEditor({
       }
       if (mode === effectiveMode) return;
 
-      const patch: Parameters<typeof setResolvedLLMConfig>[1] = {
-        mode,
-        cloudMode: mode === "openwhispr" ? "openwhispr" : "byok",
-      };
-      if (!isProviderValidForMode(config.provider, mode)) {
-        patch.provider = "";
-        patch.model = "";
-      }
-      setResolvedLLMConfig(scope, patch);
+      setResolvedLLMConfig(
+        scope,
+        modeSwitchPatch({ provider: config.provider, model: config.model }, mode)
+      );
       onModeChange?.(mode);
     },
-    [scope, config.provider, effectiveMode, isSignedIn, onModeChange, isModeAllowed]
+    [scope, config.provider, config.model, effectiveMode, isSignedIn, onModeChange, isModeAllowed]
   );
 
   const setMode = setField("mode");
@@ -171,16 +165,22 @@ export default function InferenceConfigEditor({
       setCustomReasoningApiKey={setField("customApiKey")}
       setReasoningMode={setMode}
       mode={mode}
+      modelNeeds={definition.modelNeeds}
     />
   );
 
+  // Chat streams Anthropic through the AI SDK, which sends no `thinking`.
+  const chatSendsNoThinking =
+    scope === "chatIntelligence" &&
+    effectiveMode === "providers" &&
+    config.provider === "anthropic";
   const showThinkingToggle =
-    effectiveMode === "self-hosted" ||
-    (effectiveMode === "providers" &&
-      (config.provider === "custom" ||
-        config.provider === "openrouter" ||
-        !!getCloudModel(config.model)?.supportsThinking)) ||
-    (effectiveMode === "local" && !!getLocalModel(config.model)?.supportsThinking);
+    !chatSendsNoThinking && offersThinkingToggle(effectiveMode, config.provider, config.model);
+
+  const effortCapability =
+    effectiveMode === "providers"
+      ? selectableReasoningEffort(config.provider, config.model, config, config.cloudBaseUrl)
+      : null;
 
   if (managed.kind === "error") {
     return (
@@ -271,13 +271,26 @@ export default function InferenceConfigEditor({
       {modes.length > 1 && (
         <InferenceModeSelector
           modes={modes}
+          selectedLabel={selectedLabel}
           activeMode={effectiveMode}
           onSelect={handleModeSelect}
         />
       )}
 
       {effectiveMode === "providers" && renderModelSelector("cloud")}
-      {effectiveMode === "local" && renderModelSelector("local")}
+      {effectiveMode === "local" &&
+        (localPickerRef ? (
+          <div
+            ref={localPickerRef}
+            tabIndex={-1}
+            role="group"
+            aria-label={t("models.policy.chooseModel")}
+          >
+            {renderModelSelector("local")}
+          </div>
+        ) : (
+          renderModelSelector("local")
+        ))}
 
       {effectiveMode === "self-hosted" && (
         <OpenAICompatiblePanel
@@ -305,6 +318,54 @@ export default function InferenceConfigEditor({
             <p className="text-xs text-muted-foreground">{t("reasoning.disableThinking.help")}</p>
           </div>
           <Toggle checked={config.disableThinking} onChange={setField("disableThinking")} />
+        </div>
+      )}
+
+      {effortCapability && (
+        <div className="flex items-start justify-between gap-3 pt-1">
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-medium text-foreground">{t("reasoning.effort.title")}</h4>
+            <p className="text-xs text-muted-foreground">
+              {effortCapability.defaultValue
+                ? t("reasoning.effort.descriptionWithDefault", {
+                    value: t(`reasoning.effort.options.${effortCapability.defaultValue}`),
+                  })
+                : t("reasoning.effort.description")}
+            </p>
+          </div>
+          <Select
+            value={
+              isReasoningEffortSupported(effortCapability, config.reasoningEffort)
+                ? config.reasoningEffort
+                : AUTO_REASONING_EFFORT_VALUE
+            }
+            onValueChange={(value) =>
+              setField("reasoningEffort")(
+                value === AUTO_REASONING_EFFORT_VALUE ? AUTO_REASONING_EFFORT : value
+              )
+            }
+          >
+            <SelectTrigger className="h-7 w-44 shrink-0 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem
+                value={AUTO_REASONING_EFFORT_VALUE}
+                className="text-xs py-1.5 ps-2.5 pe-7 rounded-md"
+              >
+                {t("reasoning.effort.auto")}
+              </SelectItem>
+              {effortCapability.options.map((effort) => (
+                <SelectItem
+                  key={effort}
+                  value={effort}
+                  className="text-xs py-1.5 ps-2.5 pe-7 rounded-md"
+                >
+                  {t(`reasoning.effort.options.${effort}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       )}
 

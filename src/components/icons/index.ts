@@ -4,17 +4,49 @@ import * as Nucleo from "./nucleo";
 
 export type { IconComponent, IconProps } from "./createIcon";
 export {
+  AlignCenter,
+  AlignJustify,
+  AlignRight,
+  ArrowUp,
   Bold,
+  ChevronsUpDown,
   Circle,
+  CopyRounded,
+  DoorOpen,
+  EnvelopePlus,
+  EyeOff,
+  FolderRounded,
+  FontFamily,
+  GitFork,
   Heading,
+  Highlighter,
   Italic,
+  Lightbulb,
   List,
   ListChecks,
+  ListEnd,
   ListOrdered,
+  Maximize,
+  MessageCircleQuestion,
+  MicOff,
+  Minimize,
+  Office,
   Quote,
+  RubyText,
+  SkillStack,
   Square,
+  SquareSlash,
+  SquareSparkle,
   Strikethrough,
+  Subscript,
+  Superscript,
   Table,
+  TextColor,
+  TextSelect,
+  UserMinus,
+  UserSettings,
+  UserXmark,
+  Volume,
 } from "./primitives";
 
 export const AlertCircle = createIcon("alert-circle", Nucleo.CircleWarningOutline24);
@@ -114,7 +146,6 @@ export const NotebookPen = createIcon("notebook-pen", Nucleo.NotebookOutline24);
 export const PanelLeftClose = createIcon("panel-left-close", Nucleo.LayoutLeftOutline24);
 export const PanelLeftOpen = createIcon("panel-left-open", Nucleo.LayoutLeftOutline24);
 export const PanelRight = createIcon("panel-right", Nucleo.LayoutRightOutline24);
-export const PanelRightClose = createIcon("panel-right-close", Nucleo.SidebarRightOutline24);
 export const Pencil = createIcon("pencil", Nucleo.PencilOutline24);
 export const Play = createIcon("play", Nucleo.MediaPlayOutline24);
 export const Plus = createIcon("plus", Nucleo.PlusOutline24);

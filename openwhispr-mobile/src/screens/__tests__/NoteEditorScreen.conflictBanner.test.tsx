@@ -12,6 +12,7 @@ import type {
   Speaker,
   SpeakerProfile,
 } from '@/data/types';
+import type { PrivateWorkspace } from '@/lib/privateWorkspaces';
 import type { Folder, Space } from '@/data';
 
 const mockUpdateNote = jest.fn();
@@ -56,6 +57,10 @@ const mockNotesState = {
   moveNoteToSpace: jest.fn(),
   createFolder: jest.fn(),
   getSpaceFolders: jest.fn(() => [] as Folder[]),
+  getAllPrivateFolders: jest.fn((): Folder[] => mockNotesState.folders),
+  privateWorkspaces: [] as PrivateWorkspace[],
+  activePrivateWorkspaceId: null as string | null,
+  defaultPrivateWorkspaceId: null as string | null,
   voiceProfiles: [] as SpeakerProfile[],
   meetingSpeakerEmbeddingsByNoteId: {} as Record<number, Record<string, number[]>>,
   claimSpeakerAsMe: jest.fn(),
@@ -141,6 +146,11 @@ jest.mock('@/store/useDictionaryStore', () => ({
     selector(mockDictionaryState),
 }));
 
+jest.mock('@/lib/dictationHints', () => ({
+  buildEffectiveDictionaryWords: (): string[] => [],
+  buildDictationHintTiers: (): string[][] => [[], [], []],
+}));
+
 jest.mock('@/store/useUsageStore', () => {
   const usageState = { usage: null, load: jest.fn(async () => ({ status: 'skipped' })) };
   const useUsageStore = (selector?: (state: typeof usageState) => unknown) =>
@@ -172,6 +182,8 @@ jest.mock('@/services/reasoning/ReasoningService', () => ({
   ReasoningService: {
     processText: jest.fn(),
   },
+  // Off device, so note actions keep the usual dictionary.
+  resolveReasoningPlacement: () => ({ localRequired: false }),
 }));
 
 jest.mock('@/utils/generateTitle', () => ({

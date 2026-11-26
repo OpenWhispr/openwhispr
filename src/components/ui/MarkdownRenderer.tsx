@@ -1,14 +1,35 @@
-import { createContext, useContext, useId, type ComponentProps, type ReactElement } from "react";
+import {
+  createContext,
+  useContext,
+  useId,
+  type ComponentProps,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import Markdown, { type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+  /** Leaves out a leading "---" header block, as a SKILL.md carries. */
+  hideFrontmatter?: boolean;
+  /** Shown after each code block, given the block's code. */
+  codeBlockActions?: (code: string) => ReactNode;
 }
+
+// A byte-order mark, then "---" on the first line, closed by "---" or "..." on its own line.
+const LEADING_FRONTMATTER = /^\uFEFF?---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/;
 
 const FootnotePrefixContext = createContext("");
 const InsideLinkContext = createContext(false);
+// Through a context, so markdownComponents stays one constant and keeps DOM state.
+const CodeBlockActionsContext = createContext<((code: string) => ReactNode) | null>(null);
+
+type HastNode = { type: string; value?: string; children?: HastNode[] };
+
+const hastText = (node: HastNode): string =>
+  node.type === "text" ? (node.value ?? "") : (node.children ?? []).map(hastText).join("");
 
 function MarkdownLink({ node: _node, ...props }: ComponentProps<"a"> & ExtraProps): ReactElement {
   const prefix = useContext(FootnotePrefixContext);
@@ -51,6 +72,31 @@ function MarkdownImage({
   );
 }
 
+interface MarkdownNode {
+  type: string;
+  value?: string;
+  children?: MarkdownNode[];
+}
+
+const BREAK_TAG = /^<br\s*\/?>$/i;
+
+// A GFM table row is a single line, so models break lines inside a cell with
+// <br>. Raw HTML renders as escaped text, so only a bare <br> tag is turned
+// into a Markdown line break; every other tag, and a <br> with attributes,
+// stays literal.
+function remarkBreakTags(): (tree: MarkdownNode) => void {
+  const visit = (node: MarkdownNode): void => {
+    node.children?.forEach((child, index, siblings) => {
+      if (child.type === "html" && BREAK_TAG.test(child.value ?? "")) {
+        siblings[index] = { type: "break" };
+      } else {
+        visit(child);
+      }
+    });
+  };
+  return visit;
+}
+
 // Stable component types preserve DOM state, including table scroll positions.
 const markdownComponents: Components = {
   h1: ({ children }): ReactElement => (
@@ -87,11 +133,23 @@ const markdownComponents: Components = {
       {children}
     </code>
   ),
-  pre: ({ children }): ReactElement => (
-    <pre dir="ltr" className="bg-black/10 p-2 rounded overflow-x-auto text-xs mb-2">
-      {children}
-    </pre>
-  ),
+  pre: function MarkdownCodeBlock({ children, node }): ReactElement {
+    const actions = useContext(CodeBlockActionsContext);
+    const block = (
+      <pre dir="ltr" className="bg-black/10 p-2 rounded overflow-x-auto text-xs mb-2">
+        {children}
+      </pre>
+    );
+    if (!actions || !node) return block;
+    // mdast-util-to-hast ends every code block with a newline the code itself doesn't have.
+    const code = hastText(node as HastNode).replace(/\n$/, "");
+    return (
+      <>
+        {block}
+        {actions(code)}
+      </>
+    );
+  },
   strong: ({ children }): ReactElement => <strong className="font-semibold">{children}</strong>,
   em: ({ children }): ReactElement => <em className="italic">{children}</em>,
   blockquote: ({ children }): ReactElement => (
@@ -122,18 +180,25 @@ const markdownComponents: Components = {
   ),
 };
 
-export function MarkdownRenderer({ content, className }: MarkdownRendererProps): ReactElement {
+export function MarkdownRenderer({
+  content,
+  className,
+  hideFrontmatter,
+  codeBlockActions,
+}: MarkdownRendererProps): ReactElement {
   const footnotePrefix = `user-content-${useId()}-`;
   return (
     <div dir="auto" className={className}>
       <FootnotePrefixContext value={footnotePrefix}>
-        <Markdown
-          remarkPlugins={[remarkGfm]}
-          remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
-          components={markdownComponents}
-        >
-          {content}
-        </Markdown>
+        <CodeBlockActionsContext value={codeBlockActions ?? null}>
+          <Markdown
+            remarkPlugins={[remarkGfm, remarkBreakTags]}
+            remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
+            components={markdownComponents}
+          >
+            {hideFrontmatter ? content.replace(LEADING_FRONTMATTER, "") : content}
+          </Markdown>
+        </CodeBlockActionsContext>
       </FootnotePrefixContext>
     </div>
   );

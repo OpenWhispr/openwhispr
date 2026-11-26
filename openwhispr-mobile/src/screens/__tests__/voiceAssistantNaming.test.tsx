@@ -1,7 +1,12 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react-native';
 
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('expo-router', () => ({ router: { push: jest.fn() }, useFocusEffect: () => {} }));
+// As the other KeyboardSettingsScreen suites: the real module reaches expo/fetch through apiClient.
+jest.mock('@/lib/keyboardTranslationSync', () => ({
+  keyboardCanTranslate: () => true,
+  reconcileKeyboardTranslationFromAppGroup: async () => {},
+}));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/store/useConfigStore', () => ({
@@ -9,6 +14,12 @@ jest.mock('@/store/useConfigStore', () => ({
     selector({ config: null, updateConfig: jest.fn() }),
 }));
 jest.mock('@/hooks/useConfigToggle', () => ({ useConfigToggle: () => jest.fn() }));
+jest.mock('@react-native-menu/menu', () =>
+  require('../../components/notes/__tests__/menuViewMock'),
+);
+jest.mock('../../../modules/app-group-storage/src', () => ({
+  AppGroupStorage: { setItem: jest.fn(), removeItem: jest.fn() },
+}));
 jest.mock('../../../modules/live-activity/src', () => ({
   LiveActivity: { isDictationModeEnabled: () => false, setDictationMode: jest.fn() },
 }));
@@ -45,14 +56,14 @@ jest.mock('@/store/useNotesStore', () => ({
 jest.mock('@/lib/alerts', () => ({ confirmDestructive: jest.fn() }));
 
 import { DictationAgentScreen } from '../DictationAgentScreen';
-import PreferencesScreen from '../PreferencesScreen';
+import KeyboardSettingsScreen from '../KeyboardSettingsScreen';
 import PrivacyDataScreen from '../PrivacyDataScreen';
 
 // The feature is the voice assistant everywhere users meet it, matching onboarding and desktop.
-it('lists the voice assistant in Preferences', () => {
-  render(<PreferencesScreen />);
+it('lists the voice assistant in the Keyboard settings', () => {
+  render(<KeyboardSettingsScreen />);
   expect(screen.getByText('Voice Assistant')).toBeTruthy();
-  expect(screen.getByText('Trigger AI actions by saying your assistant’s name')).toBeTruthy();
+  expect(screen.getByText('Have the keyboard’s wand write for you')).toBeTruthy();
   expect(screen.queryByText(/agent/i)).toBeNull();
 });
 
@@ -60,7 +71,7 @@ it('names the voice assistant throughout its settings screen', () => {
   render(<DictationAgentScreen />);
   expect(screen.getByText('Enable Voice Assistant')).toBeTruthy();
   expect(screen.getByText('Assistant Name')).toBeTruthy();
-  expect(screen.getByText(/Voice Assistant needs Cloud or Bring Your Own Key mode/)).toBeTruthy();
+  expect(screen.getByText(/the AI chosen for the Voice Assistant in AI Models/)).toBeTruthy();
   expect(screen.queryByText(/agent/i)).toBeNull();
 });
 

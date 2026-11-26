@@ -1,5 +1,11 @@
 import type { InferenceProvider } from "./types";
-import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl } from "../../../config/constants";
+import {
+  API_ENDPOINTS,
+  TOKEN_LIMITS,
+  buildApiUrl,
+  isGeminiOpenAIBase,
+  normalizeBaseUrl,
+} from "../../../config/constants";
 import { getCloudModel, getOpenAiApiConfig } from "../../../models/ModelRegistry";
 import { getSettings } from "../../../stores/settingsStore";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
@@ -7,12 +13,16 @@ import logger from "../../../utils/logger";
 import { canBorrowCleanupCustomKey, resolveConfiguredOpenAIBase } from "../openaiBase";
 import {
   applyChatCompletionsParams,
+  emptyOutputError,
   emptyResponseError,
   fetchWithParamFallback,
   isTruncatedFinishReason,
+  REASONING_MODEL_MIN_OUTPUT_TOKENS,
+  responsesReasoningEffort,
   truncatedOutputError,
 } from "../chatRequestBody";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
+import { abortOnCancel, isRequestCancelled, requestCancelledError } from "../requestCancellation";
 import {
   getLlmRequestTimeoutSeconds,
   llmRequestTimeoutError,
@@ -22,19 +32,37 @@ import { wrapCleanupTranscript } from "../../../config/prompts";
 import { openCodeSessionHeaders } from "../openCodeSession";
 import {
   asProviderError,
+  PROVIDER_ERROR_CODES,
   providerHttpError,
   redactProviderBody,
 } from "../../../helpers/providerHttpErrors.js";
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
 const PROBE_TIMEOUT_MS = 2_000;
-// OpenAI counts a reasoning model's hidden reasoning against the output cap and
-// recommends reserving at least 25k tokens for reasoning plus output. A cap,
-// not a spend: an unused allowance costs nothing.
-const REASONING_MODEL_MIN_OUTPUT_TOKENS = 25_000;
 
 const endpointPreferenceCache = new Map<string, "responses" | "chat">();
 const probedBases = new Set<string>();
+
+// A gateway may serve OpenAI-compatible routes under a path of its own.
+// Prefer the typed path after a successful completion, with /v1 still available
+// if the typed path returns 404 for a later request.
+const typedBaseByResolvedBase = new Map<string, string>();
+
+function getCustomBaseCandidates(
+  provider: string,
+  configuredBaseUrl: string | undefined,
+  resolvedBase: string
+): string[] {
+  if (provider !== "custom") return [resolvedBase];
+  const typedBase = normalizeBaseUrl(configuredBaseUrl);
+  if (typedBase === resolvedBase) return [resolvedBase];
+  const typedUrl = URL.parse(typedBase);
+  if (!typedUrl || typedUrl.pathname === "/" || typedUrl.origin !== new URL(resolvedBase).origin) {
+    return [resolvedBase];
+  }
+  if (typedBaseByResolvedBase.get(resolvedBase) === typedBase) return [typedBase, resolvedBase];
+  return [resolvedBase, typedBase];
+}
 
 function readStoredPreference(base: string): "responses" | "chat" | undefined {
   if (endpointPreferenceCache.has(base)) {
@@ -108,15 +136,13 @@ async function detectServerType(base: string): Promise<void> {
     return;
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
     const res = await fetch(buildApiUrl(base, "/models"), {
       method: "GET",
       signal: controller.signal,
     });
-    clearTimeout(timeoutId);
-
     if (!res.ok) {
       probedBases.add(base);
       return;
@@ -137,6 +163,8 @@ async function detectServerType(base: string): Promise<void> {
     probedBases.add(base);
   } catch {
     probedBases.add(base);
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -167,7 +195,7 @@ export const openaiProvider: InferenceProvider = {
       keyLength: apiKey?.length || 0,
     });
 
-    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
+    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, config.toneStyle);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
     const imageDataUrl = config.screenContext
       ? `data:${config.screenContext.mediaType};base64,${config.screenContext.data}`
@@ -198,13 +226,23 @@ export const openaiProvider: InferenceProvider = {
       ? API_ENDPOINTS.OPENROUTER_BASE
       : resolveConfiguredOpenAIBase(resolvedProvider, config.baseUrl);
     const dialect = detectEndpointDialect(openAiBase);
-    // OpenRouter and known dialect hosts speak Chat Completions only — no /responses probe needed.
-    let endpointCandidates: Array<{ url: string; type: "responses" | "chat" }>;
-    if (isOpenRouter || dialect) {
-      endpointCandidates = [{ url: buildApiUrl(openAiBase, "/chat/completions"), type: "chat" }];
-    } else {
-      await detectServerType(openAiBase);
-      endpointCandidates = getEndpointCandidates(openAiBase);
+    // These endpoints speak Chat Completions only — no /responses probe needed.
+    const chatOnly = isOpenRouter || !!dialect || isGeminiOpenAIBase(openAiBase);
+    const endpointCandidates: Array<{ url: string; type: "responses" | "chat"; base: string }> = [];
+    for (const base of getCustomBaseCandidates(resolvedProvider, config.baseUrl, openAiBase)) {
+      if (chatOnly) {
+        endpointCandidates.push({
+          url: buildApiUrl(base, "/chat/completions"),
+          type: "chat",
+          base,
+        });
+      } else {
+        // Probe the resolved /v1 base only. A typed path is confirmed by inference.
+        if (base === openAiBase) await detectServerType(base);
+        for (const candidate of getEndpointCandidates(base)) {
+          endpointCandidates.push({ ...candidate, base });
+        }
+      }
     }
     const isCustomEndpoint = openAiBase !== API_ENDPOINTS.OPENAI_BASE;
     // Only the user's own endpoint is self-hosted; isCustomEndpoint also covers OpenRouter.
@@ -235,15 +273,26 @@ export const openaiProvider: InferenceProvider = {
       });
     }
 
+    // Only registry-known OpenAI reasoning models on OpenAI's own host: an
+    // unknown id (fine-tune, proxy) may reject a cap above its output limit.
+    const hasReasoningRoom =
+      !isCustomEndpoint && getCloudModel(model)?.supportsTemperature === false;
+
     const retryStrategy = createApiRetryStrategy();
-    const response = await withRetry(async () => {
+    const { response, base: responseBase } = await withRetry(async () => {
       let lastError: Error | null = null;
       let lastRetryableError: Error | null = null;
+      let firstBaseNotFound: Error | null = null;
+      let modelNotFound: Error | null = null;
 
-      for (const { url: endpoint, type } of endpointCandidates) {
+      for (const [index, { url: endpoint, type, base }] of endpointCandidates.entries()) {
+        const nextBase = endpointCandidates[index + 1]?.base;
+        const switchesBase = nextBase !== undefined && nextBase !== base;
         const controller = new AbortController();
         const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
         const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
+        const unlinkCancel = abortOnCancel(config.requestId, controller);
+        let readingBody = false;
         try {
           const requestedMaxTokens =
             config.maxTokens ||
@@ -258,12 +307,9 @@ export const openaiProvider: InferenceProvider = {
             );
           // A known endpoint host knows its own request shape better than the model id does.
           const apiConfig = dialect ?? getOpenAiApiConfig(model, resolvedProvider);
-          // Only registry-known OpenAI reasoning models on OpenAI's own host: an
-          // unknown id (fine-tune, proxy) may reject a cap above its output limit.
-          const maxTokens =
-            !isCustomEndpoint && getCloudModel(model)?.supportsTemperature === false
-              ? Math.max(requestedMaxTokens, REASONING_MODEL_MIN_OUTPUT_TOKENS)
-              : requestedMaxTokens;
+          const maxTokens = hasReasoningRoom
+            ? Math.max(requestedMaxTokens, REASONING_MODEL_MIN_OUTPUT_TOKENS)
+            : requestedMaxTokens;
 
           const requestBody: Record<string, unknown> = { model };
 
@@ -274,6 +320,8 @@ export const openaiProvider: InferenceProvider = {
             if (apiConfig.supportsTemperature) {
               requestBody.temperature = config.temperature ?? (config.systemPrompt ? 0.3 : 0);
             }
+            const effort = responsesReasoningEffort(model, resolvedProvider, config, openAiBase);
+            if (effort) requestBody.reasoning = { effort };
           } else {
             requestBody.messages = buildMessages(type);
             applyChatCompletionsParams(requestBody, {
@@ -286,6 +334,7 @@ export const openaiProvider: InferenceProvider = {
           }
 
           const res = await fetchWithParamFallback(
+            endpoint,
             () =>
               fetch(endpoint, {
                 method: "POST",
@@ -307,18 +356,39 @@ export const openaiProvider: InferenceProvider = {
               errorData,
               `OpenAI API error: ${res.status}`
             );
+            const httpError = providerHttpError({
+              ...errorContext,
+              status: res.status,
+              body: errorData,
+              headers: res.headers,
+            });
+            if (res.status === 404 && httpError.code === PROVIDER_ERROR_CODES.MODEL_NOT_FOUND) {
+              modelNotFound ??= httpError;
+            }
 
-            const isUnsupportedEndpoint =
-              (res.status === 404 || res.status === 405) && type === "responses";
-
-            if (isUnsupportedEndpoint) {
-              lastError = providerHttpError({
-                ...errorContext,
-                status: res.status,
-                body: errorData,
-                headers: res.headers,
+            if (res.status === 404 && switchesBase) {
+              firstBaseNotFound = httpError;
+              if (base !== openAiBase) typedBaseByResolvedBase.delete(openAiBase);
+              lastError = httpError;
+              logger.logReasoning("OPENAI_BASE_FALLBACK", {
+                attemptedEndpoint: endpoint,
+                nextBase,
+                error: redactProviderBody(errorMessage),
               });
-              rememberPreference(openAiBase, "chat");
+              continue;
+            }
+
+            if (res.status === 404 && firstBaseNotFound && nextBase !== base) {
+              throw modelNotFound ?? firstBaseNotFound;
+            }
+
+            if (
+              type === "responses" &&
+              !switchesBase &&
+              (res.status === 404 || res.status === 405)
+            ) {
+              lastError = httpError;
+              rememberPreference(base, "chat");
               logger.logReasoning("OPENAI_ENDPOINT_FALLBACK", {
                 attemptedEndpoint: endpoint,
                 error: redactProviderBody(errorMessage),
@@ -326,25 +396,29 @@ export const openaiProvider: InferenceProvider = {
               continue;
             }
 
-            throw providerHttpError({
-              ...errorContext,
-              status: res.status,
-              body: errorData,
-              headers: res.headers,
-            });
+            throw httpError;
           }
 
-          rememberPreference(openAiBase, type);
-          return res.json();
+          readingBody = true;
+          const response = await res.json();
+          rememberPreference(base, type);
+          return { response, base };
         } catch (error) {
           if ((error as Error).name === "AbortError") {
+            if (isRequestCancelled(config.requestId)) throw requestCancelledError();
             throw llmRequestTimeoutError(timeoutSeconds);
           }
+          if (readingBody) {
+            if (base !== openAiBase) typedBaseByResolvedBase.delete(openAiBase);
+            throw error;
+          }
+          // A confirmed missing model takes precedence over an earlier retryable probe failure.
+          if (firstBaseNotFound && error === modelNotFound) throw error;
           lastError = error as Error;
           if (retryStrategy.shouldRetry(lastError)) {
             lastRetryableError = lastError;
           }
-          if (type === "responses") {
+          if (type === "responses" && !switchesBase) {
             logger.logReasoning("OPENAI_ENDPOINT_FALLBACK", {
               attemptedEndpoint: endpoint,
               error: (error as Error).message,
@@ -354,6 +428,7 @@ export const openaiProvider: InferenceProvider = {
           throw lastRetryableError || error;
         } finally {
           clearTimeout(timeoutId);
+          unlinkCancel();
         }
       }
 
@@ -371,6 +446,9 @@ export const openaiProvider: InferenceProvider = {
       response?.status === "incomplete" ||
       !!response?.incomplete_details ||
       response?.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason));
+    const contentFiltered =
+      response?.incomplete_details?.reason === "content_filter" ||
+      response?.choices?.some((choice: any) => choice?.finish_reason === "content_filter");
     if (config.requireCompleteOutput && responseIncomplete) {
       throw truncatedOutputError();
     }
@@ -449,11 +527,18 @@ export const openaiProvider: InferenceProvider = {
     });
 
     if (!responseText) {
+      if (responseBase !== openAiBase) typedBaseByResolvedBase.delete(openAiBase);
       if (refusal) {
         throw new Error(`Model declined the request: ${refusal}`);
       }
+      // A content filter also marks a Responses reply "incomplete", but no output
+      // budget ran out: an empty reply, never retried and never echoed back.
+      if (contentFiltered) throw emptyOutputError("Model output was stopped by a content filter");
       const error = emptyResponseError("OpenAI", config, !!responseIncomplete);
-      if (error) throw error;
+      // No retry code: that request already had a retry's room.
+      if (error) {
+        throw responseIncomplete && hasReasoningRoom ? truncatedOutputError(error.message) : error;
+      }
       logger.logReasoning("OPENAI_EMPTY_RESPONSE_FALLBACK", {
         model,
         originalTextLength: text.length,
@@ -462,6 +547,7 @@ export const openaiProvider: InferenceProvider = {
       return text;
     }
 
+    if (responseBase !== openAiBase) typedBaseByResolvedBase.set(openAiBase, responseBase);
     return responseText;
   },
 };

@@ -1,6 +1,7 @@
 {
   "appId": "com.gizmolabs.openwhispr",
   "afterPack": "scripts/afterPack.js",
+  "afterSign": "scripts/afterSign.js",
   "extraMetadata": {
     "windowsTrayIdentity": true
   },
@@ -119,6 +120,7 @@
         "macos-globe-listener",
         "macos-fast-paste",
         "macos-mic-listener",
+        "macos-managed-policy",
         "macos-calendar-listener",
         "macos-text-monitor",
         "macos-window-bounds",
@@ -186,13 +188,7 @@
       "certificateProfileName": "openwhispr-release",
       "codeSigningAccountName": "OpenWhispr",
       "publisherName": "CN=Gizmo Labs Inc., O=Gizmo Labs Inc., L=Wilmington, S=Delaware, C=US"
-    },
-    "extraResources": [
-      {
-        "from": "resources/bin/nircmd.exe",
-        "to": "bin/nircmd.exe"
-      }
-    ]
+    }
   },
   "linux": {
     "target": ["AppImage", "deb", "rpm", "tar.gz"],

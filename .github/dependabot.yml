@@ -8,6 +8,10 @@ updates:
     directory: "/openwhispr-mobile"
     schedule:
       interval: "weekly"
+  - package-ecosystem: "npm"
+    directory: "/model-registry"
+    schedule:
+      interval: "weekly"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

@@ -11,6 +11,16 @@ const dual = (streams, factory) =>
   streams === 2 ? Promise.all([factory(), factory()]) : factory();
 const duplicate = (streams, value) => (streams === 2 ? [value, value] : value);
 
+// The server gates managed tokens by purpose, so a default would let a meeting
+// mint as dictation. Every managed mint must say which one it is.
+const AUDIO_PURPOSES = new Set(["dictation", "meeting"]);
+function requirePurpose({ purpose }) {
+  if (AUDIO_PURPOSES.has(purpose)) return purpose;
+  throw Object.assign(new Error("Realtime token request has no audio purpose"), {
+    code: "AUDIO_PURPOSE_REQUIRED",
+  });
+}
+
 const REALTIME_TOKEN_PROVIDERS = {
   "assemblyai-realtime": async (
     { environmentManager, proxyFetch, postServerToken },
@@ -37,7 +47,9 @@ const REALTIME_TOKEN_PROVIDERS = {
       });
     }
     return dual(streams, async () => {
-      const data = await postServerToken("/api/streaming-token");
+      const data = await postServerToken("/api/streaming-token", {
+        purpose: requirePurpose(options),
+      });
       if (!data.token) throw new Error("No AssemblyAI token received");
       return data.token;
     });
@@ -52,7 +64,9 @@ const REALTIME_TOKEN_PROVIDERS = {
       return duplicate(streams, apiKey);
     }
     return dual(streams, async () => {
-      const data = await postServerToken("/api/deepgram-streaming-token");
+      const data = await postServerToken("/api/deepgram-streaming-token", {
+        purpose: requirePurpose(options),
+      });
       if (!data.token) throw new Error("No Deepgram token received");
       return data.token;
     });
@@ -70,7 +84,9 @@ const REALTIME_TOKEN_PROVIDERS = {
     }
     // Managed tokens are minted with uses:1, so N sockets need N mints.
     return dual(streams, async () => {
-      const data = await postServerToken("/api/gemini-live-token");
+      const data = await postServerToken("/api/gemini-live-token", {
+        purpose: requirePurpose(options),
+      });
       if (!data.token) throw new Error("No Gemini token received");
       return data.token;
     });
@@ -80,6 +96,21 @@ const REALTIME_TOKEN_PROVIDERS = {
     // One token covers both meeting streams; it's only used at the WSS handshake.
     const { token } = await mintCortiToken(options);
     return duplicate(streams, token);
+  },
+
+  // OpenWhispr Cloud has no ElevenLabs session to mint, so the saved key is the
+  // credential in either mode. The server-side socket sends it as a header.
+  "elevenlabs-realtime": async ({ environmentManager }, options, streams) => {
+    if (options.purpose !== "meeting") {
+      throw new Error(
+        "ElevenLabs realtime credentials are only available for meeting transcription."
+      );
+    }
+    const apiKey = environmentManager.getElevenlabsKey();
+    if (!apiKey) {
+      throw new Error("No ElevenLabs API key configured. Add your key in Settings.");
+    }
+    return duplicate(streams, apiKey);
   },
 
   "tinfoil-realtime": async ({ environmentManager }, options, streams) => {
@@ -99,6 +130,7 @@ const REALTIME_TOKEN_PROVIDERS = {
       return duplicate(streams, apiKey);
     }
     const data = await postServerToken("/api/openai-realtime-token", {
+      purpose: requirePurpose(options),
       model: options.model,
       language: options.language,
       streams: streams || 1,

@@ -1,3 +1,4 @@
+import { LocalChatRepository } from './local/chatRepository';
 import { LocalNotesRepository } from './local/notesRepository';
 import { calendarRepository } from './calendarRepository';
 import { spacesRepository } from './spacesRepository';
@@ -8,6 +9,7 @@ import type { CalendarRepository } from './calendarTypes';
 export const notesRepository: NotesRepository = new SyncedNotesRepository(
   new LocalNotesRepository(),
 );
+export const chatRepository = new LocalChatRepository();
 export { calendarRepository };
 export { spacesRepository };
 export type {
@@ -21,6 +23,9 @@ export type {
   RemoteNote,
   RemoteNoteCreateResult,
   ConflictedNote,
+  ChatCandidateNotes,
+  ChatCandidateOptions,
+  ChatNoteWindow,
 } from './types';
 export type {
   CalendarParticipant,

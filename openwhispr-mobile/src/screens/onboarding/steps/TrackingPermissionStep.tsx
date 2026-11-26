@@ -27,8 +27,11 @@ const BENEFITS: Benefit[] = [
   { icon: 'scope', mdIcon: 'Target', text: 'Make better marketing decisions' },
 ];
 
-export function TrackingPermissionStep(): ReactElement {
-  const { goNext } = useOnboardingStep('tracking-permission');
+export function TrackingPermissionStep({
+  onComplete,
+}: { onComplete?: () => Promise<void> } = {}): ReactElement {
+  const { goNext: advanceStep } = useOnboardingStep('tracking-permission');
+  const goNext = onComplete ?? advanceStep;
   const markRequestAttempted = useOnboardingStore(
     (state) => state.markTrackingAuthorizationRequestAttempted,
   );

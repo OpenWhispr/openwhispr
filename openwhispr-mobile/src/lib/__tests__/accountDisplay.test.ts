@@ -1,4 +1,5 @@
-import { getAccountDisplay } from '@/lib/accountDisplay';
+import type { AuthUser } from '@/lib/authClient';
+import { getAccountDisplay, getAccountFirstName } from '@/lib/accountDisplay';
 
 describe('getAccountDisplay', () => {
   it('shows a real account by name and email', () => {
@@ -40,5 +41,32 @@ describe('getAccountDisplay', () => {
         false,
       ),
     ).toEqual({ initials: '?', name: 'OpenWhispr User', subtitle: 'No account yet' });
+  });
+});
+
+describe('getAccountFirstName', () => {
+  const user = (overrides: Partial<AuthUser>): AuthUser => ({
+    id: 'u',
+    email: 'ada@example.com',
+    emailVerified: true,
+    isAnonymous: false,
+    ...overrides,
+  });
+
+  it('takes the first word of the name', () => {
+    expect(getAccountFirstName(user({ name: '  Ada   Lovelace ' }))).toBe('Ada');
+  });
+
+  it('has none for a guest, a nameless account or an anonymous session', () => {
+    expect(getAccountFirstName(null)).toBeNull();
+    expect(getAccountFirstName(user({ name: undefined }))).toBeNull();
+    expect(getAccountFirstName(user({ name: '   ' }))).toBeNull();
+    expect(getAccountFirstName(user({ name: 'Anonymous', isAnonymous: true }))).toBeNull();
+  });
+
+  it('has none when the name is only the email address or its handle', () => {
+    expect(getAccountFirstName(user({ name: 'Ada' }))).toBe('Ada');
+    expect(getAccountFirstName(user({ name: 'ada' }))).toBeNull();
+    expect(getAccountFirstName(user({ name: 'ada@example.com' }))).toBeNull();
   });
 });

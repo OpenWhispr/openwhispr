@@ -70,6 +70,7 @@ export interface RemoteFolder {
   deleted_at: string | null;
   updated_at: string;
   // Scope fields declared for a later task; not yet populated by pull/apply.
+  private_workspace_id?: string | null;
   space_id?: string | null;
   workspace_id?: string | null;
   previous_space_id?: string | null;
@@ -103,6 +104,7 @@ export interface RemoteNote {
   created_at?: string;
   updated_at: string;
   // Scope fields declared for a later task; not yet populated by pull/apply.
+  private_workspace_id?: string | null;
   space_id?: string | null;
   workspace_id?: string | null;
   previous_space_id?: string | null;
@@ -149,6 +151,33 @@ export interface ConflictedNote {
   conflictServerNote: RemoteNote | null;
 }
 
+/** The notes picked to answer a chat question, and how many matched before the cap. */
+export interface ChatCandidateNotes {
+  notes: Note[];
+  total: number;
+  /** The returned notes whose transcript matches a term, so their matching lines can be sent. */
+  transcriptMatchIds?: number[];
+}
+
+/** A period a chat question names: the notes created from `start` up to (not including) `end`. */
+export interface ChatNoteWindow {
+  start: Date;
+  end: Date;
+  meetingsOnly: boolean;
+}
+
+export interface ChatCandidateOptions {
+  includePrivate: boolean;
+  limit: number;
+  window?: ChatNoteWindow;
+}
+
+export interface CreateFolderOptions {
+  privateWorkspaceId?: string | null;
+  isDefault?: boolean;
+  sortOrder?: number;
+}
+
 export interface NotesRepository {
   // Existing methods
   getFolders(): Folder[];
@@ -171,8 +200,12 @@ export interface NotesRepository {
   /** Folders belonging to one space — the private space's own list is getPrivateFolders(). */
   getFoldersBySpace(spaceId: number): Folder[];
   getFolderCounts(): Record<number, number>;
-  /** Defaults to the private space; pass `spaceId` to create the folder inside a team space. */
-  createFolder(name: string, spaceId?: number): Folder;
+  /**
+   * Defaults to the private space; pass `spaceId` to create the folder inside a team space.
+   * A private folder takes `options.privateWorkspaceId`, the workspace whose Private it is in
+   * (null: the default workspace's).
+   */
+  createFolder(name: string, spaceId?: number, options?: CreateFolderOptions): Folder;
   renameFolder(id: number, name: string): void;
   deleteFolder(id: number): void;
   getNotesByFolder(folderId: number): Note[];
@@ -215,6 +248,14 @@ export interface NotesRepository {
    */
   moveNoteToSpace(noteId: number, spaceId: number): void;
   searchNotes(query: string, folderId?: number): Note[];
+  /**
+   * Notes for answering a chat question: a term matches title, content, AI summary or transcript,
+   * and a term held by fewer of the notes searched weighs more. Only notes scoring at least half
+   * as well as the best one count, the best first, then the newest. With a window, only notes
+   * created in it are searched. With no terms, the most recent notes. Capped at `limit`; `total`
+   * counts them all before the cap.
+   */
+  getChatCandidateNotes(terms: string[], options: ChatCandidateOptions): ChatCandidateNotes;
   getActions(): Action[];
   getActionById(id: number): Action | null;
   createAction(name: string, description: string, prompt: string): Action;
@@ -253,6 +294,10 @@ export interface NotesRepository {
    * still holds unpushed local work.
    */
   forkNoteToPrivate(noteId: number): void;
+  /** Retry a refused folderless create in the default Private, if its identity/filing is unchanged. */
+  resetRejectedNotePrivateWorkspace(pushed: Note): void;
+  /** Retry a refused folder create in the default Private, if its identity/placement is unchanged. */
+  resetRejectedFolderPrivateWorkspace(pushed: Folder): void;
   markFolderPushed(
     localId: number,
     remoteId: string,

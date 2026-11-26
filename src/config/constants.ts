@@ -65,11 +65,28 @@ export const buildApiUrl = (base: string, path: string): string => {
   return joinUrlDecorators(`${originAndPath}${normalizedPath}`, query, hash);
 };
 
+// Google's OpenAI-compatible API has its own versioned base, not an extra /v1.
+export const isGeminiOpenAIBase = (base: string): boolean => {
+  try {
+    const url = new URL(base);
+    return (
+      url.origin === "https://generativelanguage.googleapis.com" &&
+      url.pathname.replace(/\/+$/, "") === "/v1beta/openai"
+    );
+  } catch {
+    return false;
+  }
+};
+
 export const ensureV1Suffix = (base: string): string => {
   if (!base) return base;
   const normalized = normalizeBaseUrl(base) || base;
   const { path, query, hash } = splitUrlDecorators(normalized);
-  return joinUrlDecorators(path.endsWith("/v1") ? path : `${path}/v1`, query, hash);
+  return joinUrlDecorators(
+    path.endsWith("/v1") || isGeminiOpenAIBase(normalized) ? path : `${path}/v1`,
+    query,
+    hash
+  );
 };
 
 // Ordered bases to try when listing models from an OpenAI-compatible server.
@@ -145,8 +162,6 @@ export const LIST_SEARCH_THRESHOLD = 12;
 export const TOKEN_LIMITS = {
   MIN_TOKENS: 512,
   MAX_TOKENS: 2048,
-  MIN_TOKENS_ANTHROPIC: 100,
-  MAX_TOKENS_ANTHROPIC: 4096,
   TOKEN_MULTIPLIER: 2, // text.length * multiplier
   REASONING_CONTEXT_SIZE: 4096,
 } as const;

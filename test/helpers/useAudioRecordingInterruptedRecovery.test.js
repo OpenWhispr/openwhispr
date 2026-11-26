@@ -42,7 +42,7 @@ test("the mount effect recovers interrupted recordings with the translated messa
         onPrepareDictation: noopDispose,
         onCancelDictationPreparation: noopDispose,
         onStopDictation: noopDispose,
-        dictationLifecycleStateChanged: () => {},
+        dictationLifecycleStateChanged: async () => true,
       },
     },
   });
@@ -67,5 +67,7 @@ test("the mount effect recovers interrupted recordings with the translated messa
     root.render(React.createElement(Harness));
   });
 
-  assert.deepEqual(recoveries, ["Recovered after OpenWhispr closed before this dictation finished."]);
+  assert.deepEqual(recoveries, [
+    "Recovered after OpenWhispr closed before this dictation finished.",
+  ]);
 });

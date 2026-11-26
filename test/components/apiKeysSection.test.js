@@ -75,9 +75,13 @@ async function renderSection(t, { keyCount = 0 } = {}) {
   });
   const { default: ApiKeysSection } = await vite.ssrLoadModule("/components/ApiKeysSection.tsx");
   root = createRoot(container);
-  const render = (createRequest) =>
-    React.act(async () => root.render(createElement(ApiKeysSection, { createRequest })));
-  return { container, render, loadKeys: () => React.act(async () => resolveList()) };
+  const availability = [];
+  const onCanCreateChange = (canCreate) => availability.push(canCreate);
+  const render = (createRequest, props = {}) =>
+    React.act(async () =>
+      root.render(createElement(ApiKeysSection, { createRequest, onCanCreateChange, ...props }))
+    );
+  return { container, render, availability, loadKeys: () => React.act(async () => resolveList()) };
 }
 
 test("a create request opens the create dialog once the keys have loaded", async (t) => {
@@ -102,4 +106,34 @@ test("at the key limit a create request opens nothing, and the list says why", a
   await loadKeys();
   assert.doesNotMatch(container.textContent, /CREATE DIALOG/);
   assert.match(container.textContent, /apiKeysSection\.maxKeysReached/);
+});
+
+for (const keyCount of [0, 1, 5]) {
+  test(`the header creation action stays disabled while loading and respects the limit (${keyCount})`, async (t) => {
+    const { render, loadKeys, availability } = await renderSection(t, { keyCount });
+    await render(0);
+    assert.equal(availability.at(-1), false);
+    await loadKeys();
+    assert.equal(availability.at(-1), keyCount < 5);
+  });
+}
+
+test("while creation is refused the keys stay listed and no request opens the dialog", async (t) => {
+  const { container, render, loadKeys, availability } = await renderSection(t, { keyCount: 1 });
+  await render(0);
+  await loadKeys();
+  await render(1);
+  assert.match(container.textContent, /CREATE DIALOG/);
+
+  await render(2, { allowCreate: false });
+  assert.doesNotMatch(container.textContent, /CREATE DIALOG/);
+  assert.match(container.textContent, /Key 0/);
+  assert.equal(availability.at(-1), false);
+
+  // Allowing it again opens nothing until someone asks.
+  await render(2);
+  assert.doesNotMatch(container.textContent, /CREATE DIALOG/);
+  assert.equal(availability.at(-1), true);
+  await render(3);
+  assert.match(container.textContent, /CREATE DIALOG/);
 });

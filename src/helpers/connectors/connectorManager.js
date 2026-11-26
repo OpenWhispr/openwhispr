@@ -2,6 +2,8 @@ const crypto = require("crypto");
 const { describeError } = require("./errorSummary");
 const { policyRefusal } = require("./connectorPolicy");
 const { normalizeQueryResult, queryFailed } = require("./queryResult");
+// The most destinations a connector offers to pick from.
+const { MAX_CANDIDATES } = require("./targetResolution");
 
 const CANCEL_REASONS = new Set(["cancelled_by_user", "conversation_ended", "expired"]);
 
@@ -54,6 +56,8 @@ function normalizeCommitResult(result) {
           destinationLabel: result.destinationLabel,
           resultLabel: result.resultLabel,
         }),
+        // A reply meant for a thread that went out as a new message (Slack).
+        ...(result.outsideThread === true ? { outsideThread: true } : {}),
       };
     case "failed":
       return failedResult(result);
@@ -160,6 +164,38 @@ function hasLayoutFields(verbKey, fields) {
   return required.every((name) => isString(fields[name]));
 }
 
+function normalizeSalesforceFields(metadata, fields) {
+  if (!Array.isArray(metadata) || metadata.length < 1 || metadata.length > 3 || !fields)
+    return null;
+  if (Object.keys(fields).length !== metadata.length * 2) return null;
+  const names = new Set();
+  const result = [];
+  for (const [index, field] of metadata.entries()) {
+    if (
+      !field ||
+      field.key !== `value${index}` ||
+      ![field.name, field.label, field.before].every(isString) ||
+      !/^[A-Za-z][A-Za-z0-9_]*__c$/.test(field.name) ||
+      names.has(field.name) ||
+      !Number.isSafeInteger(field.maxLength) ||
+      field.maxLength < 1 ||
+      field.maxLength > 131072 ||
+      !isString(fields[field.key]) ||
+      !["yes", "no"].includes(fields[`include${index}`])
+    )
+      return null;
+    names.add(field.name);
+    result.push({
+      key: field.key,
+      name: field.name,
+      label: field.label,
+      before: field.before,
+      maxLength: field.maxLength,
+    });
+  }
+  return result;
+}
+
 // The card renders exactly this, so a preview missing a field it needs is
 // malformed rather than shown half empty.
 function normalizePreview(preview, editable) {
@@ -168,6 +204,11 @@ function normalizePreview(preview, editable) {
   if (![verbKey, destinationLabel, accountLabel, body].every(isString)) return null;
   const fields = normalizePreviewFields(preview.fields, editable);
   if (fields === false || (fields && !hasLayoutFields(verbKey, fields))) return null;
+  const salesforceFields =
+    verbKey === "salesforceFields"
+      ? normalizeSalesforceFields(preview.salesforceFields, fields)
+      : null;
+  if (verbKey === "salesforceFields" && !salesforceFields) return null;
   return {
     verbKey,
     destinationLabel,
@@ -178,6 +219,7 @@ function normalizePreview(preview, editable) {
       ? { notes: preview.notes.map(normalizePreviewNote).filter(Boolean) }
       : {}),
     ...(fields ? { fields } : {}),
+    ...(salesforceFields ? { salesforceFields } : {}),
   };
 }
 
@@ -200,6 +242,14 @@ function normalizePrepareResult(result, editable) {
             status: "needs_clarification",
             message: result.message,
             candidates: Array.isArray(result.candidates) ? result.candidates.filter(isString) : [],
+            ...(Array.isArray(result.choices)
+              ? {
+                  choices: result.choices
+                    .filter((choice) => isString(choice?.label) && isString(choice?.destination))
+                    .slice(0, MAX_CANDIDATES)
+                    .map(({ label, destination }) => ({ label, destination })),
+                }
+              : {}),
           }
         : INVALID_PREPARE_RESULT;
     case "failed":
@@ -295,6 +345,8 @@ const CONNECT_ERROR_CODES = new Set([
   "email_not_verified",
   // Gmail: a Workspace admin blocked the app, or it's restricted to another org.
   "domain_policy",
+  // Salesforce: the sandbox or My Domain the user typed isn't a Salesforce sign-in host.
+  "invalid_login_domain",
   // GitHub: the device code ran out (15 minutes), or the App has Device Flow off.
   "code_expired",
   "device_flow_disabled",
@@ -454,7 +506,7 @@ function createConnectorManager({
     }
   }
 
-  async function connect(connectorId, policyState) {
+  async function connect(connectorId, policyState, options = {}) {
     const accountId = getAccountId();
     const refusal = actionRefusal(policyState, accountId);
     if (refusal) return { status: "unavailable", reason: refusal };
@@ -473,7 +525,12 @@ function createConnectorManager({
       let credential;
       let replaced = null;
       try {
-        credential = await connector.authorize({ signal: controller.signal });
+        // A sign-in domain reaches only a connector that asks for one.
+        const loginDomain = connector.takesLoginDomain ? options.loginDomain : undefined;
+        credential = await connector.authorize({
+          ...(loginDomain ? { loginDomain } : {}),
+          signal: controller.signal,
+        });
       } catch (error) {
         // Replaced by a newer Connect before the provider answered: nothing
         // was issued, so nothing is saved or revoked.

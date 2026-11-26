@@ -28,6 +28,28 @@ test("accepts a well-formed policy", () => {
   assert.equal(isValidPolicyShape(validPolicy()), true);
 });
 
+test("meeting start validates shape while accepting future string modes", () => {
+  for (const meetings of [
+    undefined,
+    {},
+    { transcriptionStart: "automatic" },
+    { transcriptionStart: "manual" },
+    { transcriptionStart: "future" },
+  ]) {
+    assert.equal(isValidPolicyShape({ ...validPolicy(), meetings }), true);
+  }
+  for (const meetings of [
+    null,
+    [],
+    true,
+    "manual",
+    { transcriptionStart: null },
+    { transcriptionStart: 42 },
+  ]) {
+    assert.equal(isValidPolicyShape({ ...validPolicy(), meetings }), false);
+  }
+});
+
 test("accepts special providers from the API policy contract", () => {
   const policy = validPolicy();
   policy.transcription.allowedByokProviders = ["custom"];
@@ -44,6 +66,14 @@ test("ignores stale additive analytics metadata", () => {
   };
 
   assert.equal(isValidPolicyShape(policy), true);
+});
+
+test("personal API access accepts an optional boolean", () => {
+  for (const value of [undefined, true, false, null, 0, "false"]) {
+    const policy = validPolicy();
+    policy.features.apiAccessEnabled = value;
+    assert.equal(isValidPolicyShape(policy), value === undefined || typeof value === "boolean");
+  }
 });
 
 test("accepts screenContextEnabled as an optional boolean", () => {
@@ -92,9 +122,9 @@ test("rejects a malformed requiredLocalModels", () => {
   }
 });
 
-test("tolerates the server-only memoryEnabled flag", () => {
-  // The API gates Mem0 agent memory itself and the app never reads the field,
-  // so its presence must not invalidate an otherwise valid policy.
+test("tolerates the retired memoryEnabled flag", () => {
+  // Older API versions still send it after memory was removed
+  // (openwhispr-api#243); the app ignores it, so it must not invalidate a policy.
   for (const value of [true, false]) {
     const policy = validPolicy();
     policy.features.memoryEnabled = value;
@@ -270,4 +300,51 @@ test("accepts null or canonical minAppVersion, rejects malformed versions", () =
   const noVersion = validPolicy();
   delete noVersion.minAppVersion;
   assert.equal(isValidPolicyShape(noVersion), false);
+});
+
+test("meeting and upload controls are optional booleans for backward compatibility", () => {
+  for (const key of ["meetingRecordingEnabled", "audioUploadEnabled"]) {
+    for (const value of [true, false]) {
+      const policy = validPolicy();
+      policy.features[key] = value;
+      assert.equal(isValidPolicyShape(policy), true);
+    }
+    for (const value of ["false", 0, null]) {
+      const policy = validPolicy();
+      policy.features[key] = value;
+      assert.equal(isValidPolicyShape(policy), false);
+    }
+  }
+});
+
+test("update policy is additive and future string modes do not invalidate managed policy", () => {
+  for (const updates of [
+    undefined,
+    {},
+    { mode: "user_choice" },
+    { mode: "always_on" },
+    { mode: "it_managed" },
+    { mode: "future_mode" },
+  ]) {
+    assert.equal(isValidPolicyShape({ ...validPolicy(), updates }), true);
+  }
+  for (const updates of [null, [], "it_managed", { mode: 1 }, { mode: null }]) {
+    assert.equal(isValidPolicyShape({ ...validPolicy(), updates }), false);
+  }
+});
+
+test("meeting attendee policy accepts additive string fields and rejects invalid shapes", () => {
+  for (const meetings of [
+    {},
+    { externalAttendees: "future" },
+    { internalDomains: [] },
+    { externalAttendees: "blocked", internalDomains: ["example.com"] },
+  ])
+    assert.equal(isValidPolicyShape({ ...validPolicy(), meetings }), true);
+  for (const meetings of [
+    { externalAttendees: false },
+    { internalDomains: "example.com" },
+    { internalDomains: [null] },
+  ])
+    assert.equal(isValidPolicyShape({ ...validPolicy(), meetings }), false);
 });

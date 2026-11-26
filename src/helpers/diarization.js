@@ -10,6 +10,7 @@ const { getModelsDirForService } = require("./modelDirUtils");
 const { convertToWav } = require("./ffmpegUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { applyConfirmedSpeaker } = require("./speakerAssignmentPolicy");
+const { buildSpeakerRenumber } = require("./speakerIndexBase");
 const sidecarPidFile = require("./sidecarPidFile");
 const {
   transcriptsOverlap,
@@ -22,45 +23,39 @@ const {
 } = require("./transcriptionTimeout");
 
 const DIARIZATION_TIMEOUT_MS = 3600000; // 60 minutes
-const POST_MERGE_CONTEXT_WINDOW_MS = 6000;
-const POST_MERGE_CONTEXT_MERGE_LIMIT = 3;
+// splitMicEchoDuplicates runs on timestamps already normalized to seconds from
+// the start of the recording, so this window is in seconds too, though
+// buildMergedCandidates calls it windowMs.
+const ECHO_DUPLICATE_WINDOW_S = 6;
+const ECHO_DUPLICATE_MERGE_LIMIT = 3;
+// A transcript row lasts about as long as its words take to say (meeting
+// speech runs near 2.5 words a second).
+const SECONDS_PER_SPOKEN_WORD = 0.4;
+const MIN_ROW_SECONDS = 1;
+const wordSegmenter = new Intl.Segmenter("und", { granularity: "word" });
 
-const dedupeMicAgainstSystem = (segments) => {
-  const systemSegments = segments.filter((seg) => seg.source === "system" && seg.text);
-  if (!systemSegments.length) return segments;
+function spokenSeconds(text) {
+  let words = 0;
+  for (const part of wordSegmenter.segment(text ?? "")) if (part.isWordLike) words += 1;
+  return Math.max(MIN_ROW_SECONDS, words * SECONDS_PER_SPOKEN_WORD);
+}
 
-  return segments.filter((seg) => {
-    if (seg.source !== "mic" || !seg.text) return true;
-    if (
-      !seg.likelyRenderBleed &&
-      !seg.hasBleedEvidence &&
-      seg.suppressionReason !== "double_talk"
-    ) {
-      return true;
-    }
-
-    const matcher =
-      seg.suppressionReason === "double_talk" ? transcriptsLooselyOverlap : transcriptsOverlap;
-    const candidates = buildMergedCandidates({
-      segments: systemSegments,
-      timestamp: seg.timestamp,
-      windowMs: POST_MERGE_CONTEXT_WINDOW_MS,
-      mergeLimit: POST_MERGE_CONTEXT_MERGE_LIMIT,
-    });
-    return !candidates.some((candidateText) => matcher(seg.text, candidateText));
-  });
-};
+const {
+  EMBEDDING_MODEL_FILE: EMBEDDING_ONNX,
+  EMBEDDING_MODEL_URL,
+} = require("../constants/speakerDetection.json");
+const { DEFAULT_CLUSTER_THRESHOLD } = require("./diarizationPolicy");
+// Embedding model shipped before the switch to the zh-en "advanced" CAM++; removed once
+// the current model is in place so upgrades don't leave ~30 MB behind.
+const LEGACY_EMBEDDING_ONNX = "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
 
 const SEGMENTATION_MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2";
-const EMBEDDING_MODEL_URL =
-  "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
 const SILERO_VAD_MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx";
 
 const SEGMENTATION_DIR = "sherpa-onnx-pyannote-segmentation-3-0";
 const SEGMENTATION_ONNX = path.join(SEGMENTATION_DIR, "model.onnx");
-const EMBEDDING_ONNX = "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
 const SILERO_VAD_ONNX = "silero_vad.onnx";
 
 class DiarizationManager {
@@ -206,6 +201,7 @@ class DiarizationManager {
           },
         });
       }
+      await fsPromises.unlink(path.join(modelsDir, LEGACY_EMBEDDING_ONNX)).catch(() => {});
 
       if (!this.isVadModelDownloaded()) {
         try {
@@ -284,7 +280,7 @@ class DiarizationManager {
   }
 
   async diarize(wavPath, options = {}) {
-    const { numSpeakers = -1, threshold = 0.55, signal = null } = options;
+    const { threshold = DEFAULT_CLUSTER_THRESHOLD, signal = null } = options;
 
     if (signal?.aborted) return [];
 
@@ -310,7 +306,9 @@ class DiarizationManager {
     const args = [
       `--segmentation.pyannote-model=${segPath}`,
       `--embedding.model=${embPath}`,
-      `--clustering.num-clusters=${numSpeakers}`,
+      // Clustering always picks the count: a forced one splits short utterances
+      // from long ones instead of one voice from another (#2021).
+      "--clustering.num-clusters=-1",
       `--clustering.cluster-threshold=${threshold}`,
       "--min-duration-on=0.2",
       "--min-duration-off=0.5",
@@ -319,7 +317,6 @@ class DiarizationManager {
 
     debugLogger.info("Starting diarization", {
       binaryPath,
-      numSpeakers,
       threshold,
       wavPath,
     });
@@ -429,35 +426,54 @@ class DiarizationManager {
     return segments;
   }
 
-  capSpeakerClusters(segments, cap) {
-    if (!cap || !segments?.length) return segments;
-    const totals = new Map();
-    for (const s of segments) {
-      totals.set(s.speaker, (totals.get(s.speaker) || 0) + (s.end - s.start));
-    }
-    if (totals.size <= cap) return segments;
+  // Splits out echo-flagged mic segments whose text matches nearby system audio.
+  // `removed` holds the same objects that were passed in, so callers can map
+  // them back to their original rows.
+  splitMicEchoDuplicates(segments) {
+    const systemSegments = segments.filter((seg) => seg.source === "system" && seg.text);
+    if (!systemSegments.length) return { kept: segments, removed: [] };
 
-    const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
-    const keep = new Set(ranked.slice(0, cap).map(([sp]) => sp));
-    const primary = ranked[0][0];
-    return segments.map((s) => (keep.has(s.speaker) ? s : { ...s, speaker: primary }));
+    const kept = [];
+    const removed = [];
+    for (const seg of segments) {
+      if (
+        seg.source !== "mic" ||
+        !seg.text ||
+        (!seg.likelyRenderBleed && !seg.hasBleedEvidence && seg.suppressionReason !== "double_talk")
+      ) {
+        kept.push(seg);
+        continue;
+      }
+
+      const matcher =
+        seg.suppressionReason === "double_talk" ? transcriptsLooselyOverlap : transcriptsOverlap;
+      const candidates = buildMergedCandidates({
+        segments: systemSegments,
+        timestamp: seg.timestamp,
+        windowMs: ECHO_DUPLICATE_WINDOW_S,
+        mergeLimit: ECHO_DUPLICATE_MERGE_LIMIT,
+      });
+      const isEcho = candidates.some((candidateText) => matcher(seg.text, candidateText));
+      (isEcho ? removed : kept).push(seg);
+    }
+    return { kept, removed };
   }
 
-  mergeWithTranscript(transcriptSegments, diarizationSegments, { diarizedSource = "system" } = {}) {
+  // Expects echo duplicates already removed with splitMicEchoDuplicates, so
+  // the caller can report them to the renderer.
+  mergeWithTranscript(
+    transcriptSegments,
+    diarizationSegments,
+    { diarizedSource = "system", speakerIndexBase = 0 } = {}
+  ) {
     if (!transcriptSegments || transcriptSegments.length === 0) return [];
-    const deduped = dedupeMicAgainstSystem(transcriptSegments);
     if (!diarizationSegments || diarizationSegments.length === 0) {
-      return deduped.map((seg) => ({ ...seg }));
+      return transcriptSegments.map((seg) => ({ ...seg }));
     }
 
-    // Build speaker renumbering map (e.g., speaker_00 → speaker_0)
+    // Renumber clusters (speaker_00 → speaker_0), offset past a resumed note's ids.
     const speakerSet = new Set(diarizationSegments.map((d) => d.speaker));
-    const speakerMap = new Map();
-    let idx = 0;
-    for (const sp of speakerSet) {
-      speakerMap.set(sp, `speaker_${idx}`);
-      idx++;
-    }
+    const speakerMap = buildSpeakerRenumber(speakerSet, speakerIndexBase);
 
     // Mic-mode softening: a single cluster on a mic-only session is the user
     // talking alone (e.g. a call where the remote never spoke audibly), so it
@@ -465,8 +481,8 @@ class DiarizationManager {
     const micSingleCluster = diarizedSource === "mic" && speakerSet.size === 1;
 
     const nextTimestampAt = (startIndex, source) => {
-      for (let i = startIndex + 1; i < deduped.length; i += 1) {
-        const candidate = deduped[i];
+      for (let i = startIndex + 1; i < transcriptSegments.length; i += 1) {
+        const candidate = transcriptSegments[i];
         if (candidate.source === source && candidate.timestamp != null) {
           return candidate.timestamp;
         }
@@ -474,7 +490,7 @@ class DiarizationManager {
       return null;
     };
 
-    return deduped.map((seg, index) => {
+    return transcriptSegments.map((seg, index) => {
       const enriched = { ...seg };
 
       if (seg.source === "mic" && (diarizedSource !== "mic" || micSingleCluster)) {
@@ -487,7 +503,16 @@ class DiarizationManager {
 
       if (seg.source === diarizedSource && seg.timestamp != null) {
         const segStart = seg.timestamp;
-        const segEnd = nextTimestampAt(index, diarizedSource) ?? segStart + 2.5;
+        const nextStart = nextTimestampAt(index, diarizedSource);
+        // Completion times and audio-range starts aren't speech onsets; retain
+        // their original matching window until speech-aligned bounds are available.
+        let segEnd = nextStart ?? segStart + 2.5;
+        if (seg.timestampIsSpeechStart !== false) {
+          const spokenEnd = segStart + spokenSeconds(seg.text);
+          // Exclude the pause after an onset-timed row from speaker matching.
+          segEnd =
+            nextStart != null && nextStart > segStart ? Math.min(nextStart, spokenEnd) : spokenEnd;
+        }
         const midpoint = segStart + (segEnd - segStart) / 2;
         let overlapSpeaker = null;
         let nearestSpeaker = null;
@@ -603,6 +628,7 @@ class DiarizationManager {
     if (fs.existsSync(embPath)) {
       await fsPromises.unlink(embPath);
     }
+    await fsPromises.unlink(path.join(modelsDir, LEGACY_EMBEDDING_ONNX)).catch(() => {});
     if (fs.existsSync(vadPath)) {
       await fsPromises.unlink(vadPath);
     }

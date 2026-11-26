@@ -9,6 +9,8 @@ import {
 } from '@/lib/mobileProviders';
 import type { TranscriptionProvider, TranscriptionRequest, TextInferenceSnapshot } from '@/types';
 import { isLocalModelKey, type LocalModelKey } from '@/lib/localModelCatalog';
+import { cloudAccessFor, unsetSelection, workflowSelection } from '@/lib/aiWorkflows';
+import type { CloudAccess } from '@/lib/inferenceModes';
 
 export type ProviderRoute = Extract<InferenceRoute, { mode: 'providers' }>;
 
@@ -24,20 +26,32 @@ export function getPickedLocalModel(scope: 'dictation' | 'upload'): LocalModelKe
     : undefined;
 }
 
+// Required lazily: the auth store loads the auth client, which routing doesn't otherwise need.
+function currentCloudAccess(): CloudAccess {
+  const { useAuthStore } = require('@/store/useAuthStore') as typeof import('@/store/useAuthStore');
+  return cloudAccessFor(useAuthStore.getState().user);
+}
+
 export function getTranscriptionProvider(scope: InferenceScope): TranscriptionProvider {
-  if (useProcessingModeStore.getState().activeMode === 'private') return 'local';
-  const selection = getInferenceSelection(scope);
+  const { activeMode } = useProcessingModeStore.getState();
+  // Local Mode keeps dictation on this iPhone. Uploads run what is saved for them, or with nothing
+  // saved or Cloud held automatically, OpenWhispr Cloud when there is a session (workflowSelection).
+  if (activeMode === 'private' && scope !== 'upload') return 'local';
+  const selection =
+    activeMode === 'private'
+      ? workflowSelection(
+          useConfigStore.getState().config,
+          'upload',
+          activeMode,
+          currentCloudAccess(),
+        )
+      : getInferenceSelection(scope);
   if (selection?.mode === 'providers') return 'byok';
   if (selection?.mode === 'local') return 'local';
   // Bring Your Own Key mode without a dictation choice must refuse (see
   // snapshotTranscriptionJob), never quietly send the audio to Cloud. Uploads
   // without their own choice still follow Cloud.
-  if (
-    !selection &&
-    scope === 'dictation' &&
-    useProcessingModeStore.getState().activeMode === 'providers'
-  )
-    return 'byok';
+  if (!selection && scope === 'dictation' && activeMode === 'providers') return 'byok';
   return 'cloud';
 }
 
@@ -92,14 +106,36 @@ export async function resolveMobileProviderRoute(
 export type TranscriptionJobRoute = Pick<TranscriptionRequest, 'provider' | 'inferenceRoute'> &
   TextInferenceSnapshot;
 
-export function snapshotTextInference(provider: TranscriptionProvider): TextInferenceSnapshot {
+type TextScope = 'cleanup' | 'agent';
+
+// Dictation and uploads take only the cleanup route. A keyboard recording also takes the voice
+// assistant's, since the same snapshot serves a wand job.
+export function snapshotTextInference(
+  provider: TranscriptionProvider,
+  scopes: readonly TextScope[] = ['cleanup'],
+): TextInferenceSnapshot {
   const result: TextInferenceSnapshot = {};
-  for (const scope of ['cleanup', 'agent'] as const) {
+  const { activeMode } = useProcessingModeStore.getState();
+  const cloudAccess = provider === 'local' ? currentCloudAccess() : 'none';
+  for (const scope of scopes) {
     const routeKey = scope === 'cleanup' ? 'cleanupRoute' : 'agentRoute';
     const errorKey = scope === 'cleanup' ? 'cleanupUnavailable' : 'agentUnavailable';
     const selection = getInferenceSelection(scope);
-    // A local transcript leaves the phone only for a cleanup provider the user saved.
-    if (provider === 'local' && !(scope === 'cleanup' && selection?.mode === 'providers')) {
+    // A transcript made on this iPhone leaves it for cleanup only for the mode saved for cleanup,
+    // or in Local Mode with nothing saved, for OpenWhispr Cloud when the account can
+    // (unsetSelection). Cloud cleaning it is a separate pass that needs a signed-in account, so
+    // without one it stays here (cloudCleanupNeedsAccount).
+    const localCleanup =
+      scope === 'cleanup' && !selection && activeMode === 'private'
+        ? unsetSelection('cleanup', activeMode, cloudAccess)
+        : selection;
+    const cleanupMode = localCleanup?.mode ?? 'local';
+    // The voice assistant runs its own selection, wherever the spoken instruction was transcribed.
+    if (
+      provider === 'local' &&
+      scope === 'cleanup' &&
+      (cleanupMode === 'local' || (cleanupMode === 'openwhispr' && cloudAccess !== 'account'))
+    ) {
       result[routeKey] = { mode: 'local', scope };
     } else if (!selection && provider === 'byok') {
       result[errorKey] =
@@ -121,9 +157,12 @@ export function snapshotTextInference(provider: TranscriptionProvider): TextInfe
   return result;
 }
 
-export function snapshotTranscriptionJob(scope: 'dictation' | 'upload'): TranscriptionJobRoute {
+export function snapshotTranscriptionJob(
+  scope: 'dictation' | 'upload',
+  textScopes?: readonly TextScope[],
+): TranscriptionJobRoute {
   const provider = getTranscriptionProvider(scope);
-  const job: TranscriptionJobRoute = { provider, ...snapshotTextInference(provider) };
+  const job: TranscriptionJobRoute = { provider, ...snapshotTextInference(provider, textScopes) };
   if (provider === 'byok') {
     const selection = getInferenceSelection(scope);
     if (!selection)

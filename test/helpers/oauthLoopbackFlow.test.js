@@ -29,9 +29,11 @@ function startFlow(handleCallback = async () => ({ ok: true }), options = {}) {
   let authUrlCalls = 0;
   let server;
   const originalCreateServer = http.createServer;
+  // The 127.0.0.1 server is the first one made; a localhost flow adds ::1's.
   http.createServer = (...args) => {
-    server = originalCreateServer(...args);
-    return server;
+    const created = originalCreateServer(...args);
+    server ??= created;
+    return created;
   };
 
   try {
@@ -461,6 +463,85 @@ test("a fixed port, redirect host and path shape the redirect uri both times", a
     redirectUri: `http://localhost:${port}/slack/callback`,
   });
 });
+
+async function ipv6Available() {
+  const probe = net.createServer();
+  return new Promise((resolve) => {
+    probe.once("error", () => resolve(false));
+    probe.listen(0, "::1", () => probe.close(() => resolve(true)));
+  });
+}
+
+function canListen(port, host) {
+  const probe = net.createServer();
+  return new Promise((resolve) => {
+    probe.once("error", () => resolve(false));
+    probe.listen(port, host, () => probe.close(() => resolve(true)));
+  });
+}
+
+// A port free on both loopbacks, so another app on ::1 can't answer the test.
+async function freeDualStackPort() {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const port = await freePort();
+    if (await canListen(port, "::1")) return port;
+  }
+  throw new Error("no port free on both loopbacks");
+}
+
+test("a localhost redirect is answered on ::1 too, for a browser that resolves it to IPv6", async (t) => {
+  if (!(await ipv6Available())) return t.skip("no IPv6 loopback on this machine");
+  const port = await freeDualStackPort();
+  const started = startFlow(async (code) => ({ code }), {
+    redirectHost: "localhost",
+    ports: [port],
+    callbackPath: "/salesforce/callback",
+  });
+  await until(started.getRedirectUri);
+  await until(() => started.getAuthUrlCalls() === 1);
+  await getLocal(`http://[::1]:${port}/salesforce/callback?code=v6&state=${started.getState()}`);
+  assert.deepEqual(await started.flow, { code: "v6" });
+  assert.equal(started.getAuthUrlCalls(), 1, "one browser launch for both listeners");
+});
+
+test("a port another app holds on ::1 still opens the browser for 127.0.0.1", async (t) => {
+  if (!(await ipv6Available())) return t.skip("no IPv6 loopback on this machine");
+  const port = await freeDualStackPort();
+  const blocker = net.createServer();
+  await new Promise((resolve) => blocker.listen(port, "::1", resolve));
+  t.after(() => blocker.close());
+  const started = startFlow(async (code) => ({ code }), {
+    redirectHost: "localhost",
+    ports: [port],
+    callbackPath: "/salesforce/callback",
+  });
+  await until(() => started.getAuthUrlCalls() === 1);
+  await getLocal(
+    `http://127.0.0.1:${port}/salesforce/callback?code=v4&state=${started.getState()}`
+  );
+  assert.deepEqual(await started.flow, { code: "v4" });
+  assert.equal(started.getAuthUrlCalls(), 1);
+});
+
+test(
+  "a server error while ::1 is still binding closes ::1 and opens no browser",
+  { timeout: 5000 },
+  async (t) => {
+    if (!(await ipv6Available())) return t.skip("no IPv6 loopback on this machine");
+    const port = await freeDualStackPort();
+    const started = startFlow(async (code) => ({ code }), {
+      redirectHost: "localhost",
+      ports: [port],
+      callbackPath: "/salesforce/callback",
+    });
+    // After the flow's own listener, which has just asked ::1 to bind.
+    started.server.once("listening", () => started.server.emit("error", new Error("boom")));
+    await assert.rejects(started.flow, /boom/);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(started.getAuthUrlCalls(), 0);
+    assert.equal(await canListen(port, "::1"), true, "::1 gave the port back");
+  }
+);
 
 test("a busy fixed port falls through to the next with one browser launch; all busy rejects ports_busy", async () => {
   const blocker = net.createServer();

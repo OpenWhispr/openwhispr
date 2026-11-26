@@ -7,6 +7,7 @@ import { useToast } from "./ui/useToast";
 import { cn } from "./lib/utils";
 import { SpectrogramCard } from "./referral-cards/SpectrogramCard";
 import logger from "../utils/logger";
+import { hasValidatedAuthContext } from "../lib/authRequestContext";
 import { EMAIL_REGEX } from "../utils/validation";
 
 const REFERRAL_WORD_GOAL = 2000;
@@ -261,6 +262,16 @@ export function ReferralDashboard() {
       toast({
         title: t("referral.toasts.invalidEmailTitle"),
         description: t("referral.toasts.invalidEmailDescription"),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Main sends the stored bearer as is; only a validated session may invite.
+    if (!hasValidatedAuthContext()) {
+      toast({
+        title: t("referral.toasts.sendFailedTitle"),
+        description: t("auth.unconfirmedSession"),
         variant: "destructive",
       });
       return;

@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -40,9 +41,12 @@ const event = { sender: new EventEmitter() };
 event.sender.send = (channel, text) => messages.push([channel, text]);
 event.sender.id = 1;
 const backendFetch = async (url, options) => {
+  if (url.endsWith("/api/workspace-policy"))
+    return Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
   assert.ok(
     [
       "https://api.openwhispr.test/api/stt/orukeet/session",
+      "https://api.openwhispr.test/api/stt/orukeet/pipeline-session",
       "https://api.openwhispr.test/api/reason",
       "https://api.openwhispr.test/api/streaming-usage",
       "https://api.openwhispr.test/api/transcribe",
@@ -110,10 +114,15 @@ Module._load = function loadWithMocks(request, parent, isMain) {
             super({
               ...options,
               createSocket: (url, options, protocols) => {
-                assert.equal(url, cloudSession.websocketUrl);
                 assert.equal(
-                  options.headers.Authorization,
-                  protocols ? undefined : "Bearer test-key"
+                  url,
+                  protocols?.[0] === "orukeet.pipeline.v2"
+                    ? "wss://orukeet.gizmovoice.ai/preview/gemma12/v1/pipeline/stream"
+                    : cloudSession.websocketUrl
+                );
+                assert.equal(
+                  new Headers(options.headers).get("authorization"),
+                  protocols ? null : "Bearer test-key"
                 );
                 opened++;
                 return new WebSocket(`ws://127.0.0.1:${server.address().port}`, protocols, options);
@@ -175,6 +184,9 @@ test.before(async () => {
         sample_rate: 16000,
         encoding: "pcm_s16le",
         max_seconds: 600,
+        ...(socket.protocol === "orukeet.pipeline.v2"
+          ? { pipeline_protocol: 2, cleanup: true, account_limits: true }
+          : {}),
       })
     );
     let bytes = 0;
@@ -188,7 +200,12 @@ test.before(async () => {
           return;
         }
         socket.send(
-          JSON.stringify({ type: "language", language: "en", language_confidence: 0.99 })
+          JSON.stringify({
+            type: "language",
+            language: "en",
+            language_confidence: 0.99,
+            language_supported_score: 0.995,
+          })
         );
         socket.send(
           JSON.stringify({
@@ -197,6 +214,7 @@ test.before(async () => {
             model: "orukeet-v0.1.0",
             language: "en",
             language_confidence: 0.99,
+            language_supported_score: 0.995,
             language_audio_seconds: 6,
           })
         );
@@ -207,7 +225,8 @@ test.before(async () => {
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
   target = buildFakeThis();
-  Ctor.prototype.setupHandlers.call(target);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(target));
+  await target.refreshEffectivePolicy(event);
 });
 
 test.after(async () => {
@@ -228,10 +247,12 @@ test("registered managed IPC streams startup audio and returns exactly one compl
   assert.equal(final.text, "Recorded 1280 bytes");
   assert.equal(final.language, "en");
   assert.equal(final.languageConfidence, 0.99);
+  assert.equal(final.languageSupportedScore, 0.995);
   assert.equal(final.languageAudioSeconds, 6);
   assert.deepEqual(messages.find(([channel]) => channel === "dictation-realtime-language")?.[1], {
     language: "en",
     languageConfidence: 0.99,
+    languageSupportedScore: 0.995,
   });
   assert.equal(messages.filter(([channel]) => channel === "dictation-realtime-final").length, 1);
   assert.equal((await handlers.get("dictation-realtime-stop")()).text, final.text);
@@ -355,6 +376,50 @@ test("cloud cleanup forwards fallback telemetry to its combined log request", as
   assert.equal(Object.hasOwn(requests[1], "streamingFallbackReason"), false);
 });
 
+test("cloud reason sends shared words in sharedDictionary, and omits it when there are none", async () => {
+  const bodies = [];
+  backendResponse = async (_url, options) => {
+    bodies.push(options.body);
+    return Response.json({ text: "clean transcript" });
+  };
+  await handlers.get("cloud-reason")(event, "raw", {
+    purpose: "cleanup",
+    customDictionary: ["Piha"],
+    sharedDictionary: ["Acme"],
+  });
+  await handlers.get("cloud-reason")(event, "raw", {
+    purpose: "cleanup",
+    customDictionary: ["Piha"],
+  });
+
+  const [shared, personal] = bodies.map((body) => JSON.parse(body));
+  assert.deepEqual(shared.customDictionary, ["Piha"]);
+  assert.deepEqual(shared.sharedDictionary, ["Acme"]);
+  assert.equal(Object.hasOwn(personal, "sharedDictionary"), false);
+  assert.doesNotMatch(bodies[1], /sharedDictionary/);
+});
+
+test("pipeline minting forwards shared words in cleanupOptions", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  const calls = [];
+  backendResponse = async (url, request) => {
+    calls.push(JSON.parse(request.body));
+    return Response.json({
+      ...cloudSession,
+      baseUrl: "https://orukeet.gizmovoice.ai/preview/gemma12",
+      websocketUrl: "wss://orukeet.gizmovoice.ai/preview/gemma12/v1/pipeline/stream",
+      protocol: "orukeet.pipeline.v2",
+      cleanup: true,
+      cleanupModel: "gemma-4-12b",
+      requireAccountLimits: true,
+    });
+  };
+  const pipelineOptions = { customDictionary: ["Piha"], sharedDictionary: ["Acme"] };
+  await handlers.get("dictation-realtime-start")(event, { ...managedOptions, pipelineOptions });
+  assert.deepEqual(calls[0].cleanupOptions, pipelineOptions);
+  await handlers.get("dictation-realtime-stop")();
+});
+
 const DETECTED = {
   sttDetectedLanguage: "ja",
   sttDetectedLanguageConfidence: 0.97,
@@ -463,7 +528,26 @@ test("warmups landing together mint one session and share its unused socket", as
   await handlers.get("dictation-realtime-stop")();
 });
 
-test("a warmup never reuses a socket that has already carried audio", async () => {
+test("a start in another language still rides the warm socket", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  let mints = 0;
+  backendResponse = async () => {
+    mints += 1;
+    return Response.json(cloudSession);
+  };
+
+  // Orukeet detects the language itself, so a translation dictation or an
+  // Auto setting must not spend a second single-use GPU token.
+  await handlers.get("dictation-realtime-warmup")(event, { ...managedOptions, language: "en" });
+  const warm = target._dictationStreaming;
+  await handlers.get("dictation-realtime-start")(event, { ...managedOptions, language: "de" });
+
+  assert.equal(mints, 1);
+  assert.equal(target._dictationStreaming, warm);
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("after a renderer reload, a warmup never reuses a socket that has already carried audio", async () => {
   await handlers.get("dictation-realtime-stop")();
   let mints = 0;
   backendResponse = async () => {
@@ -474,6 +558,8 @@ test("a warmup never reuses a socket that has already carried audio", async () =
   await handlers.get("dictation-realtime-start")(event, managedOptions);
   handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
   const used = target._dictationStreaming;
+  // Only a renderer reloaded mid-recording leaves a used socket with no stop.
+  event.sender.emit("did-start-loading");
   const warmup = await handlers.get("dictation-realtime-warmup")(event, managedOptions);
 
   assert.equal(warmup.success, true);
@@ -502,4 +588,365 @@ test("an idle Orukeet warm socket closes after 60 seconds and start cancels expi
   assert.equal(target._dictationIdleTimer, null);
   assert.equal(target._dictationStreaming.isConnected, true);
   await handlers.get("dictation-realtime-stop")();
+});
+
+test("pipeline options reach minting through IPC warmup and changed options replace the cached connection", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  const calls = [];
+  backendResponse = async (url, request) => {
+    assert.ok(url.endsWith("pipeline-session"));
+    const body = JSON.parse(request.body);
+    calls.push(body);
+    return Response.json({
+      ...cloudSession,
+      baseUrl: "https://orukeet.gizmovoice.ai/preview/gemma12",
+      websocketUrl: "wss://orukeet.gizmovoice.ai/preview/gemma12/v1/pipeline/stream",
+      protocol: "orukeet.pipeline.v2",
+      cleanup: true,
+      cleanupModel: "gemma-4-12b",
+      requireAccountLimits: true,
+    });
+  };
+  const first = { customDictionary: ["Orukeet"], customPrompt: "Keep names." };
+  assert.equal(
+    (
+      await handlers.get("dictation-realtime-warmup")(event, {
+        ...managedOptions,
+        pipelineOptions: first,
+      })
+    ).success,
+    true
+  );
+  assert.equal(
+    (
+      await handlers.get("dictation-realtime-start")(event, {
+        ...managedOptions,
+        pipelineOptions: first,
+      })
+    ).success,
+    true
+  );
+  assert.equal(calls.length, 1);
+  const second = { ...first, customDictionary: ["Chad"] };
+  assert.equal(
+    (
+      await handlers.get("dictation-realtime-start")(event, {
+        ...managedOptions,
+        pipelineOptions: second,
+      })
+    ).success,
+    true
+  );
+  assert.deepEqual(
+    calls.map((entry) => entry.cleanupOptions),
+    [first, second]
+  );
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("server telemetry survives streaming usage, fallback upload and cloud cleanup IPC", async () => {
+  const metadata = {
+    orukeetLanguageRouting: {
+      version: 1,
+      mode: "shadow",
+      supportedScore: 0.02,
+      selectedFallback: false,
+    },
+    orukeetCleanup: {
+      status: "complete",
+      model: "gemma-4-12b",
+      inputTokens: 40,
+      outputTokens: 8,
+      processingMs: 220,
+    },
+  };
+  const bodies = [];
+  backendResponse = async (url, request) => {
+    bodies.push([url, request.body]);
+    return Response.json({ text: "result", recorded: true });
+  };
+  await handlers.get("cloud-streaming-usage")(event, "raw", 6, metadata);
+  await handlers.get("cloud-reason")(event, "raw", { purpose: "cleanup", ...metadata });
+  await handlers.get("cloud-transcribe")(event, new Uint8Array(64).buffer, {
+    streamingFallbackReason: "language_supported_score_low",
+    ...metadata,
+  });
+  for (const [, body] of bodies.slice(0, 2)) {
+    const parsed = JSON.parse(body);
+    assert.deepEqual(parsed.orukeetLanguageRouting, metadata.orukeetLanguageRouting);
+    assert.deepEqual(parsed.orukeetCleanup, metadata.orukeetCleanup);
+  }
+  const multipart = Buffer.from(bodies[2][1]).toString("latin1");
+  assert.ok(multipart.includes(JSON.stringify(metadata.orukeetLanguageRouting)));
+  assert.ok(multipart.includes(JSON.stringify(metadata.orukeetCleanup)));
+  assert.match(multipart, /language_supported_score_low/);
+  assert.doesNotMatch(multipart, /\[object Object\]/);
+});
+
+const nextTick = () => new Promise((resolve) => setImmediate(resolve));
+const until = async (condition) => {
+  for (let attempt = 0; attempt < 2000 && !condition(); attempt++) await nextTick();
+  assert.ok(condition());
+};
+// Each mint waits until the test answers it, so a warmup can be held mid-connect.
+const holdMints = () => {
+  const mints = [];
+  backendResponse = () => new Promise((resolve) => mints.push(resolve));
+  return { mints, answered: 0 };
+};
+const answerNext = (held) => {
+  held.answered += 1;
+  held.mints.shift()(Response.json(cloudSession));
+};
+
+test("a start during a warmup rides that connection", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  const held = holdMints();
+  const warmup = handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  await until(() => held.mints.length === 1);
+
+  const start = handlers.get("dictation-realtime-start")(event, managedOptions);
+  answerNext(held);
+  await warmup;
+  assert.equal((await start).success, true);
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+
+  const final = await handlers.get("dictation-realtime-finalize")();
+  assert.equal(final.text, "Recorded 640 bytes");
+  assert.equal(held.answered, 1);
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("a start redials when the warmup it waited for was opened for another route", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  const held = holdMints();
+  const warmup = handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  await until(() => held.mints.length === 1);
+
+  const start = handlers.get("dictation-realtime-start")(event, {
+    ...managedOptions,
+    baseUrl: "https://another-route.test",
+  });
+  answerNext(held);
+  await warmup;
+  await until(() => held.mints.length === 1);
+  answerNext(held);
+  assert.equal((await start).success, true);
+  assert.equal(held.answered, 2);
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("a start redials when the warmup it waited for failed", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  const held = holdMints();
+  const warmup = handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  await until(() => held.mints.length === 1);
+
+  const start = handlers.get("dictation-realtime-start")(event, managedOptions);
+  held.mints.shift()(Response.json({ error: "outage" }, { status: 503 }));
+  assert.equal((await warmup).success, false);
+  await until(() => held.mints.length === 1);
+  answerNext(held);
+  assert.equal((await start).success, true);
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("re-warms queued behind a start leave its recording alone", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  const held = holdMints();
+  const firstWarmup = handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  const secondWarmup = handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  await until(() => held.mints.length === 1);
+
+  const start = handlers.get("dictation-realtime-start")(event, managedOptions);
+  answerNext(held);
+  await firstWarmup;
+  assert.equal((await start).success, true);
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(32000));
+  const recording = target._dictationStreaming;
+
+  assert.equal((await secondWarmup).success, true);
+  assert.equal(target._dictationStreaming, recording);
+  assert.equal(held.answered, 1);
+  assert.equal(target._dictationIdleTimer, null, "a recording must not expire as idle");
+
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+  assert.equal((await handlers.get("dictation-realtime-finalize")()).text, "Recorded 32640 bytes");
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("a warmup during a recording changes nothing, and warmups resume after its stop", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  let mints = 0;
+  backendResponse = async () => {
+    mints += 1;
+    return Response.json(cloudSession);
+  };
+  assert.equal(
+    (await handlers.get("dictation-realtime-start")(event, managedOptions)).success,
+    true
+  );
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+  const recording = target._dictationStreaming;
+
+  await handlers.get("dictation-realtime-warmup")(event, {
+    ...managedOptions,
+    baseUrl: "https://another-route.test",
+  });
+  assert.equal(target._dictationStreaming, recording);
+  assert.equal(target._dictationIdleTimer, null);
+  assert.equal(mints, 1);
+
+  await handlers.get("dictation-realtime-stop")();
+  await handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  assert.equal(mints, 2);
+  assert.notEqual(target._dictationIdleTimer, null);
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("a failed start hands the connection back to warmups", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  backendResponse = async () => Response.json({ error: "outage" }, { status: 503 });
+  assert.equal(
+    (await handlers.get("dictation-realtime-start")(event, managedOptions)).success,
+    false
+  );
+
+  let mints = 0;
+  backendResponse = async () => {
+    mints += 1;
+    return Response.json(cloudSession);
+  };
+  await handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  assert.equal(mints, 1);
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("a stop during a start waiting on a warmup opens no new session", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  const held = holdMints();
+  const socketsBefore = opened;
+  const warmup = handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  await until(() => held.mints.length === 1);
+
+  const start = handlers.get("dictation-realtime-start")(event, managedOptions);
+  await nextTick();
+  await handlers.get("dictation-realtime-stop")();
+  answerNext(held);
+  await warmup;
+
+  assert.equal((await start).success, false);
+  assert.equal(held.mints.length, 0);
+  assert.equal(opened, socketsBefore);
+  assert.equal(target._dictationStreaming, null);
+});
+
+const selfHostedOptions = { ...managedOptions, mode: "byok", baseUrl: cloudSession.baseUrl };
+
+test("self-hosted Orukeet: a start during a warmup still replaces that warmup", async (t) => {
+  await handlers.get("dictation-realtime-stop")();
+  target.environmentManager = { getCustomTranscriptionKey: () => "test-key" };
+  t.after(async () => {
+    delete target.environmentManager;
+    await handlers.get("dictation-realtime-stop")();
+  });
+  const socketsBefore = opened;
+
+  const warmup = handlers.get("dictation-realtime-warmup")(event, selfHostedOptions);
+  await until(() => target._dictationConnectPromise);
+  const warming = target._dictationStreaming;
+  const start = await handlers.get("dictation-realtime-start")(event, selfHostedOptions);
+  await warmup;
+
+  assert.equal(start.success, true);
+  assert.notEqual(target._dictationStreaming, warming);
+  assert.equal(opened, socketsBefore + 2);
+});
+
+test("self-hosted Orukeet: a warmup still replaces a socket that carried audio", async (t) => {
+  await handlers.get("dictation-realtime-stop")();
+  target.environmentManager = { getCustomTranscriptionKey: () => "test-key" };
+  t.after(async () => {
+    delete target.environmentManager;
+    await handlers.get("dictation-realtime-stop")();
+  });
+
+  await handlers.get("dictation-realtime-start")(event, selfHostedOptions);
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+  const used = target._dictationStreaming;
+  const warmup = await handlers.get("dictation-realtime-warmup")(event, selfHostedOptions);
+
+  assert.equal(warmup.alreadyWarm, undefined);
+  assert.notEqual(target._dictationStreaming, used);
+});
+
+test("custom Orukeet excludes self-hosted headers; self-hosted mode includes them with one Bearer auth", async (t) => {
+  const requests = [];
+  const capture = (_socket, request) => requests.push(request);
+  server.on("connection", capture);
+  target.environmentManager = {
+    getCustomTranscriptionKey: () => "test-key",
+    getSelfHostedSttHeaders: () =>
+      JSON.stringify({
+        dictation: [
+          { name: "X-API-Key", value: "self-hosted-only" },
+          { name: "authorization", value: "must-not-override" },
+        ],
+        upload: [{ name: "X-Upload-Key", value: "upload-only" }],
+      }),
+  };
+  t.after(async () => {
+    server.off("connection", capture);
+    delete target.environmentManager;
+    await handlers.get("dictation-realtime-stop")();
+  });
+  for (const transcriptionMode of ["providers", "self-hosted"]) {
+    await handlers.get("dictation-realtime-stop")();
+    const result = await handlers.get("dictation-realtime-start")(event, {
+      ...managedOptions,
+      mode: "byok",
+      baseUrl: cloudSession.baseUrl,
+      transcriptionMode,
+    });
+    assert.equal(result.success, true);
+    const request = requests.at(-1);
+    assert.equal(
+      request.headers["x-api-key"],
+      transcriptionMode === "self-hosted" ? "self-hosted-only" : undefined
+    );
+    assert.equal(request.headers["x-upload-key"], undefined);
+    assert.equal(request.headers.authorization, "Bearer test-key");
+    assert.equal(
+      request.rawHeaders.filter((value) => value.toLowerCase() === "authorization").length,
+      1
+    );
+  }
+});
+
+test("self-hosted Orukeet: a warm custom socket is not reused once headers apply", async (t) => {
+  const requests = [];
+  const capture = (_socket, request) => requests.push(request);
+  server.on("connection", capture);
+  target.environmentManager = {
+    getCustomTranscriptionKey: () => "test-key",
+    getSelfHostedSttHeaders: () =>
+      JSON.stringify({ dictation: [{ name: "X-API-Key", value: "self-hosted-only" }] }),
+  };
+  t.after(async () => {
+    server.off("connection", capture);
+    delete target.environmentManager;
+    await handlers.get("dictation-realtime-stop")();
+  });
+  await handlers.get("dictation-realtime-stop")();
+  const start = (transcriptionMode) =>
+    handlers.get("dictation-realtime-start")(event, {
+      ...managedOptions,
+      mode: "byok",
+      baseUrl: cloudSession.baseUrl,
+      transcriptionMode,
+    });
+  assert.equal((await start("providers")).success, true);
+  assert.equal((await start("self-hosted")).success, true);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].headers["x-api-key"], "self-hosted-only");
 });
