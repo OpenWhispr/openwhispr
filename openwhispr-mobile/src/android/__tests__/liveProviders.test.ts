@@ -17,6 +17,7 @@ jest.mock('expo-file-system/legacy', () => ({
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: require('zustand').create(() => ({ config: {} })),
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/services/providers/ProviderCredentials', () => ({
   getProviderCredentialReference: async (id: string) => `provider.${id}`,
   getProviderCredential: async (reference: string) => ({ apiKey: `key-for-${reference}` }),

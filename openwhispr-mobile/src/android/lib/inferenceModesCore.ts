@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import type { LucideIconName } from '@/components/ui/SystemIcon';
-import type { InferenceSelection, MobileInferenceScope } from '@/lib/mobileProviders';
+import type { InferenceSelection, MobileInferenceScope } from '@/android/providers/mobileProviders';
 import { isDictationAgentEnabled } from '@/lib/dictationAgent';
 import {
   inferenceToProcessingMode,

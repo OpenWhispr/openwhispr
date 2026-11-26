@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { PillAction } from '@/android/settings/kit';
 import { VoiceEnrollmentRecorder } from '@/components/notes/VoiceEnrollmentRecorder';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 import { notesRepository } from '@/data';
 import type { SpeakerProfile } from '@/data/types';
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';

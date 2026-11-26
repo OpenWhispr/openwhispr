@@ -130,6 +130,7 @@ jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: (selector: (state: { config: { cloudBackupEnabled: boolean } }) => unknown) =>
     selector({ config: { cloudBackupEnabled: mockCloudBackupEnabled } }),
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useNotesStore', () => ({
   useNotesStore: (
     selector: (state: {
@@ -138,12 +139,14 @@ jest.mock('@/store/useNotesStore', () => ({
     }) => unknown,
   ) => selector({ setNotePrivacy: mockSetNotePrivacy, spaces: mockSpaces }),
 }));
+jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 jest.mock('@/store/useUsageStore', () => ({
   useUsageStore: Object.assign(
     (selector: (state: { usage: typeof mockUsage }) => unknown) => selector({ usage: mockUsage }),
     { getState: () => ({ load: () => Promise.resolve() }) },
   ),
 }));
+jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 let mockSubscriptionRequired = false;
 jest.mock('@/sync/useSyncStore', () => ({
   useSyncStore: (selector: (state: { subscriptionRequired: boolean }) => unknown) =>

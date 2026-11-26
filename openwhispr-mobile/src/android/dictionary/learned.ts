@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useDictionaryStore, type DictionaryEntry } from '@/store/useDictionaryStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
+import { useDictionaryStore, type DictionaryEntry } from '@/android/store/useDictionaryStore';
 
 const KEY = 'android.dictionary.learned';
 

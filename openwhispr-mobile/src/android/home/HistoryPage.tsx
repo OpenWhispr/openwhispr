@@ -4,7 +4,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
-import { useTranscriptStore } from '@/store/useTranscriptStore.android';
+import { useTranscriptStore } from '@/android/store/useTranscriptStore';
 import { applyHistoryRetention } from '../pipeline';
 import { SettingsPage, showToast } from '../settings/kit';
 import { SearchField } from '../controls';

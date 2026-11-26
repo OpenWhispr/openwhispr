@@ -5,7 +5,7 @@ import { useTheme } from '@/android/ThemeProvider';
 import * as Sentry from '@sentry/react-native';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { GlassCapsule } from '@/components/ui/GlassIconButton';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 import { safeHaptics } from '@/lib/utils';
 import { BRAND } from '@/config/colors';
 import type { Action } from '@/data';

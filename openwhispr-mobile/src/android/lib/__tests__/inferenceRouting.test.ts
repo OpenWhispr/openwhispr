@@ -12,6 +12,7 @@ import {
 const mockState = { config: { defaultMode: 'cloud', inference: {} } as Record<string, unknown> };
 const mockProcessing = { activeMode: 'cloud' };
 jest.mock('@/store/useConfigStore', () => ({ useConfigStore: { getState: () => mockState } }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => mockProcessing },
 }));
@@ -19,6 +20,7 @@ let mockUser: { id: string; isAnonymous: boolean } | null = null;
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: mockUser }) },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 
 jest.mock('@/lib/inferenceRouting', () => {
   const defaultRouting =

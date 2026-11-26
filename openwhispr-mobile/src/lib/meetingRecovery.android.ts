@@ -1,7 +1,7 @@
 import { meetingAudioContext } from './meetingAudioStorage';
 import { repairAndroidMeetingRecordingPaths } from '@/android/meetingRecordingRepair';
 import { Sentry } from './sentry';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 
 // The explicit extension loads the unchanged default implementation. Eager loading
 // preserves its process-start cutoff before this asynchronous account scan begins.

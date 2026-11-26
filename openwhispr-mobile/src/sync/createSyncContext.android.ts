@@ -1,6 +1,6 @@
 import { isCloudBackupEnabled } from '@/lib/cloudBackup.android';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { SyncCancelledError, type SyncCheckpoint } from './syncContext';
 
 export function createSyncContext(): { checkpoint: SyncCheckpoint; dispose: () => void } {

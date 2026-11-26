@@ -1,4 +1,4 @@
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import type { KeyboardTone, UserConfig } from '@/types';
 
 /**

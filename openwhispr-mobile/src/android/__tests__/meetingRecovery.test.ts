@@ -12,6 +12,7 @@ jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
 jest.mock('@/store/useNotesStore', () => ({
   useNotesStore: { getState: () => ({ loadNotes: () => {} }) },
 }));
+jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 import { startMeetingRecoveryOnce } from '@/lib/meetingRecovery.android';
 let key = 0;
 beforeEach(() => {

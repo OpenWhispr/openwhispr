@@ -11,6 +11,7 @@ const mockCloudUnmount = jest.fn();
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (select: (state: { user: MockUser }) => unknown) => select({ user: mockUser }),
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: (select: (state: { activeMode: typeof mockMode }) => unknown) =>
     select({ activeMode: mockMode }),

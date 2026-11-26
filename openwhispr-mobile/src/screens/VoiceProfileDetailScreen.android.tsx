@@ -5,7 +5,7 @@ import { Text } from '@/components/ui/Text';
 import { GroupedList } from '@/components/notes/GroupedList';
 import { SectionHeader } from '@/components/notes/SectionHeader';
 import { SpeakerAvatar } from '@/components/notes/SpeakerAvatar';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 import { confirmDestructive } from '@/lib/alerts';
 import { safeHaptics } from '@/lib/utils';
 import { AppFont } from '@/lib/fonts';

@@ -10,7 +10,7 @@ import {
 } from '@/config/constants';
 import { LocalWhisperService } from '@/services/transcription/LocalWhisperService';
 import { LocalTranscriptionService } from '@/android/transcription/LocalTranscriptionService';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
 import { getClientVersionHeader } from '@/lib/apiClient';
 import {
   buildDictationHintTiers,

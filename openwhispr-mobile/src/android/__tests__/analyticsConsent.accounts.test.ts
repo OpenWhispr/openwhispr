@@ -39,6 +39,7 @@ jest.mock('@/android/accountData', () => ({ prepareAccountData: jest.fn() }));
 jest.mock('@/store/useUsageStore', () => ({
   useUsageStore: { getState: () => ({ reset: jest.fn() }) },
 }));
+jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 jest.mock('@/services/agent/AgentComposerService', () => ({ clearAllSessions: jest.fn() }));
 jest.mock('@/lib/notes/noteShareTokens', () => ({ claimNoteShareTokens: async () => {} }));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));

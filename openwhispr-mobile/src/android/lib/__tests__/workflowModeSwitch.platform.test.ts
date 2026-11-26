@@ -7,11 +7,13 @@ const mockUpdateConfig = jest.fn().mockResolvedValue(undefined);
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: { id: 'fixture', isAnonymous: false } }) },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: {
     getState: () => ({ config: { defaultMode: 'cloud' }, updateConfig: mockUpdateConfig }),
   },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: 'cloud', setActiveMode: jest.fn() }) },
 }));

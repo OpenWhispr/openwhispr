@@ -80,10 +80,12 @@ jest.mock('../models', () => ({
   useModelDownloads: require('zustand').create(() => ({ progress: {} })),
 }));
 jest.mock('@/store/useAuthStore', () => ({ useAuthStore: () => null }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('../speechSelection', () => ({ canTranscribeMeetings: () => true }));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: require('zustand').create(() => ({ config: {}, error: null })),
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 
 import { ThemeProvider } from '../ThemeProvider';
 import { darkTheme, lightTheme } from '../theme';

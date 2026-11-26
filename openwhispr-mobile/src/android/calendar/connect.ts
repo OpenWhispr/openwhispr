@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
 import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
 import type { GoogleCalendarAccount } from '@/data/calendarTypes';
 import { getGoogleCalendarClientId } from '@/services/calendar/googleCalendarConfig';

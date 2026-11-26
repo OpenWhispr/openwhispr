@@ -21,8 +21,8 @@ import { OnDeviceModelSection } from '@/components/settings/OnDeviceModelSection
 import { useConfigToggle } from '@/hooks/useConfigToggle';
 import { useCustomPromptsStore } from '@/store/useCustomPromptsStore';
 import { resolveCustomPrompt } from '@/config/prompts/registry';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import type { LocalReasoningReadiness, UserConfig } from '@/types';
 import {

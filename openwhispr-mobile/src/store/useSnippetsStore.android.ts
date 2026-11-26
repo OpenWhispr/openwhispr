@@ -1,8 +1,2 @@
-import { createAndroidLibraryLoad, findAndroidSnippetByTrigger } from '@/android/libraryStores';
-import { createSnippetsStore } from './createSnippetsStore';
-
-export const useSnippetsStore = createSnippetsStore({
-  createLoad: createAndroidLibraryLoad,
-  findByTrigger: findAndroidSnippetByTrigger,
-  checkEveryRename: true,
-});
+// Android's copy lives in src/android; shared files still import it from here.
+export * from '@/android/store/useSnippetsStore';

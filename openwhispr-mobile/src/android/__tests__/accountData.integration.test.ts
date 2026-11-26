@@ -159,12 +159,14 @@ jest.mock('@/lib/chat/runChatTurn', () => ({
 jest.mock('@/store/useUsageStore', () => ({
   useUsageStore: { getState: () => ({ reset: jest.fn() }) },
 }));
+jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: {
     getState: () => ({ config: { cloudBackupEnabled: false } }),
     subscribe: () => () => {},
   },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 // Exercise the real collection stores during startup and account switches.
 jest.mock('@/lib/apiClient', () => ({
   ApiError: class extends Error {},

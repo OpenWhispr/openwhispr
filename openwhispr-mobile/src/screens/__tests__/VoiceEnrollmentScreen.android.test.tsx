@@ -33,6 +33,7 @@ jest.mock('expo-router', () => ({
 jest.mock('@/store/useNotesStore', () => ({
   useNotesStore: (selector: (state: typeof mockState) => unknown) => selector(mockState),
 }));
+jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 jest.mock('@/data/local/notesRepository', () => ({
   SpeakerProfileOwnerAlreadyExistsError: class extends Error {},
 }));

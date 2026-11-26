@@ -1,10 +1,10 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '@/db/schema';
-import { useDictionaryStore as iosDictionary } from '../useDictionaryStore';
-import { useDictionaryStore as androidDictionary } from '../useDictionaryStore.android';
-import { useSnippetsStore as iosSnippets } from '../useSnippetsStore';
-import { useSnippetsStore as androidSnippets } from '../useSnippetsStore.android';
+import { useDictionaryStore as iosDictionary } from '@/store/useDictionaryStore';
+import { useDictionaryStore as androidDictionary } from '@/store/useDictionaryStore.android';
+import { useSnippetsStore as iosSnippets } from '@/store/useSnippetsStore';
+import { useSnippetsStore as androidSnippets } from '@/store/useSnippetsStore.android';
 
 let mockDb: ReturnType<typeof drizzle<typeof schema>>;
 let raw: InstanceType<typeof Database>;

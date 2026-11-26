@@ -1,4 +1,4 @@
-import type { UsageInfo } from '@/data/remote/usageApi';
+import type { UsageInfo } from '@/android/remote/usageApi';
 import {
   getBillingIdentity,
   isBillingIdentityCurrent,

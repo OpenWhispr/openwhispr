@@ -12,6 +12,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: mockUser }) },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/lib/accountAccess', () => ({ requiresRealAccount: (user: unknown) => !user }));
 const mockLoad = jest.fn(async () => undefined);
 const mockSetState = jest.fn();

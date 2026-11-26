@@ -1,13 +1,15 @@
 import { Platform } from 'react-native';
-import { fetchUsage, type UsageInfo } from '@/data/remote/usageApi';
+import { fetchUsage, type UsageInfo } from '@/android/remote/usageApi';
 import { ApiError } from '@/lib/apiClient';
-import { useUsageStore as iosStore } from '../useUsageStore';
-import { useUsageStore as androidStore } from '../useUsageStore.android';
+import { useUsageStore as iosStore } from '@/store/useUsageStore';
+import { useUsageStore as androidStore } from '@/store/useUsageStore.android';
 
 let mockAuth = { user: { id: 'account-a' }, sessionCookie: 'cookie-a', isGuest: false };
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 jest.mock('@/data/remote/usageApi', () => ({ fetchUsage: jest.fn() }));
+jest.mock('@/android/remote/usageApi', () => jest.requireMock('@/data/remote/usageApi'));
 jest.mock('@/store/useAuthStore', () => ({ useAuthStore: { getState: () => mockAuth } }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 const mockFetchUsage = jest.mocked(fetchUsage);
 
 function deferred() {

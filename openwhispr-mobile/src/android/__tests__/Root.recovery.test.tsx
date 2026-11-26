@@ -86,18 +86,27 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ loadConfig: async () => {} }) },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ initialize: mockInitializeAuth }) },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useTranscriptStore', () => ({
   useTranscriptStore: { getState: () => ({ loadTranscripts: async () => {} }) },
 }));
+jest.mock('@/android/store/useTranscriptStore', () =>
+  jest.requireMock('@/store/useTranscriptStore'),
+);
 jest.mock('@/store/useDictionaryStore', () => ({
   useDictionaryStore: { getState: () => ({ load: mockLoadDictionary }) },
 }));
+jest.mock('@/android/store/useDictionaryStore', () =>
+  jest.requireMock('@/store/useDictionaryStore'),
+);
 jest.mock('@/store/useSnippetsStore', () => ({
   useSnippetsStore: { getState: () => ({ load: async () => {} }) },
 }));
+jest.mock('@/android/store/useSnippetsStore', () => jest.requireMock('@/store/useSnippetsStore'));
 jest.mock('@/store/useNotesStore', () => ({
   useNotesStore: {
     getState: () => ({
@@ -107,6 +116,7 @@ jest.mock('@/store/useNotesStore', () => ({
     }),
   },
 }));
+jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 jest.mock('@/sync/syncEngine', () => ({ initSyncTriggers: jest.fn() }));
 jest.mock('@/components/ui/PermissionAlert', () => ({ PermissionAlertMount: () => null }));
 jest.mock('@/components/superwall/OpenWhisprSuperwallProvider', () => ({

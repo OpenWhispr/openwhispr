@@ -5,6 +5,6 @@
  */
 export function meetingOnDevice(): boolean {
   const { useConfigStore } =
-    require('@/store/useConfigStore') as typeof import('@/store/useConfigStore');
+    require('@/android/store/useConfigStore') as typeof import('@/android/store/useConfigStore');
   return useConfigStore.getState().config?.inference?.meeting?.mode === 'local';
 }

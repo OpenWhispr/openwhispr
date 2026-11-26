@@ -9,6 +9,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: { id: 'account-1' } }) },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useDictionaryStore', () => {
   const { create } = require('zustand') as typeof import('zustand');
   const store = create<{
@@ -36,6 +37,9 @@ jest.mock('@/store/useDictionaryStore', () => {
   }));
   return { useDictionaryStore: store };
 });
+jest.mock('@/android/store/useDictionaryStore', () =>
+  jest.requireMock('@/store/useDictionaryStore'),
+);
 
 import { useDictionaryStore } from '@/store/useDictionaryStore';
 import {

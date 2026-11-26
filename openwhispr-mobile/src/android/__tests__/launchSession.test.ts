@@ -39,6 +39,7 @@ jest.mock('@/store/useUsageStore', () => {
   store.setState({ reset: () => store.setState({ usage: null, sessionRejected: false }) });
   return { useUsageStore: store };
 });
+jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 jest.mock('@/store/useUsageStore.android', () => require('@/store/useUsageStore'));
 jest.mock('@/store/useAuthStore', () => jest.requireActual('@/store/useAuthStore.android'));
 jest.mock('@/services/agent/AgentComposerService', () => ({ clearAllSessions: jest.fn() }));

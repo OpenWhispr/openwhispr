@@ -1,8 +1,8 @@
-import { useAuthStore } from '@/store/useAuthStore';
-import { useConfigStore } from '@/store/useConfigStore';
-import { useTranscriptStore } from '@/store/useTranscriptStore';
-import { useDictionaryStore } from '@/store/useDictionaryStore';
-import { useSnippetsStore } from '@/store/useSnippetsStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
+import { useTranscriptStore } from '@/android/store/useTranscriptStore';
+import { useDictionaryStore } from '@/android/store/useDictionaryStore';
+import { useSnippetsStore } from '@/android/store/useSnippetsStore';
 
 let booting: Promise<void> | null = null;
 

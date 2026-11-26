@@ -1,4 +1,4 @@
-import { getUsageOwnerKey, useUsageStore } from '@/store/useUsageStore';
+import { getUsageOwnerKey, useUsageStore } from '@/android/store/useUsageStore';
 import { recordRevenueCatPurchase } from '@/lib/revenuecat.android';
 
 export async function recordPurchaseForBilling(productId: string): Promise<void> {

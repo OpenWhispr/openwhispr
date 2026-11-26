@@ -2,7 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Linking, Platform } from 'react-native';
 import { router } from 'expo-router';
-import type { UsageInfo } from '@/data/remote/usageApi';
+import type { UsageInfo } from '@/android/remote/usageApi';
 
 jest.mock('../../../modules/android-dictation/src/themeFade', () => ({
   prepareThemeFade: async () => true,
@@ -38,6 +38,7 @@ jest.mock('@/store/useAuthStore', () => ({
     sessionCookie: 'session-a',
   })),
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useUsageStore.android', () => ({
   useUsageStore: require('zustand').create(() => ({
     usage: null,
@@ -46,6 +47,7 @@ jest.mock('@/store/useUsageStore.android', () => ({
     load: jest.fn(async () => ({ status: 'loaded' })),
   })),
 }));
+jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore.android'));
 const mockRegister = jest.fn(async () => undefined);
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({ register: mockRegister }),

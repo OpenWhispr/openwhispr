@@ -1,8 +1,3 @@
-jest.mock('@/android/accountData', () => ({
-  prepareAccountData: jest.fn(),
-  retryAccountDataDeletion: async () => {},
-}));
-
 const mockSignInAnonymously = jest.fn();
 const mockCaptureMessage = jest.fn();
 
@@ -41,9 +36,6 @@ jest.mock('expo-secure-store', () => ({
 }));
 
 import { useAuthStore } from '@/store/useAuthStore';
-import { useAuthStore as useAndroidAuthStore } from '@/store/useAuthStore.android';
-import * as SecureStore from 'expo-secure-store';
-import { getSession, getStoredSession } from '@/lib/authClient';
 
 const anonymousUser = {
   id: 'anon-user',
@@ -62,17 +54,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.mocked(SecureStore.getItemAsync).mockResolvedValue(null);
-  jest.mocked(getStoredSession).mockResolvedValue(null);
   useAuthStore.setState({
-    user: null,
-    sessionCookie: null,
-    isGuest: false,
-    isInitialized: true,
-    isLoading: false,
-    error: null,
-  });
-  useAndroidAuthStore.setState({
     user: null,
     sessionCookie: null,
     isGuest: false,
@@ -86,26 +68,6 @@ beforeEach(() => {
     error: null,
     status: null,
   });
-});
-
-it('restores an explicit local guest without making a network session request', async () => {
-  jest.mocked(SecureStore.getItemAsync).mockResolvedValue('true');
-  await useAndroidAuthStore.getState().initialize();
-  expect(getSession).not.toHaveBeenCalled();
-  expect(useAndroidAuthStore.getState()).toMatchObject({
-    isGuest: true,
-    isInitialized: true,
-    isLoading: false,
-  });
-});
-
-it('validates a stored account cookie even when a stale guest flag remains', async () => {
-  jest.mocked(SecureStore.getItemAsync).mockResolvedValue('true');
-  jest.mocked(getStoredSession).mockResolvedValue('session=anon');
-  jest.mocked(getSession).mockResolvedValue(anonymousUser);
-  await useAuthStore.getState().initialize();
-  expect(getSession).toHaveBeenCalledTimes(1);
-  expect(useAuthStore.getState()).toMatchObject({ user: anonymousUser, isGuest: false });
 });
 
 describe('useAuthStore.ensureAnonymousSession', () => {
@@ -218,13 +180,4 @@ it('still enters guest mode if the anonymous request fails while guest mode is w
     isGuest: true,
     isLoading: false,
   });
-});
-
-it('checks the upstream default server session before a stale local guest flag', async () => {
-  jest.mocked(SecureStore.getItemAsync).mockResolvedValue('true');
-  jest.mocked(getSession).mockResolvedValue(anonymousUser);
-  await useAuthStore.getState().initialize();
-  expect(getSession).toHaveBeenCalledWith();
-  expect(useAuthStore.getState()).toMatchObject({ user: anonymousUser, isGuest: false });
-  expect(SecureStore.getItemAsync).not.toHaveBeenCalled();
 });

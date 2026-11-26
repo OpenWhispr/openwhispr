@@ -8,9 +8,9 @@ import type {
   RegisterSuperwallGateOptions,
   SuperwallPurchaseCompletion,
 } from '@/hooks/useSuperwallGate';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
 import { requiresRealAccount } from '@/lib/accountAccess';
-import { useUsageStore } from '@/store/useUsageStore';
+import { useUsageStore } from '@/android/store/useUsageStore';
 import {
   isTransactionalSuperwallPlacement,
   resolveSuperwallPlacementName,

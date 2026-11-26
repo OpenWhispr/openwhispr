@@ -46,7 +46,6 @@ src/data/remote/notesApi.ts
 src/data/remote/sharedDictionaryApi.ts
 src/data/remote/snippetsApi.ts
 src/data/remote/spacesApi.ts
-src/data/remote/usageApi.ts
 src/data/remote/workspacesApi.ts
 src/data/spacesRepository.ts
 src/data/synced/SyncedNotesRepository.ts
@@ -176,14 +175,6 @@ src/services/transcription/policyErrors.ts
 src/services/transcription/realtimeEvents.ts
 src/services/transcription/realtimeReconnect.ts
 src/services/transcription/wordLimit.ts
-src/store/createAuthStore.ts
-src/store/createConfigStore.ts
-src/store/createDictionaryStore.ts
-src/store/createLibraryLoad.ts
-src/store/createNotesStore.ts
-src/store/createSnippetsStore.ts
-src/store/createTranscriptStore.ts
-src/store/createUsageStore.ts
 src/store/useActionsStore.ts
 src/store/useAffiliateStore.ts
 src/store/useChatStore.ts

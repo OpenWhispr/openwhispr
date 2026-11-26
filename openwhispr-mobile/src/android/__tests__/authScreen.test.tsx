@@ -46,6 +46,7 @@ jest.mock('@/store/useAuthStore', () => {
   useMockAuthStore.setState = (patch: Partial<MockAuth>) => mockSetAuth(patch);
   return { useAuthStore: useMockAuthStore };
 });
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 const mockCheckUser = jest.fn();
 jest.mock('@/lib/authClient', () => ({ checkUserExists: (email: string) => mockCheckUser(email) }));
 const mockRequestReset = jest.fn();

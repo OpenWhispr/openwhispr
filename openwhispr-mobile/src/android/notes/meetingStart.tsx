@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { router } from 'expo-router';
 import type { GoogleCalendarEvent } from '@/data/calendarTypes';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 import { meetingOnDevice } from '../meetingRouting';
 import { StartSheet } from './sheets';
 import { startMeeting } from './start';

@@ -73,6 +73,7 @@ jest.mock('@/store/useNotesStore', () => {
   useNotesStore.getState = () => mockState;
   return { useNotesStore };
 });
+jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 jest.mock('@/data', () => ({ notesRepository: { getAllNotes: () => mockNotes } }));
 jest.mock('@/data/spacesRepository', () => ({
   spacesRepository: { getPrivateSpace: () => ({ id: 1 }) },
@@ -135,6 +136,7 @@ jest.mock('@/sync/teamSpacesCapability', () => ({ getDefaultPrivateWorkspaceId: 
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (select: (state: unknown) => unknown) => select({ user: { id: 'u1' } }),
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 
 import { ThemeProvider } from '../../ThemeProvider';
 import { darkTheme, lightTheme } from '../../theme';

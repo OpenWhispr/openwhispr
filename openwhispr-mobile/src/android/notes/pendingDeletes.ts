@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 import { showToast } from '../settings/kit';
 import { notesT } from './strings';
 

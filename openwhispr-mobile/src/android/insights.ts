@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { z } from 'zod';
 import { api, ApiError } from '@/lib/apiClient';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 
 export interface InsightEvent {
   event_id: string;

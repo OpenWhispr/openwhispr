@@ -85,6 +85,7 @@ jest.mock('@/android/LocalTextModel', () => ({ selectedTextModel: () => 'qwen-ba
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: { id: 'test', isAnonymous: false } }) },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 const mockConfig: { current: Record<string, unknown> } = { current: {} };
 const baseConfig = {
   androidHistoryDays: 0,
@@ -94,6 +95,7 @@ const baseConfig = {
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ config: mockConfig.current }) },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: 'private' }) },
 }));
@@ -105,13 +107,20 @@ jest.mock('@/store/useSnippetsStore', () => ({
     }),
   },
 }));
+jest.mock('@/android/store/useSnippetsStore', () => jest.requireMock('@/store/useSnippetsStore'));
 jest.mock('@/store/useDictionaryStore', () => ({
   useDictionaryStore: { getState: () => ({ isLoaded: true, entries: [] }) },
 }));
+jest.mock('@/android/store/useDictionaryStore', () =>
+  jest.requireMock('@/store/useDictionaryStore'),
+);
 jest.mock('@/store/useCustomPromptsStore', () => ({
   getActiveCustomCleanupPrompt: () => undefined,
 }));
 jest.mock('@/store/useTranscriptStore', () => ({ useTranscriptStore: { getState: jest.fn() } }));
+jest.mock('@/android/store/useTranscriptStore', () =>
+  jest.requireMock('@/store/useTranscriptStore'),
+);
 
 const routes: Record<TranscriptionProvider, TranscriptionJobRoute> = {
   local: { provider: 'local', cleanupRoute: { mode: 'local', scope: 'cleanup' } },

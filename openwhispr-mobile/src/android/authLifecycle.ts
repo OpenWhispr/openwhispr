@@ -4,16 +4,17 @@ import {
   getStoredSession,
   type AuthUser,
 } from '@/lib/authClient';
-import { useUsageStore } from '@/store/useUsageStore';
+import { useUsageStore } from '@/android/store/useUsageStore';
 import { Sentry } from '@/lib/sentry';
-import type { AuthStoreLifecycle } from '@/store/createAuthStore';
+import type { AuthStoreLifecycle } from '@/android/store/createAuthStore';
 import { forgetEndedSession, markSessionEnded, readEndedSession } from './auth/endedSession';
 
 const GUEST_SESSION_KEY = 'openwhispr_guest_session';
 
 // The auth store is built from this lifecycle, so it is read when needed, not at import.
 function authState() {
-  const { useAuthStore } = require('@/store/useAuthStore') as typeof import('@/store/useAuthStore');
+  const { useAuthStore } =
+    require('@/android/store/useAuthStore') as typeof import('@/android/store/useAuthStore');
   return useAuthStore;
 }
 /** How long the launch check waits for the server before keeping the saved session (F3). */
@@ -25,7 +26,7 @@ function androidAuth() {
 }
 function androidUsage() {
   return (
-    require('@/store/useUsageStore.android') as typeof import('@/store/useUsageStore.android')
+    require('@/android/store/useUsageStore') as typeof import('@/android/store/useUsageStore')
   ).useUsageStore;
 }
 

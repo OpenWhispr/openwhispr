@@ -1,8 +1,8 @@
 import { Platform } from 'react-native';
 import { resolveMobileInferenceRoute } from '@/android/providers/mobileProviders';
 import { ReasoningService } from '@/android/reasoning/ReasoningService';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { getActiveCustomCleanupPrompt } from '@/store/useCustomPromptsStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { requiresRealAccount } from '@/lib/accountAccess';

@@ -3,7 +3,7 @@ import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
 import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
 import { getAccountDisplay } from '@/lib/accountDisplay';
 import { useHomeT } from './strings';
 import { themeFor, useTheme, type AndroidTheme } from '../ThemeProvider';

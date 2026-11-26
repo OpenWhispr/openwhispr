@@ -5,7 +5,7 @@ import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import type { Folder, Note } from '@/data';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 import { useNoteBuckets } from '@/hooks/useNoteBuckets';
 import { useManualSyncRefresh } from '@/hooks/useManualSyncRefresh';
 import { safeHaptics } from '@/lib/utils';

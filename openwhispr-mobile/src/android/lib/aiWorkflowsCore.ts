@@ -1,9 +1,12 @@
 import type { AuthUser } from '@/lib/authClient';
 import { isDictationAgentEnabled, isNoteChatEnabled } from '@/lib/dictationAgent';
-import type { InferenceSelection } from '@/lib/mobileProviders';
+import type { InferenceSelection } from '@/android/providers/mobileProviders';
 import { localModeDefault, MODE_LABELS, type CloudAccess } from '@/lib/inferenceModes';
 import { isLocalModelKey, LOCAL_MODEL_TITLES } from '@/lib/localModelCatalog';
-import { providerDisplayName, type MobileInferenceScope } from '@/lib/mobileProviders';
+import {
+  providerDisplayName,
+  type MobileInferenceScope,
+} from '@/android/providers/mobileProviders';
 import type { ProcessingMode, UserConfig } from '@/types';
 
 export interface AiWorkflowPolicy {

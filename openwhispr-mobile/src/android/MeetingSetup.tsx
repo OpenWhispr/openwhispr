@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
 import { meetingOnDevice } from './meetingRouting';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { Text } from '@/components/ui/Text';

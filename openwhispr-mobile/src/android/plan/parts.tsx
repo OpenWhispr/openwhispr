@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
-import type { UsageInfo } from '@/data/remote/usageApi';
+import type { UsageInfo } from '@/android/remote/usageApi';
 import { ProgressBar } from '../controls';
 import { useHome } from '../home/kit';
 import { useSettingsLook } from '../settings/look';

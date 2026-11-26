@@ -20,9 +20,9 @@ import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
-import { useTranscriptStore } from '@/store/useTranscriptStore.android';
+import { useTranscriptStore } from '@/android/store/useTranscriptStore';
 import { useAppInit } from '@/hooks/useAppInit';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { useInsights, refreshInsights } from '@/android/insights';
 import {
   AndroidCleanupError,
@@ -33,7 +33,7 @@ import {
   type AndroidJob,
 } from '@/android/pipeline';
 import { useFileUpload } from '@/hooks/useFileUpload.android';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 import { defaultFolderFor } from '@/android/notes/library';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import {
@@ -44,8 +44,8 @@ import {
 } from '@/lib/notes/importDestination';
 import { getTranscriptionProvider } from '@/lib/inferenceRouting';
 import { accountRequiredForCloud, showAccountRequiredAlert } from '@/lib/accountAccess';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useUsageStore } from '@/store/useUsageStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
+import { useUsageStore } from '@/android/store/useUsageStore';
 import { GlassPill, WordsMeter, openUpgrade } from '@/android/plan/parts';
 import { isLowOnWords } from '@/android/plan/planState';
 import { usePlanT } from '@/android/plan/strings';

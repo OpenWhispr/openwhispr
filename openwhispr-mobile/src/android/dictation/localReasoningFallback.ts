@@ -4,7 +4,7 @@ import {
   clearLocalReasoningReadinessCache,
   getLocalReasoningUnavailableMessage,
 } from '@/lib/localReasoning';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import type { LocalReasoningReadiness } from '@/types';
 import type { useAndroidCopy } from '@/hooks/useAndroidCopy';
 

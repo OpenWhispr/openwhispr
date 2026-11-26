@@ -4,9 +4,9 @@ jest.mock('@/services/storage/StorageService.android', () =>
 jest.mock('@/lib/transcriptAudio.android', () => jest.requireMock('@/lib/transcriptAudio'));
 import { Platform } from 'react-native';
 import type { Transcript } from '@/types';
-import type { TranscriptState } from '../createTranscriptStore';
-import { useTranscriptStore as iosStore } from '../useTranscriptStore';
-import { useTranscriptStore as androidStore } from '../useTranscriptStore.android';
+import type { TranscriptState } from '@/android/store/createTranscriptStore';
+import { useTranscriptStore as iosStore } from '@/store/useTranscriptStore';
+import { useTranscriptStore as androidStore } from '@/store/useTranscriptStore.android';
 
 const mockRead = jest.fn();
 const mockSave = jest.fn();
@@ -32,19 +32,22 @@ jest.mock('@/services/providers/NativeProviderTransport', () => ({
   abortError: (message: string) => Object.assign(new Error(message), { name: 'AbortError' }),
 }));
 jest.mock('@/lib/providerJobActivity', () => ({ isProviderJobActive: () => false }));
-jest.mock('../../../modules/app-group-storage/src', () => ({
+jest.mock('../../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: { getItem: () => null },
 }));
 jest.mock('@/lib/keyboardInferenceRoute', () => ({
   listPendingProviderRecoveryJobs: () => [],
   clearKeyboardProviderRecovery: jest.fn(),
 }));
-jest.mock('../../../modules/audio-tools/src', () => ({
+jest.mock('../../../../modules/audio-tools/src', () => ({
   AudioTools: { isAvailable: () => false, cleanup: async () => {} },
 }));
 jest.mock('@/lib/transcribeAndCleanup', () => ({
   transcribeAndCleanup: (...args: unknown[]) => mockTranscribe(...args),
 }));
+jest.mock('@/android/dictation/transcribeAndCleanup', () =>
+  jest.requireMock('@/lib/transcribeAndCleanup'),
+);
 jest.mock('@/lib/transcriptionLanguage', () => ({ getPreferredTranscriptionLanguage: () => 'en' }));
 jest.mock('@/lib/transcriptionErrors', () => ({
   toFriendlyTranscriptionErrorMessage: (error: Error) => error.message,

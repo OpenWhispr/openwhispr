@@ -14,6 +14,7 @@ jest.mock('@/store/useAuthStore', () => ({
     },
   },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: {
     getState: () => ({
@@ -32,6 +33,7 @@ jest.mock('@/store/useConfigStore', () => ({
     },
   },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/lib/apiClient', () => ({
   api: { post: jest.fn(), get: jest.fn() },
   ApiError: class extends Error {

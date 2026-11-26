@@ -1,4 +1,5 @@
 // Shared files reach Android's copies through these paths, as Metro's re-exports do.
+jest.mock('@/store/useNotesStore', () => jest.requireActual('@/android/store/useNotesStore'));
 jest.mock('@/services/transcription/TranscriptionService', () =>
   jest.requireActual('@/android/transcription/TranscriptionService'),
 );
@@ -30,7 +31,7 @@ import { eq } from 'drizzle-orm';
 import { notes } from '@/db/schema';
 import { createMemoryRepository } from '@/data/local/__tests__/testDb';
 import { startMeetingRecoveryOnce } from '@/lib/meetingRecovery.android';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 
 let mockMemory: ReturnType<typeof createMemoryRepository>;
 let mockCurrent = true;
@@ -73,12 +74,14 @@ jest.mock('@sentry/react-native', () => ({ captureException: jest.fn() }));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: null }), subscribe: () => () => {} },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: 'cloud' }), subscribe: () => () => {} },
 }));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ config: {} }), subscribe: () => () => {} },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/services/reasoning/ReasoningService', () => ({ ReasoningService: {} }));
 jest.mock('@/android/reasoning/ReasoningService', () =>
   jest.requireMock('@/services/reasoning/ReasoningService'),

@@ -60,9 +60,11 @@ jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (selector: (state: { user: object | null }) => unknown) =>
     selector({ user: { id: 'a', isAnonymous: false } }),
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: require('zustand').create(() => ({ config: {}, error: null })),
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: require('zustand').create(() => ({ activeMode: 'cloud' })),
 }));

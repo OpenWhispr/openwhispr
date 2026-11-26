@@ -12,6 +12,7 @@ jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ sessionCookie: 'test-session-cookie' }) },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('expo-file-system/legacy', () => ({
   getInfoAsync: jest.fn(),
   uploadAsync: jest.fn(),

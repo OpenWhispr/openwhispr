@@ -23,9 +23,11 @@ jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: mockUser }) },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ config: null, updateConfig: mockUpdateConfig }) },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: {
     getState: () => ({ activeMode: mockActiveMode, setActiveMode: mockSetMode }),
@@ -38,6 +40,9 @@ jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
     isReadyForLanguage: () => mockSpeechReady(),
   },
 }));
+jest.mock('@/android/transcription/LocalTranscriptionService', () =>
+  jest.requireMock('@/services/transcription/LocalTranscriptionService'),
+);
 jest.mock('@/lib/localReasoning', () => ({
   ...jest.requireActual('@/lib/localReasoning'),
   getLocalReasoningReadiness: () => mockTextReadiness(),

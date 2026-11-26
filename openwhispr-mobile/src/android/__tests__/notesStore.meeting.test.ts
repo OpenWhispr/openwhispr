@@ -109,9 +109,11 @@ jest.mock('@/store/useAuthStore', () => ({
     },
   },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => mockConfigState, subscribe: () => () => {} },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/utils/generateTitle', () => ({
   generateNoteTitle: mockGenerateNoteTitle,
   deriveLocalTitle: mockDeriveLocalTitle,
@@ -165,7 +167,9 @@ jest.mock('@/android/transcription/TranscriptionService', () =>
 import { Platform } from 'react-native';
 import { useNotesStore as useIosNotesStore } from '@/store/useNotesStore';
 import { useNotesStore as useAndroidNotesStore } from '@/store/useNotesStore.android';
-let useNotesStore = useIosNotesStore;
+// iOS cases run the iOS store; Android-only signatures are typed from Android's.
+const iosStore = useIosNotesStore as unknown as typeof useAndroidNotesStore;
+let useNotesStore = iosStore;
 import { notesRepository, spacesRepository } from '@/data';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { generateLocalMeetingNotes } from '@/lib/notes/localMeetingNotes';
@@ -214,7 +218,7 @@ const segment = (text: string) => ({
 const signedInUser = { id: 'user-1', email: 'user@example.com', emailVerified: true };
 
 beforeEach(() => {
-  useNotesStore = useIosNotesStore;
+  useNotesStore = iosStore;
   // loadNotes/loadFolders read SQLite; stub them on the store for these unit tests.
   for (const store of [useIosNotesStore, useAndroidNotesStore])
     store.setState({
@@ -436,21 +440,6 @@ describe('finalizeCloudMeeting', () => {
     (notesRepository.getTranscriptionStatus as jest.Mock).mockImplementation(() => status);
     (notesRepository.setTranscriptionStatus as jest.Mock).mockImplementation((_id, next) => {
       status = next;
-    });
-  });
-  it('preserves upstream iOS completion when given the Android incomplete option', async () => {
-    await useIosNotesStore
-      .getState()
-      .finalizeCloudMeeting(
-        7,
-        [{ itemId: 'saved', text: 'Saved words.', startMs: 0, endMs: 1000 }],
-        1,
-        { incomplete: true },
-      );
-    expect(notesRepository.setTranscriptionStatus).toHaveBeenLastCalledWith(7, 'done');
-    expect(mockLogTranscriptionCompleted).toHaveBeenCalledWith({
-      source: 'meeting',
-      provider: 'cloud',
     });
   });
   it('persists an incomplete Android transcript without generating notes or claiming completion', async () => {

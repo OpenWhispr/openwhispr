@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import {
   getMobileProvidersForScope,
   isTranscriptionScope,

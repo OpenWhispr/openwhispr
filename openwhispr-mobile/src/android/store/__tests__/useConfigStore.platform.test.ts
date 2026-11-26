@@ -12,7 +12,7 @@ jest.mock('@/services/storage/StorageService', () => ({
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ resetToDefault: jest.fn() }) },
 }));
-let useConfigStore: (typeof import('../useConfigStore'))['useConfigStore'];
+let useConfigStore: (typeof import('@/store/useConfigStore'))['useConfigStore'];
 function deferredSave() {
   let resolve!: () => void;
   const promise = new Promise<void>((done) => {
@@ -22,7 +22,7 @@ function deferredSave() {
 }
 beforeEach(() => {
   jest.resetModules();
-  useConfigStore = require('../useConfigStore').useConfigStore;
+  useConfigStore = require('@/store/useConfigStore').useConfigStore;
   jest.clearAllMocks();
   mockSaveConfig.mockResolvedValue(undefined);
   mockClearConfig.mockResolvedValue(undefined);

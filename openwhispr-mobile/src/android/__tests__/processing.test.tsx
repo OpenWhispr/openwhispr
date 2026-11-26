@@ -58,6 +58,7 @@ jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (selector: (state: { user: object | null }) => unknown) =>
     selector({ user: { id: 'a', isAnonymous: false } }),
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 const mockUpdateConfig = jest.fn(async (change: object) => {
   const { useConfigStore: store } = require('@/store/useConfigStore');
   store.setState((state: { config: object }) => ({ config: { ...state.config, ...change } }));
@@ -65,6 +66,7 @@ const mockUpdateConfig = jest.fn(async (change: object) => {
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: require('zustand').create(() => ({ config: {}, error: null })),
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 const mockSetPrompt = jest.fn();
 const mockResetPrompt = jest.fn();
 jest.mock('@/store/useCustomPromptsStore', () => ({

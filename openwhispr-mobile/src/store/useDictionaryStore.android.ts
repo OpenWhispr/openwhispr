@@ -1,5 +1,2 @@
-import { createAndroidLibraryLoad } from '@/android/libraryStores';
-import { createDictionaryStore } from './createDictionaryStore';
-
-export type { DictionaryEntry, DictionarySource } from './createDictionaryStore';
-export const useDictionaryStore = createDictionaryStore(createAndroidLibraryLoad);
+// Android's copy lives in src/android; shared files still import it from here.
+export * from '@/android/store/useDictionaryStore';

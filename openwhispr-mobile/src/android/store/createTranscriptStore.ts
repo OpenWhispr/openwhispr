@@ -1,11 +1,11 @@
 import { isProviderJobActive } from '@/lib/providerJobActivity';
-import { AppGroupStorage } from '../../modules/app-group-storage/src';
+import { AppGroupStorage } from '../../../modules/app-group-storage/src';
 import {
   listPendingProviderRecoveryJobs,
   clearKeyboardProviderRecovery,
 } from '@/lib/keyboardInferenceRoute';
-import { AudioTools } from '../../modules/audio-tools/src';
-import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
+import { AudioTools } from '../../../modules/audio-tools/src';
+import { transcribeAndCleanup } from '@/android/dictation/transcribeAndCleanup';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
 import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
 import {
@@ -19,8 +19,11 @@ import {
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { snapshotTextInference, snapshotTranscriptionJob } from '@/lib/inferenceRouting';
 import { logTranscriptionCompleted } from '@/lib/appsflyer';
-import type { KeyboardTone, Transcript, TranscriptionProvider } from '../types';
-import type { TranscriptLifecycle, TranscriptLifecycleContext } from './transcriptStoreLifecycle';
+import type { KeyboardTone, Transcript, TranscriptionProvider } from '@/types';
+import type {
+  TranscriptLifecycle,
+  TranscriptLifecycleContext,
+} from '@/android/store/transcriptStoreLifecycle';
 
 export type AddTranscriptInput = Omit<Transcript, 'id' | 'createdAt' | 'updatedAt'> & {
   id?: string;

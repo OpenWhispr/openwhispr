@@ -98,18 +98,22 @@ jest.mock('@/store/useAuthStore', () => ({
     },
   },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: (select: (state: unknown) => unknown) => select({ activeMode: mockMode }),
 }));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: (select: (state: unknown) => unknown) => select({ config: {} }),
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useUsageStore', () => ({
   useUsageStore: { getState: () => ({ usage: null }) },
 }));
+jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 jest.mock('@/store/useNotesStore', () => ({
   useNotesStore: { getState: () => ({ loadNotes: jest.fn(), loadFolders: jest.fn() }) },
 }));
+jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 let mockLanguages: string[] = [];
 jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguages: () => mockLanguages,

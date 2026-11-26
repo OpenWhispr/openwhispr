@@ -10,6 +10,7 @@ jest.mock('@/store/useNotesStore', () => ({
     getState: () => ({ deleteNote: mockDeleteNote, createNote: mockCreateNote }),
   },
 }));
+jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 jest.mock('../../settings/kit', () => ({
   showToast: (...args: unknown[]) => mockShowToast(...args),
 }));

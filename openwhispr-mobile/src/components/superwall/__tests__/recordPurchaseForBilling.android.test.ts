@@ -9,6 +9,7 @@ jest.mock('@/store/useUsageStore', () => ({
     getState: () => ({ usage: mockBillingId ? { billingUserId: mockBillingId } : null }),
   },
 }));
+jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 jest.mock('@/lib/revenuecat.android', () => ({ recordRevenueCatPurchase: jest.fn() }));
 
 beforeEach(() => {

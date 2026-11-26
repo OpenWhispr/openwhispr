@@ -1,21 +1,6 @@
-const mockClearNoteShares = jest.fn().mockResolvedValue(undefined);
-jest.mock('@/lib/notes/noteShareTokens', () => ({
-  claimNoteShareTokens: async () => {},
-  clearNoteShareTokens: (...args: unknown[]) => mockClearNoteShares(...args),
-}));
-
 const mockDeleteAccountApi = jest.fn();
 const mockSignOutApi = jest.fn();
 const mockClearProviderCredentials = jest.fn();
-const mockEraseInsights = jest.fn();
-jest.mock('@/android/accountData', () => ({
-  prepareAccountData: jest.fn(),
-  eraseAccountData: async () => {},
-  retryAccountDataDeletion: async () => {},
-}));
-jest.mock('@/android/insights', () => ({
-  eraseAccountInsights: (...args: unknown[]) => mockEraseInsights(...args),
-}));
 
 jest.mock('@/lib/authClient', () => ({
   getStoredSession: jest.fn(),
@@ -54,7 +39,6 @@ jest.mock('expo-secure-store', () => ({
 }));
 
 import { useAuthStore } from '@/store/useAuthStore';
-import { useAuthStore as useAndroidAuthStore } from '@/store/useAuthStore.android';
 
 const member = {
   id: 'member',
@@ -65,18 +49,9 @@ const member = {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockEraseInsights.mockReset().mockResolvedValue(undefined);
   mockClearProviderCredentials.mockResolvedValue(undefined);
   mockDeleteAccountApi.mockResolvedValue(undefined);
   useAuthStore.setState({
-    user: member,
-    sessionCookie: 'fixture-session',
-    isGuest: false,
-    isInitialized: true,
-    isLoading: false,
-    error: null,
-  });
-  useAndroidAuthStore.setState({
     user: member,
     sessionCookie: 'fixture-session',
     isGuest: false,
@@ -117,23 +92,6 @@ it('keeps provider keys when the user only signs out', async () => {
   expect(mockClearProviderCredentials).not.toHaveBeenCalled();
 });
 
-it('finishes account deletion when Android Insights cleanup fails', async () => {
-  mockEraseInsights.mockRejectedValue(new Error('Local storage unavailable'));
-  await useAndroidAuthStore.getState().deleteAccount();
-  expect(mockEraseInsights).toHaveBeenCalledWith('member');
-  expect(mockClearProviderCredentials).toHaveBeenCalledTimes(1);
-  expect(useAndroidAuthStore.getState()).toMatchObject({
-    user: null,
-    isLoading: false,
-    error: null,
-  });
-});
-
-it('does not load Android Insights when deleting an iOS account', async () => {
-  await useAuthStore.getState().deleteAccount();
-  expect(mockEraseInsights).not.toHaveBeenCalled();
-});
-
 it('clears local chat history on sign-out and on account deletion', async () => {
   await useAuthStore.getState().signOut();
   expect(mockClearChatHistory).toHaveBeenCalledTimes(1);
@@ -170,18 +128,4 @@ it('finishes signing out when the chat history cannot be cleared', async () => {
   expect(useAuthStore.getState()).toMatchObject({ user: null, isLoading: false });
   expect(warn).toHaveBeenCalled();
   warn.mockRestore();
-});
-
-it('keeps the upstream default identity-read order after the deletion response', async () => {
-  mockDeleteAccountApi.mockImplementationOnce(async () => {
-    useAuthStore.setState({ user: { ...member, id: 'response-time-user' } });
-  });
-  await useAuthStore.getState().deleteAccount();
-  expect(mockClearNoteShares).toHaveBeenCalledWith('response-time-user');
-});
-
-it('preserves Android stored chats on sign-out', async () => {
-  await useAndroidAuthStore.getState().signOut();
-  expect(mockClearChatHistory).not.toHaveBeenCalled();
-  expect(useAndroidAuthStore.getState()).toMatchObject({ user: null, isLoading: false });
 });

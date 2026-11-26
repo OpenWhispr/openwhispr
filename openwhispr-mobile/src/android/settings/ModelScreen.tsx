@@ -1,7 +1,7 @@
 import { ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { create } from 'zustand';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { useHome } from '../home/kit';
 import { ANDROID_MODELS, removeAndroidModel, type AndroidModelId } from '../models';
 import { canTranscribeMeetings, type AndroidSpeechModelId } from '../speechSelection';

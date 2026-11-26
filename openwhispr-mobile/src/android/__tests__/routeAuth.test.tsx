@@ -26,10 +26,12 @@ jest.mock('expo-router', () => ({
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (selector: (state: MockAuthState) => unknown) => selector(mockAuthState),
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useUsageStore.android', () => ({
   useUsageStore: (selector: (state: { sessionRejected: boolean }) => unknown) =>
     selector({ sessionRejected: mockSessionRejected }),
 }));
+jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore.android'));
 function mockAuthScreenModule() {
   return {
     __esModule: true,

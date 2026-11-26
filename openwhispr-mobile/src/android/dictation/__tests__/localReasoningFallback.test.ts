@@ -14,6 +14,7 @@ const mockUpdateConfig = jest.fn();
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ updateConfig: mockUpdateConfig }) },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 
 it('offers Android models without enabling an Apple setting or silently using cloud', () => {
   const original = Platform.OS;

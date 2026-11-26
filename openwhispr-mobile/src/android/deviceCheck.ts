@@ -9,7 +9,7 @@ import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage'
 import { buildProviderPrompt } from '@/android/reasoning/buildProviderPrompt';
 import { buildDictationHints } from '@/lib/dictationHints';
 import { getActiveCustomCleanupPrompt } from '@/store/useCustomPromptsStore';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import type { KeyboardTone } from '@/types';
 import { dictationToneStyle } from './style/toneStyle';
 import i18n from './strings';

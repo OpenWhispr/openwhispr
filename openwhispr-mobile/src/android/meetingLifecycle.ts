@@ -1,9 +1,9 @@
 import { notesRepository } from '@/data';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { getMeetingTranscriptionId } from '@/lib/notes/meetingTranscriptionId';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
-import type { MeetingLifecycle } from '@/store/createNotesStore';
+import type { MeetingLifecycle } from '@/android/store/createNotesStore';
 import { createLocalMeetingContext } from './localMeetingContext';
 import { createCloudMeetingContext } from './cloudMeetingContext';
 import { meetingOnDevice } from './meetingRouting';

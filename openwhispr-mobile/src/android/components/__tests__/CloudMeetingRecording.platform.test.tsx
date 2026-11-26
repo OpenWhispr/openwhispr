@@ -1,9 +1,9 @@
 import { fireEvent, render } from '@testing-library/react-native';
 import { Platform, ScrollView } from 'react-native';
-import { CloudMeetingRecording as IOSRecording } from '../CloudMeetingRecording';
-import { CloudMeetingRecording as AndroidRecording } from '../CloudMeetingRecording.android';
-import { LiveTranscriptList as IOSList } from '../LiveTranscriptList';
-import { LiveTranscriptList as AndroidList } from '../LiveTranscriptList.android';
+import { CloudMeetingRecording as IOSRecording } from '@/components/notes/CloudMeetingRecording';
+import { CloudMeetingRecording as AndroidRecording } from '@/components/notes/CloudMeetingRecording.android';
+import { LiveTranscriptList as IOSList } from '@/components/notes/LiveTranscriptList';
+import { LiveTranscriptList as AndroidList } from '@/components/notes/LiveTranscriptList.android';
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
 
 let mockKeyboardHeight = 0;
@@ -19,6 +19,7 @@ jest.mock('@/components/ui/Button', () => ({ Button: require('react-native').Pre
 jest.mock('@/config/colors', () => ({ BRAND: '#007AFF', iosColor: (name: string) => name }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/store/useAuthStore', () => ({ useAuthStore: () => null }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('expo-router', () => ({
   router: { canGoBack: () => true, back: jest.fn() },
   useNavigation: () => ({ setOptions: jest.fn() }),

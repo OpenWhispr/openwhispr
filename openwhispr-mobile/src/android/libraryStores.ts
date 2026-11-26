@@ -1,7 +1,7 @@
 import { asc, isNotNull, isNull } from 'drizzle-orm';
 import { db } from '@/db';
 import { snippets } from '@/db/schema';
-import type { CreateLibraryLoad } from '@/store/createLibraryLoad';
+import type { CreateLibraryLoad } from '@/android/store/createLibraryLoad';
 
 // Account recovery catches a failed collection read before continuing the switch.
 export const createAndroidLibraryLoad: CreateLibraryLoad = (read) =>

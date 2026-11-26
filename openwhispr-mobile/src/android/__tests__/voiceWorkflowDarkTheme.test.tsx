@@ -50,6 +50,7 @@ const mockNotesState = {
 jest.mock('@/store/useNotesStore', () => ({
   useNotesStore: (pick: (s: typeof mockNotesState) => unknown) => pick(mockNotesState),
 }));
+jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 jest.mock('@/data', () => ({ notesRepository: { getSpeakerProfiles: () => [] } }));
 jest.mock('@/data/local/notesRepository', () => ({
   SpeakerProfileOwnerAlreadyExistsError: class extends Error {},
@@ -109,12 +110,14 @@ jest.mock('@/store/useCustomPromptsStore', () => ({
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (pick: (s: unknown) => unknown) => pick({ user: null }),
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: Object.assign(
     (pick: (s: unknown) => unknown) => pick({ config: null, updateConfig: jest.fn() }),
     { getState: () => ({ config: null, error: null }) },
   ),
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: (pick: (s: unknown) => unknown) =>
     pick({ setActiveMode: jest.fn(), activeMode: 'cloud' }),

@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useScrollToTop } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { SegmentedControl } from '@/components/ui/SegmentedControl.android';
 import { useTheme } from './ThemeProvider';
 import { Toggle, showToast } from './settings/kit';

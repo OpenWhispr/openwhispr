@@ -6,6 +6,7 @@ jest.mock('../models', () => ({
 }));
 jest.mock('../settings/bubbleAppearance', () => ({ setBubbleAssistant: jest.fn() }));
 jest.mock('@/store/useConfigStore', () => ({ useConfigStore: { getState: () => ({}) } }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 
 import { modelFor, modelsToDownload } from '../onboarding/deviceSetup';
 

@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
 import { checkUserExists } from '@/lib/authClient';
 import { safeHaptics } from '@/lib/utils';
 import { showToast } from '@/android/settings/kit';

@@ -7,7 +7,7 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import type { Folder } from '@/data';
 import type { GoogleCalendarEvent } from '@/data/calendarTypes';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 import { useManualSyncRefresh } from '@/hooks/useManualSyncRefresh';
 import { withNotesRouteOwner } from '@/lib/notes/noteRouteOwner';
 import { safeHaptics } from '@/lib/utils';

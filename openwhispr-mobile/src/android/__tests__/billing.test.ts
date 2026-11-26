@@ -13,6 +13,7 @@ const mockLoad = jest.fn(async () => ({ status: 'loaded', usage: mockUsage }));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: { id: 'a', isAnonymous: false } }) },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useUsageStore', () => ({
   getUsageOwnerKey: () => mockOwner,
   useUsageStore: {
@@ -20,6 +21,7 @@ jest.mock('@/store/useUsageStore', () => ({
     subscribe: jest.fn(() => jest.fn()),
   },
 }));
+jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 jest.mock('@/lib/revenuecat.android', () => ({
   withRevenueCatUser: jest.fn(async (_id, action, check) => {
     check?.();
@@ -53,7 +55,7 @@ import {
   observeAndroidPurchaseUpdates,
 } from '../billing';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';
-import { useUsageStore } from '@/store/useUsageStore';
+import { useUsageStore } from '@/android/store/useUsageStore';
 const selected = { productId: 'pro', storeProductId: 'pro:annual', id: 'annual:trial' };
 const params = {
   platform: 'android' as const,

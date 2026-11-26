@@ -44,6 +44,7 @@ jest.mock('@/store/useNotesStore', () => {
     useNotesStore: (selector: (s: typeof state) => unknown) => selector(state),
   };
 });
+jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 
 const baseProps = {
   noteId: 7,

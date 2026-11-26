@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { applyHistoryRetention } from '../pipeline';
 import { Group, ListRow, SettingsPage, showToast } from './kit';
 import { useSettingsT, type SettingsKey } from './strings';
