@@ -28,7 +28,7 @@ import {
 } from '../../../modules/live-pcm-streaming/src';
 import { transcriptionPolicyErrorFromApiError } from './policyErrors';
 import { createRealtimeEventReducer } from './realtimeEvents';
-import type { RealtimeCallbacks, RealtimeSession } from './realtimeEvents';
+import type { RealtimeCallbacks, RealtimeSession, RealtimeUtterance } from './realtimeEvents';
 import type { AudioWindow } from './realtimeReconnect';
 import { meetingRotationMs } from '@/lib/debug/meetingDebug';
 import {
@@ -118,11 +118,15 @@ export async function startRealtimeMeetingWs(
 
   // The leg whose message the reducer is handling, so a completed turn credits that leg.
   let eventLeg: WebSocketLike | null = null;
+  // Our commits' turns as the meeting gets them, timed; the reducer keeps them untimed.
+  const commitTurnTimings = new Map<string, RealtimeUtterance>();
   // One reducer per session — this is why utterances survive every leg swap.
   const reducer = createRealtimeEventReducer({
     ...callbacks,
     onUtterance: (utterance) => {
       const meta = eventLeg ? legMeta.get(eventLeg) : undefined;
+      // Read before the accounting below moves the leg's transcribed mark past this turn.
+      const delivered = meta ? withCommitTurnTiming(utterance, meta) : utterance;
       if (meta) {
         // endMs is already on the capture clock: the leg offset was applied before the reducer.
         if (utterance.endMs !== null) {
@@ -133,7 +137,7 @@ export async function startRealtimeMeetingWs(
         }
         applyCommitCredit(meta);
       }
-      callbacks.onUtterance?.(utterance);
+      callbacks.onUtterance?.(delivered);
     },
     onTranscriptionFailed: (failure) => {
       const meta = eventLeg ? legMeta.get(eventLeg) : undefined;
@@ -159,6 +163,28 @@ export async function startRealtimeMeetingWs(
       if (item.startMs !== null) creditMs = Math.min(creditMs, item.startMs);
     }
     meta.transcribedUpToMs = Math.max(meta.transcribedUpToMs, creditMs);
+  };
+
+  // Our own commit's turn has no VAD end and usually no start, and a turn without timing can't
+  // be matched to the diarizer's speakers, so one Stop mid-speech left a whole meeting
+  // unlabelled. Its audio is known all the same: what the leg was sent after its earlier turns,
+  // up to the commit. Only the meeting's copy is timed; the accounting reads the reducer's.
+  const withCommitTurnTiming = (utterance: RealtimeUtterance, meta: LegMeta): RealtimeUtterance => {
+    if (utterance.endMs !== null || meta.commitSentUpToMs === null) return utterance;
+    // The commit's mark rounds up; the turn never claims audio past what was captured.
+    const endMs = Math.min(meta.commitSentUpToMs, bytesToMs(capturedBytes));
+    // A turn our commit cut short keeps the start VAD gave it.
+    let startMs = utterance.startMs;
+    if (startMs === null) {
+      startMs = meta.transcribedUpToMs;
+      // A VAD turn committed before ours may still be transcribing; its audio came first.
+      for (const item of reducer.pendingItemTimings(legItemPrefix(meta.legIndex))) {
+        if (item.endMs !== null) startMs = Math.max(startMs, item.endMs);
+      }
+    }
+    const timed = { ...utterance, startMs: Math.min(startMs, endMs), endMs };
+    commitTurnTimings.set(utterance.itemId, timed);
+    return timed;
   };
   const pcmRing = new PcmRingBuffer(pcmTailCapBytes(sampleRate), sampleRate);
   const bytesToMs = (bytes: number): number => Math.floor((bytes * 1000) / (sampleRate * 2));
@@ -824,7 +850,7 @@ export async function startRealtimeMeetingWs(
 
   return {
     stop,
-    utterances: reducer.utterances,
+    utterances: () => reducer.utterances().map((u) => commitTurnTimings.get(u.itemId) ?? u),
     capturedMs: () => bytesToMs(capturedBytes),
     droppedMs: () => bytesToMs(pcmRing.droppedBytes + sendDroppedBytes),
     droppedWindows: () => mergeAudioWindows([...pcmRing.droppedWindows, ...lostWindows]),

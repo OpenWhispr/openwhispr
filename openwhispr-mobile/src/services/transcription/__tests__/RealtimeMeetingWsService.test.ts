@@ -1616,3 +1616,195 @@ describe('startRealtimeMeetingWs — a meeting that starts offline', () => {
     expect(LivePCMStreaming.start).not.toHaveBeenCalled();
   });
 });
+
+describe("startRealtimeMeetingWs — timing for our own commit's turn", () => {
+  // sampleRate 100 → 200 bytes a second, so a 200-byte frame is 1000 ms of capture.
+  const SECOND = new Array(200).fill(6);
+  const DEBUG_ROTATION_MS = 120_000;
+  const speechStopped = (itemId: string, audioEndMs: number): WsMessage => ({
+    type: 'input_audio_buffer.speech_stopped',
+    item_id: itemId,
+    audio_end_ms: audioEndMs,
+  });
+
+  async function sendSeconds(count: number): Promise<void> {
+    for (let i = 0; i < count; i++) {
+      emitFrame(SECOND);
+      await jest.advanceTimersByTimeAsync(FLUSH_MS + 10);
+    }
+  }
+
+  function completeTurn(leg: FakeWebSocket, itemId: string, startMs: number, endMs: number): void {
+    leg.emit(speechStarted(itemId, startMs));
+    leg.emit(speechStopped(itemId, endMs));
+    leg.emit(completed(itemId, `turn ${itemId}`));
+  }
+
+  /** Cross the debug rotation seam and open the new leg; the old one is committed. */
+  async function rotate(): Promise<FakeWebSocket> {
+    jest.advanceTimersByTime(DEBUG_ROTATION_MS - 1);
+    await jest.advanceTimersByTimeAsync(1);
+    await flushMicro();
+    const leg = lastLeg();
+    leg.open();
+    await flushMicro();
+    return leg;
+  }
+
+  beforeEach(() => setDebugRotationMs(DEBUG_ROTATION_MS));
+  afterEach(() => setDebugRotationMs(null));
+
+  it('times the turn a Stop commit cut off, after the last turn and within what the leg was sent', async () => {
+    const onUtterance = jest.fn();
+    const { session, leg1 } = await boot({ onUtterance }, { sampleRate: 100 });
+    await sendSeconds(3); // 0–3000 ms sent
+    completeTurn(leg1, 'a', 0, 1000); // transcribed up to 1000 ms; speech keeps running
+
+    const stopped = session.stop(); // the commit goes out with the leg sent up to 3000 ms
+    leg1.emit(committed('m')); // no speech_started or speech_stopped for our commit's turn
+    leg1.emit(completed('m', 'cut off at stop'));
+    await stopped;
+
+    expect(session.droppedWindows()).toEqual([]);
+    const expected = { itemId: 'L1:m', text: 'cut off at stop', startMs: 1000, endMs: 3000 };
+    expect(onUtterance).toHaveBeenLastCalledWith(expected);
+    expect(session.utterances()).toEqual([
+      { itemId: 'L1:a', text: 'turn a', startMs: 0, endMs: 1000 },
+      expected,
+    ]);
+  });
+
+  it('keeps the VAD start of a turn a Stop commit cut short mid-speech', async () => {
+    const onUtterance = jest.fn();
+    const { session, leg1 } = await boot({ onUtterance }, { sampleRate: 100 });
+    await sendSeconds(3); // 0–3000 ms sent
+    completeTurn(leg1, 'a', 0, 1000);
+    leg1.emit(speechStarted('m', 1500)); // still being spoken: no speech_stopped
+
+    const stopped = session.stop();
+    leg1.emit(committed('m'));
+    leg1.emit(completed('m', 'mid sentence'));
+    await stopped;
+
+    expect(session.droppedWindows()).toEqual([]);
+    expect(onUtterance).toHaveBeenLastCalledWith(
+      expect.objectContaining({ itemId: 'L1:m', startMs: 1500, endMs: 3000 }),
+    );
+    expect(session.utterances()[1]).toMatchObject({ startMs: 1500, endMs: 3000 });
+  });
+
+  it('starts the commit turn after a VAD turn still being transcribed, losing the same audio as before', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    await sendSeconds(2); // 0–2000 ms sent
+    completeTurn(leg1, 'a', 0, 1000); // transcribed up to 1000 ms
+    leg1.emit(speechStarted('v', 1000));
+    leg1.emit(speechStopped('v', 1800));
+    leg1.emit(committed('v')); // a VAD turn (1000–1800 ms) that never comes back
+
+    const stopped = session.stop();
+    leg1.emit(committed('m'));
+    leg1.emit(completed('m', 'last words'));
+    await jest.advanceTimersByTimeAsync(STOP_FLUSH_TIMEOUT_MS); // v holds the drain: unclean
+    await stopped;
+
+    // The same windows as with no timing added: the credit still stops at v's start.
+    expect(session.droppedWindows()).toEqual([{ startMs: 1000, endMs: 2000 }]);
+    // v's audio came before ours, so the commit's turn starts at v's end, not at 1000 ms.
+    expect(session.utterances()[1]).toMatchObject({ itemId: 'L1:m', startMs: 1800, endMs: 2000 });
+  });
+
+  it('extends the credit as before when the pending VAD turn completes after the commit turn', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    await sendSeconds(2);
+    completeTurn(leg1, 'a', 0, 1000);
+    leg1.emit(speechStarted('v', 1000));
+    leg1.emit(speechStopped('v', 1800));
+    leg1.emit(committed('v'));
+
+    const progress = track(session.stop());
+    leg1.emit(committed('m'));
+    leg1.emit(completed('m', 'last words'));
+    await flushMicro();
+    expect(progress.done()).toBe(false); // v is still pending: the credit is held at 1000 ms
+    leg1.emit(completed('v', 'vad words'));
+    await flushMicro();
+
+    expect(progress.done()).toBe(true);
+    expect(session.droppedWindows()).toEqual([]);
+    expect(session.utterances().map((u) => [u.itemId, u.startMs, u.endMs])).toEqual([
+      ['L1:a', 0, 1000],
+      ['L1:m', 1800, 2000],
+      ['L1:v', 1000, 1800], // a VAD turn's own timing, untouched
+    ]);
+  });
+
+  it("times a rotation commit's turn on the capture clock, from the leg's offset", async () => {
+    const onUtterance = jest.fn();
+    const { session, leg1 } = await boot({ onUtterance }, { sampleRate: 100 });
+    await sendSeconds(2); // 0–2000 ms to leg 1
+    completeTurn(leg1, 'a', 0, 2000);
+    const leg2 = await rotate(); // leg 2's clock starts at captured 2000 ms
+    leg1.emit(commitEmpty); // leg 1 had nothing left
+
+    await sendSeconds(2); // 2000–4000 ms to leg 2, speech running the whole time
+    const leg3 = await rotate(); // leg 2 is committed with 4000 ms sent
+    leg2.emit(committed('m'));
+    leg2.emit(completed('m', 'across the seam'));
+    await flushMicro();
+    expect(leg2.closed).toBe(true);
+
+    const stopped = session.stop();
+    leg3.emit(commitEmpty);
+    await stopped;
+    expect(session.droppedWindows()).toEqual([]);
+    // From where leg 2's audio starts in the capture (2000 ms), not its own clock's 0.
+    expect(onUtterance).toHaveBeenLastCalledWith(
+      expect.objectContaining({ itemId: 'L2:m', startMs: 2000, endMs: 4000 }),
+    );
+  });
+
+  it("starts a rotation commit's turn at the leg's last VAD turn, offset onto the capture clock", async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    await sendSeconds(2); // 0–2000 ms to leg 1
+    completeTurn(leg1, 'a', 0, 2000);
+    const leg2 = await rotate(); // offset 2000 ms
+    leg1.emit(commitEmpty);
+
+    await sendSeconds(1); // 2000–3000 ms to leg 2
+    completeTurn(leg2, 'b', 200, 600); // leg 2's clock: 2200–2600 ms captured
+    await sendSeconds(1); // 3000–4000 ms to leg 2
+    const leg3 = await rotate();
+    leg2.emit(committed('m'));
+    leg2.emit(completed('m', 'across the seam'));
+    await flushMicro();
+
+    const stopped = session.stop();
+    leg3.emit(commitEmpty);
+    await stopped;
+
+    expect(session.droppedWindows()).toEqual([]);
+    expect(session.utterances().map((u) => [u.itemId, u.startMs, u.endMs])).toEqual([
+      ['L1:a', 0, 2000],
+      ['L2:b', 2200, 2600],
+      ['L2:m', 2600, 4000],
+    ]);
+  });
+
+  it('leaves a turn without timing alone on a leg that was never committed', async () => {
+    const { session, leg1 } = await boot({}, { sampleRate: 100 });
+    await sendSeconds(2);
+    leg1.emit(committed('x'));
+    leg1.emit(completed('x', 'no timing')); // no VAD timing and no commit of ours
+
+    ageLeg();
+    leg1.serverClose(1006);
+    await flushMicro();
+
+    expect(session.utterances()).toEqual([
+      { itemId: 'L1:x', text: 'no timing', startMs: null, endMs: null },
+    ]);
+    // As before: a turn with no end never moved the transcribed mark, so the leg's death
+    // loses everything it was sent.
+    expect(session.droppedWindows()).toEqual([{ startMs: 0, endMs: 2000 }]);
+  });
+});
