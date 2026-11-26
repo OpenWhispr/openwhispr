@@ -12,8 +12,11 @@ import { useSettingsT, type SettingsKey } from './strings';
 import { setBubbleAssistant, useBubbleAssistant } from './bubbleAppearance';
 import { currentTranslateTarget } from './translateLanguages';
 
-// The listening bubble's five bars, tallest in the middle (BubbleFace).
-const BARS = [8, 14, 20, 14, 8];
+// The listening bubble's three logo bars at rest (BubbleFace): 5 wide, 10 apart, 9 / 20 / 9 on a
+// 52 dp bubble, scaled to this 44 dp one.
+const UNIT = 44 / 52;
+const BARS = [9, 20, 9].map((height) => height * UNIT);
+const BAR_WIDTH = 5 * UNIT;
 
 /** A grey 36 tile holding one of the menu's own glyphs, for list rows. */
 export function GlyphTile({ name }: { name: GlyphName }) {
@@ -155,8 +158,8 @@ const useStyles = makeStyles((theme) => {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    bars: { flexDirection: 'row', alignItems: 'center', gap: 2.5 },
-    bar: { width: 2.6, borderRadius: 2, backgroundColor: k.onGlass },
+    bars: { flexDirection: 'row', alignItems: 'center', gap: 10 * UNIT - BAR_WIDTH },
+    bar: { width: BAR_WIDTH, borderRadius: BAR_WIDTH / 2, backgroundColor: k.onGlass },
     badge: {
       position: 'absolute',
       top: 0,

@@ -63,7 +63,9 @@ class MeetingCaptureService : Service() {
       val launch = PendingIntent.getActivity(this, 0, packageManager.getLaunchIntentForPackage(packageName), PendingIntent.FLAG_IMMUTABLE)
       val notification = Notification.Builder(this, "meeting").setSmallIcon(android.R.drawable.ic_btn_speak_now)
         .setContentTitle(getString(R.string.ow_bubble_recording)).setContentText(getString(R.string.ow_meeting_notice))
-        .setContentIntent(launch).setOngoing(true).addAction(Notification.Action.Builder(null, getString(R.string.ow_meeting_stop), stop).build()).build()
+        .setContentIntent(launch).setOngoing(true).addAction(Notification.Action.Builder(null, getString(R.string.ow_meeting_stop), stop).build())
+        .apply { if (Build.VERSION.SDK_INT >= 31) setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE) }
+        .build()
       if (Build.VERSION.SDK_INT >= 29) startForeground(473, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE) else startForeground(473, notification)
       val noteId = captureRoute.noteId
       val directory = if (captureRoute.recordingDirectory.isEmpty()) filesDir else File(filesDir, captureRoute.recordingDirectory)

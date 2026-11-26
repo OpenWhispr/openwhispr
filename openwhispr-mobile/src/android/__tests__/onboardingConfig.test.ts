@@ -102,3 +102,22 @@ describe('starting languages', () => {
     expect(initialLanguages(undefined)).toEqual(['zh-TW']);
   });
 });
+
+describe('Settings › Language shows what dictation uses', () => {
+  const { languageChoice } = jest.requireActual('../onboarding/languages');
+
+  it('shows the one onboarding language, sent as the hint', () => {
+    expect(languageChoice(['en-US'], undefined)).toBe('en-US');
+  });
+
+  it('shows Auto-detect for two or more languages, or none (Skip)', () => {
+    expect(languageChoice(['en-US', 'af'], undefined)).toBe('auto');
+    expect(languageChoice(undefined, undefined)).toBe('auto');
+    expect(languageChoice([], undefined)).toBe('auto');
+  });
+
+  it('lets a pick made in Settings win', () => {
+    expect(languageChoice(['en-US', 'af'], 'fr')).toBe('fr');
+    expect(languageChoice(['en-US'], 'auto')).toBe('auto');
+  });
+});

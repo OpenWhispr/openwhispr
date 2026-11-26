@@ -85,7 +85,7 @@ export function CalendarPrompt() {
             pressed && !connecting && glassPressed,
           ]}
         >
-          <Text style={{ color: n.onGlass, fontSize: 15, lineHeight: 20, fontWeight: '600' }}>
+          <Text style={{ color: n.onGlass, fontSize: 15, lineHeight: 20, fontWeight: '500' }}>
             {t(connecting ? 'waitingGoogle' : 'connectGoogle')}
           </Text>
         </Pressable>

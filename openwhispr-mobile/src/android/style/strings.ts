@@ -27,7 +27,7 @@ export const styleEnglish = {
   describeFormal: 'Capitals and full punctuation',
   describeCasual: 'Capitals, lighter punctuation',
   describeVeryCasual: 'lowercase, barely any punctuation',
-  describeExcited: 'Capitals and more exclamation points',
+  describeExcited: 'Capitals and exclamation points',
   // TalkBack: what the example card shows.
   exampleLabel: 'Example in {{kind}}: {{text}}',
   toneSlider: 'Tone for {{kind}}',
@@ -47,7 +47,6 @@ export const styleEnglish = {
   appsEmail: 'Gmail, Outlook, Proton Mail',
   appsOther: 'Notion, ChatGPT and the rest',
   soundsLikeMe: 'Sounds like me',
-  swipeToCompare: 'Swipe to compare tones',
   doneTitle: 'You’re set',
   doneBody: 'Change any of these later in the Style tab.',
   done: 'Done',

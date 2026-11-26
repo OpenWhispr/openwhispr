@@ -57,7 +57,7 @@ export function CloudMeetingRecordingView({
       status={status}
       error={error}
       elapsedSeconds={elapsedSeconds}
-      title={title?.trim() || notesT('recordMeeting')}
+      title={title?.trim() || notesT('untitled')}
       chips={peopleCount && peopleCount > 1 ? [notesT('people', { count: peopleCount })] : []}
       meta={noteId != null ? <RecordingNoteChips noteId={noteId} /> : undefined}
       rawNotes={rawNotes}

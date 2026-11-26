@@ -24,7 +24,7 @@ export function OlderRecordingsRow({ count, onPress }: { count: number; onPress:
         card,
         {
           flexDirection: 'row',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           gap: 12,
           paddingLeft: 14,
           paddingRight: 12,
@@ -68,15 +68,15 @@ function OlderRow({
       <View
         style={{
           flexDirection: 'row',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           gap: 12,
           paddingLeft: 14,
           paddingRight: 12,
           paddingVertical: 12,
         }}
       >
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text selectable={!audioOnly} numberOfLines={2} style={type.rowTitle}>
+        <View style={{ flex: 1, gap: 2, paddingTop: 7 }}>
+          <Text selectable={!audioOnly} style={type.rowTitle}>
             {audioOnly ? t('audioOnly') : text}
           </Text>
           <Text style={type.footnote}>{longDate(item.createdAt)}</Text>

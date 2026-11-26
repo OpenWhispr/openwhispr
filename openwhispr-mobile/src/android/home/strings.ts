@@ -47,6 +47,7 @@ export const homeEnglish = {
   history: 'History',
   copied: 'Copied to clipboard',
   addedToHistory: 'Added to History',
+  savedToFolder: 'Saved to {{folder}}',
   copy: 'Copy',
   retry: 'Retry',
   notSent: 'not sent',

@@ -150,7 +150,10 @@ class DictationService : Service() {
         else -> R.string.ow_bubble_ready
       }))
       .setContentText(getString(if (asleep) R.string.ow_bubble_hidden_notice else R.string.ow_bubble_notice))
-      .setContentIntent(pending).setOngoing(true).build()
+      .setContentIntent(pending).setOngoing(true)
+      // Android 12+ holds a new foreground service's notification back about 10 s; show it at once.
+      .apply { if (Build.VERSION.SDK_INT >= 31) setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE) }
+      .build()
     val type = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
     if (Build.VERSION.SDK_INT >= 29) startForeground(472, notification, type or if (recording) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0)
     else startForeground(472, notification)

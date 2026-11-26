@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useReduceMotion } from '../settings/kit';
@@ -12,6 +13,9 @@ import type { CloudFinishStage } from './cloudFinishStore';
 export { useCloudFinishJob } from './cloudFinishStore';
 
 type StepState = 'done' | 'active' | 'waiting';
+
+const SPINNER_RADIUS = 9;
+const SPINNER_DASH = (2 * Math.PI * SPINNER_RADIUS) / 16;
 
 function Spinner() {
   const n = useNotesLook();
@@ -35,15 +39,25 @@ function Spinner() {
       style={{
         width: 20,
         height: 20,
-        borderRadius: 10,
-        borderWidth: 2,
-        borderStyle: 'dashed',
-        borderColor: n.accent,
         transform: [
           { rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
         ],
       }}
-    />
+    >
+      {/* Drawn, not a dashed border: Android can't fit whole dashes round a circle, so one gap
+          came out short (Josh, 25 Nov). Eight equal dashes. */}
+      <Svg width={20} height={20}>
+        <Circle
+          cx={10}
+          cy={10}
+          r={SPINNER_RADIUS}
+          stroke={n.accent}
+          strokeWidth={2}
+          strokeDasharray={`${SPINNER_DASH} ${SPINNER_DASH}`}
+          fill="none"
+        />
+      </Svg>
+    </Animated.View>
   );
 }
 

@@ -43,6 +43,7 @@ import {
 } from '@/android/settings/bubbleAppearance';
 import { processingSummary } from '@/android/processingFable/places';
 import { GlyphTile } from '@/android/settings/BubbleAssistantScreen';
+import { languageChoice } from '@/android/onboarding/languages';
 
 const HISTORY_LABEL: Record<number, SettingsKey> = {
   [-1]: 'forever',
@@ -163,7 +164,7 @@ export default function SettingsScreen() {
 
   const { initials, name } = getAccountDisplay(user, isGuest);
   const language = registry.languages.find(
-    (item) => item.code === (config?.preferredLanguage ?? 'auto'),
+    (item) => item.code === languageChoice(config?.languages, config?.preferredLanguage),
   );
   const planLabel = usage
     ? usage.isSubscribed

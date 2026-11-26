@@ -64,7 +64,8 @@
         "expo-audio",
         {
           "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for voice recording and transcription.",
-          "enableBackgroundRecording": true
+          "enableBackgroundRecording": true,
+          "enableBackgroundPlayback": false
         }
       ],
       [

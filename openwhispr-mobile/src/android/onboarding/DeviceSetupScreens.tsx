@@ -268,7 +268,10 @@ function SetupRow({ item, divider, added }: { item: Item; divider?: boolean; add
   );
 }
 
-// Waiting its turn: a dashed ring the size of the V1 download ring.
+// Waiting its turn: a dashed ring the size of the V1 download ring, twelve equal dashes so the
+// seam doesn't leave one gap short.
+const QUEUED_DASH = (2 * Math.PI * 11) / 24;
+
 function QueuedRing() {
   const k = useTheme().tokens;
   return (
@@ -279,7 +282,7 @@ function QueuedRing() {
         r={11}
         stroke={k.dotIdle}
         strokeWidth={2}
-        strokeDasharray="3 3"
+        strokeDasharray={`${QUEUED_DASH} ${QUEUED_DASH}`}
         fill="none"
       />
     </Svg>

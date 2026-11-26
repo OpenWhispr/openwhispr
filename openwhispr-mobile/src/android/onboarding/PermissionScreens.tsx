@@ -15,7 +15,6 @@ import {
   LinkButton,
   PillButton,
   Halo,
-  PulseRings,
   Screen,
   onboardingColorsFor,
   useOnboardingColors,
@@ -149,7 +148,6 @@ function OverlayArt() {
           }}
         >
           <View style={[p.overlayBubble, s.center]}>
-            <PulseRings size={89.6} color="rgba(51,102,227,0.16)" />
             <Halo size={117.6} color="rgba(51,102,227,0.08)" />
             <Halo size={89.6} color="rgba(51,102,227,0.16)" />
             <BubbleIcon size={56} />

@@ -271,9 +271,13 @@ class AndroidDictationModule : Module() {
       val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
       clipboard.setPrimaryClip(android.content.ClipData.newPlainText("OpenWhispr", text))
     }
-    AsyncFunction("startRecording") {
+    // [voiceLevel]: getRecordingLevel hears the voice above the room, as the bubble's bars do (practice bubble).
+    AsyncFunction("startRecording") { voiceLevel: Boolean? ->
       check(recorder == null) { "A recording is already active." }
-      val next = WavRecorder(context)
+      val next = if (voiceLevel == true) {
+        val meter = VoiceMeter(windowMs = DictationService.LEVEL_WINDOW_MS)
+        WavRecorder(context, readMillis = DictationService.LEVEL_WINDOW_MS, measure = meter::level)
+      } else WavRecorder(context)
       try { next.start(); recorder = next } catch (error: Exception) { next.close(); throw error }
     }
     Function("getRecordingLevel") { recorder?.level ?: 0f }

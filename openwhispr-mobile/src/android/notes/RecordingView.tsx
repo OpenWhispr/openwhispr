@@ -5,7 +5,7 @@ import { router, useNavigation } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
 import { useNavigationBarCanvas } from '../navigationBar';
-import { IconButton, useNotesLook } from './look';
+import { BackButton, useNotesLook } from './look';
 import { MetaChip, NoteTabs, type NoteTab } from './noteParts';
 import { useNotesT } from './strings';
 import { useReduceMotion } from '../settings/kit';
@@ -107,7 +107,7 @@ export type RecordingStatus = 'connecting' | 'live' | 'reconnecting' | 'error';
 
 /**
  * Figma R1: the tab bar and header go away; a white status pill (red dot, time) sits beside
- * a ∨ that goes back to the notes; the meeting's title and chips; Live transcript and Notes
+ * a back chevron (leaving asks to keep recording or stop and save); the meeting's title and chips; Live transcript and Notes
  * as two tabs; and one glass Stop and save at the bottom. No pause for beta.
  */
 export function RecordingView({
@@ -175,11 +175,7 @@ export function RecordingView({
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16 }}>
-        <IconButton
-          icon="ChevronDown"
-          label={t('minimise')}
-          onPress={() => (router.canGoBack() ? router.back() : undefined)}
-        />
+        <BackButton onPress={() => (router.canGoBack() ? router.back() : undefined)} />
         <View
           accessibilityRole="timer"
           accessibilityLiveRegion="polite"
@@ -293,7 +289,7 @@ export function RecordingView({
           ]}
         >
           <View style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: n.onGlass }} />
-          <Text style={{ color: n.onGlass, fontSize: 17, lineHeight: 22, fontWeight: '600' }}>
+          <Text style={{ color: n.onGlass, fontSize: 17, lineHeight: 22, fontWeight: '500' }}>
             {stopLabel ?? t('stopAndSave')}
           </Text>
         </Pressable>

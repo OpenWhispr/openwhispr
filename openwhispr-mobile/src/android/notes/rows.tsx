@@ -398,7 +398,7 @@ export function SwipeRow({
             <Animated.View style={trashStyle}>
               <SystemIcon name="trash" mdName="Trash2" size={20} color={n.onGlass} />
             </Animated.View>
-            <Text style={{ fontSize: 13, lineHeight: 16, fontWeight: '600', color: n.onGlass }}>
+            <Text style={{ fontSize: 13, lineHeight: 16, fontWeight: '500', color: n.onGlass }}>
               {t('delete')}
             </Text>
           </Pressable>

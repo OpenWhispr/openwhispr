@@ -20,3 +20,15 @@ export function initialLanguages(saved: string[] | undefined, preferred?: string
   if (picked.length) return [...new Set(picked)];
   return [matchLanguage(AndroidDictation?.getLocale?.() ?? 'en-US') ?? 'en-US'];
 }
+
+/**
+ * The one choice Settings › Language shows: what dictation uses now. Settings' own pick when one is
+ * saved; else the onboarding list's language when it holds one (sent as the hint); else 'auto'
+ * (two or more, or none: dictation works it out). Mirrors getPreferredTranscriptionLanguage.
+ */
+export function languageChoice(saved: string[] | undefined, preferred?: string): string {
+  if (preferred) return preferred;
+  const picked = (saved ?? []).map(matchLanguage).filter((code): code is string => code !== null);
+  const bases = new Set(picked.map((code) => code.split('-')[0]));
+  return bases.size === 1 ? picked[0] : 'auto';
+}

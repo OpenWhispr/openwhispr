@@ -86,7 +86,6 @@ export const KIND_APPS: Record<ToneKind, AppLogo[]> = {
 const ENGLISH: ExampleSet = {
   question: 'What are you up to later?',
   to: 'To',
-  subject: 'Re: Proposal',
   notes: 'Call notes',
   intro: INTRO_EXAMPLES,
   examples: EXAMPLES,

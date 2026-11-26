@@ -13,7 +13,7 @@ import * as transcriptionErrors from '@/lib/transcriptionErrors';
 import { toFriendlyTranscriptionErrorMessage as androidMessage } from '@/lib/transcriptionErrors.android';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() }, useFocusEffect: jest.fn() }));
 jest.mock('@react-navigation/native', () => ({
@@ -147,6 +147,34 @@ jest.mock('@/android/pipeline', () => ({
 }));
 jest.mock('@/hooks/useAppInit', () => ({ useAppInit: jest.fn() }));
 const mockPickFile = jest.fn();
+const mockSaveImportedNote = jest.fn((..._args: unknown[]) => ({ id: 42 }));
+const mockResolveDestination = jest.fn();
+jest.mock('@/lib/notes/importDestination', () => ({
+  ImportDestinationError: class extends Error {},
+  resolveImportDestination: (input: unknown) => {
+    mockResolveDestination(input);
+    return { ownerId: null, spaceId: 1, folderId: 7, isPrivate: false, label: 'Personal' };
+  },
+  saveImportedNote: (...args: unknown[]) => mockSaveImportedNote(...args),
+}));
+jest.mock('@/android/notes/library', () => ({
+  defaultFolderFor: (folders: { id: number; isDefault?: boolean }[]) =>
+    (folders.find((folder) => folder.isDefault) ?? folders[0])?.id,
+}));
+jest.mock('@/store/useNotesStore', () => ({
+  useNotesStore: {
+    getState: () => ({
+      isInitialized: true,
+      initialize: jest.fn(),
+      folders: [{ id: 7, isDefault: true }],
+      loadNotes: jest.fn(),
+      loadFolders: jest.fn(),
+    }),
+  },
+}));
+jest.mock('@/store/useProcessingModeStore', () => ({
+  useProcessingModeStore: { getState: () => ({ activeMode: 'cloud' }) },
+}));
 const mockProcessUpload = jest.fn();
 const mockSaveUpload = jest.fn();
 const mockSaveFailedUpload = jest.fn();
@@ -432,8 +460,11 @@ it('allows a new Cloud upload after returning to Home', async () => {
     onFocus();
   });
   await act(async () => fireEvent.press(screen.getByText('uploadAudio')));
-  expect(mockSaveUpload).toHaveBeenCalledWith(
-    expect.objectContaining({ text: 'Fresh upload', provider: 'cloud' }),
+  expect(mockSaveImportedNote).toHaveBeenCalledWith(
+    expect.objectContaining({ label: 'Personal' }),
+    'Fresh upload',
+    'input.wav',
+    'importDefaultTitle',
   );
   // The finished bar stays full for a moment before the card goes.
   await act(async () => new Promise((resolve) => setTimeout(resolve, 600)));
@@ -653,11 +684,14 @@ it('copies a Try it dictation to the clipboard and says so at the bottom', async
   expect(screen.getByText('dictate')).toBeTruthy();
 });
 
-it('says Added to History once an upload is written up', async () => {
+it('saves an upload as a note in Personal, not in History, and says so', async () => {
   render(<AndroidHome />);
   await act(async () => fireEvent.press(screen.getByText('uploadAudio')));
-  expect(mockSaveUpload).toHaveBeenCalled();
-  expect(screen.getByText('addedToHistory', { includeHiddenElements: true })).toBeTruthy();
+  expect(mockResolveDestination).toHaveBeenCalledWith({ folderId: 7, isPrivate: false });
+  expect(mockSaveImportedNote).toHaveBeenCalled();
+  expect(mockSaveUpload).not.toHaveBeenCalled();
+  expect(screen.getByText('savedToFolder', { includeHiddenElements: true })).toBeTruthy();
+  expect(router.push).toHaveBeenCalledWith('/(tabs)/(notes)/42', { withAnchor: true });
 });
 
 describe('bubble card buttons by screen width', () => {

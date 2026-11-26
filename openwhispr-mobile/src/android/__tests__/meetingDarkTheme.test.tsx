@@ -36,7 +36,7 @@ jest.mock('@/components/ui/SystemIcon', () => ({
 }));
 jest.mock('react-native-svg', () => {
   const { View } = require('react-native');
-  return { __esModule: true, default: View, SvgXml: View };
+  return { __esModule: true, default: View, SvgXml: View, Circle: View };
 });
 jest.mock('@/android/notes/noteChips', () => ({ RecordingNoteChips: () => null }));
 jest.mock('@/android/navigationBar', () => ({

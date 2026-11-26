@@ -221,7 +221,6 @@ describe.each([
       backgroundColor: tokens.surface,
     });
     expect(textColour('soundsLikeMe')).toBe(tokens.onGlass);
-    expect(textColour('swipeToCompare')).toBe(tokens.secondary);
   });
 
   it('draws the summary rows on a flat card with tiles', () => {

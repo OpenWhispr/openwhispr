@@ -335,7 +335,7 @@ export function NoSummaryCard({
         ]}
       >
         <SystemIcon name="sparkles" mdName="Sparkles" size={18} color={n.onGlass} />
-        <Text style={{ color: n.onGlass, fontSize: 17, lineHeight: 22, fontWeight: '600' }}>
+        <Text style={{ color: n.onGlass, fontSize: 17, lineHeight: 22, fontWeight: '500' }}>
           {t('writeSummary')}
         </Text>
       </Pressable>

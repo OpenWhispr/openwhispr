@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Alert, FlatList, View } from 'react-native';
-import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import registry from '@/config/languageRegistry.json';
 import { useConfigStore } from '@/store/useConfigStore';
@@ -8,42 +7,61 @@ import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { safeHaptics } from '@/lib/utils';
 import { speechModelSupportsLanguages } from '@/android/speechCapabilities';
 import type { AndroidSpeechModelId } from '@/android/speechSelection';
-import { Badge, ListRow, SettingsPage, useSettings } from '@/android/settings/kit';
+import {
+  Badge,
+  Group,
+  ListRow,
+  SettingsPage,
+  showToast,
+  useSettings,
+} from '@/android/settings/kit';
+import { SystemIcon } from '@/components/ui/SystemIcon';
 import { MODEL_ROWS, modelName } from '@/android/settings/modelCatalog';
 import { useSettingsT } from '@/android/settings/strings';
 import { useNavigationBar } from '@/android/navigationBar';
 import { useSettingsLook } from '@/android/settings/look';
 import { SearchField } from '@/android/controls';
+import { languageChoice } from '@/android/onboarding/languages';
 
 function Divider() {
   const { look } = useSettingsLook();
   return <View style={{ height: 1, marginLeft: 14, backgroundColor: look.hairline }} />;
 }
 
-/** Settings → Language: one searchable list; a tap saves and goes straight back. */
+/**
+ * Settings → Language: what dictation uses now in its own Current card, then every other choice
+ * (Auto-detect first, then A to Z). A search filters one list instead. A tap saves and moves the
+ * pick into the Current card, staying on the screen.
+ */
 export default function LanguageScreen() {
   const t = useSettingsT();
   const settings = useSettings();
   // Settings' card: the glass edge, corners 16.
-  const { edgeCard: cardStyle } = useSettingsLook();
+  const { edgeCard: cardStyle, sectionLabel } = useSettingsLook();
   const config = useConfigStore((s) => s.config);
   const local = useProcessingModeStore((s) => s.activeMode === 'private');
   const [query, setQuery] = useState('');
-  // The card stops 16 dp above the gesture handle or the button bar.
+  // The list stops 16 dp above the gesture handle or the button bar.
   const { buttons, inset } = useNavigationBar();
-  const selected = config?.preferredLanguage ?? 'auto';
+  // What dictation uses now, so a language picked in onboarding shows here too.
+  const selected = languageChoice(config?.languages, config?.preferredLanguage);
   const search = query.trim().toLowerCase();
-  const languages = registry.languages.filter(
-    (item) =>
-      !search || item.label.toLowerCase().includes(search) || item.code.toLowerCase() === search,
+  const current = registry.languages.find((item) => item.code === selected);
+  // Without a search, the current choice sits in its own card above, so the list leaves it out.
+  const languages = registry.languages.filter((item) =>
+    search
+      ? item.label.toLowerCase().includes(search) || item.code.toLowerCase() === search
+      : item.code !== current?.code,
   );
 
-  const save = (code: string, speech?: AndroidSpeechModelId) => {
+  const save = (code: string, label: string, speech?: AndroidSpeechModelId) => {
     void useConfigStore.getState().updateConfig({
       preferredLanguage: code,
       ...(speech ? { androidSpeechModel: speech } : {}),
     });
-    router.back();
+    // Stay on the screen: the pick moves into the Current card above.
+    setQuery('');
+    showToast(t('languageSet', { language: code === 'auto' ? t('autoDetect') : label }));
   };
 
   const choose = (code: string, label: string) => {
@@ -51,7 +69,7 @@ export default function LanguageScreen() {
     const speech: AndroidSpeechModelId = config?.androidSpeechModel ?? 'parakeet-v3';
     // Dictation on this phone: warn when its speech model can't hear the language.
     if (!local || code === 'auto' || speechModelSupportsLanguages(speech, [code])) {
-      save(code);
+      save(code, label);
       return;
     }
     const other = MODEL_ROWS.find(
@@ -69,18 +87,22 @@ export default function LanguageScreen() {
       [
         // With nothing on the phone that can do it, the language is only kept on purpose.
         ...(other ? [] : [{ text: t('cancel'), style: 'cancel' as const }]),
-        { text: t('keepModel', { model }), onPress: () => save(code) },
+        { text: t('keepModel', { model }), onPress: () => save(code, label) },
         ...(other
           ? [
               {
                 text: t('useModel', { model: modelName(other.id) }),
-                onPress: () => save(code, other.id as AndroidSpeechModelId),
+                onPress: () => save(code, label, other.id as AndroidSpeechModelId),
               },
             ]
           : []),
       ],
     );
   };
+
+  const autoBadge = (onSelected: boolean) => (
+    <Badge label={t('recommended')} onSelected={onSelected} />
+  );
 
   return (
     <SettingsPage title={t('language')} scroll={false}>
@@ -90,9 +112,26 @@ export default function LanguageScreen() {
         placeholder={t('searchLanguages')}
         clearLabel={t('clearSearch')}
       />
+      {!search && current && (
+        <Group title={t('currentLanguage')}>
+          <ListRow
+            title={current.code === 'auto' ? t('autoDetect') : current.label}
+            badge={current.code === 'auto' ? autoBadge(false) : undefined}
+            subtitle={t(current.code === 'auto' ? 'currentAutoBody' : 'currentLanguageBody')}
+            trailing={
+              <SystemIcon name="checkmark" mdName="Check" size={20} color={settings.accent} />
+            }
+          />
+        </Group>
+      )}
+      {!search && (
+        <Text accessibilityRole="header" style={[sectionLabel, { marginBottom: -4 }]}>
+          {t('allLanguages')}
+        </Text>
+      )}
       {/* One card that fills the room left down to the handle or bar and scrolls inside, so the
           list never runs off the bottom of the screen. */}
-      <View style={[cardStyle, { flexShrink: 1 }]}>
+      <View style={[cardStyle, { flexShrink: 1, marginBottom: 16 + (buttons ? 0 : inset) }]}>
         <FlatList
           data={languages}
           keyExtractor={(item) => item.code}
@@ -107,11 +146,7 @@ export default function LanguageScreen() {
           renderItem={({ item }) => (
             <ListRow
               title={item.code === 'auto' ? t('autoDetect') : item.label}
-              badge={
-                item.code === 'auto' ? (
-                  <Badge label={t('recommended')} onSelected={selected === 'auto'} />
-                ) : undefined
-              }
+              badge={item.code === 'auto' ? autoBadge(selected === 'auto') : undefined}
               selected={selected === item.code}
               trailing={null}
               onPress={() => choose(item.code, item.label)}
@@ -119,14 +154,6 @@ export default function LanguageScreen() {
           )}
         />
       </View>
-      <Text
-        style={[
-          settings.subtitle,
-          { paddingHorizontal: 4, marginTop: -8, marginBottom: 16 + (buttons ? 0 : inset) },
-        ]}
-      >
-        {search ? '' : t('languagesFooter', { count: registry.languages.length - 1 })}
-      </Text>
     </SettingsPage>
   );
 }

@@ -33,6 +33,15 @@ import {
   type AndroidJob,
 } from '@/android/pipeline';
 import { useFileUpload } from '@/hooks/useFileUpload.android';
+import { useNotesStore } from '@/store/useNotesStore';
+import { defaultFolderFor } from '@/android/notes/library';
+import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import {
+  ImportDestinationError,
+  resolveImportDestination,
+  saveImportedNote,
+  type ImportDestination,
+} from '@/lib/notes/importDestination';
 import { getTranscriptionProvider } from '@/lib/inferenceRouting';
 import { accountRequiredForCloud, showAccountRequiredAlert } from '@/lib/accountAccess';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -128,8 +137,7 @@ export default function AndroidHome() {
   const closeNotch = () =>
     setNotch((current) => current && (current.doneText ? current : { ...current, closing: true }));
   const uploadDone = useRef(false);
-  const uploadStartedAt = useRef(0);
-  // Set when an upload or dictation finished: take the person to its new History row once
+  // Set when a dictation finished: take the person to its new History row once
   // the progress card has gone. Holds the time the work started, so an older row (history
   // off, nothing saved) is never mistaken for the new one.
   const revealNewest = useRef<number | null>(null);
@@ -142,14 +150,38 @@ export default function AndroidHome() {
     (message: string) => showSettingsToast(message, 'success', undefined, { aboveTabBar: true }),
     [],
   );
+  // Upload audio makes a note in Personal, as Notes' upload does, picked here with no extra screen.
+  const uploadDestination = useRef<ImportDestination | null>(null);
   const { stage, cancel, pickAndTranscribeFile } = useFileUpload({
+    // saveImportedNote refuses a note for an account that changed mid-upload.
+    saveToHistory: false,
     onError: (error) => Alert.alert(t('errorTitle'), error.message),
     onPicked: (name, size) =>
       setNotch({ flow: 'upload', name, size, startedAt: Date.now(), doneText: null }),
-    onComplete: () => {
+    onComplete: (text, fileName) => {
+      const destination = uploadDestination.current;
+      if (!destination) return;
+      let noteId: number;
+      try {
+        noteId = saveImportedNote(destination, text, fileName, t('importDefaultTitle')).id;
+      } catch (error) {
+        Alert.alert(
+          t('errorTitle'),
+          error instanceof ImportDestinationError
+            ? t(error.translationKey)
+            : (error as Error).message,
+        );
+        return;
+      }
+      useNotesStore.getState().loadNotes();
+      useNotesStore.getState().loadFolders();
       uploadDone.current = true;
-      revealNewest.current = uploadStartedAt.current;
-      setNotch((current) => current && { ...current, doneText: h('addedToHistory') });
+      setNotch(
+        (current) =>
+          current && { ...current, doneText: h('savedToFolder', { folder: destination.label }) },
+      );
+      // Open it, as Notes' upload does; Back from it lands on the Notes home.
+      router.push(`/(tabs)/(notes)/${noteId}`, { withAnchor: true });
     },
   });
 
@@ -221,13 +253,29 @@ export default function AndroidHome() {
       showAccountRequiredAlert(t('upload'));
       return;
     }
+    try {
+      // Private's default folder (Personal), where Notes' New puts a note.
+      const notes = useNotesStore.getState();
+      if (!notes.isInitialized) notes.initialize();
+      uploadDestination.current = resolveImportDestination({
+        folderId: defaultFolderFor(useNotesStore.getState().folders),
+        isPrivate: useProcessingModeStore.getState().activeMode === 'private',
+      });
+    } catch (error) {
+      Alert.alert(
+        t('errorTitle'),
+        error instanceof ImportDestinationError
+          ? t(error.translationKey)
+          : (error as Error).message,
+      );
+      return;
+    }
     const begin = async () => {
       if (action.current || startedOnVisit !== navigationRevision.current) return;
       action.current = true;
       setWorking(true);
       setNotch(null);
       uploadDone.current = false;
-      uploadStartedAt.current = Date.now();
       try {
         await pickAndTranscribeFile();
       } catch {

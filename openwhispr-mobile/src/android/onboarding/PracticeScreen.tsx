@@ -72,6 +72,9 @@ export function PracticeScreen({ onBack, onNext }: { onBack: () => void; onNext:
         ]);
         return;
       }
+      // Android's permission dialog closes the keyboard and takes the box's cursor; Allow gives it
+      // back, so the first tap still ends with the box focused and listening (Josh, 25 Nov).
+      if (!input.current?.isFocused()) input.current?.focus();
       if ((await recorder.current.start()) && mounted.current) setPhase('listening');
     } catch (failure) {
       if (mounted.current) setError(practiceFailure(t, failure));
