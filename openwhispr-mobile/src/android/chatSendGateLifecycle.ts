@@ -1,4 +1,4 @@
-import { confirmCloudOnce } from '@/lib/alerts';
+import { confirmCloudOnce } from '@/android/lib/alerts';
 import { isChatEnabled } from '@/lib/dictationAgent';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';

@@ -1,4 +1,4 @@
-import type { PasswordResetResponse } from '@/lib/authClient.android';
+import type { PasswordResetResponse } from '@/android/lib/authClient';
 
 /**
  * The reset email links here. Android opens the app on it as an App Link once openwhispr.com

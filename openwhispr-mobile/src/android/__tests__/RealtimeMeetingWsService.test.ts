@@ -4,6 +4,7 @@ import { LivePCMStreaming } from '../../../modules/live-pcm-streaming/src/index.
 jest.mock('@/lib/apiClient', () => ({
   api: { post: jest.fn(async () => ({ clientSecret: 'test' })) },
 }));
+jest.mock('@/android/lib/apiClient', () => jest.requireMock('@/lib/apiClient'));
 jest.mock('expo-network', () => ({ getNetworkStateAsync: jest.fn() }));
 jest.mock('../../../modules/live-pcm-streaming/src/index.android', () => ({
   DEFAULT_SAMPLE_RATE: 24000,

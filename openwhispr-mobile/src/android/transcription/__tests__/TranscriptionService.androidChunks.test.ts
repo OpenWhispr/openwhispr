@@ -1,12 +1,3 @@
-jest.mock('@/android/transcription/cloudAudio', () =>
-  jest.requireActual('@/android/transcription/cloudAudio'),
-);
-jest.mock('@/android/transcription/transcriptionLifecycle', () =>
-  jest.requireActual('@/android/transcription/transcriptionLifecycle'),
-);
-jest.mock('@/android/transcription/uploadTranscriptionAudio', () =>
-  jest.requireActual('@/android/transcription/uploadTranscriptionAudio'),
-);
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { BackgroundUploader } from '../../../../modules/background-uploader/src';

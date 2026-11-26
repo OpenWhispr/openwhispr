@@ -10,7 +10,7 @@ import {
   saveAuthorizedGoogleCalendarAccount,
 } from './googleAuth';
 import { captureGoogleCalendarException } from '@/services/calendar/googleCalendarTelemetry';
-import { requiresRealAccount } from '@/lib/accountAccess';
+import { requiresRealAccount } from '@/android/lib/accountAccess';
 
 /**
  * Connecting Google Calendar on Android (Figma C2 and 19.3): Google's own account and consent

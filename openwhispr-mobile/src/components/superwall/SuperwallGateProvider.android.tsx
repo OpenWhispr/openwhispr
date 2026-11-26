@@ -9,7 +9,7 @@ import type {
   SuperwallPurchaseCompletion,
 } from '@/hooks/useSuperwallGate';
 import { useAuthStore } from '@/android/store/useAuthStore';
-import { requiresRealAccount } from '@/lib/accountAccess';
+import { requiresRealAccount } from '@/android/lib/accountAccess';
 import { useUsageStore } from '@/android/store/useUsageStore';
 import {
   isTransactionalSuperwallPlacement,
@@ -17,9 +17,9 @@ import {
   SUPERWALL_PLACEMENTS,
   type SuperwallPlacement,
 } from '@/lib/superwall';
-import { Sentry } from '@/lib/sentry';
+import { Sentry } from '@/android/lib/sentry';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';
-import { logPaywallViewed, logSubscription } from '@/lib/appsflyer';
+import { logPaywallViewed, logSubscription } from '@/android/lib/appsflyer';
 import { recordPurchaseForBilling } from './recordPurchaseForBilling';
 import { createAffiliatePaywallSession } from '@/lib/affiliatePaywall';
 

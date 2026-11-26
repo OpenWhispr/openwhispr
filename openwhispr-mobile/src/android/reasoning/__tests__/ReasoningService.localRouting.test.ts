@@ -11,6 +11,7 @@ jest.mock('@/lib/apiClient', () => ({
     })),
   },
 }));
+jest.mock('@/android/lib/apiClient', () => jest.requireMock('@/lib/apiClient'));
 
 jest.mock('@/lib/localReasoning', () => ({
   fitsLocalCleanupOutput: jest.fn(),

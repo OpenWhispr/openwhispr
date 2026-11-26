@@ -90,6 +90,7 @@ jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAut
 jest.mock('@/lib/appsflyer', () => ({
   logTranscriptionCompleted: mockLogTranscriptionCompleted,
 }));
+jest.mock('@/android/lib/appsflyer', () => jest.requireMock('@/lib/appsflyer'));
 
 jest.mock('../../../../modules/audio-tools/src', () => ({
   AudioTools: {

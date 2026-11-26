@@ -11,7 +11,7 @@ import {
 import { LocalWhisperService } from '@/services/transcription/LocalWhisperService';
 import { LocalTranscriptionService } from '@/android/transcription/LocalTranscriptionService';
 import { useAuthStore } from '@/android/store/useAuthStore';
-import { getClientVersionHeader } from '@/lib/apiClient';
+import { getClientVersionHeader } from '@/android/lib/apiClient';
 import {
   buildDictationHintTiers,
   buildLlmDictionary,

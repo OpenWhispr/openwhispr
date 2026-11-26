@@ -1,5 +1,5 @@
 import { androidCopy } from '@/lib/androidCopy';
-import type { AccountAccessPresentation } from '../lib/accountAccessCore';
+import type { AccountAccessPresentation } from '@/android/lib/accountAccessCore';
 
 const ANDROID_FEATURE_KEYS: Record<string, string> = {
   'cloud transcription': 'workflowAlerts.cloudTranscription',

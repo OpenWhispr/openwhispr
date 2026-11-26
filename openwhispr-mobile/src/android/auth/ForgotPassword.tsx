@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import { requestPasswordResetEmail, type PasswordResetResponse } from '@/lib/authClient.android';
+import { requestPasswordResetEmail, type PasswordResetResponse } from '@/android/lib/authClient';
 import { safeHaptics } from '@/lib/utils';
 import { showToast } from '../settings/kit';
 import { AndroidDictation } from '../../../modules/android-dictation/src';

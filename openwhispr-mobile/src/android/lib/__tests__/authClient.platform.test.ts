@@ -19,9 +19,10 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: (...args: Parameters<typeof mockDelete>) => mockDelete(...args),
 }));
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
-jest.mock('../apiClient', () => ({ getClientVersionHeader: () => ({}) }));
+jest.mock('@/lib/apiClient', () => ({ getClientVersionHeader: () => ({}) }));
+jest.mock('@/android/lib/apiClient', () => jest.requireMock('@/lib/apiClient'));
 
-const { clearSession } = require('../authClient') as typeof import('../authClient');
+const { clearSession } = require('@/lib/authClient') as typeof import('@/lib/authClient');
 
 it('keeps default SDK setup to the origin headers, free of Android response and cookie overrides', () => {
   // Only the origin headers from main (#3088); no Android response hook.

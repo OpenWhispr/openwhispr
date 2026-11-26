@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
-import type { AuthUser } from '@/lib/authClient.android';
+import type { AuthUser } from '@/android/lib/authClient';
 
 /**
  * An account whose session the server ended (a password change, a sign-out elsewhere, an expiry).

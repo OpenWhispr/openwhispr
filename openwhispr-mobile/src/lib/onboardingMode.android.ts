@@ -1,6 +1,2 @@
-import { createOnboardingMode } from './onboardingModeCore';
-import { androidOnboardingModePolicy } from '../android/onboardingMode';
-
-export const { saveOnboardingConfig, chooseOnboardingMode } = createOnboardingMode(
-  androidOnboardingModePolicy,
-);
+// Android's copy lives in src/android; shared files still import it from here.
+export * from '@/android/lib/onboardingMode';

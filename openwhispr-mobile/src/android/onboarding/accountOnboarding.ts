@@ -1,4 +1,4 @@
-import { api } from '@/lib/apiClient';
+import { api } from '@/android/lib/apiClient';
 import { useAuthStore } from '@/android/store/useAuthStore';
 
 /**

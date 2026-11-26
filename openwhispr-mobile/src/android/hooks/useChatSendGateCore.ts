@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
-import { requiresRealAccount, showAccountRequiredAlert } from '@/lib/accountAccess';
-import { confirmCloudOnce } from '@/lib/alerts';
+import { requiresRealAccount, showAccountRequiredAlert } from '@/android/lib/accountAccess';
+import { confirmCloudOnce } from '@/android/lib/alerts';
 import { isChatEnabled } from '@/lib/dictationAgent';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { useAuthStore } from '@/android/store/useAuthStore';

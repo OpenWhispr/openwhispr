@@ -4,7 +4,7 @@ import { MenuView, type MenuAction } from '@react-native-menu/menu';
 import { Text } from '@/components/ui/Text';
 import { useIosColor } from '@/config/colors.android';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { confirmDestructive } from '@/lib/alerts';
+import { confirmDestructive } from '@/android/lib/alerts';
 import type {
   NoteAccessGrant,
   NoteAccessState,

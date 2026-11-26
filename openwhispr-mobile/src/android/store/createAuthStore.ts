@@ -15,8 +15,8 @@ import {
   initAuthenticatedUser,
   type AuthUser,
   type SocialAuthResult,
-} from '@/lib/authClient';
-import { Sentry } from '@/lib/sentry';
+} from '@/android/lib/authClient';
+import { Sentry } from '@/android/lib/sentry';
 import { useUsageStore } from '@/android/store/useUsageStore';
 import { clearAllSessions as clearAgentSessions } from '@/services/agent/AgentComposerService';
 import { claimNoteShareTokens, clearNoteShareTokens } from '@/lib/notes/noteShareTokens';

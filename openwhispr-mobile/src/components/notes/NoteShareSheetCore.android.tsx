@@ -22,7 +22,7 @@ import type { UserConfig } from '@/types';
 import type { NoteShareCopy } from './NoteSharePrincipalCore.android';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
-import { confirmDestructive } from '@/lib/alerts';
+import { confirmDestructive } from '@/android/lib/alerts';
 import { isValidEmail } from '@/lib/utils';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { useNotesStore } from '@/android/store/useNotesStore';

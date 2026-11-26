@@ -9,6 +9,7 @@ jest.mock('@/android/meetingRecordingRepair', () => ({
   repairAndroidMeetingRecordingPaths: (...args: unknown[]) => mockRepair(...args),
 }));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+jest.mock('@/android/lib/sentry', () => jest.requireMock('@/lib/sentry'));
 jest.mock('@/store/useNotesStore', () => ({
   useNotesStore: { getState: () => ({ loadNotes: () => {} }) },
 }));

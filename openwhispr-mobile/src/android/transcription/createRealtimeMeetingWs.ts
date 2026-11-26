@@ -13,7 +13,7 @@
  */
 import { Buffer } from 'buffer';
 import * as Network from 'expo-network';
-import { api } from '@/lib/apiClient';
+import { api } from '@/android/lib/apiClient';
 import { withRetry, createApiRetryStrategy } from '@/lib/retry';
 import {
   LivePCMStreaming,

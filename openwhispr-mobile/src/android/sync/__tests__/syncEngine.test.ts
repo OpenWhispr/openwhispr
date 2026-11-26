@@ -32,6 +32,7 @@ jest.mock('@/lib/apiClient', () => {
       error.code === 'POLICY_CLOUD_BACKUP_BLOCKED',
   };
 });
+jest.mock('@/android/lib/apiClient', () => jest.requireMock('@/lib/apiClient'));
 
 const mockAuthState = { user: { id: 'user-1' } as { id: string } | null, isGuest: false };
 jest.mock('@/store/useAuthStore', () => ({

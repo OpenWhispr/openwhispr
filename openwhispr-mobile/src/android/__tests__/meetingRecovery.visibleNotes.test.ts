@@ -70,6 +70,7 @@ jest.mock('expo-file-system/legacy', () => ({
   readDirectoryAsync: jest.fn(),
 }));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+jest.mock('@/android/lib/sentry', () => jest.requireMock('@/lib/sentry'));
 jest.mock('@sentry/react-native', () => ({ captureException: jest.fn() }));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: null }), subscribe: () => () => {} },
@@ -91,6 +92,7 @@ jest.mock('@/android/lib/notes/localMeetingNotes', () =>
   jest.requireMock('@/lib/notes/localMeetingNotes'),
 );
 jest.mock('@/lib/appsflyer', () => ({ logTranscriptionCompleted: jest.fn() }));
+jest.mock('@/android/lib/appsflyer', () => jest.requireMock('@/lib/appsflyer'));
 jest.mock('@/data/remote/notesApi', () => ({ deleteNote: jest.fn() }));
 jest.mock('@/android/dictation/localReasoningFallback', () => ({
   promptLocalReasoningFallback: jest.fn(),

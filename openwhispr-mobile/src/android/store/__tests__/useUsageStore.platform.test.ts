@@ -1,3 +1,5 @@
+// One ApiError class for both platforms' stores in this test (each bundle has only its own).
+jest.mock('@/android/lib/apiClient', () => jest.requireActual('@/lib/apiClient'));
 import { Platform } from 'react-native';
 import { fetchUsage, type UsageInfo } from '@/android/remote/usageApi';
 import { ApiError } from '@/lib/apiClient';

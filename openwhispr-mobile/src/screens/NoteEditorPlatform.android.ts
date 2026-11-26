@@ -1,6 +1,6 @@
 import type { MutableRefObject } from 'react';
 import type { Note } from '@/data/types';
-import type { AuthUser } from '@/lib/authClient';
+import type { AuthUser } from '@/android/lib/authClient';
 import type { ProcessingMode } from '@/types';
 
 export type EditorCopy = (

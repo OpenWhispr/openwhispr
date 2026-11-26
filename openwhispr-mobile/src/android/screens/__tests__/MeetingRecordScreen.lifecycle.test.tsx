@@ -265,7 +265,9 @@ jest.mock('@/store/useProcessingModeStore', () => ({
 jest.mock('@/lib/accountAccess', () => ({
   canRunCloudMeeting: (_user: unknown, mode: string) => mode === 'cloud',
 }));
+jest.mock('@/android/lib/accountAccess', () => jest.requireMock('@/lib/accountAccess'));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+jest.mock('@/android/lib/sentry', () => jest.requireMock('@/lib/sentry'));
 jest.mock('@/lib/superwall', () => ({ SUPERWALL_PLACEMENTS: { meetingRecordStart: 'meeting' } }));
 jest.mock('@/services/transcription/RealtimeMeetingWsService.android', () => ({
   startRealtimeMeetingWs: (...args: unknown[]) => mockRealtimeStart(...args),

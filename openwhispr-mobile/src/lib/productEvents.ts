@@ -869,8 +869,7 @@ export function captureDictationContext(
 /**
  * dictation_completed, from a dictation that delivered its text: the app's
  * own recorder (useAudioRecording) and the keyboard (useKeyboardHandoff).
- * Fire-and-forget, so it never holds up or breaks the dictation. The same
- * dictation also counts toward the ad-measurement milestone (dictationMilestone).
+ * Fire-and-forget, so it never holds up or breaks the dictation.
  */
 export function recordDictationCompleted(dictation: {
   context: ProductEventsCaptureContext;
@@ -881,9 +880,6 @@ export function recordDictationCompleted(dictation: {
   retranscribe: boolean;
 }): void {
   runtime?.recordDictationCompleted(dictation).catch(() => undefined);
-  const { recordDictationMilestone } =
-    require('@/lib/dictationMilestone') as typeof import('@/lib/dictationMilestone');
-  recordDictationMilestone(dictation);
 }
 
 /** Called while the saved config is still opted out, before persisting an opt-in. */

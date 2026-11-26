@@ -18,7 +18,7 @@ import {
 } from '@/lib/transcriptAudio';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { snapshotTextInference, snapshotTranscriptionJob } from '@/lib/inferenceRouting';
-import { logTranscriptionCompleted } from '@/lib/appsflyer';
+import { logTranscriptionCompleted } from '@/android/lib/appsflyer';
 import type { KeyboardTone, Transcript, TranscriptionProvider } from '@/types';
 import type {
   TranscriptLifecycle,

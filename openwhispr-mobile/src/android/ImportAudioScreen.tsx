@@ -25,7 +25,7 @@ import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { useUsageStore } from '@/android/store/useUsageStore';
 import { snapshotTranscriptionJob } from '@/lib/inferenceRouting';
-import { accountRequiredForCloud, showAccountRequiredAlert } from '@/lib/accountAccess';
+import { accountRequiredForCloud, showAccountRequiredAlert } from '@/android/lib/accountAccess';
 import { buildUsageGateParams, SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import {
   ImportDestinationError,

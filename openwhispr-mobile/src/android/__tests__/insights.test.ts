@@ -46,6 +46,7 @@ jest.mock('@/lib/apiClient', () => ({
     }
   },
 }));
+jest.mock('@/android/lib/apiClient', () => jest.requireMock('@/lib/apiClient'));
 import { api, ApiError } from '@/lib/apiClient';
 import {
   setInsightsSyncConsent,

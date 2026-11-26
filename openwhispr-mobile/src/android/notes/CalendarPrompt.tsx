@@ -4,7 +4,7 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
 import { useAuthStore } from '@/android/store/useAuthStore';
-import { requiresRealAccount } from '@/lib/accountAccess';
+import { requiresRealAccount } from '@/android/lib/accountAccess';
 import { useTheme } from '../ThemeProvider';
 import { showToast } from '../settings/kit';
 import {

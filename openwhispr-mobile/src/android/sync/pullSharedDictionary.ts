@@ -8,7 +8,7 @@ import {
   type SharedDictionaryPage,
 } from '@/data/remote/sharedDictionaryApi';
 import { fetchMyWorkspaces, type RemoteWorkspace } from '@/data/remote/workspacesApi';
-import { ApiError } from '@/lib/apiClient';
+import { ApiError } from '@/android/lib/apiClient';
 import { resolveActiveWorkspaceId } from '@/lib/activeWorkspace';
 import { getUsageOwnerKey, useUsageStore } from '@/android/store/useUsageStore';
 import type { UsageInfo } from '@/android/remote/usageApi';

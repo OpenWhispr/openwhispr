@@ -11,6 +11,7 @@ jest.mock('@/store/useUsageStore', () => ({
 }));
 jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 jest.mock('@/lib/revenuecat.android', () => ({ recordRevenueCatPurchase: jest.fn() }));
+jest.mock('@/android/lib/revenuecat', () => jest.requireMock('@/lib/revenuecat.android'));
 
 beforeEach(() => {
   jest.clearAllMocks();

@@ -36,7 +36,7 @@ import {
   setLastSyncedUserId,
 } from '@/sync/syncIdentity';
 import { useSyncStore } from '@/sync/useSyncStore';
-import { ApiError, isPolicyCloudBackupBlockedError } from '@/lib/apiClient';
+import { ApiError, isPolicyCloudBackupBlockedError } from '@/android/lib/apiClient';
 import { withChatHistory } from '@/lib/chat/withChatHistory';
 
 export type SyncReason = 'after-write' | 'foreground' | 'sign-in' | 'manual';

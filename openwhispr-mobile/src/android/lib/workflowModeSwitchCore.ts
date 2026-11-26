@@ -7,7 +7,7 @@ import {
   accountRequiredForCloud,
   requiresRealAccount,
   showAccountRequiredAlert,
-} from '@/lib/accountAccess';
+} from '@/android/lib/accountAccess';
 import { cloudAccessFor, workflowSelection, workflowSummary } from '@/lib/aiWorkflows';
 import { localSelection, workflowSaveConfig } from '@/lib/inferenceModes';
 import {

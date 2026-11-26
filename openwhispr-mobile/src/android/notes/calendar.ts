@@ -5,7 +5,7 @@ import { calendarRepository } from '@/data/calendarRepository';
 import type { GoogleCalendarEvent } from '@/data/calendarTypes';
 import { parseCalendarParticipants } from '@/lib/calendar/meetingContext';
 import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
-import { Sentry } from '@/lib/sentry';
+import { Sentry } from '@/android/lib/sentry';
 import { initialsOf } from './initials';
 
 /** The Up next card shows from an hour before a meeting until it ends (Figma L5). */

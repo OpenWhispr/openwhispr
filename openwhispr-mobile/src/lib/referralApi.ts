@@ -1,4 +1,4 @@
-import { sessionFetch as fetch } from './sessionFetch';
+import { fetch } from 'expo/fetch';
 import { ApiError, getClientVersionHeader } from '@/lib/apiClient';
 import { parseApiErrorBody } from '@/lib/apiErrorBody';
 

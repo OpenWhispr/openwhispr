@@ -5,10 +5,10 @@ import {
   getAppsFlyerAttributionConsent,
   logAppsFlyerEventConfirmed,
   subscribeAppsFlyerAttribution,
-} from '@/lib/appsflyer';
-import type { recordDictationCompleted } from '@/lib/productEvents';
+} from '@/android/lib/appsflyer';
+import type { recordDictationCompleted } from '@/android/lib/productEvents';
 import { isUsageAnalyticsAllowed } from '@/lib/usageAnalytics';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 
 // The mobile ad-measurement milestone: one AppsFlyer event the first time this
 // install has dictated 200 words. It counts the same finished dictations as the

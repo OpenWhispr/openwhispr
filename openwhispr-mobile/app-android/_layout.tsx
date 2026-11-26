@@ -2,6 +2,6 @@
 // root renders.
 import '@/android/startup';
 import AndroidRoot from '@/android/Root';
-import { Sentry } from '@/lib/sentry';
+import { Sentry } from '@/android/lib/sentry';
 
 export default Sentry.wrap(AndroidRoot);

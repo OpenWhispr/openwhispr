@@ -39,11 +39,13 @@ jest.mock('@/lib/accountAccess', () => ({
   requiresRealAccount: (user: MockUser) => !user || Boolean(user.isAnonymous),
   showAccountRequiredAlert: (...args: unknown[]) => mockShowAccountRequiredAlert(...args),
 }));
+jest.mock('@/android/lib/accountAccess', () => jest.requireMock('@/lib/accountAccess'));
 
 const mockConfirmCloudOnce = jest.fn();
 jest.mock('@/lib/alerts', () => ({
   confirmCloudOnce: (...args: unknown[]) => mockConfirmCloudOnce(...args),
 }));
+jest.mock('@/android/lib/alerts', () => jest.requireMock('@/lib/alerts'));
 
 import { useChatSendGate } from '@/hooks/useChatSendGate';
 import { useChatSendGate as useAndroidChatSendGate } from '@/hooks/useChatSendGate.android';

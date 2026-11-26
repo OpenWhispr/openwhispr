@@ -24,11 +24,12 @@ jest.mock('expo-secure-store', () => ({
   getItemAsync: (...args: unknown[]) => mockReadCache(...args),
 }));
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
-jest.mock('../apiClient', () => ({ getClientVersionHeader: () => 'test' }));
+jest.mock('@/lib/apiClient', () => ({ getClientVersionHeader: () => 'test' }));
+jest.mock('@/android/lib/apiClient', () => jest.requireMock('@/lib/apiClient'));
 
-import { getSession, getStoredSession, deleteAccount } from '../authClient.android';
-import * as iosAuth from '../authClient';
-import * as androidAuth from '../authClient.android';
+import { getSession, getStoredSession, deleteAccount } from '@/lib/authClient.android';
+import * as iosAuth from '@/lib/authClient';
+import * as androidAuth from '@/lib/authClient.android';
 import { fetch } from 'expo/fetch';
 
 const user = {
@@ -122,14 +123,6 @@ it.each([
   if (scenario === 'different-user') cache.session.userId = 'another-user';
   mockReadCache.mockResolvedValue(scenario === 'malformed' ? '{' : JSON.stringify(cache));
   expect(await getSession({ allowOfflineCache: true })).toBeNull();
-});
-
-it('does not use cache for explicit sign-in validation or for iOS', async () => {
-  await expect(getSession()).rejects.toThrow('Network request failed');
-  await expect(iosAuth.getSession({ allowOfflineCache: true })).rejects.toThrow(
-    'Network request failed',
-  );
-  expect(mockReadCache).not.toHaveBeenCalled();
 });
 
 it('uses the current server identity when online', async () => {

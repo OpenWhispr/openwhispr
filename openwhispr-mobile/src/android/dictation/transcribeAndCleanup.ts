@@ -10,7 +10,7 @@ import { useConfigStore } from '@/android/store/useConfigStore';
 import { getActiveCustomCleanupPrompt } from '@/store/useCustomPromptsStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useSnippetsStore } from '@/android/store/useSnippetsStore';
-import { requiresRealAccount } from '@/lib/accountAccess';
+import { requiresRealAccount } from '@/android/lib/accountAccess';
 import { cleanupRunsOnDevice } from '@/lib/aiWorkflows';
 import { cleanupTranscript } from '@/android/dictation/cleanupTranscript';
 import { isDictationContext } from '@/lib/dictationHints';

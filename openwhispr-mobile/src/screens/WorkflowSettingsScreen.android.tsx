@@ -13,7 +13,7 @@ import { Text } from '@/components/ui/Text';
 import { Toast } from '@/components/ui/Toast';
 import { workflowSettingsPlatform } from './workflowSettingsPlatform';
 import { useToast } from '@/hooks/useToast';
-import { confirmDestructive } from '@/lib/alerts';
+import { confirmDestructive } from '@/android/lib/alerts';
 // The Android design's blue switch, not the iOS system-green one.
 import { Toggle } from '@/android/settings/kit';
 import { useTheme } from '@/android/ThemeProvider';

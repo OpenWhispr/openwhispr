@@ -5,7 +5,7 @@ import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { getActiveCustomCleanupPrompt } from '@/store/useCustomPromptsStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import { requiresRealAccount } from '@/lib/accountAccess';
+import { requiresRealAccount } from '@/android/lib/accountAccess';
 import type {
   KeyboardTone,
   ToneAppCategory,

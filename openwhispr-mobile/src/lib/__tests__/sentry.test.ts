@@ -2,7 +2,11 @@ import type { ReactNativeOptions } from '@sentry/react-native';
 import type { UserConfig } from '@/types';
 
 type SentryModule = typeof import('../sentry');
+type ReplayOptions = NonNullable<
+  Parameters<(typeof import('@sentry/react-native'))['mobileReplayIntegration']>[0]
+>;
 type ErrorEvent = Parameters<NonNullable<ReactNativeOptions['beforeSend']>>[0];
+type Log = Parameters<NonNullable<ReactNativeOptions['beforeSendLog']>>[0];
 
 interface MockConfigState {
   config: UserConfig | null;
@@ -11,9 +15,12 @@ interface MockConfigState {
 
 let mockConfigState: MockConfigState = { config: null, isLoading: false };
 
+const mockReplayIntegration = { name: 'MobileReplay' };
 const mockInit = jest.fn<void, [ReactNativeOptions]>();
 const mockClose = jest.fn(() => Promise.resolve(true));
-const mockMobileReplayIntegration = jest.fn(() => ({ name: 'MobileReplay' }));
+const mockMobileReplayIntegration = jest.fn<typeof mockReplayIntegration, [ReplayOptions?]>(
+  () => mockReplayIntegration,
+);
 let mockConfigListener: (() => void) | undefined;
 const mockSubscribe = jest.fn((listener: () => void) => {
   mockConfigListener = listener;
@@ -45,13 +52,21 @@ function loadSentry(): SentryModule {
   return require('../sentry') as SentryModule;
 }
 
-function initOptions(): ReactNativeOptions {
+interface Gates {
+  options: ReactNativeOptions;
+  replay: ReplayOptions;
+}
+
+function initGates(): Gates {
   const initialState = mockConfigState;
   setAnalyticsEnabled(true);
   loadSentry().initSentry();
   mockConfigState = initialState;
   expect(mockInit).toHaveBeenCalledTimes(1);
-  return mockInit.mock.calls[0][0];
+  expect(mockMobileReplayIntegration).toHaveBeenCalledTimes(1);
+  const [replay] = mockMobileReplayIntegration.mock.calls[0];
+  if (!replay) throw new Error('mobileReplayIntegration was called without options');
+  return { options: mockInit.mock.calls[0][0], replay };
 }
 
 const event: ErrorEvent = {
@@ -61,16 +76,19 @@ const event: ErrorEvent = {
 };
 const hint = {};
 const breadcrumb = { category: 'test', message: 'crumb' };
+const log: Log = { level: 'info', message: 'structured log' };
 
-function gateResults(options: ReactNativeOptions) {
+function gateResults({ options, replay }: Gates) {
   return {
     event: options.beforeSend?.(event, hint),
     breadcrumb: options.beforeBreadcrumb?.(breadcrumb, hint),
+    log: options.beforeSendLog?.(log),
+    replay: replay.beforeErrorSampling?.(event, hint),
   };
 }
 
-const passThrough = { event, breadcrumb };
-const dropped = { event: null, breadcrumb: null };
+const passThrough = { event, breadcrumb, log, replay: true };
+const dropped = { event: null, breadcrumb: null, log: null, replay: false };
 
 beforeEach(() => {
   process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://public@sentry.example/1';
@@ -102,40 +120,41 @@ describe('initSentry', () => {
     expect(mockInit).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps PII off and sends crash and error reports only', () => {
-    expect(initOptions()).toMatchObject({
+  it('keeps PII off and only buffers replays for errors', () => {
+    expect(initGates().options).toMatchObject({
       dsn: 'https://public@sentry.example/1',
       sendDefaultPii: false,
-      enableLogs: false,
+      enableLogs: true,
       replaysSessionSampleRate: 0,
-      replaysOnErrorSampleRate: 0,
+      replaysOnErrorSampleRate: 1,
+      integrations: [mockReplayIntegration],
     });
   });
 
-  it('adds no screen replay and no log forwarding', () => {
-    const options = initOptions();
-    expect(mockMobileReplayIntegration).not.toHaveBeenCalled();
-    expect(options.integrations).toBeUndefined();
-    expect(options.beforeSendLog).toBeUndefined();
-    expect(options.logsOrigin).toBeUndefined();
+  it('pins replay masking explicitly instead of relying on SDK defaults', () => {
+    expect(initGates().replay).toMatchObject({
+      maskAllText: true,
+      maskAllImages: true,
+      maskAllVectors: true,
+    });
   });
 });
 
 describe('Usage Analytics gate', () => {
-  it('passes events and breadcrumbs through when enabled', () => {
+  it('passes events, breadcrumbs, logs and replays through when enabled', () => {
     setAnalyticsEnabled(true);
-    const gates = initOptions();
+    const gates = initGates();
     expect(gateResults(gates)).toEqual(passThrough);
   });
 
-  it('drops events and breadcrumbs when disabled', () => {
+  it('drops events, breadcrumbs, logs and replays when disabled', () => {
     setAnalyticsEnabled(false);
-    const gates = initOptions();
+    const gates = initGates();
     expect(gateResults(gates)).toEqual(dropped);
   });
 
   it('drops all channels until config finishes hydrating', () => {
-    const gates = initOptions();
+    const gates = initGates();
     expect(gateResults(gates)).toEqual(dropped);
 
     setAnalyticsEnabled(undefined);
@@ -145,12 +164,12 @@ describe('Usage Analytics gate', () => {
   it('keeps every channel open while a preference save is in flight', () => {
     setAnalyticsEnabled(true);
     mockConfigState.isLoading = true;
-    expect(gateResults(initOptions())).toEqual(passThrough);
+    expect(gateResults(initGates())).toEqual(passThrough);
   });
 
   it('stops and restarts every channel when the toggle flips at runtime', () => {
     setAnalyticsEnabled(true);
-    const gates = initOptions();
+    const gates = initGates();
     expect(gateResults(gates)).toEqual(passThrough);
 
     setAnalyticsEnabled(false);
@@ -162,7 +181,7 @@ describe('Usage Analytics gate', () => {
   });
 });
 
-it('waits for loaded consent before starting native capture', () => {
+it('waits for loaded consent before starting native capture and replay buffering', () => {
   const sentry = loadSentry();
   sentry.initSentry();
   expect(mockInit).not.toHaveBeenCalled();
@@ -175,7 +194,8 @@ it('waits for loaded consent before starting native capture', () => {
 });
 
 it('keeps native crash reporting on for consenting users', () => {
-  const options = initOptions();
+  const { options } = initGates();
+  expect(options.logsOrigin).toBe('js');
   expect(options.enableNativeCrashHandling).toBeUndefined();
   expect(options.enableAppHangTracking).toBeUndefined();
   expect(options.enableWatchdogTerminationTracking).toBeUndefined();

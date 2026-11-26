@@ -23,7 +23,7 @@ import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { useNotesStore } from '@/android/store/useNotesStore';
 import { useAuthStore } from '@/android/store/useAuthStore';
-import { canRunCloudMeeting } from '@/lib/accountAccess';
+import { canRunCloudMeeting } from '@/android/lib/accountAccess';
 import { meetingKey } from './providers/liveMeeting';
 import { meetingOnDevice } from './meetingRouting';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
@@ -36,7 +36,7 @@ import { runSpeakerPass, saveLiveSpeakers } from '@/android/liveSpeakers/session
 import { forgetLinesSaved, whenLinesSaved } from '@/android/liveSpeakers/whenSaved';
 import { LocalMeetingRecorder } from '@/android/LocalMeetingRecorder';
 import { createLocalMeetingContext } from '@/android/localMeetingContext';
-import { Sentry } from '@/lib/sentry';
+import { Sentry } from '@/android/lib/sentry';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import type { TranscriptionStatus } from '@/types';
 type Phase =

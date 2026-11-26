@@ -20,7 +20,7 @@ import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { meetingAudioDirectory } from '@/lib/meetingAudioStorage';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
-import { Sentry } from '@/lib/sentry';
+import { Sentry } from '@/android/lib/sentry';
 import { mapUtterancesToSegments } from '@/lib/notes/cloudMeetingSegments';
 import { setCloudFinish } from './notes/cloudFinishStore';
 import { runSpeakerPass, saveLiveSpeakers } from './liveSpeakers/session';

@@ -14,6 +14,7 @@ jest.mock('@/store/useAuthStore', () => ({
 }));
 jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/lib/accountAccess', () => ({ requiresRealAccount: (user: unknown) => !user }));
+jest.mock('@/android/lib/accountAccess', () => jest.requireMock('@/lib/accountAccess'));
 const mockLoad = jest.fn(async () => undefined);
 const mockSetState = jest.fn();
 let mockAccounts: { googleSubject: string }[] = [];

@@ -66,6 +66,7 @@ jest.mock('@/data/local/notesRepository', () => ({
 }));
 jest.mock('@/android/data/notesRepository', () => jest.requireMock('@/data/local/notesRepository'));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+jest.mock('@/android/lib/sentry', () => jest.requireMock('@/lib/sentry'));
 
 import { ThemeProvider } from '../ThemeProvider';
 import { darkTheme, lightTheme } from '../theme';

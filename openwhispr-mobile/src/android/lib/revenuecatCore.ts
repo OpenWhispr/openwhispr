@@ -6,12 +6,12 @@ import Purchases, {
   PURCHASES_ERROR_CODE,
   STOREKIT_VERSION,
 } from 'react-native-purchases';
-import { Sentry } from '@/lib/sentry';
+import { Sentry } from '@/android/lib/sentry';
 import {
   getAppsFlyerAttributionConsent,
   getAppsFlyerRevenueId,
   subscribeAppsFlyerAttribution,
-} from '@/lib/appsflyer';
+} from '@/android/lib/appsflyer';
 
 export function createRevenueCatClient(observerMode: boolean, androidAttribution = false) {
   const attributionEnabled = (): boolean =>

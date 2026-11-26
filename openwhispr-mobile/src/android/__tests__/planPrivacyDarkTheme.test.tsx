@@ -58,6 +58,7 @@ jest.mock('@/lib/referralApi', () => ({
   ]),
   sendReferralInvite: jest.fn(),
 }));
+jest.mock('@/android/lib/referralApi', () => jest.requireMock('@/lib/referralApi'));
 jest.mock('@/store/useUsageStore.android', () => ({
   useUsageStore: require('zustand').create(() => ({
     usage: null,

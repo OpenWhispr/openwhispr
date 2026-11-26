@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useUsageStore } from '@/android/store/useUsageStore';
-import { confirmAccountDeletion } from '@/lib/alerts';
+import { confirmAccountDeletion } from '@/android/lib/alerts';
 import { Group, ListRow, SettingsPage } from '@/android/settings/kit';
 import { useSettingsT } from '@/android/settings/strings';
 

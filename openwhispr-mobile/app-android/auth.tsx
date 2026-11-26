@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import AuthScreen, { isAuthReason } from '@/screens/AuthScreen.android';
-import { requiresRealAccount } from '@/lib/accountAccess';
+import { requiresRealAccount } from '@/android/lib/accountAccess';
 import { needsEmailVerification } from '@/android/auth/emailVerification';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useUsageStore } from '@/android/store/useUsageStore';

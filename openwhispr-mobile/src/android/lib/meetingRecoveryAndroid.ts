@@ -1,6 +1,6 @@
 import { meetingAudioContext } from '@/lib/meetingAudioStorage';
 import { repairAndroidMeetingRecordingPaths } from '@/android/meetingRecordingRepair';
-import { Sentry } from '@/lib/sentry';
+import { Sentry } from '@/android/lib/sentry';
 import { useNotesStore } from '@/android/store/useNotesStore';
 
 // The explicit extension loads the unchanged default implementation. Eager loading

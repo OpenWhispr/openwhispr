@@ -1,3 +1,5 @@
+// One ApiError class for both platforms' stores in this test (each bundle has only its own).
+jest.mock('@/android/lib/apiClient', () => jest.requireActual('@/lib/apiClient'));
 import { fetchUsage, type UsageInfo } from '@/android/remote/usageApi';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore.android';

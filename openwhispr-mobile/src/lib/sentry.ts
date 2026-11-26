@@ -8,7 +8,7 @@ let closing: Promise<void> | null = null;
 
 // Consent is unknown until the stored preferences hydrate, so every channel
 // fails closed until then. Once loaded, the saved preference (default on) is
-// authoritative; the store applies withdrawal immediately, before saving it.
+// authoritative — including while a later save is in flight.
 function analyticsEnabled(): boolean {
   return isUsageAnalyticsAllowed(useConfigStore.getState().config);
 }
@@ -45,12 +45,20 @@ export function initSentry(): void {
   Sentry.init({
     dsn,
     sendDefaultPii: false,
-    // Crash and error reports only, as the privacy policy says: no log lines and
-    // no screen replay, not even on error.
-    enableLogs: false,
+    enableLogs: true,
+    logsOrigin: 'js',
     replaysSessionSampleRate: 0,
-    replaysOnErrorSampleRate: 0,
+    replaysOnErrorSampleRate: 1,
+    integrations: [
+      Sentry.mobileReplayIntegration({
+        maskAllText: true,
+        maskAllImages: true,
+        maskAllVectors: true,
+        beforeErrorSampling: () => analyticsEnabled(),
+      }),
+    ],
     beforeSend: (event) => (analyticsEnabled() ? event : null),
+    beforeSendLog: (log) => (analyticsEnabled() ? log : null),
     beforeSendTransaction: (event) => (analyticsEnabled() ? event : null),
     beforeBreadcrumb: (breadcrumb) => (analyticsEnabled() ? breadcrumb : null),
   });

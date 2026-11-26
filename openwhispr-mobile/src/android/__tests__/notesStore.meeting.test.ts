@@ -128,6 +128,7 @@ jest.mock('@/android/dictation/localReasoningFallback', () =>
 jest.mock('@/lib/appsflyer', () => ({
   logTranscriptionCompleted: (...args: unknown[]) => mockLogTranscriptionCompleted(...args),
 }));
+jest.mock('@/android/lib/appsflyer', () => jest.requireMock('@/lib/appsflyer'));
 jest.mock('@/services/reasoning/ReasoningService', () => ({
   ReasoningService: {
     processText: jest.fn(),

@@ -1,4 +1,4 @@
-import type { AuthUser } from '@/lib/authClient';
+import type { AuthUser } from '@/android/lib/authClient';
 import { isDictationAgentEnabled, isNoteChatEnabled } from '@/lib/dictationAgent';
 import type { InferenceSelection } from '@/android/providers/mobileProviders';
 import { localModeDefault, MODE_LABELS, type CloudAccess } from '@/lib/inferenceModes';
