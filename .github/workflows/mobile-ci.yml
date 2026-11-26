@@ -58,9 +58,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # The Android isolation check compares against the pull request's base, so bundles needs full
-          # history. Written as != so the 0 comes last: `x && 0 || 1` is always 1, since 0 is falsy.
-          fetch-depth: ${{ matrix.check != 'bundles' && 1 || 0 }}
+          fetch-depth: 1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: openwhispr-mobile/.nvmrc
@@ -103,13 +101,6 @@ jobs:
         run: node_modules/.bin/expo export --platform ios --source-maps --max-workers 2 --output-dir "$RUNNER_TEMP/mobile-export"
         env:
           OPENWHISPR_APP_ENV: production
-      # Android UI must never change iOS: a pull request that changes Android-only
-      # files may not also change a file the iOS bundle above loaded.
-      - name: Keep Android changes out of files iOS loads
-        if: matrix.check == 'bundles' && github.event_name == 'pull_request'
-        run: node scripts/check-android-ui-isolation.mjs --base "$BASE_SHA" --export-dir "$RUNNER_TEMP/mobile-export"
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
       # A JS bundle is the cheapest Android check: no SDK, emulator, or signing.
       # Native Android build/release validation stays deferred.
       - name: Bundle Android
@@ -117,6 +108,85 @@ jobs:
         run: node_modules/.bin/expo export --platform android --max-workers 2 --output-dir "$RUNNER_TEMP/mobile-export-android"
         env:
           OPENWHISPR_APP_ENV: production
+
+  # Android and iOS stay apart (scripts/check-android-ui-isolation.mjs): nothing from Android goes
+  # into iOS and nothing from iOS into Android. The fork point is where android/beta left main.
+  isolation:
+    name: Mobile isolation
+    needs: [changes, lockfile]
+    if: needs.changes.outputs.mobile == 'true' && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: openwhispr-mobile
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      BASE_REF: ${{ github.event.pull_request.base.ref }}
+      OPENWHISPR_APP_ENV: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Fetch main for the fork point
+        run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: openwhispr-mobile/.nvmrc
+          cache: npm
+          cache-dependency-path: openwhispr-mobile/package-lock.json
+      - name: Test the isolation check
+        run: npm run test:android-ui-isolation
+      # Into android/beta: a file of main's tree changes only back to its fork-point content, and
+      # new files go under Android-only paths. Into main: no Android-only file changes.
+      - name: Keep files on their own side
+        run: node scripts/check-android-ui-isolation.mjs files --base "$BASE_SHA" --target "$BASE_REF"
+      - name: Find the fork point with main
+        if: startsWith(github.event.pull_request.base.ref, 'android/')
+        id: fork
+        run: echo "sha=$(git merge-base origin/main HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Install locked dependencies without lifecycle scripts
+        if: startsWith(github.event.pull_request.base.ref, 'android/')
+        run: npm ci --ignore-scripts --no-audit --no-fund && node_modules/.bin/patch-package --error-on-fail
+      - name: Bundle iOS as plain JS
+        if: startsWith(github.event.pull_request.base.ref, 'android/')
+        run: node_modules/.bin/expo export --platform ios --no-bytecode --source-maps --max-workers 2 --output-dir "$RUNNER_TEMP/ios-head"
+      - name: Fingerprint the iOS app
+        if: startsWith(github.event.pull_request.base.ref, 'android/')
+        run: node scripts/check-android-ui-isolation.mjs fingerprint --project . --export-dir "$RUNNER_TEMP/ios-head" --out "$RUNNER_TEMP/ios-head.json"
+      # The fork point's fingerprint only changes when the fork point or the fingerprint code does.
+      - name: Restore the fork point's iOS fingerprint
+        if: startsWith(github.event.pull_request.base.ref, 'android/')
+        id: fork-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ios-fork.json
+          key: ios-fork-fingerprint-${{ steps.fork.outputs.sha }}-${{ hashFiles('openwhispr-mobile/scripts/check-android-ui-isolation.mjs') }}
+      - name: Fingerprint the iOS app at the fork point
+        if: startsWith(github.event.pull_request.base.ref, 'android/') && steps.fork-cache.outputs.cache-hit != 'true'
+        env:
+          FORK_SHA: ${{ steps.fork.outputs.sha }}
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/fork" "$FORK_SHA"
+          cd "$RUNNER_TEMP/fork/openwhispr-mobile"
+          npm ci --ignore-scripts --no-audit --no-fund
+          node_modules/.bin/patch-package --error-on-fail
+          node_modules/.bin/expo export --platform ios --no-bytecode --source-maps --max-workers 2 --output-dir "$RUNNER_TEMP/ios-fork"
+          node "$GITHUB_WORKSPACE/openwhispr-mobile/scripts/check-android-ui-isolation.mjs" fingerprint --project . --export-dir "$RUNNER_TEMP/ios-fork" --out "$RUNNER_TEMP/ios-fork.json"
+      # Every difference from main's iOS app must be listed in scripts/android-ios-known-ios-diffs.json,
+      # and listed ones that are gone must be removed. The list only shrinks.
+      - name: Keep the iOS app as main has it
+        if: startsWith(github.event.pull_request.base.ref, 'android/')
+        run: node scripts/check-android-ui-isolation.mjs compare-ios --head "$RUNNER_TEMP/ios-head.json" --fork "$RUNNER_TEMP/ios-fork.json"
+      - name: Bundle Android with source maps
+        if: startsWith(github.event.pull_request.base.ref, 'android/')
+        run: node_modules/.bin/expo export --platform android --source-maps --max-workers 2 --output-dir "$RUNNER_TEMP/android-head"
+      # Android must end up loading no file iOS loads. scripts/android-ios-shared-baseline.txt lists
+      # the ones it still does; the list only shrinks.
+      - name: Keep Android off files iOS loads
+        if: startsWith(github.event.pull_request.base.ref, 'android/')
+        run: node scripts/check-android-ui-isolation.mjs shared --ios-export "$RUNNER_TEMP/ios-head" --android-export "$RUNNER_TEMP/android-head"
 
   native-transport:
     name: Mobile native Swift tests
@@ -148,7 +218,7 @@ jobs:
 
   mobile-status:
     name: Mobile CI
-    needs: [changes, lockfile, checks, native-transport]
+    needs: [changes, lockfile, checks, isolation, native-transport]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -160,11 +230,14 @@ jobs:
           MOBILE: ${{ needs.changes.outputs.mobile }}
           LOCKFILE_RESULT: ${{ needs.lockfile.result }}
           CHECKS_RESULT: ${{ needs.checks.result }}
+          ISOLATION_RESULT: ${{ needs.isolation.result }}
+          EVENT: ${{ github.event_name }}
           NATIVE_TRANSPORT_RESULT: ${{ needs.native-transport.result }}
         run: |
           test "$CHANGES_RESULT" = success
           if [ "$MOBILE" = true ]; then
             test "$LOCKFILE_RESULT" = success
             test "$CHECKS_RESULT" = success
+            if [ "$EVENT" = pull_request ]; then test "$ISOLATION_RESULT" = success; fi
             test "$NATIVE_TRANSPORT_RESULT" = success
           fi
