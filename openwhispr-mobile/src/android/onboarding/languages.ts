@@ -20,13 +20,3 @@ export function initialLanguages(saved: string[] | undefined, preferred?: string
   if (picked.length) return [...new Set(picked)];
   return [matchLanguage(AndroidDictation?.getLocale?.() ?? 'en-US') ?? 'en-US'];
 }
-
-/**
- * The languages dictation is using now, as registry codes: Settings' single pick when one is
- * saved (an explicit 'auto' means none), else the onboarding list. Mirrors
- * getPreferredTranscriptionLanguages, keeping regions so the labels match. Empty = auto-detect.
- */
-export function savedLanguages(saved: string[] | undefined, preferred?: string): string[] {
-  const source = preferred ? (preferred === 'auto' ? [] : [preferred]) : (saved ?? []);
-  return [...new Set(source.map(matchLanguage).filter((code): code is string => code !== null))];
-}
