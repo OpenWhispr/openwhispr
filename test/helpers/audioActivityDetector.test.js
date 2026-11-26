@@ -2131,6 +2131,33 @@ test("win32: after ignoring the app a prompt was for, a meeting app still prompt
   assert.deepEqual(detections[1].apps, [CAPTURE_APPS[22]]);
 });
 
+test("win32: a call that started while the ignored app's card was open prompts once it's ignored", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("win32", {
+    resolveCaptureApps: resolveTestCaptureApps,
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  children[0].stdout.emit("data", "MIC_START 22\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 1, "Orca's prompt holds back the call");
+
+  // The card's "Don't ask for Orca": the list syncs, then the card answers.
+  detector.setIgnoredApps(["orca.exe"]);
+  detector.releasePrompt();
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 2);
+  assert.deepEqual(detections[1].apps, [CAPTURE_APPS[22]]);
+});
+
 test("linux: an ignored app's capture does not drive meeting prompts", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children } = createDetector("linux", {

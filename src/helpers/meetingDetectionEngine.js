@@ -535,6 +535,7 @@ class MeetingDetectionEngine {
       // its captures stop counting, and a real meeting must still prompt.
       if (action === "open") this.openNotificationJoinUrl(owner);
       else if (action === "dismiss") this._dismiss();
+      else this.audioActivityDetector.releasePrompt();
       this.activeDetections.delete(detectionId);
       this.windowManager.dismissMeetingNotification({ notifyEngine: false });
       return Promise.resolve({ success: true, value: null });

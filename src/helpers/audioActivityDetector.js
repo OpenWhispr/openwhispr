@@ -273,6 +273,14 @@ class AudioActivityDetector extends EventEmitter {
     debugLogger.info("Audio detection prompt reset (no cooldown)", {}, "meeting");
   }
 
+  // The prompted app was marked "not a meeting". A capture that started while
+  // its card was open (a real call) was held back by that prompt, and with the
+  // ignored app gone from the evidence no edge announces it, so look again.
+  releasePrompt() {
+    this.resetPrompt();
+    this._reevaluateAfterGate();
+  }
+
   _reset() {
     this.consecutiveChecks = 0;
     this.audioActiveStart = null;

@@ -53,6 +53,8 @@ function createEngine(engineOptions) {
   audioDetector.dismissals = 0;
   audioDetector.dismiss = () => audioDetector.dismissals++;
   audioDetector.resetPrompt = () => {};
+  audioDetector.releases = 0;
+  audioDetector.releasePrompt = () => audioDetector.releases++;
   audioDetector.getExternalMicState = () => ({ reliable: true, externalMicActive: true });
   audioDetector.setUserRecording = () => {};
   audioDetector.setMicWarmHold = () => {};
@@ -140,6 +142,7 @@ test("ignoring the app behind an audio prompt closes it without a mic cooldown",
 
   assert.equal(result.success, true);
   assert.equal(audioDetector.dismissals, 0, "a real meeting right after must still prompt");
+  assert.equal(audioDetector.releases, 1, "a call held back by this prompt must get its own");
   assert.equal(engine.activeDetections.size, 0);
 
   engine.setIgnoredApps(["orca.exe"]);
