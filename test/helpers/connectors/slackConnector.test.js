@@ -246,12 +246,40 @@ test("a person whose name has a comma in it is that person, not a group DM", asy
     ...channelsOnly,
     "users.list": [ok({ ...FIXTURES.people, members: [...FIXTURES.people.members, smith] })],
   });
+  // However the comma is spaced or the name cased, as any name is matched.
+  for (const destination of ["Smith, Gabe", "Smith,Gabe", "smith ,  gabe", "SMITH, GABE"]) {
+    const prepared = await connector.prepare("send_message", { destination, text: "Hi" }, BOUND);
+    assert.equal(prepared.preview?.destinationLabel, "Smith, Gabe (@gsmith)", destination);
+  }
+});
+
+test("people who share a name with a comma in it are offered to pick from", async () => {
+  const smith = (id, name) => ({
+    id,
+    name,
+    deleted: false,
+    is_bot: false,
+    profile: { real_name: "Smith, Gabe", display_name: "" },
+  });
+  const members = [
+    ...FIXTURES.people.members,
+    smith("U0SMITH01", "gsmith"),
+    smith("U0SMITH02", "gsmith2"),
+  ];
+  const { connector } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok({ ...FIXTURES.people, members })],
+  });
   const prepared = await connector.prepare(
     "send_message",
     { destination: "Smith, Gabe", text: "Hi" },
     BOUND
   );
-  assert.equal(prepared.preview.destinationLabel, "Smith, Gabe (@gsmith)");
+  assert.equal(prepared.status, "needs_clarification");
+  assert.deepEqual(
+    prepared.choices.map((choice) => choice.destination),
+    ["@gsmith", "@gsmith2"]
+  );
 });
 
 test("a list of people is a group DM even when it loosely matches one channel's name", async () => {

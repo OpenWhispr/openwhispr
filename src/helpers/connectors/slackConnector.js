@@ -171,6 +171,19 @@ function parseDestination(raw) {
   return { kind: "any", query: value };
 }
 
+// A name as a list of people reads it: case, accents and the spaces around
+// its commas aside. "Smith,Gabriel" is the person "Smith, Gabriel", but
+// "Gabe Gabriel" never stands for the list "Gabe, Gabriel".
+function listName(value) {
+  return String(value)
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .split(",")
+    .map((part) => part.trim().replace(/\s+/g, " "))
+    .join(",");
+}
+
 function clarify(message, candidates = []) {
   const labels = candidates.map((candidate) => candidate.hint ?? candidate.label);
   return {
@@ -304,6 +317,8 @@ function createSlackConnector({ api, auth, directory, credentials }) {
           `More than one match for "${parsed.query}". Ask the user which one they meant.`,
           resolved.candidates
         ),
+        // Who matched, so prepare can tell people who share a name from a list of people.
+        matches: resolved.candidates,
       };
     }
     const where =
@@ -513,12 +528,16 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       const cacheKey = loginCacheKey(binding, credential);
       let found;
       if (destination) {
-        // "Smith, Gabe" may be one person, but only by exactly that name; any
-        // other match for a list of people is a looser one.
+        // "Smith, Gabe" may be one person (or several who share that name, a
+        // picker), but only by that whole name; any other match for a list of
+        // people ("Ana, Sam" for Ana Sampson, #gabe-gabriel) is a looser one.
         const named = await findTargetWithRefresh(parsed, binding, access, cacheKey);
-        const wholeName = named.candidate?.names?.some(
-          (name) => name.toLowerCase() === destination.toLowerCase()
-        );
+        const whole = listName(destination);
+        const isWholeName = (candidate) =>
+          candidate.kind === "user" && candidate.names.some((name) => listName(name) === whole);
+        const wholeName = named.candidate
+          ? isWholeName(named.candidate)
+          : Boolean(named.matches?.every(isWholeName));
         found = (!wholeName && (await findGroup(destination, binding, access, cacheKey))) || named;
       } else {
         found = await lookupWithRefresh(
