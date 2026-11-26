@@ -1288,6 +1288,24 @@ test("a channel, person or DM named by id, or by a link, resolves exactly", asyn
   );
 });
 
+test("a group DM with a thread in one of the user's channels is refused before any DM opens", async () => {
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok(FIXTURES.people)],
+  });
+  const prepared = await connector.prepare(
+    "send_message",
+    {
+      ...groupStandup,
+      thread: "https://acme-test.slack.com/archives/C0ENG0001/p1727200000123456",
+    },
+    BOUND
+  );
+  assert.equal(prepared.status, "failed");
+  assert.equal(prepared.errorCode, "thread_mismatch");
+  assert.equal(slack.methods().includes("conversations.open"), false);
+});
+
 test("a thread in another person's DM that a Send opened here is refused before any DM opens", async () => {
   const { connector, slack } = await setupSlack({
     ...channelsOnly,

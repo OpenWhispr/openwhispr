@@ -583,7 +583,15 @@ function createSlackConnector({ api, auth, directory, credentials }) {
         (target.kind === "user" || target.kind === "group") &&
         threadDm &&
         threadDm.userId !== target.id;
-      if (thread && (!threadFits(target, thread) || otherPersonsDm)) {
+      // A group DM is never one of the user's channels: a thread in one can't
+      // be in it, and Send would open the group DM in Slack before finding out.
+      const groupThreadInChannel =
+        thread &&
+        target.kind === "group" &&
+        (await directory.channels(access.token, cacheKey)).items?.some(
+          (channel) => channel.id === thread.channelId
+        );
+      if (thread && (!threadFits(target, thread) || otherPersonsDm || groupThreadInChannel)) {
         return prepareFailed("thread_mismatch", failureMessage("thread_mismatch", target.label));
       }
       return {
