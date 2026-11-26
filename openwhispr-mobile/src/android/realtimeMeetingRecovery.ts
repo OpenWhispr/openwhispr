@@ -3,7 +3,7 @@ import type {
   RealtimeTransportContext,
   RealtimeTransportLifecycle,
   WebSocketLike,
-} from '@/services/transcription/createRealtimeMeetingWs';
+} from '@/android/transcription/createRealtimeMeetingWs';
 
 const WS_OPEN = 1;
 interface LegState {

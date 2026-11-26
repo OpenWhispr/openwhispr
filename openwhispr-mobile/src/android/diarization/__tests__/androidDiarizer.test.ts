@@ -26,9 +26,10 @@ jest.mock('../../../../modules/speaker-diarization/src', () => ({
 }));
 
 import { Platform } from 'react-native';
-import { getDiarizer } from '../getDiarizer.android';
-import { getDiarizer as getIosDiarizer } from '../getDiarizer';
-import { FluidAudioDiarizer } from '../fluidAudioDiarizer';
+import { getDiarizer } from '@/lib/diarization/getDiarizer.android';
+import { AndroidDiarizer } from '@/android/diarization/androidDiarizer';
+import { getDiarizer as getIosDiarizer } from '@/lib/diarization/getDiarizer';
+import { FluidAudioDiarizer } from '@/lib/diarization/fluidAudioDiarizer';
 import { AndroidDictation } from '../../../../modules/android-dictation/src';
 import { modelReady } from '@/android/models';
 import { withAndroidInference } from '@/android/inferenceQueue';
@@ -85,7 +86,7 @@ it('cancels queued work without starting the native engine', async () => {
   expect(diarizer.isAvailable()).toBe(true);
   const pending = diarizer.diarize('file:///meeting.wav');
   const rejected = expect(pending).rejects.toThrow();
-  diarizer.cancel?.();
+  AndroidDiarizer.cancel();
   release();
   await blocker;
   await rejected;
@@ -109,7 +110,7 @@ it('discards a native result returned after cancellation', async () => {
   const pending = diarizer.diarize('file:///meeting.wav');
   const rejected = expect(pending).rejects.toThrow();
   await ready;
-  diarizer.cancel?.();
+  AndroidDiarizer.cancel();
   finish(result);
   await rejected;
 });

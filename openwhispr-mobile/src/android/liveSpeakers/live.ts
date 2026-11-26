@@ -4,7 +4,7 @@ import { meetingAudioDirectory } from '@/lib/meetingAudioStorage';
 import type {
   RealtimeMeetingDeps,
   WebSocketLike,
-} from '@/services/transcription/createRealtimeMeetingWs';
+} from '@/android/transcription/createRealtimeMeetingWs';
 import { modelPath, modelReady } from '@/android/models';
 import { createLineClock, type LineSpan } from './lineClock';
 import { createLiveSpeakers } from './liveSpeakers';

@@ -1,4 +1,4 @@
-import type { Snippet } from './snippets';
+import type { Snippet } from '@/android/dictation/snippets';
 
 interface SnippetMatcher {
   regex: RegExp;

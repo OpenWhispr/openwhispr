@@ -39,7 +39,7 @@ export function useAndroidFileUploadLifecycle(
     const job = active.current;
     job?.controller.abort();
     if (job?.provider === 'local') {
-      import('../services/transcription/LocalTranscriptionService')
+      import('@/android/transcription/LocalTranscriptionService')
         .then(({ LocalTranscriptionService }) => {
           if (active.current === job) return LocalTranscriptionService.cancelTranscription();
         })

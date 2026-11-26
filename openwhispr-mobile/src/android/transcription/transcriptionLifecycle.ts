@@ -1,6 +1,8 @@
-import { abortError } from '../providers/NativeProviderTransport';
+import { abortError } from '@/services/providers/NativeProviderTransport';
 import type { RetryOptions } from '@/lib/retry';
-import type { SignalOwner } from './transcriptionLifecycle';
+export interface SignalOwner {
+  signal?: AbortSignal;
+}
 
 export const transcriptionLifecycle = {
   cancellationRequested(owner: SignalOwner): boolean {

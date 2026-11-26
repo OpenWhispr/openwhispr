@@ -21,14 +21,14 @@ import {
   DEFAULT_SAMPLE_RATE,
   type PcmFrame,
 } from '../../../modules/live-pcm-streaming/src';
-import { transcriptionPolicyErrorFromApiError } from './policyErrors';
-import { createRealtimeEventReducer } from './realtimeEvents';
+import { transcriptionPolicyErrorFromApiError } from '@/services/transcription/policyErrors';
+import { createRealtimeEventReducer } from '@/services/transcription/realtimeEvents';
 import type {
   RealtimeCallbacks,
   RealtimeSession,
   RealtimeUtterance,
   RealtimeEventReducer,
-} from './realtimeEvents';
+} from '@/services/transcription/realtimeEvents';
 import {
   PcmRingBuffer,
   applyLegOffset,
@@ -40,9 +40,13 @@ import {
   RECONNECT_INITIAL_DELAY_MS,
   RECONNECT_MAX_DELAY_MS,
   CONNECT_TIMEOUT_MS,
-} from './realtimeReconnect';
+} from '@/services/transcription/realtimeReconnect';
 
-export type { RealtimeCallbacks, RealtimeSession, RealtimeUtterance } from './realtimeEvents';
+export type {
+  RealtimeCallbacks,
+  RealtimeSession,
+  RealtimeUtterance,
+} from '@/services/transcription/realtimeEvents';
 
 const OPENAI_REALTIME_WS_URL = 'wss://api.openai.com/v1/realtime?intent=transcription';
 // bufferedAmount is undefined on RN, so batching sends at this cadence is the only

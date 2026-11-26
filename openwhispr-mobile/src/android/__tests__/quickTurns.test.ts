@@ -4,7 +4,7 @@ import {
   quickTurns,
   quickerTurns,
 } from '@/android/liveSpeakers/quickTurns';
-import type { WebSocketLike } from '@/services/transcription/createRealtimeMeetingWs';
+import type { WebSocketLike } from '@/android/transcription/createRealtimeMeetingWs';
 
 function leg() {
   const sent: string[] = [];

@@ -1,3 +1,33 @@
+// Shared files reach Android's copies through these paths, as Metro's re-exports do.
+jest.mock('@/services/transcription/TranscriptionService', () =>
+  jest.requireActual('@/android/transcription/TranscriptionService'),
+);
+jest.mock('@/services/transcription/LocalTranscriptionService', () =>
+  jest.requireActual('@/android/transcription/LocalTranscriptionService'),
+);
+jest.mock('@/services/diarization/DiarizationService', () =>
+  jest.requireActual('@/android/transcription/DiarizationService'),
+);
+jest.mock('@/lib/cleanupTranscript', () =>
+  jest.requireActual('@/android/dictation/cleanupTranscript'),
+);
+jest.mock('@/lib/transcribeAndCleanup', () =>
+  jest.requireMock('@/android/dictation/transcribeAndCleanup'),
+);
+jest.mock('@/lib/localReasoningFallback', () =>
+  jest.requireActual('@/android/dictation/localReasoningFallback'),
+);
+jest.mock('@/lib/snippets', () => jest.requireActual('@/android/dictation/snippets'));
+jest.mock('@/lib/mobileProviders', () => jest.requireActual('@/android/providers/mobileProviders'));
+jest.mock('@/services/reasoning/ReasoningService', () =>
+  jest.requireActual('@/android/reasoning/ReasoningService'),
+);
+jest.mock('@/services/reasoning/buildProviderPrompt', () =>
+  jest.requireActual('@/android/reasoning/buildProviderPrompt'),
+);
+jest.mock('@/services/agent/composerPrompt', () =>
+  jest.requireActual('@/android/reasoning/composerPrompt'),
+);
 jest.mock('@/lib/meetingRecoveryLifecycle', () =>
   jest.requireActual('@/lib/meetingRecoveryLifecycle.android'),
 );
@@ -27,7 +57,7 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
 }));
 jest.mock('../../../modules/audio-tools/src', () => ({ AudioTools: {} }));
-jest.mock('@/lib/transcribeAndCleanup', () => ({ transcribeAndCleanup: jest.fn() }));
+jest.mock('@/android/dictation/transcribeAndCleanup', () => ({ transcribeAndCleanup: jest.fn() }));
 jest.mock('@/lib/appsflyer', () => ({ logTranscriptionCompleted: jest.fn() }));
 import Database from 'better-sqlite3';
 import type { Folder } from '@/data/types';

@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import { abortError } from '../providers/NativeProviderTransport';
+import { abortError } from '@/services/providers/NativeProviderTransport';
 
 export async function uploadTranscriptionAudio(
   url: string,

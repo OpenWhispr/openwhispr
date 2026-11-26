@@ -62,7 +62,7 @@ import {
   shouldUseLocalReasoning,
 } from '@/lib/localReasoning';
 import { providerDisplayName } from '@/android/providers/mobileProviders';
-import { promptLocalReasoningFallback } from '@/lib/localReasoningFallback';
+import { promptLocalReasoningFallback } from '@/android/dictation/localReasoningFallback';
 import { confirmCloudOnce, confirmDestructive } from '@/lib/alerts';
 import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
 import { isDefaultGenerateNotesAction } from '@/lib/notes/generateNotesPrompt';

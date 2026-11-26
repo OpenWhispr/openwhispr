@@ -7,7 +7,7 @@ import {
 import type {
   RealtimeMeetingDeps,
   WebSocketLike,
-} from '@/services/transcription/createRealtimeMeetingWs';
+} from '@/android/transcription/createRealtimeMeetingWs';
 import { assemblyAiLiveSocket, assemblyAiStreamingToken } from './assemblyai';
 import { deepgramLiveSocket } from './deepgram';
 import { requestJson } from './http';

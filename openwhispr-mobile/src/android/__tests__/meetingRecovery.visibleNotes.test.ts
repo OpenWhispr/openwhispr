@@ -1,3 +1,30 @@
+// Shared files reach Android's copies through these paths, as Metro's re-exports do.
+jest.mock('@/services/transcription/TranscriptionService', () =>
+  jest.requireActual('@/android/transcription/TranscriptionService'),
+);
+jest.mock('@/services/transcription/LocalTranscriptionService', () =>
+  jest.requireActual('@/android/transcription/LocalTranscriptionService'),
+);
+jest.mock('@/services/diarization/DiarizationService', () =>
+  jest.requireActual('@/android/transcription/DiarizationService'),
+);
+jest.mock('@/lib/cleanupTranscript', () =>
+  jest.requireActual('@/android/dictation/cleanupTranscript'),
+);
+jest.mock('@/lib/transcribeAndCleanup', () =>
+  jest.requireActual('@/android/dictation/transcribeAndCleanup'),
+);
+jest.mock('@/lib/localReasoningFallback', () =>
+  jest.requireMock('@/android/dictation/localReasoningFallback'),
+);
+jest.mock('@/lib/snippets', () => jest.requireActual('@/android/dictation/snippets'));
+jest.mock('@/lib/mobileProviders', () => jest.requireActual('@/android/providers/mobileProviders'));
+jest.mock('@/services/reasoning/buildProviderPrompt', () =>
+  jest.requireActual('@/android/reasoning/buildProviderPrompt'),
+);
+jest.mock('@/services/agent/composerPrompt', () =>
+  jest.requireActual('@/android/reasoning/composerPrompt'),
+);
 import * as FileSystem from 'expo-file-system/legacy';
 import { eq } from 'drizzle-orm';
 import { notes } from '@/db/schema';
@@ -53,10 +80,15 @@ jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ config: {} }), subscribe: () => () => {} },
 }));
 jest.mock('@/services/reasoning/ReasoningService', () => ({ ReasoningService: {} }));
+jest.mock('@/android/reasoning/ReasoningService', () =>
+  jest.requireMock('@/services/reasoning/ReasoningService'),
+);
 jest.mock('@/lib/notes/localMeetingNotes', () => ({ generateLocalMeetingNotes: jest.fn() }));
 jest.mock('@/lib/appsflyer', () => ({ logTranscriptionCompleted: jest.fn() }));
 jest.mock('@/data/remote/notesApi', () => ({ deleteNote: jest.fn() }));
-jest.mock('@/lib/localReasoningFallback', () => ({ promptLocalReasoningFallback: jest.fn() }));
+jest.mock('@/android/dictation/localReasoningFallback', () => ({
+  promptLocalReasoningFallback: jest.fn(),
+}));
 
 beforeEach(() => {
   mockMemory = createMemoryRepository();

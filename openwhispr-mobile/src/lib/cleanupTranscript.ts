@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import { resolveMobileInferenceRoute } from '@/lib/mobileProviders';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -8,7 +7,6 @@ import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { requiresRealAccount } from './accountAccess';
 import type {
   KeyboardTone,
-  ToneAppCategory,
   LocalReasoningReadiness,
   ReasoningRequest,
   TextInferenceSnapshot,
@@ -18,7 +16,6 @@ import { buildDictationHintTiers } from './dictationHints';
 import { splitLlmDictionary, type LlmDictionary } from './snippets';
 import { fitDictionaryOnDevice } from './onDeviceDictionary';
 import { buildProviderPrompt } from '@/services/reasoning/buildProviderPrompt';
-import { createTimeoutSignal, localCleanupInstructions } from './cleanupLifecycle';
 import {
   LOCAL_CLEANUP_MAX_TRANSCRIPT_TOKENS,
   countLocalReasoningTokens,
@@ -39,10 +36,7 @@ interface CleanupOptions
   inferenceRoute?: ReasoningRequest['inferenceRoute'];
   requireProvider?: boolean;
   onSkipped?: (reason: string) => void;
-  signal?: AbortSignal;
   tone?: KeyboardTone;
-  // Sent only with a tone; on its own it says nothing.
-  appCategory?: ToneAppCategory;
   includeSnippetTriggers?: boolean;
   context?: CleanupContext;
 }
@@ -50,6 +44,15 @@ interface CleanupOptions
 export const CLEANUP_TIMEOUT_MS = 12_000;
 export const CLEANUP_MAX_RETRIES = 1;
 export const CLEANUP_INITIAL_RETRY_DELAY_MS = 750;
+
+function createTimeoutSignal(timeoutMs: number): { signal: AbortSignal; cancel: () => void } {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  return {
+    signal: controller.signal,
+    cancel: () => clearTimeout(timeout),
+  };
+}
 
 // Apple Intelligence writes a cleaned copy about as long as the transcript, at roughly 30 tokens a
 // second on an iPhone 15 Pro (Apple's figure), so a long one can't finish in Cloud's 12 s. The rate
@@ -70,8 +73,7 @@ const TOO_LONG_FOR_ON_DEVICE = 'This transcript is too long for On-Device cleanu
 // Why an on-device pass can't run, or the transcript's length in tokens.
 async function prepareLocalRun(
   text: string,
-): Promise<{ skipReason: string } | { tokens?: number; readiness?: LocalReasoningReadiness }> {
-  if (Platform.OS === 'android') return {};
+): Promise<{ skipReason: string } | { tokens: number; readiness: LocalReasoningReadiness }> {
   let readiness = await getLocalReasoningReadiness();
   // The cached answer outlives a fix in iOS Settings, so check again before refusing.
   if (readiness.status !== 'ready') readiness = await getLocalReasoningReadiness({ refresh: true });
@@ -87,7 +89,7 @@ async function prepareLocalRun(
 // Apple Intelligence's common failures say what happened. The only signal a cleanup run gets is
 // its timeout, so a cancelled one took too long.
 function cleanupFailureReason(error: unknown): string {
-  if (Platform.OS === 'ios' && error instanceof LocalReasoningError) {
+  if (error instanceof LocalReasoningError) {
     if (error.code === 'APPLE_LLM_CANCELLED') return 'Apple Intelligence took too long.';
     if (error.code === 'APPLE_LLM_RATE_LIMITED') return 'Apple Intelligence was busy.';
     if (error.code === 'APPLE_LLM_UNSUPPORTED_LANGUAGE') return UNSUPPORTED_LANGUAGE_MESSAGE;
@@ -132,6 +134,7 @@ export async function cleanupTranscript(
     ? getDictationAgentName(cfg ?? { defaultMode: activeMode })
     : undefined;
 
+  let timeoutMs = CLEANUP_TIMEOUT_MS;
   const snapshottedRoute = options.inferenceRoute ?? options.cleanupRoute;
   if (options.cleanupUnavailable) {
     options.onSkipped?.(options.cleanupUnavailable);
@@ -162,10 +165,6 @@ export async function cleanupTranscript(
     return rawText;
   }
   const inferenceRoute = resolved.route;
-  // First-use CPU model loading and prefill are slower than a hosted request.
-  // Keep the existing network timeout; local work remains user-cancellable.
-  let timeoutMs =
-    Platform.OS === 'android' && inferenceRoute.mode === 'local' ? 120_000 : CLEANUP_TIMEOUT_MS;
   // A cleanup provider route only ever comes from the provider the user saved for cleanup, so it is
   // sent there even in On-Device mode. An on-device route takes the privacy hint. A Cloud route is
   // either the user's choice or a Cloud fallback they just consented to while still in private
@@ -185,9 +184,6 @@ export async function cleanupTranscript(
     language: lang,
     locale: lang,
     tone: options.tone,
-    ...(options.tone && options.tone !== 'default' && options.appCategory
-      ? { appCategory: options.appCategory }
-      : {}),
     agentName,
     customPrompt: getActiveCustomCleanupPrompt(),
   };
@@ -203,19 +199,13 @@ export async function cleanupTranscript(
       options.onSkipped?.(`${localRun.skipReason} Your raw transcript is saved.`);
       return rawText;
     }
-    if (Platform.OS === 'ios' && localRun.tokens !== undefined) {
-      timeoutMs = localCleanupTimeoutMs(localRun.tokens);
-    }
+    timeoutMs = localCleanupTimeoutMs(localRun.tokens);
     // Built as ReasoningService builds the on-device cleanup prompt.
     dictionary = await fitDictionaryOnDevice(
       hintTiers,
       (candidate) => {
-        const candidateRequest = withDictionary(candidate);
-        const prompt = buildProviderPrompt(candidateRequest);
-        return {
-          instructions: localCleanupInstructions(candidateRequest, prompt),
-          prompt: prompt.text,
-        };
+        const prompt = buildProviderPrompt(withDictionary(candidate));
+        return { instructions: prompt.systemPrompt, prompt: prompt.text };
       },
       localRun.readiness,
     );
@@ -227,7 +217,7 @@ export async function cleanupTranscript(
     let retryCount = 0;
     const result = await withRetry(
       async () => {
-        const { signal, cancel } = createTimeoutSignal(timeoutMs, options);
+        const { signal, cancel } = createTimeoutSignal(timeoutMs);
         try {
           return await ReasoningService.processText({ ...finalRequest, signal, timeoutMs });
         } finally {

@@ -1,6 +1,6 @@
 import type { ReasoningRequest } from '@/types';
 import type { ProviderPrompt } from '@/android/reasoning/buildProviderPrompt';
-import type { SignalOwner } from '@/services/transcription/transcriptionLifecycle';
+import type { SignalOwner } from '@/android/transcription/transcriptionLifecycle';
 import { buildLocalReasoningInstructions } from '@/services/reasoning/LocalReasoningService';
 
 export function createTimeoutSignal(

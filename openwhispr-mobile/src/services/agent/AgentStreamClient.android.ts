@@ -9,7 +9,7 @@ import {
 } from '@/lib/apiClient';
 import { parseApiErrorBody } from '@/lib/apiErrorBody';
 import { withRetry } from '@/lib/retry';
-import { stripThinkingTags } from '@/services/reasoning/buildProviderPrompt';
+import { stripThinkingTags } from '@/android/reasoning/buildProviderPrompt';
 
 // Single budget for the entire streaming call: connect + receive.
 const AGENT_STREAM_TIMEOUT_MS = 55_000;

@@ -3,12 +3,13 @@ import { downloadAndroidModel, modelPath, modelReady, removeAndroidModel } from 
 import { withAndroidInference } from '@/android/inferenceQueue';
 import { LocalTextModel } from '@/android/LocalTextModel';
 import i18n from '@/android/strings';
-import type { Diarizer } from './diarizer';
+import type { Diarizer } from '@/lib/diarization/diarizer';
 
 let generation = 0;
 const model = 'meeting-speakers';
 
-export const AndroidDiarizer: Diarizer = {
+// Android's diarizer can also stop a run in progress.
+export const AndroidDiarizer: Diarizer & { cancel(): void } = {
   isAvailable: () => typeof AndroidDictation?.diarize === 'function',
   isModelDownloaded: () => modelReady(model),
   downloadModel: (onProgress) => downloadAndroidModel(model, onProgress),

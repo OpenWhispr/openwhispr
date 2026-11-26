@@ -91,7 +91,6 @@ src/lib/chat/chatHistory.ts
 src/lib/chat/chatTerms.ts
 src/lib/chat/runChatTurn.ts
 src/lib/chat/withChatHistory.ts
-src/lib/cleanupTranscript.ts
 src/lib/diarization/diarizationBridge.ts
 src/lib/diarization/diarizer.ts
 src/lib/diarization/embeddingCodec.ts
@@ -114,7 +113,6 @@ src/lib/keyboardInferenceRoute.ts
 src/lib/keyboardTone.ts
 src/lib/localModelCatalog.ts
 src/lib/localReasoning.ts
-src/lib/localReasoningFallback.ts
 src/lib/meetingRecovery.ts
 src/lib/noteExport.ts
 src/lib/notes/chatOverNote.ts
@@ -150,13 +148,10 @@ src/lib/retry.ts
 src/lib/revenuecatCore.ts
 src/lib/sentry.ts
 src/lib/sharedDictionaryHints.ts
-src/lib/snippetExpansion.ts
-src/lib/snippets.ts
 src/lib/spacePermissions.ts
 src/lib/speechActivity.ts
 src/lib/superwall.ts
 src/lib/trackingTransparency.ts
-src/lib/transcribeAndCleanup.ts
 src/lib/transcriptAudioCore.ts
 src/lib/transcriptionErrors.ts
 src/lib/transcriptionLanguage.ts
@@ -173,16 +168,12 @@ src/services/calendar/GoogleCalendarService.ts
 src/services/calendar/googleCalendarApi.ts
 src/services/calendar/googleCalendarSync.ts
 src/services/calendar/googleCalendarTelemetry.ts
-src/services/diarization/DiarizationService.ts
 src/services/diarization/VoiceprintService.ts
 src/services/providers/ProviderCredentialScope.ts
 src/services/providers/ProviderPolicy.ts
 src/services/storage/StorageService.ts
 src/services/transcription/LocalParakeetService.ts
-src/services/transcription/LocalTranscriptionService.ts
 src/services/transcription/LocalWhisperService.ts
-src/services/transcription/TranscriptionService.ts
-src/services/transcription/createRealtimeMeetingWs.ts
 src/services/transcription/localEngine.ts
 src/services/transcription/parakeetModelDownloader.ts
 src/services/transcription/parakeetSegments.ts

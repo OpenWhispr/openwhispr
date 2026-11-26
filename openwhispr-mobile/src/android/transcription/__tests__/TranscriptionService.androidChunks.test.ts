@@ -1,9 +1,11 @@
-jest.mock('../cloudAudio', () => jest.requireActual('../cloudAudio.android'));
-jest.mock('../transcriptionLifecycle', () =>
-  jest.requireActual('../transcriptionLifecycle.android'),
+jest.mock('@/android/transcription/cloudAudio', () =>
+  jest.requireActual('@/android/transcription/cloudAudio'),
 );
-jest.mock('../uploadTranscriptionAudio', () =>
-  jest.requireActual('../uploadTranscriptionAudio.android'),
+jest.mock('@/android/transcription/transcriptionLifecycle', () =>
+  jest.requireActual('@/android/transcription/transcriptionLifecycle'),
+);
+jest.mock('@/android/transcription/uploadTranscriptionAudio', () =>
+  jest.requireActual('@/android/transcription/uploadTranscriptionAudio'),
 );
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -24,8 +26,8 @@ jest.mock('expo-file-system/legacy', () => ({
   FileSystemUploadType: { MULTIPART: 1 },
   FileSystemSessionType: { FOREGROUND: 0 },
 }));
-jest.mock('../LocalWhisperService', () => ({ LocalWhisperService: {} }));
-jest.mock('../LocalTranscriptionService', () => ({
+jest.mock('@/services/transcription/LocalWhisperService', () => ({ LocalWhisperService: {} }));
+jest.mock('@/android/transcription/LocalTranscriptionService', () => ({
   LocalTranscriptionService: { isAvailable: () => true, transcribe: jest.fn() },
 }));
 jest.mock('@/lib/inferenceRouting', () => ({ getPickedLocalModel: () => 'parakeet-v3' }));
@@ -34,7 +36,7 @@ jest.mock('@/lib/dictationHints', () => ({
   buildLlmDictionary: () => ({ personal: [], shared: [] }),
   isDictationContext: () => true,
 }));
-jest.mock('@/lib/cleanupTranscript', () => ({ CLEANUP_TIMEOUT_MS: 30000 }));
+jest.mock('@/android/dictation/cleanupTranscript', () => ({ CLEANUP_TIMEOUT_MS: 30000 }));
 jest.mock('../../../../modules/background-uploader/src', () => ({
   BackgroundUploader: { isAvailable: jest.fn(), upload: jest.fn() },
 }));
@@ -56,7 +58,7 @@ const { AndroidDictation: native } =
 const originalPlatform = Platform.OS;
 Platform.OS = 'android';
 const { TranscriptionService } =
-  require('../TranscriptionService') as typeof import('../TranscriptionService');
+  require('@/android/transcription/TranscriptionService') as typeof import('@/android/transcription/TranscriptionService');
 beforeEach(() => {
   jest.clearAllMocks();
   Platform.OS = 'android';

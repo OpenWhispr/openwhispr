@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import { AudioTools, type ChunkResult } from '../../../modules/audio-tools/src';
-import { abortError } from '../providers/NativeProviderTransport';
+import { abortError } from '@/services/providers/NativeProviderTransport';
 
 function androidAudio() {
   const { AndroidDictation } =

@@ -1,6 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { BackgroundUploader } from '../../../../modules/background-uploader/src';
-import { CloudAudioTools as AudioTools } from '../cloudAudio';
+import { AudioTools } from '../../../../modules/audio-tools/src';
 import { TranscriptionService } from '../TranscriptionService';
 import type { TranscriptionRequest } from '../../../types';
 
@@ -29,8 +29,8 @@ jest.mock('@/lib/cleanupTranscript', () => ({ CLEANUP_TIMEOUT_MS: 30000 }));
 jest.mock('../../../../modules/background-uploader/src', () => ({
   BackgroundUploader: { isAvailable: () => true, upload: jest.fn() },
 }));
-jest.mock('../cloudAudio', () => ({
-  CloudAudioTools: { isAvailable: () => true, splitToChunks: jest.fn(), cleanup: jest.fn() },
+jest.mock('../../../../modules/audio-tools/src', () => ({
+  AudioTools: { isAvailable: () => true, splitToChunks: jest.fn(), cleanup: jest.fn() },
 }));
 jest.mock('../../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: {},
@@ -152,16 +152,4 @@ describe('declared audio purpose', (): void => {
       }
     },
   );
-});
-
-it('does not opt iOS meeting uploads into Android empty-text recovery', async () => {
-  await TranscriptionService.transcribe({
-    audioUri: 'file:///recording.wav',
-    provider: 'cloud',
-    requestContext: 'file',
-    purpose: 'meeting',
-  });
-  expect(BackgroundUploader.upload).toHaveBeenCalled();
-  const options = jest.mocked(BackgroundUploader.upload).mock.calls[0][0];
-  expect(options.parameters?.androidMeetingRecovery).toBeUndefined();
 });

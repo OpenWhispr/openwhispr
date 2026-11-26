@@ -1,6 +1,8 @@
-jest.mock('@/lib/dictationLifecycle', () => jest.requireActual('@/lib/dictationLifecycle.android'));
-jest.mock('@/services/transcription/transcriptionLifecycle', () =>
-  jest.requireActual('@/services/transcription/transcriptionLifecycle.android'),
+jest.mock('@/android/dictation/dictationLifecycle', () =>
+  jest.requireActual('@/android/dictation/dictationLifecycle'),
+);
+jest.mock('@/android/transcription/transcriptionLifecycle', () =>
+  jest.requireActual('@/android/transcription/transcriptionLifecycle'),
 );
 jest.mock('../insights', () => ({
   insightsScope: () => 'device',
@@ -14,10 +16,10 @@ import {
   type DictationMode,
 } from '../pipeline';
 import { SELECTION_EDIT_SYSTEM_PROMPT } from '../selectionEdit';
-import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
-import { cleanupTranscript } from '@/lib/cleanupTranscript';
+import { transcribeAndCleanup } from '@/android/dictation/transcribeAndCleanup';
+import { cleanupTranscript } from '@/android/dictation/cleanupTranscript';
 import type { TranscriptionJobRoute } from '@/lib/inferenceRouting';
-import { TranscriptionService } from '@/services/transcription/TranscriptionService';
+import { TranscriptionService } from '@/android/transcription/TranscriptionService';
 import { ReasoningService } from '@/android/reasoning/ReasoningService';
 import type { TranscriptionProvider } from '@/types';
 
@@ -27,7 +29,7 @@ jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguage: () => undefined,
   getPreferredTranscriptionLanguages: () => [],
 }));
-jest.mock('@/services/transcription/TranscriptionService', () => ({
+jest.mock('@/android/transcription/TranscriptionService', () => ({
   TranscriptionService: {
     transcribe: jest.fn(async ({ provider }: { provider: TranscriptionProvider }) => ({
       text: 'original words',
@@ -48,7 +50,7 @@ jest.mock('@/services/transcription/TranscriptionService', () => ({
   },
   isLocalModelMissingError: () => false,
 }));
-jest.mock('@/lib/cleanupTranscript', () => ({
+jest.mock('@/android/dictation/cleanupTranscript', () => ({
   cleanupTranscript: jest.fn(async () => 'Discarded cleanup.'),
 }));
 // Shared files reach Android's service through the shared path, as Metro's re-export does.
@@ -66,7 +68,7 @@ jest.mock('@/android/reasoning/ReasoningService', () => ({
     })),
   },
 }));
-jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
+jest.mock('@/android/transcription/LocalTranscriptionService', () => ({
   LocalTranscriptionService: { cancelTranscription: jest.fn() },
 }));
 jest.mock('@/lib/permissions', () => ({ isNoSpeechError: () => false }));

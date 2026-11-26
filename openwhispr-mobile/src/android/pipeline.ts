@@ -4,14 +4,14 @@ import {
   observeTranscriptScope,
   type TranscriptScope,
 } from '@/lib/transcriptScope';
-import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
+import { transcribeAndCleanup } from '@/android/dictation/transcribeAndCleanup';
 import { snapshotTranscriptionJob, type TranscriptionJobRoute } from '@/lib/inferenceRouting';
 import {
   getPreferredTranscriptionLanguage,
   getPreferredTranscriptionLanguages,
 } from '@/lib/transcriptionLanguage';
 import { ReasoningService } from '@/android/reasoning/ReasoningService';
-import { LocalTranscriptionService } from '@/services/transcription/LocalTranscriptionService';
+import { LocalTranscriptionService } from '@/android/transcription/LocalTranscriptionService';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useTranscriptStore } from '@/store/useTranscriptStore';
 import { modelReady } from './models';
