@@ -162,6 +162,32 @@ test("the Slack window the hotkey was pressed over reaches only Slack's prepare"
   assert.deepEqual(asked, [event]);
 });
 
+test("an account switch while the Slack window title is read gives the prepare the new account", async () => {
+  const { registerConnectorIpc } = await load();
+  const ipcMain = fakeIpcMain();
+  const manager = fakeManager();
+  let scope = SCOPE;
+  registerConnectorIpc({
+    ipcMain,
+    manager,
+    getPolicyState: async () => "allowed",
+    getAccountScope: () => scope,
+    getSlackWindowTitle: async () => {
+      scope = { accountId: "account-b", authGeneration: 4 };
+      return "eng (Channel) - Acme - Slack";
+    },
+  });
+  await ipcMain.handlers.get("connector-prepare")(
+    { sender: "agent-window" },
+    "slack",
+    "send_message",
+    {
+      text: "hi",
+    }
+  );
+  assert.equal(manager.calls[0].args[3].accountId, "account-b");
+});
+
 test("a cancel that lands while a direct run waits on policy stops it", async () => {
   const { registerConnectorIpc } = await load();
   const ipcMain = fakeIpcMain();

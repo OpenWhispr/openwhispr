@@ -154,9 +154,12 @@ function registerConnectorIpc({
     if (!isNonEmptyString(connectorId) || !isNonEmptyString(action) || !isPlainObject(args)) {
       return { status: "unavailable", reason: "invalid_request" };
     }
+    // Read before the account, so a switch while a title read runs can't pair
+    // the account from before it with the login after it.
+    const slackWindowTitle = connectorId === "slack" ? await getSlackWindowTitle(event) : null;
     return manager.prepare(connectorId, action, args, {
       ...(await resolveCallAuth(event)),
-      slackWindowTitle: connectorId === "slack" ? await getSlackWindowTitle(event) : null,
+      slackWindowTitle,
     });
   });
 
