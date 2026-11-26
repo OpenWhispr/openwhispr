@@ -336,7 +336,7 @@
 }
 
 /* The speaking glow in a call's status cap: a monochrome bloom rising from the
-   pill, as strong as the reply is loud (VoicePill sets --voice-level). */
+   pill, as strong as the reply is loud (useSoundMeter sets --voice-level on VoicePill). */
 .voice-pill-glow {
   animation: voice-pill-swap 180ms ease-out;
   background: radial-gradient(

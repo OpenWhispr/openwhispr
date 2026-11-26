@@ -10,7 +10,7 @@ interface SoundBarsProps {
   ref?: Ref<HTMLDivElement>;
   /** Work in progress: a blue wave runs across the bars, as the shimmer does across "Thinking…". */
   shimmer?: boolean;
-  /** Dimmed while there is no sound to follow (the call's microphone off). */
+  /** Dimmed while the call isn't running, or its microphone is off and nothing plays. */
   dimmed?: boolean;
 }
 

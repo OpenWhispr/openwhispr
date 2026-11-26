@@ -91,7 +91,7 @@ export function AgentPill({
         </span>
       ) : controls.waveform ? (
         // The bars' own width, with as much space before them as the divider leaves after.
-        <span className="flex h-6 shrink-0 items-center ps-0.5">
+        <span className="flex shrink-0 items-center ps-0.5">
           <SoundBars ref={barsRef} />
         </span>
       ) : null}
