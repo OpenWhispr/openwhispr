@@ -3,7 +3,7 @@ import { Alert, Platform, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
-import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
+import { toFriendlyTranscriptionErrorMessage } from '@/android/shared/lib/transcriptionErrors';
 import { useTranscriptStore } from '@/android/store/useTranscriptStore';
 import { applyHistoryRetention } from '../pipeline';
 import { SettingsPage, showToast } from '../settings/kit';

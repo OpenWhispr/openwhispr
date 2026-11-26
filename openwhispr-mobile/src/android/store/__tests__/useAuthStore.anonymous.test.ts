@@ -33,10 +33,16 @@ jest.mock('@/store/useUsageStore', () => ({
 }));
 jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 jest.mock('@/services/agent/AgentComposerService', () => ({ clearAllSessions: jest.fn() }));
+jest.mock('@/android/shared/services/agent/AgentComposerService', () =>
+  jest.requireMock('@/services/agent/AgentComposerService'),
+);
 jest.mock('@/lib/chat/chatHistory', () => ({
   clearChatHistory: jest.fn(),
   stopChatTurn: jest.fn(),
 }));
+jest.mock('@/android/shared/lib/chat/chatHistory', () =>
+  jest.requireMock('@/lib/chat/chatHistory'),
+);
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn().mockResolvedValue(null),
   setItemAsync: jest.fn(),

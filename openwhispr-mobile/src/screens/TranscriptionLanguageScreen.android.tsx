@@ -3,8 +3,8 @@ import { Alert, FlatList, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import registry from '@/config/languageRegistry.json';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import { safeHaptics } from '@/lib/utils';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
+import { safeHaptics } from '@/android/shared/lib/utils';
 import { speechModelSupportsLanguages } from '@/android/speechCapabilities';
 import type { AndroidSpeechModelId } from '@/android/speechSelection';
 import {

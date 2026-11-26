@@ -1,8 +1,8 @@
 import { Alert } from 'react-native';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import { workflowSaveConfig } from '@/lib/inferenceModes';
-import { androidCopy } from '@/lib/androidCopy';
+import { androidCopy } from '@/android/shared/lib/androidCopy';
 import {
   resolveMobileInferenceRoute,
   type InferenceSelection,
@@ -45,7 +45,7 @@ async function providerUsable(selection: InferenceSelection): Promise<boolean> {
   const { getProviderCredentialStatus } =
     require('@/services/providers/ProviderCredentials') as typeof import('@/services/providers/ProviderCredentials');
   const { getProviderPolicy } =
-    require('@/services/providers/ProviderPolicy') as typeof import('@/services/providers/ProviderPolicy');
+    require('@/android/shared/services/providers/ProviderPolicy') as typeof import('@/android/shared/services/providers/ProviderPolicy');
   const resolved = resolveMobileInferenceRoute({
     scope: 'dictation',
     selection,

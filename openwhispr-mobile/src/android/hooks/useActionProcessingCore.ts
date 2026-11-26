@@ -6,9 +6,9 @@ import {
   type GenerateNotesInputKind,
   type BuildActionSystemPromptInput,
 } from '@/android/lib/notes/generateNotesPromptCore';
-import { fitDictionaryOnDevice } from '@/lib/onDeviceDictionary';
+import { fitDictionaryOnDevice } from '@/android/shared/lib/onDeviceDictionary';
 import { splitLlmDictionary, type LlmDictionary } from '@/android/dictation/snippets';
-import type { Action } from '@/data';
+import type { Action } from '@/android/shared/data';
 import type { ReasoningRoutingOptions } from '@/android/types';
 
 export type ProcessingState = 'idle' | 'processing' | 'success';

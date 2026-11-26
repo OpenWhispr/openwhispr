@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { useAuthStore } from '@/android/store/useAuthStore';
-import { getAccountDisplay } from '@/lib/accountDisplay';
+import { getAccountDisplay } from '@/android/shared/lib/accountDisplay';
 import { useHomeT } from './strings';
 import { themeFor, useTheme, type AndroidTheme } from '../ThemeProvider';
 import type { Scheme } from '../theme';

@@ -1,18 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Linking, View } from 'react-native';
-import { calendarRepository } from '@/data/calendarRepository';
-import { notesRepository } from '@/data';
-import { searchNoteAccessPrincipals } from '@/data/remote/noteSharingApi';
+import { calendarRepository } from '@/android/shared/data/calendarRepository';
+import { notesRepository } from '@/android/shared/data';
+import { searchNoteAccessPrincipals } from '@/android/shared/data/remote/noteSharingApi';
 import type { CalendarParticipant, GoogleCalendarEvent } from '@/data/calendarTypes';
 import type { Note } from '@/data/types';
 import {
   buildCalendarMeetingContext,
   parseCalendarParticipants,
-} from '@/lib/calendar/meetingContext';
+} from '@/android/shared/lib/calendar/meetingContext';
 import { formatNoteMetaDate, markViewer, noteTakenAt } from '@/android/lib/notes/noteMeta';
 import { Sentry } from '@/android/lib/sentry';
-import { safeHaptics } from '@/lib/utils';
-import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
+import { safeHaptics } from '@/android/shared/lib/utils';
+import { useGoogleCalendarStore } from '@/android/shared/store/useGoogleCalendarStore';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useNotesStore } from '@/android/store/useNotesStore';
 import { showToast } from '../settings/kit';

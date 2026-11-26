@@ -1,3 +1,8 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/lib/accountRequiredError', () =>
+  jest.requireActual('@/android/shared/lib/accountRequiredError'),
+);
+jest.mock('@/lib/apiErrorBody', () => jest.requireActual('@/android/shared/lib/apiErrorBody'));
 import { parseApiErrorBody } from '@/lib/apiErrorBody';
 import {
   ACCOUNT_REQUIRED_CODE,

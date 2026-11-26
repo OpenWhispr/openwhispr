@@ -9,30 +9,30 @@ import {
 } from '@/lib/inferenceRouting';
 import { transcribeAndCleanup } from '@/android/dictation/transcribeAndCleanup';
 import { isLocalModelMissingError } from '@/android/transcription/TranscriptionService';
-import { analyzeSpeechActivity, createNoSpeechError } from '@/lib/speechActivity';
+import { analyzeSpeechActivity, createNoSpeechError } from '@/android/shared/lib/speechActivity';
 import {
   isMicPermissionError,
   isNoSpeechError,
   MicPermissionError,
   NO_SPEECH_ERROR_MESSAGE,
-} from '@/lib/permissions';
-import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
-import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
+} from '@/android/shared/lib/permissions';
+import { getPreferredTranscriptionLanguage } from '@/android/shared/lib/transcriptionLanguage';
+import { toFriendlyTranscriptionErrorMessage } from '@/android/shared/lib/transcriptionErrors';
 import { deleteManagedTranscriptAudio, retainTranscriptAudio } from '@/lib/transcriptAudio';
-import { isUsageLimitError, type UsageLimitError } from '@/lib/usageLimitError';
-import { randomUUID } from '@/lib/uuid';
+import { isUsageLimitError, type UsageLimitError } from '@/android/shared/lib/usageLimitError';
+import { randomUUID } from '@/android/shared/lib/uuid';
 import {
   captureDictationContext,
   recordDictationCompleted,
   type ProductEventsCaptureContext,
 } from '@/android/lib/productEvents';
-import { countSpokenWords } from '@/lib/wordCount';
+import { countSpokenWords } from '@/android/shared/lib/wordCount';
 import type { TranscriptionProvider } from '@/android/types';
 import {
   getExpoAudioModule,
   isExpoAudioAvailable,
   getDefaultRecorderOptions,
-} from '@/utils/expoAudio';
+} from '@/android/shared/utils/expoAudio';
 import { useAudioRecorder } from 'expo-audio';
 
 export interface UseAudioRecordingOptions {

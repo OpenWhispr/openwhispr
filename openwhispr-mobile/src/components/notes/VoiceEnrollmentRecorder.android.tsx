@@ -8,9 +8,9 @@ import Svg, { Circle } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { WaveformVisualizer } from '@/components/features/WaveformVisualizer';
+import { WaveformVisualizer } from '@/android/shared/components/features/WaveformVisualizer';
 import { useAudioRecording } from '@/android/hooks/useAudioRecording';
-import { useAudioWaveform } from '@/hooks/useAudioWaveform';
+import { useAudioWaveform } from '@/android/shared/hooks/useAudioWaveform';
 import { useTheme } from '@/android/ThemeProvider';
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/android/data/notesRepository';
 import {
@@ -18,12 +18,12 @@ import {
   VoiceEnrollmentError,
   type EnrollVoiceProfileInput,
   type ReenrollVoiceProfileInput,
-} from '@/services/diarization/VoiceprintService';
+} from '@/android/shared/services/diarization/VoiceprintService';
 import {
   VOICE_ENROLLMENT_UNEXPLAINED_FAILURE,
   voiceEnrollmentFailureMessage,
-} from '@/lib/voiceEnrollmentMessages';
-import { isMicPermissionError, showMicPermissionAlert } from '@/lib/permissions';
+} from '@/android/shared/lib/voiceEnrollmentMessages';
+import { isMicPermissionError, showMicPermissionAlert } from '@/android/shared/lib/permissions';
 import { Sentry } from '@/android/lib/sentry';
 
 type Phase =

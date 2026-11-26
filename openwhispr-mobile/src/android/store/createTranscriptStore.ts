@@ -1,13 +1,13 @@
-import { isProviderJobActive } from '@/lib/providerJobActivity';
-import { AppGroupStorage } from '../../../modules/app-group-storage/src';
+import { isProviderJobActive } from '@/android/shared/lib/providerJobActivity';
+import { AppGroupStorage } from '@/android/shared/modules/app-group-storage/index';
 import {
   listPendingProviderRecoveryJobs,
   clearKeyboardProviderRecovery,
 } from '@/android/lib/keyboardInferenceRoute';
-import { AudioTools } from '../../../modules/audio-tools/src';
+import { AudioTools } from '@/android/shared/modules/audio-tools/index';
 import { transcribeAndCleanup } from '@/android/dictation/transcribeAndCleanup';
-import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
-import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
+import { getPreferredTranscriptionLanguage } from '@/android/shared/lib/transcriptionLanguage';
+import { toFriendlyTranscriptionErrorMessage } from '@/android/shared/lib/transcriptionErrors';
 import {
   deleteManagedTranscriptAudio,
   isManagedTranscriptAudioUri,
@@ -16,7 +16,7 @@ import {
   RETAINED_AUDIO_MAX_AGE_MS,
   transcriptAudioExists,
 } from '@/lib/transcriptAudio';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import { snapshotTextInference, snapshotTranscriptionJob } from '@/lib/inferenceRouting';
 import { logTranscriptionCompleted } from '@/android/lib/appsflyer';
 import type { KeyboardTone, Transcript, TranscriptionProvider } from '@/android/types';

@@ -16,8 +16,11 @@ jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: (select: (state: { activeMode: typeof mockMode }) => unknown) =>
     select({ activeMode: mockMode }),
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('expo-router', () => ({ router: {} }));
-jest.mock('@/lib/androidCopy', () => ({
+jest.mock('@/android/shared/lib/androidCopy', () => ({
   androidCopy: (_key: string, fallback: string) => fallback,
 }));
 jest.mock('@/android/CloudMeetingScreen', () => ({

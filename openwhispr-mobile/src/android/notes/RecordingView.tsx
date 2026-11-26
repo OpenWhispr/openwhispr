@@ -3,7 +3,7 @@ import { Animated, Easing, Pressable, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useNavigation } from 'expo-router';
 import { Text } from '@/components/ui/Text';
-import { AppFont } from '@/lib/fonts';
+import { AppFont } from '@/android/shared/lib/fonts';
 import { useNavigationBarCanvas } from '../navigationBar';
 import { BackButton, useNotesLook } from './look';
 import { MetaChip, NoteTabs, type NoteTab } from './noteParts';

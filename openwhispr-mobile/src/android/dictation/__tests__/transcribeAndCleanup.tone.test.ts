@@ -23,6 +23,7 @@ jest.mock('@/android/dictation/cleanupTranscript', () => ({
 jest.mock('@/lib/permissions', () => ({
   isNoSpeechError: jest.fn(() => false),
 }));
+jest.mock('@/android/shared/lib/permissions', () => jest.requireMock('@/lib/permissions'));
 
 let mockConfig: Record<string, unknown> = { cleanupEnabled: true };
 jest.mock('@/store/useConfigStore', () => ({
@@ -54,6 +55,9 @@ jest.mock('@/android/store/useDictionaryStore', () =>
 jest.mock('@/store/useCustomPromptsStore', () => ({
   getActiveCustomCleanupPrompt: () => undefined,
 }));
+jest.mock('@/android/shared/store/useCustomPromptsStore', () =>
+  jest.requireMock('@/store/useCustomPromptsStore'),
+);
 
 // transcribeAndCleanup now imports ReasoningService for the defensive agent path.
 // Mock it so expo/fetch doesn't bleed into this test suite.
@@ -67,6 +71,9 @@ let mockActiveMode = 'cloud';
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: mockActiveMode }) },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 
 const PROVIDER_ROUTE = {
   mode: 'providers' as const,

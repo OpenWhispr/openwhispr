@@ -17,10 +17,13 @@ import {
   type SQLWrapper,
 } from 'drizzle-orm';
 import * as FileSystem from 'expo-file-system/legacy';
-import { parseRemoteTranscript, serializeSegmentsForSync } from '@/lib/notes/remoteTranscript';
-import { randomUUID } from '@/lib/uuid';
-import { isFolderAwaitingUpload } from '@/lib/notes/folderUpload';
-import { LATIN_WORD_TERM, NUMBER_TERM, WHOLE_WORD_TERM } from '@/lib/chat/chatTerms';
+import {
+  parseRemoteTranscript,
+  serializeSegmentsForSync,
+} from '@/android/shared/lib/notes/remoteTranscript';
+import { randomUUID } from '@/android/shared/lib/uuid';
+import { isFolderAwaitingUpload } from '@/android/shared/lib/notes/folderUpload';
+import { LATIN_WORD_TERM, NUMBER_TERM, WHOLE_WORD_TERM } from '@/android/shared/lib/chat/chatTerms';
 import {
   folderDeleteJournal,
   folders,
@@ -34,13 +37,13 @@ import {
   speakerProfiles,
   spaces,
 } from '@/android/db/schema';
-import { isTranscriptionStatus } from '@/lib/diarization/diarizer';
+import { isTranscriptionStatus } from '@/android/shared/lib/diarization/diarizer';
 import {
   decodeEmbedding,
   encodeEmbedding,
   validateEmbedding,
-} from '@/lib/diarization/embeddingCodec';
-import type { TranscriptionStatus } from '@/lib/diarization/diarizer';
+} from '@/android/shared/lib/diarization/embeddingCodec';
+import type { TranscriptionStatus } from '@/android/shared/lib/diarization/diarizer';
 import type {
   NotesRepository,
   Note,

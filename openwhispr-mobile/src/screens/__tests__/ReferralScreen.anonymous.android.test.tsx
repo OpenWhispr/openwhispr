@@ -1,3 +1,7 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/lib/accountRequiredError', () =>
+  jest.requireActual('@/android/shared/lib/accountRequiredError'),
+);
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { Alert, Platform, Share } from 'react-native';
@@ -31,6 +35,7 @@ jest.mock('@/lib/referralApi', () => ({
 jest.mock('@/android/lib/referralApi', () => jest.requireMock('@/lib/referralApi'));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn(), isValidEmail: () => true }));
+jest.mock('@/android/shared/lib/utils', () => jest.requireMock('@/lib/utils'));
 jest.mock('@/lib/accountAccess', () => ({
   ...jest.requireActual('@/lib/accountRequiredError'),
   handleAccountRequiredError: jest.fn(() => false),

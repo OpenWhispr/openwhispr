@@ -19,6 +19,7 @@ jest.mock('@/components/settings/WorkflowSettingsHeader.android', () => ({
 }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));
+jest.mock('@/android/shared/lib/utils', () => jest.requireMock('@/lib/utils'));
 jest.mock('@/lib/aiWorkflows', () => ({
   WORKFLOW_LABELS: { dictation: 'Dictation' },
   parseWorkflow: (scope: string) => scope,

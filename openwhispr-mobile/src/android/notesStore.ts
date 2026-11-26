@@ -1,9 +1,9 @@
 import type { StoreApi, UseBoundStore } from 'zustand';
-import { notesRepository, spacesRepository } from '@/data';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { notesRepository, spacesRepository } from '@/android/shared/data';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import { createNotesStore, type NotesStore } from '@/android/store/createNotesStore';
 import { androidMeetingLifecycle } from './meetingLifecycle';
-import { assertTransition } from '@/lib/diarization/transcriptionStatus';
+import { assertTransition } from '@/android/shared/lib/diarization/transcriptionStatus';
 import { Sentry } from '@/android/lib/sentry';
 import { linesSaved } from './liveSpeakers/whenSaved';
 

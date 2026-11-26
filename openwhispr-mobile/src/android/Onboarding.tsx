@@ -6,8 +6,8 @@ import { handleAuthBack } from './auth/backPress';
 import { needsEmailVerification } from './auth/emailVerification';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { useSuperwallGate } from '@/hooks/useSuperwallGate';
-import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
+import { useSuperwallGate } from '@/android/shared/hooks/useSuperwallGate';
+import { SUPERWALL_PLACEMENTS } from '@/android/shared/lib/superwall';
 import { AndroidDictation } from '../../modules/android-dictation/src';
 import {
   clearProgress,

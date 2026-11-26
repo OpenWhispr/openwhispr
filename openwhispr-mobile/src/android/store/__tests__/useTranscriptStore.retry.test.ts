@@ -1,5 +1,12 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/lib/providerJobActivity', () =>
+  jest.requireActual('@/android/shared/lib/providerJobActivity'),
+);
 jest.mock('@/services/storage/StorageService.android', () =>
   jest.requireMock('@/services/storage/StorageService'),
+);
+jest.mock('@/android/shared/services/storage/StorageService', () =>
+  jest.requireMock('@/services/storage/StorageService.android'),
 );
 jest.mock('@/lib/transcriptAudio.android', () => jest.requireMock('@/lib/transcriptAudio'));
 let mockHistoryScope: { owner: string; key: string; revision: number } | null = null;
@@ -23,6 +30,9 @@ const mockAppGroupGetItem = jest.fn((_key: string): string | null => null);
 jest.mock('../../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: { getItem: mockAppGroupGetItem },
 }));
+jest.mock('@/android/shared/modules/app-group-storage/index', () =>
+  jest.requireMock('../../../../modules/app-group-storage/src'),
+);
 const mockSaveTranscripts = jest.fn();
 const mockGetTranscripts = jest.fn();
 const mockClearTranscripts = jest.fn();
@@ -63,6 +73,9 @@ jest.mock('@/android/dictation/transcribeAndCleanup', () =>
 jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguage: () => 'en',
 }));
+jest.mock('@/android/shared/lib/transcriptionLanguage', () =>
+  jest.requireMock('@/lib/transcriptionLanguage'),
+);
 
 jest.mock('@/lib/transcriptAudio', () => ({
   __esModule: true,
@@ -81,6 +94,9 @@ jest.mock('@/store/useProcessingModeStore', () => ({
     getState: () => mockProcessingModeState,
   },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: null }) },
@@ -99,6 +115,9 @@ jest.mock('../../../../modules/audio-tools/src', () => ({
     cleanup: mockAudioToolsCleanup,
   },
 }));
+jest.mock('@/android/shared/modules/audio-tools/index', () =>
+  jest.requireMock('../../../../modules/audio-tools/src'),
+);
 
 import type { Transcript } from '@/android/types';
 import { withActiveProviderJob } from '@/lib/providerJobActivity';

@@ -1,6 +1,6 @@
 import { useAuthStore } from '@/android/store/useAuthStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import { notesRepository } from '@/data';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
+import { notesRepository } from '@/android/shared/data';
 import { Sentry } from '@/android/lib/sentry';
 
 /** Observe transitions, including A -> B -> A, for the whole asynchronous job. */

@@ -1,6 +1,6 @@
-import { UsageLimitError } from '@/lib/usageLimitError';
-import { isAccountRequiredError } from '@/lib/accountRequiredError';
-import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
+import { UsageLimitError } from '@/android/shared/lib/usageLimitError';
+import { isAccountRequiredError } from '@/android/shared/lib/accountRequiredError';
+import { toFriendlyTranscriptionErrorMessage } from '@/android/shared/lib/transcriptionErrors';
 import type { BubbleMessage } from '../../modules/android-dictation/src';
 import type { DictationMode } from './pipeline';
 

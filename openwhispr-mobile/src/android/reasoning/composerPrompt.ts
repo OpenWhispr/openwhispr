@@ -1,5 +1,5 @@
 import type { KeyboardTone, ToneAppCategory } from '@/android/types';
-import { sharedDictionaryHint } from '@/lib/sharedDictionaryHints';
+import { sharedDictionaryHint } from '@/android/shared/lib/sharedDictionaryHints';
 
 // Tone sentences ported verbatim from openwhispr-api/lib/prompts.ts (TONE_INSTRUCTIONS).
 // Any change here must stay in sync with the server-side source.

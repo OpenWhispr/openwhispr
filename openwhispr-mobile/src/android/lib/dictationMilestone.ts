@@ -7,7 +7,7 @@ import {
   subscribeAppsFlyerAttribution,
 } from '@/android/lib/appsflyer';
 import type { recordDictationCompleted } from '@/android/lib/productEvents';
-import { isUsageAnalyticsAllowed } from '@/lib/usageAnalytics';
+import { isUsageAnalyticsAllowed } from '@/android/shared/lib/usageAnalytics';
 import { useConfigStore } from '@/android/store/useConfigStore';
 
 // The mobile ad-measurement milestone: one AppsFlyer event the first time this

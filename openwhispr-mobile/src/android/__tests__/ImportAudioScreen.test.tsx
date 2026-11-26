@@ -90,6 +90,9 @@ jest.mock('@/hooks/useSuperwallGate', () => ({
     },
   }),
 }));
+jest.mock('@/android/shared/hooks/useSuperwallGate', () =>
+  jest.requireMock('@/hooks/useSuperwallGate'),
+);
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: {
     getState: () => ({ user: { id: 'a' } }),
@@ -103,6 +106,9 @@ jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAut
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: (select: (state: unknown) => unknown) => select({ activeMode: mockMode }),
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: (select: (state: unknown) => unknown) => select({ config: {} }),
 }));
@@ -119,6 +125,9 @@ let mockLanguages: string[] = [];
 jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguages: () => mockLanguages,
 }));
+jest.mock('@/android/shared/lib/transcriptionLanguage', () =>
+  jest.requireMock('@/lib/transcriptionLanguage'),
+);
 jest.mock('../speechSelection', () => ({ selectedSpeechModel: () => 'parakeet-v3' }));
 jest.mock('../settings/modelCatalog', () => ({ modelName: () => 'Parakeet v3' }));
 jest.mock('@/lib/inferenceRouting', () => ({ snapshotTranscriptionJob: () => mockRoute }));
@@ -131,7 +140,8 @@ jest.mock('@/lib/superwall', () => ({
   SUPERWALL_PLACEMENTS: { audioUploadStart: 'upload' },
   buildUsageGateParams: jest.fn(),
 }));
-jest.mock('@/lib/notes/importDestination', () => ({
+jest.mock('@/android/shared/lib/superwall', () => jest.requireMock('@/lib/superwall'));
+jest.mock('@/android/shared/lib/notes/importDestination', () => ({
   ImportDestinationError: class extends Error {
     translationKey = '';
     constructor(key: string, message: string) {

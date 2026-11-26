@@ -1,5 +1,5 @@
 import { abortError } from '@/services/providers/NativeProviderTransport';
-import type { RetryOptions } from '@/lib/retry';
+import type { RetryOptions } from '@/android/shared/lib/retry';
 export interface SignalOwner {
   signal?: AbortSignal;
 }

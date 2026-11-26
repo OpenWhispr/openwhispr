@@ -3,7 +3,7 @@ import type React from 'react';
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { useIosColor } from '@/config/colors.android';
+import { useIosColor } from '@/android/shared/config/colors';
 
 interface NoteMetaRowProps {
   dateLabel: string;

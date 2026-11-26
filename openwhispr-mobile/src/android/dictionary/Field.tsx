@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TextInput, type TextInputProps } from 'react-native';
-import { AppFont } from '@/lib/fonts';
+import { AppFont } from '@/android/shared/lib/fonts';
 import { useNotesLook } from '../notes/look';
 
 /** A 48 field with the glass edge; the hairline turns brand blue while it has focus. */

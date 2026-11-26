@@ -1,3 +1,7 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/lib/diarization/diarizer', () =>
+  jest.requireActual('@/android/shared/lib/diarization/diarizer'),
+);
 // src/services/diarization/__tests__/DiarizationService.test.ts
 import { processMeeting, type DiarizationDeps } from '@/android/transcription/DiarizationService';
 import type { DiarizationResult } from '@/lib/diarization/diarizer';

@@ -1,10 +1,10 @@
 import 'expo-sqlite/localStorage/install';
 import { AppState, type AppStateStatus } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import type { Note } from '@/data';
-import { notesRepository } from '@/data';
-import { canTransition } from '@/lib/diarization/transcriptionStatus';
-import { tryParseNoteTimestamp } from '@/lib/parseNoteTimestamp';
+import type { Note } from '@/android/shared/data';
+import { notesRepository } from '@/android/shared/data';
+import { canTransition } from '@/android/shared/lib/diarization/transcriptionStatus';
+import { tryParseNoteTimestamp } from '@/android/shared/lib/parseNoteTimestamp';
 import { Sentry } from '@/android/lib/sentry';
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
 import { createMeetingRecoveryLifecycle } from '@/android/lib/meetingRecoveryLifecycle';

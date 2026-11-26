@@ -12,9 +12,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
-import { safeHaptics } from '@/lib/utils';
-import type { Note } from '@/data';
-import { parseNoteTimestamp } from '@/lib/parseNoteTimestamp';
+import { safeHaptics } from '@/android/shared/lib/utils';
+import type { Note } from '@/android/shared/data';
+import { parseNoteTimestamp } from '@/android/shared/lib/parseNoteTimestamp';
 import { useReduceMotion } from '../settings/kit';
 import { plainNoteText } from './liveMarkdownSpans';
 import { NoteTile, useNotesLook, type NotesLook } from './look';

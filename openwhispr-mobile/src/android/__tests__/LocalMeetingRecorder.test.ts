@@ -1,5 +1,6 @@
 let mockCaptureSequence = 0;
 jest.mock('@/lib/uuid', () => ({ randomUUID: () => `capture-${++mockCaptureSequence}` }));
+jest.mock('@/android/shared/lib/uuid', () => jest.requireMock('@/lib/uuid'));
 const mockListeners = new Map<
   string,
   Set<(event: { noteId: number; captureId: string; message?: string }) => void>

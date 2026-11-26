@@ -17,10 +17,19 @@ jest.mock('@/services/calendar/googleCalendarSync', () => ({
   syncGoogleCalendarList: jest.fn(async () => undefined),
   syncSelectedGoogleCalendarEventWindow: jest.fn(async () => undefined),
 }));
+jest.mock('@/android/shared/services/calendar/googleCalendarSync', () =>
+  jest.requireMock('@/services/calendar/googleCalendarSync'),
+);
 jest.mock('@/data/calendarRepository', () => ({ calendarRepository: {} }));
+jest.mock('@/android/shared/data/calendarRepository', () =>
+  jest.requireMock('@/data/calendarRepository'),
+);
 jest.mock('@/services/calendar/googleCalendarTelemetry', () => ({
   captureGoogleCalendarException: jest.fn(),
 }));
+jest.mock('@/android/shared/services/calendar/googleCalendarTelemetry', () =>
+  jest.requireMock('@/services/calendar/googleCalendarTelemetry'),
+);
 
 import {
   GoogleCalendarAuthError,

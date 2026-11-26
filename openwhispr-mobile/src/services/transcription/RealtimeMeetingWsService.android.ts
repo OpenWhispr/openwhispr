@@ -11,7 +11,7 @@ export type {
   RealtimeTransportCallbacks as RealtimeCallbacks,
   RealtimeTransportSession as RealtimeSession,
 } from '@/android/transcription/createRealtimeMeetingWs';
-export type { RealtimeUtterance } from './realtimeEvents';
+export type { RealtimeUtterance } from '@/android/shared/services/transcription/realtimeEvents';
 
 export const startRealtimeMeetingWs = createRealtimeMeetingWs((context) =>
   createAndroidRealtimeRecovery(context, { addPcmStopListener, addPcmErrorListener }),

@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
-import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
+import { OpenWhisprMark } from '@/android/shared/components/ui/OpenWhisprMark';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';

@@ -1,18 +1,18 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { TextInput, View, type TextStyle } from 'react-native';
 import { Text } from '@/components/ui/Text';
-import { searchNoteAccessPrincipals } from '@/data/remote/noteSharingApi';
+import { searchNoteAccessPrincipals } from '@/android/shared/data/remote/noteSharingApi';
 import type {
   AccessPrincipalSuggestion,
   NoteAccessState,
   NoteShareInvitation,
 } from '@/data/remote/noteSharingTypes';
-import { useIosColor } from '@/config/colors.android';
-import { AppFont } from '@/lib/fonts';
-import { isValidEmail } from '@/lib/utils';
-import { isGroupPrincipal } from '@/lib/notes/noteShareAccess';
+import { useIosColor } from '@/android/shared/config/colors';
+import { AppFont } from '@/android/shared/lib/fonts';
+import { isValidEmail } from '@/android/shared/lib/utils';
+import { isGroupPrincipal } from '@/android/shared/lib/notes/noteShareAccess';
 import { GroupedList } from './GroupedList';
-import { NOTES_ROW_CONTENT_INSET } from './tokens';
+import { NOTES_ROW_CONTENT_INSET } from '@/android/shared/components/notes/tokens';
 import { PRINCIPAL_LABEL, PrincipalAvatar, RowIcon } from './NoteSharePrincipal';
 import type { NoteShareCopy } from './NoteSharePrincipalCore.android';
 

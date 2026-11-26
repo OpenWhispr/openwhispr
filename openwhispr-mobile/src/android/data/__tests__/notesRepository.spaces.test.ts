@@ -1,3 +1,5 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/lib/uuid', () => jest.requireActual('@/android/shared/lib/uuid'));
 import { eq } from 'drizzle-orm';
 import { folderDeleteJournal, folders, notes, spaces } from '@/db/schema';
 import type { RemoteFolder, RemoteNote } from '@/data/types';

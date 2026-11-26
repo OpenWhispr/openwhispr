@@ -13,6 +13,9 @@ jest.mock('@/android/reasoning/ReasoningService', () =>
   jest.requireMock('@/services/reasoning/ReasoningService'),
 );
 jest.mock('@/lib/onDeviceDictionary', () => ({ fitDictionaryOnDevice: jest.fn() }));
+jest.mock('@/android/shared/lib/onDeviceDictionary', () =>
+  jest.requireMock('@/lib/onDeviceDictionary'),
+);
 jest.mock('@/utils/generateTitle', () => ({ generateNoteTitle: jest.fn() }));
 jest.mock('@/android/utils/generateTitle', () => jest.requireMock('@/utils/generateTitle'));
 jest.mock('@/store/useConfigStore', () => ({

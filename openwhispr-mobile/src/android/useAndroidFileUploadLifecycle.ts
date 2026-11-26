@@ -6,8 +6,8 @@ import {
   observeTranscriptScope,
 } from '@/lib/transcriptScope';
 import { snapshotTranscriptionJob } from '../lib/inferenceRouting';
-import { isNoSpeechError } from '../lib/permissions';
-import { toFriendlyTranscriptionErrorMessage } from '../lib/transcriptionErrors';
+import { isNoSpeechError } from '@/android/shared/lib/permissions';
+import { toFriendlyTranscriptionErrorMessage } from '@/android/shared/lib/transcriptionErrors';
 import type { TranscriptionProvider } from '@/android/types';
 import type {
   CommonFileUploadOptions,

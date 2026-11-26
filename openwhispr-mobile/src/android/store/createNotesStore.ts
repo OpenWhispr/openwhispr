@@ -1,60 +1,66 @@
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
 import { create, type StoreApi } from 'zustand';
 import * as Sentry from '@sentry/react-native';
-import { notesRepository, spacesRepository } from '@/data';
-import type { Note, Folder, NoteUpdate, Space } from '@/data';
+import { notesRepository, spacesRepository } from '@/android/shared/data';
+import type { Note, Folder, NoteUpdate, Space } from '@/android/shared/data';
 import type { ConflictedNote, Segment, Speaker, SpeakerProfile } from '@/data/types';
 import type { CalendarParticipant } from '@/data/calendarTypes';
-import type { Diarizer } from '@/lib/diarization/diarizer';
+import type { Diarizer } from '@/android/shared/lib/diarization/diarizer';
 import { useAuthStore } from '@/android/store/useAuthStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { deletePrivateNoteCloudCopy, queuePrivateNoteDeletion } from '@/sync/privateNoteDeletion';
+import {
+  deletePrivateNoteCloudCopy,
+  queuePrivateNoteDeletion,
+} from '@/android/shared/sync/privateNoteDeletion';
 import { createSyncContext } from '@/sync/createSyncContext';
-import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
+import { getPreferredTranscriptionLanguage } from '@/android/shared/lib/transcriptionLanguage';
 import type { TranscriptionStatus } from '@/android/types';
-import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
-import { assertTransition } from '@/lib/diarization/transcriptionStatus';
-import { formatTranscriptForExport } from '@/lib/diarization/transcriptDisplay';
-import { buildMergeTargetPatch, buildRenameSpeakerPatch } from '@/lib/diarization/speakerEdits';
+import type { RealtimeUtterance } from '@/android/shared/services/transcription/realtimeEvents';
+import { assertTransition } from '@/android/shared/lib/diarization/transcriptionStatus';
+import { formatTranscriptForExport } from '@/android/shared/lib/diarization/transcriptDisplay';
+import {
+  buildMergeTargetPatch,
+  buildRenameSpeakerPatch,
+} from '@/android/shared/lib/diarization/speakerEdits';
 import {
   buildConfirmedSpeakerPatch,
   buildRejectedSuggestionPatch,
   hasFiniteNonZeroNorm,
   l2Normalize,
   runningMeanEmbedding,
-} from '@/lib/diarization/voiceprints';
+} from '@/android/shared/lib/diarization/voiceprints';
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/android/data/notesRepository';
 import {
   buildActionSystemPrompt,
   isDefaultGenerateNotesAction,
 } from '@/android/lib/notes/generateNotesPrompt';
-import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
-import { mapUtterancesToSegments } from '@/lib/notes/cloudMeetingSegments';
-import { DEFAULT_MEETING_TITLE } from '@/lib/notes/meetingConstants';
+import { buildMeetingNotesInput } from '@/android/shared/lib/notes/meetingNotesInput';
+import { mapUtterancesToSegments } from '@/android/shared/lib/notes/cloudMeetingSegments';
+import { DEFAULT_MEETING_TITLE } from '@/android/shared/lib/notes/meetingConstants';
 import { generateLocalMeetingNotes } from '@/android/lib/notes/localMeetingNotes';
 import {
   getLocalReasoningReadiness,
   isLocalReasoningRequired,
   shouldUseLocalReasoning,
-} from '@/lib/localReasoning';
+} from '@/android/shared/lib/localReasoning';
 import { promptLocalReasoningFallback } from '@/android/dictation/localReasoningFallback';
 import {
   getCalendarParticipantEmails,
   parseCalendarParticipants,
-} from '@/lib/calendar/meetingContext';
-import { makeContentHash } from '@/lib/utils';
+} from '@/android/shared/lib/calendar/meetingContext';
+import { makeContentHash } from '@/android/shared/lib/utils';
 import { logTranscriptionCompleted } from '@/android/lib/appsflyer';
 import { ReasoningService } from '@/android/reasoning/ReasoningService';
 import type {
   EnrollVoiceProfileInput,
   ReenrollVoiceProfileInput,
-} from '@/services/diarization/VoiceprintService';
+} from '@/android/shared/services/diarization/VoiceprintService';
 import {
   VOICE_ENROLLMENT_DIARIZER_MODEL_REQUIRED,
   VoiceEnrollmentError,
   identifyNoteSpeakers,
-} from '@/services/diarization/VoiceprintService';
+} from '@/android/shared/services/diarization/VoiceprintService';
 
 export type CreateMeetingNoteContext = {
   expectedSpeakerCount?: number;
@@ -219,7 +225,7 @@ export function createNotesStore(
 
   const loadVoiceEnrollmentDeps = () => {
     const voiceprintService =
-      require('@/services/diarization/VoiceprintService') as typeof import('@/services/diarization/VoiceprintService');
+      require('@/android/shared/services/diarization/VoiceprintService') as typeof import('@/android/shared/services/diarization/VoiceprintService');
     const diarizerModule =
       require('@/lib/diarization/getDiarizer') as typeof import('@/lib/diarization/getDiarizer');
 
@@ -232,9 +238,9 @@ export function createNotesStore(
 
   const loadVoiceEnrollmentProcessingDeps = () => {
     const speechActivityModule =
-      require('@/lib/speechActivity') as typeof import('@/lib/speechActivity');
+      require('@/android/shared/lib/speechActivity') as typeof import('@/android/shared/lib/speechActivity');
     const audioToolsModule =
-      require('../../../modules/audio-tools/src') as typeof import('../../../modules/audio-tools/src');
+      require('@/android/shared/modules/audio-tools/index') as typeof import('@/android/shared/modules/audio-tools/index');
 
     return {
       analyzeSpeechActivity: speechActivityModule.analyzeSpeechActivity,

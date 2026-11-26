@@ -1,4 +1,7 @@
-import { applyLegOffset, namespaceItemId } from '@/services/transcription/realtimeReconnect';
+import {
+  applyLegOffset,
+  namespaceItemId,
+} from '@/android/shared/services/transcription/realtimeReconnect';
 import type {
   RealtimeTransportContext,
   RealtimeTransportLifecycle,

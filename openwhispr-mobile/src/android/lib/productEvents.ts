@@ -1,5 +1,5 @@
-import { randomUUID, uuidFromKey } from '@/lib/uuid';
-import { WORD_COUNTER_VERSION } from '@/lib/wordCount';
+import { randomUUID, uuidFromKey } from '@/android/shared/lib/uuid';
+import { WORD_COUNTER_VERSION } from '@/android/shared/lib/wordCount';
 import type { ProcessingMode, TranscriptionProvider } from '@/android/types';
 
 // Dashboard funnel milestones (/api/product-events/batch). Content-free: never
@@ -804,9 +804,9 @@ export function initProductEvents(): void {
   const { useConfigStore } =
     require('@/android/store/useConfigStore') as typeof import('@/android/store/useConfigStore');
   const { isUsageAnalyticsAllowed } =
-    require('@/lib/usageAnalytics') as typeof import('@/lib/usageAnalytics');
+    require('@/android/shared/lib/usageAnalytics') as typeof import('@/android/shared/lib/usageAnalytics');
   const { useOnboardingStore } =
-    require('@/store/useOnboardingStore') as typeof import('@/store/useOnboardingStore');
+    require('@/android/shared/store/useOnboardingStore') as typeof import('@/android/shared/store/useOnboardingStore');
 
   const instance = createProductEvents({
     storage: AsyncStorage,

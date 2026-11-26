@@ -2,8 +2,11 @@ import { useEffect, useRef } from 'react';
 import type React from 'react';
 import { ScrollView, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
-import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
-import { getSpeakerDisplayColor, getSpeakerDisplayName } from '@/lib/diarization/transcriptDisplay';
+import type { RealtimeUtterance } from '@/android/shared/services/transcription/realtimeEvents';
+import {
+  getSpeakerDisplayColor,
+  getSpeakerDisplayName,
+} from '@/android/shared/lib/diarization/transcriptDisplay';
 import { useTheme } from '@/android/ThemeProvider';
 
 export interface LiveTranscriptListProps {

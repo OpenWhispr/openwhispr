@@ -12,7 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { safeHaptics } from '@/lib/utils';
+import { safeHaptics } from '@/android/shared/lib/utils';
 import type { DictionaryEntry } from '@/android/store/useDictionaryStore';
 import { PillButton, useHome } from '../home/kit';
 import { showToast, useReduceMotion } from '../settings/kit';

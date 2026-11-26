@@ -2,7 +2,7 @@ import React from 'react';
 import { CloudMeetingScreen } from '@/android/CloudMeetingScreen';
 import { MeetingRecordScreen as LocalMeetingScreen } from '@/android/MeetingRecordScreen';
 import { useAuthStore } from '@/android/store/useAuthStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import { canRunCloudMeeting } from '@/android/lib/accountAccess';
 
 export function MeetingRecordScreen(): React.JSX.Element {

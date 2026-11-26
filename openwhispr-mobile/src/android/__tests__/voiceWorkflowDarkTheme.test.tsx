@@ -23,6 +23,9 @@ jest.mock('@/components/ui/SystemIcon', () => ({
   },
 }));
 jest.mock('@/components/ui/GradientGlassSurface', () => ({ GradientGlassSurface: () => null }));
+jest.mock('@/android/shared/components/ui/GradientGlassSurface', () =>
+  jest.requireMock('@/components/ui/GradientGlassSurface'),
+);
 
 // Voice screens: the store, router and the shared children they host.
 let mockParams: Record<string, string | undefined> = {};
@@ -52,6 +55,7 @@ jest.mock('@/store/useNotesStore', () => ({
 }));
 jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 jest.mock('@/data', () => ({ notesRepository: { getSpeakerProfiles: () => [] } }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 jest.mock('@/data/local/notesRepository', () => ({
   SpeakerProfileOwnerAlreadyExistsError: class extends Error {},
 }));
@@ -69,7 +73,10 @@ jest.mock('@/components/notes/VoiceProfileList.android', () => ({
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({ register: jest.fn(async () => undefined) }),
 }));
-jest.mock('@/lib/voiceEnrollmentCapability', () => ({
+jest.mock('@/android/shared/hooks/useSuperwallGate', () =>
+  jest.requireMock('@/hooks/useSuperwallGate'),
+);
+jest.mock('@/android/shared/lib/voiceEnrollmentCapability', () => ({
   supportsVoiceEnrollment: () => mockSupportsEnrollment,
   VOICE_ENROLLMENT_UNAVAILABLE: 'Voice profiles are not available.',
 }));
@@ -101,13 +108,23 @@ jest.mock('@react-navigation/native', () => ({
   usePreventRemove: jest.fn(),
 }));
 jest.mock('@/components/ui/Toast', () => ({ Toast: () => null }));
+jest.mock('@/android/shared/components/ui/Toast', () => jest.requireMock('@/components/ui/Toast'));
 jest.mock('@/components/settings/OnDeviceModelSection', () => ({
   OnDeviceModelSection: () => null,
 }));
+jest.mock('@/android/shared/components/settings/OnDeviceModelSection', () =>
+  jest.requireMock('@/components/settings/OnDeviceModelSection'),
+);
 jest.mock('@/hooks/useConfigToggle', () => ({ useConfigToggle: () => () => undefined }));
+jest.mock('@/android/shared/hooks/useConfigToggle', () =>
+  jest.requireMock('@/hooks/useConfigToggle'),
+);
 jest.mock('@/store/useCustomPromptsStore', () => ({
   useCustomPromptsStore: (pick: (s: unknown) => unknown) => pick({ customPrompts: {} }),
 }));
+jest.mock('@/android/shared/store/useCustomPromptsStore', () =>
+  jest.requireMock('@/store/useCustomPromptsStore'),
+);
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (pick: (s: unknown) => unknown) => pick({ user: null }),
 }));
@@ -123,6 +140,9 @@ jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: (pick: (s: unknown) => unknown) =>
     pick({ setActiveMode: jest.fn(), activeMode: 'cloud' }),
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/services/providers/ProviderExecution', () => ({
   discoverProviderModels: jest.fn(),
   testProviderConnection: jest.fn(),
@@ -131,6 +151,9 @@ jest.mock('@/services/providers/ProviderExecution', () => ({
 jest.mock('@/services/providers/ProviderPolicy', () => ({
   getProviderPolicy: jest.fn(() => new Promise(() => undefined)),
 }));
+jest.mock('@/android/shared/services/providers/ProviderPolicy', () =>
+  jest.requireMock('@/services/providers/ProviderPolicy'),
+);
 jest.mock('@/services/providers/ProviderCredentials', () => ({
   getProviderCredentialReference: jest.fn(async () => 'provider.openai'),
   getProviderCredential: jest.fn(async () => null),
@@ -141,10 +164,12 @@ jest.mock('@/services/providers/ProviderCredentials', () => ({
 jest.mock('@/lib/privateMode', () => ({
   getPrivateModeReadiness: () => new Promise(() => undefined),
 }));
+jest.mock('@/android/shared/lib/privateMode', () => jest.requireMock('@/lib/privateMode'));
 jest.mock('@/lib/localReasoning', () => ({
   ...jest.requireActual('@/lib/localReasoning'),
   getLocalReasoningReadiness: () => new Promise(() => undefined),
 }));
+jest.mock('@/android/shared/lib/localReasoning', () => jest.requireMock('@/lib/localReasoning'));
 jest.mock('@/lib/workflowModeSwitch', () => ({
   switchWorkflowMode: jest.fn(),
   leavingLocalModeWithLocalReasoning: async () => false,

@@ -1,3 +1,9 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/sync/pullCursors', () => jest.requireActual('@/android/shared/sync/pullCursors'));
+jest.mock('@/sync/sharedDictionaryState', () =>
+  jest.requireActual('@/android/shared/sync/sharedDictionaryState'),
+);
+jest.mock('@/sync/syncContext', () => jest.requireActual('@/android/shared/sync/syncContext'));
 const mockSyncState = new Map<string, string>();
 const mockSyncStateWrites: string[] = [];
 jest.mock('@/data', () => ({
@@ -12,6 +18,7 @@ jest.mock('@/data', () => ({
     },
   },
 }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 
 // apiClient pulls in expo/fetch, which jest-expo cannot instantiate.
 jest.mock('@/lib/apiClient', () => ({
@@ -34,11 +41,17 @@ jest.mock('@/data/remote/sharedDictionaryApi', () => ({
   fetchSharedDictionary: (...args: unknown[]) => mockFetchSharedDictionary(...args),
   fetchSharedDictionaryHides: (...args: unknown[]) => mockFetchSharedDictionaryHides(...args),
 }));
+jest.mock('@/android/shared/data/remote/sharedDictionaryApi', () =>
+  jest.requireMock('@/data/remote/sharedDictionaryApi'),
+);
 
 const mockFetchMyWorkspaces = jest.fn();
 jest.mock('@/data/remote/workspacesApi', () => ({
   fetchMyWorkspaces: (...args: unknown[]) => mockFetchMyWorkspaces(...args),
 }));
+jest.mock('@/android/shared/data/remote/workspacesApi', () =>
+  jest.requireMock('@/data/remote/workspacesApi'),
+);
 
 const OWNER = 'user-1:cookie';
 const mockUsageState: {

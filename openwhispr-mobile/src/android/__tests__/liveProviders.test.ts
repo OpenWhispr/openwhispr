@@ -1,3 +1,7 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/store/useProcessingModeStore', () =>
+  jest.requireActual('@/android/shared/store/useProcessingModeStore'),
+);
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { liveAdapter } from '../providers/liveAdapter';

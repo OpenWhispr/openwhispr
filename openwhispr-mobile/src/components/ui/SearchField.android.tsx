@@ -1,8 +1,8 @@
 import { ReactNode, forwardRef } from 'react';
 import { View, TextInput, type TextInputProps } from 'react-native';
-import { useIosColor } from '@/config/colors.android';
+import { useIosColor } from '@/android/shared/config/colors';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { AppFont } from '@/lib/fonts';
+import { AppFont } from '@/android/shared/lib/fonts';
 
 const SEARCH_FIELD_RADIUS = 10;
 const SEARCH_FIELD_HEIGHT = 48;

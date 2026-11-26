@@ -4,11 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { notesRepository } from '@/data';
-import type { Note } from '@/data';
+import { notesRepository } from '@/android/shared/data';
+import type { Note } from '@/android/shared/data';
 import { useNotesStore } from '@/android/store/useNotesStore';
 import { SearchField } from '../controls';
-import { safeHaptics } from '@/lib/utils';
+import { safeHaptics } from '@/android/shared/lib/utils';
 import { useNavigationBarCanvas } from '../navigationBar';
 import { BackButton, Card, Chip, SectionLabel, useNotesLook } from './look';
 import {

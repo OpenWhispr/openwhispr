@@ -17,6 +17,7 @@ jest.mock('@/db', () => ({
 jest.mock('@/sync/syncEngine', () => ({ requestSync: jest.fn() }));
 jest.mock('@/android/sync/syncEngine', () => jest.requireMock('@/sync/syncEngine'));
 jest.mock('@/lib/uuid', () => ({ randomUUID: () => 'test-id' }));
+jest.mock('@/android/shared/lib/uuid', () => jest.requireMock('@/lib/uuid'));
 
 beforeEach(() => {
   raw = new Database(':memory:');

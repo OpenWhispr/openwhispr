@@ -28,6 +28,9 @@ jest.mock('@/store/useGoogleCalendarStore', () => ({
     setState: (...args: unknown[]) => mockSetState(...args),
   },
 }));
+jest.mock('@/android/shared/store/useGoogleCalendarStore', () =>
+  jest.requireMock('@/store/useGoogleCalendarStore'),
+);
 jest.mock('@/services/calendar/googleCalendarConfig', () => ({
   getGoogleCalendarClientId: () => mockClientId,
 }));
@@ -38,6 +41,9 @@ jest.mock('../googleAuth', () => ({
 jest.mock('@/services/calendar/googleCalendarTelemetry', () => ({
   captureGoogleCalendarException: jest.fn(),
 }));
+jest.mock('@/android/shared/services/calendar/googleCalendarTelemetry', () =>
+  jest.requireMock('@/services/calendar/googleCalendarTelemetry'),
+);
 
 import { GoogleCalendarAuthError } from '@/services/calendar/googleCalendarAuth.android';
 import {

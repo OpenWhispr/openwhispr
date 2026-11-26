@@ -1,3 +1,10 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/services/transcription/policyErrors', () =>
+  jest.requireActual('@/android/shared/services/transcription/policyErrors'),
+);
+jest.mock('@/services/transcription/realtimeReconnect', () =>
+  jest.requireActual('@/android/shared/services/transcription/realtimeReconnect'),
+);
 /**
  * Service-level tests for the leg-swap transport: reconnect keeps the mic alive,
  * rotation drains retiring legs, and a terminal give-up preserves the transcript.

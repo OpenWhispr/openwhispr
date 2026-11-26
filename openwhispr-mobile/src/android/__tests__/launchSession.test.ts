@@ -128,6 +128,9 @@ jest.mock('@/lib/notes/noteShareTokens', () => ({
   claimNoteShareTokens: async () => {},
   clearNoteShareTokens: async () => {},
 }));
+jest.mock('@/android/shared/lib/notes/noteShareTokens', () =>
+  jest.requireMock('@/lib/notes/noteShareTokens'),
+);
 jest.mock('@/lib/sentry', () => ({
   Sentry: { captureMessage: jest.fn(), captureException: jest.fn() },
 }));
@@ -145,10 +148,16 @@ jest.mock('@/android/store/useUsageStore', () => ({
 jest.mock('@/store/useUsageStore.android', () => require('@/store/useUsageStore'));
 jest.mock('@/store/useAuthStore', () => jest.requireActual('@/store/useAuthStore.android'));
 jest.mock('@/services/agent/AgentComposerService', () => ({ clearAllSessions: jest.fn() }));
+jest.mock('@/android/shared/services/agent/AgentComposerService', () =>
+  jest.requireMock('@/services/agent/AgentComposerService'),
+);
 jest.mock('@/lib/chat/chatHistory', () => ({
   clearChatHistory: jest.fn(),
   stopChatTurn: jest.fn(),
 }));
+jest.mock('@/android/shared/lib/chat/chatHistory', () =>
+  jest.requireMock('@/lib/chat/chatHistory'),
+);
 const mockSecure = new Map<string, string>();
 jest.mock('expo-secure-store', () => ({
   getItemAsync: async (key: string) => mockSecure.get(key) ?? null,

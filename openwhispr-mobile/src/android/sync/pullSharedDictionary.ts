@@ -1,15 +1,22 @@
 import { checkpointDictionaryPersistence } from '@/android/sync/dictionaryPersistenceCheckpoint';
-import { SyncStalledError, uncheckedSync, type SyncCheckpoint } from '@/sync/syncContext';
-import { notesRepository } from '@/data';
+import {
+  SyncStalledError,
+  uncheckedSync,
+  type SyncCheckpoint,
+} from '@/android/shared/sync/syncContext';
+import { notesRepository } from '@/android/shared/data';
 import {
   fetchSharedDictionary,
   fetchSharedDictionaryHides,
   type RemoteSharedScope,
   type SharedDictionaryPage,
-} from '@/data/remote/sharedDictionaryApi';
-import { fetchMyWorkspaces, type RemoteWorkspace } from '@/data/remote/workspacesApi';
+} from '@/android/shared/data/remote/sharedDictionaryApi';
+import {
+  fetchMyWorkspaces,
+  type RemoteWorkspace,
+} from '@/android/shared/data/remote/workspacesApi';
 import { ApiError } from '@/android/lib/apiClient';
-import { resolveActiveWorkspaceId } from '@/lib/activeWorkspace';
+import { resolveActiveWorkspaceId } from '@/android/shared/lib/activeWorkspace';
 import { getUsageOwnerKey, useUsageStore } from '@/android/store/useUsageStore';
 import type { UsageInfo } from '@/android/remote/usageApi';
 import {
@@ -18,12 +25,12 @@ import {
   SHARED_DICTIONARY_HIDES_CURSOR_ID_KEY,
   SHARED_DICTIONARY_HIDES_CURSOR_KEY,
   resetSharedDictionaryCursors,
-} from '@/sync/pullCursors';
+} from '@/android/shared/sync/pullCursors';
 import {
   loadSharedDictionaryState,
   saveSharedDictionaryState,
   type SharedDictionaryState,
-} from '@/sync/sharedDictionaryState';
+} from '@/android/shared/sync/sharedDictionaryState';
 
 // Mirrors desktop SyncService's pullSharedEntries/pullSharedHides.
 const PAGE_LIMIT = 200;

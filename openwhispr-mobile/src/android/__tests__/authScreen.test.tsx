@@ -188,9 +188,13 @@ jest.mock('@/android/settings/kit', () => ({
 }));
 jest.mock('../settings/kit', () => ({ showToast: (...args: unknown[]) => mockToast(...args) }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));
+jest.mock('@/android/shared/lib/utils', () => jest.requireMock('@/lib/utils'));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/OpenWhisprMark', () => ({ OpenWhisprMark: () => null }));
+jest.mock('@/android/shared/components/ui/OpenWhisprMark', () =>
+  jest.requireMock('@/components/ui/OpenWhisprMark'),
+);
 jest.mock('react-native-svg', () => {
   const Stub = () => null;
   return {

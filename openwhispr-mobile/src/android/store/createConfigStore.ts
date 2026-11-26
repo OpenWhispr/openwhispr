@@ -1,13 +1,13 @@
 import { create, type StoreApi } from 'zustand';
 import type { UserConfig } from '@/android/types';
-import { StorageService } from '@/services/storage/StorageService';
+import { StorageService } from '@/android/shared/services/storage/StorageService';
 import {
   localModeUpgradeConfig,
   noteChatSplitConfig,
   notesLocalModeSplitConfig,
 } from '@/lib/inferenceModes';
-import { withoutRetiredModels } from '@/lib/retiredModels';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { withoutRetiredModels } from '@/android/shared/lib/retiredModels';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 
 export interface ConfigState {
   config: UserConfig | null;

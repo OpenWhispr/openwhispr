@@ -1,5 +1,8 @@
 import { notesRepository, spacesRepository } from '@/data';
-import { resolveImportDestination, saveImportedNote } from '@/lib/notes/importDestination';
+import {
+  resolveImportDestination,
+  saveImportedNote,
+} from '@/android/shared/lib/notes/importDestination';
 
 let mockOwner = 'account-a';
 const mockPersonal = { id: 1, name: 'Personal', kind: 'private' };
@@ -18,6 +21,7 @@ jest.mock('@/data', () => ({
   },
   spacesRepository: { getPrivateSpace: () => mockPersonal, listSpaces: jest.fn() },
 }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 const repo = notesRepository as jest.Mocked<typeof notesRepository>;
 const spaces = spacesRepository as jest.Mocked<typeof spacesRepository>;
 

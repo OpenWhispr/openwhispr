@@ -1,3 +1,7 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/lib/diarization/transcriptDisplay', () =>
+  jest.requireActual('@/android/shared/lib/diarization/transcriptDisplay'),
+);
 import { Alert, Platform, Share, Text } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import type { TranscriptBlock } from '@/lib/diarization/transcriptDisplay';
@@ -59,6 +63,9 @@ jest.mock('@/components/ui/GlassIconButton', () => ({
     );
   },
 }));
+jest.mock('@/android/shared/components/ui/GlassIconButton', () =>
+  jest.requireMock('@/components/ui/GlassIconButton'),
+);
 
 const block: TranscriptBlock = {
   id: 'b1',

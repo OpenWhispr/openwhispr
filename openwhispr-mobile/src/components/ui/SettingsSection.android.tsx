@@ -10,7 +10,7 @@ import {
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from './SystemIcon';
 import { makeStyles, useTheme } from '@/android/ThemeProvider';
-import { AppFont } from '@/lib/fonts';
+import { AppFont } from '@/android/shared/lib/fonts';
 
 type SettingsRowProps = {
   icon: string;

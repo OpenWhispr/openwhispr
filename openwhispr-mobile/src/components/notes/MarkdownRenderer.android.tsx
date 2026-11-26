@@ -2,8 +2,8 @@ import { useMemo } from 'react';
 import { View, ScrollView, StyleSheet, type StyleProp, type TextStyle } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { parseMarkdownBlocks, type MarkdownBlock } from './markdownBlocks';
-import { NOTES_GROUP_RADIUS } from './tokens';
-import { iosColor as iosColorFor, useIosColor } from '@/config/colors.android';
+import { NOTES_GROUP_RADIUS } from '@/android/shared/components/notes/tokens';
+import { iosColor as iosColorFor, useIosColor } from '@/android/shared/config/colors';
 import { makeStyles } from '@/android/ThemeProvider';
 
 interface MarkdownRendererProps {

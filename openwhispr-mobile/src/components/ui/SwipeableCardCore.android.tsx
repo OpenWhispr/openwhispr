@@ -18,7 +18,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { Trash2, FolderInput } from 'lucide-react-native';
-import { useIosColor } from '@/config/colors.android';
+import { useIosColor } from '@/android/shared/config/colors';
 import { makeStyles } from '@/android/ThemeProvider';
 
 /** Slides the row back to rest; call it when the user backs out of a delete. */

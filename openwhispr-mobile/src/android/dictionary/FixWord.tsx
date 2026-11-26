@@ -9,7 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
-import { safeHaptics } from '@/lib/utils';
+import { safeHaptics } from '@/android/shared/lib/utils';
 import { useHome } from '../home/kit';
 import { showToast, useReduceMotion } from '../settings/kit';
 import { useNotesLook } from '../notes/look';

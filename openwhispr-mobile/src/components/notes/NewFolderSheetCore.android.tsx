@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { PlatformColor, TextInput } from 'react-native';
 import { FormSheet } from '@/components/ui/FormSheet';
-import { AppFont } from '@/lib/fonts';
-import { useIosColor } from '@/config/colors.android';
-import { safeHaptics } from '@/lib/utils';
-import { NOTES_BUTTON_RADIUS } from './tokens';
+import { AppFont } from '@/android/shared/lib/fonts';
+import { useIosColor } from '@/android/shared/config/colors';
+import { safeHaptics } from '@/android/shared/lib/utils';
+import { NOTES_BUTTON_RADIUS } from '@/android/shared/components/notes/tokens';
 
 type NewFolderSheetProps = {
   visible: boolean;

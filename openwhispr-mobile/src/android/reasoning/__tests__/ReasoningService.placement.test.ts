@@ -11,6 +11,9 @@ jest.mock('@/services/reasoning/LocalReasoningService', () => ({
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: 'private' }) },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 
 const originalPlatform = Platform.OS;
 afterEach(() => {

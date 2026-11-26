@@ -3,18 +3,18 @@ import type { TOptions } from 'i18next';
 import { useEffect, useMemo, useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { Text } from '@/components/ui/Text';
-import { useSyncStore } from '@/sync/useSyncStore';
+import { useSyncStore } from '@/android/shared/sync/useSyncStore';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { useUsageStore } from '@/android/store/useUsageStore';
 import { requestSync } from '@/android/sync/syncEngine';
-import { notesRepository } from '@/data';
+import { notesRepository } from '@/android/shared/data';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { formatRelativeTime, safeHaptics } from '@/lib/utils';
-import { useSuperwallGate } from '@/hooks/useSuperwallGate';
-import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
+import { formatRelativeTime, safeHaptics } from '@/android/shared/lib/utils';
+import { useSuperwallGate } from '@/android/shared/hooks/useSuperwallGate';
+import { SUPERWALL_PLACEMENTS } from '@/android/shared/lib/superwall';
 import { describeConflictCount } from '@/lib/notes/conflictCount';
-import { useIosColor } from '@/config/colors.android';
+import { useIosColor } from '@/android/shared/config/colors';
 
 const RELATIVE_TICK_MS = 30_000;
 

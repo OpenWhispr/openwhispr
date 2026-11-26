@@ -26,9 +26,15 @@ jest.mock('@/services/storage/StorageService', () => ({
     saveConfig: (config: UserConfig) => mockSaveConfig(config),
   },
 }));
+jest.mock('@/android/shared/services/storage/StorageService', () =>
+  jest.requireMock('@/services/storage/StorageService'),
+);
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ resetToDefault: jest.fn() }) },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/lib/authClient', () => ({
   signInWithEmail: (email: string, password: string) => mockSignIn(email, password),
   signOut: async () => {},
@@ -42,7 +48,13 @@ jest.mock('@/store/useUsageStore', () => ({
 }));
 jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 jest.mock('@/services/agent/AgentComposerService', () => ({ clearAllSessions: jest.fn() }));
+jest.mock('@/android/shared/services/agent/AgentComposerService', () =>
+  jest.requireMock('@/services/agent/AgentComposerService'),
+);
 jest.mock('@/lib/notes/noteShareTokens', () => ({ claimNoteShareTokens: async () => {} }));
+jest.mock('@/android/shared/lib/notes/noteShareTokens', () =>
+  jest.requireMock('@/lib/notes/noteShareTokens'),
+);
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
 jest.mock('@/android/lib/sentry', () => jest.requireMock('@/lib/sentry'));
 jest.mock('react-native-appsflyer', () => ({

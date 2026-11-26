@@ -1,0 +1,54 @@
+import { useEffect } from 'react';
+import { startMeetingRecoveryOnce } from '@/android/lib/meetingRecoveryAndroid';
+import { useDictionaryStore } from '@/android/store/useDictionaryStore';
+import { useSnippetsStore } from '@/android/store/useSnippetsStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
+import { loadSharedDictionaryIfOwnedBy } from '@/android/shared/store/useSharedDictionaryStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
+import { useTranscriptStore } from '@/android/store/useTranscriptStore';
+
+export function useAppInit() {
+  const loadDictionary = useDictionaryStore((state) => state.load);
+  const isDictionaryLoaded = useDictionaryStore((state) => state.isLoaded);
+  const loadSnippets = useSnippetsStore((state) => state.load);
+  const isSnippetsLoaded = useSnippetsStore((state) => state.isLoaded);
+  const initNotes = useNotesStore((state) => state.initialize);
+  const isNotesInitialized = useNotesStore((state) => state.isInitialized);
+  const loadConfig = useConfigStore((state) => state.loadConfig);
+  const loadTranscripts = useTranscriptStore((state) => state.loadTranscripts);
+  const signedInUserId = useAuthStore((state) =>
+    state.user && !state.isGuest ? state.user.id : null,
+  );
+
+  useEffect(() => {
+    if (!isDictionaryLoaded) loadDictionary();
+    // Hydrate snippets at startup so expansion + hints work for keyboard dictation
+    // even when the Dictionary screen was never opened.
+    if (!isSnippetsLoaded) loadSnippets();
+    if (!isNotesInitialized) initNotes();
+    loadConfig();
+    loadTranscripts();
+  }, [
+    loadDictionary,
+    isDictionaryLoaded,
+    loadSnippets,
+    isSnippetsLoaded,
+    initNotes,
+    isNotesInitialized,
+    loadConfig,
+    loadTranscripts,
+  ]);
+
+  // Stored shared words apply from launch, before (or without) a sync, but only
+  // for the account they were pulled under.
+  useEffect(() => {
+    loadSharedDictionaryIfOwnedBy(signedInUserId).catch(() => {});
+  }, [signedInUserId]);
+
+  // After notes load and before any meeting can start: recover meeting notes whose
+  // process died mid-recording or mid-pipeline.
+  useEffect(() => {
+    if (isNotesInitialized) startMeetingRecoveryOnce();
+  }, [isNotesInitialized]);
+}

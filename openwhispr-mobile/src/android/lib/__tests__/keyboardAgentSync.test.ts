@@ -1,3 +1,10 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/lib/keyboardAgentSync', () =>
+  jest.requireActual('@/android/shared/lib/keyboardAgentSync'),
+);
+jest.mock('@/store/useProcessingModeStore', () =>
+  jest.requireActual('@/android/shared/store/useProcessingModeStore'),
+);
 import {
   startKeyboardAgentSync,
   snapshotKeyboardAgentRequest,
@@ -10,7 +17,7 @@ import {
   hideKeyboardAgentHints,
 } from '@/lib/keyboardAgentSync';
 import type { KeyboardAgentJob, KeyboardAgentResult } from '@/lib/keyboardAgentSync';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 
 const store: Record<string, string> = {};
@@ -41,6 +48,9 @@ jest.mock('../../../../modules/app-group-storage/src', () => ({
     KEYBOARD_CANCEL_REQUESTED: 'keyboard_cancel_requested',
   },
 }));
+jest.mock('@/android/shared/modules/app-group-storage/index', () =>
+  jest.requireMock('../../../../modules/app-group-storage/src'),
+);
 
 let mockAppStateListener: ((state: string) => void) | undefined;
 jest.mock('react-native', () => ({
@@ -60,10 +70,14 @@ jest.mock('react-native', () => ({
 jest.mock('@/services/storage/StorageService', () => ({
   StorageService: { saveConfig: jest.fn(async () => {}) },
 }));
+jest.mock('@/android/shared/services/storage/StorageService', () =>
+  jest.requireMock('@/services/storage/StorageService'),
+);
 
 jest.mock('@/lib/uuid', () => ({
   randomUUID: jest.fn(() => 'test-uuid-1234'),
 }));
+jest.mock('@/android/shared/lib/uuid', () => jest.requireMock('@/lib/uuid'));
 
 jest.mock('@/store/useAuthStore', () => {
   const { create } = jest.requireActual('zustand');

@@ -102,6 +102,7 @@ jest.mock('../auth/emailVerification', () => ({ needsEmailVerification: () => fa
 jest.mock('../auth/backPress', () => ({ handleAuthBack: () => false }));
 jest.mock('../PlanContent', () => ({ PlanContent: () => null }));
 jest.mock('@/lib/superwall', () => ({ SUPERWALL_PLACEMENTS: {} }));
+jest.mock('@/android/shared/lib/superwall', () => jest.requireMock('@/lib/superwall'));
 jest.mock('../onboarding/DeviceSetupScreens', () => ({
   DeviceSetupScreen: () => null,
   DeviceReadyScreen: () => null,
@@ -110,6 +111,9 @@ jest.mock('@/screens/AuthScreen.android', () => ({ __esModule: true, default: ()
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({ register: jest.fn() }),
 }));
+jest.mock('@/android/shared/hooks/useSuperwallGate', () =>
+  jest.requireMock('@/hooks/useSuperwallGate'),
+);
 jest.mock('@/store/useAuthStore', () => {
   const user = { isAnonymous: false, emailVerified: true };
   const store = (select: (state: object) => unknown) => select({ user });

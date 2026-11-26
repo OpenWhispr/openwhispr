@@ -105,6 +105,9 @@ jest.mock('@/hooks/useNoteSharing', () => ({
 }));
 jest.mock('@/android/hooks/useNoteSharing', () => jest.requireMock('@/hooks/useNoteSharing'));
 jest.mock('@/data/remote/noteSharingApi', () => ({ searchNoteAccessPrincipals: jest.fn() }));
+jest.mock('@/android/shared/data/remote/noteSharingApi', () =>
+  jest.requireMock('@/data/remote/noteSharingApi'),
+);
 jest.mock('@react-native-menu/menu', () => ({
   MenuView: jest.fn(require('./menuViewMock').MenuView),
 }));
@@ -122,6 +125,9 @@ jest.mock('@/components/ui/GlassIconButton', () => ({
     return <Pressable onPress={onPress} accessibilityLabel={accessibilityLabel} />;
   },
 }));
+jest.mock('@/android/shared/components/ui/GlassIconButton', () =>
+  jest.requireMock('@/components/ui/GlassIconButton'),
+);
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
@@ -153,11 +159,15 @@ jest.mock('@/sync/useSyncStore', () => ({
   useSyncStore: (selector: (state: { subscriptionRequired: boolean }) => unknown) =>
     selector({ subscriptionRequired: mockSubscriptionRequired }),
 }));
+jest.mock('@/android/shared/sync/useSyncStore', () => jest.requireMock('@/sync/useSyncStore'));
 jest.mock('@/sync/syncEngine', () => ({ requestSync: jest.fn() }));
 jest.mock('@/android/sync/syncEngine', () => jest.requireMock('@/sync/syncEngine'));
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({ register: mockRegisterGate }),
 }));
+jest.mock('@/android/shared/hooks/useSuperwallGate', () =>
+  jest.requireMock('@/hooks/useSuperwallGate'),
+);
 
 const share = {
   visibility: 'private' as const,

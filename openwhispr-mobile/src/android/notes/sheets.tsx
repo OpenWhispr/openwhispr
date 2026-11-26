@@ -3,7 +3,7 @@ import { Pressable, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import type { GoogleCalendarEvent } from '@/data/calendarTypes';
-import { AppFont } from '@/lib/fonts';
+import { AppFont } from '@/android/shared/lib/fonts';
 import { BottomSheet } from '../settings/kit';
 import { GlassButton } from '../processingFable/look';
 import { Card, LinkButton, ListRow, NoteTile, useNotesLook } from './look';
@@ -11,7 +11,7 @@ import { eventIsNow, eventTimeRange, minutesUntil } from './calendar';
 import { timeOf } from './rows';
 import { useNotesT } from './strings';
 import type { Workspace } from './library';
-import { parseCalendarParticipants } from '@/lib/calendar/meetingContext';
+import { parseCalendarParticipants } from '@/android/shared/lib/calendar/meetingContext';
 import { MeetingModelList, MeetingModelRow } from './meetingModelSheet';
 
 /** A row with a tile, a title and a line under it; used by every sheet here. */

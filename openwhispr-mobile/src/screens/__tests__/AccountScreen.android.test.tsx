@@ -11,6 +11,9 @@ let mockBillingStatus: Record<string, string> = {};
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({ register: mockRegister }),
 }));
+jest.mock('@/android/shared/hooks/useSuperwallGate', () =>
+  jest.requireMock('@/hooks/useSuperwallGate'),
+);
 jest.mock('@/android/billing', () => ({
   useAndroidBillingStatus: { getState: () => ({ accounts: mockBillingStatus }) },
 }));
@@ -20,6 +23,9 @@ jest.mock('@/store/useGoogleCalendarStore', () => {
   const state = { accounts: [], load: async () => undefined };
   return { useGoogleCalendarStore: (select: (value: unknown) => unknown) => select(state) };
 });
+jest.mock('@/android/shared/store/useGoogleCalendarStore', () =>
+  jest.requireMock('@/store/useGoogleCalendarStore'),
+);
 jest.mock('@/android/calendar/connect', () => ({ needsReconnect: () => false }));
 jest.mock('@/android/navigationBar', () => ({
   useNavigationBar: () => ({ buttons: true, inset: 0 }),
@@ -85,6 +91,9 @@ jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: (selector: (state: { activeMode: string }) => unknown) =>
     selector({ activeMode: 'cloud' }),
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/sync/useSyncStore', () => ({
   useSyncStore: () => ({
     status: 'idle',
@@ -93,9 +102,11 @@ jest.mock('@/sync/useSyncStore', () => ({
     subscriptionRequired: false,
   }),
 }));
+jest.mock('@/android/shared/sync/useSyncStore', () => jest.requireMock('@/sync/useSyncStore'));
 jest.mock('@/sync/syncEngine', () => ({ requestSync: jest.fn(async () => undefined) }));
 jest.mock('@/android/sync/syncEngine', () => jest.requireMock('@/sync/syncEngine'));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));
+jest.mock('@/android/shared/lib/utils', () => jest.requireMock('@/lib/utils'));
 
 const updateConfig = jest.fn(async (change: object) => {
   useConfigStore.setState((state) => ({ config: { ...state.config!, ...change } }));

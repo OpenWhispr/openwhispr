@@ -1,4 +1,4 @@
-import { AppGroupStorage } from '../../../modules/app-group-storage/src';
+import { AppGroupStorage } from '@/android/shared/modules/app-group-storage/index';
 import type { ProviderRecoveryJob } from '@/android/lib/keyboardInferenceRoute';
 
 export function attachKeyboardRecoveryOwner(job: ProviderRecoveryJob, jobId: string): void {

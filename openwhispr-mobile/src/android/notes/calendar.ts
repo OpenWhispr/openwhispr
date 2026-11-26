@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { create } from 'zustand';
-import { calendarRepository } from '@/data/calendarRepository';
+import { calendarRepository } from '@/android/shared/data/calendarRepository';
 import type { GoogleCalendarEvent } from '@/data/calendarTypes';
-import { parseCalendarParticipants } from '@/lib/calendar/meetingContext';
-import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
+import { parseCalendarParticipants } from '@/android/shared/lib/calendar/meetingContext';
+import { useGoogleCalendarStore } from '@/android/shared/store/useGoogleCalendarStore';
 import { Sentry } from '@/android/lib/sentry';
 import { initialsOf } from './initials';
 

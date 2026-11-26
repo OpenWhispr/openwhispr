@@ -2,7 +2,7 @@ import type React from 'react';
 import { I18nManager } from 'react-native';
 import * as LucideIcons from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { BRAND, useIosColor } from '@/config/colors.android';
+import { BRAND, useIosColor } from '@/android/shared/config/colors';
 import type { LucideIconName, SystemIconColor } from './SystemIcon';
 
 export type { LucideIconName, SystemIconColor } from './SystemIcon';

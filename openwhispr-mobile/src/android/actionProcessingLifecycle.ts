@@ -7,9 +7,9 @@ import {
 import {
   DESKTOP_DEFAULT_NOTE_ACTION,
   isNothingToSummarizeReply,
-} from '@/lib/notes/desktopDefaultNotesPrompt';
-import { unwrapGeneratedMarkdown } from '@/lib/notes/unwrapGeneratedMarkdown';
-import type { Action } from '@/data';
+} from '@/android/shared/lib/notes/desktopDefaultNotesPrompt';
+import { unwrapGeneratedMarkdown } from '@/android/shared/lib/notes/unwrapGeneratedMarkdown';
+import type { Action } from '@/android/shared/data';
 import type {
   ActionProcessingLifecycle,
   PreparedActionPrompt,

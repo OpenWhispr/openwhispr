@@ -5,10 +5,10 @@ import { LocalTextModel, selectedTextModel, type AndroidTextModelId } from './Lo
 import { selectedSpeechModel, type AndroidSpeechModelId } from './speechSelection';
 import { modelReady } from './models';
 import { speechModelSupportsLanguages } from './speechCapabilities';
-import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
+import { getPreferredTranscriptionLanguages } from '@/android/shared/lib/transcriptionLanguage';
 import { buildProviderPrompt } from '@/android/reasoning/buildProviderPrompt';
-import { buildDictationHints } from '@/lib/dictationHints';
-import { getActiveCustomCleanupPrompt } from '@/store/useCustomPromptsStore';
+import { buildDictationHints } from '@/android/shared/lib/dictationHints';
+import { getActiveCustomCleanupPrompt } from '@/android/shared/store/useCustomPromptsStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import type { KeyboardTone } from '@/android/types';
 import { dictationToneStyle } from './style/toneStyle';

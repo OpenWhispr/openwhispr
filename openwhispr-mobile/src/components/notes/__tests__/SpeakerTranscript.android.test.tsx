@@ -1,3 +1,7 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/lib/diarization/transcriptDisplay', () =>
+  jest.requireActual('@/android/shared/lib/diarization/transcriptDisplay'),
+);
 import { Platform, ScrollView } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import type { Speaker } from '@/data/types';

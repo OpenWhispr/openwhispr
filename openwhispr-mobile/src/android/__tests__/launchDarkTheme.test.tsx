@@ -55,6 +55,9 @@ jest.mock('@/android/strings', () => ({
 jest.mock('../launch/strings', () => ({ useLaunchT: () => (key: string) => key }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/OpenWhisprMark', () => ({ OpenWhisprMark: () => null }));
+jest.mock('@/android/shared/components/ui/OpenWhisprMark', () =>
+  jest.requireMock('@/components/ui/OpenWhisprMark'),
+);
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: require('react-native').View,
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),

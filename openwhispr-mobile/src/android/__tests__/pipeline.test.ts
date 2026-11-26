@@ -20,6 +20,9 @@ jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguage: () => undefined,
   getPreferredTranscriptionLanguages: () => [],
 }));
+jest.mock('@/android/shared/lib/transcriptionLanguage', () =>
+  jest.requireMock('@/lib/transcriptionLanguage'),
+);
 // Shared files reach Android's service through the shared path, as Metro's re-export does.
 jest.mock('@/services/reasoning/ReasoningService', () =>
   jest.requireMock('@/android/reasoning/ReasoningService'),

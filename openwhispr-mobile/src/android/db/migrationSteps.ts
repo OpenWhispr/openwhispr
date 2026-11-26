@@ -1,5 +1,5 @@
 import type * as SQLite from 'expo-sqlite';
-import { randomUUID } from '@/lib/uuid';
+import { randomUUID } from '@/android/shared/lib/uuid';
 
 const LEGACY_DICTIONARY_KEY = 'openwhispr_dictionary';
 

@@ -6,10 +6,10 @@ import { GroupedList } from './GroupedList';
 import { FolderRow } from './FolderRow';
 import { SpaceRow } from './SpaceRow';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { GlassIconButton } from '@/components/ui/GlassIconButton';
-import { safeHaptics } from '@/lib/utils';
-import { useIosColor } from '@/config/colors.android';
-import type { Folder, Space } from '@/data';
+import { GlassIconButton } from '@/android/shared/components/ui/GlassIconButton';
+import { safeHaptics } from '@/android/shared/lib/utils';
+import { useIosColor } from '@/android/shared/config/colors';
+import type { Folder, Space } from '@/android/shared/data';
 
 export type MoveToFolderSheetProps = {
   visible: boolean;

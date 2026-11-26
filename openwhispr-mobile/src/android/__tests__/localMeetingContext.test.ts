@@ -38,7 +38,11 @@ jest.mock('@/store/useProcessingModeStore', () => ({
     },
   },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/data', () => ({ notesRepository: { getNoteById: () => mockReadNote() } }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
 jest.mock('@/android/lib/sentry', () => jest.requireMock('@/lib/sentry'));
 import { createLocalMeetingContext } from '../localMeetingContext';

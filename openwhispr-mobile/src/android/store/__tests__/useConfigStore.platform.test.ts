@@ -9,9 +9,15 @@ jest.mock('@/services/storage/StorageService', () => ({
     clearConfig: () => mockClearConfig(),
   },
 }));
+jest.mock('@/android/shared/services/storage/StorageService', () =>
+  jest.requireMock('@/services/storage/StorageService'),
+);
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ resetToDefault: jest.fn() }) },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 let useConfigStore: (typeof import('@/store/useConfigStore'))['useConfigStore'];
 function deferredSave() {
   let resolve!: () => void;

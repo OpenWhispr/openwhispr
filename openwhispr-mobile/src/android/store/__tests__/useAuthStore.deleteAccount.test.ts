@@ -3,6 +3,9 @@ jest.mock('@/lib/notes/noteShareTokens', () => ({
   claimNoteShareTokens: async () => {},
   clearNoteShareTokens: (...args: unknown[]) => mockClearNoteShares(...args),
 }));
+jest.mock('@/android/shared/lib/notes/noteShareTokens', () =>
+  jest.requireMock('@/lib/notes/noteShareTokens'),
+);
 
 const mockDeleteAccountApi = jest.fn();
 const mockSignOutApi = jest.fn();
@@ -41,12 +44,18 @@ jest.mock('@/store/useUsageStore', () => ({
 }));
 jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 jest.mock('@/services/agent/AgentComposerService', () => ({ clearAllSessions: jest.fn() }));
+jest.mock('@/android/shared/services/agent/AgentComposerService', () =>
+  jest.requireMock('@/services/agent/AgentComposerService'),
+);
 const mockClearChatHistory = jest.fn();
 const mockStopChatTurn = jest.fn();
 jest.mock('@/lib/chat/chatHistory', () => ({
   clearChatHistory: (...args: unknown[]) => mockClearChatHistory(...args),
   stopChatTurn: (...args: unknown[]) => mockStopChatTurn(...args),
 }));
+jest.mock('@/android/shared/lib/chat/chatHistory', () =>
+  jest.requireMock('@/lib/chat/chatHistory'),
+);
 jest.mock('@/services/providers/ProviderCredentials', () => ({
   clearProviderCredentials: (...args: unknown[]) => mockClearProviderCredentials(...args),
 }));

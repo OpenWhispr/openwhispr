@@ -1,7 +1,7 @@
 import type { CalendarParticipant } from '@/data/calendarTypes';
-import { getHumanParticipants } from '@/lib/calendar/meetingContext';
+import { getHumanParticipants } from '@/android/shared/lib/calendar/meetingContext';
 import { formatClockTime } from '@/android/lib/formatNoteRowTime';
-import { tryParseNoteTimestamp } from '@/lib/parseNoteTimestamp';
+import { tryParseNoteTimestamp } from '@/android/shared/lib/parseNoteTimestamp';
 
 export const isSameDay = (a: Date, b: Date): boolean =>
   a.getFullYear() === b.getFullYear() &&

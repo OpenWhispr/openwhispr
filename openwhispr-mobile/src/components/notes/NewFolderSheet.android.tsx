@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useIosColor } from '@/config/colors.android';
+import { useIosColor } from '@/android/shared/config/colors';
 import { createNewFolderSheet, type NewFolderPresentation } from './NewFolderSheetCore.android';
 
 function useAndroidFolderPresentation(initialName?: string): NewFolderPresentation {

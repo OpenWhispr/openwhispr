@@ -48,6 +48,9 @@ jest.mock('../../../../modules/app-group-storage/src', () => ({
     setItem: (key: string, value: string) => mockStorage.set(key, value),
   },
 }));
+jest.mock('@/android/shared/modules/app-group-storage/index', () =>
+  jest.requireMock('../../../../modules/app-group-storage/src'),
+);
 jest.mock('@/lib/inferenceRouting', () => ({ snapshotTranscriptionJob: jest.fn(() => mockRoute) }));
 beforeEach(() => {
   mockStorage.clear();

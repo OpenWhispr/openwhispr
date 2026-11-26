@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
+import { useGoogleCalendarStore } from '@/android/shared/store/useGoogleCalendarStore';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { requiresRealAccount } from '@/android/lib/accountAccess';
 import { useTheme } from '../ThemeProvider';

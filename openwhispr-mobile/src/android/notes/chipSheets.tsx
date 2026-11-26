@@ -3,7 +3,7 @@ import { Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'rea
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import type { CalendarParticipant, GoogleCalendarEvent } from '@/data/calendarTypes';
-import { AppFont } from '@/lib/fonts';
+import { AppFont } from '@/android/shared/lib/fonts';
 import { BottomSheet } from '../settings/kit';
 import { GlassButton } from '../processingFable/look';
 import { SearchField } from '../controls';

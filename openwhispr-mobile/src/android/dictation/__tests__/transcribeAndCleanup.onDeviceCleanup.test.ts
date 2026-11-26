@@ -64,9 +64,11 @@ jest.mock('@/lib/localReasoning', () => ({
   getLocalReasoningReadiness: jest.fn(),
   countLocalReasoningTokens: jest.fn(),
 }));
+jest.mock('@/android/shared/lib/localReasoning', () => jest.requireMock('@/lib/localReasoning'));
 jest.mock('@/lib/permissions', () => ({
   isNoSpeechError: jest.fn(() => false),
 }));
+jest.mock('@/android/shared/lib/permissions', () => jest.requireMock('@/lib/permissions'));
 let mockUser: { id: string; isAnonymous: boolean } | null = { id: 'u', isAnonymous: false };
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: mockUser }) },
@@ -79,6 +81,9 @@ jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useC
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: mockActiveMode }) },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/store/useSnippetsStore', () => ({
   useSnippetsStore: { getState: () => ({ isLoaded: true, entries: [] }) },
 }));
@@ -92,6 +97,9 @@ jest.mock('@/android/store/useDictionaryStore', () =>
 jest.mock('@/store/useCustomPromptsStore', () => ({
   getActiveCustomCleanupPrompt: () => mockCustomPrompt,
 }));
+jest.mock('@/android/shared/store/useCustomPromptsStore', () =>
+  jest.requireMock('@/store/useCustomPromptsStore'),
+);
 
 const mockTranscribe = TranscriptionService.transcribe as jest.Mock;
 const mockReason = ReasoningService.processText as jest.Mock;

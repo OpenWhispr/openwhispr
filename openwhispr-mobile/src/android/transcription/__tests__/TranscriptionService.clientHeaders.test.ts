@@ -20,6 +20,9 @@ jest.mock('expo-file-system/legacy', () => ({
   FileSystemSessionType: { FOREGROUND: 0 },
 }));
 jest.mock('@/services/transcription/LocalWhisperService', () => ({ LocalWhisperService: {} }));
+jest.mock('@/android/shared/services/transcription/LocalWhisperService', () =>
+  jest.requireMock('@/services/transcription/LocalWhisperService'),
+);
 jest.mock('@/android/transcription/LocalTranscriptionService', () => ({
   LocalTranscriptionService: {},
 }));
@@ -28,6 +31,7 @@ jest.mock('@/lib/dictationHints', () => ({
   buildLlmDictionary: () => ({ personal: [], shared: [] }),
   isDictationContext: () => true,
 }));
+jest.mock('@/android/shared/lib/dictationHints', () => jest.requireMock('@/lib/dictationHints'));
 jest.mock('@/android/dictation/cleanupTranscript', () => ({ CLEANUP_TIMEOUT_MS: 30000 }));
 jest.mock('../../../../modules/background-uploader/src', () => ({
   BackgroundUploader: { isAvailable: () => true, upload: jest.fn() },
@@ -39,6 +43,9 @@ jest.mock('../../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: {},
   APP_GROUP_KEYS: {},
 }));
+jest.mock('@/android/shared/modules/app-group-storage/index', () =>
+  jest.requireMock('../../../../modules/app-group-storage/src'),
+);
 
 beforeEach((): void => {
   jest.clearAllMocks();

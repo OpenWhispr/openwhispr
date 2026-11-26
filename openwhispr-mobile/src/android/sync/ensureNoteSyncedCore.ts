@@ -1,13 +1,13 @@
 import type { NoteSharingFeedbackCode } from '@/android/lib/notes/noteSharingMessages';
 import * as Network from 'expo-network';
-import { notesRepository, type Note } from '@/data';
+import { notesRepository, type Note } from '@/android/shared/data';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { useNotesStore } from '@/android/store/useNotesStore';
-import { isFolderAwaitingUpload } from '@/lib/notes/folderUpload';
-import { createPushScopeResolver, createTeamSpaceFilter } from '@/sync/pushScope';
+import { isFolderAwaitingUpload } from '@/android/shared/lib/notes/folderUpload';
+import { createPushScopeResolver, createTeamSpaceFilter } from '@/android/shared/sync/pushScope';
 import { requestSync, subscribeSyncCompletion } from '@/android/sync/syncEngine';
-import { useSyncStore } from '@/sync/useSyncStore';
+import { useSyncStore } from '@/android/shared/sync/useSyncStore';
 
 export function createEnsureNoteSynced({
   failure,

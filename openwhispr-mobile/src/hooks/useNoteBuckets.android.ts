@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { Note } from '@/data';
+import type { Note } from '@/android/shared/data';
 import { groupNotesByDate } from '@/android/lib/groupNotesByDate';
 import { useAndroidCopy } from './useAndroidCopy';
 

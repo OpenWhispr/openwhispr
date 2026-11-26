@@ -4,6 +4,7 @@ jest.mock('@/lib/appleLLM', () => ({
     generateMeetingNotes: jest.fn(),
   },
 }));
+jest.mock('@/android/shared/lib/appleLLM', () => jest.requireMock('@/lib/appleLLM'));
 
 jest.mock('@/android/LocalTextModel', () => ({ LocalTextModel: { processText: jest.fn() } }));
 
@@ -15,6 +16,7 @@ jest.mock('@/data', () => ({
     getActions: jest.fn(),
   },
 }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 
 jest.mock('@/lib/localReasoning', () => ({
   LOCAL_OUTPUT_TOKEN_RESERVE: 900,
@@ -40,6 +42,7 @@ jest.mock('@/lib/localReasoning', () => ({
     (error as { code?: unknown }).code === 'APPLE_LLM_OUTPUT_LIMIT',
   toLocalReasoningError: jest.fn((error: unknown) => error),
 }));
+jest.mock('@/android/shared/lib/localReasoning', () => jest.requireMock('@/lib/localReasoning'));
 
 import {
   generateLocalMeetingNotes,

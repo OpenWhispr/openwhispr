@@ -1,4 +1,4 @@
-import { unwrapGeneratedMarkdown } from '@/lib/notes/unwrapGeneratedMarkdown';
+import { unwrapGeneratedMarkdown } from '@/android/shared/lib/notes/unwrapGeneratedMarkdown';
 
 describe('generated Markdown wrappers', () => {
   it.each([

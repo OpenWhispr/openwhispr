@@ -3,7 +3,7 @@ import { Text } from '@/components/ui/Text';
 import { GroupedList } from './GroupedList';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import type { LucideIconName } from '@/components/ui/SystemIcon';
-import { useIosColor } from '@/config/colors.android';
+import { useIosColor } from '@/android/shared/config/colors';
 
 type FolderRowProps = {
   sfName: string;

@@ -1,8 +1,8 @@
 import type { AuthUser } from '@/android/lib/authClient';
-import { isDictationAgentEnabled, isNoteChatEnabled } from '@/lib/dictationAgent';
+import { isDictationAgentEnabled, isNoteChatEnabled } from '@/android/shared/lib/dictationAgent';
 import type { InferenceSelection } from '@/android/providers/mobileProviders';
 import { localModeDefault, MODE_LABELS, type CloudAccess } from '@/lib/inferenceModes';
-import { isLocalModelKey, LOCAL_MODEL_TITLES } from '@/lib/localModelCatalog';
+import { isLocalModelKey, LOCAL_MODEL_TITLES } from '@/android/shared/lib/localModelCatalog';
 import {
   providerDisplayName,
   type MobileInferenceScope,

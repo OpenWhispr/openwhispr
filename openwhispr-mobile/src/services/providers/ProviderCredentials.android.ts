@@ -1,7 +1,7 @@
 import 'expo-sqlite/localStorage/install';
 import * as SecureStore from 'expo-secure-store';
 import { CryptoDigestAlgorithm, digestStringAsync } from 'expo-crypto';
-import { isSecureHttpEndpoint, normalizeBaseUrl } from '@/lib/providerEndpoints';
+import { isSecureHttpEndpoint, normalizeBaseUrl } from '@/android/shared/lib/providerEndpoints';
 import modelCatalog from '@/config/providerCatalog.json';
 
 export interface ProviderCredential {

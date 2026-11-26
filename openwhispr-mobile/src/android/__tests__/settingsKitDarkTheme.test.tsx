@@ -39,6 +39,9 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('@/store/useAuthStore', () => ({ useAuthStore: () => null }));
 jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/hooks/useKeyboardHeight', () => ({ useKeyboardHeight: () => 0 }));
+jest.mock('@/android/shared/hooks/useKeyboardHeight', () =>
+  jest.requireMock('@/hooks/useKeyboardHeight'),
+);
 
 import { ThemeProvider } from '../ThemeProvider';
 import { darkTheme, lightTheme } from '../theme';

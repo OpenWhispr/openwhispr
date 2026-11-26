@@ -2,7 +2,7 @@ import { type ReactNode } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { MenuView, type MenuAction } from '@react-native-menu/menu';
 import { Text } from '@/components/ui/Text';
-import { useIosColor } from '@/config/colors.android';
+import { useIosColor } from '@/android/shared/config/colors';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { confirmDestructive } from '@/android/lib/alerts';
 import type {
@@ -15,7 +15,7 @@ import {
   isGroupPrincipal,
   isPausedBySharingOff,
   isScopeGrant,
-} from '@/lib/notes/noteShareAccess';
+} from '@/android/shared/lib/notes/noteShareAccess';
 import { GroupedList } from './GroupedList';
 import { PRINCIPAL_LABEL, PrincipalAvatar } from './NoteSharePrincipal';
 import type { NoteShareCopy } from './NoteSharePrincipalCore.android';

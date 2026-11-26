@@ -10,6 +10,7 @@ jest.mock('@/lib/localReasoning', () => ({
   clearLocalReasoningReadinessCache: jest.fn(),
   getLocalReasoningUnavailableMessage: () => 'Download a local text model.',
 }));
+jest.mock('@/android/shared/lib/localReasoning', () => jest.requireMock('@/lib/localReasoning'));
 const mockUpdateConfig = jest.fn();
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ updateConfig: mockUpdateConfig }) },

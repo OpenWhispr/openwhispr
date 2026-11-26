@@ -8,6 +8,9 @@ const mockUnassignedHistory = jest.fn(async () => []);
 jest.mock('@/services/storage/StorageService.android', () => ({
   StorageService: { getUnassignedTranscripts: () => mockUnassignedHistory() },
 }));
+jest.mock('@/android/shared/services/storage/StorageService', () =>
+  jest.requireMock('@/services/storage/StorageService.android'),
+);
 import React from 'react';
 import * as transcriptionErrors from '@/lib/transcriptionErrors';
 import { toFriendlyTranscriptionErrorMessage as androidMessage } from '@/lib/transcriptionErrors.android';
@@ -147,10 +150,11 @@ jest.mock('@/android/pipeline', () => ({
   processAndroidAudio: jest.fn(),
 }));
 jest.mock('@/hooks/useAppInit', () => ({ useAppInit: jest.fn() }));
+jest.mock('@/android/shared/hooks/useAppInit', () => jest.requireMock('@/hooks/useAppInit'));
 const mockPickFile = jest.fn();
 const mockSaveImportedNote = jest.fn((..._args: unknown[]) => ({ id: 42 }));
 const mockResolveDestination = jest.fn();
-jest.mock('@/lib/notes/importDestination', () => ({
+jest.mock('@/android/shared/lib/notes/importDestination', () => ({
   ImportDestinationError: class extends Error {},
   resolveImportDestination: (input: unknown) => {
     mockResolveDestination(input);
@@ -177,6 +181,9 @@ jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNo
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: 'cloud' }) },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 const mockProcessUpload = jest.fn();
 const mockSaveUpload = jest.fn();
 const mockSaveFailedUpload = jest.fn();
@@ -193,6 +200,9 @@ jest.mock('expo-file-system/legacy', () => ({
 jest.mock('../../../modules/audio-tools/src', () => ({
   AudioTools: { isAvailable: () => false, cleanup: jest.fn(async () => undefined) },
 }));
+jest.mock('@/android/shared/modules/audio-tools/index', () =>
+  jest.requireMock('../../../modules/audio-tools/src'),
+);
 jest.mock('@/services/transcription/TranscriptionService', () => ({
   isOggOpus: () => false,
   isLocalModelMissingError: () => false,
@@ -212,7 +222,11 @@ jest.mock('@/android/dictation/transcribeAndCleanup', () =>
   jest.requireMock('@/lib/transcribeAndCleanup'),
 );
 jest.mock('@/lib/transcriptionLanguage', () => ({ getPreferredTranscriptionLanguage: () => 'en' }));
+jest.mock('@/android/shared/lib/transcriptionLanguage', () =>
+  jest.requireMock('@/lib/transcriptionLanguage'),
+);
 jest.mock('@/lib/permissions', () => ({ isNoSpeechError: () => false }));
+jest.mock('@/android/shared/lib/permissions', () => jest.requireMock('@/lib/permissions'));
 jest.mock('@/lib/transcriptAudio', () => ({
   retainTranscriptAudio: jest.fn(async () => 'file://docs/upload.wav'),
   deleteManagedTranscriptAudio: jest.fn(async () => undefined),
@@ -220,6 +234,9 @@ jest.mock('@/lib/transcriptAudio', () => ({
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({ register: mockRegister }),
 }));
+jest.mock('@/android/shared/hooks/useSuperwallGate', () =>
+  jest.requireMock('@/hooks/useSuperwallGate'),
+);
 jest.mock('@/lib/inferenceRouting', () => ({
   getTranscriptionProvider: () => mockUploadProvider,
   snapshotTranscriptionJob: () => ({ provider: mockUploadProvider }),
@@ -234,6 +251,7 @@ jest.mock('@/lib/superwall', () => ({
   },
   buildUsageGateParams: () => ({}),
 }));
+jest.mock('@/android/shared/lib/superwall', () => jest.requireMock('@/lib/superwall'));
 jest.mock('@/store/useAuthStore', () => ({ useAuthStore: () => mockUser }));
 jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 let mockUsage: Record<string, unknown> | null = null;

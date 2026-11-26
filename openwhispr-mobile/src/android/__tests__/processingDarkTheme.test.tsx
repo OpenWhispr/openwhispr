@@ -68,6 +68,9 @@ jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useC
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: require('zustand').create(() => ({ activeMode: 'cloud' })),
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('../models', () => ({
   ANDROID_MODELS: {
     'parakeet-v3': { title: 'Parakeet v3', bytes: 670478772 },

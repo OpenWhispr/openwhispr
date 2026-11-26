@@ -74,9 +74,15 @@ jest.mock('../../../../modules/app-group-storage/src', () => ({
   addKeyboardStatusChangedListener: () => mockSubscription,
   addAgentActionListener: () => mockSubscription,
 }));
+jest.mock('@/android/shared/modules/app-group-storage/index', () =>
+  jest.requireMock('../../../../modules/app-group-storage/src'),
+);
 jest.mock('../../../../modules/live-activity/src', () => ({
   LiveActivity: { setDictationMode: jest.fn(), startSession: jest.fn() },
 }));
+jest.mock('@/android/shared/modules/live-activity/index', () =>
+  jest.requireMock('../../../../modules/live-activity/src'),
+);
 jest.mock('@/store/useHandoffStore', () => ({
   useHandoffStore: { getState: () => mockHandoffStoreState },
 }));
@@ -89,6 +95,9 @@ jest.mock('@/store/useKeyboardRecoveryStore', () => ({
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: 'cloud' }) },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/store/useTranscriptStore', () => ({
   useTranscriptStore: {
     getState: () => ({
@@ -130,6 +139,9 @@ jest.mock('@/services/agent/AgentComposerService', () => ({
   generateForJob: jest.fn(),
   handleAgentAction: jest.fn(),
 }));
+jest.mock('@/android/shared/services/agent/AgentComposerService', () =>
+  jest.requireMock('@/services/agent/AgentComposerService'),
+);
 jest.mock('@/lib/cleanupTranscript', () => ({
   cleanupTranscript: (...args: unknown[]) => mockCleanupTranscript(...args),
 }));
@@ -154,23 +166,34 @@ jest.mock('@/lib/keyboardAgentSync', () => ({
   clearKeyboardAgentJob: jest.fn(),
   consumeKeyboardAgentAction: jest.fn(() => null),
 }));
+jest.mock('@/android/shared/lib/keyboardAgentSync', () =>
+  jest.requireMock('@/lib/keyboardAgentSync'),
+);
 jest.mock('@/lib/snippets', () => ({ expandSnippets: (text: string) => text }));
 jest.mock('@/android/dictation/snippets', () => jest.requireMock('@/lib/snippets'));
 jest.mock('@/lib/speechActivity', () => ({
   analyzeSpeechActivity: (...args: unknown[]) => mockAnalyzeSpeechActivity(...args),
   serializeSpeechActivityMetrics: jest.fn(),
 }));
+jest.mock('@/android/shared/lib/speechActivity', () => jest.requireMock('@/lib/speechActivity'));
 jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguage: () => 'en',
 }));
+jest.mock('@/android/shared/lib/transcriptionLanguage', () =>
+  jest.requireMock('@/lib/transcriptionLanguage'),
+);
 jest.mock('@/lib/transcriptionErrors', () => ({
   toFriendlyTranscriptionErrorMessage: (error: unknown) => String(error),
 }));
+jest.mock('@/android/shared/lib/transcriptionErrors', () =>
+  jest.requireMock('@/lib/transcriptionErrors'),
+);
 jest.mock('@/lib/transcriptAudio', () => ({
   deleteManagedTranscriptAudio: jest.fn(async () => undefined),
   retainTranscriptAudio: (...args: unknown[]) => mockRetainTranscriptAudio(...args),
 }));
 jest.mock('@/lib/permissions', () => ({ isNoSpeechError: () => false }));
+jest.mock('@/android/shared/lib/permissions', () => jest.requireMock('@/lib/permissions'));
 jest.mock('expo-application', () => ({ applicationId: 'com.gizmolabs.openwhispr' }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 jest.mock('expo-crypto', () => ({
@@ -215,6 +238,9 @@ jest.mock('@/store/useOnboardingStore', () => ({
     hydrate: () => mockHydrate(),
   })),
 }));
+jest.mock('@/android/shared/store/useOnboardingStore', () =>
+  jest.requireMock('@/store/useOnboardingStore'),
+);
 jest.mock('@/lib/authClient', () => ({ getCachedSession: () => mockReadCachedSession() }));
 jest.mock('@/android/lib/authClient', () => jest.requireMock('@/lib/authClient'));
 jest.mock('@/lib/apiClient', () => ({
@@ -272,17 +298,29 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('@/components/superwall/OpenWhisprSuperwallProvider', () => ({
   OpenWhisprSuperwallProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
+jest.mock('@/android/shared/components/superwall/OpenWhisprSuperwallProvider', () =>
+  jest.requireMock('@/components/superwall/OpenWhisprSuperwallProvider'),
+);
 jest.mock('@/components/features/AnimatedSplash', () => ({ AnimatedSplash: () => null }));
 jest.mock('@/components/ui/PermissionAlert', () => ({ PermissionAlertMount: () => null }));
+jest.mock('@/android/shared/components/ui/PermissionAlert', () =>
+  jest.requireMock('@/components/ui/PermissionAlert'),
+);
 jest.mock('@/screens/AuthScreen', () => () => null);
 jest.mock('@/screens/onboarding/OnboardingFlow', () => ({ OnboardingFlow: () => null }));
 jest.mock('@/hooks/useRevenueCatIdentity', () => ({ useRevenueCatIdentity: () => undefined }));
+jest.mock('@/android/shared/hooks/useRevenueCatIdentity', () =>
+  jest.requireMock('@/hooks/useRevenueCatIdentity'),
+);
 jest.mock('@/hooks/useAffiliateAttribution', () => ({ useAffiliateAttribution: () => undefined }));
 jest.mock('@/hooks/useAnonymousOnboardingSession', () => ({
   useAnonymousOnboardingSession: () => undefined,
 }));
 jest.mock('@/hooks/useGuestPrivateMode', () => ({ useGuestPrivateMode: () => undefined }));
 jest.mock('@/store/useCustomPromptsStore', () => ({ startRetiredPromptSweep: () => undefined }));
+jest.mock('@/android/shared/store/useCustomPromptsStore', () =>
+  jest.requireMock('@/store/useCustomPromptsStore'),
+);
 jest.mock('@/store/useUsageStore', () => ({ useUsageStore: { getState: () => ({}) } }));
 jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 jest.mock('@/lib/appResume', () => ({ resolveResumeAction: () => ({}) }));

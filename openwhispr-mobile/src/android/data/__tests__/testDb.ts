@@ -1,3 +1,8 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/data/local/chatRepository', () =>
+  jest.requireActual('@/android/shared/data/local/chatRepository'),
+);
+jest.mock('@/lib/uuid', () => jest.requireActual('@/android/shared/lib/uuid'));
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '@/db/schema';

@@ -1,16 +1,16 @@
 import { Platform } from 'react-native';
-import type { ParakeetVersion } from '../../../modules/parakeet-asr/src';
+import type { ParakeetVersion } from '@/android/shared/modules/parakeet-asr/index';
 import type { TranscriptionResponse } from '@/android/types';
-import type { LocalModelKey } from '@/lib/localModelCatalog';
-import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
-import { LocalParakeetService } from '@/services/transcription/LocalParakeetService';
-import { LocalWhisperService } from '@/services/transcription/LocalWhisperService';
+import type { LocalModelKey } from '@/android/shared/lib/localModelCatalog';
+import { getPreferredTranscriptionLanguages } from '@/android/shared/lib/transcriptionLanguage';
+import { LocalParakeetService } from '@/android/shared/services/transcription/LocalParakeetService';
+import { LocalWhisperService } from '@/android/shared/services/transcription/LocalWhisperService';
 import {
   selectLocalEngine,
   preferredEngineForLanguages,
   type LocalEngineAvailability,
   type LocalEngineChoice,
-} from '@/services/transcription/localEngine';
+} from '@/android/shared/services/transcription/localEngine';
 
 export interface LocalEngineDescriptor {
   engine: 'parakeet' | 'whisper' | 'moonshine';

@@ -3,8 +3,8 @@ import { resolveMobileInferenceRoute } from '@/android/providers/mobileProviders
 import { ReasoningService } from '@/android/reasoning/ReasoningService';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { getActiveCustomCleanupPrompt } from '@/store/useCustomPromptsStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { getActiveCustomCleanupPrompt } from '@/android/shared/store/useCustomPromptsStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import { requiresRealAccount } from '@/android/lib/accountAccess';
 import type {
   KeyboardTone,
@@ -13,10 +13,10 @@ import type {
   ReasoningRequest,
   TextInferenceSnapshot,
 } from '@/android/types';
-import { getDictationAgentName } from '@/lib/dictationAgent';
-import { buildDictationHintTiers } from '@/lib/dictationHints';
+import { getDictationAgentName } from '@/android/shared/lib/dictationAgent';
+import { buildDictationHintTiers } from '@/android/shared/lib/dictationHints';
 import { splitLlmDictionary, type LlmDictionary } from '@/android/dictation/snippets';
-import { fitDictionaryOnDevice } from '@/lib/onDeviceDictionary';
+import { fitDictionaryOnDevice } from '@/android/shared/lib/onDeviceDictionary';
 import { buildProviderPrompt } from '@/android/reasoning/buildProviderPrompt';
 import {
   createTimeoutSignal,
@@ -30,8 +30,8 @@ import {
   getLocalReasoningUnavailableMessage,
   LocalReasoningError,
   UNSUPPORTED_LANGUAGE_MESSAGE,
-} from '@/lib/localReasoning';
-import { withRetry, createApiRetryStrategy } from '@/lib/retry';
+} from '@/android/shared/lib/localReasoning';
+import { withRetry, createApiRetryStrategy } from '@/android/shared/lib/retry';
 
 // Only 'keyboard' and 'recording' are dictation, where the prompt is told the assistant's name.
 type DictationCleanupContext = 'keyboard' | 'recording';

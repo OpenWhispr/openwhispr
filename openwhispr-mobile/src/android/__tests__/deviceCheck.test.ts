@@ -17,9 +17,13 @@ jest.mock('../LocalTextModel', () => ({
 }));
 jest.mock('../models', () => ({ modelReady: jest.fn(async () => true) }));
 jest.mock('@/lib/dictationHints', () => ({ buildDictationHints: () => [] }));
+jest.mock('@/android/shared/lib/dictationHints', () => jest.requireMock('@/lib/dictationHints'));
 jest.mock('@/store/useCustomPromptsStore', () => ({
   getActiveCustomCleanupPrompt: () => undefined,
 }));
+jest.mock('@/android/shared/store/useCustomPromptsStore', () =>
+  jest.requireMock('@/store/useCustomPromptsStore'),
+);
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ config: {} }) },
 }));
@@ -27,6 +31,9 @@ jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useC
 jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguages: () => ['en'],
 }));
+jest.mock('@/android/shared/lib/transcriptionLanguage', () =>
+  jest.requireMock('@/lib/transcriptionLanguage'),
+);
 import * as FileSystem from 'expo-file-system/legacy';
 import { AndroidDictation, type DeviceProfile } from '../../../modules/android-dictation/src';
 import { LocalSpeechModel } from '../LocalSpeechModel';

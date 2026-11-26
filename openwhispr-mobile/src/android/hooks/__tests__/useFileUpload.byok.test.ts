@@ -27,6 +27,9 @@ jest.mock('expo-file-system/legacy', () => ({
 jest.mock('../../../../modules/audio-tools/src', () => ({
   AudioTools: { isAvailable: () => false, cleanup: jest.fn(async () => undefined) },
 }));
+jest.mock('@/android/shared/modules/audio-tools/index', () =>
+  jest.requireMock('../../../../modules/audio-tools/src'),
+);
 jest.mock('@/services/transcription/TranscriptionService', () => ({
   isOggOpus: () => false,
   isLocalModelMissingError: () => false,
@@ -55,7 +58,11 @@ jest.mock('@/android/dictation/transcribeAndCleanup', () =>
 jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguage: () => 'en',
 }));
+jest.mock('@/android/shared/lib/transcriptionLanguage', () =>
+  jest.requireMock('@/lib/transcriptionLanguage'),
+);
 jest.mock('@/lib/permissions', () => ({ isNoSpeechError: () => false }));
+jest.mock('@/android/shared/lib/permissions', () => jest.requireMock('@/lib/permissions'));
 jest.mock('@/lib/transcriptAudio', () => ({
   retainTranscriptAudio: (...args: unknown[]): unknown => mockRetainTranscriptAudio(...args),
   deleteManagedTranscriptAudio: (...args: unknown[]): unknown =>

@@ -9,7 +9,7 @@ import { snapshotTranscriptionJob, type TranscriptionJobRoute } from '@/lib/infe
 import {
   getPreferredTranscriptionLanguage,
   getPreferredTranscriptionLanguages,
-} from '@/lib/transcriptionLanguage';
+} from '@/android/shared/lib/transcriptionLanguage';
 import { ReasoningService } from '@/android/reasoning/ReasoningService';
 import { LocalTranscriptionService } from '@/android/transcription/LocalTranscriptionService';
 import { useConfigStore } from '@/android/store/useConfigStore';
@@ -199,7 +199,7 @@ function senderFirstName(): string | null {
   const { useAuthStore } =
     require('@/android/store/useAuthStore') as typeof import('@/android/store/useAuthStore');
   const { getAccountFirstName } =
-    require('@/lib/accountDisplay') as typeof import('@/lib/accountDisplay');
+    require('@/android/shared/lib/accountDisplay') as typeof import('@/android/shared/lib/accountDisplay');
   return getAccountFirstName(useAuthStore.getState().user);
 }
 

@@ -20,6 +20,9 @@ jest.mock('../speechSelection', () => ({
 jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguages: jest.fn(() => []),
 }));
+jest.mock('@/android/shared/lib/transcriptionLanguage', () =>
+  jest.requireMock('@/lib/transcriptionLanguage'),
+);
 jest.mock('../LocalTextModel', () => ({
   LocalTextModel: { release: jest.fn(async () => undefined) },
 }));

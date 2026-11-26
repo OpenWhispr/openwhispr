@@ -17,6 +17,7 @@ jest.mock('../../../../modules/android-dictation/src', () => ({
 }));
 jest.mock('expo-router', () => ({ router: { navigate: (path: string) => mockNavigate(path) } }));
 jest.mock('@/lib/dictationHints', () => ({ buildEffectiveDictionaryWords: () => ['OpenWhispr'] }));
+jest.mock('@/android/shared/lib/dictationHints', () => jest.requireMock('@/lib/dictationHints'));
 jest.mock('../learned', () => ({
   loadLearnedWords: () => Promise.resolve(),
   learnCorrections: (...args: unknown[]) => mockLearn(...args),

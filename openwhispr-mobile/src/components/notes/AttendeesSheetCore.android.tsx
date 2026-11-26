@@ -4,11 +4,11 @@ import { Modal, ScrollView, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { GlassIconButton } from '@/components/ui/GlassIconButton';
+import { GlassIconButton } from '@/android/shared/components/ui/GlassIconButton';
 import type { CalendarParticipant } from '@/data/calendarTypes';
 import { attendeeName, sortAttendees } from '@/android/lib/notes/noteMeta';
 import { GroupedList } from './GroupedList';
-import { useIosColor } from '@/config/colors.android';
+import { useIosColor } from '@/android/shared/config/colors';
 
 interface AttendeesSheetProps {
   visible: boolean;

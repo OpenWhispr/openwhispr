@@ -1,4 +1,4 @@
-import { randomUUID } from '@/lib/uuid';
+import { randomUUID } from '@/android/shared/lib/uuid';
 import * as FileSystem from 'expo-file-system/legacy';
 import { AndroidDictation, dictationEvents } from '../../modules/android-dictation/src';
 import { meetingAudioContext, meetingAudioDirectory } from '@/lib/meetingAudioStorage';

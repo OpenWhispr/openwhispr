@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { resetPasswordWithToken } from '@/android/lib/authClient';
 import { useAuthStore } from '@/android/store/useAuthStore';
-import { safeHaptics } from '@/lib/utils';
+import { safeHaptics } from '@/android/shared/lib/utils';
 import { showToast } from '../settings/kit';
 import { ForgotPassword } from './ForgotPassword';
 import {

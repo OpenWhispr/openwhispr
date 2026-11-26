@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { withActiveProviderJob } from '@/lib/providerJobActivity';
+import { withActiveProviderJob } from '@/android/shared/lib/providerJobActivity';
 import { snapshotTextInference } from '@/lib/inferenceRouting';
 import {
   TranscriptionService,
@@ -7,18 +7,18 @@ import {
 } from '@/android/transcription/TranscriptionService';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { getActiveCustomCleanupPrompt } from '@/store/useCustomPromptsStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { getActiveCustomCleanupPrompt } from '@/android/shared/store/useCustomPromptsStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import { useSnippetsStore } from '@/android/store/useSnippetsStore';
 import { requiresRealAccount } from '@/android/lib/accountAccess';
 import { cleanupRunsOnDevice } from '@/lib/aiWorkflows';
 import { cleanupTranscript } from '@/android/dictation/cleanupTranscript';
-import { isDictationContext } from '@/lib/dictationHints';
-import { getLocalReasoningReadiness } from '@/lib/localReasoning';
-import { isNoSpeechError } from '@/lib/permissions';
-import { withRetry, type RetryOptions } from '@/lib/retry';
+import { isDictationContext } from '@/android/shared/lib/dictationHints';
+import { getLocalReasoningReadiness } from '@/android/shared/lib/localReasoning';
+import { isNoSpeechError } from '@/android/shared/lib/permissions';
+import { withRetry, type RetryOptions } from '@/android/shared/lib/retry';
 import { expandSnippets } from '@/android/dictation/snippets';
-import { isUsageLimitError } from '@/lib/usageLimitError';
+import { isUsageLimitError } from '@/android/shared/lib/usageLimitError';
 import { transcriptionLifecycle } from '@/android/transcription/transcriptionLifecycle';
 import {
   cleanupToneForRequest,

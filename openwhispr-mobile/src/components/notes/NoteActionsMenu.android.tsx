@@ -4,11 +4,11 @@ import { MenuView, type MenuAction } from '@react-native-menu/menu';
 import { useTheme } from '@/android/ThemeProvider';
 import * as Sentry from '@sentry/react-native';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { GlassCapsule } from '@/components/ui/GlassIconButton';
+import { GlassCapsule } from '@/android/shared/components/ui/GlassIconButton';
 import { useNotesStore } from '@/android/store/useNotesStore';
-import { safeHaptics } from '@/lib/utils';
-import { BRAND } from '@/config/colors';
-import type { Action } from '@/data';
+import { safeHaptics } from '@/android/shared/lib/utils';
+import { BRAND } from '@/android/shared/config/colors';
+import type { Action } from '@/android/shared/data';
 
 interface NoteActionsMenuProps {
   noteId: number;

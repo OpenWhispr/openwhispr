@@ -2,7 +2,7 @@ import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import {
   accountRequiredForCloud,
   requiresRealAccount,
@@ -14,13 +14,16 @@ import {
   canRunLocalReasoning,
   getLocalReasoningReadiness,
   getLocalReasoningUnavailableMessage,
-} from '@/lib/localReasoning';
-import type { LocalModelKey } from '@/lib/localModelCatalog';
+} from '@/android/shared/lib/localReasoning';
+import type { LocalModelKey } from '@/android/shared/lib/localModelCatalog';
 import {
   type InferenceSelection,
   type MobileInferenceScope,
 } from '@/android/providers/mobileProviders';
-import { getPrivateModeReadiness, getPrivateModeUnavailableMessage } from '@/lib/privateMode';
+import {
+  getPrivateModeReadiness,
+  getPrivateModeUnavailableMessage,
+} from '@/android/shared/lib/privateMode';
 
 type SpeechScope = 'dictation' | 'upload';
 

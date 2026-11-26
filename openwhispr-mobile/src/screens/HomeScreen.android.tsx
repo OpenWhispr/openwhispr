@@ -1,5 +1,5 @@
-import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
-import { StorageService } from '@/services/storage/StorageService.android';
+import { toFriendlyTranscriptionErrorMessage } from '@/android/shared/lib/transcriptionErrors';
+import { StorageService } from '@/android/shared/services/storage/StorageService';
 import type { Transcript } from '@/android/types';
 import {
   AccessibilityInfo,
@@ -21,7 +21,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { useTranscriptStore } from '@/android/store/useTranscriptStore';
-import { useAppInit } from '@/hooks/useAppInit';
+import { useAppInit } from '@/android/shared/hooks/useAppInit';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { useInsights, refreshInsights } from '@/android/insights';
 import {
@@ -35,13 +35,13 @@ import {
 import { useFileUpload } from '@/android/hooks/useFileUpload';
 import { useNotesStore } from '@/android/store/useNotesStore';
 import { defaultFolderFor } from '@/android/notes/library';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import {
   ImportDestinationError,
   resolveImportDestination,
   saveImportedNote,
   type ImportDestination,
-} from '@/lib/notes/importDestination';
+} from '@/android/shared/lib/notes/importDestination';
 import { getTranscriptionProvider } from '@/lib/inferenceRouting';
 import { accountRequiredForCloud, showAccountRequiredAlert } from '@/android/lib/accountAccess';
 import { useAuthStore } from '@/android/store/useAuthStore';
@@ -49,8 +49,8 @@ import { useUsageStore } from '@/android/store/useUsageStore';
 import { GlassPill, WordsMeter, openUpgrade } from '@/android/plan/parts';
 import { isLowOnWords } from '@/android/plan/planState';
 import { usePlanT } from '@/android/plan/strings';
-import { useSuperwallGate } from '@/hooks/useSuperwallGate';
-import { buildUsageGateParams, SUPERWALL_PLACEMENTS } from '@/lib/superwall';
+import { useSuperwallGate } from '@/android/shared/hooks/useSuperwallGate';
+import { buildUsageGateParams, SUPERWALL_PLACEMENTS } from '@/android/shared/lib/superwall';
 import type { Recording } from '../../modules/android-dictation/src';
 import { useHomeT } from '@/android/home/strings';
 import { AccountAvatar, IconTile, PillButton, SectionHeader, useHome } from '@/android/home/kit';

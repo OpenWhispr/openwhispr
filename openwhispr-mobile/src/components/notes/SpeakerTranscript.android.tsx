@@ -1,8 +1,8 @@
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
-import type { TranscriptBlock } from '@/lib/diarization/transcriptDisplay';
-import { useIosColor } from '@/config/colors.android';
+import type { TranscriptBlock } from '@/android/shared/lib/diarization/transcriptDisplay';
+import { useIosColor } from '@/android/shared/config/colors';
 
 interface SpeakerTranscriptProps {
   blocks: TranscriptBlock[];

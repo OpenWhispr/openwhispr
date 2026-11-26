@@ -1,4 +1,4 @@
-import { tryParseNoteTimestamp } from '@/lib/parseNoteTimestamp';
+import { tryParseNoteTimestamp } from '@/android/shared/lib/parseNoteTimestamp';
 
 /** Use the app language, not the device default or English relative-time suffixes.
  * Hermes supports DateTimeFormat; RelativeTimeFormat is not available on every build.

@@ -48,6 +48,9 @@ jest.mock('@/components/ui/GlassIconButton', () => ({
     );
   },
 }));
+jest.mock('@/android/shared/components/ui/GlassIconButton', () =>
+  jest.requireMock('@/components/ui/GlassIconButton'),
+);
 
 const originalOS = Platform.OS;
 afterEach(async () => {

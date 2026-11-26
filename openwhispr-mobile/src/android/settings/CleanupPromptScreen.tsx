@@ -10,13 +10,13 @@ import {
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { useCustomPromptsStore } from '@/store/useCustomPromptsStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useCustomPromptsStore } from '@/android/shared/store/useCustomPromptsStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import {
   DEFAULT_CLEANUP_PROMPT,
   normalizeCustomPromptForSave,
   resolveCustomPrompt,
-} from '@/config/prompts/registry';
+} from '@/android/shared/config/prompts/registry';
 import { useHome } from '../home/kit';
 import { PillAction, SettingsPage, TextAction, showToast, useSettings } from './kit';
 import { useSettingsLook } from './look';

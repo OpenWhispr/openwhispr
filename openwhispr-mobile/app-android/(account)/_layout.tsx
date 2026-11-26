@@ -5,8 +5,8 @@ import { Stack, router } from 'expo-router';
 import { Pressable } from 'react-native';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { theme } from '@/android/theme';
-import { safeHaptics } from '@/lib/utils';
-import { customHeaderStackOptions, glassStackOptions } from '@/config/navigation';
+import { safeHaptics } from '@/android/shared/lib/utils';
+import { customHeaderStackOptions, glassStackOptions } from '@/android/shared/config/navigation';
 import { WORKFLOW_LABELS, parseWorkflow } from '@/lib/aiWorkflows';
 
 const androidPageHeader = customHeaderStackOptions;

@@ -142,6 +142,9 @@ jest.mock('expo-file-system/legacy', () => ({
 }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/Button', () => ({ Button: require('react-native').Pressable }));
+jest.mock('@/android/shared/components/ui/Button', () =>
+  jest.requireMock('@/components/ui/Button'),
+);
 // The Android screen's buttons; the real module pulls in react-native-svg, which this suite
 // can't parse.
 jest.mock('@/android/processingFable/look', () => {
@@ -162,6 +165,9 @@ jest.mock('@/android/processingFable/look', () => {
   return { GlassButton: MockButton, OutlineButton: MockButton };
 });
 jest.mock('@/components/features/WaveformVisualizer', () => ({ ProcessingWaveform: () => null }));
+jest.mock('@/android/shared/components/features/WaveformVisualizer', () =>
+  jest.requireMock('@/components/features/WaveformVisualizer'),
+);
 jest.mock('@/components/notes/CalendarEventPicker', () => ({ CalendarEventPicker: () => null }));
 jest.mock('@/components/notes/SpeakerCountPrompt', () => ({
   SpeakerCountPrompt: ({ onSubmit }: { onSubmit: () => void }) =>
@@ -198,18 +204,32 @@ jest.mock('@/components/notes/CloudMeetingRecording', () => ({
     ),
 }));
 jest.mock('@/config/colors', () => ({ BRAND: '#222', iosColor: () => '#222' }));
+jest.mock('@/android/shared/config/colors', () => jest.requireMock('@/config/colors'));
 jest.mock('@/data', () => ({
   notesRepository: {
     updateNoteMeta: jest.fn(),
     getNoteById: () => mockSavedNote,
   },
 }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 jest.mock('@/data/calendarRepository', () => ({ calendarRepository: {} }));
+jest.mock('@/android/shared/data/calendarRepository', () =>
+  jest.requireMock('@/data/calendarRepository'),
+);
 jest.mock('@/lib/calendar/meetingContext', () => ({ buildCalendarMeetingContext: jest.fn() }));
+jest.mock('@/android/shared/lib/calendar/meetingContext', () =>
+  jest.requireMock('@/lib/calendar/meetingContext'),
+);
 jest.mock('@/lib/calendar/meetingSuggestions', () => ({
   getMeetingCalendarEventSuggestions: () => [],
 }));
+jest.mock('@/android/shared/lib/calendar/meetingSuggestions', () =>
+  jest.requireMock('@/lib/calendar/meetingSuggestions'),
+);
 jest.mock('@/lib/transcriptionLanguage', () => ({ getPreferredTranscriptionLanguage: () => 'en' }));
+jest.mock('@/android/shared/lib/transcriptionLanguage', () =>
+  jest.requireMock('@/lib/transcriptionLanguage'),
+);
 jest.mock('@/hooks/useAudioRecording', () => ({
   useAudioRecording: () => ({
     startRecording: mockLocalStart,
@@ -219,7 +239,13 @@ jest.mock('@/hooks/useAudioRecording', () => ({
 }));
 jest.mock('@/android/hooks/useAudioRecording', () => jest.requireMock('@/hooks/useAudioRecording'));
 jest.mock('@/hooks/useKeyboardHeight', () => ({ useKeyboardHeight: () => 0 }));
+jest.mock('@/android/shared/hooks/useKeyboardHeight', () =>
+  jest.requireMock('@/hooks/useKeyboardHeight'),
+);
 jest.mock('@/hooks/useMeetingLiveActivity', () => ({ useMeetingLiveActivity: jest.fn() }));
+jest.mock('@/android/shared/hooks/useMeetingLiveActivity', () =>
+  jest.requireMock('@/hooks/useMeetingLiveActivity'),
+);
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({
     register: async (options: { feature: () => void }) => {
@@ -228,6 +254,9 @@ jest.mock('@/hooks/useSuperwallGate', () => ({
     },
   }),
 }));
+jest.mock('@/android/shared/hooks/useSuperwallGate', () =>
+  jest.requireMock('@/hooks/useSuperwallGate'),
+);
 jest.mock('@/store/useNotesStore', () => ({
   useNotesStore: Object.assign((select: (s: typeof mockNotes) => unknown) => select(mockNotes), {
     getState: () => mockNotes,
@@ -238,6 +267,9 @@ jest.mock('@/store/useGoogleCalendarStore', () => ({
   useGoogleCalendarStore: (select: (s: unknown) => unknown) =>
     select({ accounts: mockAccounts, load: mockLoadCalendars }),
 }));
+jest.mock('@/android/shared/store/useGoogleCalendarStore', () =>
+  jest.requireMock('@/store/useGoogleCalendarStore'),
+);
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: {
     getState: () => ({ user: mockUser }),
@@ -262,6 +294,9 @@ jest.mock('@/store/useProcessingModeStore', () => ({
     },
   },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/lib/accountAccess', () => ({
   canRunCloudMeeting: (_user: unknown, mode: string) => mode === 'cloud',
 }));
@@ -269,6 +304,7 @@ jest.mock('@/android/lib/accountAccess', () => jest.requireMock('@/lib/accountAc
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
 jest.mock('@/android/lib/sentry', () => jest.requireMock('@/lib/sentry'));
 jest.mock('@/lib/superwall', () => ({ SUPERWALL_PLACEMENTS: { meetingRecordStart: 'meeting' } }));
+jest.mock('@/android/shared/lib/superwall', () => jest.requireMock('@/lib/superwall'));
 jest.mock('@/services/transcription/RealtimeMeetingWsService.android', () => ({
   startRealtimeMeetingWs: (...args: unknown[]) => mockRealtimeStart(...args),
 }));

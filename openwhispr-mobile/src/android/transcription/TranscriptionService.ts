@@ -7,8 +7,8 @@ import {
   CLOUD_CHUNK_SECONDS,
   CLOUD_INLINE_LIMIT,
   CLOUD_INPROCESS_UPLOAD_LIMIT,
-} from '@/config/constants';
-import { LocalWhisperService } from '@/services/transcription/LocalWhisperService';
+} from '@/android/shared/config/constants';
+import { LocalWhisperService } from '@/android/shared/services/transcription/LocalWhisperService';
 import { LocalTranscriptionService } from '@/android/transcription/LocalTranscriptionService';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { getClientVersionHeader } from '@/android/lib/apiClient';
@@ -16,7 +16,7 @@ import {
   buildDictationHintTiers,
   buildLlmDictionary,
   isDictationContext,
-} from '@/lib/dictationHints';
+} from '@/android/shared/lib/dictationHints';
 import {
   GROQ_PROMPT_CHARS,
   MAX_SHARED_KEYTERMS,
@@ -26,14 +26,14 @@ import {
   formatDictionaryPrompt,
   promptLimitKeepingPersonal,
   sharedDictionaryPromptChars,
-} from '@/lib/transcriptionPromptCap';
+} from '@/android/shared/lib/transcriptionPromptCap';
 import { BackgroundUploader } from '../../../modules/background-uploader/src';
 import { CloudAudioTools as AudioTools } from '@/android/transcription/cloudAudio';
-import { AppGroupStorage, APP_GROUP_KEYS } from '../../../modules/app-group-storage/src';
+import { AppGroupStorage, APP_GROUP_KEYS } from '@/android/shared/modules/app-group-storage/index';
 import { CLEANUP_TIMEOUT_MS } from '@/android/dictation/cleanupTranscript';
-import { withRetry } from '@/lib/retry';
-import { wordLimitErrorFromBody } from '@/services/transcription/wordLimit';
-import { transcriptionPolicyErrorFromResponse } from '@/services/transcription/policyErrors';
+import { withRetry } from '@/android/shared/lib/retry';
+import { wordLimitErrorFromBody } from '@/android/shared/services/transcription/wordLimit';
+import { transcriptionPolicyErrorFromResponse } from '@/android/shared/services/transcription/policyErrors';
 import { transcriptionLifecycle } from '@/android/transcription/transcriptionLifecycle';
 import { uploadTranscriptionAudio } from '@/android/transcription/uploadTranscriptionAudio';
 

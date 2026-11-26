@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import type { Action } from '@/data';
+import type { Action } from '@/android/shared/data';
 import { BottomSheet, Toggle } from '../settings/kit';
 import { GlassButton, OutlineButton } from '../processingFable/look';
 import { Card, Chip, ListRow, SectionLabel, useNotesLook } from './look';

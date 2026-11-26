@@ -1,15 +1,2 @@
-const upstream = require('./syncIdentity.ts') as typeof import('./syncIdentity');
-
-export const {
-  getLastSyncedUserId,
-  setLastSyncedUserId,
-  recordAnonymousUser,
-  isLinkFromAnonymous,
-  clearAnonymousLink,
-} = upstream;
-
-export function hasRealAccountHistory(): boolean {
-  const { hasAndroidAccountHistory } =
-    require('@/android/accountData') as typeof import('@/android/accountData');
-  return hasAndroidAccountHistory();
-}
+// Android's copy lives in src/android; shared files still import it from here.
+export * from '@/android/shared/sync/syncIdentity';

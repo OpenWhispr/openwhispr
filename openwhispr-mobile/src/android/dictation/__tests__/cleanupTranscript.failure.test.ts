@@ -12,6 +12,7 @@ jest.mock('@/lib/retry', () => ({
   withRetry: (operation: () => Promise<unknown>): Promise<unknown> => operation(),
   createApiRetryStrategy: (): Record<string, never> => ({}),
 }));
+jest.mock('@/android/shared/lib/retry', () => jest.requireMock('@/lib/retry'));
 jest.mock('@/store/useSnippetsStore', () => ({
   useSnippetsStore: { getState: () => ({ isLoaded: true, entries: [] }) },
 }));
@@ -25,6 +26,9 @@ jest.mock('@/android/store/useDictionaryStore', () =>
 jest.mock('@/store/useCustomPromptsStore', () => ({
   getActiveCustomCleanupPrompt: () => undefined,
 }));
+jest.mock('@/android/shared/store/useCustomPromptsStore', () =>
+  jest.requireMock('@/store/useCustomPromptsStore'),
+);
 let mockConfig: Record<string, unknown> = { cleanupEnabled: true, defaultMode: 'cloud' };
 let mockActiveMode = 'cloud';
 jest.mock('@/store/useConfigStore', () => ({
@@ -34,6 +38,9 @@ jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useC
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: mockActiveMode }) },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: { id: 'u', isAnonymous: false } }) },
 }));

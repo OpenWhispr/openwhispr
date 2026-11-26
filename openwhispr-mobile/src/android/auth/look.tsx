@@ -23,8 +23,8 @@ import Svg, {
 } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
-import { AppFont } from '@/lib/fonts';
+import { OpenWhisprMark } from '@/android/shared/components/ui/OpenWhisprMark';
+import { AppFont } from '@/android/shared/lib/fonts';
 import { makeStyles, themeFor } from '../ThemeProvider';
 import { useNavigationBarCanvas } from '../navigationBar';
 

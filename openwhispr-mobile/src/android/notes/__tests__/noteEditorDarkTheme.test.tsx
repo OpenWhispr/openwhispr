@@ -1,3 +1,7 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/lib/diarization/transcriptDisplay', () =>
+  jest.requireActual('@/android/shared/lib/diarization/transcriptDisplay'),
+);
 import React, { createRef, useState } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
@@ -27,6 +31,7 @@ jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: require('react-native').View,
 }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));
+jest.mock('@/android/shared/lib/utils', () => jest.requireMock('@/lib/utils'));
 jest.mock('../../settings/kit', () => ({ useReduceMotion: () => true }));
 jest.mock('../strings', () => ({
   useNotesT: () => (key: string) => key,

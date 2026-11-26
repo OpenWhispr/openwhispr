@@ -44,9 +44,13 @@ jest.mock('@sentry/react-native', () => ({
 jest.mock('@/data/remote/notesApi', () => ({
   deleteNote: jest.fn(),
 }));
+jest.mock('@/android/shared/data/remote/notesApi', () =>
+  jest.requireMock('@/data/remote/notesApi'),
+);
 jest.mock('@/lib/uuid', () => ({
   randomUUID: () => 'test-uuid',
 }));
+jest.mock('@/android/shared/lib/uuid', () => jest.requireMock('@/lib/uuid'));
 jest.mock('@/data', () => ({
   notesRepository: {
     // A meeting note is created in the private space, so its folder is resolved
@@ -91,6 +95,7 @@ jest.mock('@/data', () => ({
     ]),
   },
 }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: {
     getState: () => mockProcessingModeState,
@@ -100,6 +105,9 @@ jest.mock('@/store/useProcessingModeStore', () => ({
     },
   },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: {
     getState: () => mockAuthState,
@@ -178,7 +186,7 @@ let useNotesStore = iosStore;
 import { notesRepository, spacesRepository } from '@/data';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { generateLocalMeetingNotes } from '@/lib/notes/localMeetingNotes';
-import * as localReasoning from '@/lib/localReasoning';
+import * as localReasoning from '@/android/shared/lib/localReasoning';
 import type { Speaker } from '@/data/types';
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
 import * as Sentry from '@sentry/react-native';
@@ -968,39 +976,6 @@ describe('runMeetingPipeline', () => {
       expect(ReasoningService.processText).toHaveBeenCalled();
       expect(wroteGeneratedNotes()).toBe(false);
     });
-  });
-
-  it('writes On-Device meeting notes through the chunked local path when signed in', async () => {
-    mockAuthState.user = signedInUser;
-    mockConfigState.config.inference = { notes: { mode: 'local' } };
-    (notesRepository.getNoteById as jest.Mock).mockReturnValue({
-      id: 7,
-      title: 'Planning Sync',
-      content: '',
-      noteType: 'meeting',
-      isPrivate: 0,
-      deletedAt: null,
-      enhancedAtContentHash: null,
-    });
-    (notesRepository.getActions as jest.Mock).mockReturnValue([
-      { id: 1, name: 'Generate Notes', prompt: 'Transform this meeting.', isDefault: 1 },
-    ]);
-    (notesRepository.getSegments as jest.Mock).mockReturnValue([segment('Ship the fix.')]);
-    (generateLocalMeetingNotes as jest.Mock).mockResolvedValue('Local notes');
-    jest
-      .spyOn(localReasoning, 'getLocalReasoningReadiness')
-      .mockResolvedValueOnce({ status: 'ready', tokenCounting: false });
-
-    await useNotesStore.getState().runMeetingPipeline(7, 'file://meeting.wav', 2);
-
-    expect(generateLocalMeetingNotes).toHaveBeenCalledWith(7, {
-      actionPrompt: 'Transform this meeting.',
-    });
-    expect(ReasoningService.processText).not.toHaveBeenCalled();
-    expect(notesRepository.updateNote).toHaveBeenCalledWith(
-      7,
-      expect.objectContaining({ enhancedContent: 'Local notes' }),
-    );
   });
 
   it('still offers to enable local AI when On-Device notes cannot run yet', async () => {

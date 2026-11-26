@@ -1,7 +1,7 @@
 import { isCloudBackupEnabled } from '@/lib/cloudBackup.android';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { SyncCancelledError, type SyncCheckpoint } from './syncContext';
+import { SyncCancelledError, type SyncCheckpoint } from '@/android/shared/sync/syncContext';
 
 export function createSyncContext(): { checkpoint: SyncCheckpoint; dispose: () => void } {
   const { user, sessionCookie } = useAuthStore.getState();

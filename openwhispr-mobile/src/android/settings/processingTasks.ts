@@ -4,7 +4,7 @@ import { useConfigStore } from '@/android/store/useConfigStore';
 import { workflowSelection } from '@/lib/aiWorkflows';
 import type { CloudAccess } from '@/lib/inferenceModes';
 import { providerDisplayName } from '@/android/providers/mobileProviders';
-import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
+import { getPreferredTranscriptionLanguages } from '@/android/shared/lib/transcriptionLanguage';
 import type { ProcessingMode, UserConfig } from '@/android/types';
 import { speechModelSupportsLanguages } from '../speechCapabilities';
 import type { AndroidSpeechModelId } from '../speechSelection';

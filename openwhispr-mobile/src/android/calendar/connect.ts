@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '@/android/store/useAuthStore';
-import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
+import { useGoogleCalendarStore } from '@/android/shared/store/useGoogleCalendarStore';
 import type { GoogleCalendarAccount } from '@/data/calendarTypes';
 import { getGoogleCalendarClientId } from '@/services/calendar/googleCalendarConfig';
 import { GoogleCalendarAuthError } from '@/services/calendar/googleCalendarAuth.android';
@@ -9,7 +9,7 @@ import {
   authorizeGoogleCalendarOnAndroid,
   saveAuthorizedGoogleCalendarAccount,
 } from './googleAuth';
-import { captureGoogleCalendarException } from '@/services/calendar/googleCalendarTelemetry';
+import { captureGoogleCalendarException } from '@/android/shared/services/calendar/googleCalendarTelemetry';
 import { requiresRealAccount } from '@/android/lib/accountAccess';
 
 /**

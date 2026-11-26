@@ -38,6 +38,9 @@ jest.mock('@/components/ui/GlassIconButton', () => ({
     return <View>{children}</View>;
   },
 }));
+jest.mock('@/android/shared/components/ui/GlassIconButton', () =>
+  jest.requireMock('@/components/ui/GlassIconButton'),
+);
 jest.mock('@/store/useNotesStore', () => {
   const state = { notes: [], setNotePrivacy: jest.fn() };
   return {

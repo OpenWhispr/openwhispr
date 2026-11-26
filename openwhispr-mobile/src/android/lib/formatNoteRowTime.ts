@@ -1,5 +1,5 @@
 import type { DateBucketKey } from '@/android/lib/groupNotesByDate';
-import { tryParseNoteTimestamp } from '@/lib/parseNoteTimestamp';
+import { tryParseNoteTimestamp } from '@/android/shared/lib/parseNoteTimestamp';
 import { createNoteRowTimeFormatter } from '@/android/lib/formatNoteRowTimeCore';
 
 export { formatClockTime } from '@/android/lib/formatNoteRowTimeCore';

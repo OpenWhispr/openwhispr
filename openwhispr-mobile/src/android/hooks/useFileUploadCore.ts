@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import { AudioTools } from '../../../modules/audio-tools/src';
+import { AudioTools } from '@/android/shared/modules/audio-tools/index';
 import { isOggOpus, isLocalModelMissingError } from '@/android/transcription/TranscriptionService';
 import { createTranscriptId, useTranscriptStore } from '@/android/store/useTranscriptStore';
 import {
@@ -10,13 +10,13 @@ import {
   type TranscriptionJobRoute,
 } from '@/lib/inferenceRouting';
 import { transcribeAndCleanup } from '@/android/dictation/transcribeAndCleanup';
-import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
-import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
-import { isNoSpeechError } from '@/lib/permissions';
+import { getPreferredTranscriptionLanguage } from '@/android/shared/lib/transcriptionLanguage';
+import { toFriendlyTranscriptionErrorMessage } from '@/android/shared/lib/transcriptionErrors';
+import { isNoSpeechError } from '@/android/shared/lib/permissions';
 import { deleteManagedTranscriptAudio, retainTranscriptAudio } from '@/lib/transcriptAudio';
-import { isUsageLimitError, type UsageLimitError } from '@/lib/usageLimitError';
-import { randomUUID } from '@/lib/uuid';
-import { MAX_FILE_SIZE } from '@/config/constants';
+import { isUsageLimitError, type UsageLimitError } from '@/android/shared/lib/usageLimitError';
+import { randomUUID } from '@/android/shared/lib/uuid';
+import { MAX_FILE_SIZE } from '@/android/shared/config/constants';
 import type { TranscriptionProvider } from '@/android/types';
 
 export interface UseFileUploadOptions {

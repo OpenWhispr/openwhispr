@@ -46,6 +46,7 @@ jest.mock('@/data', () => ({
     return mockMemory.repo;
   },
 }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 jest.mock('expo-sqlite/localStorage/install', () => ({}));
 jest.mock('@/android/lib/meetingRecoveryLifecycle', () => ({
   createMeetingRecoveryLifecycle: () => ({
@@ -79,6 +80,9 @@ jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAut
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: 'cloud' }), subscribe: () => () => {} },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ config: {} }), subscribe: () => () => {} },
 }));
@@ -94,6 +98,9 @@ jest.mock('@/android/lib/notes/localMeetingNotes', () =>
 jest.mock('@/lib/appsflyer', () => ({ logTranscriptionCompleted: jest.fn() }));
 jest.mock('@/android/lib/appsflyer', () => jest.requireMock('@/lib/appsflyer'));
 jest.mock('@/data/remote/notesApi', () => ({ deleteNote: jest.fn() }));
+jest.mock('@/android/shared/data/remote/notesApi', () =>
+  jest.requireMock('@/data/remote/notesApi'),
+);
 jest.mock('@/android/dictation/localReasoningFallback', () => ({
   promptLocalReasoningFallback: jest.fn(),
 }));

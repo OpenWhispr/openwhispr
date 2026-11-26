@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 
 jest.mock('@/lib/appleLLM', () => ({ AppleLLM: { generateMeetingNotes: jest.fn() } }));
+jest.mock('@/android/shared/lib/appleLLM', () => jest.requireMock('@/lib/appleLLM'));
 jest.mock('@/android/LocalTextModel', () => ({ LocalTextModel: { processText: jest.fn() } }));
 jest.mock('@/data', () => ({
   notesRepository: {
@@ -10,6 +11,7 @@ jest.mock('@/data', () => ({
     getActions: jest.fn(() => []),
   },
 }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 jest.mock('@/android/lib/notes/localMeetingNotesPlatform', () => {
   const selected =
     (): (typeof import('@/android/lib/notes/localMeetingNotesPlatform'))['localMeetingNotesPlatform'] => {
@@ -77,6 +79,7 @@ jest.doMock('@/lib/localReasoning', () => ({
     tokenCounting: true,
   })),
 }));
+jest.doMock('@/android/shared/lib/localReasoning', () => jest.requireMock('@/lib/localReasoning'));
 
 import { AppleLLM } from '@/lib/appleLLM';
 import { LocalTextModel } from '@/android/LocalTextModel';

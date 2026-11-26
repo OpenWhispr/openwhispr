@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useNotesStore } from '@/android/store/useNotesStore';
-import { safeHaptics } from '@/lib/utils';
+import { safeHaptics } from '@/android/shared/lib/utils';
 
 /** Write a note: a new note in the folder the user is in, opened with the keyboard up. */
 export function startNote(folderId: number | undefined) {

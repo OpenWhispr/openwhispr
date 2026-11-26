@@ -8,6 +8,7 @@ jest.mock('@/android/lib/accountAccess', () => jest.requireMock('@/lib/accountAc
 jest.mock('@/lib/dictationHints', () => ({
   buildDictationHintTiers: () => [['Piha'], ['Acme'], []],
 }));
+jest.mock('@/android/shared/lib/dictationHints', () => jest.requireMock('@/lib/dictationHints'));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: { id: 'u' } }) },
 }));
@@ -19,9 +20,15 @@ jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useC
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: 'private' }) },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/store/useCustomPromptsStore', () => ({
   getActiveCustomCleanupPrompt: () => 'Keep the entire transcript.',
 }));
+jest.mock('@/android/shared/store/useCustomPromptsStore', () =>
+  jest.requireMock('@/store/useCustomPromptsStore'),
+);
 jest.mock('@/android/reasoning/ReasoningService', () => ({
   ReasoningService: { processText: jest.fn() },
 }));
@@ -34,6 +41,7 @@ jest.mock('@/lib/localReasoning', () => ({
   getLocalReasoningReadiness: jest.fn(async () => ({ status: 'ready', contextSize: 4096 })),
   LocalReasoningError: class extends Error {},
 }));
+jest.mock('@/android/shared/lib/localReasoning', () => jest.requireMock('@/lib/localReasoning'));
 
 const originalPlatform = Platform.OS;
 beforeEach(() => {

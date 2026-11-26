@@ -1,5 +1,5 @@
-import type { Note } from '@/data';
-import { parseNoteTimestamp } from '@/lib/parseNoteTimestamp';
+import type { Note } from '@/android/shared/data';
+import { parseNoteTimestamp } from '@/android/shared/lib/parseNoteTimestamp';
 
 export type DateBucketKey = 'today' | 'yesterday' | 'prev7' | 'prev30' | string;
 

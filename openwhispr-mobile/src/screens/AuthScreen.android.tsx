@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { checkUserExists } from '@/android/lib/authClient';
-import { safeHaptics } from '@/lib/utils';
+import { safeHaptics } from '@/android/shared/lib/utils';
 import { showToast } from '@/android/settings/kit';
 import {
   AuthBackground,

@@ -1,3 +1,10 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/lib/accountRequiredError', () =>
+  jest.requireActual('@/android/shared/lib/accountRequiredError'),
+);
+jest.mock('@/services/transcription/wordLimit', () =>
+  jest.requireActual('@/android/shared/services/transcription/wordLimit'),
+);
 import { bubbleFailure, bubbleMode } from '../bubbleOutcome';
 import { WordLimitError } from '@/services/transcription/wordLimit';
 import { AccountRequiredError } from '@/lib/accountRequiredError';

@@ -2,15 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform, Share } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as WebBrowser from 'expo-web-browser';
-import { notesRepository, type Note } from '@/data';
+import { notesRepository, type Note } from '@/android/shared/data';
 import { ApiError } from '@/android/lib/apiClient';
 import type { NoteSharingFeedbackCode } from '@/android/lib/notes/noteSharingMessages';
-import { isValidEmail } from '@/lib/utils';
+import { isValidEmail } from '@/android/shared/lib/utils';
 import type { AuthUser } from '@/android/lib/authClient';
-import { getNoteShareViewerBaseUrl } from '@/config/noteSharing';
+import { getNoteShareViewerBaseUrl } from '@/android/shared/config/noteSharing';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useNotesStore } from '@/android/store/useNotesStore';
-import * as api from '@/data/remote/noteSharingApi';
+import * as api from '@/android/shared/data/remote/noteSharingApi';
 import type {
   ExternalSharingMode,
   ShareSettings,
@@ -26,8 +26,12 @@ import {
   readNoteShareToken,
   saveNoteShareToken,
   removeNoteShareToken,
-} from '@/lib/notes/noteShareTokens';
-import { canChangeGrant, isGroupPrincipal, isScopeGrant } from '@/lib/notes/noteShareAccess';
+} from '@/android/shared/lib/notes/noteShareTokens';
+import {
+  canChangeGrant,
+  isGroupPrincipal,
+  isScopeGrant,
+} from '@/android/shared/lib/notes/noteShareAccess';
 import { ensureNoteSynced } from '@/android/sync/ensureNoteSynced';
 import { requestSync } from '@/android/sync/syncEngine';
 

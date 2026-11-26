@@ -1,5 +1,5 @@
 import catalog from '@/config/providerCatalog.json';
-import { isSecureHttpEndpoint, normalizeBaseUrl } from '@/lib/providerEndpoints';
+import { isSecureHttpEndpoint, normalizeBaseUrl } from '@/android/shared/lib/providerEndpoints';
 
 export type InferenceScope =
   | 'dictation'

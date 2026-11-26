@@ -1,8 +1,8 @@
 import { sessionFetch as fetch } from '@/android/lib/sessionFetch';
 import Constants from 'expo-constants';
 import { useAuthStore } from '@/android/store/useAuthStore';
-import { parseApiErrorBody } from '@/lib/apiErrorBody';
-import { UPGRADE_REQUIRED_MESSAGE } from '@/lib/policyMessages';
+import { parseApiErrorBody } from '@/android/shared/lib/apiErrorBody';
+import { UPGRADE_REQUIRED_MESSAGE } from '@/android/shared/lib/policyMessages';
 
 // Re-exported so existing consumers (e.g. AgentStreamClient.ts, which already
 // imports from this module) can keep pulling it from one place; the

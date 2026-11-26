@@ -1,39 +1,13 @@
-// iOS's Dictionary. Android's is src/android/dictionary (tests in its __tests__).
 import React from 'react';
 import { render, screen } from '@testing-library/react-native';
 import DictionaryScreen from '../DictionaryScreen';
 import type { DictionaryEntry } from '@/store/useDictionaryStore';
 import type { SharedDictionarySummary } from '@/store/useSharedDictionaryStore';
 
-jest.mock('@react-navigation/native', () => ({ useScrollToTop: () => undefined }));
-
 let mockEntries: DictionaryEntry[] = [];
 let mockSummary: SharedDictionarySummary | null = null;
 let mockSharedWordsLower = new Set<string>();
 let mockHiddenOnlyKeys = new Set<string>();
-const mockRemoveWord = jest.fn();
-let mockLanguage = 'en';
-
-jest.mock('@/android/ui', () => ({ AccountButton: () => null }));
-jest.mock('@/components/ui/SegmentedControl.android', () => ({ SegmentedControl: () => null }));
-jest.mock('@/android/libraryTime', () => ({ formatLibraryTime: () => 'today' }));
-jest.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, options?: { defaultValue?: string }) => {
-      const resource =
-        mockLanguage === 'ar'
-          ? require('@/locales/ar/translation.json').android
-          : require('@/locales/en/translation.json').android;
-      let value: unknown = resource;
-      for (const part of key.split('.')) {
-        value =
-          value && typeof value === 'object' ? (value as Record<string, unknown>)[part] : undefined;
-      }
-      return typeof value === 'string' ? value : (options?.defaultValue ?? key);
-    },
-    i18n: { resolvedLanguage: mockLanguage },
-  }),
-}));
 
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
@@ -57,7 +31,7 @@ jest.mock('@/store/useDictionaryStore', () => ({
       isLoaded: true,
       load: jest.fn(),
       addWords: jest.fn(),
-      removeWord: mockRemoveWord,
+      removeWord: jest.fn(),
     }),
 }));
 jest.mock('@/store/useSharedDictionaryStore', () => ({
@@ -77,8 +51,6 @@ const entry = (word: string, sharedAt: number | null = null): DictionaryEntry =>
 });
 
 beforeEach(() => {
-  mockRemoveWord.mockClear();
-  mockLanguage = 'en';
   mockEntries = [entry('Kubernetes')];
   mockSummary = null;
   mockSharedWordsLower = new Set();
