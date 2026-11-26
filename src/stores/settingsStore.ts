@@ -18,6 +18,7 @@ import type {
   LocalTranscriptionProvider,
   InferenceMode,
   LocalServerPrefs,
+  MeetingDetectionApp,
   SelfHostedType,
 } from "../types/electron";
 import type { CalendarAccount, MicrosoftCalendarAccount } from "../types/calendar";
@@ -582,6 +583,7 @@ const ARRAY_SETTINGS = new Set([
   "onboardingUseCases",
   "spokenLanguages",
   "translationTargets",
+  "meetingDetectionIgnoredApps",
 ]);
 
 const NUMERIC_SETTINGS = new Set([
@@ -1179,6 +1181,7 @@ export interface SettingsState
   notificationsEnabled: boolean;
   notifyMeetingDetection: boolean;
   notifyCalendarReminders: boolean;
+  meetingDetectionIgnoredApps: MeetingDetectionApp[];
   autoUpdatesEnabled: boolean;
   gcalPrimaryOnly: boolean;
   mcalPrimaryOnly: boolean;
@@ -1518,6 +1521,7 @@ export interface SettingsState
   setNotificationsEnabled: (value: boolean) => void;
   setNotifyMeetingDetection: (value: boolean) => void;
   setNotifyCalendarReminders: (value: boolean) => void;
+  setMeetingDetectionIgnoredApps: (apps: MeetingDetectionApp[]) => void;
   setAutoUpdatesEnabled: (enabled: boolean) => void;
   setGcalPrimaryOnly: (value: boolean) => void;
   setMcalPrimaryOnly: (value: boolean) => void;
@@ -1944,6 +1948,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   notificationsEnabled: readBoolean("notificationsEnabled", true),
   notifyMeetingDetection: readBoolean("notifyMeetingDetection", true),
   notifyCalendarReminders: readBoolean("notifyCalendarReminders", true),
+  meetingDetectionIgnoredApps: (() => {
+    try {
+      const parsed = JSON.parse(readString("meetingDetectionIgnoredApps", "[]"));
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  })(),
   autoUpdatesEnabled: readBoolean("autoUpdatesEnabled", true),
   ...(() => {
     let accounts: CalendarAccount[] = [];
@@ -2837,6 +2849,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setNotificationsEnabled: createBooleanSetter("notificationsEnabled"),
   setNotifyMeetingDetection: createBooleanSetter("notifyMeetingDetection"),
   setNotifyCalendarReminders: createBooleanSetter("notifyCalendarReminders"),
+  setMeetingDetectionIgnoredApps: (apps: MeetingDetectionApp[]) => {
+    if (isBrowser) localStorage.setItem("meetingDetectionIgnoredApps", JSON.stringify(apps));
+    set({ meetingDetectionIgnoredApps: apps });
+    if (isBrowser) {
+      void window.electronAPI?.syncNotificationPreferences?.({ meetingDetectionIgnoredApps: apps });
+    }
+  },
   setAutoUpdatesEnabled: (enabled: boolean) => {
     if (isBrowser) localStorage.setItem("autoUpdatesEnabled", String(enabled));
     set({ autoUpdatesEnabled: enabled });
@@ -4146,6 +4165,7 @@ export async function initializeSettings(): Promise<void> {
         notifyMeetingDetection: state.notifyMeetingDetection,
         notifyCalendarReminders: state.notifyCalendarReminders,
         meetingProcessDetection: state.meetingProcessDetection,
+        meetingDetectionIgnoredApps: state.meetingDetectionIgnoredApps,
       });
     } catch (err) {
       logger.warn(

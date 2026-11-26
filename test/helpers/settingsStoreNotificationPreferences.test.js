@@ -10,6 +10,7 @@ test("startup syncs the full saved notification snapshot once", async (t) => {
       notifyMeetingDetection: "true",
       notifyCalendarReminders: "false",
       meetingProcessDetection: "false",
+      meetingDetectionIgnoredApps: '[{"id":"orca.exe","name":"Orca"}]',
       customDictionary: '["OpenWhispr"]',
     },
     window: {
@@ -38,6 +39,7 @@ test("startup syncs the full saved notification snapshot once", async (t) => {
       notifyMeetingDetection: true,
       notifyCalendarReminders: false,
       meetingProcessDetection: false,
+      meetingDetectionIgnoredApps: [{ id: "orca.exe", name: "Orca" }],
     },
   ]);
 });

@@ -5666,6 +5666,8 @@
         "disableAllDescription": "كتم كل شيء باستثناء رسائل الخطأ",
         "meetingDetection": "اكتشاف الاجتماع",
         "meetingDetectionDescription": "إعلام عند اكتشاف اجتماع حتى تتمكن من بدء التسجيل",
+        "ignoredAppDescription": "لا يعرض اكتشاف الاجتماعات تنبيهًا عندما يستخدم هذا التطبيق الميكروفون",
+        "stopIgnoringApp": "إيقاف التجاهل",
         "calendarReminders": "تذكيرات التقويم",
         "calendarRemindersDescription": "إعلام عند اقتراب موعد بدء اجتماع مجدول"
       },
@@ -7360,6 +7362,7 @@
     "start": "تدوين الملاحظات",
     "join": "انضمام وتفريغ صوتي",
     "joinOnly": "الانضمام إلى الاجتماع",
+    "ignoreApp": "ليس اجتماعًا؟ لا تسأل بشأن {{app}}",
     "folders": {
       "choose": "اختيار مجلد الاجتماع",
       "search": "البحث عن مجلدات",

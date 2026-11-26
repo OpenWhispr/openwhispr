@@ -520,18 +520,21 @@ class MeetingDetectionEngine {
       variant,
       joinUrl,
       ...(recordingRefusal ? { recordingRefusal } : {}),
+      // The apps holding the mic, so the card can offer to ignore one.
+      ...(data?.apps?.length ? { apps: data.apps } : {}),
     });
   }
 
   handleNotificationResponse(detectionId, action, options = {}, owner) {
-    if (!["start", "join", "open", "dismiss"].includes(action))
+    if (!["start", "join", "open", "dismiss", "ignore"].includes(action))
       return Promise.resolve({ success: false, code: "INVALID_REQUEST" });
     if (owner.responsePromise) return owner.responsePromise;
-    if (action === "dismiss" || action === "open") {
+    if (action === "dismiss" || action === "open" || action === "ignore") {
       // Opening the meeting without recording it is not a decline, so it starts
-      // no mic cooldown.
+      // no mic cooldown. Neither does ignoring the app that raised the prompt:
+      // its captures stop counting, and a real meeting must still prompt.
       if (action === "open") this.openNotificationJoinUrl(owner);
-      else this._dismiss();
+      else if (action === "dismiss") this._dismiss();
       this.activeDetections.delete(detectionId);
       this.windowManager.dismissMeetingNotification({ notifyEngine: false });
       return Promise.resolve({ success: true, value: null });
@@ -949,6 +952,10 @@ class MeetingDetectionEngine {
 
     this._syncMeetingProcessDetector();
     this._syncAudioActivityDetector();
+  }
+
+  setIgnoredApps(appIds) {
+    this.audioActivityDetector.setIgnoredApps(appIds);
   }
 
   start() {

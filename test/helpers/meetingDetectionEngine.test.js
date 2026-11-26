@@ -58,6 +58,10 @@ function createEngine(engineOptions) {
   audioDetector.setMicWarmHold = () => {};
   audioDetector.meetingAppNotifications = 0;
   audioDetector.notifyMeetingAppsChanged = () => audioDetector.meetingAppNotifications++;
+  audioDetector.ignoredApps = null;
+  audioDetector.setIgnoredApps = (appIds) => {
+    audioDetector.ignoredApps = appIds;
+  };
   audioDetector.running = false;
   audioDetector.start = () => {
     audioDetector.running = true;
@@ -122,6 +126,24 @@ test("explicitly dismissing an audio prompt still starts the mic cooldown", asyn
   await engine.handleNotificationResponse(shown[0].detectionId, "dismiss", {}, owner);
 
   assert.equal(audioDetector.dismissals, 1, "an explicit decline must keep its cooldown");
+});
+
+test("ignoring the app behind an audio prompt closes it without a mic cooldown", async () => {
+  const { engine, audioDetector, shown } = createEngine();
+  const app = { id: "orca.exe", name: "Orca" };
+
+  engine.setPreferences({ audioDetection: true, processDetection: true });
+  audioDetector.emit("sustained-audio-detected", { durationMs: 2000, detectedAt: 0, apps: [app] });
+  assert.deepEqual(shown[0].apps, [app], "the card must know which app to offer");
+  const owner = { prompt: shown[0], detection: engine.activeDetections.get(shown[0].detectionId) };
+  const result = await engine.handleNotificationResponse(shown[0].detectionId, "ignore", {}, owner);
+
+  assert.equal(result.success, true);
+  assert.equal(audioDetector.dismissals, 0, "a real meeting right after must still prompt");
+  assert.equal(engine.activeDetections.size, 0);
+
+  engine.setIgnoredApps(["orca.exe"]);
+  assert.deepEqual(audioDetector.ignoredApps, ["orca.exe"]);
 });
 
 test("a detection card closed without a response allows the next prompt", () => {

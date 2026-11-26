@@ -1301,6 +1301,12 @@ export default function SettingsPage({
   } = useSettings();
 
   const meetingProcessDetection = useSettingsStore((state) => state.meetingProcessDetection);
+  const meetingDetectionIgnoredApps = useSettingsStore(
+    (state) => state.meetingDetectionIgnoredApps
+  );
+  const setMeetingDetectionIgnoredApps = useSettingsStore(
+    (state) => state.setMeetingDetectionIgnoredApps
+  );
   const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
   const translationKey = useSettingsStore((s) => s.translationKey);
@@ -2799,6 +2805,29 @@ export default function SettingsPage({
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
+                {meetingDetectionIgnoredApps.map((app) => (
+                  <SettingsPanelRow key={app.id}>
+                    <SettingsRow
+                      label={app.name}
+                      description={t(
+                        "settingsPage.general.notifications.ignoredAppDescription"
+                      )}
+                    >
+                      <Button
+                        onClick={() =>
+                          setMeetingDetectionIgnoredApps(
+                            meetingDetectionIgnoredApps.filter((ignored) => ignored.id !== app.id)
+                          )
+                        }
+                        variant="ghost"
+                        size="sm"
+                        className="text-foreground/70 hover:text-foreground"
+                      >
+                        {t("settingsPage.general.notifications.stopIgnoringApp")}
+                      </Button>
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                ))}
                 <SettingsPanelRow>
                   <SettingsRow
                     label={t("settingsPage.general.notifications.calendarReminders")}

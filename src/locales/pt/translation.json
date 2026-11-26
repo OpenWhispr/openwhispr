@@ -2016,6 +2016,8 @@
         "disableAllDescription": "Silenciar tudo exceto mensagens de erro",
         "meetingDetection": "Detecção de reuniões",
         "meetingDetectionDescription": "Notificar quando uma reunião for detectada para iniciar a gravação",
+        "ignoredAppDescription": "A detecção de reuniões não avisa quando este app usa o microfone",
+        "stopIgnoringApp": "Parar de ignorar",
         "calendarReminders": "Lembretes do calendário",
         "calendarRemindersDescription": "Notificar quando uma reunião agendada está prestes a começar"
       },
@@ -6862,6 +6864,7 @@
     "start": "Fazer anotações",
     "join": "Entrar e transcrever",
     "joinOnly": "Entrar na reunião",
+    "ignoreApp": "Não é uma reunião? Não perguntar para {{app}}",
     "folders": {
       "choose": "Escolher pasta da reunião",
       "search": "Pesquisar pastas",

@@ -1,4 +1,4 @@
-import type { MeetingNotificationData } from "../types/electron";
+import type { MeetingDetectionApp, MeetingNotificationData } from "../types/electron";
 
 import { meetingAttendeeRefusalKey } from "../helpers/meetingAttendeePolicy.js";
 
@@ -17,6 +17,9 @@ export interface MeetingNotificationPresentation {
   // "open" joins the meeting without recording it, so it offers no destination.
   action: "start" | "join" | "open";
   dismissible: true;
+  // The one app whose microphone use raised the prompt, which the card offers
+  // to stop asking about.
+  ignoreApp?: MeetingDetectionApp;
 }
 
 const MEETING_NOTIFICATION_SWIPE_DISTANCE_PX = 80;
@@ -54,6 +57,7 @@ export function getMeetingNotificationPresentation(
     actionKey: data?.joinUrl ? "meetingNotification.join" : "meetingNotification.start",
     action: data?.joinUrl ? "join" : "start",
     dismissible: true,
+    ...(data?.source === "audio" && data.apps?.length === 1 ? { ignoreApp: data.apps[0] } : {}),
   };
 }
 

@@ -78,7 +78,14 @@ function createFakeChild(spawnError) {
 // here. Both spellings feed the detector's excluded-pid provider.
 function createDetector(
   platform,
-  { excludedProcessIds, ownPids, execResponses = [], spawnError, isMeetingAppRunning } = {}
+  {
+    excludedProcessIds,
+    ownPids,
+    execResponses = [],
+    spawnError,
+    isMeetingAppRunning,
+    resolveCaptureApps,
+  } = {}
 ) {
   const getExcludedProcessIds =
     excludedProcessIds ?? (ownPids ? () => [...ownPids] : () => [process.pid]);
@@ -110,7 +117,11 @@ function createDetector(
     logEntries
   );
 
-  const detector = new AudioActivityDetector(getExcludedProcessIds, isMeetingAppRunning);
+  const detector = new AudioActivityDetector(
+    getExcludedProcessIds,
+    isMeetingAppRunning,
+    resolveCaptureApps
+  );
   detector._isMicActive = async () => false;
   return { detector, children, calls, execCalls, logEntries };
 }
@@ -1971,3 +1982,133 @@ for (const gate of ["setUserRecording", "setMicWarmHold"]) {
     assert.equal(detector.hasPrompted, false, "a later inactive period still rearms detection");
   });
 }
+
+// The apps behind capture pids, as meetingCaptureApps.js names them (#3412).
+const CAPTURE_APPS = {
+  11: { id: "orca.exe", name: "Orca" },
+  22: { id: "ms-teams.exe", name: "ms-teams" },
+};
+const resolveTestCaptureApps = async (pids) =>
+  new Map(pids.filter((pid) => CAPTURE_APPS[pid]).map((pid) => [pid, CAPTURE_APPS[pid]]));
+
+for (const platform of ["darwin", "win32"]) {
+  test(`${platform}: an ignored app holding the mic never prompts but still holds it for auto-end`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+    const { detector, children } = createDetector(platform, {
+      resolveCaptureApps: resolveTestCaptureApps,
+    });
+    t.after(() => detector.stop());
+    const detections = [];
+    detector.on("sustained-audio-detected", (data) => detections.push(data));
+    detector.setIgnoredApps(["orca.exe"]);
+
+    await detector.start();
+    children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\n");
+    await flushImmediate();
+    t.mock.timers.tick(SUSTAINED_MS);
+
+    assert.equal(detections.length, 0);
+    assert.deepEqual(detector.getExternalMicState(), { reliable: true, externalMicActive: true });
+  });
+}
+
+test("win32: the prompt names the app holding the mic", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("win32", {
+    resolveCaptureApps: resolveTestCaptureApps,
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 1);
+  assert.deepEqual(detections[0].apps, [CAPTURE_APPS[11]]);
+});
+
+test("win32: another app beside an ignored one still prompts, naming only that app", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("win32", {
+    resolveCaptureApps: resolveTestCaptureApps,
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+  detector.setIgnoredApps(["orca.exe"]);
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\nMIC_START 22\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 1);
+  assert.deepEqual(detections[0].apps, [CAPTURE_APPS[22]]);
+});
+
+test("win32: ignoring an app while its prompt is pending cancels the prompt", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("win32", {
+    resolveCaptureApps: resolveTestCaptureApps,
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\n");
+  await flushImmediate();
+  detector.setIgnoredApps(["orca.exe"]);
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 0);
+});
+
+test("win32: a capture whose app can't be named still prompts", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("win32", {
+    resolveCaptureApps: async () => {
+      throw new Error("process list unavailable");
+    },
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+  detector.setIgnoredApps(["orca.exe"]);
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 1);
+  assert.deepEqual(detections[0].apps, []);
+});
+
+test("linux: an ignored app's capture does not drive meeting prompts", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("linux", {
+    resolveCaptureApps: resolveTestCaptureApps,
+    execResponses: [
+      { stdout: "[]" },
+      { stdout: JSON.stringify([{ properties: { "application.process.id": "11" } }]) },
+    ],
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+  detector.setIgnoredApps(["orca.exe"]);
+
+  await detector.start();
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'new' on source-output #1\n");
+  await flushImmediate();
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 0);
+  assert.deepEqual(detector.getExternalMicState(), { reliable: true, externalMicActive: true });
+});

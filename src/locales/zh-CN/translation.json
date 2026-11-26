@@ -2037,6 +2037,8 @@
         "disableAllDescription": "静音除错误消息外的所有内容",
         "meetingDetection": "会议检测",
         "meetingDetectionDescription": "检测到会议时通知您以便开始录音",
+        "ignoredAppDescription": "此应用使用麦克风时，会议检测不会提示",
+        "stopIgnoringApp": "取消忽略",
         "calendarReminders": "日历提醒",
         "calendarRemindersDescription": "预定会议即将开始时通知您"
       },
@@ -6834,6 +6836,7 @@
     "start": "开始记录",
     "join": "加入并转录",
     "joinOnly": "加入会议",
+    "ignoreApp": "不是会议？不再为 {{app}} 询问",
     "folders": {
       "choose": "选择会议文件夹",
       "search": "搜索文件夹",

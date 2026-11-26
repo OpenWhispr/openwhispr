@@ -2037,6 +2037,8 @@
         "disableAllDescription": "靜音除錯誤訊息外的所有內容",
         "meetingDetection": "會議偵測",
         "meetingDetectionDescription": "偵測到會議時通知您以便開始錄音",
+        "ignoredAppDescription": "此應用程式使用麥克風時，會議偵測不會提示",
+        "stopIgnoringApp": "取消忽略",
         "calendarReminders": "行事曆提醒",
         "calendarRemindersDescription": "預定會議即將開始時通知您"
       },
@@ -6834,6 +6836,7 @@
     "start": "開始記錄",
     "join": "加入並轉錄",
     "joinOnly": "加入會議",
+    "ignoreApp": "不是會議？不再為 {{app}} 詢問",
     "folders": {
       "choose": "選擇會議資料夾",
       "search": "搜尋資料夾",

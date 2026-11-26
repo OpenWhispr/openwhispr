@@ -2792,6 +2792,8 @@
         "disableAllDescription": "Alles stummschalten außer Fehlermeldungen",
         "meetingDetection": "Meeting-Erkennung",
         "meetingDetectionDescription": "Benachrichtigen, wenn ein Meeting erkannt wird, um die Aufnahme zu starten",
+        "ignoredAppDescription": "Die Meeting-Erkennung fragt nicht nach, wenn diese App das Mikrofon nutzt",
+        "stopIgnoringApp": "Nicht mehr ignorieren",
         "calendarReminders": "Kalendererinnerungen",
         "calendarRemindersDescription": "Benachrichtigen, wenn ein geplantes Meeting bald beginnt"
       },
@@ -6834,6 +6836,7 @@
     "start": "Notizen aufnehmen",
     "join": "Beitreten & transkribieren",
     "joinOnly": "Besprechung beitreten",
+    "ignoreApp": "Kein Meeting? Bei {{app}} nicht mehr fragen",
     "folders": {
       "choose": "Besprechungsordner auswählen",
       "search": "Ordner suchen",
