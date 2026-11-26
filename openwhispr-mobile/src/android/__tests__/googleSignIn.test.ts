@@ -4,7 +4,7 @@ const mockBrowser = jest.fn();
 const mockSheet = jest.fn();
 let mockSheetAvailable = true;
 
-jest.mock('../../lib/authClientCore', () => ({
+jest.mock('@/android/lib/authClientCore', () => ({
   COOKIE_STORAGE_KEY: 'c',
   SESSION_DATA_STORAGE_KEY: 's',
   mapAuthUser: (user: unknown) => user,
@@ -17,7 +17,7 @@ jest.mock('../../lib/authClientCore', () => ({
     signInWithGoogle: () => mockBrowser(),
   }),
 }));
-jest.mock('../../lib/sessionFetch.android', () => ({ sessionFetch: jest.fn() }));
+jest.mock('@/android/lib/sessionFetch', () => ({ sessionFetch: jest.fn() }));
 jest.mock('@better-auth/expo/client', () => ({ storageAdapter: jest.fn() }));
 jest.mock('expo-secure-store', () => ({}));
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'nonce-1' }));

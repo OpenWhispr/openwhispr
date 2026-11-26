@@ -1,6 +1,6 @@
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { notesRepository } from '@/data';
-import { Sentry } from '@/lib/sentry';
+import { Sentry } from '@/android/lib/sentry';
 import { createLocalMeetingContext } from './localMeetingContext';
 
 export function createCloudMeetingContext(noteId: number, signal?: AbortSignal) {

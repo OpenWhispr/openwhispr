@@ -9,6 +9,7 @@ jest.mock('@/lib/apiClient', () => ({
     post: jest.fn(async () => ({ text: 'out', model: 'm', provider: 'cloud', processingMs: 1 })),
   },
 }));
+jest.mock('@/android/lib/apiClient', () => jest.requireMock('@/lib/apiClient'));
 
 const mockPost = api.post as jest.Mock;
 

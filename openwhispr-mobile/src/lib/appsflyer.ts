@@ -1,4 +1,3 @@
-import { createAppsFlyerLifecycle } from './appsFlyerLifecycle';
 import { Platform } from 'react-native';
 import { useConfigStore } from '@/store/useConfigStore';
 import {
@@ -34,10 +33,10 @@ const DEV_KEY = process.env.EXPO_PUBLIC_APPSFLYER_DEV_KEY?.trim();
 const IOS_APP_ID = '6763804420';
 const MAX_PENDING_EVENTS = 20;
 const REVENUE_ID_LOOKUP_TIMEOUT_MS = 2_000;
-const CONFIRMED_EVENT_TIMEOUT_MS = 15_000;
 
 let didSetUp = false;
 let didInit = false;
+let stopped = false;
 let sessionReady = false;
 let didStartCurrentSession = false;
 let sdkReady: Promise<boolean> | null = null;
@@ -48,19 +47,6 @@ let pendingEvents: PendingEvent[] = [];
 const attributionListeners = new Set<() => void>();
 let lastPublishedConsent: AppsFlyerAttributionConsent | undefined;
 let revenueId: string | null = null;
-
-const lifecycle = createAppsFlyerLifecycle({
-  isInitialized: () => didInit,
-  updateStopped: updateSdkStoppedState,
-  setReadiness: (readiness) => {
-    sdkReady = readiness;
-  },
-  isCurrentReadiness: (readiness) => sdkReady === readiness,
-  collectionAllowed,
-  startSession: startSessionIfAllowed,
-  flushEvents: flushPendingEvents,
-  publishReady: () => publishAttributionState(true),
-});
 
 // 'revoked' is an explicit opt-out on this device (Usage Analytics off, ATT
 // denied). 'undecided' is a device that has not answered the ATT prompt, or a
@@ -154,7 +140,7 @@ function getAppsFlyer(): AppsFlyerSdk {
 // AppsFlyer records install/app-open attribution and a small set of product
 // milestones — never transcription content. Like Sentry, every interaction is
 // gated behind the user's Usage Analytics preference: disabling the toggle
-// requests native stop and immediately blocks app events. A null result means the
+// stops the SDK immediately, re-enabling resumes it. A null result means the
 // persisted preference has not hydrated yet, so no SDK interaction is allowed.
 function analyticsPreference(): boolean | null {
   const config = useConfigStore.getState().config;
@@ -184,13 +170,7 @@ function collectionAllowed(): boolean {
 }
 
 function startSessionIfAllowed(): void {
-  if (
-    !sessionReady ||
-    didStartCurrentSession ||
-    !lifecycle.canStartSession() ||
-    !collectionAllowed()
-  )
-    return;
+  if (!sessionReady || didStartCurrentSession || !collectionAllowed()) return;
 
   didStartCurrentSession = true;
   const startOperation = invokeSdk(() => getAppsFlyer().start())
@@ -265,7 +245,29 @@ function updateSdkStoppedState(shouldStop: boolean): Promise<boolean> {
   return result;
 }
 
-const setSdkStopped = lifecycle.setStopped;
+function setSdkStopped(shouldStop: boolean): void {
+  if (!didInit || shouldStop === stopped) return;
+
+  stopped = shouldStop;
+  const preferenceChange = updateSdkStoppedState(shouldStop);
+  if (shouldStop) {
+    sdkReady = null;
+    return;
+  }
+
+  const readiness = preferenceChange.then((updated): boolean => {
+    if (!updated || stopped) return false;
+    startSessionIfAllowed();
+    flushPendingEvents();
+    return true;
+  });
+  sdkReady = readiness;
+  readiness.then((ready): void => {
+    // A resume that starts no session of its own (after the ATT re-check, or one
+    // that superseded a pending start) still makes the identifier readable.
+    if (ready && sdkReady === readiness) publishAttributionState(true);
+  });
+}
 
 function applyAttributionPolicy(devKey: string): void {
   applyCollectionPolicy(devKey);
@@ -311,9 +313,6 @@ export function setAppsFlyerTrackingAuthorizationStatus(status: TrackingAuthoriz
 
 export async function refreshAppsFlyerTrackingAuthorization(): Promise<void> {
   if (trackingAuthorizationStatus === 'notSupported') {
-    if (lifecycle.reapplyPolicyOnUnsupportedRefresh && didSetUp && DEV_KEY) {
-      applyAttributionPolicy(DEV_KEY);
-    }
     startSessionIfAllowed();
     return;
   }
@@ -383,37 +382,6 @@ export function logAppsFlyerEvent(
   }
 
   sendEventWhenReady(eventName, eventValues);
-}
-
-// A once-only milestone the caller keeps until delivery is confirmed: true only
-// once AppsFlyer's server accepted the event. Never queues, so a false result
-// means "send again later" and an unsent milestone survives a relaunch.
-export async function logAppsFlyerEventConfirmed(
-  eventName: string,
-  eventValues: Record<string, unknown> = {},
-): Promise<boolean> {
-  const readiness = sdkReady;
-  if (!DEV_KEY || !didInit || !didStartCurrentSession || !readiness || !collectionAllowed()) {
-    return false;
-  }
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  try {
-    const ready = await readiness;
-    if (!ready || readiness !== sdkReady || !collectionAllowed()) return false;
-    return await Promise.race([
-      invokeSdk(() =>
-        getAppsFlyer().logEvent({ eventName, eventValues, awaitResponse: true }),
-      ).then((): boolean => true),
-      new Promise<boolean>((resolve) => {
-        timeout = setTimeout(() => resolve(false), CONFIRMED_EVENT_TIMEOUT_MS);
-      }),
-    ]);
-  } catch (error) {
-    warn(`failed to confirm ${eventName}`)(error);
-    return false;
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 export function logTutorialCompletion({

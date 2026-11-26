@@ -1,12 +1,12 @@
 import type { InferenceSelection } from '@/android/providers/mobileProviders';
-import { sessionFetch as fetch } from '@/lib/sessionFetch';
+import { sessionFetch as fetch } from '@/android/lib/sessionFetch';
 import {
   BASE_URL,
   getAuthHeaders,
   getClientVersionHeader,
   ApiError,
   UPGRADE_REQUIRED_MESSAGE,
-} from '@/lib/apiClient';
+} from '@/android/lib/apiClient';
 import { parseApiErrorBody } from '@/lib/apiErrorBody';
 import { withRetry } from '@/lib/retry';
 import { stripThinkingTags } from '@/android/reasoning/buildProviderPrompt';

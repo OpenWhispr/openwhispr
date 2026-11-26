@@ -1,13 +1,2 @@
-import { createAccountAccess } from './accountAccessCore';
-import { androidAccountAccessPresentation } from '../android/accountAccess';
-
-export const {
-  accountRequiredForCloud,
-  requiresRealAccount,
-  cloudModeRequiresAccount,
-  canRunCloudMeeting,
-  getCloudAccountRequiredMessage,
-  getCloudOnlyAccountRequiredMessage,
-  showAccountRequiredAlert,
-  handleAccountRequiredError,
-} = createAccountAccess(androidAccountAccessPresentation);
+// Android's copy lives in src/android; shared files still import it from here.
+export * from '@/android/lib/accountAccess';

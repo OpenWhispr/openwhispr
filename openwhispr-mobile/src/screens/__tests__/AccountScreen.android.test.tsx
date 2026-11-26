@@ -69,6 +69,7 @@ jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAut
 jest.mock('@/lib/accountAccess', () => ({
   requiresRealAccount: (user: { isAnonymous?: boolean } | null) => !user || user.isAnonymous,
 }));
+jest.mock('@/android/lib/accountAccess', () => jest.requireMock('@/lib/accountAccess'));
 jest.mock('@/store/useUsageStore', () => ({
   useUsageStore: require('zustand').create(() => ({
     usage: null,

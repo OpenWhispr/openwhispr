@@ -5,7 +5,7 @@ import type { Note } from '@/data';
 import { notesRepository } from '@/data';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
 import { tryParseNoteTimestamp } from '@/lib/parseNoteTimestamp';
-import { Sentry } from '@/lib/sentry';
+import { Sentry } from '@/android/lib/sentry';
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
 import { createMeetingRecoveryLifecycle } from '@/android/lib/meetingRecoveryLifecycle';
 import { useNotesStore } from '@/android/store/useNotesStore';

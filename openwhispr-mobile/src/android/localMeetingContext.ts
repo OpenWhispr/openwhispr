@@ -1,7 +1,7 @@
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { notesRepository } from '@/data';
-import { Sentry } from '@/lib/sentry';
+import { Sentry } from '@/android/lib/sentry';
 
 /** Observe transitions, including A -> B -> A, for the whole asynchronous job. */
 export function createLocalMeetingContext(noteId: number, signal?: AbortSignal) {

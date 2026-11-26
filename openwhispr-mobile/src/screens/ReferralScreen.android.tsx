@@ -18,9 +18,9 @@ import {
   sendReferralInvite,
   type ReferralStats,
   type ReferralInvite,
-} from '@/lib/referralApi';
+} from '@/android/lib/referralApi';
 import { safeHaptics, isValidEmail } from '@/lib/utils';
-import { handleAccountRequiredError, requiresRealAccount } from '@/lib/accountAccess';
+import { handleAccountRequiredError, requiresRealAccount } from '@/android/lib/accountAccess';
 import { router } from 'expo-router';
 import {
   Group,

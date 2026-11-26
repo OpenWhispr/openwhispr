@@ -1,4 +1,4 @@
-import { api } from '@/lib/apiClient';
+import { api } from '@/android/lib/apiClient';
 
 export interface UsageInfo {
   billingUserId: string;

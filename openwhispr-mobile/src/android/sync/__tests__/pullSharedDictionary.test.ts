@@ -26,6 +26,7 @@ jest.mock('@/lib/apiClient', () => ({
     }
   },
 }));
+jest.mock('@/android/lib/apiClient', () => jest.requireMock('@/lib/apiClient'));
 
 const mockFetchSharedDictionary = jest.fn();
 const mockFetchSharedDictionaryHides = jest.fn();

@@ -36,6 +36,7 @@ let mockRoute: Record<string, unknown> = { cleanupRoute: { mode: 'openwhispr' } 
 jest.mock('@/lib/inferenceRouting', () => ({ snapshotTranscriptionJob: () => mockRoute }));
 let mockGuest = false;
 jest.mock('@/lib/accountAccess', () => ({ requiresRealAccount: () => mockGuest }));
+jest.mock('@/android/lib/accountAccess', () => jest.requireMock('@/lib/accountAccess'));
 const mockAuthListeners: (() => void)[] = [];
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: {

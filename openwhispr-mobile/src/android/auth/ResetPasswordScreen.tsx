@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { resetPasswordWithToken } from '@/lib/authClient.android';
+import { resetPasswordWithToken } from '@/android/lib/authClient';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { safeHaptics } from '@/lib/utils';
 import { showToast } from '../settings/kit';

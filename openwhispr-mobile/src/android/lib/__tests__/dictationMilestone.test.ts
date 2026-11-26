@@ -1,6 +1,6 @@
 import type { UserConfig } from '@/types';
 
-type MilestoneModule = typeof import('../dictationMilestone');
+type MilestoneModule = typeof import('@/android/lib/dictationMilestone');
 type DictationInput = Parameters<MilestoneModule['recordDictationMilestone']>[0];
 
 const STORAGE_KEY = 'openwhispr.dictation-milestone.v1';
@@ -32,6 +32,7 @@ jest.mock('@/lib/appsflyer', () => ({
     };
   },
 }));
+jest.mock('@/android/lib/appsflyer', () => jest.requireMock('@/lib/appsflyer'));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: {
     getState: (): { config: UserConfig | null } => ({ config: mockConfig }),
@@ -43,12 +44,13 @@ jest.mock('@/store/useConfigStore', () => ({
     },
   },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 
 function load(): MilestoneModule {
   jest.resetModules();
   mockConfigListeners.clear();
   mockAttributionListeners.clear();
-  return require('../dictationMilestone') as MilestoneModule;
+  return require('@/android/lib/dictationMilestone') as MilestoneModule;
 }
 
 let captureCount = 0;

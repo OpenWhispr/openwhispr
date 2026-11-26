@@ -72,6 +72,7 @@ jest.mock('@/store/useAuthStore', () => ({
 }));
 jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/lib/accountAccess', () => ({ requiresRealAccount: (user: unknown) => !user }));
+jest.mock('@/android/lib/accountAccess', () => jest.requireMock('@/lib/accountAccess'));
 jest.mock('@/sync/useSyncStore', () => ({
   useSyncStore: (selector: (state: { policyBlocked: boolean }) => unknown) =>
     selector({ policyBlocked: false }),

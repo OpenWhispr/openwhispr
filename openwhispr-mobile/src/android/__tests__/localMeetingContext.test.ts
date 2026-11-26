@@ -40,6 +40,7 @@ jest.mock('@/store/useProcessingModeStore', () => ({
 }));
 jest.mock('@/data', () => ({ notesRepository: { getNoteById: () => mockReadNote() } }));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+jest.mock('@/android/lib/sentry', () => jest.requireMock('@/lib/sentry'));
 import { createLocalMeetingContext } from '../localMeetingContext';
 import { createCloudMeetingContext } from '../cloudMeetingContext';
 beforeEach(() => {

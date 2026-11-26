@@ -73,6 +73,7 @@ jest.mock('@/lib/inferenceRouting', () => ({
   snapshotTranscriptionJob: () => ({ provider: 'cloud' }),
 }));
 jest.mock('@/lib/appsflyer', () => ({ logTranscriptionCompleted: jest.fn() }));
+jest.mock('@/android/lib/appsflyer', () => jest.requireMock('@/lib/appsflyer'));
 
 const failed: Transcript = {
   id: 'fixture',

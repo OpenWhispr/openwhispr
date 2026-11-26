@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { meetingOnDevice } from './meetingRouting';
-import { requiresRealAccount } from '@/lib/accountAccess';
+import { requiresRealAccount } from '@/android/lib/accountAccess';
 import { Text } from '@/components/ui/Text';
 import { Button, Card, useUiStyles } from './ui';
 

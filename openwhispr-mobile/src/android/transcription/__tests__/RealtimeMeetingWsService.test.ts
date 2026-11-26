@@ -24,6 +24,7 @@ import { LivePCMStreaming, addPcmFrameListener } from '../../../../modules/live-
 jest.mock('@/lib/apiClient', () => ({
   api: { post: jest.fn() },
 }));
+jest.mock('@/android/lib/apiClient', () => jest.requireMock('@/lib/apiClient'));
 
 jest.mock('expo-network', () => ({
   getNetworkStateAsync: jest.fn(),

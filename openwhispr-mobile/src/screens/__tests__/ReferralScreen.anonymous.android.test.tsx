@@ -28,6 +28,7 @@ jest.mock('@/lib/referralApi', () => ({
   fetchReferralInvites: jest.fn().mockResolvedValue([]),
   sendReferralInvite: (...args: unknown[]) => mockSendInvite(...args),
 }));
+jest.mock('@/android/lib/referralApi', () => jest.requireMock('@/lib/referralApi'));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn(), isValidEmail: () => true }));
 jest.mock('@/lib/accountAccess', () => ({
@@ -35,6 +36,7 @@ jest.mock('@/lib/accountAccess', () => ({
   handleAccountRequiredError: jest.fn(() => false),
   requiresRealAccount: jest.requireActual('@/lib/accountAccess').requiresRealAccount,
 }));
+jest.mock('@/android/lib/accountAccess', () => jest.requireMock('@/lib/accountAccess'));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/android/navigationBar', () => ({

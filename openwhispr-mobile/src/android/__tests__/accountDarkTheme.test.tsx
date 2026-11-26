@@ -64,18 +64,23 @@ jest.mock('@/store/useAuthStore', () => {
 });
 jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/lib/authClient', () => ({ checkUserExists: jest.fn() }));
+jest.mock('@/android/lib/authClient', () => ({
+  ...jest.requireMock('@/lib/authClient'),
+  ...jest.requireMock('@/lib/authClient.android'),
+}));
 jest.mock('@/lib/authClient.android', () => ({
   requestPasswordResetEmail: jest.fn(),
   resetPasswordWithToken: jest.fn(),
   requestVerificationEmail: jest.fn(),
 }));
-jest.mock('@/lib/sessionFetch.android', () => ({ sessionFetch: jest.fn() }));
+jest.mock('@/android/lib/sessionFetch', () => ({ sessionFetch: jest.fn() }));
 jest.mock('@/lib/apiClient', () => ({
   ApiError: class extends Error {},
   BASE_URL: 'https://api.test',
   getClientVersionHeader: () => ({}),
   api: { get: jest.fn(), post: jest.fn() },
 }));
+jest.mock('@/android/lib/apiClient', () => jest.requireMock('@/lib/apiClient'));
 jest.mock('@/android/settings/kit', () => ({ showToast: jest.fn() }));
 jest.mock('../settings/kit', () => ({ showToast: jest.fn() }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));

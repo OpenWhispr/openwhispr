@@ -18,7 +18,7 @@ import {
 } from './pipeline';
 import { bubbleFailure, bubbleMode } from './bubbleOutcome';
 import { snapshotTranscriptionJob } from '@/lib/inferenceRouting';
-import { requiresRealAccount } from '@/lib/accountAccess';
+import { requiresRealAccount } from '@/android/lib/accountAccess';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { usePracticeSession } from './practiceSession';

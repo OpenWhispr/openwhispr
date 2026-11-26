@@ -1,11 +1,11 @@
-import { useAuthStore } from '@/store/useAuthStore';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { hasRealAccountHistory } from '@/sync/syncIdentity';
 import type { LocalReasoningReadiness, UserConfig } from '@/types';
-import { dictationModeConfig, holdOnDeviceConfig } from './inferenceModes';
-import { OnboardingError } from './onboardingErrors';
+import { dictationModeConfig, holdOnDeviceConfig } from '@/lib/inferenceModes';
+import { OnboardingError } from '@/lib/onboardingErrors';
 
 export interface OnboardingModePolicy {
   getLocalReadiness: () => Promise<LocalReasoningReadiness>;

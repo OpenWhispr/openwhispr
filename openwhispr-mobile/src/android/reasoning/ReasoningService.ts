@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import type { ReasoningRequest, ReasoningResponse, ReasoningRoutingOptions } from '@/types';
 import type { InferenceSelection } from '@/android/providers/mobileProviders';
 import { buildProviderPrompt, stripThinkingTags } from '@/android/reasoning/buildProviderPrompt';
-import { api } from '@/lib/apiClient';
+import { api } from '@/android/lib/apiClient';
 import { buildChatOverNotePayload, type ChatOverNoteRequest } from '@/lib/notes/chatOverNote';
 import {
   fitsLocalCleanupOutput,

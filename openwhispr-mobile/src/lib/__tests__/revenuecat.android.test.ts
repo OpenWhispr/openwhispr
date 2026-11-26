@@ -15,6 +15,7 @@ jest.mock('@/lib/appsflyer', () => ({
   getAppsFlyerRevenueId: jest.fn(),
   subscribeAppsFlyerAttribution: jest.fn(),
 }));
+jest.mock('@/android/lib/appsflyer', () => jest.requireMock('@/lib/appsflyer'));
 jest.mock('react-native-purchases', () => ({
   __esModule: true,
   default: {
@@ -29,6 +30,7 @@ jest.mock('react-native-purchases', () => ({
   STOREKIT_VERSION: { STOREKIT_2: 'STOREKIT_2' },
 }));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+jest.mock('@/android/lib/sentry', () => jest.requireMock('@/lib/sentry'));
 beforeEach(() => {
   jest.clearAllMocks();
   process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY = 'goog_test';

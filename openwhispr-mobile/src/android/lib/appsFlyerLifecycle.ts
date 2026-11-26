@@ -1,4 +1,13 @@
-import type { AppsFlyerLifecycleDeps } from './appsFlyerLifecycle';
+export interface AppsFlyerLifecycleDeps {
+  isInitialized(): boolean;
+  updateStopped(shouldStop: boolean): Promise<boolean>;
+  setReadiness(readiness: Promise<boolean> | null): void;
+  isCurrentReadiness(readiness: Promise<boolean>): boolean;
+  collectionAllowed(): boolean;
+  startSession(): void;
+  flushEvents(): void;
+  publishReady(): void;
+}
 
 export function createAppsFlyerLifecycle(deps: AppsFlyerLifecycleDeps) {
   // A failed native transition must be retried when policy is reapplied.

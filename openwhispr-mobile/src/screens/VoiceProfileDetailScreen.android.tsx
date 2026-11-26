@@ -6,7 +6,7 @@ import { GroupedList } from '@/components/notes/GroupedList';
 import { SectionHeader } from '@/components/notes/SectionHeader';
 import { SpeakerAvatar } from '@/components/notes/SpeakerAvatar';
 import { useNotesStore } from '@/android/store/useNotesStore';
-import { confirmDestructive } from '@/lib/alerts';
+import { confirmDestructive } from '@/android/lib/alerts';
 import { safeHaptics } from '@/lib/utils';
 import { AppFont } from '@/lib/fonts';
 import {

@@ -226,6 +226,7 @@ jest.mock('@/lib/inferenceRouting', () => ({
   snapshotTextInference: () => ({}),
 }));
 jest.mock('@/lib/accountAccess', () => ({ accountRequiredForCloud: () => false }));
+jest.mock('@/android/lib/accountAccess', () => jest.requireMock('@/lib/accountAccess'));
 jest.mock('@/lib/superwall', () => ({
   SUPERWALL_PLACEMENTS: {
     audioUploadStart: 'audio-upload-start',
@@ -269,9 +270,10 @@ jest.mock('@/store/useTranscriptStore', () => ({
     { getState: () => ({ retryTranscript: mockRetryTranscript }) },
   ),
 }));
-jest.mock('@/android/store/useTranscriptStore', () =>
-  jest.requireMock('@/store/useTranscriptStore'),
-);
+jest.mock('@/android/store/useTranscriptStore', () => ({
+  ...jest.requireMock('@/store/useTranscriptStore'),
+  ...jest.requireMock('@/store/useTranscriptStore.android'),
+}));
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );

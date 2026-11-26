@@ -155,6 +155,7 @@ jest.mock('@/data', () => ({
   },
 }));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+jest.mock('@/android/lib/sentry', () => jest.requireMock('@/lib/sentry'));
 jest.mock('@/lib/transcriptAudio', () => ({
   isManagedMeetingAudioUri: (id: number, uri?: string) => uri === `file:///docs/meeting-${id}.wav`,
 }));

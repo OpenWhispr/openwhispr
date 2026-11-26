@@ -58,7 +58,6 @@ src/hooks/useMeetingLiveActivity.ts
 src/hooks/useRevenueCatIdentity.ts
 src/hooks/useSuperwallGate.ts
 src/hooks/useToast.ts
-src/lib/accountAccessCore.ts
 src/lib/accountDisplay.ts
 src/lib/accountRequiredError.ts
 src/lib/activeWorkspace.ts
@@ -66,12 +65,8 @@ src/lib/affiliateAttribution.ts
 src/lib/affiliateLink.ts
 src/lib/affiliateOffer.ts
 src/lib/affiliatePaywall.ts
-src/lib/alerts.ts
-src/lib/apiClient.ts
 src/lib/apiErrorBody.ts
 src/lib/appleLLM.ts
-src/lib/appsflyer.ts
-src/lib/authClientCore.ts
 src/lib/billingIdentity.ts
 src/lib/calendar/meetingContext.ts
 src/lib/calendar/meetingSuggestions.ts
@@ -93,7 +88,6 @@ src/lib/diarization/transcriptionStatus.ts
 src/lib/diarization/voiceprints.ts
 src/lib/dictationAgent.ts
 src/lib/dictationHints.ts
-src/lib/dictationMilestone.ts
 src/lib/fonts.ts
 src/lib/keyboardAgentSync.ts
 src/lib/keyboardTone.ts
@@ -119,15 +113,11 @@ src/lib/parseNoteTimestamp.ts
 src/lib/permissions.ts
 src/lib/policyMessages.ts
 src/lib/privateMode.ts
-src/lib/productEvents.ts
 src/lib/providerEndpoints.ts
 src/lib/providerJobActivity.ts
 src/lib/recordingWaveformPattern.ts
-src/lib/referralApi.ts
 src/lib/retiredModels.ts
 src/lib/retry.ts
-src/lib/revenuecatCore.ts
-src/lib/sentry.ts
 src/lib/sharedDictionaryHints.ts
 src/lib/spacePermissions.ts
 src/lib/speechActivity.ts

@@ -4,6 +4,7 @@ import { countLocalReasoningTokens, fitsLocalReasoningBudget } from '@/lib/local
 import { ReasoningService } from '@/android/reasoning/ReasoningService';
 
 jest.mock('@/lib/accountAccess', () => ({ requiresRealAccount: () => false }));
+jest.mock('@/android/lib/accountAccess', () => jest.requireMock('@/lib/accountAccess'));
 jest.mock('@/lib/dictationHints', () => ({
   buildDictationHintTiers: () => [['Piha'], ['Acme'], []],
 }));

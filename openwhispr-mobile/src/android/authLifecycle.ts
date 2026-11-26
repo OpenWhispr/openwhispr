@@ -3,9 +3,9 @@ import {
   deleteAccount as deleteAccountApi,
   getStoredSession,
   type AuthUser,
-} from '@/lib/authClient';
+} from '@/android/lib/authClient';
 import { useUsageStore } from '@/android/store/useUsageStore';
-import { Sentry } from '@/lib/sentry';
+import { Sentry } from '@/android/lib/sentry';
 import type { AuthStoreLifecycle } from '@/android/store/createAuthStore';
 import { forgetEndedSession, markSessionEnded, readEndedSession } from './auth/endedSession';
 
@@ -22,7 +22,7 @@ export const SESSION_CHECK_TIMEOUT_MS = 5000;
 
 // Android's own client and usage store; read when needed so a guest launch never loads them.
 function androidAuth() {
-  return require('@/lib/authClient.android') as typeof import('@/lib/authClient.android');
+  return require('@/android/lib/authClient') as typeof import('@/android/lib/authClient');
 }
 function androidUsage() {
   return (

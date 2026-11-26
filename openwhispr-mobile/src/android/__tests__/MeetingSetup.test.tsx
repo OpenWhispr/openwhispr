@@ -11,6 +11,7 @@ jest.mock('@/store/useAuthStore', () => ({
 jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('../meetingRouting', () => ({ meetingOnDevice: () => mockOnDevice }));
 jest.mock('@/lib/accountAccess', () => ({ requiresRealAccount: () => true }));
+jest.mock('@/android/lib/accountAccess', () => jest.requireMock('@/lib/accountAccess'));
 jest.mock('../ui', () => {
   const { View, Pressable, Text } = require('react-native');
   return {

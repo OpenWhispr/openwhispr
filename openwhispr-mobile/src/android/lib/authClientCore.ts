@@ -5,7 +5,7 @@ import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { fetch as expoFetch } from 'expo/fetch';
-import { getClientVersionHeader } from './apiClient';
+import { getClientVersionHeader } from '@/android/lib/apiClient';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.openwhispr.com';
 // Mirrors ANONYMOUS_EMAIL_DOMAIN in the API's lib/anonymous-identity.ts.

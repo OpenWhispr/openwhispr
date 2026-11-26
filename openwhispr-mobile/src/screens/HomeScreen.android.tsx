@@ -43,7 +43,7 @@ import {
   type ImportDestination,
 } from '@/lib/notes/importDestination';
 import { getTranscriptionProvider } from '@/lib/inferenceRouting';
-import { accountRequiredForCloud, showAccountRequiredAlert } from '@/lib/accountAccess';
+import { accountRequiredForCloud, showAccountRequiredAlert } from '@/android/lib/accountAccess';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useUsageStore } from '@/android/store/useUsageStore';
 import { GlassPill, WordsMeter, openUpgrade } from '@/android/plan/parts';

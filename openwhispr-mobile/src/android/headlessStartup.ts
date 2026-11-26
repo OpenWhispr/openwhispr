@@ -1,5 +1,5 @@
 import { runMigrations } from '@/db/migrate';
-import { initSentry } from '@/lib/sentry';
+import { initSentry } from '@/android/lib/sentry';
 
 let ran = false;
 

@@ -25,7 +25,7 @@ import {
   captureDictationContext,
   recordDictationCompleted,
   type ProductEventsCaptureContext,
-} from '@/lib/productEvents';
+} from '@/android/lib/productEvents';
 import { countSpokenWords } from '@/lib/wordCount';
 import type { TranscriptionProvider } from '@/types';
 import {

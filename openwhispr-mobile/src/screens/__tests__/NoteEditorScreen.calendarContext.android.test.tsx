@@ -289,7 +289,10 @@ jest.mock('@/hooks/useSuperwallGate', () => ({
 jest.mock('@/utils/generateTitle', () => ({
   generateNoteTitle: jest.fn(),
 }));
-jest.mock('@/android/utils/generateTitle', () => jest.requireMock('@/utils/generateTitle'));
+jest.mock('@/android/utils/generateTitle', () => ({
+  ...jest.requireMock('@/utils/generateTitle'),
+  ...jest.requireMock('@/utils/generateTitle.android'),
+}));
 
 jest.mock('@/lib/privateMode', () => ({
   promptLocalModelFallback: jest.fn(),
@@ -440,6 +443,7 @@ jest.mock('@/android/notes/moveSheet', () => ({
 }));
 
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+jest.mock('@/android/lib/sentry', () => jest.requireMock('@/lib/sentry'));
 
 // The chips read and write the calendar link and people through the repository.
 const mockNotesRepository = {

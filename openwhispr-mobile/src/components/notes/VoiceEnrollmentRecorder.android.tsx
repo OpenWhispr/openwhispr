@@ -24,7 +24,7 @@ import {
   voiceEnrollmentFailureMessage,
 } from '@/lib/voiceEnrollmentMessages';
 import { isMicPermissionError, showMicPermissionAlert } from '@/lib/permissions';
-import { Sentry } from '@/lib/sentry';
+import { Sentry } from '@/android/lib/sentry';
 
 type Phase =
   | 'checking-model'

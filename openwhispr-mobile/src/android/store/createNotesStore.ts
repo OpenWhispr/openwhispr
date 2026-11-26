@@ -44,7 +44,7 @@ import {
   parseCalendarParticipants,
 } from '@/lib/calendar/meetingContext';
 import { makeContentHash } from '@/lib/utils';
-import { logTranscriptionCompleted } from '@/lib/appsflyer';
+import { logTranscriptionCompleted } from '@/android/lib/appsflyer';
 import { ReasoningService } from '@/android/reasoning/ReasoningService';
 import type {
   EnrollVoiceProfileInput,

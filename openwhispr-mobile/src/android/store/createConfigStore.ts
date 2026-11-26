@@ -44,7 +44,7 @@ async function prepareConfigChange(
     nextConfig.usageAnalyticsEnabled !== false
   ) {
     const { prepareProductEventsOptIn } =
-      require('@/lib/productEvents') as typeof import('@/lib/productEvents');
+      require('@/android/lib/productEvents') as typeof import('@/android/lib/productEvents');
     await prepareProductEventsOptIn();
   }
 }

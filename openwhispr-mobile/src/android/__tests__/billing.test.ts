@@ -28,10 +28,12 @@ jest.mock('@/lib/revenuecat.android', () => ({
     return action();
   }),
 }));
+jest.mock('@/android/lib/revenuecat', () => jest.requireMock('@/lib/revenuecat.android'));
 jest.mock('@/lib/billingReconciliation', () => ({
   reconcileStoreBilling: jest.fn(async () => undefined),
 }));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+jest.mock('@/android/lib/sentry', () => jest.requireMock('@/lib/sentry'));
 jest.mock('react-native-purchases', () => ({
   __esModule: true,
   default: {

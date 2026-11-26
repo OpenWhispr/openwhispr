@@ -15,7 +15,7 @@ import {
   useAuthColors,
 } from './look';
 import { readVerified, tokenEmail, verifyEmailToken } from './emailVerification';
-import { requestVerificationEmail } from '@/lib/authClient.android';
+import { requestVerificationEmail } from '@/android/lib/authClient';
 import { useAuthT } from './strings';
 
 type Stage = 'checking' | 'verified' | 'expired' | 'offline' | 'sent';

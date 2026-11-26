@@ -14,21 +14,32 @@ const native = {
   'expo-linking': { createURL: () => 'openwhispr://' },
   // Android's Google sign-in sheet is native; these flows never call it.
   'expo-crypto': { randomUUID: () => 'fixture-nonce' },
-  '../../modules/android-google-authorization/src': {
+  '../../../modules/android-google-authorization/src': {
     isGoogleSignInAvailable: () => false,
     signInWithGoogleSheet: () => Promise.reject(new Error('not in this harness')),
   },
 };
+// One module cache per set of replacements (each harness run passes its own), so an import cycle
+// resolves to the partly built module as Node does, and no run sees another run's stubs.
+const caches = new WeakMap();
 function load(file, replacements, sourceFile = file) {
+  if (!caches.has(replacements)) caches.set(replacements, new Map());
+  const loaded = caches.get(replacements);
+  if (loaded.has(file) && sourceFile === file) return loaded.get(file).exports;
   const localRequire = createRequire(file);
   const compiled = ts.transpileModule(fs.readFileSync(sourceFile, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
     fileName: file,
   }).outputText;
   const module = { exports: {} };
+  if (sourceFile === file) loaded.set(file, module);
   vm.runInThisContext(`(function(require,module,exports){${compiled}\n})`, { filename: file })(
     (name) => {
       if (Object.hasOwn(replacements, name)) return replacements[name];
+      // The app's @/ alias, as Metro and jest resolve it.
+      if (name.startsWith('@/') && fs.existsSync(path.join(root, 'src', `${name.slice(2)}.ts`))) {
+        return load(path.join(root, 'src', `${name.slice(2)}.ts`), replacements);
+      }
       if (name.startsWith('.') && fs.existsSync(path.resolve(path.dirname(file), `${name}.ts`))) {
         return load(path.resolve(path.dirname(file), `${name}.ts`), replacements);
       }
@@ -128,11 +139,11 @@ async function checkFreshLogin({
         })
       : new global.Response('<title>Gateway</title>', { headers: { 'content-type': 'text/html' } });
   };
-  const loadAuth = () =>
-    load(
+  const loadAuth = () => {
+    return load(
       path.join(
         root,
-        Platform.OS === 'android' ? 'src/lib/authClient.android.ts' : 'src/lib/authClient.ts',
+        Platform.OS === 'android' ? 'src/android/lib/authClient.ts' : 'src/lib/authClient.ts',
       ),
       {
         ...native,
@@ -141,9 +152,11 @@ async function checkFreshLogin({
         'expo-secure-store': storage,
         'expo/fetch': { fetch: (...args) => global.fetch(...args) },
         './apiClient': { getClientVersionHeader: () => 'test' },
+        '@/android/lib/apiClient': { getClientVersionHeader: () => 'test' },
       },
       process.argv[2],
     );
+  };
   const auth = loadAuth();
   const result = await {
     email: () => auth.signInWithEmail(user.email, 'fixture-password'),
@@ -206,7 +219,7 @@ async function check(
   const auth = load(
     path.join(
       root,
-      Platform.OS === 'android' ? 'src/lib/authClient.android.ts' : 'src/lib/authClient.ts',
+      Platform.OS === 'android' ? 'src/android/lib/authClient.ts' : 'src/lib/authClient.ts',
     ),
     {
       ...native,
@@ -215,6 +228,7 @@ async function check(
       'expo-secure-store': storage,
       'expo/fetch': { fetch: (...args) => global.fetch(...args) },
       './apiClient': { getClientVersionHeader: () => 'test' },
+      '@/android/lib/apiClient': { getClientVersionHeader: () => 'test' },
     },
     process.argv[2],
   );
@@ -256,7 +270,7 @@ async function checkChunkedClear({ rejected = false } = {}) {
   const auth = load(
     path.join(
       root,
-      Platform.OS === 'android' ? 'src/lib/authClient.android.ts' : 'src/lib/authClient.ts',
+      Platform.OS === 'android' ? 'src/android/lib/authClient.ts' : 'src/lib/authClient.ts',
     ),
     {
       ...native,
@@ -265,6 +279,7 @@ async function checkChunkedClear({ rejected = false } = {}) {
       'expo-secure-store': storage,
       'expo/fetch': { fetch: (...args) => global.fetch(...args) },
       './apiClient': { getClientVersionHeader: () => 'test' },
+      '@/android/lib/apiClient': { getClientVersionHeader: () => 'test' },
     },
     process.argv[2],
   );

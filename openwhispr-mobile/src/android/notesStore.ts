@@ -4,7 +4,7 @@ import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { createNotesStore, type NotesStore } from '@/android/store/createNotesStore';
 import { androidMeetingLifecycle } from './meetingLifecycle';
 import { assertTransition } from '@/lib/diarization/transcriptionStatus';
-import { Sentry } from '@/lib/sentry';
+import { Sentry } from '@/android/lib/sentry';
 import { linesSaved } from './liveSpeakers/whenSaved';
 
 const currentPrivateFolderId = (): number | null => {

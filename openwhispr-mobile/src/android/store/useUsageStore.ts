@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ApiError } from '@/lib/apiClient';
+import { ApiError } from '@/android/lib/apiClient';
 import {
   createUsageState,
   type UsageLifecycle,

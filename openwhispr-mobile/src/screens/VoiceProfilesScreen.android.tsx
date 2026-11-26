@@ -5,7 +5,7 @@ import { VoiceProfileList } from '@/components/notes/VoiceProfileList.android';
 import type { RestoreRow } from '@/components/ui/SwipeableCard';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { useNotesStore } from '@/android/store/useNotesStore';
-import { confirmDestructive } from '@/lib/alerts';
+import { confirmDestructive } from '@/android/lib/alerts';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { safeHaptics } from '@/lib/utils';
 import type { SpeakerProfile } from '@/data/types';

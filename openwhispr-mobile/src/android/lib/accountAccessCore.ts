@@ -1,9 +1,9 @@
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { isAccountRequiredError } from '@/lib/accountRequiredError';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import type { AuthUser } from '@/lib/authClient';
+import type { AuthUser } from '@/android/lib/authClient';
 import type { ProcessingMode } from '@/types';
 
 export interface AccountAccessPresentation {

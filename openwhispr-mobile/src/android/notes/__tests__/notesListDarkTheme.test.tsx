@@ -86,6 +86,7 @@ jest.mock('@/lib/notes/noteRouteOwner', () => ({
 }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));
 jest.mock('@/lib/accountAccess', () => ({ requiresRealAccount: () => false }));
+jest.mock('@/android/lib/accountAccess', () => jest.requireMock('@/lib/accountAccess'));
 jest.mock('@/store/useGoogleCalendarStore', () => {
   const state = { accounts: [], load: () => Promise.resolve() };
   return { useGoogleCalendarStore: (select: (s: unknown) => unknown) => select(state) };

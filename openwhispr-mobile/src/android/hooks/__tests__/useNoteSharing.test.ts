@@ -50,6 +50,7 @@ jest.mock('@/lib/apiClient', () => ({
     }
   },
 }));
+jest.mock('@/android/lib/apiClient', () => jest.requireMock('@/lib/apiClient'));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn() }));
 jest.mock('@/lib/notes/noteShareTokens', () => ({

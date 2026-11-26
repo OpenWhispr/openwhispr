@@ -2,7 +2,7 @@ import type React from 'react';
 import { RecordingView } from '@/android/notes/RecordingView';
 import { notesT } from '@/android/notes/strings';
 import { RecordingNoteChips } from '@/android/notes/noteChips';
-import { Sentry } from '@/lib/sentry';
+import { Sentry } from '@/android/lib/sentry';
 
 /** A meeting recorded on the phone (Figma R1): transcribed afterwards, so Notes is the tab. */
 export function LocalMeetingRecording({

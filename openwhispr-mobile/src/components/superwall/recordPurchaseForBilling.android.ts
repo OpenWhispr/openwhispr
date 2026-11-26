@@ -1,5 +1,5 @@
 import { getUsageOwnerKey, useUsageStore } from '@/android/store/useUsageStore';
-import { recordRevenueCatPurchase } from '@/lib/revenuecat.android';
+import { recordRevenueCatPurchase } from '@/android/lib/revenuecat';
 
 export async function recordPurchaseForBilling(productId: string): Promise<void> {
   const billingUserId = useUsageStore.getState().usage?.billingUserId;

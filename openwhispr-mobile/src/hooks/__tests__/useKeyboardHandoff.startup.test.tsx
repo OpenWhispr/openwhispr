@@ -274,7 +274,6 @@ jest.mock('@/lib/sentry', () => ({
   Sentry: { wrap: (component: unknown) => component },
 }));
 jest.mock('@/lib/appsflyer', () => ({ initAppsFlyer: () => undefined }));
-jest.mock('@/lib/dictationMilestone', () => ({ initDictationMilestone: () => undefined }));
 jest.mock('@/sync/syncEngine', () => ({ initSyncTriggers: () => undefined }));
 jest.mock('@/lib/keyboardFullAccessProbe', () => ({
   startKeyboardFullAccessProbe: () => () => undefined,

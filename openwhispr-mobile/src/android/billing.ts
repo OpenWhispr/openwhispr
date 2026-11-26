@@ -6,9 +6,9 @@ import type { CustomPurchaseControllerContext } from 'expo-superwall';
 import type { UsageInfo } from '@/android/remote/usageApi';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { getUsageOwnerKey, useUsageStore } from '@/android/store/useUsageStore';
-import { withRevenueCatUser } from '@/lib/revenuecat.android';
+import { withRevenueCatUser } from '@/android/lib/revenuecat';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';
-import { Sentry } from '@/lib/sentry';
+import { Sentry } from '@/android/lib/sentry';
 
 export type BillingStatus = 'checking' | 'payment-pending' | 'access-pending' | 'idle';
 const STATUS_KEY = 'android-billing-status-v1';

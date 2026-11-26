@@ -20,12 +20,14 @@ jest.mock('@/lib/authClient', () => ({
   getSession: jest.fn(),
   initAuthenticatedUser: jest.fn(),
 }));
+jest.mock('@/android/lib/authClient', () => jest.requireMock('@/lib/authClient'));
 jest.mock('@/lib/sentry', () => ({
   Sentry: {
     captureMessage: (...args: unknown[]) => mockCaptureMessage(...args),
     captureException: jest.fn(),
   },
 }));
+jest.mock('@/android/lib/sentry', () => jest.requireMock('@/lib/sentry'));
 jest.mock('@/store/useUsageStore', () => ({
   useUsageStore: { getState: () => ({ reset: jest.fn(), load: jest.fn() }) },
 }));

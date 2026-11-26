@@ -1,6 +1,6 @@
 import { canRunLocalReasoning, getLocalReasoningReadiness } from '@/lib/localReasoning';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
-import type { OnboardingModePolicy } from '../lib/onboardingModeCore';
+import type { OnboardingModePolicy } from '@/android/lib/onboardingModeCore';
 
 export const androidOnboardingModePolicy: OnboardingModePolicy = {
   getLocalReadiness: () => getLocalReasoningReadiness(),

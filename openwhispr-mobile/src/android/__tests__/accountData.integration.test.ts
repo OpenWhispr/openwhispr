@@ -59,6 +59,7 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
 jest.mock('../../../modules/audio-tools/src', () => ({ AudioTools: {} }));
 jest.mock('@/android/dictation/transcribeAndCleanup', () => ({ transcribeAndCleanup: jest.fn() }));
 jest.mock('@/lib/appsflyer', () => ({ logTranscriptionCompleted: jest.fn() }));
+jest.mock('@/android/lib/appsflyer', () => jest.requireMock('@/lib/appsflyer'));
 import Database from 'better-sqlite3';
 import type { Folder } from '@/data/types';
 
@@ -119,6 +120,10 @@ jest.mock('@/lib/authClient.android', () => ({
     return mockSessionUser ? { state: 'valid', user: mockSessionUser } : { state: 'ended' };
   },
 }));
+jest.mock('@/android/lib/authClient', () => ({
+  ...jest.requireMock('@/lib/authClient'),
+  ...jest.requireMock('@/lib/authClient.android'),
+}));
 jest.mock('@/lib/authClient', () => ({
   getStoredSession: async () => (mockSessionUser ? `test-${mockSessionUser.id}` : null),
   getSession: async () => {
@@ -141,6 +146,7 @@ jest.mock('@/lib/authClient', () => ({
 jest.mock('@/lib/sentry', () => ({
   Sentry: { addBreadcrumb: jest.fn(), captureException: jest.fn() },
 }));
+jest.mock('@/android/lib/sentry', () => jest.requireMock('@/lib/sentry'));
 jest.mock('@sentry/react-native', () => ({
   addBreadcrumb: jest.fn(),
   captureException: jest.fn(),
@@ -172,6 +178,7 @@ jest.mock('@/lib/apiClient', () => ({
   ApiError: class extends Error {},
   isPolicyCloudBackupBlockedError: () => false,
 }));
+jest.mock('@/android/lib/apiClient', () => jest.requireMock('@/lib/apiClient'));
 jest.mock('@/sync/privateNoteDeletion', () => ({
   pushPrivateNoteDeletes: async () => {},
   clearPrivateNoteDeletionQueue: jest.fn(),

@@ -54,7 +54,7 @@ import {
   handleAccountRequiredError,
   requiresRealAccount,
   showAccountRequiredAlert,
-} from '@/lib/accountAccess';
+} from '@/android/lib/accountAccess';
 import {
   getLocalReasoningReadiness,
   getLocalReasoningUnavailableMessage,
@@ -63,7 +63,7 @@ import {
 } from '@/lib/localReasoning';
 import { providerDisplayName } from '@/android/providers/mobileProviders';
 import { promptLocalReasoningFallback } from '@/android/dictation/localReasoningFallback';
-import { confirmCloudOnce, confirmDestructive } from '@/lib/alerts';
+import { confirmCloudOnce, confirmDestructive } from '@/android/lib/alerts';
 import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
 import { isDefaultGenerateNotesAction } from '@/android/lib/notes/generateNotesPrompt';
 import { isRegenerableNoteTitle } from '@/lib/notes/regenerableNoteTitle';

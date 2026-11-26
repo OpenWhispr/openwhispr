@@ -126,6 +126,7 @@ jest.mock('@/lib/accountAccess', () => ({
   accountRequiredForCloud: () => false,
   showAccountRequiredAlert: jest.fn(),
 }));
+jest.mock('@/android/lib/accountAccess', () => jest.requireMock('@/lib/accountAccess'));
 jest.mock('@/lib/superwall', () => ({
   SUPERWALL_PLACEMENTS: { audioUploadStart: 'upload' },
   buildUsageGateParams: jest.fn(),

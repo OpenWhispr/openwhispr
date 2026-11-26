@@ -30,6 +30,7 @@ jest.mock('@/store/useUsageStore', () => ({
 }));
 jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 jest.mock('@/lib/alerts', () => ({ confirmAccountDeletion: jest.fn() }));
+jest.mock('@/android/lib/alerts', () => jest.requireMock('@/lib/alerts'));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View }));

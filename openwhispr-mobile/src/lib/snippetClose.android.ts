@@ -1,4 +1,4 @@
-import { confirmDestructive } from './alerts';
+import { confirmDestructive } from '@/android/lib/alerts';
 import type { SnippetCloseOptions } from './snippetClose';
 
 export function createSnippetCloseHandler({

@@ -1,4 +1,4 @@
-import type { AuthUser } from '@/lib/authClient';
+import type { AuthUser } from '@/android/lib/authClient';
 
 /** Checked like desktop's EmailVerificationStep: every 5 s while the verify screen is open. */
 export const VERIFY_POLL_MS = 5000;
@@ -15,7 +15,7 @@ export function needsEmailVerification(user: AuthUser | null | undefined): boole
 export async function readVerified(): Promise<boolean | null> {
   try {
     // Loaded here so the sign-in screens don't pull the API client in just to render.
-    const { api } = require('@/lib/apiClient') as typeof import('@/lib/apiClient');
+    const { api } = require('@/android/lib/apiClient') as typeof import('@/android/lib/apiClient');
     const result = await api.get<{ verified?: boolean }>('/api/auth/verification-status');
     return result?.verified === true;
   } catch {
@@ -32,9 +32,9 @@ export type VerifyLinkOutcome = 'verified' | 'invalid' | 'network';
  */
 export async function verifyEmailToken(token: string): Promise<VerifyLinkOutcome> {
   const { BASE_URL, getClientVersionHeader } =
-    require('@/lib/apiClient') as typeof import('@/lib/apiClient');
+    require('@/android/lib/apiClient') as typeof import('@/android/lib/apiClient');
   const { sessionFetch } =
-    require('@/lib/sessionFetch.android') as typeof import('@/lib/sessionFetch.android');
+    require('@/android/lib/sessionFetch') as typeof import('@/android/lib/sessionFetch');
   try {
     // Without the app's session, and with cookies omitted both ways: the API signs the link's
     // account in when the caller isn't it, which would silently switch a phone signed in as
