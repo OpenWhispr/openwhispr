@@ -7,7 +7,14 @@ import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { safeHaptics } from '@/lib/utils';
 import { speechModelSupportsLanguages } from '@/android/speechCapabilities';
 import type { AndroidSpeechModelId } from '@/android/speechSelection';
-import { Badge, Group, ListRow, SettingsPage, useSettings } from '@/android/settings/kit';
+import {
+  Badge,
+  Group,
+  ListRow,
+  SettingsPage,
+  showToast,
+  useSettings,
+} from '@/android/settings/kit';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { MODEL_ROWS, modelName } from '@/android/settings/modelCatalog';
 import { useSettingsT } from '@/android/settings/strings';
@@ -47,13 +54,14 @@ export default function LanguageScreen() {
       : item.code !== current?.code,
   );
 
-  const save = (code: string, speech?: AndroidSpeechModelId) => {
+  const save = (code: string, label: string, speech?: AndroidSpeechModelId) => {
     void useConfigStore.getState().updateConfig({
       preferredLanguage: code,
       ...(speech ? { androidSpeechModel: speech } : {}),
     });
     // Stay on the screen: the pick moves into the Current card above.
     setQuery('');
+    showToast(t('languageSet', { language: code === 'auto' ? t('autoDetect') : label }));
   };
 
   const choose = (code: string, label: string) => {
@@ -61,7 +69,7 @@ export default function LanguageScreen() {
     const speech: AndroidSpeechModelId = config?.androidSpeechModel ?? 'parakeet-v3';
     // Dictation on this phone: warn when its speech model can't hear the language.
     if (!local || code === 'auto' || speechModelSupportsLanguages(speech, [code])) {
-      save(code);
+      save(code, label);
       return;
     }
     const other = MODEL_ROWS.find(
@@ -79,12 +87,12 @@ export default function LanguageScreen() {
       [
         // With nothing on the phone that can do it, the language is only kept on purpose.
         ...(other ? [] : [{ text: t('cancel'), style: 'cancel' as const }]),
-        { text: t('keepModel', { model }), onPress: () => save(code) },
+        { text: t('keepModel', { model }), onPress: () => save(code, label) },
         ...(other
           ? [
               {
                 text: t('useModel', { model: modelName(other.id) }),
-                onPress: () => save(code, other.id as AndroidSpeechModelId),
+                onPress: () => save(code, label, other.id as AndroidSpeechModelId),
               },
             ]
           : []),

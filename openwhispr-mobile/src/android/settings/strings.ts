@@ -191,6 +191,7 @@ export const settingsEnglish = {
   recommended: 'Recommended',
   currentLanguage: 'Current',
   currentLanguageBody: 'Dictation listens for this language.',
+  languageSet: 'Language set to {{language}}',
   currentAutoBody: 'Works out which language you speak.',
   noLanguages: 'No languages match “{{query}}”',
   modelCantDo: '{{model}} can’t do {{language}}',
