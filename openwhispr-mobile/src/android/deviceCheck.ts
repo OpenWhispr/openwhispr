@@ -6,7 +6,7 @@ import { selectedSpeechModel, type AndroidSpeechModelId } from './speechSelectio
 import { modelReady } from './models';
 import { speechModelSupportsLanguages } from './speechCapabilities';
 import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
-import { buildProviderPrompt } from '@/services/reasoning/buildProviderPrompt';
+import { buildProviderPrompt } from '@/android/reasoning/buildProviderPrompt';
 import { buildDictationHints } from '@/lib/dictationHints';
 import { getActiveCustomCleanupPrompt } from '@/store/useCustomPromptsStore';
 import { useConfigStore } from '@/store/useConfigStore';

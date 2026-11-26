@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { TextInput } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
-import { ReasoningService } from '@/services/reasoning/ReasoningService';
+import { ReasoningService } from '@/android/reasoning/ReasoningService';
 import { getInferenceSelection } from '@/lib/inferenceRouting';
 import { Page, Button, Card, useUiStyles } from './ui';
 export default function AssistantScreen() {

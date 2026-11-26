@@ -10,7 +10,7 @@ import {
   getPreferredTranscriptionLanguage,
   getPreferredTranscriptionLanguages,
 } from '@/lib/transcriptionLanguage';
-import { ReasoningService } from '@/services/reasoning/ReasoningService';
+import { ReasoningService } from '@/android/reasoning/ReasoningService';
 import { LocalTranscriptionService } from '@/services/transcription/LocalTranscriptionService';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useTranscriptStore } from '@/store/useTranscriptStore';

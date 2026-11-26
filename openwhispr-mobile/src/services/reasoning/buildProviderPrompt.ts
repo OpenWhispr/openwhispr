@@ -1,10 +1,6 @@
 import { DEFAULT_CLEANUP_PROMPT } from '@/config/prompts/registry';
 import languageRegistry from '@/config/languageRegistry.json';
-import {
-  APP_CATEGORY_INSTRUCTIONS,
-  TONE_INSTRUCTIONS,
-  TONE_PRIORITY_INSTRUCTION,
-} from '@/services/agent/composerPrompt';
+import { TONE_INSTRUCTIONS, TONE_PRIORITY_INSTRUCTION } from '@/services/agent/composerPrompt';
 import { sharedDictionaryHint } from '@/lib/sharedDictionaryHints';
 import type { ReasoningRequest } from '@/types';
 
@@ -48,10 +44,7 @@ export function buildProviderPrompt(request: ReasoningRequest): ProviderPrompt {
   // A custom cleanup prompt is the user's own instruction, which the tone's
   // priority sentence would override; the server skips the tone the same way.
   const tone = !customPrompt && request.tone ? TONE_INSTRUCTIONS[request.tone] : undefined;
-  // As the server: the kind of app, then the tone, then its priority, in one paragraph.
-  const medium =
-    tone && request.appCategory ? APP_CATEGORY_INSTRUCTIONS[request.appCategory] : undefined;
-  if (tone) parts.push([medium, tone, TONE_PRIORITY_INSTRUCTION].filter(Boolean).join(' '));
+  if (tone) parts.push(`${tone} ${TONE_PRIORITY_INSTRUCTION}`);
   return {
     systemPrompt: parts.join('\n\n'),
     text: `<transcript>\n${request.text}\n</transcript>\n\nOutput only the cleaned transcript.`,

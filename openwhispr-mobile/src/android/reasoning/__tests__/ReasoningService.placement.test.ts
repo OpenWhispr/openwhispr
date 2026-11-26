@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { resolveReasoningPlacement } from '../ReasoningService';
+import { resolveReasoningPlacement } from '@/android/reasoning/ReasoningService';
 
 jest.mock('@/lib/apiClient', () => ({ api: { post: jest.fn() } }));
 jest.mock('@/lib/inferenceRouting', () => ({ getInferenceSelection: jest.fn() }));
