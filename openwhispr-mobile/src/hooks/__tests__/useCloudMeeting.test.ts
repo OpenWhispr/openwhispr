@@ -345,6 +345,53 @@ describe('useCloudMeeting', () => {
     expect(result.current.status).toBe('error');
   });
 
+  it('exposes a start that failed before any session, with its native code', async () => {
+    const { result } = setup(true, 'file:///docs/meeting-audio/42.wav');
+    const fake = latest();
+    expect(result.current.startFailure).toBeNull();
+
+    await act(async () => {
+      fake.start.reject(
+        Object.assign(new Error('Session activation failed'), { code: 'MIC_UNAVAILABLE' }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(result.current.status).toBe('error');
+    expect(result.current.startFailure).toEqual({
+      code: 'MIC_UNAVAILABLE',
+      message: 'Session activation failed',
+    });
+  });
+
+  it('a session that ends mid-meeting is not a start failure', async () => {
+    const { result } = setup();
+    const fake = latest();
+    await goLive(fake);
+
+    act(() => {
+      fake.callbacks.onClose?.();
+    });
+
+    expect(result.current.status).toBe('error');
+    expect(result.current.startFailure).toBeNull();
+  });
+
+  it("the next session starts without the last one's start failure", async () => {
+    const { result, setEnabled } = setup();
+    await act(async () => {
+      latest().start.reject(new Error('Token request failed'));
+      await Promise.resolve();
+    });
+    expect(result.current.startFailure).not.toBeNull();
+
+    setEnabled(false);
+    setEnabled(true);
+
+    expect(result.current.startFailure).toBeNull();
+    expect(result.current.status).toBe('connecting');
+  });
+
   it('counts one interruption when the native event and the stall check both see it', async () => {
     const { result } = setup();
     const fake = latest();

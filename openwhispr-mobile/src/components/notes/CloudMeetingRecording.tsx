@@ -28,6 +28,11 @@ interface CloudMeetingRecordingProps {
   /** Capture has started; a recorded meeting still connecting is already recording. */
   captureStarted: boolean;
   error: string | null;
+  /**
+   * The session's start was refused, so nothing was ever recorded. The session ends the meeting
+   * and says why in an alert; until then nothing claims recording has stopped.
+   */
+  startFailed?: boolean;
   /** Audio the mic actually captured, so the clock stops while nothing is recorded. */
   capturedSeconds: number;
   rawNotes: string;
@@ -47,6 +52,7 @@ export function CloudMeetingRecording({
   status,
   captureStarted,
   error,
+  startFailed = false,
   capturedSeconds,
   rawNotes,
   onChangeRawNotes,
@@ -86,7 +92,7 @@ export function CloudMeetingRecording({
           </Text>
         </View>
       </View>
-      {status === 'error' ? (
+      {status === 'error' && !startFailed ? (
         <Text className="mx-4 mt-2 text-[13px] text-systemRed">{stoppedMessage(error)}</Text>
       ) : null}
       {status === 'interrupted' ? (

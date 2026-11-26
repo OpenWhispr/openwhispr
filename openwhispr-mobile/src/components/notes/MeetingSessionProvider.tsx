@@ -5,10 +5,15 @@ import { notesRepository } from '@/data';
 import type { Note } from '@/data/types';
 import { LiveMeetingNoteContext, useLiveMeetingNoteId } from '@/components/notes/liveMeetingNote';
 import { useAudioRecording } from '@/hooks/useAudioRecording';
-import { useCloudMeeting, type CloudMeeting } from '@/hooks/useCloudMeeting';
+import {
+  useCloudMeeting,
+  type CloudMeeting,
+  type MeetingStartFailure,
+} from '@/hooks/useCloudMeeting';
 import { useMeetingLiveActivity, type MeetingActivityPhase } from '@/hooks/useMeetingLiveActivity';
 import { useMeetingRecorderHealth } from '@/hooks/useMeetingRecorderHealth';
 import type { buildCalendarMeetingContext } from '@/lib/calendar/meetingContext';
+import { alertMeetingStartFailed } from '@/lib/alerts';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
 import {
   alertCloudMeetingCapture,
@@ -18,7 +23,12 @@ import {
 import { reportCaptureInterrupted, reportMeetingFinished } from '@/lib/meetingCaptureTelemetry';
 import { registerActiveMeeting } from '@/lib/notes/activeMeeting';
 import { captureMeetingAccount, type MeetingAccountFence } from '@/lib/notes/meetingAccountFence';
-import { captureCoverage, isCloudMeetingCapturing } from '@/lib/notes/meetingCapture';
+import {
+  captureCoverage,
+  isCloudMeetingCapturing,
+  meetingStartFailureNotice,
+} from '@/lib/notes/meetingCapture';
+import { showMicPermissionAlert } from '@/lib/permissions';
 import { Sentry } from '@/lib/sentry';
 import { excludeMeetingFileFromBackup, meetingRecordingUri } from '@/lib/transcriptAudio';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
@@ -46,7 +56,10 @@ export interface MeetingSession {
   capturedSeconds: number;
   /** True while startLocal waits for the recorder, before the phase leaves 'idle'. */
   starting: boolean;
-  cloud: Pick<CloudMeeting, 'status' | 'error' | 'utterances' | 'partialText' | 'liveSinceMs'>;
+  cloud: Pick<
+    CloudMeeting,
+    'status' | 'error' | 'startFailure' | 'utterances' | 'partialText' | 'liveSinceMs'
+  >;
   rawNotes: string;
   setRawNotes: (text: string) => void;
   startLocal: (input: MeetingStartInput) => Promise<boolean>;
@@ -109,6 +122,7 @@ export function MeetingSessionProvider({
   const updateNote = useNotesStore((s) => s.updateNote);
   const createMeetingNote = useNotesStore((s) => s.createMeetingNote);
   const transitionStatus = useNotesStore((s) => s.transitionStatus);
+  const deleteNote = useNotesStore((s) => s.deleteNote);
   const runMeetingPipeline = useNotesStore((s) => s.runMeetingPipeline);
   const finalizeCloudMeeting = useNotesStore((s) => s.finalizeCloudMeeting);
   const appendCloudMeetingUtterance = useNotesStore((s) => s.appendCloudMeetingUtterance);
@@ -313,8 +327,9 @@ export function MeetingSessionProvider({
   };
 
   // Cloud meetings don't pre-check the mic (the realtime session requests it); the note is
-  // created up front so live captions have somewhere to land. A session that never connects
-  // is resolved on Stop (finishCloud) as failed rather than a done, empty note.
+  // created up front so live captions have somewhere to land. A session whose start is refused
+  // (no microphone, a call holding the audio session) ends the meeting at once and takes the empty
+  // note with it (abandonFailedCloudStart); one that starts and later fails waits for Stop.
   const startCloud = (input: MeetingStartInput): boolean => {
     if (!isIdle()) return false;
     const context = input.context;
@@ -536,9 +551,58 @@ export function MeetingSessionProvider({
     }
   };
 
+  // The failure this session already ended a meeting for: the effect and a Stop can both see it.
+  const handledStartFailureRef = useRef<MeetingStartFailure | null>(null);
+  // A cloud start the session refused captured nothing and left no session to stop, so there is
+  // nothing to finish: the meeting ends now rather than waiting for Stop, and its note goes unless
+  // the user already wrote in it. Synchronous, so no newer meeting can start in between.
+  const abandonFailedCloudStart = (failure: MeetingStartFailure): void => {
+    if (phaseRef.current !== 'cloud-recording' || finishingRef.current) return;
+    if (handledStartFailureRef.current === failure) return;
+    handledStartFailureRef.current = failure;
+    const id = noteIdRef.current;
+    const fence = accountFenceRef.current;
+    const keepNote = rawNotesRef.current.trim() !== '';
+    // Before the session lets go of the note: the debounce stops with the meeting.
+    if (keepNote) saveRawNotesNow();
+    // First, so the store no longer refuses to delete the live meeting's note.
+    returnToIdle();
+    if (id == null) return;
+    // Another account's note is never deleted from here, and nothing about it is shown.
+    if (keepNote || !isOwnAccount(fence)) {
+      failNoteSafely(id);
+    } else {
+      try {
+        // A soft delete: sync drops a note that never reached the cloud without a request, and
+        // removes the cloud copy of one whose create went out while the start was failing.
+        deleteNote(id);
+      } catch (deleteError) {
+        Sentry.captureException(deleteError, {
+          tags: { feature: 'meeting-session', operation: 'delete_unstarted_note' },
+        });
+        failNoteSafely(id);
+      }
+    }
+    if (!isOwnAccount(fence)) return;
+    const notice = meetingStartFailureNotice(failure);
+    if (notice.kind === 'mic-permission') showMicPermissionAlert();
+    else alertMeetingStartFailed(notice.message);
+  };
+  const abandonFailedCloudStartRef = useRef(abandonFailedCloudStart);
+  abandonFailedCloudStartRef.current = abandonFailedCloudStart;
+  const cloudStartFailure = cloudMeeting.startFailure;
+  useEffect(() => {
+    if (cloudStartFailure != null) abandonFailedCloudStartRef.current(cloudStartFailure);
+  }, [cloudStartFailure]);
+
   const endMeeting = async (): Promise<void> => {
     const active = phaseRef.current;
     if ((active !== 'recording' && active !== 'cloud-recording') || finishingRef.current) return;
+    // A Stop that reaches a refused start before its effect does ends it the same way, once.
+    if (active === 'cloud-recording' && cloudMeeting.startFailure != null) {
+      abandonFailedCloudStart(cloudMeeting.startFailure);
+      return;
+    }
     finishingRef.current = true;
     const generation = generationRef.current;
     let markCaptured: () => void = () => undefined;
@@ -667,6 +731,7 @@ export function MeetingSessionProvider({
     cloud: {
       status: cloudMeeting.status,
       error: cloudMeeting.error,
+      startFailure: cloudMeeting.startFailure,
       utterances: cloudMeeting.utterances,
       partialText: cloudMeeting.partialText,
       liveSinceMs: cloudMeeting.liveSinceMs,

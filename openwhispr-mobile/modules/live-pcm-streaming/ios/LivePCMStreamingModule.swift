@@ -140,7 +140,8 @@ public class LivePCMStreamingModule: Module {
           promise.resolve(nil)
         } catch {
           self.teardownOnQueue()
-          promise.reject("PCM_START_FAILED", error.localizedDescription)
+          // A call holding the audio session gets its own code, so JS can say why.
+          promise.reject(StartRejection.code(for: error), error.localizedDescription)
         }
       }
     }

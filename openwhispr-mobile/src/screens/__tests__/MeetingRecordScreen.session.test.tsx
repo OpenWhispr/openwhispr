@@ -46,6 +46,7 @@ const mockUtterances = [{ text: 'We ship on Friday', startMs: 0, endMs: 1200 }];
 const mockCloud = {
   status: 'live',
   error: null,
+  startFailure: null,
   partialText: 'and then',
   utterances: mockUtterances,
   capturedSeconds: 12,
@@ -86,6 +87,8 @@ jest.mock('@/lib/sentry', () => ({
   Sentry: { captureException: jest.fn(), captureMessage: jest.fn() },
 }));
 jest.mock('@/lib/transcriptionLanguage', () => ({ getPreferredTranscriptionLanguage: () => 'en' }));
+// The permission alert's modal pulls in the icon set, which this suite does not render.
+jest.mock('@/lib/permissions', () => ({ showMicPermissionAlert: jest.fn() }));
 
 let mockCloudRecordingProps: Record<string, unknown> | null = null;
 jest.mock('expo-router', () => ({

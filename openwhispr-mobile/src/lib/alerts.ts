@@ -36,6 +36,12 @@ export function alertMeetingNoteNotDeletable(): void {
   Alert.alert('Meeting in progress', 'End the meeting before deleting its note.');
 }
 
+// The meeting ended as soon as its recording was refused, so this is the only place the user
+// learns why the screen went back to the start.
+export function alertMeetingStartFailed(message: string): void {
+  Alert.alert("Recording didn't start", message);
+}
+
 // The store keeps renewing a subscription after the account behind it is gone,
 // and the server cannot cancel it, so the user has to before deleting.
 function storeSubscriptionWarning(): string {

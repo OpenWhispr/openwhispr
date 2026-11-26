@@ -46,7 +46,14 @@ beforeEach(() => {
     path: 'local',
     capturing: true,
     capturedSeconds: 65,
-    cloud: { status: 'live', error: null, utterances: [], partialText: '', liveSinceMs: null },
+    cloud: {
+      status: 'live',
+      error: null,
+      startFailure: null,
+      utterances: [],
+      partialText: '',
+      liveSinceMs: null,
+    },
     stop,
   };
 });

@@ -10,13 +10,15 @@ import { addRecordingFailedListener } from '../../modules/live-pcm-streaming/src
 import {
   deriveCloudMeetingStatus,
   initialCloudMeetingSession,
+  meetingStartFailureFrom,
   trackCaptureGrowth,
   type CloudMeetingStatus,
+  type MeetingStartFailure,
 } from '@/lib/notes/meetingCapture';
 import { reportCaptureInterrupted, reportSessionEnded } from '@/lib/meetingCaptureTelemetry';
 import { WAV_HEADER_BYTES } from '@/lib/notes/wavRange';
 
-export type { CloudMeetingStatus } from '@/lib/notes/meetingCapture';
+export type { CloudMeetingStatus, MeetingStartFailure } from '@/lib/notes/meetingCapture';
 
 export interface CloudMeetingResult {
   utterances: RealtimeUtterance[];
@@ -43,6 +45,11 @@ const recordingHoldsAudio = async (uri: string): Promise<boolean> => {
 export interface CloudMeeting {
   status: CloudMeetingStatus;
   error: string | null;
+  /**
+   * Set when the session itself never started (the start was refused, so nothing was captured
+   * and there is nothing to stop). A session that ends mid-meeting leaves it null.
+   */
+  startFailure: MeetingStartFailure | null;
   partialText: string;
   utterances: RealtimeUtterance[];
   /** Audio the mic actually delivered, in seconds. */
@@ -96,6 +103,9 @@ export function useCloudMeeting({
   const [stalled, setStalled] = useState(initial.stalled);
   const [reconnecting, setReconnecting] = useState(initial.reconnecting);
   const [error, setError] = useState<string | null>(initial.error);
+  const [startFailure, setStartFailure] = useState<MeetingStartFailure | null>(
+    initial.startFailure,
+  );
   const [partialText, setPartialText] = useState(initial.partialText);
   const [utterances, setUtterances] = useState<RealtimeUtterance[]>(initial.utterances);
   const [capturedSeconds, setCapturedSeconds] = useState(initial.capturedSeconds);
@@ -127,6 +137,7 @@ export function useCloudMeeting({
       setStalled(fresh.stalled);
       setReconnecting(fresh.reconnecting);
       setError(fresh.error);
+      setStartFailure(fresh.startFailure);
       setPartialText(fresh.partialText);
       setUtterances(fresh.utterances);
       setCapturedSeconds(fresh.capturedSeconds);
@@ -261,7 +272,9 @@ export function useCloudMeeting({
       })
       .catch((e) => {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : String(e));
+        const failure = meetingStartFailureFrom(e);
+        setError(failure.message);
+        setStartFailure(failure);
         setFailed(true);
         reportEnded();
       });
@@ -339,6 +352,7 @@ export function useCloudMeeting({
   return {
     status,
     error,
+    startFailure,
     partialText,
     utterances,
     capturedSeconds,

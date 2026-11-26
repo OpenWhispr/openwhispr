@@ -19,7 +19,14 @@ const createSession = (overrides: Partial<MeetingSession> = {}): MeetingSession 
   capturing: false,
   capturedSeconds: 0,
   starting: false,
-  cloud: { status: 'connecting', error: null, utterances: [], partialText: '', liveSinceMs: null },
+  cloud: {
+    status: 'connecting',
+    error: null,
+    startFailure: null,
+    utterances: [],
+    partialText: '',
+    liveSinceMs: null,
+  },
   rawNotes: '',
   setRawNotes: jest.fn(),
   startLocal: jest.fn(async () => true),
@@ -192,6 +199,7 @@ describe('MeetingRecordScreen', () => {
       cloud: {
         status: 'live',
         error: null,
+        startFailure: null,
         utterances: utterances as MeetingSession['cloud']['utterances'],
         partialText: 'and then',
         liveSinceMs: 1000,

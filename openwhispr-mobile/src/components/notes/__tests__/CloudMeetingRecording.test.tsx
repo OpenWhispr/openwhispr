@@ -52,3 +52,36 @@ describe('CloudMeetingRecording status indicator', () => {
     expect(screen.getByText('The microphone was interrupted. Trying to resume…')).toBeTruthy();
   });
 });
+
+const renderError = (error: string | null, startFailed: boolean) =>
+  render(
+    <CloudMeetingRecording
+      status="error"
+      captureStarted={false}
+      error={error}
+      startFailed={startFailed}
+      capturedSeconds={0}
+      rawNotes=""
+      onChangeRawNotes={jest.fn()}
+      utterances={[]}
+      partialText=""
+      onStop={jest.fn()}
+    />,
+  );
+
+describe('CloudMeetingRecording error line', () => {
+  it('says a meeting that ended mid-way has stopped recording', () => {
+    const screen = renderError('Realtime WebSocket closed (code 1011)', false);
+
+    expect(
+      screen.getByText('Realtime WebSocket closed (code 1011). Recording has stopped.'),
+    ).toBeTruthy();
+  });
+
+  it('never says a meeting that never started has stopped recording', () => {
+    const screen = renderError('Session activation failed', true);
+
+    expect(screen.queryByText(/Recording has stopped/)).toBeNull();
+    expect(screen.queryByText(/Session activation failed/)).toBeNull();
+  });
+});

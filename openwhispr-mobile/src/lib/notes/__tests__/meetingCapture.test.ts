@@ -8,6 +8,8 @@ import {
   formatClock,
   meetingBarState,
   meetingCaptureAlert,
+  meetingStartFailureFrom,
+  meetingStartFailureNotice,
   partialCaptureMessage,
   trackCaptureGrowth,
 } from '../meetingCapture';
@@ -119,6 +121,7 @@ describe('initialCloudMeetingSession', () => {
       interruptions: 0,
       reconnects: 0,
       utteranceCount: 0,
+      startFailure: null,
       clock: { lastCapturedMs: 0, lastGrowthAtMs: 10_000 },
     });
   });
@@ -370,5 +373,85 @@ describe('formatClock', () => {
     expect(formatClock(3599)).toBe('59:59');
     expect(formatClock(3600)).toBe('1:00:00');
     expect(formatClock(3725)).toBe('1:02:05');
+  });
+});
+
+const codedError = (code: string, message: string): Error =>
+  Object.assign(new Error(message), { code });
+
+describe('meetingStartFailureFrom', () => {
+  it('keeps the native code and the message', () => {
+    expect(
+      meetingStartFailureFrom(codedError('MIC_UNAVAILABLE', 'Session activation failed')),
+    ).toEqual({ code: 'MIC_UNAVAILABLE', message: 'Session activation failed' });
+  });
+
+  it('has no code for an error without one, or a code that is not a string', () => {
+    expect(meetingStartFailureFrom(new Error('Token request failed'))).toEqual({
+      code: null,
+      message: 'Token request failed',
+    });
+    expect(meetingStartFailureFrom(Object.assign(new Error('x'), { code: 7 }))).toEqual({
+      code: null,
+      message: 'x',
+    });
+  });
+
+  it('reads a thrown non-error as its text', () => {
+    expect(meetingStartFailureFrom('lease refused')).toEqual({
+      code: null,
+      message: 'lease refused',
+    });
+  });
+});
+
+describe('meetingStartFailureNotice', () => {
+  const CALL_MESSAGE = "Can't record during a call. End the call, then try again.";
+
+  it('says a call holds the microphone when the session refused to activate', () => {
+    expect(
+      meetingStartFailureNotice({ code: 'MIC_UNAVAILABLE', message: 'Session activation failed' }),
+    ).toEqual({ kind: 'message', message: CALL_MESSAGE });
+  });
+
+  it('reads an older build that only reports the activation failure as a call too', () => {
+    expect(
+      meetingStartFailureNotice({
+        code: 'PCM_START_FAILED',
+        message: 'The operation couldn’t be completed. Session activation failed',
+      }),
+    ).toEqual({ kind: 'message', message: CALL_MESSAGE });
+  });
+
+  it('shows the microphone access alert when permission was denied', () => {
+    expect(
+      meetingStartFailureNotice({
+        code: 'MIC_PERMISSION_DENIED',
+        message: 'Microphone permission was not granted',
+      }),
+    ).toEqual({ kind: 'mic-permission' });
+  });
+
+  it('gives the reason for any other failure', () => {
+    expect(
+      meetingStartFailureNotice({
+        code: 'PCM_START_FAILED',
+        message: 'Microphone input format is unavailable',
+      }),
+    ).toEqual({
+      kind: 'message',
+      message: "Couldn't start recording. Microphone input format is unavailable.",
+    });
+    expect(meetingStartFailureNotice({ code: null, message: 'Token refused.' })).toEqual({
+      kind: 'message',
+      message: "Couldn't start recording. Token refused.",
+    });
+  });
+
+  it('says only that recording did not start when there is no reason', () => {
+    expect(meetingStartFailureNotice({ code: null, message: '  ' })).toEqual({
+      kind: 'message',
+      message: "Couldn't start recording.",
+    });
   });
 });

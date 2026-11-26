@@ -10,6 +10,9 @@ import type { CloudMeetingResult } from '@/hooks/useCloudMeeting';
 import { isMeetingActive, stopActiveMeeting } from '@/lib/notes/activeMeeting';
 import { alertCloudMeetingCapture, alertIfPartialCapture } from '@/lib/meetingCaptureAlerts';
 import { useMeetingLiveActivity } from '@/hooks/useMeetingLiveActivity';
+import { alertMeetingStartFailed } from '@/lib/alerts';
+import { showMicPermissionAlert } from '@/lib/permissions';
+import type { MeetingStartFailure } from '@/lib/notes/meetingCapture';
 
 interface MockNote {
   id: number;
@@ -22,6 +25,7 @@ const mockState = {
   createMeetingNote: jest.fn(),
   updateNote: jest.fn(),
   transitionStatus: jest.fn(),
+  deleteNote: jest.fn(),
   runMeetingPipeline: jest.fn(),
   finalizeCloudMeeting: jest.fn(),
   appendCloudMeetingUtterance: jest.fn(),
@@ -52,7 +56,8 @@ jest.mock('@/hooks/useAudioRecording', () => ({
 
 const mockCloud = {
   status: 'live',
-  error: null,
+  error: null as string | null,
+  startFailure: null as MeetingStartFailure | null,
   partialText: '',
   utterances: [],
   capturedSeconds: 30,
@@ -91,6 +96,10 @@ jest.mock('@/lib/meetingCaptureTelemetry', () => ({
   reportCaptureInterrupted: jest.fn(),
   reportMeetingFinished: jest.fn(),
 }));
+
+jest.mock('@/lib/alerts', () => ({ alertMeetingStartFailed: jest.fn() }));
+
+jest.mock('@/lib/permissions', () => ({ showMicPermissionAlert: jest.fn() }));
 
 const mockUpdateNoteMeta = jest.fn();
 jest.mock('@/data', () => ({
@@ -159,12 +168,26 @@ const Probe = (): null => {
   return null;
 };
 
-const renderProvider = (): ReturnType<typeof render> =>
-  render(
-    <MeetingSessionProvider>
-      <Probe />
-    </MeetingSessionProvider>,
-  );
+// A fresh element each time, or React skips the provider's re-render altogether.
+const providerTree = (): React.JSX.Element => (
+  <MeetingSessionProvider>
+    <Probe />
+  </MeetingSessionProvider>
+);
+
+const renderProvider = (): ReturnType<typeof render> => render(providerTree());
+
+const CALL_FAILURE: MeetingStartFailure = {
+  code: 'MIC_UNAVAILABLE',
+  message: 'Session activation failed',
+};
+
+// What the cloud hook reports when its session's start was refused: nothing was captured.
+const refuseCloudStart = (failure: MeetingStartFailure = CALL_FAILURE): void => {
+  mockCloud.status = 'error';
+  mockCloud.error = failure.message;
+  mockCloud.startFailure = failure;
+};
 
 const setMockUser = (id: string | null): void => {
   (
@@ -204,6 +227,8 @@ beforeEach(() => {
   };
   mockCloud.stop.mockResolvedValue(result);
   mockCloud.status = 'live';
+  mockCloud.error = null;
+  mockCloud.startFailure = null;
   mockCloud.liveSinceMs = null;
   mockAudioOptions = {};
   mockAccountLinks.clear();
@@ -684,6 +709,171 @@ describe('MeetingSessionProvider', () => {
     });
     expect(mockCloud.stop).toHaveBeenCalledTimes(1);
     expect(mockState.finalizeCloudMeeting).toHaveBeenCalledTimes(1);
+  });
+
+  describe('a cloud start that fails', () => {
+    it('returns to idle, removes the empty note and says why', () => {
+      let activeWhenDeleted: boolean | null = null;
+      mockState.deleteNote.mockImplementation(() => {
+        // The store refuses to delete the live meeting's note, so the session lets go first.
+        activeWhenDeleted = isMeetingActive();
+      });
+      const view = renderProvider();
+      act(() => {
+        session.startCloud(input);
+      });
+
+      act(() => {
+        refuseCloudStart();
+        view.rerender(providerTree());
+      });
+
+      expect(session.phase).toBe('idle');
+      expect(session.noteId).toBeNull();
+      expect(mockState.deleteNote).toHaveBeenCalledTimes(1);
+      expect(mockState.deleteNote).toHaveBeenCalledWith(42);
+      expect(activeWhenDeleted).toBe(false);
+      expect(mockState.transitionStatus).not.toHaveBeenCalled();
+      expect(alertMeetingStartFailed).toHaveBeenCalledTimes(1);
+      expect(alertMeetingStartFailed).toHaveBeenCalledWith(
+        "Can't record during a call. End the call, then try again.",
+      );
+      // Nothing was captured: no session to stop and nothing to finalize.
+      expect(mockCloud.stop).not.toHaveBeenCalled();
+      expect(mockState.finalizeCloudMeeting).not.toHaveBeenCalled();
+      expect(session.finishedNoteId).toBeNull();
+    });
+
+    it('lets a new meeting start right after', () => {
+      const view = renderProvider();
+      act(() => {
+        session.startCloud(input);
+      });
+      act(() => {
+        refuseCloudStart();
+        view.rerender(providerTree());
+      });
+      // The hook starts the next session with no start failure.
+      mockCloud.status = 'connecting';
+      mockCloud.error = null;
+      mockCloud.startFailure = null;
+
+      let started = false;
+      act(() => {
+        started = session.startCloud(input);
+      });
+
+      expect(started).toBe(true);
+      expect(session.phase).toBe('cloud-recording');
+      expect(mockCloudEnabled).toBe(true);
+      expect(mockState.deleteNote).toHaveBeenCalledTimes(1);
+      expect(alertMeetingStartFailed).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps a note the user already wrote in, saved and marked failed', () => {
+      const view = renderProvider();
+      act(() => {
+        session.startCloud(input);
+      });
+      act(() => {
+        session.setRawNotes('Agenda: pricing');
+      });
+
+      act(() => {
+        refuseCloudStart();
+        view.rerender(providerTree());
+      });
+
+      expect(session.phase).toBe('idle');
+      expect(mockState.deleteNote).not.toHaveBeenCalled();
+      expect(mockState.updateNote).toHaveBeenCalledWith(42, { content: 'Agenda: pricing' });
+      expect(mockState.transitionStatus).toHaveBeenCalledWith(42, 'failed');
+      expect(alertMeetingStartFailed).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows the microphone access alert when permission was denied', () => {
+      const view = renderProvider();
+      act(() => {
+        session.startCloud(input);
+      });
+
+      act(() => {
+        refuseCloudStart({
+          code: 'MIC_PERMISSION_DENIED',
+          message: 'Microphone permission was not granted',
+        });
+        view.rerender(providerTree());
+      });
+
+      expect(showMicPermissionAlert).toHaveBeenCalledTimes(1);
+      expect(alertMeetingStartFailed).not.toHaveBeenCalled();
+      expect(mockState.deleteNote).toHaveBeenCalledWith(42);
+    });
+
+    it('a Stop racing the failure ends the meeting once, without the finish', async () => {
+      const view = renderProvider();
+      act(() => {
+        session.startCloud(input);
+      });
+
+      let stopping: Promise<void> = Promise.resolve();
+      act(() => {
+        refuseCloudStart();
+        view.rerender(providerTree());
+        stopping = session.stop();
+      });
+      await act(async () => {
+        await stopping;
+        await session.stop();
+      });
+
+      expect(session.phase).toBe('idle');
+      expect(mockCloud.stop).not.toHaveBeenCalled();
+      expect(mockState.finalizeCloudMeeting).not.toHaveBeenCalled();
+      expect(mockState.transitionStatus).not.toHaveBeenCalled();
+      expect(mockState.deleteNote).toHaveBeenCalledTimes(1);
+      expect(alertMeetingStartFailed).toHaveBeenCalledTimes(1);
+    });
+
+    it('a failure seen after the account changed keeps the note and tells no one', async () => {
+      setMockUser('first');
+      const view = renderProvider();
+      act(() => {
+        session.startCloud(input);
+      });
+
+      await act(async () => {
+        refuseCloudStart();
+        view.rerender(providerTree());
+        setMockUser('second');
+      });
+
+      expect(session.phase).toBe('idle');
+      expect(mockState.deleteNote).not.toHaveBeenCalled();
+      expect(mockState.transitionStatus).toHaveBeenCalledWith(42, 'failed');
+      expect(alertMeetingStartFailed).not.toHaveBeenCalled();
+      expect(mockCloud.stop).not.toHaveBeenCalled();
+    });
+
+    it('a session that ends mid-meeting still waits for Stop', async () => {
+      const view = renderProvider();
+      act(() => {
+        session.startCloud(input);
+      });
+      act(() => {
+        mockCloud.status = 'error';
+        view.rerender(providerTree());
+      });
+
+      expect(session.phase).toBe('cloud-recording');
+      expect(mockState.deleteNote).not.toHaveBeenCalled();
+      expect(alertMeetingStartFailed).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await session.stop();
+      });
+      expect(mockCloud.stop).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('non-React access', () => {

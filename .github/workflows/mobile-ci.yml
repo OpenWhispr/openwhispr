@@ -139,6 +139,8 @@ jobs:
         run: sh openwhispr-mobile/modules/live-pcm-streaming/tests/run-meeting-recording-writer-tests.sh
       - name: Run WAV header tests
         run: sh openwhispr-mobile/modules/live-pcm-streaming/tests/run-wav-header-tests.sh
+      - name: Run meeting start rejection tests
+        run: sh openwhispr-mobile/modules/live-pcm-streaming/tests/run-start-rejection-tests.sh
 
   mobile-status:
     name: Mobile CI

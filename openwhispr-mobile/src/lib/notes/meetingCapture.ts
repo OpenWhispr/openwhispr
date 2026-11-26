@@ -82,6 +82,8 @@ export interface CloudMeetingSessionState {
   interruptions: number;
   reconnects: number;
   utteranceCount: number;
+  /** Set when the session never started; mid-meeting failures leave it null. */
+  startFailure: MeetingStartFailure | null;
   clock: CaptureClock;
 }
 
@@ -105,7 +107,48 @@ export function initialCloudMeetingSession(nowMs: number): CloudMeetingSessionSt
     interruptions: 0,
     reconnects: 0,
     utteranceCount: 0,
+    startFailure: null,
     clock: { lastCapturedMs: 0, lastGrowthAtMs: nowMs },
+  };
+}
+
+/** Why a cloud meeting's session never started: nothing was captured and there is no session. */
+export interface MeetingStartFailure {
+  /** The native rejection code (`MIC_UNAVAILABLE`, `MIC_PERMISSION_DENIED`, …); null when none. */
+  code: string | null;
+  message: string;
+}
+
+export function meetingStartFailureFrom(error: unknown): MeetingStartFailure {
+  const code = (error as { code?: unknown } | null)?.code;
+  return {
+    code: typeof code === 'string' ? code : null,
+    message: error instanceof Error ? error.message : String(error),
+  };
+}
+
+const MIC_HELD_BY_CALL_MESSAGE = "Can't record during a call. End the call, then try again.";
+
+/** What to tell the user about a start that failed: the microphone access alert, or a message. */
+export type MeetingStartFailureNotice =
+  | { kind: 'mic-permission' }
+  | { kind: 'message'; message: string };
+
+export function meetingStartFailureNotice(failure: MeetingStartFailure): MeetingStartFailureNotice {
+  if (failure.code === 'MIC_PERMISSION_DENIED') return { kind: 'mic-permission' };
+  // Builds from before MIC_UNAVAILABLE report a call holding the audio session only through
+  // iOS's (English) description of the refused activation.
+  if (
+    failure.code === 'MIC_UNAVAILABLE' ||
+    (failure.code === 'PCM_START_FAILED' && failure.message.includes('Session activation failed'))
+  ) {
+    return { kind: 'message', message: MIC_HELD_BY_CALL_MESSAGE };
+  }
+  const reason = failure.message.trim();
+  if (!reason) return { kind: 'message', message: "Couldn't start recording." };
+  return {
+    kind: 'message',
+    message: `Couldn't start recording. ${reason}${/[.!?…]$/.test(reason) ? '' : '.'}`,
   };
 }
 
