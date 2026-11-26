@@ -6,11 +6,17 @@ export interface RecorderHealth {
 }
 
 export interface HealthRecorder {
-  getStatus(): { isRecording: boolean; durationMillis: number };
+  // The native recorder's own state.
+  readonly isRecording: boolean;
+  // expo-audio's record of its state, which keeps saying recording after iOS pauses the recorder
+  // for a call or refuses a record() while the call holds the microphone.
+  getStatus(): { isRecording: boolean };
+  pause(): void;
   record(): void;
 }
 
 const POLL_MS = 1000;
+const MAX_POLL_GAP_MS = 2 * POLL_MS;
 const RESUME_RETRY_MS = 2000;
 
 const IDLE_HEALTH: RecorderHealth = { capturing: false, capturedMs: 0 };
@@ -18,11 +24,37 @@ const IDLE_HEALTH: RecorderHealth = { capturing: false, capturedMs: 0 };
 // "not capturing" here would flash a false "Not recording" at the start of every meeting.
 const STARTING_HEALTH: RecorderHealth = { capturing: true, capturedMs: 0 };
 
+function isCapturing(recorder: HealthRecorder): boolean {
+  try {
+    return recorder.isRecording;
+  } catch {
+    // A recorder that is mid-teardown can throw; report it as not capturing.
+    return false;
+  }
+}
+
+function resume(recorder: HealthRecorder): void {
+  try {
+    // expo's record() does nothing unless its own state is paused, and that state still reads
+    // recording when iOS paused the recorder without telling it.
+    if (recorder.getStatus().isRecording) recorder.pause();
+    recorder.record();
+    // Refused while a call holds the microphone, which leaves expo reading recording again and
+    // would make its own resume when the call ends a no-op. That resume can't wait for the next
+    // attempt here: the app may be suspended by then. Only while expo reads recording: Android's
+    // record() on an unprepared recorder does nothing, and pausing that would block its next prepare.
+    if (!recorder.isRecording && recorder.getStatus().isRecording) recorder.pause();
+  } catch {
+    // The next attempt is two seconds away; the screen already shows the recorder as paused.
+  }
+}
+
 /**
  * Polls once a second while `active`; each active period starts as capturing at zero, and the
- * last values are kept once it ends (processing still reads the captured time). Asks a paused
- * recorder to resume at most every 2 s, and only while `shouldResume()` allows it (not during a
- * stop).
+ * last values are kept once it ends (processing still reads the captured time). Capture comes
+ * from the native recorder and the captured time is counted here, since expo's `durationMillis`
+ * keeps counting while the native recorder is stopped. Asks a paused recorder to resume at most
+ * every 2 s, and only while `shouldResume()` allows it (not during a stop).
  */
 export function useMeetingRecorderHealth(
   recorder: HealthRecorder | null,
@@ -46,30 +78,29 @@ export function useMeetingRecorderHealth(
   useEffect(() => {
     if (!recorder || !active) return;
     let lastResumeAt = Number.NEGATIVE_INFINITY;
+    let lastPollAt = 0;
+    let wasCapturing = false;
+    let capturedMs = 0;
 
     const poll = (): void => {
-      let status: ReturnType<HealthRecorder['getStatus']>;
-      try {
-        status = recorder.getStatus();
-      } catch {
-        // A recorder that is mid-teardown can throw; report it as not capturing.
-        status = { isRecording: false, durationMillis: 0 };
+      const now = Date.now();
+      const capturing = isCapturing(recorder);
+      // Only the time between two polls that both saw it capturing counts: a second it stopped
+      // or resumed in is left out rather than counted while nothing may have been recorded. A
+      // longer gap means the app was suspended in between, through a call expo paused and resumed
+      // the recorder for, so at most one missed poll of it counts.
+      if (capturing && wasCapturing) capturedMs += Math.min(now - lastPollAt, MAX_POLL_GAP_MS);
+      lastPollAt = now;
+      wasCapturing = capturing;
+      if (!capturing && shouldResumeRef.current() && now - lastResumeAt >= RESUME_RETRY_MS) {
+        lastResumeAt = now;
+        resume(recorder);
       }
-      if (!status.isRecording && shouldResumeRef.current()) {
-        const now = Date.now();
-        if (now - lastResumeAt >= RESUME_RETRY_MS) {
-          lastResumeAt = now;
-          try {
-            recorder.record();
-          } catch {
-            // The next attempt is two seconds away; the screen already shows the recorder as paused.
-          }
-        }
-      }
+      const next: RecorderHealth = { capturing, capturedMs };
       setHealth((previous) =>
-        previous.capturing === status.isRecording && previous.capturedMs === status.durationMillis
+        previous.capturing === next.capturing && previous.capturedMs === next.capturedMs
           ? previous
-          : { capturing: status.isRecording, capturedMs: status.durationMillis },
+          : next,
       );
     };
 
