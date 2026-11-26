@@ -1,4 +1,4 @@
-import type { KeyboardTone, ToneAppCategory } from '@/types';
+import type { KeyboardTone, ToneAppCategory } from '@/android/types';
 import { sharedDictionaryHint } from '@/lib/sharedDictionaryHints';
 
 // Tone sentences ported verbatim from openwhispr-api/lib/prompts.ts (TONE_INSTRUCTIONS).

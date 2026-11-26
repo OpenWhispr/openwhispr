@@ -1,6 +1,6 @@
 import { useConfigStore } from '@/android/store/useConfigStore';
 import type { InferenceSelection } from '@/android/providers/mobileProviders';
-import type { UserConfig } from '@/types';
+import type { UserConfig } from '@/android/types';
 
 /**
  * Android's model choices for your own key, checked against each provider's own model and

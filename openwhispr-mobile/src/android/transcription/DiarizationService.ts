@@ -7,7 +7,7 @@ import {
 } from '@/lib/diarization/diarizationBridge';
 import { mergeWordsWithSpeakers } from '@/lib/diarization/mergeSegments';
 import { applyProvisional } from '@/lib/diarization/speakerState';
-import type { TranscriptionResponse, TranscriptionStatus } from '@/types';
+import type { TranscriptionResponse, TranscriptionStatus } from '@/android/types';
 import type { NewSegment, NewSpeaker, Speaker } from '@/data/types';
 
 /**

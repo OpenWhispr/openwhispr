@@ -14,7 +14,7 @@ import { formatTranscriptForExport } from '@/lib/diarization/transcriptDisplay';
 import { parseCalendarParticipants } from '@/lib/calendar/meetingContext';
 import { buildMeetingNotesInput, type MeetingNotesContext } from '@/lib/notes/meetingNotesInput';
 import { isDefaultGenerateNotesAction } from '@/android/lib/notes/generateNotesPrompt';
-import type { StructuredMeetingNotes } from '@/types';
+import type { StructuredMeetingNotes } from '@/android/types';
 
 const DEFAULT_LOCAL_MEETING_ACTION_PROMPT =
   'Transform this meeting transcript into concise, actionable meeting notes.';

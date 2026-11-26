@@ -8,7 +8,7 @@ import {
 import { snapshotTranscriptionJob } from '../lib/inferenceRouting';
 import { isNoSpeechError } from '../lib/permissions';
 import { toFriendlyTranscriptionErrorMessage } from '../lib/transcriptionErrors';
-import type { TranscriptionProvider } from '../types';
+import type { TranscriptionProvider } from '@/android/types';
 import type {
   CommonFileUploadOptions,
   FileUploadLifecycle,

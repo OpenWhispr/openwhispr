@@ -1,5 +1,5 @@
 import { create, type StoreApi } from 'zustand';
-import type { UserConfig } from '@/types';
+import type { UserConfig } from '@/android/types';
 import { StorageService } from '@/services/storage/StorageService';
 import {
   localModeUpgradeConfig,

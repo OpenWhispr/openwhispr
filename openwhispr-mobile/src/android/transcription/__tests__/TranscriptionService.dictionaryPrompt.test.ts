@@ -7,7 +7,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { BackgroundUploader } from '../../../../modules/background-uploader/src';
 import { transcribeWithProvider } from '@/services/providers/ProviderExecution';
 import { TranscriptionService } from '@/android/transcription/TranscriptionService';
-import type { TranscriptionRequest } from '@/types';
+import type { TranscriptionRequest } from '@/android/types';
 
 jest.mock('expo-constants', () => ({
   __esModule: true,

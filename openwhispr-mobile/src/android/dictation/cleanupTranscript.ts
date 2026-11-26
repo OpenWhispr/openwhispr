@@ -12,7 +12,7 @@ import type {
   LocalReasoningReadiness,
   ReasoningRequest,
   TextInferenceSnapshot,
-} from '@/types';
+} from '@/android/types';
 import { getDictationAgentName } from '@/lib/dictationAgent';
 import { buildDictationHintTiers } from '@/lib/dictationHints';
 import { splitLlmDictionary, type LlmDictionary } from '@/android/dictation/snippets';

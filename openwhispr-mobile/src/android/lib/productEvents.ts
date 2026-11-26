@@ -1,6 +1,6 @@
 import { randomUUID, uuidFromKey } from '@/lib/uuid';
 import { WORD_COUNTER_VERSION } from '@/lib/wordCount';
-import type { ProcessingMode, TranscriptionProvider } from '@/types';
+import type { ProcessingMode, TranscriptionProvider } from '@/android/types';
 
 // Dashboard funnel milestones (/api/product-events/batch). Content-free: never
 // transcripts, audio, titles or provider details. Sent with every upload as

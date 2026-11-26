@@ -1,4 +1,4 @@
-import type { ReasoningRequest } from '@/types';
+import type { ReasoningRequest } from '@/android/types';
 import type { ProviderPrompt } from '@/android/reasoning/buildProviderPrompt';
 import type { SignalOwner } from '@/android/transcription/transcriptionLifecycle';
 import { buildLocalReasoningInstructions } from '@/services/reasoning/LocalReasoningService';

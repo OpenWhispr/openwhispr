@@ -15,7 +15,7 @@ import { cleanupTranscript } from '@/android/dictation/cleanupTranscript';
 import type { TranscriptionJobRoute } from '@/lib/inferenceRouting';
 import { TranscriptionService } from '@/android/transcription/TranscriptionService';
 import { ReasoningService } from '@/android/reasoning/ReasoningService';
-import type { TranscriptionProvider } from '@/types';
+import type { TranscriptionProvider } from '@/android/types';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 jest.mock('@/lib/inferenceRouting', () => ({ snapshotTextInference: () => ({}) }));

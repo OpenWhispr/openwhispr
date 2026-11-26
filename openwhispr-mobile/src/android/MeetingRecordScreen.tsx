@@ -38,7 +38,7 @@ import { LocalMeetingRecorder } from '@/android/LocalMeetingRecorder';
 import { createLocalMeetingContext } from '@/android/localMeetingContext';
 import { Sentry } from '@/android/lib/sentry';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
-import type { TranscriptionStatus } from '@/types';
+import type { TranscriptionStatus } from '@/android/types';
 type Phase =
   | 'prompt'
   | 'unsupported'

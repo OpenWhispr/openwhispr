@@ -62,7 +62,7 @@ import { ReasoningService } from '@/android/reasoning/ReasoningService';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useTranscriptStore } from '@/store/useTranscriptStore';
 import { modelReady } from '../models';
-import type { UserConfig } from '@/types';
+import type { UserConfig } from '@/android/types';
 
 const config: Partial<UserConfig> = { androidHistoryDays: -1 };
 const history = {

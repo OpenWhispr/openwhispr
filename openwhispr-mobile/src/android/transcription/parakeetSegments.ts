@@ -1,5 +1,5 @@
 import type { ParakeetTokenTiming } from '../../../modules/parakeet-asr/src';
-import type { WhisperSegment } from '@/types';
+import type { WhisperSegment } from '@/android/types';
 
 // Parakeet TDT emits SentencePiece subword tokens; a token starting with the boundary marker
 // (▁, U+2581) or a literal space opens a new word. Punctuation tokens carry no marker, so they

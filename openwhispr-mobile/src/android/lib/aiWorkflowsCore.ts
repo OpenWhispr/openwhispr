@@ -7,7 +7,7 @@ import {
   providerDisplayName,
   type MobileInferenceScope,
 } from '@/android/providers/mobileProviders';
-import type { ProcessingMode, UserConfig } from '@/types';
+import type { ProcessingMode, UserConfig } from '@/android/types';
 
 export interface AiWorkflowPolicy {
   copy: {

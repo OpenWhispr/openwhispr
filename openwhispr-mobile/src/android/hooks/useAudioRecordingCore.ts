@@ -27,7 +27,7 @@ import {
   type ProductEventsCaptureContext,
 } from '@/android/lib/productEvents';
 import { countSpokenWords } from '@/lib/wordCount';
-import type { TranscriptionProvider } from '@/types';
+import type { TranscriptionProvider } from '@/android/types';
 import {
   getExpoAudioModule,
   isExpoAudioAvailable,

@@ -19,7 +19,7 @@ import { selectedTextModel } from './LocalTextModel';
 import { selectedSpeechModel } from './speechSelection';
 import { speechModelSupportsLanguages } from './speechCapabilities';
 import type { Recording } from '../../modules/android-dictation/src';
-import type { KeyboardTone } from '@/types';
+import type { KeyboardTone } from '@/android/types';
 import { dictationToneStyle, type ToneKind } from './style/toneStyle';
 import { cleanupSavedOnDevice } from '@/lib/aiWorkflows.android';
 import i18n from './strings';

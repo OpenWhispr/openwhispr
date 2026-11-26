@@ -3,7 +3,7 @@ import { useConfigStore } from '@/android/store/useConfigStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { hasRealAccountHistory } from '@/sync/syncIdentity';
-import type { LocalReasoningReadiness, UserConfig } from '@/types';
+import type { LocalReasoningReadiness, UserConfig } from '@/android/types';
 import { dictationModeConfig, holdOnDeviceConfig } from '@/lib/inferenceModes';
 import { OnboardingError } from '@/lib/onboardingErrors';
 

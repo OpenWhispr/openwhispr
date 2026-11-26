@@ -1,4 +1,4 @@
-import type { UserConfig } from '../types';
+import type { UserConfig } from '@/android/types';
 import type { ConfigStoreContext, ConfigStoreLifecycle } from '@/android/store/createConfigStore';
 
 export function createAndroidConfigLifecycle({

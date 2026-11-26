@@ -1,4 +1,4 @@
-import type { ReasoningRoutingOptions } from '@/types';
+import type { ReasoningRoutingOptions } from '@/android/types';
 import { generateNoteTitleCore } from '@/android/utils/generateTitleCore';
 export { deriveLocalTitle } from '@/android/utils/generateTitleCore';
 

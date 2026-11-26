@@ -6,7 +6,7 @@ import {
   type TrackingAuthorizationStatus,
 } from '@/lib/trackingTransparency';
 import type { SuperwallPlacement } from '@/lib/superwall';
-import type { TranscriptionProvider } from '@/types';
+import type { TranscriptionProvider } from '@/android/types';
 
 type AppsFlyerSdk = (typeof import('react-native-appsflyer'))['default'];
 

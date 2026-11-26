@@ -3,7 +3,7 @@ import { useConfigStore } from '@/android/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import type { InferenceMode, InferenceSelection } from '@/android/providers/mobileProviders';
 import { getProviderCredentialReference } from '@/services/providers/ProviderCredentials';
-import type { UserConfig } from '@/types';
+import type { UserConfig } from '@/android/types';
 import { upgradeSavedModels } from './androidModels';
 import type { KeyProviderId } from './keyCheck';
 import { SHEET_TASKS, providerCanRun, startingModel, type SheetTask } from './ownKey';

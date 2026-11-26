@@ -7,7 +7,7 @@ import {
   type InferenceMode,
   type ProcessingMode,
   type UserConfig,
-} from '@/types';
+} from '@/android/types';
 
 export type ModeDescriptor = {
   mode: InferenceMode;

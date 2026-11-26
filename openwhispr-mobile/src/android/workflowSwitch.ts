@@ -7,7 +7,7 @@ import {
   resolveMobileInferenceRoute,
   type InferenceSelection,
 } from '@/android/providers/mobileProviders';
-import type { UserConfig } from '@/types';
+import type { UserConfig } from '@/android/types';
 import type {
   createWorkflowModeSwitch,
   ModeSwitchResult,

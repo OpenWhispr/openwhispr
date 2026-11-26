@@ -3,7 +3,7 @@ jest.mock('@/services/storage/StorageService.android', () =>
 );
 jest.mock('@/lib/transcriptAudio.android', () => jest.requireMock('@/lib/transcriptAudio'));
 import { Platform } from 'react-native';
-import type { Transcript } from '@/types';
+import type { Transcript } from '@/android/types';
 import type { TranscriptState } from '@/android/store/createTranscriptStore';
 import { useTranscriptStore as iosStore } from '@/store/useTranscriptStore';
 import { useTranscriptStore as androidStore } from '@/store/useTranscriptStore.android';
@@ -155,7 +155,9 @@ describe.each([
       expect(row).not.toHaveProperty('clientTranscriptionId');
       expect(mockRelease).not.toHaveBeenCalled();
     } else {
-      expect(row.clientTranscriptionId).toBe('usage-identity');
+      expect((row as { clientTranscriptionId?: string }).clientTranscriptionId).toBe(
+        'usage-identity',
+      );
       expect(mockRelease).toHaveBeenCalledWith('file://retained.wav');
     }
     expect(mockSave.mock.calls[0]).toHaveLength(platform === 'ios' ? 1 : 2);

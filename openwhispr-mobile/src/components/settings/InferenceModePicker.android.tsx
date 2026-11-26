@@ -3,7 +3,7 @@ import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { getInferenceModes, type InferenceScope } from '@/lib/inferenceModes';
-import type { InferenceMode } from '@/types';
+import type { InferenceMode } from '@/android/types';
 
 type Props = {
   scope: InferenceScope;

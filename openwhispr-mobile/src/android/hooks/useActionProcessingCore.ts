@@ -9,7 +9,7 @@ import {
 import { fitDictionaryOnDevice } from '@/lib/onDeviceDictionary';
 import { splitLlmDictionary, type LlmDictionary } from '@/android/dictation/snippets';
 import type { Action } from '@/data';
-import type { ReasoningRoutingOptions } from '@/types';
+import type { ReasoningRoutingOptions } from '@/android/types';
 
 export type ProcessingState = 'idle' | 'processing' | 'success';
 export interface RunActionOptions {

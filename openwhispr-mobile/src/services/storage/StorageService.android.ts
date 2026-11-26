@@ -1,4 +1,4 @@
-import type { Transcript } from '../../types';
+import type { Transcript } from '@/android/types';
 import { STORAGE_KEYS } from '../../config/constants';
 import { captureTranscriptScope } from '@/lib/transcriptScope';
 

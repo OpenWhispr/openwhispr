@@ -1,4 +1,4 @@
-import type { Transcript } from '@/types';
+import type { Transcript } from '@/android/types';
 import { StorageService } from '@/services/storage/StorageService';
 import { garbageCollectTranscriptAudio } from '@/lib/transcriptAudio';
 import type { FailedTranscriptInput, TranscriptState } from '@/android/store/createTranscriptStore';

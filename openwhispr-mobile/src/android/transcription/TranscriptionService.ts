@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import { AudioPurpose, TranscriptionRequest, TranscriptionResponse } from '@/types';
+import { AudioPurpose, TranscriptionRequest, TranscriptionResponse } from '@/android/types';
 import {
   API_ENDPOINTS,
   CLOUD_CHUNK_CONCURRENCY,

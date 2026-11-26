@@ -74,7 +74,7 @@ import {
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import type { Note } from '@/data/types';
-import type { ReasoningRoutingOptions } from '@/types';
+import type { ReasoningRoutingOptions } from '@/android/types';
 import {
   formatTranscriptForExport,
   getSpeakerDisplayName,

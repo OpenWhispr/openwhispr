@@ -183,6 +183,5 @@ src/sync/syncSpaces.ts
 src/sync/teamCursors.ts
 src/sync/teamSpacesCapability.ts
 src/sync/useSyncStore.ts
-src/types/index.ts
 src/utils/expoAudio.ts
 src/utils/onboarding.ts

@@ -25,7 +25,7 @@ import {
   prepareDictation,
   transcriptionOnly,
 } from '@/android/dictation/dictationLifecycle';
-import type { TranscriptionRequest, TranscriptionResponse } from '@/types';
+import type { TranscriptionRequest, TranscriptionResponse } from '@/android/types';
 
 type ProcessingStage = 'transcribing' | 'cleaning';
 

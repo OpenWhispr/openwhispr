@@ -7,7 +7,7 @@ import {
   type RouteErrorCode,
   resolveMobileInferenceRoute,
 } from '@/android/providers/mobileProviders';
-import type { TranscriptionProvider, TranscriptionRequest, TextInferenceSnapshot } from '@/types';
+import type { TranscriptionProvider, TranscriptionRequest, TextInferenceSnapshot } from '@/android/types';
 import { isLocalModelKey, type LocalModelKey } from '@/lib/localModelCatalog';
 import { cloudAccessFor, unsetSelection, workflowSelection } from '@/lib/aiWorkflows';
 import type { CloudAccess } from '@/lib/inferenceModes';

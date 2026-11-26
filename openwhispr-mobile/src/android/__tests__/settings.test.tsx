@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { AccessibilityInfo, Alert } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { applyHistoryRetention } from '@/android/pipeline';
 import { setInsightsSyncConsent } from '@/android/insights';
 import { ModelRow } from '../settings/ModelRow';

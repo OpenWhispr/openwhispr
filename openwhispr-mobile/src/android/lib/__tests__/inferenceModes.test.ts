@@ -24,7 +24,7 @@ import {
   notesLocalModeSplitConfig,
   workflowSaveConfig,
 } from '@/lib/inferenceModes';
-import type { UserConfig } from '@/types';
+import type { UserConfig } from '@/android/types';
 
 it('leaves Android workflow choices intact during the iOS note-formatting migration', () => {
   const originalOS = Platform.OS;
@@ -538,9 +538,9 @@ describe('noteChatSplitConfig', () => {
     const privateModeReturn: UserConfig['privateModeReturn'] = {
       pinned: { agent: groqChat, noteChat: { mode: 'local' } },
     };
-    expect(noteChatSplitConfig({ defaultMode: 'private', privateModeReturn })).not.toHaveProperty(
-      'privateModeReturn',
-    );
+    expect(
+      noteChatSplitConfig({ defaultMode: 'private', privateModeReturn } as UserConfig),
+    ).not.toHaveProperty('privateModeReturn');
   });
 
   it('copies a provider selection and its remembered providers', () => {

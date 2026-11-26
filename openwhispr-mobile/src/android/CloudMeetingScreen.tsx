@@ -26,7 +26,7 @@ import { setCloudFinish } from './notes/cloudFinishStore';
 import { runSpeakerPass, saveLiveSpeakers } from './liveSpeakers/session';
 import { forgetLinesSaved, whenLinesSaved } from './liveSpeakers/whenSaved';
 import { prefetchSpeakerModel } from './liveSpeakers/speakerModel';
-import type { TranscriptionStatus } from '@/types';
+import type { TranscriptionStatus } from '@/android/types';
 
 type Phase = 'prompt' | 'recording' | 'cancelling' | 'cancel-failed';
 type Capture = {

@@ -17,7 +17,7 @@ import {
   subscribeProviderCredentialChanges,
 } from '@/services/providers/ProviderCredentials';
 import { discoverProviderModels } from '@/services/providers/ProviderExecution';
-import type { ProcessingMode, UserConfig } from '@/types';
+import type { ProcessingMode, UserConfig } from '@/android/types';
 import i18n from '../strings';
 import {
   ANDROID_MODELS,

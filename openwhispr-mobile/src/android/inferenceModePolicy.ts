@@ -1,5 +1,5 @@
 import type { InferenceSelection, MobileInferenceScope } from '@/android/providers/mobileProviders';
-import { processingToInferenceMode, type ProcessingMode, type UserConfig } from '@/types';
+import { processingToInferenceMode, type ProcessingMode, type UserConfig } from '@/android/types';
 import type {
   CloudAccess,
   DictationModeConfig,

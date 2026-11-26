@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Transcript } from '@/types';
+import type { Transcript } from '@/android/types';
 import { createAndroidTranscriptLifecycle } from '@/android/transcriptStoreLifecycle';
 import {
   createTranscriptState,

@@ -8,7 +8,7 @@ import { useCustomPromptsStore } from '@/store/useCustomPromptsStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { resolveCustomPrompt } from '@/config/prompts/registry';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
-import type { UserConfig } from '@/types';
+import type { UserConfig } from '@/android/types';
 import { ANDROID_MODELS, type AndroidModelId } from '../models';
 import type { AndroidSpeechModelId } from '../speechSelection';
 import { BottomSheet, ListRow, useReduceMotion, useSettings } from '../settings/kit';

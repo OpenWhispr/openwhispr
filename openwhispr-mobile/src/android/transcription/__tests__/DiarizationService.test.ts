@@ -1,7 +1,7 @@
 // src/services/diarization/__tests__/DiarizationService.test.ts
 import { processMeeting, type DiarizationDeps } from '@/android/transcription/DiarizationService';
 import type { DiarizationResult } from '@/lib/diarization/diarizer';
-import type { TranscriptionResponse } from '@/types';
+import type { TranscriptionResponse } from '@/android/types';
 
 const whisperResponse: TranscriptionResponse = {
   text: 'hello there hi',

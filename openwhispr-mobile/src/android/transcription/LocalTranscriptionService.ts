@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import type { ParakeetVersion } from '../../../modules/parakeet-asr/src';
-import type { TranscriptionResponse } from '@/types';
+import type { TranscriptionResponse } from '@/android/types';
 import type { LocalModelKey } from '@/lib/localModelCatalog';
 import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
 import { LocalParakeetService } from '@/services/transcription/LocalParakeetService';

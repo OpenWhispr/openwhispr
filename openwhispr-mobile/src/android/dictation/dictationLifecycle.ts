@@ -1,4 +1,4 @@
-import type { KeyboardTone, TranscriptionRequest } from '@/types';
+import type { KeyboardTone, TranscriptionRequest } from '@/android/types';
 import type { DictationProcessingLifecycle } from '@/android/dictation/transcribeAndCleanup';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { abortError } from '@/services/providers/NativeProviderTransport';

@@ -1,4 +1,4 @@
-import type { Transcript } from '@/types';
+import type { Transcript } from '@/android/types';
 import type { InsightEvent } from '../insights';
 import {
   averageWordsPerMinute,

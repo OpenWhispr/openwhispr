@@ -17,7 +17,7 @@ import { deleteManagedTranscriptAudio, retainTranscriptAudio } from '@/lib/trans
 import { isUsageLimitError, type UsageLimitError } from '@/lib/usageLimitError';
 import { randomUUID } from '@/lib/uuid';
 import { MAX_FILE_SIZE } from '@/config/constants';
-import type { TranscriptionProvider } from '@/types';
+import type { TranscriptionProvider } from '@/android/types';
 
 export interface UseFileUploadOptions {
   onComplete?: (text: string) => void;

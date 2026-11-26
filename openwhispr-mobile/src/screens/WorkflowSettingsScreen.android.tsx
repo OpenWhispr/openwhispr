@@ -24,7 +24,7 @@ import { resolveCustomPrompt } from '@/config/prompts/registry';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import type { LocalReasoningReadiness, UserConfig } from '@/types';
+import type { LocalReasoningReadiness, UserConfig } from '@/android/types';
 import {
   type ProviderCredential,
   getProviderCredential,

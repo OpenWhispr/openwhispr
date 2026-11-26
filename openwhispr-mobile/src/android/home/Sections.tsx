@@ -11,7 +11,7 @@ import {
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import type { Transcript } from '@/types';
+import type { Transcript } from '@/android/types';
 import { useHomeT, type HomeKey } from './strings';
 import { IconTile, SectionHeader, TileButton, useHome } from './kit';
 import { BottomSheet, PillAction } from '../settings/kit';
