@@ -3,7 +3,10 @@
  * app loads and must not change) that also says which misheard word each correction replaced, so
  * the Dictionary can show "You fixed “Sinty”". Same rules, same thresholds: keep the two in step.
  */
-import { acceptsCorrectionEdit, retainsCorrectionContext } from '@/lib/correctionPolicy';
+import {
+  acceptsCorrectionEdit,
+  retainsCorrectionContext,
+} from '@/android/dictionary/correctionPolicy';
 
 const MIN_WORD_LENGTH = 3;
 const MAX_DISTANCE_RATIO = 0.65;
