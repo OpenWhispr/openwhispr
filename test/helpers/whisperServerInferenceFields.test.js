@@ -173,7 +173,10 @@ test("transcribeLocalWhisper plumbs shortenPauses to the server request (dictati
   };
   manager.getModelPath = () => __filename;
 
-  await manager.transcribeLocalWhisper(Buffer.from("audio"), { model: "base", shortenPauses: true });
+  await manager.transcribeLocalWhisper(Buffer.from("audio"), {
+    model: "base",
+    shortenPauses: true,
+  });
   assert.equal(captured[0].shortenPauses, true);
 
   await manager.transcribeLocalWhisper(Buffer.from("audio"), { model: "base" });

@@ -1935,6 +1935,35 @@ test("while a verdict loads, local work runs, new remote work waits for it, and 
   assert.deepEqual(await remote, { ok: true, status: 200 });
 });
 
+test("dictation asks for shortened pauses only when its decode runs without VAD (#2474)", async (t) => {
+  const previousWhisperManager = fakeThis.whisperManager;
+  t.after(() => {
+    fakeThis.whisperManager = previousWhisperManager;
+    delete fakeThis._resolveWhisperVadOptions;
+  });
+  const requests = [];
+  fakeThis.whisperManager = {
+    transcribeLocalWhisper: async (_audio, options) => {
+      requests.push([options.vadEnabled, options.shortenPauses]);
+      return { success: true, text: "dictation" };
+    },
+  };
+  const transcribe = (options) =>
+    handlers.get("transcribe-local-whisper")({ sender: {} }, new Uint8Array([1]), options);
+
+  fakeThis._resolveWhisperVadOptions = () => ({ vadEnabled: false });
+  await transcribe();
+  fakeThis._resolveWhisperVadOptions = () => ({ vadEnabled: true });
+  await transcribe();
+  await transcribe({ skipVad: true });
+
+  assert.deepEqual(requests, [
+    [false, true],
+    [true, false],
+    [false, true],
+  ]);
+});
+
 test("new remote work doesn't start on a verdict that never settles", async (t) => {
   const { POLICY_TIMEOUT_MS } = require("../../src/helpers/connectors/connectorIpc");
   const previousApiUrl = process.env.OPENWHISPR_API_URL;
