@@ -2,10 +2,10 @@ import React from 'react';
 import { act, render } from '@testing-library/react-native';
 import {
   MeetingSessionProvider,
-  useLiveMeetingNoteId,
   useMeetingSession,
   type MeetingSession,
 } from '@/components/notes/MeetingSessionProvider';
+import { useLiveMeetingNoteId } from '@/components/notes/liveMeetingNote';
 import type { CloudMeetingResult } from '@/hooks/useCloudMeeting';
 import { isMeetingActive, stopActiveMeeting } from '@/lib/notes/activeMeeting';
 import {
@@ -141,10 +141,10 @@ jest.mock('@/sync/syncIdentity', () => ({
 jest.mock('@/store/useAuthStore', () => {
   let userId: string | null = null;
   const listeners = new Set<() => void>();
-  const React = jest.requireActual<typeof import('react')>('react');
+  const ActualReact = jest.requireActual<typeof import('react')>('react');
   const useAuthStore = (selector: (state: { user: { id: string } | null }) => unknown): unknown => {
-    const [, force] = React.useReducer((n: number) => n + 1, 0);
-    React.useEffect(() => {
+    const [, force] = ActualReact.useReducer((n: number) => n + 1, 0);
+    ActualReact.useEffect(() => {
       const listener = (): void => force();
       listeners.add(listener);
       return () => {

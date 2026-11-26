@@ -12,7 +12,6 @@ import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording'
 import {
   useMeetingSession,
   type MeetingSession,
-  type MeetingSessionPhase,
   type MeetingStartInput,
 } from '@/components/notes/MeetingSessionProvider';
 import { SpeakerCountPrompt } from '@/components/notes/SpeakerCountPrompt';
@@ -25,7 +24,7 @@ import { canRunCloudMeeting } from '@/lib/accountAccess';
 import { buildCalendarMeetingContext } from '@/lib/calendar/meetingContext';
 import { getMeetingCalendarEventSuggestions } from '@/lib/calendar/meetingSuggestions';
 import { Sentry } from '@/lib/sentry';
-import { formatClock } from '@/lib/notes/meetingCapture';
+import { formatClock, type MeetingSessionPhase } from '@/lib/notes/meetingCapture';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';

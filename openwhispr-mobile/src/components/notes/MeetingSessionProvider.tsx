@@ -3,7 +3,7 @@ import type React from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
 import { notesRepository } from '@/data';
 import type { Note } from '@/data/types';
-import { LiveMeetingNoteContext, useLiveMeetingNoteId } from '@/components/notes/liveMeetingNote';
+import { LiveMeetingNoteContext } from '@/components/notes/liveMeetingNote';
 import { useAudioRecording } from '@/hooks/useAudioRecording';
 import {
   useCloudMeeting,
@@ -27,7 +27,9 @@ import {
   captureCoverage,
   isCloudMeetingCapturing,
   meetingStartFailureNotice,
+  type MeetingSessionPhase,
 } from '@/lib/notes/meetingCapture';
+import { errorCode } from '@/lib/notes/meetingPostPass';
 import { showMicPermissionAlert } from '@/lib/permissions';
 import { Sentry } from '@/lib/sentry';
 import { excludeMeetingFileFromBackup, meetingRecordingUri } from '@/lib/transcriptAudio';
@@ -36,8 +38,6 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useNotesStore } from '@/store/useNotesStore';
 import { isAccountLink } from '@/sync/syncIdentity';
 import type { TranscriptionStatus } from '@/types';
-
-export type MeetingSessionPhase = 'idle' | 'recording' | 'cloud-recording' | 'processing';
 
 export interface MeetingStartInput {
   expectedSpeakerCount?: number;
@@ -395,17 +395,23 @@ export function MeetingSessionProvider({
       });
     }
   };
+  // Reports a failed finish as a fixed message and a code: the error itself can carry a file path.
+  const reportFinishFailure = (message: string, error: unknown): void => {
+    Sentry.captureMessage(message, {
+      level: 'error',
+      tags: { feature: 'meeting-post-pass', error_code: errorCode(error) },
+    });
+  };
 
   const finish = async (onCaptureStopped: () => void): Promise<void> => {
-    const noteId = noteIdRef.current;
-    const expectedSpeakerCount = expectedSpeakerCountRef.current;
+    const finishingNoteId = noteIdRef.current;
+    const finishingSpeakerCount = expectedSpeakerCountRef.current;
     const generation = generationRef.current;
     const fence = accountFenceRef.current;
     // After any await below, the session may have moved on without this finish.
     const settleIdle = (): void => {
       if (isCurrentGeneration(generation)) returnToIdle();
     };
-    const failNote = failNoteSafely;
     setPhase('processing');
     // Everything after the phase change is inside the try: a throw outside it would leave the
     // session in 'processing' for the rest of the process, refusing every new meeting.
@@ -417,19 +423,19 @@ export function MeetingSessionProvider({
       );
       const uri = await recording.stopRecordingRaw();
       onCaptureStopped();
-      if (!uri || noteId == null) {
+      if (!uri || finishingNoteId == null) {
         saveRawNotesNow();
-        if (noteId != null) failNote(noteId);
+        if (finishingNoteId != null) failNoteSafely(finishingNoteId);
         settleIdle();
         return;
       }
       saveRawNotesNow();
-      const stableUri = `${FileSystem.documentDirectory}meeting-${noteId}.wav`;
+      const stableUri = `${FileSystem.documentDirectory}meeting-${finishingNoteId}.wav`;
       await FileSystem.copyAsync({ from: uri, to: stableUri });
       await excludeMeetingFileFromBackup(stableUri);
       // The recorder's own file is a second copy of the meeting that nothing else deletes.
       await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
-      await runMeetingPipeline(noteId, stableUri, expectedSpeakerCount, {
+      await runMeetingPipeline(finishingNoteId, stableUri, finishingSpeakerCount, {
         fence: fence ?? undefined,
       });
       reportMeetingFinished({
@@ -442,11 +448,11 @@ export function MeetingSessionProvider({
       if (!isCurrentGeneration(generation)) return;
       returnToIdle();
       if (!isOwnAccount(fence)) return;
-      setFinishedNoteId(noteId);
+      setFinishedNoteId(finishingNoteId);
       alertIfPartialCapture(coverage);
     } catch (error) {
-      if (noteId != null) failNote(noteId);
-      Sentry.captureException(error);
+      if (finishingNoteId != null) failNoteSafely(finishingNoteId);
+      reportFinishFailure('meeting-local-finish-failed', error);
       settleIdle();
     }
   };
@@ -461,7 +467,7 @@ export function MeetingSessionProvider({
       (cloudMeeting.capturedSeconds - cloudMeeting.droppedSeconds) * 1000,
       elapsedMs,
     );
-    const noteId = noteIdRef.current;
+    const finishingNoteId = noteIdRef.current;
     const hadError = cloudMeeting.status === 'error';
     const { interruptions, reconnects, droppedSeconds } = cloudMeeting;
     const generation = generationRef.current;
@@ -469,13 +475,12 @@ export function MeetingSessionProvider({
     const settleIdle = (): void => {
       if (isCurrentGeneration(generation)) returnToIdle();
     };
-    const failNote = failNoteSafely;
     setPhase('processing');
     // Set once the recording is on the note, so a failure afterwards doesn't look for it again.
     let recordingLinked = false;
     try {
       const result = await cloudMeeting.stop();
-      if (noteId == null) {
+      if (finishingNoteId == null) {
         settleIdle();
         return;
       }
@@ -483,19 +488,24 @@ export function MeetingSessionProvider({
       // Linked before finalizing and before a failure: a failed note keeping its recording is
       // what Retry needs later.
       if (result.recordingUri) {
-        notesRepository.updateNoteMeta(noteId, { sourceFile: result.recordingUri });
+        notesRepository.updateNoteMeta(finishingNoteId, { sourceFile: result.recordingUri });
         recordingLinked = true;
       }
       // A failed session with nothing transcribed and no recording shouldn't become a done,
       // empty note. With a recording the store tries the file and decides done or failed.
       if (hadError && result.utterances.length === 0 && !result.recordingUri) {
-        failNote(noteId);
+        failNoteSafely(finishingNoteId);
         settleIdle();
         return;
       }
-      const { owedMs, unsavedOwedMs = 0 } = await finalizeCloudMeeting(noteId, result, captured, {
-        fence: fence ?? undefined,
-      });
+      const { owedMs, unsavedOwedMs = 0 } = await finalizeCloudMeeting(
+        finishingNoteId,
+        result,
+        captured,
+        {
+          fence: fence ?? undefined,
+        },
+      );
       reportMeetingFinished({
         path: 'cloud',
         coverage,
@@ -506,7 +516,7 @@ export function MeetingSessionProvider({
       if (!isCurrentGeneration(generation)) return;
       returnToIdle();
       if (!isOwnAccount(fence)) return;
-      setFinishedNoteId(noteId);
+      setFinishedNoteId(finishingNoteId);
       alertCloudMeetingCapture({
         elapsedMs,
         capturedMs: captured * 1000,
@@ -520,19 +530,11 @@ export function MeetingSessionProvider({
         unsavedMs: unsavedOwedMs,
       });
     } catch (error) {
-      if (noteId != null) {
-        if (!recordingLinked) await linkManagedRecording(noteId);
-        failNote(noteId);
+      if (finishingNoteId != null) {
+        if (!recordingLinked) await linkManagedRecording(finishingNoteId);
+        failNoteSafely(finishingNoteId);
       }
-      // A fixed message and a code: the error itself can carry a file path.
-      const code = (error as { code?: unknown } | null)?.code;
-      Sentry.captureMessage('meeting-finalize-failed', {
-        level: 'error',
-        tags: {
-          feature: 'meeting-post-pass',
-          error_code: typeof code === 'string' ? code : 'unknown',
-        },
-      });
+      reportFinishFailure('meeting-finalize-failed', error);
       settleIdle();
     }
   };
@@ -764,8 +766,6 @@ export function MeetingSessionProvider({
     </MeetingSessionContext.Provider>
   );
 }
-
-export { useLiveMeetingNoteId };
 
 export function useMeetingSession(): MeetingSession {
   const session = useContext(MeetingSessionContext);

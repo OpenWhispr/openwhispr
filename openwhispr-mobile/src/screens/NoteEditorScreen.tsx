@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { isMicPermissionError, showMicPermissionAlert } from '@/lib/permissions';
 import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
-import { useLiveMeetingNoteId } from '@/components/notes/MeetingSessionProvider';
+import { useLiveMeetingNoteId } from '@/components/notes/liveMeetingNote';
 import { isCaptureLeaseHeld } from '@/lib/captureLease';
 import { MEETING_RECORDING_REFUSAL } from '@/lib/meetingRecordingRefusal';
 import { useNotesStore } from '@/store/useNotesStore';

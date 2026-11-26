@@ -98,9 +98,9 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 const mockPush = jest.fn();
-// useMeetingSession throws outside the provider, so the editor gets a controllable stand-in.
+// Which note the running meeting is recording into, set per test.
 const mockMeetingSession: { liveNoteId: number | null } = { liveNoteId: null };
-jest.mock('@/components/notes/MeetingSessionProvider', () => ({
+jest.mock('@/components/notes/liveMeetingNote', () => ({
   useLiveMeetingNoteId: () => mockMeetingSession.liveNoteId,
 }));
 let mockLeaseHeld = false;

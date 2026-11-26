@@ -13,15 +13,15 @@ import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents'
 import type { CloudMeetingStatus } from '@/hooks/useCloudMeeting';
 import {
   STATUS_LABEL,
+  asSentence,
   formatClock,
   isCloudMeetingRecordingAudio,
 } from '@/lib/notes/meetingCapture';
 
 // The reason as its own sentence, when there is one, then what it means for the meeting.
 const withReason = (error: string | null, consequence: string): string => {
-  const reason = error?.trim();
-  if (!reason) return consequence;
-  return `${reason}${/[.!?…]$/.test(reason) ? '' : '.'} ${consequence}`;
+  const reason = asSentence(error);
+  return reason ? `${reason} ${consequence}` : consequence;
 };
 
 interface CloudMeetingRecordingProps {

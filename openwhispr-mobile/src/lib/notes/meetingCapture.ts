@@ -3,7 +3,9 @@
  * so they can be unit-tested without React.
  */
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
-import type { MeetingSessionPhase } from '@/components/notes/MeetingSessionProvider';
+
+/** Where the app-wide meeting session is: idle, recording (on-device or cloud), or finishing. */
+export type MeetingSessionPhase = 'idle' | 'recording' | 'cloud-recording' | 'processing';
 
 export type CloudMeetingStatus =
   | 'connecting'
@@ -152,6 +154,13 @@ export type MeetingStartFailureNotice =
   | { kind: 'mic-permission' }
   | { kind: 'message'; message: string };
 
+/** The text as a sentence: trimmed, with a period unless it ends in . ! ? or …; '' when blank. */
+export function asSentence(text: string | null | undefined): string {
+  const trimmed = text?.trim();
+  if (!trimmed) return '';
+  return /[.!?…]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
 export function meetingStartFailureNotice(failure: MeetingStartFailure): MeetingStartFailureNotice {
   if (failure.code === 'MIC_PERMISSION_DENIED') return { kind: 'mic-permission' };
   // Builds from before MIC_UNAVAILABLE report a call holding the audio session only through
@@ -162,12 +171,9 @@ export function meetingStartFailureNotice(failure: MeetingStartFailure): Meeting
   ) {
     return { kind: 'message', message: MIC_HELD_BY_CALL_MESSAGE };
   }
-  const reason = failure.message.trim();
+  const reason = asSentence(failure.message);
   if (!reason) return { kind: 'message', message: "Couldn't start recording." };
-  return {
-    kind: 'message',
-    message: `Couldn't start recording. ${reason}${/[.!?…]$/.test(reason) ? '' : '.'}`,
-  };
+  return { kind: 'message', message: `Couldn't start recording. ${reason}` };
 }
 
 /** Advance the capture clock with a new reading and say whether capture has stalled. */
