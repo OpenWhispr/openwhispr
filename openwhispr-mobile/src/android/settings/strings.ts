@@ -188,6 +188,10 @@ export const settingsEnglish = {
   // Language
   searchLanguages: 'Search languages',
   autoDetect: 'Auto-detect',
+  languagesPage: 'Languages',
+  languagesPageBody:
+    'With one language, dictation listens for it. With more, it works out which one you’re speaking.',
+  languagesPageAuto: 'No languages picked. Dictation works out which one you’re speaking.',
   recommended: 'Recommended',
   languagesFooter: '{{count}} languages, A to Z. Scroll for the rest.',
   noLanguages: 'No languages match “{{query}}”',

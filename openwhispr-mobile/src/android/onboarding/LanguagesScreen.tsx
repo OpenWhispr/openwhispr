@@ -35,8 +35,6 @@ export function LanguagesScreen({
 }) {
   const t = useOnboardingT();
   const s = useOnboardingStyles();
-  const colors = useOnboardingColors();
-  const l = useStyles();
   const launchT = useLaunchT();
   const config = useConfigStore((state) => state.config);
   const [codes, setCodes] = useState(() =>
@@ -68,27 +66,10 @@ export function LanguagesScreen({
           <LinkButton label={launchT('seeHowItWorks')} onPress={onSeeHowItWorks} />
         </View>
       )}
-      <View style={{ gap: 12 }}>
-        {codes.map((code) => {
-          const language = byCode.get(code);
-          if (!language) return null;
-          return (
-            <View key={code} style={l.row}>
-              <Text style={{ fontSize: 18 }}>{language.flag}</Text>
-              <Text style={l.label}>{language.label}</Text>
-              <Pressable
-                cssInterop={false}
-                accessibilityRole="button"
-                accessibilityLabel={t('removeLanguage', { language: language.label })}
-                onPress={() => setCodes((current) => current.filter((item) => item !== code))}
-                hitSlop={10}
-              >
-                <SystemIcon name="xmark" mdName="X" size={18} color={colors.tertiary} />
-              </Pressable>
-            </View>
-          );
-        })}
-      </View>
+      <LanguageRows
+        codes={codes}
+        onRemove={(code) => setCodes((current) => current.filter((item) => item !== code))}
+      />
       <AddLanguageSheet
         visible={adding}
         selected={codes}
@@ -102,7 +83,43 @@ export function LanguagesScreen({
   );
 }
 
-function AddLanguageSheet({
+/** The picked languages, each with its remove button. Settings › Language shows the same list. */
+export function LanguageRows({
+  codes,
+  onRemove,
+}: {
+  codes: string[];
+  onRemove: (code: string) => void;
+}) {
+  const t = useOnboardingT();
+  const colors = useOnboardingColors();
+  const l = useStyles();
+  return (
+    <View style={{ gap: 12 }}>
+      {codes.map((code) => {
+        const language = byCode.get(code);
+        if (!language) return null;
+        return (
+          <View key={code} style={l.row}>
+            <Text style={{ fontSize: 18 }}>{language.flag}</Text>
+            <Text style={l.label}>{language.label}</Text>
+            <Pressable
+              cssInterop={false}
+              accessibilityRole="button"
+              accessibilityLabel={t('removeLanguage', { language: language.label })}
+              onPress={() => onRemove(code)}
+              hitSlop={10}
+            >
+              <SystemIcon name="xmark" mdName="X" size={18} color={colors.tertiary} />
+            </Pressable>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+export function AddLanguageSheet({
   visible,
   selected,
   onClose,

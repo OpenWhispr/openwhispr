@@ -102,3 +102,21 @@ describe('starting languages', () => {
     expect(initialLanguages(undefined)).toEqual(['zh-TW']);
   });
 });
+
+describe('Settings › Language shows the languages dictation uses', () => {
+  it('reads the onboarding list, keeping regions for the labels', () => {
+    const { savedLanguages } = jest.requireActual('../onboarding/languages');
+    expect(savedLanguages(['en-US', 'af'], undefined)).toEqual(['en-US', 'af']);
+  });
+
+  it('lets an old single pick from Settings win, and its auto mean none', () => {
+    const { savedLanguages } = jest.requireActual('../onboarding/languages');
+    expect(savedLanguages(['en-US', 'af'], 'fr')).toEqual(['fr']);
+    expect(savedLanguages(['en-US', 'af'], 'auto')).toEqual([]);
+  });
+
+  it('is empty, not the phone language, when nothing was picked', () => {
+    const { savedLanguages } = jest.requireActual('../onboarding/languages');
+    expect(savedLanguages(undefined, undefined)).toEqual([]);
+  });
+});

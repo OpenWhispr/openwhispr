@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import registry from '@/config/languageRegistry.json';
+import { savedLanguages } from '@/android/onboarding/languages';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore';
 import { useConfigStore } from '@/store/useConfigStore';
@@ -162,9 +163,11 @@ export default function SettingsScreen() {
         : t('cloudBackupBody');
 
   const { initials, name } = getAccountDisplay(user, isGuest);
-  const language = registry.languages.find(
-    (item) => item.code === (config?.preferredLanguage ?? 'auto'),
-  );
+  // The languages dictation uses now: the onboarding list, or an old single pick from Settings.
+  const languageLabels = savedLanguages(config?.languages, config?.preferredLanguage)
+    .map((code) => registry.languages.find((item) => item.code === code)?.label)
+    .filter(Boolean)
+    .join(', ');
   const planLabel = usage
     ? usage.isSubscribed
       ? usage.isTrial
@@ -270,7 +273,7 @@ export default function SettingsScreen() {
         <ListRow
           icon="Globe"
           title={t('language')}
-          value={!language || language.code === 'auto' ? t('autoDetect') : language.label}
+          value={languageLabels || t('autoDetect')}
           onPress={() => router.push('/(account)/transcription-language')}
         />
         <ListRow
