@@ -5,14 +5,18 @@ const processListCache = require("./processListCache");
 // a helper inside the app's bundle (Chromium, Electron), so the outermost bundle
 // names the app there.
 function captureAppFromProcess({ name, path }, platform = process.platform) {
+  // ps-list leaves `path` empty for an executable path with many spaces (Chrome's
+  // helpers) and reports the whole path as `name` instead.
+  const executable = path || name || "";
   if (platform === "darwin") {
-    const bundle = /\/([^/]+)\.app(?:\/|$)/.exec(path || "");
+    const bundle = /\/([^/]+)\.app(?:\/|$)/.exec(executable);
     if (bundle) return { id: bundle[1].toLowerCase(), name: bundle[1] };
   }
-  if (!name) return null;
+  const fileName = executable.split(/[\\/]/).pop();
+  if (!fileName) return null;
   return {
-    id: name.toLowerCase(),
-    name: platform === "win32" ? name.replace(/\.exe$/i, "") : name,
+    id: fileName.toLowerCase(),
+    name: platform === "win32" ? fileName.replace(/\.exe$/i, "") : fileName,
   };
 }
 

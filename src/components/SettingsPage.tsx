@@ -2809,9 +2809,7 @@ export default function SettingsPage({
                   <SettingsPanelRow key={app.id}>
                     <SettingsRow
                       label={app.name}
-                      description={t(
-                        "settingsPage.general.notifications.ignoredAppDescription"
-                      )}
+                      description={t("settingsPage.general.notifications.ignoredAppDescription")}
                     >
                       <Button
                         onClick={() =>

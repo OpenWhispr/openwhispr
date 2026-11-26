@@ -122,7 +122,7 @@ async function mount(t, overrides = {}, setupDom = () => {}) {
     cachePrefix: "meeting-folder-picker-",
     noExternal: ["react-i18next"],
     mockModules: {
-      "react-i18next": `import en from '/locales/en/translation.json';const t=(key,values={})=>{let s=key.split('.').reduce((v,k)=>v?.[k],en)??key;return String(s).replace(/{{(\\w+)}}/g,(_,k)=>values[k]??'');};export const useTranslation=()=>({t,i18n:{language:'en'}});`,
+      "react-i18next": `import en from '/locales/en/translation.json';const t=(key,values={})=>{let s=key.split('.').reduce((v,k)=>v?.[k],en)??key;return String(s).replace(/{{(\\w+)}}/g,(_,k)=>values[k]??'');};export const useTranslation=()=>({t,i18n:{language:'en'}});export const initReactI18next={type:'3rdParty',init(){}};`,
     },
   });
   const { default: Overlay } = await vite.ssrLoadModule(

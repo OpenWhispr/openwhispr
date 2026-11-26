@@ -39,10 +39,24 @@ test("a macOS helper process is named after the app bundle it lives in", () => {
     ),
     { id: "orca", name: "Orca" }
   );
-  assert.deepEqual(captureAppFromProcess({ name: "sox", path: "/opt/homebrew/bin/sox" }, "darwin"), {
-    id: "sox",
-    name: "sox",
-  });
+  // ps-list gives up on a path with this many spaces: no `path`, the whole path as `name`.
+  assert.deepEqual(
+    captureAppFromProcess(
+      {
+        name: "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/131.0.6778.86/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper",
+        path: "",
+      },
+      "darwin"
+    ),
+    { id: "google chrome", name: "Google Chrome" }
+  );
+  assert.deepEqual(
+    captureAppFromProcess({ name: "sox", path: "/opt/homebrew/bin/sox" }, "darwin"),
+    {
+      id: "sox",
+      name: "sox",
+    }
+  );
 });
 
 test("Windows and Linux name the executable", () => {

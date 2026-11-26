@@ -2088,6 +2088,49 @@ test("win32: a capture whose app can't be named still prompts", async (t) => {
   assert.deepEqual(detections[0].apps, []);
 });
 
+test("win32: a prompt with a capture it can't name names no app", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("win32", {
+    resolveCaptureApps: resolveTestCaptureApps,
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\nMIC_START 33\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 1);
+  assert.deepEqual(detections[0].apps, []);
+});
+
+test("win32: after ignoring the app a prompt was for, a meeting app still prompts", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("win32", {
+    resolveCaptureApps: resolveTestCaptureApps,
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 1);
+
+  // The card's "Don't ask for Orca", while Orca still holds the mic.
+  detector.setIgnoredApps(["orca.exe"]);
+  children[0].stdout.emit("data", "MIC_START 22\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 2);
+  assert.deepEqual(detections[1].apps, [CAPTURE_APPS[22]]);
+});
+
 test("linux: an ignored app's capture does not drive meeting prompts", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children } = createDetector("linux", {

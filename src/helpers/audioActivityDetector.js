@@ -823,11 +823,14 @@ class AudioActivityDetector extends EventEmitter {
     if (hadEvidence !== hasEvidence && this._listenerProcess) this._onMicStateChanged(hasEvidence);
   }
 
+  // Names the prompt's apps only when it knows every one, or the card could
+  // offer to ignore one app while another capture keeps the prompt alive.
   _promptApps() {
     const apps = new Map();
     for (const processId of this._externalCapturePids) {
       const app = this._captureApps.get(processId);
-      if (app) apps.set(app.id, app);
+      if (!app) return [];
+      apps.set(app.id, app);
     }
     return [...apps.values()];
   }
