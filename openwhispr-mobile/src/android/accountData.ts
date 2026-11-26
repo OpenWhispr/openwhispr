@@ -3,7 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { create } from 'zustand';
 import { activateAccountDatabase, blockAccountDatabase } from './database';
 import { runMigrations } from './migrations';
-import { openApplicationDatabase } from '@/db/connections';
+import { openApplicationDatabase } from '@/android/db/connections';
 import { randomUUID } from '@/lib/uuid';
 
 const MANIFEST_KEY = 'android.local-accounts.v1';

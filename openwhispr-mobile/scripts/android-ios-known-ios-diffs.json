@@ -1,8 +1,6 @@
 [
   "config:development:infoPlist.NSAdvertisingAttributionReportEndpoint",
   "config:production:infoPlist.NSAdvertisingAttributionReportEndpoint",
-  "module:src/db/migrate.ts",
-  "module:src/db/migrationSteps.ts",
   "module:src/hooks/actionProcessingLifecycle.ts",
   "module:src/hooks/useActionProcessing.ts",
   "module:src/hooks/useActionProcessingCore.ts",
