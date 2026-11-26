@@ -1,4 +1,4 @@
-import { createAiWorkflows } from './aiWorkflowsCore';
+import { createAiWorkflows } from '@/android/lib/aiWorkflowsCore';
 import { androidWorkflowPolicy } from '../android/workflowPolicy';
 export {
   ANDROID_LOCAL_MODE_LOCKED,

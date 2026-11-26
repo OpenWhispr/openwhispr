@@ -1,5 +1,5 @@
 import { Alert, Platform } from 'react-native';
-import * as defaultSwitch from '../workflowModeSwitch';
+import * as defaultSwitch from '@/lib/workflowModeSwitch';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 

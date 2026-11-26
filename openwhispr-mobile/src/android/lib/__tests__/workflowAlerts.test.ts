@@ -43,11 +43,11 @@ jest.mock('@/lib/localReasoning', () => ({
   getLocalReasoningReadiness: () => mockTextReadiness(),
   // Jest uses its default resolver; exercise the implementation Metro selects on Android.
   getLocalReasoningUnavailableMessage: (...args: unknown[]) =>
-    jest.requireActual('../localReasoning.android').getLocalReasoningUnavailableMessage(...args),
+    jest.requireActual('@/lib/localReasoning.android').getLocalReasoningUnavailableMessage(...args),
 }));
 
-import { showAccountRequiredAlert } from '../accountAccess';
-import { switchWorkflowMode } from '../workflowModeSwitch.android';
+import { showAccountRequiredAlert } from '@/lib/accountAccess';
+import { switchWorkflowMode } from '@/lib/workflowModeSwitch.android';
 
 const originalOS = Platform.OS;
 let alert: jest.SpyInstance;

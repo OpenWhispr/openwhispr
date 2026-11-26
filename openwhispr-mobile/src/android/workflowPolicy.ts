@@ -1,7 +1,7 @@
 import type { InferenceMode, UserConfig } from '@/types';
 import type { MobileInferenceScope } from '@/android/providers/mobileProviders';
 import { MODE_LABELS } from '@/lib/inferenceModes';
-import type { AiWorkflowPolicy } from '../lib/aiWorkflowsCore';
+import type { AiWorkflowPolicy } from '@/android/lib/aiWorkflowsCore';
 
 export const PRIVATE_MODE_LOCKED_REASON =
   'Off while Local Mode is on. Turn it off in Models & processing.';

@@ -12,7 +12,7 @@ import type {
   createWorkflowModeSwitch,
   ModeSwitchResult,
   WorkflowModeSwitchPolicy,
-} from '../lib/workflowModeSwitchCore';
+} from '@/android/lib/workflowModeSwitchCore';
 
 function showOnDeviceUnavailable(message: string): void {
   const title = androidCopy('workflowAlerts.unavailableTitle', 'On-Device Unavailable');

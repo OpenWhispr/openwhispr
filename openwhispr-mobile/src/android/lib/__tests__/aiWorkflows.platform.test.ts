@@ -1,8 +1,8 @@
 import { Platform } from 'react-native';
-import * as defaultWorkflows from '../aiWorkflows';
-import * as androidWorkflows from '../aiWorkflows.android';
-import { workflowModeRestrictions } from '../workflowModeRestrictions';
-import { workflowModeRestrictions as androidRestrictions } from '../workflowModeRestrictions.android';
+import * as defaultWorkflows from '@/lib/aiWorkflows';
+import * as androidWorkflows from '@/lib/aiWorkflows.android';
+import { workflowModeRestrictions } from '@/lib/workflowModeRestrictions';
+import { workflowModeRestrictions as androidRestrictions } from '@/lib/workflowModeRestrictions.android';
 
 jest.mock('@/lib/inferenceModes', () => {
   const { Platform: runtimePlatform } = require('react-native') as typeof import('react-native');
