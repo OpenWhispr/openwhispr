@@ -28,7 +28,7 @@ beforeEach(() => {
 });
 
 it('retains distinct usable account handles when their files are selected again', () => {
-  const { openApplicationDatabase } = require('../connections');
+  const { openApplicationDatabase } = require('@/android/db/connections');
   const accountA = openApplicationDatabase('account-a.db');
   const accountB = openApplicationDatabase('account-b.db');
   expect(accountA).not.toBe(accountB);
@@ -45,7 +45,7 @@ it('does not inherit a native cached binding released by an earlier JS handle', 
   old.releaseNativeBinding();
   expect(() => mockOpen('account-a.db').execSync()).toThrow('Native binding released');
 
-  const { openApplicationDatabase } = require('../connections');
+  const { openApplicationDatabase } = require('@/android/db/connections');
   const current = openApplicationDatabase('account-a.db');
   expect(() => current.execSync()).not.toThrow();
 });
@@ -54,14 +54,14 @@ it('allows a failed open to be retried without keeping a broken handle', () => {
   mockOpen.mockImplementationOnce(() => {
     throw new Error('Open failed');
   });
-  const { openApplicationDatabase } = require('../connections');
+  const { openApplicationDatabase } = require('@/android/db/connections');
   expect(() => openApplicationDatabase('account-a.db')).toThrow('Open failed');
   expect(() => openApplicationDatabase('account-a.db').execSync()).not.toThrow();
 });
 
 it('preserves the existing iOS open behavior', () => {
   require('react-native').Platform.OS = 'ios';
-  const { openApplicationDatabase } = require('../connections');
+  const { openApplicationDatabase } = require('@/android/db/connections');
   const first = openApplicationDatabase('openwhispr_notes.db');
   const second = openApplicationDatabase('openwhispr_notes.db');
   expect(first).not.toBe(second);

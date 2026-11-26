@@ -1,5 +1,5 @@
 import { and, eq, isNull } from 'drizzle-orm';
-import { spaces } from '@/db/schema';
+import { spaces } from '@/android/db/schema';
 import type { NotesRepository } from '@/data/types';
 import { meetingTranscriptionIdKey } from '@/lib/notes/meetingTranscriptionId';
 

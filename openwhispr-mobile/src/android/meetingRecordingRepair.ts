@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/db';
-import { notes } from '@/db/schema';
+import { notes } from '@/android/db/schema';
 import { meetingAudioContext, meetingAudioDirectory } from '@/lib/meetingAudioStorage';
 
 /** Compare and replace only the obsolete root path; keep timestamps and note data intact. */

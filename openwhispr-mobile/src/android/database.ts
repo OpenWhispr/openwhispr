@@ -1,7 +1,7 @@
 import { drizzle } from 'drizzle-orm/expo-sqlite';
 import * as SQLite from 'expo-sqlite';
-import * as schema from '@/db/schema';
-import { openApplicationDatabase } from '@/db/connections';
+import * as schema from '@/android/db/schema';
+import { openApplicationDatabase } from '@/android/db/connections';
 
 const expo = openApplicationDatabase('openwhispr_notes.db');
 let active = drizzle(expo, { schema });

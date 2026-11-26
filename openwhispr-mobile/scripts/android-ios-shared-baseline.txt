@@ -48,7 +48,6 @@ src/data/remote/spacesApi.ts
 src/data/remote/workspacesApi.ts
 src/data/spacesRepository.ts
 src/data/synced/SyncedNotesRepository.ts
-src/db/migrationSteps.ts
 src/db/schema.ts
 src/hooks/useActionProcessingCore.ts
 src/hooks/useAppInit.ts

@@ -33,7 +33,7 @@ import {
   speakers,
   speakerProfiles,
   spaces,
-} from '@/db/schema';
+} from '@/android/db/schema';
 import { isTranscriptionStatus } from '@/lib/diarization/diarizer';
 import {
   decodeEmbedding,

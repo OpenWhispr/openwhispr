@@ -1,12 +1,12 @@
 import 'expo-sqlite/localStorage/install';
 import type * as SQLite from 'expo-sqlite';
-import { openApplicationDatabase } from '@/db/connections';
+import { openApplicationDatabase } from '@/android/db/connections';
 import {
   DEFAULT_ACTIONS_SQL,
   migrateDictionaryFromLocalStorage,
   migrateSchema,
   seedPrivateSpaceAndBackfillSpaceId,
-} from '@/db/migrationSteps';
+} from '@/android/db/migrationSteps';
 
 const legacyDb = openApplicationDatabase('openwhispr_notes.db');
 

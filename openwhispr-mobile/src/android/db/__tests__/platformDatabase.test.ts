@@ -4,10 +4,11 @@ jest.mock('expo-sqlite', () => ({
   openDatabaseSync: (...args: Parameters<typeof mockOpen>) => mockOpen(...args),
 }));
 jest.mock('drizzle-orm/expo-sqlite', () => ({ drizzle: () => mockDatabase }));
-jest.mock('../schema', () => ({}));
+jest.mock('@/db/schema', () => ({}));
+jest.mock('@/android/db/schema', () => jest.requireMock('@/db/schema'));
 
 it('keeps the default database as the upstream Drizzle instance', () => {
-  const { db } = require('../index');
+  const { db } = require('@/db/index');
   expect(db).toBe(mockDatabase);
   expect(mockOpen).toHaveBeenCalledWith('openwhispr_notes.db');
 });

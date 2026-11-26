@@ -1,7 +1,7 @@
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { create } from 'zustand';
 import { db } from '@/db';
-import { dictionaryEntries } from '@/db/schema';
+import { dictionaryEntries } from '@/android/db/schema';
 import { randomUUID } from '@/lib/uuid';
 import { createLibraryLoad, type CreateLibraryLoad } from '@/android/store/createLibraryLoad';
 
