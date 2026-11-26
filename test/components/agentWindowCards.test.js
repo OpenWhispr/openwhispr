@@ -1945,14 +1945,19 @@ async function caretTake(
   await view.chat({ busy: false, messages: [user, answer] });
   await view.settle();
   const modal = () => view.main.layouts.some((request) => request.layout === "modal");
-  return { options, probes, pastes, released, hides: () => hides, streamedIn, modal };
+  return { view, options, probes, pastes, released, hides: () => hides, streamedIn, modal };
 }
 
 test("a voice answer for another app's writable field is typed there as plain text", async (t) => {
-  const { options, probes, pastes, released, hides, streamedIn, modal } = await caretTake(t);
+  const { view, options, probes, pastes, released, hides, streamedIn, modal } = await caretTake(t);
 
   assert.equal(streamedIn, "pill", "the answer streams in the pill");
   assert.equal(modal(), false, "the modal never opens over the field");
+  assert.equal(
+    view.host.querySelector(".agent-modal-glow"),
+    null,
+    "nor lays out behind the hidden window once its turn ends"
+  );
   assert.deepEqual(probes, [{ probeEditable: true }]);
   assert.equal(options.plainTextResponse, true);
   assert.deepEqual(pastes, [["caret-1", "Thanks, team!"]]);
@@ -2026,6 +2031,22 @@ test("a caret take whose reply asks a question first is never typed, so its answ
   assert.deepEqual(pastes, []);
   assert.deepEqual(released, ["caret-1"]);
   assert.equal(globalThis.__chat.newChats, 0);
+});
+
+test("a caret answer an answer card then waits on opens the modal while its turn runs", async (t) => {
+  const { pastes, released } = await caretTake(t, {
+    onlyRead: false,
+    beforeAnswer: async (view) => {
+      // Text streamed first, so only the card arriving can open the modal.
+      await view.chat({ busy: true, messages: [user, reply([slackCall], "**Thanks**, team!")] });
+      await view.askApproval("c5");
+      await view.wait(1000);
+      assert.equal(view.layout(), "modal", "at once, not when the card's 4 s nudge fires");
+    },
+  });
+
+  assert.deepEqual(pastes, []);
+  assert.deepEqual(released, ["caret-1"], "a card means it won't be typed");
 });
 
 for (const action of ["dismiss", "Stop", "account change", "unmount", "newer request"]) {

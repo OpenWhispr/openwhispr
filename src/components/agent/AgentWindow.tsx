@@ -499,9 +499,11 @@ export default function AgentWindow() {
       // An answer that only read is typed into the field the take was spoken
       // over; one that asked or acted, or that a newer take overtook, stays here.
       const deliverToCaret = async ({
+        assistantId,
         content,
         onlyRead,
       }: {
+        assistantId: string;
         content: string;
         onlyRead: boolean;
       }): Promise<void> => {
@@ -515,7 +517,11 @@ export default function AgentWindow() {
           .catch(() => null);
         if (caretDeliveryRef.current !== caretSessionId) return;
         caretDeliveryRef.current = null;
-        if (result?.success && press === pressRef.current) hideKeepingChatRef.current();
+        if (result?.success && press === pressRef.current) {
+          // Typed where it was asked for: the hidden window never expands it.
+          expandedRepliesRef.current.add(assistantId);
+          hideKeepingChatRef.current();
+        }
       };
       void (async () => {
         dispatch({
