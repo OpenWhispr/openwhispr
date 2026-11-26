@@ -29,8 +29,6 @@
   "module:src/lib/appsflyer.ts",
   "module:src/lib/authClient.ts",
   "module:src/lib/authClientCore.ts",
-  "module:src/lib/correctionLearner.ts",
-  "module:src/lib/correctionPolicy.ts",
   "module:src/lib/dictationMilestone.ts",
   "module:src/lib/formatNoteRowTime.ts",
   "module:src/lib/formatNoteRowTimeCore.ts",
