@@ -70,26 +70,10 @@ export default function AccountLayout() {
           };
         }}
       />
-      <Stack.Screen
-        name="dictation-agent"
-        options={{ title: 'Voice Assistant', headerLargeTitle: false }}
-      />
-      <Stack.Screen
-        name="keyboard-tone"
-        options={{ title: 'Keyboard Tone', headerLargeTitle: false }}
-      />
-      <Stack.Screen
-        name="hardware-keyboard"
-        options={{ title: 'Hardware Keyboard', headerLargeTitle: false }}
-      />
       <Stack.Screen name="cleanup-prompt" options={customHeaderStackOptions} />
       <Stack.Screen
         name="preferences"
         options={{ title: 'Preferences', headerLargeTitle: false, ...androidPageHeader }}
-      />
-      <Stack.Screen
-        name="google-calendar"
-        options={{ title: 'Google Calendar', headerLargeTitle: false }}
       />
       <Stack.Screen
         name="transcription-language"
@@ -98,18 +82,6 @@ export default function AccountLayout() {
       <Stack.Screen
         name="privacy"
         options={{ title: 'Privacy & Data', headerLargeTitle: false, ...androidPageHeader }}
-      />
-      <Stack.Screen
-        name="model-download"
-        options={{ title: 'Transcription Models', headerLargeTitle: false }}
-      />
-      <Stack.Screen
-        name="diarization-model"
-        options={{ title: 'Speaker Separation', headerLargeTitle: false }}
-      />
-      <Stack.Screen
-        name="parakeet-benchmark"
-        options={{ title: 'Parakeet Benchmark', headerLargeTitle: false }}
       />
       <Stack.Screen
         name="licenses"

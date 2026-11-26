@@ -34,6 +34,7 @@ const ANDROID_ONLY = [
   /^modules\/android-[^/]+\//,
   /^modules\/[^/]+\/android\//,
   /^app\/android-[^/]+\.[jt]sx?$/,
+  /^app-android\//,
   /^app\/\(tabs\)\/\(style\)\//,
   /^assets\/android\//,
   /^plugins\/android-[^/]+\//,

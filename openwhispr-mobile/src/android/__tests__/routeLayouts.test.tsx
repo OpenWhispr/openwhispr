@@ -24,41 +24,49 @@ jest.mock('@/lib/aiWorkflows', () => ({
   parseWorkflow: (scope: string) => scope,
 }));
 
-import AccountLayout from '../(account)/_layout';
-import AndroidAccountLayout from '../(account)/_layout.android';
-import NotesLayout from '../(tabs)/(notes)/_layout';
-import AndroidNotesLayout from '../(tabs)/(notes)/_layout.android';
+import AccountLayout from '../../../app-android/(account)/_layout';
+import NotesLayout from '../../../app-android/(tabs)/(notes)/_layout';
 
 beforeEach(() => {
   mockScreens.length = 0;
   mockCopy.mockClear();
 });
 
-it.each([
-  [AccountLayout, false],
-  [AndroidAccountLayout, true],
-])('keeps account help and device checks on Android (%p)', (Layout, android) => {
-  render(<Layout />);
+it('keeps account help and device checks', () => {
+  render(<AccountLayout />);
   const names = mockScreens.map((screen) => screen.name);
-  expect(names.includes('device-check')).toBe(android);
-  expect(names.includes('help')).toBe(android);
+  expect(names).toEqual(expect.arrayContaining(['device-check', 'help']));
   const workflow = mockScreens.find((screen) => screen.name === 'ai-workflow');
   const options = workflow!.options as (props: { route: { params: { scope: string } } }) => {
     title: string;
     header?: unknown;
   };
   const resolved = options({ route: { params: { scope: 'dictation' } } });
-  expect(resolved.title).toBe(android ? 'translated:workflowSettings.dictation' : 'Dictation');
-  expect(Boolean(resolved.header)).toBe(android);
-  expect(mockCopy).toHaveBeenCalledTimes(android ? 1 : 0);
+  expect(resolved.title).toBe('translated:workflowSettings.dictation');
+  expect(Boolean(resolved.header)).toBe(true);
+  expect(mockCopy).toHaveBeenCalledTimes(1);
 });
 
-it.each([
-  [NotesLayout, false],
-  [AndroidNotesLayout, true],
-])('keeps the import-audio route registration on Android (%p)', (Layout, android) => {
-  render(<Layout />);
-  expect(mockScreens.some((screen) => screen.name === 'import-audio')).toBe(android);
+// Android never had these iOS screens; they are not part of its route tree.
+it('declares no iOS-only account screen', () => {
+  render(<AccountLayout />);
+  const names = mockScreens.map((screen) => screen.name);
+  for (const name of [
+    'dictation-agent',
+    'keyboard-tone',
+    'hardware-keyboard',
+    'google-calendar',
+    'model-download',
+    'diarization-model',
+    'parakeet-benchmark',
+  ]) {
+    expect(names).not.toContain(name);
+  }
+});
+
+it('keeps the import-audio route registration', () => {
+  render(<NotesLayout />);
+  expect(mockScreens.some((screen) => screen.name === 'import-audio')).toBe(true);
   expect(mockScreens.find((screen) => screen.name === '[id]')?.options).toEqual(
     expect.objectContaining({ headerShown: false }),
   );

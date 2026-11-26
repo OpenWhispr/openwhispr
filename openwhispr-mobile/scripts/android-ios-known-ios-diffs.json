@@ -1,7 +1,6 @@
 [
   "config:development:infoPlist.NSAdvertisingAttributionReportEndpoint",
   "config:production:infoPlist.NSAdvertisingAttributionReportEndpoint",
-  "module:app/_layout.tsx",
   "module:src/data/local/notesRepository.ts",
   "module:src/data/local/notesRepositoryPlatform.ts",
   "module:src/data/remote/usageApi.ts",
