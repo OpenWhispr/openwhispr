@@ -52,7 +52,9 @@ function codedError(code) {
 }
 
 // The code exchange nests the user token under authed_user; a refresh
-// returns it at the top level (both recorded in plan Task 3).
+// returns it at the top level (both recorded in plan Task 3). The scopes
+// Slack granted, when it says, so an action that needs one the login lacks
+// is refused up front; a refresh that doesn't say keeps the login's.
 function parseUserTokens(data, now) {
   const source = typeof data?.authed_user?.access_token === "string" ? data.authed_user : data;
   if (typeof source?.access_token !== "string") return null;
@@ -61,6 +63,9 @@ function parseUserTokens(data, now) {
     accessToken: source.access_token,
     refreshToken: typeof source.refresh_token === "string" ? source.refresh_token : null,
     expiresAt: Number.isFinite(source.expires_in) ? now + source.expires_in * 1000 : null,
+    ...(typeof source.scope === "string"
+      ? { scopes: source.scope.split(",").filter(Boolean) }
+      : {}),
   };
 }
 

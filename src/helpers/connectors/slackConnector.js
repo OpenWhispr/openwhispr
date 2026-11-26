@@ -30,6 +30,9 @@ const TOO_LARGE_FOR_NAMES =
 const SLACK_ID = /^[CDGUW](?=[A-Z0-9]*\d)[A-Z0-9]{8,}$/;
 // conversations.open takes at most 8 people besides the user.
 const MAX_GROUP_PEOPLE = 8;
+const GROUP_DM_SCOPE = "mpim:write";
+const GROUP_DMS_NOT_GRANTED =
+  "Slack hasn't let OpenWhispr open group DMs for this account (a workspace admin may need to approve it), so nothing was sent. Tell the user, and offer to post to a channel or to each person instead.";
 // What a channel name can hold: lowercase or caseless letters, digits, - and _.
 const CHANNEL_NAME = /^[\p{Ll}\p{Lo}\p{Lm}\p{M}\p{Nd}_-]+$/u;
 // A message in a link: p, then its ts without the dot.
@@ -189,6 +192,12 @@ function clarify(message, candidates = []) {
 
 function prepareFailed(errorCode, message) {
   return { status: "failed", errorCode, message };
+}
+
+// The scopes a login lists, when Slack said them at connect; a login from
+// before they were kept lists none, so it is tried.
+function scopesKnown(credential) {
+  return Array.isArray(credential?.scopes);
 }
 
 // Which Slack login a lookup or an opened DM belongs to.
@@ -533,6 +542,15 @@ function createSlackConnector({ api, auth, directory, credentials }) {
         // A person with their username, since display names repeat.
         label: found.candidate.hint ?? found.candidate.label,
       };
+      // Refused before the card, never by flagging the login: a reconnect
+      // can't grant what the workspace withholds, and posts elsewhere still work.
+      if (
+        target.kind === "group" &&
+        scopesKnown(credential) &&
+        !credential.scopes.includes(GROUP_DM_SCOPE)
+      ) {
+        return prepareFailed("missing_scope", GROUP_DMS_NOT_GRANTED);
+      }
       // A DM is known only once Send opens it, unless an earlier Send here
       // opened the thread's DM with someone else: then nothing is opened.
       const threadDm = thread && openedDms.get(`${cacheKey}:${thread.channelId}`);
@@ -599,12 +617,16 @@ function createSlackConnector({ api, auth, directory, credentials }) {
         const channelId = opened.result.ok ? opened.result.data?.channel?.id : null;
         // Whatever happened to the DM, the message itself was never posted.
         if (!channelId) {
-          // A login from before group DMs lacks mpim:write: Settings offers a reconnect.
-          const scopeMissing =
-            target.kind === "group" && opened.result.errorCode === "missing_scope";
+          // A login from before group DMs lacks mpim:write: it is flagged, so the
+          // card and Settings offer a reconnect, which asks for it and records
+          // what Slack granted. One that lists its scopes is never flagged.
+          const reconnectForScope =
+            target.kind === "group" &&
+            opened.result.errorCode === "missing_scope" &&
+            !scopesKnown(current.credential);
           const errorCode = opened.result.ok
             ? "bad_response"
-            : scopeMissing
+            : reconnectForScope
               ? auth.markReconnect(binding).errorCode
               : opened.result.errorCode;
           return {

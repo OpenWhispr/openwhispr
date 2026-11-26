@@ -98,6 +98,15 @@ test("authorize asks for user scopes only, exchanges with the PKCE verifier, and
     teamName: "Acme Test",
     teamUrl: "https://acme-test.slack.com/",
     needsReconnect: false,
+    scopes: [
+      "chat:write",
+      "channels:read",
+      "groups:read",
+      "im:write",
+      "mpim:write",
+      "users:read",
+      "users:read.email",
+    ],
   });
   assert.equal(credentials.saves.length, 0);
 });
@@ -183,7 +192,18 @@ test("concurrent callers share one refresh, and the rotated token is saved befor
   assert.equal(second.token, "xoxe.xoxp-1-test-access-2");
   assert.equal(credentials.saves.length, 1);
   assert.equal(credentials.saves[0].refreshToken, "xoxe-1-test-refresh-2");
+  assert.ok(credentials.saves[0].scopes.includes("mpim:write"), "the scopes Slack names");
   assert.equal(credentials.generation("acct-1", "slack"), 1, "a refresh is not a new login");
+});
+
+test("a refresh that names no scopes keeps the ones the login has", async () => {
+  const { scope: _scope, ...refreshWithoutScope } = FIXTURES.refresh;
+  const { auth, credentials } = await setup({
+    credential: { ...EXPIRED, scopes: ["chat:write"] },
+    script: { "oauth.v2.access": [ok(refreshWithoutScope)] },
+  });
+  assert.equal((await auth.getAccessToken(BINDING)).ok, true);
+  assert.deepEqual(credentials.saves[0].scopes, ["chat:write"]);
 });
 
 test("forceRefresh refreshes a token that still looks valid", async () => {

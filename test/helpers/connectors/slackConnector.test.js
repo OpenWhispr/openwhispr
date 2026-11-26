@@ -194,6 +194,46 @@ test("a login from before group DMs is told to reconnect when Slack refuses to o
   assert.equal((await connector.getStatus()).needsReconnect, true);
 });
 
+const groupStandup = { destination: "Gabe Smith, Gabriel Stone", text: "Standup notes" };
+
+test("a login whose scopes leave out group DMs is told so before any card, and is never flagged", async () => {
+  const { connector, slack } = await setupSlack(
+    {
+      ...channelsOnly,
+      "users.list": [ok(FIXTURES.people)],
+      "chat.postMessage": [ok(FIXTURES.posted)],
+    },
+    { credential: { ...CONNECTED, scopes: ["chat:write", "channels:read", "users:read"] } }
+  );
+  const prepared = await connector.prepare("send_message", groupStandup, BOUND);
+  assert.equal(prepared.status, "failed");
+  assert.equal(prepared.errorCode, "missing_scope");
+  assert.match(prepared.message, /group DMs/);
+  assert.equal(slack.methods().includes("conversations.open"), false);
+  assert.equal((await connector.getStatus()).needsReconnect, false);
+  // A reconnect can't grant what the workspace withholds: posts elsewhere still go out.
+  const eng = await prepareEng(connector);
+  assert.equal((await connector.commit("send_message", eng.payload, {}, BOUND)).state, "sent");
+});
+
+test("Slack refusing a group DM the login's scopes allow never flags the login", async () => {
+  const { connector, slack } = await setupSlack(
+    {
+      ...channelsOnly,
+      "users.list": [ok(FIXTURES.people)],
+      "conversations.open": [slackError("missing_scope")],
+    },
+    { credential: { ...CONNECTED, scopes: ["chat:write", "mpim:write", "users:read"] } }
+  );
+  const prepared = await connector.prepare("send_message", groupStandup, BOUND);
+  assert.equal(prepared.status, "ready");
+  const result = await connector.commit("send_message", prepared.payload, {}, BOUND);
+  assert.equal(result.state, "failed");
+  assert.equal(result.errorCode, "missing_scope");
+  assert.equal(posts(slack).length, 0);
+  assert.equal((await connector.getStatus()).needsReconnect, false);
+});
+
 test("a person whose name has a comma in it is that person, not a group DM", async () => {
   const smith = {
     id: "U0SMITH01",
