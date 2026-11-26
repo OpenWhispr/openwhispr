@@ -1936,7 +1936,7 @@ for (const [kind, joinedRequest] of [
 }
 
 test("a call started from the agent pill grows its pill out of that one, then settles", async (t) => {
-  const view = await mountWindow(t);
+  const view = await mountWindow(t, { platform: "darwin" });
   await React.act(async () => view.main.handlers.open({ layout: "typing" }));
   await view.settle();
   // happy-dom lays nothing out: the agent pill's width as a real window measures it.
@@ -1947,11 +1947,19 @@ test("a call started from the agent pill grows its pill out of that one, then se
   assert.equal(pill().dataset.callEnter, "", "it grows out of the agent pill");
   assert.equal(pill().style.getPropertyValue("--call-enter-from"), "181px");
   assert.equal(
+    pill().style.getPropertyValue("--call-enter-drop"),
+    "12px",
+    "from its place, in the transcript's window"
+  );
+  assert.equal(
     view.host.querySelector(".agent-window-content").dataset.instant,
     "true",
     "in place of the usual fade"
   );
-  await view.waitForLayout("pill");
+  // Settings above the pill get a window of their own, with no room below the pill.
+  await React.act(async () => view.button("Settings").click());
+  assert.equal(pill().style.getPropertyValue("--call-enter-drop"), "0px", "so it grows in place");
+  await view.waitForLayout("standalone");
   await view.settle();
   assert.equal(pill().dataset.callEnter, undefined, "and is done once it has grown");
 });

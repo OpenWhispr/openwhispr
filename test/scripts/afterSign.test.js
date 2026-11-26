@@ -200,7 +200,7 @@ test("packaging does not distribute or download NirCmd", () => {
 });
 
 test(
-  "Windows SignTool verifies the vendor addon and rejects unsigned or modified files",
+  "Windows SignTool verifies a vendor DLL and rejects unsigned or modified files",
   {
     skip: process.platform !== "win32",
   },
@@ -208,12 +208,14 @@ test(
     const { inspectWindowsSignatures } = require("../../scripts/lib/windows-signatures");
     const appOutDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-signatures-"));
     t.after(() => fs.rmSync(appOutDir, { recursive: true, force: true }));
-    const addon = path.join(
+    // Not the binding: download-sherpa-onnx rewrites its imports in node_modules,
+    // which breaks its signature.
+    const vendorDll = path.join(
       __dirname,
-      "../../node_modules/onnxruntime-node/bin/napi-v6/win32/x64/onnxruntime_binding.node"
+      "../../node_modules/onnxruntime-node/bin/napi-v6/win32/x64/DirectML.dll"
     );
-    const signedFile = path.join(appOutDir, "ONNX provider's addon.node");
-    fs.copyFileSync(addon, signedFile);
+    const signedFile = path.join(appOutDir, "ONNX provider's DirectML.dll");
+    fs.copyFileSync(vendorDll, signedFile);
     fs.writeFileSync(path.join(appOutDir, "unsigned.dll"), buildPeImage());
     const modified = fs.readFileSync(signedFile);
     const coffHeader = modified.readUInt32LE(0x3c) + 4;

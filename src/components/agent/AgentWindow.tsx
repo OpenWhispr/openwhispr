@@ -840,7 +840,7 @@ export default function AgentWindow() {
   const [callPanel, setCallPanel] = useState<"entering" | "leaving" | null>(null);
   // The agent pill a call starts from: the call's pill grows out of its width and place.
   const agentPillRef = useRef<HTMLDivElement>(null);
-  const [callEnter, setCallEnter] = useState<{ width: number; drop: number } | null>(null);
+  const [callEnter, setCallEnter] = useState<number | null>(null);
   const callPanelTimerRef = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(callPanelTimerRef.current), []);
   const callCardHidden = callCard !== null && callCard.id === hiddenCallCard;
@@ -872,16 +872,7 @@ export default function AgentWindow() {
       return;
     }
     stopReading();
-    const fromWidth =
-      stateRef.current.layout === "modal"
-        ? 0
-        : (agentPillRef.current?.getBoundingClientRect().width ?? 0);
-    // On Windows and Linux the call's own window has no room below its pill, so it grows in place.
-    setCallEnter(
-      fromWidth
-        ? { width: fromWidth, drop: getCachedPlatform() === "darwin" ? CALL_ENTER_DROP_PX : 0 }
-        : null
-    );
+    setCallEnter(agentPillRef.current?.getBoundingClientRect().width || null);
     dispatch({ type: "startCall" });
     await voiceCall.start();
   }, [
@@ -1738,7 +1729,12 @@ export default function AgentWindow() {
       onStopReply={pendingCard || cardSending ? voiceCall.stopSpeech : stopCallReply}
       onLeave={leaveCall}
       onShowCard={!inModal && callCardHidden ? () => setHiddenCallCard(null) : undefined}
-      enterFrom={inModal ? null : callEnter}
+      // Only the transcript's window has room below the call's pill; elsewhere it grows in place.
+      enterFrom={
+        inModal || callEnter === null
+          ? null
+          : { width: callEnter, drop: inTranscriptWindow ? CALL_ENTER_DROP_PX : 0 }
+      }
     />
   );
   // A question stack's questions still to come show behind it, three at most.
