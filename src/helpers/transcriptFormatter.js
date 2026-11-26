@@ -87,14 +87,53 @@ function normalizeSegmentTimestamps(segments, note) {
   });
 }
 
+function spokenTimestamp(segment) {
+  return typeof segment.timestamp === "number" && Number.isFinite(segment.timestamp)
+    ? segment.timestamp
+    : null;
+}
+
+// Held mic lines are appended when they are released, so timed rows can be
+// out of spoken order. Rows with no timestamp are an upload and stay where
+// they were saved. Sorting them to the end gives them a fake time of 0.
+function inSpokenOrder(segments) {
+  const timedSlots = [];
+  segments.forEach((segment, index) => {
+    if (spokenTimestamp(segment) != null) timedSlots.push(index);
+  });
+  const byTime = [...timedSlots].sort((left, right) => {
+    return spokenTimestamp(segments[left]) - spokenTimestamp(segments[right]) || left - right;
+  });
+  const ordered = segments.slice();
+  byTime.forEach((sourceIndex, position) => {
+    ordered[timedSlots[position]] = segments[sourceIndex];
+  });
+  return ordered;
+}
+
 function mergeSegments(segments) {
   const merged = [];
   let lastTimestamp = null;
-  for (const seg of segments) {
+  for (const seg of inSpokenOrder(segments)) {
     if (!seg.text?.trim()) continue;
-    const ts = seg.timestamp || 0;
+    const ts = spokenTimestamp(seg);
+    if (ts == null) {
+      merged.push({ ...seg, text: seg.text.trim() });
+      lastTimestamp = null;
+      continue;
+    }
     const last = merged[merged.length - 1];
-    if (last && speakerKey(last) === speakerKey(seg) && ts - lastTimestamp < 2) {
+    // A negative gap is an earlier line, not a continuation. `ts - last < 2`
+    // is true for every backwards pair, which glues them and ends the cue
+    // before it starts.
+    if (
+      last &&
+      spokenTimestamp(last) != null &&
+      speakerKey(last) === speakerKey(seg) &&
+      lastTimestamp != null &&
+      ts >= lastTimestamp &&
+      ts - lastTimestamp < 2
+    ) {
       last.text = last.text + " " + seg.text.trim();
       last.endTimestamp = ts;
     } else {
@@ -163,7 +202,7 @@ function formatTxt(note, segments, speakerMappings, { recorderLabel } = {}) {
   lines.push("", "──────────────────────────────────", "");
   const untimed = isUntimed(segments);
   for (const seg of merged) {
-    if (!untimed) {
+    if (!untimed && spokenTimestamp(seg) != null) {
       lines.push(
         `[${formatTimestamp(seg.timestamp)}] ${resolveSpeaker(seg, speakerMappings, recorderLabel)}:`
       );
@@ -176,18 +215,25 @@ function formatTxt(note, segments, speakerMappings, { recorderLabel } = {}) {
 
 function formatSrt(segments, speakerMappings, note = {}, { recorderLabel } = {}) {
   const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
+  // A whole upload has no times, so it is one cue from the start. A single
+  // untimed row beside timed speech stays out of the cue list. Giving it
+  // time 0 makes the previous caption end before it starts.
+  const untimedNote = isUntimed(segments);
+  const cues = untimedNote
+    ? merged.map((seg) => ({ ...seg, timestamp: 0, endTimestamp: 0 }))
+    : merged.filter((seg) => spokenTimestamp(seg) != null);
   // Upload transcripts carry no speaker identity at all; prefixing every cue
   // with "Unknown Speaker:" would defeat the subtitle use case. Meeting
   // segments always serialize a source, so they keep their labels.
-  const hasSpeakerIdentity = merged.some((seg) => seg.speaker || seg.speakerName || seg.source);
+  const hasSpeakerIdentity = cues.some((seg) => seg.speaker || seg.speakerName || seg.source);
   // Untimed text has one cue at 0; it spans the recording when its length is known.
   const lastEnd =
-    isUntimed(segments) && note.audio_duration_seconds > 0 ? note.audio_duration_seconds : null;
+    untimedNote && note.audio_duration_seconds > 0 ? note.audio_duration_seconds : null;
   const entries = [];
-  for (let i = 0; i < merged.length; i++) {
-    const seg = merged[i];
+  for (let i = 0; i < cues.length; i++) {
+    const seg = cues[i];
     const nextTs =
-      i + 1 < merged.length ? merged[i + 1].timestamp : (lastEnd ?? seg.endTimestamp + 3);
+      i + 1 < cues.length ? cues[i + 1].timestamp : (lastEnd ?? seg.endTimestamp + 3);
     entries.push(`${i + 1}`);
     entries.push(`${formatSrtTimestamp(seg.timestamp)} --> ${formatSrtTimestamp(nextTs)}`);
     entries.push(
@@ -209,7 +255,7 @@ function formatJson(note, segments, speakerMappings, { recorderLabel } = {}) {
   if (!untimed) {
     for (const seg of merged) speakersSet.add(resolveSpeaker(seg, speakerMappings, recorderLabel));
   }
-  const lastSeg = merged[merged.length - 1];
+  const lastTimed = [...merged].reverse().find((seg) => spokenTimestamp(seg) != null);
 
   return JSON.stringify(
     {
@@ -219,8 +265,8 @@ function formatJson(note, segments, speakerMappings, { recorderLabel } = {}) {
         duration_seconds:
           untimed && note.audio_duration_seconds > 0
             ? Math.round(note.audio_duration_seconds)
-            : lastSeg
-              ? Math.round(lastSeg.endTimestamp)
+            : lastTimed
+              ? Math.round(lastTimed.endTimestamp)
               : 0,
         speaker_count: speakersSet.size,
         segment_count: merged.length,
@@ -247,7 +293,7 @@ function formatMd(note, segments, speakerMappings, { recorderLabel } = {}) {
   lines.push("", "---", "");
   const untimed = isUntimed(segments);
   for (const seg of merged) {
-    if (!untimed) {
+    if (!untimed && spokenTimestamp(seg) != null) {
       lines.push(
         `**${resolveSpeaker(seg, speakerMappings, recorderLabel)}** \`${formatTimestamp(seg.timestamp)}\``
       );

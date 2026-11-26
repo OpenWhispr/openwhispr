@@ -153,6 +153,23 @@ const mergeSpeakerFields = (
   return normalizeTranscriptSegment(merged);
 };
 
+function orderTimedSegments(segments: TranscriptSegment[]) {
+  const timedSlots: number[] = [];
+  segments.forEach((segment, index) => {
+    if (typeof segment.timestamp === "number" && Number.isFinite(segment.timestamp)) {
+      timedSlots.push(index);
+    }
+  });
+  const byTime = [...timedSlots].sort((left, right) => {
+    return segments[left]!.timestamp! - segments[right]!.timestamp! || left - right;
+  });
+  const ordered = segments.slice();
+  byTime.forEach((sourceIndex, position) => {
+    ordered[timedSlots[position]!] = segments[sourceIndex]!;
+  });
+  return ordered;
+}
+
 export const mergeTranscriptSegments = (
   existingSegments: TranscriptSegment[],
   incomingSegments: TranscriptSegment[],
@@ -162,8 +179,10 @@ export const mergeTranscriptSegments = (
     return normalizeTranscriptSegments(existingSegments);
   }
   if (existingSegments.length === 0) {
-    return incomingSegments.map((segment, index) =>
-      normalizeTranscriptSegment({ ...segment, id: segment.id || `merged-${index}` })
+    return orderTimedSegments(
+      incomingSegments.map((segment, index) =>
+        normalizeTranscriptSegment({ ...segment, id: segment.id || `merged-${index}` })
+      )
     );
   }
 
@@ -220,7 +239,26 @@ export const mergeTranscriptSegments = (
     (segment, index) => enrichedByIndex.get(index) ?? normalizeTranscriptSegment(segment)
   );
 
-  return [...preserved, ...unmatchedIncoming];
+  // A risky mic line can be released after a later line was already saved.
+  // The plain-text builder sorts for that. The saved rows have to as well,
+  // or the late line is read and exported after speech it preceded.
+  const ordered = [...preserved];
+  for (const segment of unmatchedIncoming) {
+    const timestamp = segment.timestamp;
+    if (typeof timestamp !== "number" || !Number.isFinite(timestamp)) {
+      ordered.push(segment);
+      continue;
+    }
+    const index = ordered.findIndex(
+      (row) =>
+        typeof row.timestamp === "number" &&
+        Number.isFinite(row.timestamp) &&
+        row.timestamp > timestamp
+    );
+    if (index < 0) ordered.push(segment);
+    else ordered.splice(index, 0, segment);
+  }
+  return ordered;
 };
 
 export const serializeTranscriptSegments = (segments: TranscriptSegment[]) =>
