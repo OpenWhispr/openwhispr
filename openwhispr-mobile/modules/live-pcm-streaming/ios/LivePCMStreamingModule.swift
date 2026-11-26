@@ -292,7 +292,7 @@ public class LivePCMStreamingModule: Module {
       NSLog("[LivePCMStreaming] restart (\(reason)) attempt=\(attempt) ok")
     } catch {
       // Expected while a phone call holds the session: the watchdog retries,
-      // a second later while the interruption is young.
+      // a second later while the interruption is young or has just ended.
       stateLock.lock()
       health.restartFailed(atMs: Self.nowMs())
       stateLock.unlock()
@@ -393,13 +393,17 @@ public class LivePCMStreamingModule: Module {
 
   // Runs on captureQueue. Restarts whether or not iOS sets .shouldResume (a
   // meeting recording is always worth resuming), but only while still
-  // interrupted: a watchdog retry may already have brought audio back.
+  // interrupted: a watchdog retry may already have brought audio back. The
+  // end opens a fresh window of one-second retries with background time:
+  // after a call longer than the first window the app has been suspended,
+  // and iOS often refuses this first attempt.
   private func resumeAfterInterruption() {
     stateLock.lock()
-    let action: CaptureHealthAction = isStreaming ? health.interruptionEnded() : .none
+    let action: CaptureHealthAction = isStreaming ? health.interruptionEnded(atMs: Self.nowMs()) : .none
     stateLock.unlock()
 
     if action == .restart {
+      requestBackgroundTime(newInterruption: true)
       restartCapture(reason: "interruptionEnded")
     }
   }
@@ -430,8 +434,9 @@ public class LivePCMStreamingModule: Module {
   // Any thread; takes stateLock, so never call it holding the lock. Reads
   // what the policy wants under the lock, so a request never acts on a stale
   // answer (capture returning on the render thread meanwhile). Queues the
-  // change to main only when the wanted state changes, or when a new
-  // interruption begins, which swaps any task still held for a fresh one.
+  // change to main only when the wanted state changes, or when an
+  // interruption begins or ends (`newInterruption`; either opens a fresh
+  // window), which swaps any task still held for a fresh one.
   private func requestBackgroundTime(newInterruption: Bool = false) {
     stateLock.lock()
     defer { stateLock.unlock() }

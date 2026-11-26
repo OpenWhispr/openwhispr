@@ -19,15 +19,19 @@ public struct CaptureHealthPolicy {
   /// Late in an interruption, restarts are spaced this far apart: during a
   /// phone call every attempt fails, and hammering the session does not help.
   public static let retryEveryMs: Int64 = 5_000
-  /// Early in an interruption, a restart the session refused is retried a
-  /// second later: another app that borrowed the microphone for a moment is
-  /// usually done within seconds, and each second of waiting is a second
-  /// missing from the meeting. A restart whose engine started gets the stall
-  /// grace instead, so a slow first buffer is not torn down.
+  /// Early in an interruption, and again right after the system ends one, a
+  /// restart the session refused is retried a second later: another app that
+  /// borrowed the microphone for a moment is usually done within seconds, iOS
+  /// often refuses the session for a moment after a call, and each second of
+  /// waiting is a second missing from the meeting. A restart whose engine
+  /// started gets the stall grace instead, so a slow first buffer is not torn
+  /// down.
   public static let fastRetryEveryMs: Int64 = 1_000
-  /// How long into an interruption the one-second retries last. The app holds
-  /// background time for this long too (`wantsBackgroundTime`), so the retries
-  /// keep running after another app took the microphone.
+  /// How long the one-second retries last, from an interruption's beginning
+  /// and again from the system's end of it, since a phone call usually
+  /// outlasts the first window. The app holds background time for this long
+  /// too (`wantsBackgroundTime`), so the retries keep running after another
+  /// app took the microphone.
   public static let fastRetryForMs: Int64 = 25_000
   /// The watchdog ticks once a second, and a restart reads the clock a few ms
   /// after the tick that asked for it, so a retry is due this much early;
@@ -39,8 +43,9 @@ public struct CaptureHealthPolicy {
   private var lastRestartAtMs: Int64?
   // The last restart's engine never started (`restartFailed`).
   private var lastRestartFailed = false
-  // When the current interruption began; nil while capturing.
-  private var interruptedAtMs: Int64?
+  // When the current fast-retry window opened: the interruption's beginning,
+  // or the system's end of it. nil while capturing.
+  private var fastRetryFromMs: Int64?
   // Restarts since the current interruption began (or since the last restart
   // while capturing, which stands alone).
   private var attempts = 0
@@ -58,7 +63,7 @@ public struct CaptureHealthPolicy {
     state = .capturing
     // A later interruption should get its first retry on the next tick.
     lastRestartAtMs = nil
-    interruptedAtMs = nil
+    fastRetryFromMs = nil
     attempts = 0
     return true
   }
@@ -87,33 +92,41 @@ public struct CaptureHealthPolicy {
   }
 
   /// How far apart failed restarts are right now: a second for the first
-  /// `fastRetryForMs` of an interruption, `retryEveryMs` otherwise.
+  /// `fastRetryForMs` of an interruption or after the system ends one,
+  /// `retryEveryMs` otherwise.
   public func retryIntervalMs(atMs: Int64) -> Int64 {
     return inFastRetryWindow(atMs: atMs) ? Self.fastRetryEveryMs : Self.retryEveryMs
   }
 
   /// True while the app should hold background time: from an interruption's
-  /// beginning until capture returns or `fastRetryForMs` has passed.
+  /// beginning, and again from the system's end of it, until capture returns
+  /// or `fastRetryForMs` has passed.
   public func wantsBackgroundTime(atMs: Int64) -> Bool {
     return inFastRetryWindow(atMs: atMs)
   }
 
   private func inFastRetryWindow(atMs: Int64) -> Bool {
-    guard state == .interrupted, let interruptedAtMs else { return false }
-    return atMs - interruptedAtMs < Self.fastRetryForMs
+    guard state == .interrupted, let fastRetryFromMs else { return false }
+    return atMs - fastRetryFromMs < Self.fastRetryForMs
   }
 
   private mutating func beginInterruption(atMs: Int64) {
     state = .interrupted
-    interruptedAtMs = atMs
+    fastRetryFromMs = atMs
     attempts = 0
   }
 
   /// The system ended an interruption. `.restart` only while still
   /// interrupted: when a watchdog retry already brought audio back, another
-  /// restart would only cut a gap into the recording.
-  public func interruptionEnded() -> CaptureHealthAction {
-    return state == .interrupted ? .restart : .none
+  /// restart would only cut a gap into the recording. While still interrupted
+  /// it also opens a fresh fast-retry window from `atMs`, so a session iOS
+  /// refuses right after a long call is retried every second rather than
+  /// after the app has been suspended. Attempts keep counting from the
+  /// interruption's beginning.
+  public mutating func interruptionEnded(atMs: Int64) -> CaptureHealthAction {
+    guard state == .interrupted else { return .none }
+    fastRetryFromMs = atMs
+    return .restart
   }
 
   /// Records a restart and returns its attempt number within the current

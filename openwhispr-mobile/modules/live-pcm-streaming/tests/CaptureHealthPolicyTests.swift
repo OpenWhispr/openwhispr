@@ -18,6 +18,10 @@ struct CaptureHealthPolicyTests {
     aStartedEngineGetsTheStallGraceEvenInsideTheFastWindow()
     aFailedAttemptIsRetriedAfterOneSecond()
     aLateRetryIsDueWithinTheTolerance()
+    anInterruptionsEndOpensAFreshFastWindow()
+    aFailedRestartAfterTheEndIsRetriedASecondLater()
+    anEndWhileCapturingChangesNothing()
+    theEndsWindowClosesAfter25s()
     print("CaptureHealthPolicyTests: all passed")
   }
 
@@ -77,12 +81,12 @@ struct CaptureHealthPolicyTests {
 
   static func interruptionEndedRestartsOnlyWhileInterrupted() {
     var p = CaptureHealthPolicy(startedAtMs: 0)
-    expect(p.interruptionEnded() == .none, "capturing: nothing to resume")
+    expect(p.interruptionEnded(atMs: 500) == .none, "capturing: nothing to resume")
     expect(p.interrupted(atMs: 1_000) == true, "interrupted")
-    expect(p.interruptionEnded() == .restart, "interrupted: resume")
+    expect(p.interruptionEnded(atMs: 1_050) == .restart, "interrupted: resume")
     p.restartAttempted(atMs: 1_100)
     expect(p.frameArrived(atMs: 1_400) == true, "a watchdog retry brought audio back")
-    expect(p.interruptionEnded() == .none, "a late .ended restarts nothing")
+    expect(p.interruptionEnded(atMs: 1_500) == .none, "a late .ended restarts nothing")
   }
 
   static func retriesEverySecondWhileInterrupted() {
@@ -201,5 +205,64 @@ struct CaptureHealthPolicyTests {
     p.restartAttempted(atMs: 34_600)
     expect(p.tick(atMs: 37_600) == .none, "a started attempt outside the window waits the full 5 s")
     expect(p.tick(atMs: 39_600) == .restart, "5 s after it")
+  }
+
+  static func anInterruptionsEndOpensAFreshFastWindow() {
+    var p = CaptureHealthPolicy(startedAtMs: 0)
+    expect(p.interrupted(atMs: 1_000) == true, "a phone call")
+    expect(p.restartAttempted(atMs: 1_000) == 1, "first attempt")
+    p.restartFailed(atMs: 1_000)
+    // The call outlasts the first window, and the app is suspended meanwhile.
+    expect(p.wantsBackgroundTime(atMs: 60_000) == false, "the first window has passed")
+    expect(p.retryIntervalMs(atMs: 60_000) == CaptureHealthPolicy.retryEveryMs, "5 s late in the call")
+    expect(p.interruptionEnded(atMs: 60_000) == .restart, "the call ended")
+    expect(p.wantsBackgroundTime(atMs: 60_000) == true, "background time again from the end")
+    expect(p.retryIntervalMs(atMs: 60_000) == 1_000, "1 s again from the end")
+    expect(p.restartAttempted(atMs: 60_000) == 2, "attempts keep counting from the call's beginning")
+  }
+
+  static func aFailedRestartAfterTheEndIsRetriedASecondLater() {
+    var p = CaptureHealthPolicy(startedAtMs: 0)
+    expect(p.interrupted(atMs: 1_000) == true, "a phone call")
+    expect(p.interruptionEnded(atMs: 60_000) == .restart, "the call ended")
+    p.restartAttempted(atMs: 60_005)
+    // iOS refused the session for a moment after the call.
+    p.restartFailed(atMs: 60_010)
+    expect(p.tick(atMs: 60_500) == .none, "not within the same second")
+    expect(p.tick(atMs: 61_000) == .restart, "a second later, not five")
+    p.restartAttempted(atMs: 61_000)
+    expect(p.tick(atMs: 62_000) == .none, "an attempt that started gets the stall grace")
+    expect(p.tick(atMs: 64_000) == .restart, "and is retried once the grace passes")
+  }
+
+  static func anEndWhileCapturingChangesNothing() {
+    var p = CaptureHealthPolicy(startedAtMs: 0)
+    expect(p.frameArrived(atMs: 1_000) == false, "capturing")
+    expect(p.interruptionEnded(atMs: 1_500) == .none, "nothing to resume")
+    expect(p.state == .capturing, "still capturing")
+    expect(p.wantsBackgroundTime(atMs: 1_500) == false, "no background time")
+    expect(p.retryIntervalMs(atMs: 1_500) == CaptureHealthPolicy.retryEveryMs, "no fast window")
+    expect(p.tick(atMs: 3_999) == .none, "the stall grace still counts from the last frame")
+    expect(p.tick(atMs: 4_000) == .restart, "3 s after the last frame is a stall")
+  }
+
+  static func theEndsWindowClosesAfter25s() {
+    var p = CaptureHealthPolicy(startedAtMs: 0)
+    expect(p.interrupted(atMs: 1_000) == true, "a phone call")
+    expect(p.interruptionEnded(atMs: 60_000) == .restart, "the call ended")
+    p.restartAttempted(atMs: 60_000)
+    p.restartFailed(atMs: 60_000)
+    var at: Int64 = 61_000
+    while at < 85_000 {
+      expect(p.tick(atMs: at) == .restart, "every second inside the end's window (\(at))")
+      p.restartAttempted(atMs: at)
+      p.restartFailed(atMs: at)
+      at += 1_000
+    }
+    expect(p.wantsBackgroundTime(atMs: 84_999) == true, "still inside 25 s of the end")
+    expect(p.wantsBackgroundTime(atMs: 85_000) == false, "released 25 s after the end")
+    expect(p.tick(atMs: 85_000) == .none, "no longer every second")
+    expect(p.tick(atMs: 88_000) == .none, "4 s after the last retry")
+    expect(p.tick(atMs: 89_000) == .restart, "5 s after the last retry")
   }
 }
