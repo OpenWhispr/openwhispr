@@ -227,7 +227,7 @@ export async function transcribeFile(
   });
 }
 
-// OpenAI/Mistral BYOK handle diarization inside the transcription call itself.
+// OpenAI/Mistral/ElevenLabs BYOK handle diarization inside the transcription call itself.
 // Self-hosted mode routes to the user's own server, which doesn't — those users
 // get local diarization like everyone else.
 export function shouldUseByokDiarize(
@@ -240,7 +240,9 @@ export function shouldUseByokDiarize(
     !cfg.useLocalWhisper &&
     !cfg.isOpenWhisprCloud &&
     cfg.transcriptionMode !== "self-hosted" &&
-    (cfg.cloudTranscriptionProvider === "openai" || cfg.cloudTranscriptionProvider === "mistral")
+    (cfg.cloudTranscriptionProvider === "openai" ||
+      cfg.cloudTranscriptionProvider === "mistral" ||
+      cfg.cloudTranscriptionProvider === "elevenlabs")
   );
 }
 

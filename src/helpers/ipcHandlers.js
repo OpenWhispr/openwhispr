@@ -14479,15 +14479,34 @@ class IPCHandlers {
             if (route.transport === "proxied" && route.provider === "elevenlabs") {
               // No language hint, as for the other uploads: a file is often not
               // in the dictation language.
-              const { text } = await transcribeElevenLabsSpeech({
+              const { text, segments: grouped } = await transcribeElevenLabsSpeech({
                 audioBuffer: fs.readFileSync(realByok),
                 signal,
                 model: route.model,
                 fileName: path.basename(realByok),
                 contentType: providerContentType(realByok),
+                diarize,
+                timestamps,
                 apiKey: apiKey || this.environmentManager.getElevenlabsKey(),
               });
-              return { success: true, text };
+              // The saved segments replace the transcript text, so validate coverage
+              // before accepting either timed or speaker-labelled segments.
+              const segments = mapVerboseSegments(
+                { text, segments: grouped },
+                { preserveSpeakers: diarize }
+              );
+              if (diarize && segments?.some((segment) => segment.speaker)) {
+                return {
+                  success: true,
+                  text: formatSpeakerTranscript(segments),
+                  diarized: true,
+                  segments,
+                };
+              }
+              if (diarize) {
+                debugLogger.warn("ElevenLabs diarization returned no usable speaker segments");
+              }
+              return { success: true, text, ...(segments ? { segments } : {}) };
             }
 
             if (!apiKey && route.provider !== "custom") {

@@ -75,8 +75,13 @@ test("provider segments serialize into the meeting-path transcript shape", async
   // later meeting recording on the same note share the base instead of mixing
   // relative seconds with Date.now() values.
   assert.deepEqual(JSON.parse(transcript), [
-    { text: "Hello world.", timestamp: anchorMs },
-    { text: "Named part.", timestamp: anchorMs + 4200, speaker: "speaker_0" },
+    { text: "Hello world.", timestamp: anchorMs, endTimestamp: anchorMs + 4200 },
+    {
+      text: "Named part.",
+      timestamp: anchorMs + 4200,
+      endTimestamp: anchorMs + 7500,
+      speaker: "speaker_0",
+    },
   ]);
 });
 
@@ -98,12 +103,14 @@ test("the default anchor is the current epoch so later meeting appends share one
 // upload transcript mixed with those appends exports sane cue times — a
 // relative-seconds base would keep resolveRecordingStartMs at ~0, skip the
 // epoch rebase, and render the appended segments as ~481,000,000-hour cues.
-test("upload transcripts mixed with later live meeting segments export sane SRT times", async () => {
+test("upload cue ends survive a note edit and a later live meeting append", async () => {
   const { buildUploadTranscript } = await load();
+  const { parseSeedSegments } = await import("../../src/utils/parseTranscriptSegments.ts");
+  const { serializeTranscriptSegments } = await import("../../src/utils/transcriptSpeakerState.ts");
   const { formatSrt } = require("../../src/helpers/transcriptFormatter");
 
   const anchorMs = 1_700_000_000_000;
-  const seeded = JSON.parse(
+  const seeded = parseSeedSegments(
     buildUploadTranscript(
       [
         { text: "Uploaded intro.", start: 0, end: 3 },
@@ -112,12 +119,46 @@ test("upload transcripts mixed with later live meeting segments export sane SRT 
       anchorMs
     )
   );
-  const appended = [{ text: "Live follow-up.", source: "mic", timestamp: anchorMs + 60_000 }];
+  const appended = { text: "Live follow-up.", source: "mic", timestamp: anchorMs + 60_000 };
 
-  const output = formatSrt([...seeded, ...appended], {});
-  assert.match(output, /^1\n00:00:00,000 --> 00:00:30,000\nUnknown Speaker: Uploaded intro\./);
-  assert.match(output, /\n2\n00:00:30,000 --> 00:01:00,000\nUnknown Speaker: Uploaded detail\./);
+  const resaved = JSON.parse(serializeTranscriptSegments([...seeded, appended]));
+  const output = formatSrt(resaved, {});
+  assert.match(output, /^1\n00:00:00,000 --> 00:00:03,000\nUnknown Speaker: Uploaded intro\./);
+  assert.match(output, /\n2\n00:00:30,000 --> 00:00:33,000\nUnknown Speaker: Uploaded detail\./);
   assert.match(output, /\n3\n00:01:00,000 --> 00:01:03,000\nYou: Live follow-up\./);
+});
+
+test("a single timed upload keeps its subtitle end and known recording duration", async () => {
+  const { buildUploadNoteMetadata } = await load();
+  const { formatSrt, formatJson } = require("../../src/helpers/transcriptFormatter");
+  const { transcript, audioDurationSeconds } = buildUploadNoteMetadata(
+    { enabled: false, localModelsReady: false, numSpeakers: null },
+    26,
+    [{ text: "The whole recording.", start: 0, end: 26 }],
+    1_700_000_000_000
+  );
+  const segments = JSON.parse(transcript);
+  const note = { audio_duration_seconds: audioDurationSeconds };
+  assert.equal(
+    formatSrt(segments, {}, note),
+    "1\n00:00:00,000 --> 00:00:26,000\nThe whole recording.\n"
+  );
+  assert.equal(JSON.parse(formatJson(note, segments, {})).metadata.duration_seconds, 26);
+});
+
+test("upload cues stay aligned with the audio after an opening silence and a resave", async () => {
+  const { buildUploadTranscript } = await load();
+  const { parseSeedSegments } = await import("../../src/utils/parseTranscriptSegments.ts");
+  const { serializeTranscriptSegments } = await import("../../src/utils/transcriptSpeakerState.ts");
+  const { formatSrt, formatJson } = require("../../src/helpers/transcriptFormatter");
+  const transcript = buildUploadTranscript(
+    [{ text: "After the pause.", start: 5, end: 12 }],
+    1_700_000_000_000
+  );
+  const segments = JSON.parse(serializeTranscriptSegments(parseSeedSegments(transcript)));
+
+  assert.equal(formatSrt(segments, {}), "1\n00:00:05,000 --> 00:00:12,000\nAfter the pause.\n");
+  assert.equal(JSON.parse(formatJson({}, segments, {})).metadata.duration_seconds, 12);
 });
 
 test("unusable segments produce no transcript at all", async () => {
@@ -146,7 +187,10 @@ test("segments persist the transcript even when diarization is off", async () =>
     anchorMs
   );
 
-  assert.equal(transcript, JSON.stringify([{ text: "Hello.", timestamp: anchorMs }]));
+  assert.equal(
+    transcript,
+    JSON.stringify([{ text: "Hello.", timestamp: anchorMs, endTimestamp: anchorMs + 2000 }])
+  );
   // The transcript must not drag the diarization columns along: a null
   // diarization_enabled still defers to the global speaker setting.
   assert.equal(noteUpdates, null);
@@ -165,7 +209,14 @@ test("diarization metadata follows the insert separately from the transcript", a
 
   assert.equal(
     transcript,
-    JSON.stringify([{ text: "Hi.", timestamp: anchorMs + 1000, speaker: "speaker_0" }])
+    JSON.stringify([
+      {
+        text: "Hi.",
+        timestamp: anchorMs + 1000,
+        recordingStartTimestamp: anchorMs,
+        speaker: "speaker_0",
+      },
+    ])
   );
   assert.deepEqual(noteUpdates, { diarization_enabled: 1 });
 });

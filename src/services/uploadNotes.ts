@@ -13,9 +13,8 @@ export interface UploadSegment {
 // epoch-ms base the meeting path writes (anchorMs + offset), NOT in relative
 // seconds: the record button on any note seeds a meeting recording from
 // note.transcript and appends Date.now()-stamped live segments, and a
-// mixed-base transcript defeats the export rebase (normalizeSegmentTimestamps
-// keys off min timestamp > 1e9), rendering garbage cue times. The rebase
-// subtracts the minimum on export, so pure-upload output is unchanged.
+// mixed-base transcript defeats the export rebase, rendering garbage cue times.
+// Keep the source start if it precedes speech so exports include opening silence.
 // Speakers are stored as the meeting path's ids (speaker_0, … in order of first
 // appearance), never as names: the UI translates "Speaker N" from them, renaming
 // keys its mappings on them, mobile reads them, and a recording later made into
@@ -30,13 +29,17 @@ export function buildUploadTranscript(
   const spoken = segments?.filter((seg) => seg.text?.trim()) ?? [];
   if (!spoken.length || spoken.some((seg) => !Number.isFinite(seg.start))) return undefined;
   const speakerIds = new Map<string, string>();
-  const stored = spoken.map((seg) => {
+  const stored = spoken.map((seg, index) => {
     if (seg.speaker && !speakerIds.has(seg.speaker)) {
       speakerIds.set(seg.speaker, `speaker_${speakerIds.size}`);
     }
     return {
       text: seg.text.trim(),
       timestamp: anchorMs + seg.start * 1000,
+      ...(index === 0 && seg.start > 0 ? { recordingStartTimestamp: anchorMs } : {}),
+      ...(seg.end !== undefined && Number.isFinite(seg.end) && seg.end > seg.start
+        ? { endTimestamp: anchorMs + seg.end * 1000 }
+        : {}),
       ...(seg.speaker ? { speaker: speakerIds.get(seg.speaker) } : {}),
     };
   });
