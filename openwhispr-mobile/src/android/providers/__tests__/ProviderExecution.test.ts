@@ -867,8 +867,9 @@ test.each(['provider.openai', 'custom.another-endpoint'])(
 
 describe('ProviderExecution platform transcription providers', () => {
   test('hands the file and the saved key to a provider the platform registered', async () => {
-    const { registerTranscriptionProvider } =
-      jest.requireActual<typeof import('@/android/providers/mobileProviders')>('@/android/providers/mobileProviders');
+    const { registerTranscriptionProvider } = jest.requireActual<
+      typeof import('@/android/providers/mobileProviders')
+    >('@/android/providers/mobileProviders');
     const transcribe = jest.fn(async () => ({ text: 'fixture transcript', duration: 3 }));
     registerTranscriptionProvider({
       id: 'fixture-asr',

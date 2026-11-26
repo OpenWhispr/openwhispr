@@ -247,7 +247,8 @@ it.each(['agent', 'noteChat'] as const)(
 
 it('adds a provider the platform registers to transcription only, and routes to it', () => {
   jest.isolateModules(() => {
-    const providers = require('@/android/providers/mobileProviders') as typeof import('@/android/providers/mobileProviders');
+    const providers =
+      require('@/android/providers/mobileProviders') as typeof import('@/android/providers/mobileProviders');
     expect(providers.isMobileProviderId('deepgram')).toBe(false);
     providers.registerTranscriptionProvider({
       id: 'deepgram',
