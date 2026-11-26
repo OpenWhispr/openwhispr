@@ -322,6 +322,22 @@ async function recoverOrphan(
   const hasTranscript = deps.hasTranscript(note.id);
 
   if (hasTranscript) {
+    const hadSidecar = pendingBackfills.has(note.id);
+    const listOwedAudio = async (): Promise<boolean> => {
+      if (!hasRecording) return false;
+      try {
+        return await prepareOwedBackfill(note.id, hadSidecar, deps);
+      } catch (error) {
+        deps.reportError(error, note.id);
+        // Unsure what the recording holds: keep it.
+        return true;
+      }
+    };
+    // With no sidecar, it is written before the keep: once the note is done the launch clean-up
+    // keeps its recording only for a sidecar, so a kill in between would delete the audio the
+    // transcript misses. The tail after the last utterance and the gaps the stream dropped were
+    // known only in memory. A sidecar already there keeps the recording across the keep.
+    let owesAudio = hadSidecar ? false : await listOwedAudio();
     let kept = false;
     try {
       deps.keepTranscript(note.id);
@@ -329,20 +345,14 @@ async function recoverOrphan(
     } catch (error) {
       deps.reportError(error, note.id);
     }
+    if (!kept && owesAudio && !hadSidecar) {
+      // The note ends failed below, and only a done note's sidecar lists owed audio.
+      await attempt(deps, note.id, () => deps.deletePendingBackfill(note.id));
+    }
     if (kept) {
-      // Before the wait: a background launch killed while waiting finds the sidecar next time,
-      // so the launch clean-up keeps the recording for the audio the transcript misses. The
-      // tail after the last utterance and the gaps the stream dropped were known only in memory.
-      let owesAudio = false;
-      if (hasRecording) {
-        try {
-          owesAudio = await prepareOwedBackfill(note.id, pendingBackfills.has(note.id), deps);
-        } catch (error) {
-          deps.reportError(error, note.id);
-          // Unsure what the recording holds: keep it.
-          owesAudio = true;
-        }
-      }
+      // An empty sidecar goes only now: a kill before the keep would otherwise leave an orphan
+      // whose owed audio is derived again, pauses included.
+      if (hadSidecar) owesAudio = await listOwedAudio();
       // After the keep: the note is already done, so a background launch killed
       // while waiting loses only the labels, title and summary.
       await deps.waitUntilActive();

@@ -519,11 +519,12 @@ describe('recoverOrphanedMeetings with the meeting recording', () => {
       expect(harness.deps.savePendingBackfill).toHaveBeenCalledWith(70, [
         { startMs: 10_000, endMs: 60_000 },
       ]);
-      // The sidecar is written before the wait, so a launch killed while waiting keeps the audio.
+      // The sidecar is written before the note is done: a done note without one loses its
+      // recording to the launch clean-up, so a kill between the two would lose the tail.
       expect(harness.calls).toEqual([
         'link:70',
-        'keep:70',
         'save:70',
+        'keep:70',
         'active',
         'label:70',
         'backfill:70',
@@ -556,6 +557,33 @@ describe('recoverOrphanedMeetings with the meeting recording', () => {
 
       expect(harness.deps.discardRecording).not.toHaveBeenCalled();
       expect(harness.deps.finishNotes).toHaveBeenCalledWith(72);
+    });
+
+    it('removes the sidecar it wrote when the transcript cannot be kept', async () => {
+      const harness = makeDeps([killed(76)]);
+      killedWithText(76, harness);
+      (harness.deps.keepTranscript as jest.Mock).mockImplementation(() => {
+        throw new Error('cannot transition');
+      });
+
+      await recoverOrphanedMeetings(harness.deps);
+
+      expect(harness.calls).toEqual(['link:76', 'save:76', 'clearSidecar:76', 'failed:76']);
+      expect(harness.deps.finishNotes).not.toHaveBeenCalled();
+    });
+
+    it('keeps an earlier sidecar when the transcript cannot be kept', async () => {
+      const harness = makeDeps([note({ id: 77, transcriptionStatus: 'transcribing' })]);
+      killedWithText(77, harness);
+      (harness.deps.listPendingBackfills as jest.Mock).mockResolvedValue([77]);
+      (harness.deps.keepTranscript as jest.Mock).mockImplementation(() => {
+        throw new Error('cannot transition');
+      });
+
+      await recoverOrphanedMeetings(harness.deps);
+
+      expect(harness.deps.deletePendingBackfill).not.toHaveBeenCalled();
+      expect(harness.deps.markFailed).toHaveBeenCalledWith(77);
     });
 
     it('does not derive owed windows twice', async () => {
