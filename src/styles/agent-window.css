@@ -142,7 +142,7 @@
 
 @keyframes voice-pill-enter-body {
   from {
-    width: var(--call-enter-from);
+    width: min(var(--call-enter-from), 100%);
     transform: translateY(var(--call-enter-drop));
   }
 }
