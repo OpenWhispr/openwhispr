@@ -33,9 +33,9 @@ jest.mock('../../../modules/live-activity/src', () => ({
 }));
 
 import { AppGroupStorage } from '../../../modules/app-group-storage/src';
-import PreferencesScreen from '../PreferencesScreen';
+import KeyboardSettingsScreen from '../KeyboardSettingsScreen';
 
-describe('PreferencesScreen — dictate without opening the app', () => {
+describe('KeyboardSettingsScreen — dictate without opening the app', () => {
   const originalOS = Platform.OS;
   const originalVersion = Object.getOwnPropertyDescriptor(Platform, 'Version');
   function setIOSVersion(version: string): void {
@@ -55,12 +55,12 @@ describe('PreferencesScreen — dictate without opening the app', () => {
   });
 
   it('shows the switch on iOS, on by default, and saves it when turned off', () => {
-    render(<PreferencesScreen />);
-    expect(screen.getByText('Dictate without opening OpenWhispr')).toBeTruthy();
+    render(<KeyboardSettingsScreen />);
+    expect(screen.getByText('Dictate in place')).toBeTruthy();
     expect(
       screen.getByText('Beta. Records in the keyboard instead of switching to the app.'),
     ).toBeTruthy();
-    const toggle = screen.getByLabelText('Dictate without opening OpenWhispr');
+    const toggle = screen.getByLabelText('Dictate in place');
     expect(toggle.props.value).toBe(true);
     fireEvent(toggle, 'valueChange', false);
     expect(mockToggles.keyboardDirectDictation).toHaveBeenCalledWith(false);
@@ -68,13 +68,13 @@ describe('PreferencesScreen — dictate without opening the app', () => {
 
   it('stays off for someone who turned it off', () => {
     mockConfig = { defaultMode: 'cloud', keyboardDirectDictation: false };
-    render(<PreferencesScreen />);
-    expect(screen.getByLabelText('Dictate without opening OpenWhispr').props.value).toBe(false);
+    render(<KeyboardSettingsScreen />);
+    expect(screen.getByLabelText('Dictate in place').props.value).toBe(false);
   });
 
   it('explains when the app still opens behind the help button', () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    render(<PreferencesScreen />);
+    render(<KeyboardSettingsScreen />);
     fireEvent.press(screen.getByLabelText('When OpenWhispr still opens'));
     expect(alert).toHaveBeenCalledWith(
       'When OpenWhispr still opens',
@@ -84,29 +84,29 @@ describe('PreferencesScreen — dictate without opening the app', () => {
 
   it('keeps the switch hidden after an OTA update to an older native build on iOS 26', () => {
     AppGroupStorage.supportsKeyboardDirectDictation = false;
-    render(<PreferencesScreen />);
-    expect(screen.queryByText('Dictate without opening OpenWhispr')).toBeNull();
+    render(<KeyboardSettingsScreen />);
+    expect(screen.queryByText('Dictate in place')).toBeNull();
   });
 
   it('keeps the containing-app handoff on iOS 18', () => {
     setIOSVersion('18.7');
-    render(<PreferencesScreen />);
-    expect(screen.queryByText('Dictate without opening OpenWhispr')).toBeNull();
+    render(<KeyboardSettingsScreen />);
+    expect(screen.queryByText('Dictate in place')).toBeNull();
   });
 
   it('is not offered off iOS', () => {
     Platform.OS = 'android';
-    render(<PreferencesScreen />);
-    expect(screen.queryByText('Dictate without opening OpenWhispr')).toBeNull();
+    render(<KeyboardSettingsScreen />);
+    expect(screen.queryByText('Dictate in place')).toBeNull();
   });
 });
 
-describe('PreferencesScreen — keyboard sections', () => {
+describe('KeyboardSettingsScreen — keyboard sections', () => {
   it('groups setup, dictation and typing under their own headings', () => {
     Platform.OS = 'ios';
-    render(<PreferencesScreen />);
-    expect(screen.getByText('Keyboard setup')).toBeTruthy();
-    expect(screen.getByText('Keyboard dictation')).toBeTruthy();
-    expect(screen.getByText('Keyboard typing')).toBeTruthy();
+    render(<KeyboardSettingsScreen />);
+    expect(screen.getByText('Setup')).toBeTruthy();
+    expect(screen.getByText('Dictation')).toBeTruthy();
+    expect(screen.getByText('Typing')).toBeTruthy();
   });
 });

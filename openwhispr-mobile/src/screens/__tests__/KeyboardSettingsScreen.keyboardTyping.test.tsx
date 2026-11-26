@@ -44,9 +44,9 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
   },
 }));
 
-import PreferencesScreen from '../PreferencesScreen';
+import KeyboardSettingsScreen from '../KeyboardSettingsScreen';
 
-describe('PreferencesScreen — keyboard typing', () => {
+describe('KeyboardSettingsScreen — keyboard typing', () => {
   const originalOS = Platform.OS;
 
   beforeEach(() => {
@@ -61,7 +61,7 @@ describe('PreferencesScreen — keyboard typing', () => {
   });
 
   it('defaults to Automatic for language and layout, with haptics on', () => {
-    render(<PreferencesScreen />);
+    render(<KeyboardSettingsScreen />);
     expect(screen.getByLabelText('Typing language: Automatic')).toBeTruthy();
     expect(screen.getByLabelText('Layout: Automatic')).toBeTruthy();
     expect(screen.getByLabelText('Haptic feedback').props.value).toBe(true);
@@ -75,7 +75,7 @@ describe('PreferencesScreen — keyboard typing', () => {
       keyboardTypingLayout: 'qwerty',
       keyboardHapticsEnabled: false,
     };
-    render(<PreferencesScreen />);
+    render(<KeyboardSettingsScreen />);
     expect(screen.getByLabelText('Typing language: Deutsch')).toBeTruthy();
     expect(screen.getByLabelText('Layout: QWERTY')).toBeTruthy();
     expect(screen.getByLabelText('Haptic feedback').props.value).toBe(false);
@@ -85,7 +85,7 @@ describe('PreferencesScreen — keyboard typing', () => {
     ['menu-en', 'en'],
     ['menu-de', 'de'],
   ] as const)('writes the typing language picked with %s', (testID, language) => {
-    render(<PreferencesScreen />);
+    render(<KeyboardSettingsScreen />);
     fireEvent.press(screen.getByTestId(testID));
     expect(mockAppGroup.keyboard_typing_language).toBe(language);
     expect(mockUpdateConfig).toHaveBeenCalledWith({ keyboardTypingLanguage: language });
@@ -95,7 +95,7 @@ describe('PreferencesScreen — keyboard typing', () => {
     ['menu-qwerty', 'qwerty'],
     ['menu-qwertz', 'qwertz'],
   ] as const)('writes the layout picked with %s', (testID, layout) => {
-    render(<PreferencesScreen />);
+    render(<KeyboardSettingsScreen />);
     fireEvent.press(screen.getByTestId(testID));
     expect(mockAppGroup.keyboard_typing_layout).toBe(layout);
     expect(mockUpdateConfig).toHaveBeenCalledWith({ keyboardTypingLayout: layout });
@@ -109,7 +109,7 @@ describe('PreferencesScreen — keyboard typing', () => {
     };
     mockAppGroup.keyboard_typing_language = 'de';
     mockAppGroup.keyboard_typing_layout = 'qwertz';
-    render(<PreferencesScreen />);
+    render(<KeyboardSettingsScreen />);
     const [languageAutomatic, layoutAutomatic] = screen.getAllByTestId('menu-automatic');
 
     fireEvent.press(languageAutomatic);
@@ -123,7 +123,7 @@ describe('PreferencesScreen — keyboard typing', () => {
   });
 
   it('writes haptics as "0" and "1"', () => {
-    render(<PreferencesScreen />);
+    render(<KeyboardSettingsScreen />);
     const toggle = screen.getByLabelText('Haptic feedback');
     fireEvent(toggle, 'valueChange', false);
     expect(mockAppGroup.keyboard_haptics_enabled).toBe('0');
@@ -136,7 +136,7 @@ describe('PreferencesScreen — keyboard typing', () => {
   it('clears learned words only after confirming', () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     jest.spyOn(Date, 'now').mockReturnValue(1790000000000);
-    render(<PreferencesScreen />);
+    render(<KeyboardSettingsScreen />);
     fireEvent.press(screen.getByText('Clear learned words'));
 
     expect(alert).toHaveBeenCalledTimes(1);
@@ -154,7 +154,7 @@ describe('PreferencesScreen — keyboard typing', () => {
 
   it('is not offered off iOS', () => {
     Platform.OS = 'android';
-    render(<PreferencesScreen />);
+    render(<KeyboardSettingsScreen />);
     expect(screen.queryByText('Typing language')).toBeNull();
     expect(screen.queryByText('Clear learned words')).toBeNull();
   });

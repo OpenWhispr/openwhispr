@@ -95,8 +95,8 @@ export function clearKeyboardLearnedWords(): void {
   AppGroupStorage.setItem(KEYBOARD_TYPING_KEYS.LEARNED_WORDS_CLEARED_AT_MS, String(Date.now()));
 }
 
-// Takes a language or layout the user switched in the keyboard into config, so Preferences shows
-// it and the mirror doesn't undo it. A missing or invalid App Group value leaves config as the
+// Takes a language or layout the user switched in the keyboard into config, so the Keyboard screen
+// shows it and the mirror doesn't undo it. A missing or invalid App Group value leaves config as the
 // source of truth.
 export async function reconcileKeyboardTypingFromAppGroup(): Promise<void> {
   const config = useConfigStore.getState().config;

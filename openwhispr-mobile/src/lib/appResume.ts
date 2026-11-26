@@ -37,7 +37,8 @@ export function resolveResumeAction(alreadyOnHome: boolean): ResumeDecision {
   // this handler can otherwise replace the screen with Home before it is seen.
   if (isRecoveryDeepLinkFresh()) return STAY;
 
-  // The keyboard's Keyboard Settings… just opened Preferences, ahead of `didBecomeActive` as above.
+  // The keyboard's Keyboard Settings… just opened the Keyboard screen, ahead of `didBecomeActive`
+  // as above.
   if (isKeyboardSettingsLinkFresh()) return STAY;
 
   if (useGoogleCalendarStore.getState().isAuthSessionActive) return STAY;
