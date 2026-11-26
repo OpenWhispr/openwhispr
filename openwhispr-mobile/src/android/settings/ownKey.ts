@@ -4,7 +4,7 @@ import {
   getMobileProvidersForScope,
   isTranscriptionScope,
   type MobileInferenceScope,
-} from '@/lib/mobileProviders';
+} from '@/android/providers/mobileProviders';
 import {
   getProviderCredential,
   getProviderCredentialReference,

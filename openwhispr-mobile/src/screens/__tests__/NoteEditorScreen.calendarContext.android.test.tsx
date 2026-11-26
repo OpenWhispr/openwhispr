@@ -27,7 +27,7 @@ jest.mock('@/screens/NoteEditorScreen', () => {
 });
 
 import React from 'react';
-import { ProviderExecutionError } from '@/services/providers/ProviderExecutionError';
+import { ProviderExecutionError } from '@/android/providers/ProviderExecutionError';
 import { Alert, Modal, Platform } from 'react-native';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import NoteEditorScreen from '@/screens/NoteEditorScreen.android';

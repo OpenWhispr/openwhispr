@@ -7,7 +7,7 @@ import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { ProviderExecutionError } from '@/services/providers/ProviderExecution';
-import { getProviderErrorCopyKey } from '@/lib/providerErrorCopy';
+import { getProviderErrorCopyKey } from '@/android/providers/providerErrorCopy';
 import { getLocalReasoningUnavailableMessage } from '@/lib/localReasoning';
 import { MODE_LABELS } from '@/lib/inferenceModes';
 import {

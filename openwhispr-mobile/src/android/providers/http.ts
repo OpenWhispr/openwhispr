@@ -1,5 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { ProviderExecutionError } from '@/services/providers/ProviderExecutionError';
+import { ProviderExecutionError } from '@/android/providers/ProviderExecutionError';
 
 /** The provider failure for an HTTP status, in the same codes the OpenAI-compatible client uses. */
 export function statusError(name: string, status: number): ProviderExecutionError {

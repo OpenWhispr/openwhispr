@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
-import { providerDisplayName } from '@/lib/mobileProviders';
+import { providerDisplayName } from '@/android/providers/mobileProviders';
 import { switchWorkflowMode } from '@/lib/workflowModeSwitch.android';
 import type { AndroidSpeechModelId } from '../speechSelection';
 import { ANDROID_MODELS, type AndroidModelId } from '../models';

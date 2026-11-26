@@ -1,4 +1,4 @@
-import type { ProviderExecutionError } from '@/services/providers/ProviderExecutionError';
+import type { ProviderExecutionError } from '@/android/providers/ProviderExecutionError';
 
 const PROVIDER_FAILURE_COPY: Readonly<Partial<Record<string, string>>> = {
   INVALID_CREDENTIAL: 'invalidCredential',

@@ -3,7 +3,10 @@ import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { workflowSaveConfig } from '@/lib/inferenceModes';
 import { androidCopy } from '@/lib/androidCopy';
-import { resolveMobileInferenceRoute, type InferenceSelection } from '@/lib/mobileProviders';
+import {
+  resolveMobileInferenceRoute,
+  type InferenceSelection,
+} from '@/android/providers/mobileProviders';
 import type { UserConfig } from '@/types';
 import type {
   createWorkflowModeSwitch,

@@ -7,8 +7,8 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { supportsVoiceEnrollment } from '@/lib/voiceEnrollmentCapability';
-import { ProviderExecutionError } from '@/services/providers/ProviderExecutionError';
-import { getProviderErrorCopyKey } from '@/lib/providerErrorCopy';
+import { ProviderExecutionError } from '@/android/providers/ProviderExecutionError';
+import { getProviderErrorCopyKey } from '@/android/providers/providerErrorCopy';
 import type {
   EditorContext,
   EditorCopy,

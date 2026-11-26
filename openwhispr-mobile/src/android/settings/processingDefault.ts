@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import type { InferenceMode, InferenceSelection } from '@/lib/mobileProviders';
+import type { InferenceMode, InferenceSelection } from '@/android/providers/mobileProviders';
 import { getProviderCredentialReference } from '@/services/providers/ProviderCredentials';
 import type { UserConfig } from '@/types';
 import { upgradeSavedModels } from './androidModels';

@@ -1,5 +1,5 @@
 import type { InferenceSelection } from '@/lib/mobileProviders';
-import { sessionFetch as fetch } from '@/lib/sessionFetch';
+import { fetch } from 'expo/fetch';
 import {
   BASE_URL,
   getAuthHeaders,

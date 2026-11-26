@@ -1,4 +1,4 @@
-import { registerTranscriptionProvider } from '@/lib/mobileProviders';
+import { registerTranscriptionProvider } from '@/android/providers/mobileProviders';
 import { assemblyAiProvider } from './assemblyai';
 import { deepgramProvider } from './deepgram';
 

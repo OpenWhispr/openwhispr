@@ -3,7 +3,7 @@ import {
   isTranscriptScopeCurrent,
   observeTranscriptScope,
 } from '@/lib/transcriptScope';
-import type { ProviderFileScope } from '@/services/providers/NativeProviderTransportCore';
+import type { ProviderFileScope } from '@/android/providers/NativeProviderTransportCore';
 
 export function createProviderFileScope(routeSnapshot?: string): ProviderFileScope {
   const scope = captureTranscriptScope();

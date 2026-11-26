@@ -1,4 +1,4 @@
-import type { PlatformTranscriptionProvider } from '@/lib/mobileProviders';
+import type { PlatformTranscriptionProvider } from '@/android/providers/mobileProviders';
 import { liveAdapter } from './liveAdapter';
 import { noSpeech, promptTerms, uploadFile } from './http';
 
