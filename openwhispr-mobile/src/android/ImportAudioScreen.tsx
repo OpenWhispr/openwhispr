@@ -17,7 +17,7 @@ import { speechModelCoversRecording, unsupportedSpeechLanguages } from './speech
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import registry from '@/config/languageRegistry.json';
 import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
-import { useFileUpload } from '@/hooks/useFileUpload.android';
+import { useFileUpload } from '@/android/hooks/useFileUpload';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useNotesStore } from '@/android/store/useNotesStore';

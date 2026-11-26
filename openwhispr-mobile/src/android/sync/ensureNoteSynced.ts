@@ -1,6 +1,6 @@
 import { createEnsureNoteSynced } from '@/android/sync/ensureNoteSyncedCore';
 import { isCloudBackupEnabled } from '@/lib/cloudBackup';
-import { NoteSharingError, noteSharingFeedback } from '@/lib/notes/noteSharingFeedback';
+import { NoteSharingError, noteSharingFeedback } from '@/android/lib/notes/noteSharingFeedback';
 
 export const NOTE_UNAVAILABLE_ERROR = noteSharingFeedback.noteUnavailable;
 export const NOTE_PRIVATE_ERROR = noteSharingFeedback.notePrivate;

@@ -47,7 +47,7 @@ jest.mock('@/data', () => ({
   },
 }));
 jest.mock('expo-sqlite/localStorage/install', () => ({}));
-jest.mock('@/lib/meetingRecoveryLifecycle', () => ({
+jest.mock('@/android/lib/meetingRecoveryLifecycle', () => ({
   createMeetingRecoveryLifecycle: () => ({
     begin: () => ({
       directory: null,
@@ -87,6 +87,9 @@ jest.mock('@/android/reasoning/ReasoningService', () =>
   jest.requireMock('@/services/reasoning/ReasoningService'),
 );
 jest.mock('@/lib/notes/localMeetingNotes', () => ({ generateLocalMeetingNotes: jest.fn() }));
+jest.mock('@/android/lib/notes/localMeetingNotes', () =>
+  jest.requireMock('@/lib/notes/localMeetingNotes'),
+);
 jest.mock('@/lib/appsflyer', () => ({ logTranscriptionCompleted: jest.fn() }));
 jest.mock('@/data/remote/notesApi', () => ({ deleteNote: jest.fn() }));
 jest.mock('@/android/dictation/localReasoningFallback', () => ({

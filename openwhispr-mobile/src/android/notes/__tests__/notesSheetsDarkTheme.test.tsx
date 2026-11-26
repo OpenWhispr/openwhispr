@@ -34,6 +34,9 @@ jest.mock('react-native-gesture-handler', () => ({
 jest.mock('@/hooks/useSheetDragToDismiss', () => ({
   useSheetDragToDismiss: () => ({ dragGesture: {}, sheetStyle: {} }),
 }));
+jest.mock('@/android/hooks/useSheetDragToDismiss', () =>
+  jest.requireMock('@/hooks/useSheetDragToDismiss'),
+);
 jest.mock('react-native-reanimated', () => ({
   __esModule: true,
   default: { View: require('react-native').View },

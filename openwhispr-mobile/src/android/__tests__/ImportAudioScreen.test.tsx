@@ -82,6 +82,7 @@ jest.mock('@/hooks/useFileUpload.android', () => ({
     };
   },
 }));
+jest.mock('@/android/hooks/useFileUpload', () => jest.requireMock('@/hooks/useFileUpload.android'));
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({
     register: async ({ feature }: { feature: () => void }) => {

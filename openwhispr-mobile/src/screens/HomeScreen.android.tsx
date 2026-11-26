@@ -32,7 +32,7 @@ import {
   processAndroidAudio,
   type AndroidJob,
 } from '@/android/pipeline';
-import { useFileUpload } from '@/hooks/useFileUpload.android';
+import { useFileUpload } from '@/android/hooks/useFileUpload';
 import { useNotesStore } from '@/android/store/useNotesStore';
 import { defaultFolderFor } from '@/android/notes/library';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';

@@ -1,5 +1,5 @@
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { formatNoteRowTime } from '@/lib/formatNoteRowTime.android';
+import { formatNoteRowTime } from '@/android/lib/formatNoteRowTime';
 import { createNoteRow } from './NoteRowCore.android';
 
 export const NoteRow = createNoteRow(function useNotePresentation({ onDelete, onMove }) {

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { generateNoteTitle } from '@/utils/generateTitle.android';
+import { generateNoteTitle } from '@/android/utils/generateTitle';
 import {
   isDefaultGenerateNotesAction,
   type GenerateNotesInputKind,
-} from '@/lib/notes/generateNotesPromptCore';
+} from '@/android/lib/notes/generateNotesPromptCore';
 import {
   DESKTOP_DEFAULT_NOTE_ACTION,
   isNothingToSummarizeReply,
@@ -15,7 +15,7 @@ import type {
   PreparedActionPrompt,
   ProcessingState,
   RunActionOptions,
-} from '@/hooks/useActionProcessingCore';
+} from '@/android/hooks/useActionProcessingCore';
 
 export interface AndroidRunActionOptions extends RunActionOptions {
   isCurrent?: () => boolean;

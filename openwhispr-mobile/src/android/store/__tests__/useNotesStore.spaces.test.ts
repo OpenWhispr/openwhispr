@@ -48,6 +48,7 @@ jest.mock('@/utils/generateTitle', () => ({
   generateNoteTitle: jest.fn(),
   deriveLocalTitle: jest.fn(),
 }));
+jest.mock('@/android/utils/generateTitle', () => jest.requireMock('@/utils/generateTitle'));
 jest.mock('@/lib/localReasoningFallback', () => ({
   promptLocalReasoningFallback: jest.fn(),
 }));

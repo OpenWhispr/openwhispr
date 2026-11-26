@@ -3,7 +3,7 @@ import { AppGroupStorage } from '../../../modules/app-group-storage/src';
 import {
   listPendingProviderRecoveryJobs,
   clearKeyboardProviderRecovery,
-} from '@/lib/keyboardInferenceRoute';
+} from '@/android/lib/keyboardInferenceRoute';
 import { AudioTools } from '../../../modules/audio-tools/src';
 import { transcribeAndCleanup } from '@/android/dictation/transcribeAndCleanup';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';

@@ -9,7 +9,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { WaveformVisualizer } from '@/components/features/WaveformVisualizer';
-import { useAudioRecording } from '@/hooks/useAudioRecording';
+import { useAudioRecording } from '@/android/hooks/useAudioRecording';
 import { useAudioWaveform } from '@/hooks/useAudioWaveform';
 import { useTheme } from '@/android/ThemeProvider';
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/android/data/notesRepository';

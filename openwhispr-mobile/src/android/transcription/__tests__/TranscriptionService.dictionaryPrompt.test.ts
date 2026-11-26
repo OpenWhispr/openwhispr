@@ -90,6 +90,9 @@ jest.mock(
 jest.mock('@/lib/keyboardInferenceRoute', () => ({
   clearKeyboardProviderRecovery: jest.fn(),
 }));
+jest.mock('@/android/lib/keyboardInferenceRoute', () =>
+  jest.requireMock('@/lib/keyboardInferenceRoute'),
+);
 
 let logSpy: jest.SpyInstance;
 

@@ -17,7 +17,7 @@ import { useIosColor } from '@/config/colors.android';
 import { useTheme } from '@/android/ThemeProvider';
 import { GlassIconButton } from '@/components/ui/GlassIconButton';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
-import { INVALID_EMAIL_ERROR, useNoteSharing } from '@/hooks/useNoteSharing';
+import { INVALID_EMAIL_ERROR, useNoteSharing } from '@/android/hooks/useNoteSharing';
 import type { UserConfig } from '@/types';
 import type { NoteShareCopy } from './NoteSharePrincipalCore.android';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
@@ -655,7 +655,7 @@ export function createNoteShareSheet(options: SheetPresentation = {}) {
           if (
             'errorCode' in sharing
               ? sharing.errorCode === 'invalidEmail'
-              : sharing.error === INVALID_EMAIL_ERROR
+              : (sharing as { error?: string }).error === INVALID_EMAIL_ERROR
           )
             sharing.dismissError();
         }}

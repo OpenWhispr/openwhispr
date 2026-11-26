@@ -1,11 +1,2 @@
-import {
-  androidChatSendGateLifecycle,
-  type AndroidChatSendGateOptions,
-} from '@/android/chatSendGateLifecycle';
-import { useChatSendGateCore, type ChatSendGate as BaseChatSendGate } from './useChatSendGateCore';
-
-export type ChatSendGateOptions = AndroidChatSendGateOptions;
-export type ChatSendGate = BaseChatSendGate<ChatSendGateOptions>;
-export function useChatSendGate(): ChatSendGate {
-  return useChatSendGateCore(androidChatSendGateLifecycle);
-}
+// Android's copy lives in src/android; shared files still import it from here.
+export * from '@/android/hooks/useChatSendGate';

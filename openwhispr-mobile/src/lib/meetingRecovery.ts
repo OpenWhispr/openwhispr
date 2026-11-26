@@ -7,7 +7,6 @@ import { canTransition } from '@/lib/diarization/transcriptionStatus';
 import { tryParseNoteTimestamp } from '@/lib/parseNoteTimestamp';
 import { Sentry } from '@/lib/sentry';
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
-import { createMeetingRecoveryLifecycle } from './meetingRecoveryLifecycle';
 import { useNotesStore } from '@/store/useNotesStore';
 import type { TranscriptionStatus } from '@/types';
 
@@ -20,7 +19,6 @@ const RUNTIME_STARTED_AT_MS = Date.now();
 const ORPHANED_STATUSES: ReadonlySet<string> = new Set(['recording', 'transcribing', 'diarizing']);
 
 export interface MeetingRecoveryDeps {
-  isCurrent?(): boolean;
   listNotes(): Note[];
   markFailed(noteId: number): void;
   /** Settles once a resume can run without iOS suspending it. */
@@ -52,7 +50,6 @@ export async function recoverOrphanedMeetings(deps: MeetingRecoveryDeps): Promis
     );
 
   for (const note of orphans) {
-    if (deps.isCurrent?.() === false) return;
     const markerKey = `${MEETING_RESUME_MARKER_PREFIX}${note.id}`;
     const alreadyAttempted = deps.storage.getItem(markerKey) != null;
     const resumable =
@@ -78,7 +75,6 @@ export async function recoverOrphanedMeetings(deps: MeetingRecoveryDeps): Promis
     // Before the marker: the note is already failed, so a background launch
     // killed while waiting leaves it failed with Retry and no stale marker.
     await deps.waitUntilActive();
-    if (deps.isCurrent?.() === false) return;
     deps.storage.setItem(markerKey, '1');
     try {
       // Sequential on purpose: each resume runs on-device ASR + diarization.
@@ -93,7 +89,6 @@ export async function recoverOrphanedMeetings(deps: MeetingRecoveryDeps): Promis
 const MEETING_RECORDING_FILE = /^meeting-(\d+)\.wav$/;
 
 export interface MeetingRecordingRepairDeps {
-  isCurrent?(): boolean;
   /** File names in the directory meeting recordings are saved to. */
   listRecordingFiles(): Promise<string[]>;
   getNote(noteId: number): Note | null;
@@ -110,7 +105,6 @@ export interface MeetingRecordingRepairDeps {
  */
 export async function repairMeetingRecordings(deps: MeetingRecordingRepairDeps): Promise<void> {
   for (const name of await deps.listRecordingFiles()) {
-    if (deps.isCurrent?.() === false) return;
     const noteId = Number(MEETING_RECORDING_FILE.exec(name)?.[1]);
     if (!noteId) continue;
     const note = deps.getNote(noteId);
@@ -158,18 +152,17 @@ export function createdBeforeRuntime(
   return createdAt.getTime() < cutoffMs;
 }
 
-const recoveryLifecycle = createMeetingRecoveryLifecycle();
+let hasStarted = false;
 
-/** Runs once per selected account revision. Call after the notes store is initialized. */
+/** Runs the sweep once per JS runtime. Call after the notes store is initialized. */
 export function startMeetingRecoveryOnce(): void {
-  const run = recoveryLifecycle.begin();
-  if (!run) return;
-  const { directory } = run;
+  if (hasStarted) return;
+  hasStarted = true;
+  const directory = FileSystem.documentDirectory;
   // A recording found again can make its meeting resumable, so this runs first.
   const repaired = directory
     ? repairMeetingRecordings({
-        ...(run.isCurrent ? { isCurrent: run.isCurrent } : {}),
-        listRecordingFiles: run.listRecordingFiles,
+        listRecordingFiles: () => FileSystem.readDirectoryAsync(directory),
         getNote: (noteId) => notesRepository.getNoteById(noteId),
         recordingUri: (noteId) => `${directory}meeting-${noteId}.wav`,
         restorePath: (noteId, uri) => notesRepository.restoreMeetingRecordingPath(noteId, uri),
@@ -181,10 +174,8 @@ export function startMeetingRecoveryOnce(): void {
       })
     : Promise.resolve();
   repaired
-    .then(() => {
-      if (run.isCurrent && !run.isCurrent()) return;
-      return recoverOrphanedMeetings({
-        ...(run.isCurrent ? { isCurrent: run.isCurrent } : {}),
+    .then(() =>
+      recoverOrphanedMeetings({
         listNotes: () =>
           notesRepository
             .getAllNotes()
@@ -192,14 +183,14 @@ export function startMeetingRecoveryOnce(): void {
         markFailed: (noteId) => useNotesStore.getState().transitionStatus(noteId, 'failed'),
         waitUntilActive: () => waitForAppActive(AppState),
         resume: (noteId) => useNotesStore.getState().retryMeetingTranscription(noteId),
-        storage: run.getStorage(),
+        storage: localStorage,
         reportError: (error, noteId) =>
           Sentry.captureException(error, {
             tags: { feature: 'meeting-recovery' },
             extra: { noteId },
           }),
-      });
-    })
+      }),
+    )
     .catch((error) => {
       Sentry.captureException(error, { tags: { feature: 'meeting-recovery' } });
     });

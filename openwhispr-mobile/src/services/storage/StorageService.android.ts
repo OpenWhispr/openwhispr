@@ -73,7 +73,7 @@ export class StorageService extends upstream.StorageService {
     const { deleteManagedTranscriptAudio } =
       require('@/lib/transcriptAudio') as typeof import('@/lib/transcriptAudio');
     const { listPendingProviderRecoveryJobs, clearKeyboardProviderRecovery } =
-      require('@/lib/keyboardInferenceRoute') as typeof import('@/lib/keyboardInferenceRoute');
+      require('@/android/lib/keyboardInferenceRoute') as typeof import('@/android/lib/keyboardInferenceRoute');
     const byOwner = readAccountTranscripts();
     const jobs = listPendingProviderRecoveryJobs();
     const protectedAudio = new Set([

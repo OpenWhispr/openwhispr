@@ -1,7 +1,6 @@
 import { act, renderHook } from '@testing-library/react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAudioRecording, type UseAudioRecordingOptions } from '../useAudioRecording';
-import { useAudioRecording as useAndroidAudioRecording } from '../useAudioRecording.android';
 import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
 import { analyzeSpeechActivity } from '@/lib/speechActivity';
 import { deleteManagedTranscriptAudio, retainTranscriptAudio } from '@/lib/transcriptAudio';
@@ -81,11 +80,8 @@ const transcribed = (text: string): Awaited<ReturnType<typeof transcribeAndClean
     transcription: { duration: 1, provider: 'cloud' },
   }) as Awaited<ReturnType<typeof transcribeAndCleanup>>;
 
-async function recordAndStop(
-  options: UseAudioRecordingOptions,
-  useRecording: typeof useAudioRecording | typeof useAndroidAudioRecording = useAudioRecording,
-): Promise<{ stopError: unknown }> {
-  const { result } = renderHook(() => useRecording(options));
+async function recordAndStop(options: UseAudioRecordingOptions): Promise<{ stopError: unknown }> {
+  const { result } = renderHook(() => useAudioRecording(options));
   await act(async () => {
     await result.current.startRecording();
   });
@@ -105,17 +101,6 @@ beforeEach(() => {
   jest.mocked(isLocalModelMissingError).mockReturnValue(false);
   jest.mocked(isUsageLimitError).mockReturnValue(false);
   mockRecorder.isRecording = false;
-});
-
-it('retains the Android recording request usage ID in failed history', async () => {
-  mockTranscribe.mockRejectedValueOnce(new Error('Response lost'));
-  await recordAndStop({}, useAndroidAudioRecording);
-
-  const request = mockTranscribe.mock.calls[0][0];
-  expect(request.clientTranscriptionId).toMatch(/^recording-.+/);
-  expect(mockAddFailedTranscript).toHaveBeenCalledWith(
-    expect.objectContaining({ clientTranscriptionId: request.clientTranscriptionId }),
-  );
 });
 
 it('does not write transcript history when saveToHistory is false', async () => {
@@ -390,7 +375,7 @@ describe('cancelRecording', () => {
     );
     const { result } = await startHook();
 
-    let stopping: Promise<boolean | void> = Promise.resolve();
+    let stopping: Promise<void> = Promise.resolve();
     await act(async () => {
       stopping = result.current.stopRecording();
       await result.current.cancelRecording();
@@ -477,7 +462,7 @@ describe('cancelRecording', () => {
     });
     mockRecorder.isRecording = true;
 
-    let stopping: Promise<boolean | void> = Promise.resolve();
+    let stopping: Promise<void> = Promise.resolve();
     await act(async () => {
       stopping = hook.result.current.stopRecording();
       await Promise.resolve();

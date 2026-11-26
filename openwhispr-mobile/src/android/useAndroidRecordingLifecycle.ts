@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { AudioRecordingLifecycle } from '../hooks/useAudioRecordingCore';
+import type { AudioRecordingLifecycle } from '@/android/hooks/useAudioRecordingCore';
 
 export function useAndroidRecordingLifecycle(): AudioRecordingLifecycle {
   const [isStarting, setIsStarting] = useState(false);

@@ -4,7 +4,7 @@ import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { useSheetDragToDismiss } from '@/hooks/useSheetDragToDismiss';
+import { useSheetDragToDismiss } from '@/android/hooks/useSheetDragToDismiss';
 import type { Transcript } from '@/types';
 import { useHomeT } from './strings';
 import { IconTile, TileButton, useHome } from './kit';

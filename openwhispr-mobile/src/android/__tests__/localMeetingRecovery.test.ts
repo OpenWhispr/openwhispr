@@ -10,16 +10,16 @@ jest.mock('@/data', () => ({
     getActions: jest.fn(() => []),
   },
 }));
-jest.mock('@/lib/notes/localMeetingNotesPlatform', () => {
+jest.mock('@/android/lib/notes/localMeetingNotesPlatform', () => {
   const selected =
-    (): (typeof import('@/lib/notes/localMeetingNotesPlatform'))['localMeetingNotesPlatform'] => {
+    (): (typeof import('@/android/lib/notes/localMeetingNotesPlatform'))['localMeetingNotesPlatform'] => {
       const os = jest.requireActual<typeof import('react-native')>('react-native').Platform.OS;
       return os === 'android'
-        ? jest.requireActual<typeof import('@/lib/notes/localMeetingNotesPlatform.android')>(
-            '@/lib/notes/localMeetingNotesPlatform.android',
+        ? jest.requireActual<typeof import('@/android/lib/notes/localMeetingNotesPlatform')>(
+            '@/android/lib/notes/localMeetingNotesPlatform',
           ).localMeetingNotesPlatform
-        : jest.requireActual<typeof import('@/lib/notes/localMeetingNotesPlatform')>(
-            '@/lib/notes/localMeetingNotesPlatform',
+        : jest.requireActual<typeof import('@/android/lib/notes/localMeetingNotesPlatform')>(
+            '@/android/lib/notes/localMeetingNotesPlatform',
           ).localMeetingNotesPlatform;
     };
   return {
@@ -86,7 +86,7 @@ const {
 }: typeof import('@/lib/localReasoning') = require('@/lib/localReasoning');
 const {
   generateLocalMeetingNotes,
-}: typeof import('@/lib/notes/localMeetingNotes') = require('@/lib/notes/localMeetingNotes');
+}: typeof import('@/android/lib/notes/localMeetingNotes') = require('@/android/lib/notes/localMeetingNotes');
 
 const originalPlatform = Platform.OS;
 const apple = jest.mocked(AppleLLM.generateMeetingNotes);
@@ -173,53 +173,6 @@ beforeEach(() => {
 
 afterEach(() => {
   Platform.OS = originalPlatform;
-});
-
-describe('iOS recovery isolation', () => {
-  beforeEach(() => {
-    Platform.OS = 'ios';
-  });
-
-  it('keeps Android checkpoints out of Apple split and merge recovery', async () => {
-    const events: string[] = [];
-    apple.mockImplementation(async () => {
-      events.push('generate');
-      if (apple.mock.calls.length === 1) throw limited('APPLE_LLM_OUTPUT_LIMIT');
-      return partial('Supported notes');
-    });
-    const text = await generateLocalMeetingNotes(7, { checkpoint: () => events.push('check') });
-    expect(text).toBe('Supported notes');
-    expect(events).toEqual(['generate', 'generate', 'generate', 'generate']);
-    expect(android).not.toHaveBeenCalled();
-  });
-
-  it('retains the approved Apple recovery behavior when an Android checkpoint would cancel', async () => {
-    let cancelled = false;
-    apple.mockImplementation(async () => {
-      if (apple.mock.calls.length === 1) {
-        cancelled = true;
-        throw limited('APPLE_LLM_OUTPUT_LIMIT');
-      }
-      return partial('Supported notes');
-    });
-    await expect(
-      generateLocalMeetingNotes(7, {
-        checkpoint: () => {
-          if (cancelled) throw Object.assign(new Error('Cancelled'), { name: 'AbortError' });
-        },
-      }),
-    ).resolves.toBe('Supported notes');
-    expect(apple).toHaveBeenCalledTimes(4);
-    expect(android).not.toHaveBeenCalled();
-  });
-
-  it('does not treat an Android-only output code as an Apple recovery trigger', async () => {
-    apple.mockRejectedValue(limited('LOCAL_OUTPUT_LIMIT'));
-    await expect(generateLocalMeetingNotes(7)).rejects.toMatchObject({
-      code: 'APPLE_LLM_FAILED',
-    });
-    expect(apple).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe('Android bounded meeting recovery', () => {

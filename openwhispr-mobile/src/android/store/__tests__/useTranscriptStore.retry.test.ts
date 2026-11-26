@@ -16,6 +16,9 @@ jest.mock('@/lib/keyboardInferenceRoute', () => ({
   listPendingProviderRecoveryJobs: mockListPendingProviderRecoveryJobs,
   clearKeyboardProviderRecovery: mockClearKeyboardProviderRecovery,
 }));
+jest.mock('@/android/lib/keyboardInferenceRoute', () =>
+  jest.requireMock('@/lib/keyboardInferenceRoute'),
+);
 const mockAppGroupGetItem = jest.fn((_key: string): string | null => null);
 jest.mock('../../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: { getItem: mockAppGroupGetItem },

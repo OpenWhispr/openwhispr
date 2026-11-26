@@ -217,6 +217,7 @@ jest.mock('@/hooks/useAudioRecording', () => ({
     stopRecordingRaw: mockStopLocalRaw,
   }),
 }));
+jest.mock('@/android/hooks/useAudioRecording', () => jest.requireMock('@/hooks/useAudioRecording'));
 jest.mock('@/hooks/useKeyboardHeight', () => ({ useKeyboardHeight: () => 0 }));
 jest.mock('@/hooks/useMeetingLiveActivity', () => ({ useMeetingLiveActivity: jest.fn() }));
 jest.mock('@/hooks/useSuperwallGate', () => ({

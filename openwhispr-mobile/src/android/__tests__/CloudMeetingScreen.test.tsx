@@ -180,6 +180,7 @@ jest.mock('@/lib/transcriptionLanguage', () => ({ getPreferredTranscriptionLangu
 jest.mock('@/hooks/useAudioRecording', () => ({
   useAudioRecording: () => ({ startRecording: mockLocalStart, cancelRecording: mockCancelLocal }),
 }));
+jest.mock('@/android/hooks/useAudioRecording', () => jest.requireMock('@/hooks/useAudioRecording'));
 jest.mock('@/hooks/useKeyboardHeight', () => ({ useKeyboardHeight: () => 0 }));
 jest.mock('@/hooks/useMeetingLiveActivity', () => ({ useMeetingLiveActivity: jest.fn() }));
 jest.mock('@/hooks/useSuperwallGate', () => ({

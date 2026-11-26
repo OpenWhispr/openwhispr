@@ -1,4 +1,4 @@
-import { localMeetingNotesPlatform } from './localMeetingNotesPlatform';
+import { AppleLLM } from '@/lib/appleLLM';
 import { notesRepository } from '@/data';
 import type { Note, Segment, Speaker } from '@/data/types';
 import {
@@ -8,12 +8,16 @@ import {
   getLocalReasoningReadiness,
   isLocalContextLimitError,
   isLocalOutputLimitError,
+  LOCAL_OUTPUT_TOKEN_RESERVE,
   toLocalReasoningError,
 } from '@/lib/localReasoning';
 import { formatTranscriptForExport } from '@/lib/diarization/transcriptDisplay';
 import { parseCalendarParticipants } from '@/lib/calendar/meetingContext';
 import { buildMeetingNotesInput, type MeetingNotesContext } from '@/lib/notes/meetingNotesInput';
-import { isDefaultGenerateNotesAction } from '@/lib/notes/generateNotesPrompt';
+import {
+  buildActionSystemPrompt,
+  isDefaultGenerateNotesAction,
+} from '@/lib/notes/generateNotesPrompt';
 import type { StructuredMeetingNotes } from '@/types';
 
 const DEFAULT_LOCAL_MEETING_ACTION_PROMPT =
@@ -207,11 +211,14 @@ async function generateStructuredNotes(input: {
   prompt: string;
 }): Promise<StructuredMeetingNotes> {
   try {
-    const notes = await localMeetingNotesPlatform.generateNotes(input);
+    const notes = await AppleLLM.generateMeetingNotes({
+      instructions: input.instructions,
+      prompt: input.prompt,
+      temperature: 0.2,
+      maxTokens: LOCAL_OUTPUT_TOKEN_RESERVE,
+    });
     return normalizeMeetingNotes(notes);
   } catch (error) {
-    // Preserve Android's native limit without changing shared or Apple error normalization.
-    if (localMeetingNotesPlatform.isOutputLimitError?.(error)) throw error;
     throw toLocalReasoningError(error);
   }
 }
@@ -235,9 +242,7 @@ async function mapChunkWithRetry(input: {
   instructions: string;
   previousSummary?: string;
   outputLimitSplitsLeft?: number;
-  checkpoint?: () => void;
 }): Promise<StructuredMeetingNotes[]> {
-  input.checkpoint?.();
   const outputLimitSplitsLeft = input.outputLimitSplitsLeft ?? MAX_OUTPUT_LIMIT_SPLITS;
   const chunkInput = buildChunkInput({
     note: input.note,
@@ -256,8 +261,7 @@ async function mapChunkWithRetry(input: {
       }),
     ];
   } catch (error) {
-    const outputLimit =
-      isLocalOutputLimitError(error) || localMeetingNotesPlatform.isOutputLimitError?.(error);
+    const outputLimit = isLocalOutputLimitError(error);
     if (!isLocalContextLimitError(error) && !(outputLimit && outputLimitSplitsLeft > 0)) {
       throw error;
     }
@@ -306,9 +310,7 @@ async function reduceStructuredNotes(input: {
   notes: StructuredMeetingNotes[];
   instructions: string;
   budget: number;
-  checkpoint?: () => void;
 }): Promise<StructuredMeetingNotes> {
-  input.checkpoint?.();
   if (input.notes.length === 0) return emptyMeetingNotes();
   if (input.notes.length === 1) return normalizeMeetingNotes(input.notes[0]);
 
@@ -320,7 +322,6 @@ async function reduceStructuredNotes(input: {
       budget: input.budget,
     })
   ) {
-    input.checkpoint?.();
     try {
       return await generateStructuredNotes({
         instructions: input.instructions,
@@ -328,12 +329,7 @@ async function reduceStructuredNotes(input: {
       });
     } catch (error) {
       // Merged notes too long for the output cap are merged like ones too long to read.
-      if (
-        !isLocalOutputLimitError(error) &&
-        !localMeetingNotesPlatform.isOutputLimitError?.(error)
-      ) {
-        throw error;
-      }
+      if (!isLocalOutputLimitError(error)) throw error;
     }
   }
 
@@ -358,10 +354,8 @@ async function reduceStructuredNotes(input: {
 
 export async function generateLocalMeetingNotes(
   noteId: number,
-  options: { actionPrompt?: string; checkpoint?: () => void } = {},
+  options: { actionPrompt?: string } = {},
 ): Promise<string> {
-  const checkpoint = localMeetingNotesPlatform.getCheckpoint(options);
-  checkpoint?.();
   const note = notesRepository.getNoteById(noteId);
   if (!note || note.deletedAt || note.noteType !== 'meeting') return '';
 
@@ -373,7 +367,11 @@ export async function generateLocalMeetingNotes(
     options.actionPrompt ??
     notesRepository.getActions().find(isDefaultGenerateNotesAction)?.prompt ??
     DEFAULT_LOCAL_MEETING_ACTION_PROMPT;
-  const instructions = localMeetingNotesPlatform.buildInstructions(actionPrompt);
+  const instructions = buildActionSystemPrompt({
+    actionPrompt,
+    inputKind: 'meeting-transcript',
+    isDefaultGenerateNotesAction: true,
+  });
   const readiness = await getLocalReasoningReadiness();
   const budget = getLocalInputTokenBudget(readiness);
   const meetingContext = resolveMeetingContext(note);
@@ -382,7 +380,6 @@ export async function generateLocalMeetingNotes(
     prompt: buildChunkInput({ note, lines: [], meetingContext }),
   });
   const chunkBudget = Math.min(budget, chunkOverhead + LOCAL_MEETING_CHUNK_MAX_TRANSCRIPT_TOKENS);
-  checkpoint?.();
   const lines = transcriptLines(segments, notesRepository.getSpeakers(noteId));
   const chunks = await buildTranscriptChunks({
     note,
@@ -395,7 +392,6 @@ export async function generateLocalMeetingNotes(
 
   const mapped: StructuredMeetingNotes[] = [];
   for (const linesInChunk of chunks) {
-    checkpoint?.();
     const previousSummary = mapped[mapped.length - 1]?.summary;
     mapped.push(
       ...(await mapChunkWithRetry({
@@ -404,24 +400,20 @@ export async function generateLocalMeetingNotes(
         meetingContext,
         instructions,
         previousSummary,
-        checkpoint,
       })),
     );
   }
 
-  checkpoint?.();
   const reduced = await reduceStructuredNotes({
     notes: mapped,
     instructions,
     budget: Math.min(budget, LOCAL_MEETING_MERGE_MAX_INPUT_TOKENS),
-    checkpoint,
   });
-  checkpoint?.();
   const markdown = renderStructuredMeetingNotesToMarkdown(reduced);
 
   if (__DEV__) {
     console.log(
-      `[reasoning] provider=local model=${localMeetingNotesPlatform.modelName} mode=meeting chunks=${chunks.length} elapsedMs=${Date.now() - startedAt}`,
+      `[reasoning] provider=local model=apple-fm mode=meeting chunks=${chunks.length} elapsedMs=${Date.now() - startedAt}`,
     );
   }
 

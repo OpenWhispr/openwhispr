@@ -82,6 +82,9 @@ const mockClearRecovery = jest.fn();
 jest.mock('@/lib/keyboardInferenceRoute', () => ({
   clearKeyboardProviderRecovery: (jobId: string) => mockClearRecovery(jobId),
 }));
+jest.mock('@/android/lib/keyboardInferenceRoute', () =>
+  jest.requireMock('@/lib/keyboardInferenceRoute'),
+);
 
 const mockTranscribeWithProvider = transcribeWithProvider as jest.MockedFunction<
   typeof transcribeWithProvider

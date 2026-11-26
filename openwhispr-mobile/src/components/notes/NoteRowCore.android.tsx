@@ -5,8 +5,8 @@ import { GroupedList } from './GroupedList';
 import { SwipeableCard, type RestoreRow } from '@/components/ui/SwipeableCard';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { BRAND, useIosColor } from '@/config/colors.android';
-import { formatNoteRowTime } from '@/lib/formatNoteRowTime';
-import type { DateBucketKey } from '@/lib/groupNotesByDate';
+import { formatNoteRowTime } from '@/android/lib/formatNoteRowTime';
+import type { DateBucketKey } from '@/android/lib/groupNotesByDate';
 import type { Note } from '@/data';
 
 export type NoteRowProps = {
