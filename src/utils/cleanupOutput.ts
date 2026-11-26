@@ -83,33 +83,23 @@ function copiesInstructions(
   });
 }
 
-function rejectCleanupOutput(
-  reason: string,
-  rawText: string,
-  output: string,
-  message: string,
-  messageKey: string
-): never {
-  logger.logReasoning("CLEANUP_OUTPUT_REJECTED", {
-    reason,
-    inputLength: rawText.length,
-    outputLength: output.length,
-  });
-  throw Object.assign(new Error(message), { code: "CLEANUP_OUTPUT_INVALID", messageKey });
-}
-
 export function assertValidCleanupOutput(
   rawText: string,
   output: string,
   instructions?: CleanupInstructions
 ): void {
   if (instructions && copiesInstructions(rawText, output, instructions)) {
-    rejectCleanupOutput(
-      "copied_instructions",
-      rawText,
-      output,
-      "AI cleanup added text you didn't say. The original text was kept.",
-      "hooks.audioRecording.errorDescriptions.cleanupAddedText"
+    logger.logReasoning("CLEANUP_OUTPUT_REJECTED", {
+      reason: "copied_instructions",
+      inputLength: rawText.length,
+      outputLength: output.length,
+    });
+    throw Object.assign(
+      new Error("AI cleanup added text you didn't say. The original text was kept."),
+      {
+        code: "CLEANUP_OUTPUT_INVALID",
+        messageKey: "hooks.audioRecording.errorDescriptions.cleanupAddedText",
+      }
     );
   }
 
@@ -140,11 +130,16 @@ export function assertValidCleanupOutput(
   }
   if (saidTwice * 2 > halfLength) return;
 
-  rejectCleanupOutput(
-    "duplicated_transcript",
-    rawText,
-    output,
-    "AI cleanup repeated the transcript. The original text was kept.",
-    "hooks.audioRecording.errorDescriptions.cleanupDuplicated"
+  logger.logReasoning("CLEANUP_OUTPUT_REJECTED", {
+    reason: "duplicated_transcript",
+    inputLength: rawText.length,
+    outputLength: output.length,
+  });
+  throw Object.assign(
+    new Error("AI cleanup repeated the transcript. The original text was kept."),
+    {
+      code: "CLEANUP_OUTPUT_INVALID",
+      messageKey: "hooks.audioRecording.errorDescriptions.cleanupDuplicated",
+    }
   );
 }
