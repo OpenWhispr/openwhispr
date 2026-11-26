@@ -1643,6 +1643,14 @@ for (const [answer, respond, overrides, label = "account-a"] of [
       }),
     {},
   ],
+  [
+    "an answer naming another workspace read again from memory",
+    () =>
+      response(200, {
+        data: { ...validPolicy().data, managedBy: ["workspace-2"], ...removedFrom },
+      }),
+    withinRefresh,
+  ],
   ["an unmanaged answer to a lookup with no label", () => unmanagedWith(removedFrom), {}, null],
   [
     "an unmanaged answer to a lookup with no label, read again from memory",

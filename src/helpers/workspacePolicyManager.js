@@ -305,6 +305,18 @@ function createWorkspacePolicyManager({
     ) {
       saveVerdict(identity, data);
     }
+    // A managed one replaces it only at the next lookup, but the removals it
+    // lists are checked against it once the bearer is bound, not minutes
+    // later; from then on the binding vouches for the lookup.
+    const key = identityKey(identity);
+    if (data.managed && lookedUp.get(key) === false && isValidatedAccount(identity)) {
+      try {
+        for (const removal of listedRemovals(data)) reportRemoval(identity, removal);
+        lookedUp.set(key, true);
+      } catch (error) {
+        logger?.error?.("Workspace removal not recorded", error);
+      }
+    }
     return {
       success: true,
       status,

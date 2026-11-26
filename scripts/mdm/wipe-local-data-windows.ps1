@@ -14,6 +14,9 @@
 # PowerShell 7 lacks the .NET calls the notes cleanup uses.
 #Requires -PSEdition Desktop
 
+# A parameter it doesn't know stops the run rather than leaving -UserProfile
+# empty, which would wipe every profile.
+[CmdletBinding()]
 param(
   [switch]$IncludeModels,
   [ValidateScript({ Test-Path -LiteralPath $_ -PathType Container })]
@@ -100,6 +103,17 @@ function Remove-Entry([IO.FileSystemInfo]$Item) {
   }
 }
 
+# Test-RealFolder for a folder the script cleans: one reached through a
+# junction or link is reported, so the run fails rather than leaving it.
+function Test-ReachedFolder([string]$Dir, [string]$Root) {
+  $real = Test-RealFolder $Dir $Root
+  if ($real -eq $false) {
+    Write-Warning "Skipped $($Dir): it is reached through a junction or link"
+    $script:failed = $true
+  }
+  return $real
+}
+
 # The daily files meetingAuditLog.js writes, every user's.
 $auditFile = '^meeting-audit-.+-\d{4}-\d{2}-\d{2}\.jsonl$'
 
@@ -108,14 +122,7 @@ $auditFile = '^meeting-audit-.+-\d{4}-\d{2}-\d{2}\.jsonl$'
 # way to it; everything else in that folder goes. One reached through a
 # junction or link is skipped and reported.
 function Remove-AllExcept([string]$Dir, [string]$Root, [string[]]$Keep, [string]$Audit) {
-  $real = Test-RealFolder $Dir $Root
-  if (-not $real) {
-    if ($null -ne $real) {
-      Write-Warning "Skipped $($Dir): it is reached through a junction or link"
-      $script:failed = $true
-    }
-    return
-  }
+  if (-not (Test-ReachedFolder $Dir $Root)) { return }
   $audit = if ($Audit) { & $fullPath $Audit }
   $isAuditDir = $audit -and (& $fullPath $Dir) -eq $audit
   foreach ($item in Get-ChildItem -LiteralPath $Dir -Force) {
@@ -128,7 +135,7 @@ function Remove-AllExcept([string]$Dir, [string]$Root, [string[]]$Keep, [string]
 }
 
 function Remove-TempFiles([string]$Dir, [string]$Root) {
-  if (-not (Test-RealFolder $Dir $Root)) { return }
+  if (-not (Test-ReachedFolder $Dir $Root)) { return }
   Get-ChildItem -LiteralPath $Dir -Force |
     Where-Object { $name = $_.Name; $tempPrefixes | Where-Object { $name.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) } } |
     ForEach-Object { Remove-Entry $_ }
@@ -241,8 +248,10 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
         }
       }
       $copied = Join-Path $copy.FullName "transcriptions.db"
-      # A version from before the mirror kept its record names no file.
-      $rows = if ((Read-Sqlite $copied "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'note_mirror_files'" 1).Count) {
+      # A version from before the mirror kept its record names no file, and only
+      # a plain table its own SQL names is the app's, never a virtual one whose
+      # module would run as SYSTEM on a file the user made.
+      $rows = if ((Read-Sqlite $copied "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'note_mirror_files' AND sql GLOB 'CREATE TABLE note_mirror_files[ (]*'" 1).Count) {
         Read-Sqlite $copied "SELECT base_path, rel_path, kind, content_hash FROM note_mirror_files ORDER BY base_path" 4
       }
     } finally {
@@ -272,7 +281,10 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
     # you to clean, and the database still goes, since keeping it would keep
     # every note.
     $names = $base.Split("\")
-    if (-not $base.StartsWith("$profileRoot\", [StringComparison]::OrdinalIgnoreCase) -or
+    # Compared as the file system does: PowerShell's -eq ignores characters
+    # such as a soft hyphen, which a planted folder's name could carry.
+    $isProfile = [string]::Equals($base, $profileRoot, [StringComparison]::OrdinalIgnoreCase)
+    if ((-not $isProfile -and -not $base.StartsWith("$profileRoot\", [StringComparison]::OrdinalIgnoreCase)) -or
       $names -contains "." -or $names -contains "..") {
       if ($base -ne $outside) { Write-Warning "Skipped $($base): it is outside $ProfilePath" }
       $outside = $base
@@ -286,7 +298,14 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
       $unsafe = $true
       continue
     }
-    $real = Test-RealFolder $base $ProfilePath
+    # Nor can one whose path is too long for Windows PowerShell, which finds
+    # nothing there.
+    if ($file.Length -ge 260) {
+      Write-Warning "Skipped $($file): its path is too long for Windows PowerShell"
+      $unsafe = $true
+      continue
+    }
+    $real = if ($isProfile) { $true } else { Test-RealFolder $base $ProfilePath }
     # Gone: the user deleted it.
     if ($null -eq $real) { continue }
     # A junction or link put on its way isn't the folder the mirror wrote to.
@@ -532,7 +551,7 @@ foreach ($profilePath in $profilePaths) {
     Remove-AllExcept (Join-Path $profilePath ".cache\openwhispr") $profilePath $cacheKept $audit
     $bridge = Join-Path $profilePath ".openwhispr"
     $bridgeFile = Join-Path $bridge "cli-bridge.json"
-    if ((Test-RealFolder $bridge $profilePath) -and (Test-Path -LiteralPath $bridgeFile -PathType Leaf)) {
+    if ((Test-ReachedFolder $bridge $profilePath) -and (Test-Path -LiteralPath $bridgeFile -PathType Leaf)) {
       Remove-Entry (Get-Item -LiteralPath $bridgeFile -Force)
     }
     Remove-TempFiles (Join-Path $profilePath "AppData\Local\Temp") $profilePath

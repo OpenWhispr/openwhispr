@@ -296,6 +296,24 @@ test(
   }
 );
 
+// Recordings moved to another drive, say: the wipe never goes through a link.
+test(
+  "a store the user replaced with a link is reported, and what it leads to stays",
+  { skip: process.platform === "win32" },
+  async () => {
+    const elsewhere = path.join(root, "external", "audio");
+    seed(path.join(elsewhere, "1.webm"));
+    fs.mkdirSync(roots.userData, { recursive: true });
+    fs.symlinkSync(elsewhere, path.join(roots.userData, "audio"));
+    assert.deepEqual(await removeLocalData({ includeModels: false, roots }), [
+      `audio: it led to ${elsewhere}, which wasn't removed`,
+    ]);
+    assert.equal(exists(roots.userData, "audio"), false);
+    assert.equal(exists(elsewhere, "1.webm"), true);
+    assert.deepEqual(await removeLocalData({ includeModels: false, roots }), []);
+  }
+);
+
 function launchHarness({ snapshot, readError, clearBrowserData = async () => {}, env = {} } = {}) {
   const calls = [];
   const options = {
@@ -1277,5 +1295,58 @@ test(
     } finally {
       if (fs.existsSync(note)) fs.chmodSync(note, 0o644);
     }
+  }
+);
+
+// A user may pick their home itself as the notes folder.
+test(
+  "the macOS script cleans a notes folder that is the home itself",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async () => {
+    const home = path.join(root, "home");
+    const userData = path.join(home, "Library", "Application Support", "OpenWhispr");
+    mirrorWrote(userData, home, "Personal/1-a.md", mirrored(1));
+    assert.match(macosScript()(home), /Removed/);
+    assert.equal(exists(home, "Personal"), false);
+    assert.equal(exists(userData, "transcriptions.db"), false);
+  }
+);
+
+// A sparse file takes no room, but reading one would hold the run for days.
+test(
+  "the macOS script keeps the database when a note is too large to read",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async () => {
+    const home = path.join(root, "home");
+    const userData = path.join(home, "Library", "Application Support", "OpenWhispr");
+    const vault = path.join(home, "Documents", "Vault");
+    mirrorWrote(userData, vault, "Personal/1-a.md", mirrored(1));
+    fs.truncateSync(path.join(vault, "Personal", "1-a.md"), (512 << 20) + 1);
+    assert.throws(
+      () => macosScript()(home),
+      (error) => error.status === 1 && error.stderr.includes("Could not read")
+    );
+    assert.equal(exists(vault, "Personal", "1-a.md"), true);
+    assert.equal(exists(userData, "transcriptions.db"), true);
+  }
+);
+
+// A copy is a leftover only once the run that made it has ended: a run still
+// reading it would write, as root, through whatever a user put in its place.
+test(
+  "the macOS script removes only copies left by runs that have ended",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async (t) => {
+    const { spawnSync } = require("node:child_process");
+    const ended = spawnSync("true").pid;
+    const running = fs.mkdtempSync(`/tmp/openwhispr-wipe.${process.pid}.`);
+    const left = fs.mkdtempSync(`/tmp/openwhispr-wipe.${ended}.`);
+    t.after(() => fs.rmSync(running, { recursive: true, force: true }));
+    t.after(() => fs.rmSync(left, { recursive: true, force: true }));
+    const home = path.join(root, "home");
+    fs.mkdirSync(home);
+    macosScript()(home);
+    assert.equal(fs.existsSync(running), true);
+    assert.equal(fs.existsSync(left), false);
   }
 );

@@ -92,12 +92,14 @@ remove_all_except() {
   local dir="$1" entry name real
   shift
   [[ -e "$dir" || -L "$dir" ]] || return 0
-  if [[ ! -d "$dir" || -L "$dir" ]] || ! inside_home "$dir"; then
+  # One moved away after the check is skipped too, rather than ending the run
+  # (set -e) before the homes after this one.
+  if [[ ! -d "$dir" || -L "$dir" ]] || ! inside_home "$dir" ||
+    ! real="$(cd -P "$dir" 2>/dev/null && /bin/pwd -P)"; then
     echo "Skipped $dir: it is a link or leads out of $home" >&2
     failed=1
     return 0
   fi
-  real="$(cd -P "$dir" && /bin/pwd -P)"
   for entry in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
     [[ -e "$entry" || -L "$entry" ]] || continue
     name="$(basename "$entry")"
@@ -126,14 +128,18 @@ remove_if_emptied() {
   printf '%s\0' "$dir" | as_owner rmdir 2>/dev/null
 }
 
-# A file's bytes, read as the home's owner. It is opened without waiting and
-# read only as a regular file, as the audit writer below opens its file, so a
-# FIFO the user swaps in after the checks can't hold the run.
+# A file's bytes, read as the home's owner, when it holds no more than the
+# bytes given ($2). It is opened without waiting and read only as a regular
+# file, as the audit writer below opens its file, so a FIFO the user swaps in
+# after the checks can't hold the run, nor can a sparse file that takes no room
+# but would take days to read. The app can't read a note over 512 MiB either.
+max_note_bytes=$((512 << 20))
+max_database_bytes=$((4 << 30))
 read_regular_file='
   zmodload zsh/system zsh/stat && IFS= read -r -d "" file &&
   sysopen -r -o nofollow,nonblock -u fd -- "$file" && zstat -H st -f $fd &&
-  (( (st[mode] & 8#170000) == 8#100000 )) && cat <&$fd'
-read_as_owner() { printf '%s\0' "$1" | as_owner_run /bin/zsh -fc "$read_regular_file"; }
+  (( (st[mode] & 8#170000) == 8#100000 && st[size] <= $1 )) && head -c "$1" <&$fd'
+read_as_owner() { printf '%s\0' "$1" | as_owner_run /bin/zsh -fc "$read_regular_file" zsh "$2"; }
 
 # In each folder of the home the notes mirror wrote to, the user's chosen ones
 # included, removes only the files the app's database records it writing there
@@ -158,24 +164,27 @@ remove_mirrored_files() {
   [[ -f "$database" && ! -L "$database" ]] || return 0
   [[ ! -e "$database-journal" && ! -L "$database-journal" ]] || journal=1
   # In /tmp, where the reader can reach it: without a template, macOS's mktemp
-  # makes it in root's own temp folder, which only root can enter.
-  if snapshot="$(mktemp -d /tmp/openwhispr-wipe.XXXXXXXX)"; then
+  # makes it in root's own temp folder, which only root can enter. Named by this
+  # run's process, so another run never takes it for a leftover (below).
+  if snapshot="$(mktemp -d "/tmp/openwhispr-wipe.$$.XXXXXXXX")"; then
     # Never left behind, even by a run that is stopped.
     trap 'rm -rf "$snapshot"' EXIT
     db="$snapshot/transcriptions.db"
     : >"$db-wal" && : >"$db-shm" || read_failed=1
     for suffix in "" -wal; do
       [[ -f "$database$suffix" && ! -L "$database$suffix" ]] || continue
-      read_as_owner "$database$suffix" >"$db$suffix" || read_failed=1
+      read_as_owner "$database$suffix" "$max_database_bytes" >"$db$suffix" || read_failed=1
     done
     # Only then can the reader reach the folder, and no one else the copy.
     chmod 600 "$snapshot"/* && chmod 711 "$snapshot" || read_failed=1
     [[ -z "$run_as" ]] || chown "$owner_uid" "$snapshot"/* || read_failed=1
-    # A version from before the mirror kept its record names no file. Opened
-    # read-write, since macOS's sqlite3 can't open a WAL database read-only once
-    # its app has closed it, but never created, so a copy gone missing fails.
+    # A version from before the mirror kept its record names no file, and only
+    # a plain table its own SQL names is the app's, never a virtual one whose
+    # module would run on a file the user made. Opened read-write, since
+    # macOS's sqlite3 can't open a WAL database read-only once its app has
+    # closed it, but never created, so a copy gone missing fails.
     [[ -z "$read_failed" ]] && rows="$(as_owner_run sqlite3 -init /dev/null "file:$db?mode=rw" \
-      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'note_mirror_files'")" &&
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'note_mirror_files' AND sql GLOB 'CREATE TABLE note_mirror_files[ (]*'")" &&
       { [[ -z "$rows" ]] || { [[ -z "$journal" ]] && rows="$(as_owner_run sqlite3 -init /dev/null -ascii "file:$db?mode=rw" \
         "SELECT base_path, rel_path, kind, content_hash FROM note_mirror_files ORDER BY base_path")"; }; } ||
       read_failed=1
@@ -195,7 +204,7 @@ remove_mirrored_files() {
     # folder outside it, by its path as recorded (a real path, so with no "." or
     # ".." in it), is reported for you to clean, and the database still goes,
     # since keeping it would keep every note.
-    if [[ "$base" != "$home_real"/* || "$base/" == */../* || "$base/" == */./* ]]; then
+    if [[ ("$base" != "$home_real" && "$base" != "$home_real"/*) || "$base/" == */../* || "$base/" == */./* ]]; then
       [[ "$base" == "$outside" ]] || echo "Skipped $base: it is outside $home" >&2
       outside="$base"
       continue
@@ -219,8 +228,8 @@ remove_mirrored_files() {
       [[ "$real_dir" == "$real_base" || "$real_dir" == "$real_base"/* ]] || continue
       [[ -f "$file" && ! -L "$file" ]] || continue
       # One it can't read may still hold what it wrote: a failure, not an edit.
-      raw="$(read_as_owner "$file" | openssl dgst -sha256 -r)" &&
-        plain="$(read_as_owner "$file" | LC_ALL=C sed $'1s/^\xef\xbb\xbf//; s/\r$//' | openssl dgst -sha256 -r)" || {
+      raw="$(read_as_owner "$file" "$max_note_bytes" | openssl dgst -sha256 -r)" &&
+        plain="$(read_as_owner "$file" "$max_note_bytes" | LC_ALL=C sed $'1s/^\xef\xbb\xbf//; s/\r$//' | openssl dgst -sha256 -r)" || {
         echo "Could not read $file" >&2
         failed=1
         continue
@@ -311,9 +320,14 @@ console_user=""
 [[ $EUID -eq 0 ]] && console_user="$(stat -f %Su /dev/console)"
 
 # Copies of a database left by a run killed while reading it (see
-# remove_mirrored_files).
+# remove_mirrored_files), never one a run still going reads: in sticky /tmp, a
+# user could put a folder of links in its place, which that run would then
+# write and chown through as root.
 for leftover in /tmp/openwhispr-wipe.*; do
-  if [[ -d "$leftover" && ! -L "$leftover" && -O "$leftover" ]]; then rm -rf "$leftover" 2>/dev/null || true; fi
+  pid="${leftover#/tmp/openwhispr-wipe.}"
+  pid="${pid%%.*}"
+  if [[ -d "$leftover" && ! -L "$leftover" && -O "$leftover" && "$pid" =~ ^[0-9]+$ ]] &&
+    ! kill -0 "$pid" 2>/dev/null; then rm -rf "$leftover" 2>/dev/null || true; fi
 done
 
 kept=("${kept_user_data[@]}")
@@ -338,6 +352,13 @@ for home in "${homes[@]}"; do
       continue
     fi
     id -un "$owner_uid" >/dev/null 2>&1 && run_as="#$owner_uid"
+    # Root cleans a home whose account is gone only while nothing still runs as
+    # it, which could swap a link in mid-run.
+    if [[ -z "$run_as" ]] && pgrep -u "$owner_uid" >/dev/null; then
+      echo "Skipped $home: its account is gone, but processes still run as it" >&2
+      failed=1
+      continue
+    fi
   fi
   # Counted per home, so "Removed" names only homes where nothing failed.
   failed_before="$failed"

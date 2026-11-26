@@ -210,7 +210,11 @@ async function removeLocalData({ includeModels, roots = defaultRoots(), auditLog
           if (below !== "" || !isAuditFileName(child)) await remove(name, path.join(target, child));
         return;
       }
+      // One the user moved elsewhere through a link: the link goes, but what it
+      // leads to isn't followed, so it is reported.
+      const link = await fs.promises.readlink(target).catch(() => null);
       await fs.promises.rm(target, { recursive: true, force: true, maxRetries: 3 });
+      if (link !== null) errors.push(`${name}: it led to ${link}, which wasn't removed`);
     } catch (error) {
       if (!(othersMayOwn && ["EPERM", "EACCES"].includes(error.code)))
         errors.push(`${name}: ${error.message}`);
