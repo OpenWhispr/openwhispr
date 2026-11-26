@@ -1017,6 +1017,24 @@ test("a spoken answer for a question the card moved past asks the one on screen 
   assert.deepEqual(globalThis.__chat.sent, []);
 });
 
+test("words spoken while the user answered the question on its card wait in the composer", async (t) => {
+  const view = await mountWindow(t);
+  const results = await askWhileCompact(view, TEXT_QUESTION);
+  const store = await view.vite.ssrLoadModule("/stores/agentInteractionStore.ts");
+  const [key] = Object.keys(store.useAgentInteractionStore.getState().entries);
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  // The user types the answer on the card while still speaking.
+  await React.act(async () => store.updateInteractionDraft(key, { deadline: "Tuesday" }));
+  await React.act(async () => globalThis.__voice.callbacks.onTranscript("um, actually", "submit"));
+  await view.settle();
+  assert.deepEqual(results, [], "nothing is answered for the user");
+  assert.deepEqual(store.useAgentInteractionStore.getState().entries[key].draft, {
+    deadline: "Tuesday",
+  });
+  assert.equal(view.host.querySelector("textarea").value, "um, actually");
+  assert.deepEqual(globalThis.__chat.sent, []);
+});
+
 test("the modal's glow is full on an empty chat, faint while speaking or working in one, gone at rest or while a card waits", async (t) => {
   const view = await mountWindow(t);
   const glow = () => view.host.querySelector(".agent-modal-glow").getAttribute("data-glow");

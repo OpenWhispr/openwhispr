@@ -132,17 +132,35 @@ function selectedApprovalField(): SelectionEditTarget | null {
   };
 }
 
+// The take answering a waiting card, and what that card held when it began.
+interface ReplyTake {
+  cardId: string;
+  actionId?: string;
+  step?: number;
+  /** What the user had picked or typed for the question on screen. */
+  input?: string;
+}
+
+function questionInput(key: string): string | undefined {
+  const entry = useAgentInteractionStore.getState().entries[key];
+  if (entry?.payload.kind !== "questions") return undefined;
+  const id = entry.payload.questions[entry.step]?.id ?? "";
+  return JSON.stringify([entry.draft[id] ?? null, entry.typedAnswers[id] ?? null]);
+}
+
 // A spoken reply to the waiting card: a question takes the words as its
-// answer; an answer card takes a clear yes as Send and a clear no as Cancel,
-// only while it holds the action it held when the take began.
-function replyToCard(card: PendingCard, text: string, actionId: string | undefined): boolean {
+// answer, unless the user picked or typed one on the card meanwhile; an
+// answer card takes a clear yes as Send and a clear no as Cancel, only while
+// it holds the action it held when the take began.
+function replyToCard(card: PendingCard, text: string, take: ReplyTake): boolean {
   if (card.interaction === "questions") {
+    if (questionInput(card.key) !== take.input) return false;
     answerWithText(card.key, text);
     return true;
   }
   const entry = useConnectorApprovalStore.getState().entries[card.key];
   const reply = spokenCardReply(text);
-  if (!entry || entry.actionId !== actionId || !reply) return false;
+  if (!entry || entry.actionId !== take.actionId || !reply) return false;
   if (reply === "no") cancelApproval(card.key);
   else if (approvalCardFields(entry).sendBlocked) return false;
   else void approveAction(card.key);
@@ -283,7 +301,7 @@ export default function AgentWindow() {
   const replyCard = voiceReplyCard(pendingCards, approvals);
   const replyCardRef = useRef(replyCard);
   replyCardRef.current = replyCard;
-  const replyTakeRef = useRef<{ cardId: string; actionId?: string; step?: number } | null>(null);
+  const replyTakeRef = useRef<ReplyTake | null>(null);
   const cardFrameRef = useRef<HTMLDivElement>(null);
   const [cardHeight, setCardHeight] = useState(0);
   const standalone = state.layout === "standalone";
@@ -554,10 +572,12 @@ export default function AgentWindow() {
         // A card minimized meanwhile is never answered unseen.
         const { visible, layout } = stateRef.current;
         const onScreen = visible && (layout === "modal" || layout === "standalone");
-        if (card && onScreen && replyToCard(card, text, replyTake.actionId)) return;
-        // Not a clear answer, or its card is gone or prepared again: the words
-        // wait in the composer.
+        if (card && onScreen && replyToCard(card, text, replyTake)) return;
+        // Not a clear answer, its card is gone or prepared again, or the user
+        // answered on the card meanwhile: the words wait in the composer, which
+        // a card above the pill has none of, so the modal opens to show it.
         dispatch({ type: "held", text, context: null, attachment: null });
+        if (visible && layout === "standalone") dispatch({ type: "expand" });
         return;
       }
       const extras = {
@@ -824,6 +844,7 @@ export default function AgentWindow() {
             cardId: replyTo.id,
             actionId: useConnectorApprovalStore.getState().entries[replyTo.key]?.actionId,
             step: useAgentInteractionStore.getState().entries[replyTo.key]?.step,
+            input: questionInput(replyTo.key),
           }
         : null;
       dispatch({ type: "useVoice" });
