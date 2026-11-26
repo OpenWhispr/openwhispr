@@ -34,7 +34,12 @@ test("a short spoken yes in any of the app's languages confirms", () => {
     "はい、送信してください。",
     "送ってください",
     "うん、送って",
+    "はい、いいよ",
+    "发吧",
+    "Да, сейчас.",
     "نعم، أرسلها",
+    "أرسلها من فضلك",
+    "Send it now.",
   ]);
 });
 
@@ -60,7 +65,11 @@ test("a spoken no cancels, a negated yes included", () => {
     "算了",
     "いいえ",
     "送らないで",
+    "いや、いい",
+    "不用了",
     "لا",
+    "Don't send it now.",
+    "Nicht jetzt senden.",
   ]);
 });
 
@@ -98,5 +107,46 @@ test("anything that isn't only a yes or a no answers nothing", () => {
     "أرسلها؟",
     "Отправить?",
     "好吗",
+  ]);
+});
+
+test("a reply that turns it down, asks, puts it off or hedges in yes words sends nothing", () => {
+  cases(null, [
+    // Turned down, or sarcastic: "never mind", "yeah, right".
+    "いいって",
+    "いいよいいよ",
+    "Ага, сейчас!",
+    "行了行了",
+    // Questions whose mark speech to text left off: "right?", "who sent it?",
+    // "you're sending the message", "if he sends the message".
+    "对吧",
+    "是吧",
+    "可以吧",
+    "对了",
+    "من أرسلها",
+    "Vous envoyez le message",
+    "S'il envoie le message",
+    "Si envía el mensaje.",
+    "Si lo manda",
+  ]);
+  cases(null, [
+    // Put off, not cancelled: the card keeps waiting.
+    "Not now.",
+    "No, not now.",
+    "Ahora no.",
+    "Pas maintenant.",
+    "Nicht jetzt.",
+    "Agora não.",
+    "Non ora.",
+    "Не сейчас.",
+    // Hedged, or "don't cancel".
+    "Not sure.",
+    "Not good.",
+    "Nicht klar.",
+    "Non annulla.",
+    "Non ferma.",
+    "Mind.",
+    // "No, send it", with the comma left off.
+    "لا أرسلها",
   ]);
 });
