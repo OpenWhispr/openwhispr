@@ -9,7 +9,11 @@ config.resolver.assetExts.push(
   'mil', // Core ML model files (iOS)
 );
 
-const platformConfig = withPlatformNativeWind(config, { input: './global.css' });
+const platformConfig = withPlatformNativeWind(config, {
+  input: './global.css',
+  androidInput: './src/android/global.css',
+  androidConfigPath: './tailwind.config.android.js',
+});
 const resolveRequest = platformConfig.resolver.resolveRequest;
 const iosRouterContext = require.resolve('expo-router/_ctx.ios.js');
 const isolatedIosRouterContext = require.resolve('./config/router-context.ios.js');

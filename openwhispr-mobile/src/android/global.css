@@ -1,0 +1,5 @@
+@config "../../tailwind.config.android.js";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

@@ -1,14 +1,1 @@
-[
-  "config:development:infoPlist.NSAdvertisingAttributionReportEndpoint",
-  "config:production:infoPlist.NSAdvertisingAttributionReportEndpoint",
-  "native:OpenWhispr/Info.plist",
-  "style:0:order",
-  "style:0:rule:!hidden",
-  "style:0:rule:ease-out",
-  "style:0:rule:grid",
-  "style:0:rule:h-auto",
-  "style:0:rule:line-through",
-  "style:0:rule:min-h-[48px]",
-  "style:0:rule:min-h-[52px]",
-  "style:0:rule:resize"
-]
+[]

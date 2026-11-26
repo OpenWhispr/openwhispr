@@ -2,7 +2,7 @@
 // for its side effects: the same imports, in the same order, then the same calls. The iOS
 // screens, keyboard handoff and onboarding that layout also imported never ran on Android and are
 // left out.
-import '../../global.css';
+import './global.css';
 import 'react-native-gesture-handler';
 import 'react-native-safe-area-context';
 import 'expo-router';

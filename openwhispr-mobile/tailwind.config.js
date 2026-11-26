@@ -11,7 +11,14 @@ const ios = (iosName, androidFallback, web = androidFallback) =>
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ['./App.{js,jsx,ts,tsx}', './app/**/*.{js,jsx,ts,tsx}', './src/**/*.{js,jsx,ts,tsx}'],
+  // Android builds with tailwind.config.android.js; iOS never scans Android-only files.
+  content: [
+    './App.{js,jsx,ts,tsx}',
+    './app/**/*.{js,jsx,ts,tsx}',
+    './src/**/*.{js,jsx,ts,tsx}',
+    '!./src/android/**',
+    '!./**/*.android.{js,jsx,ts,tsx}',
+  ],
   presets: [require(`${nativewind}/preset`)],
   theme: {
     extend: {

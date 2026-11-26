@@ -19,7 +19,6 @@
         "NSMicrophoneUsageDescription": "This app needs access to the microphone to record audio for transcription.",
         "CFBundleAllowMixedLocalizations": true,
         "ITSAppUsesNonExemptEncryption": false,
-        "NSAdvertisingAttributionReportEndpoint": "https://appsflyer-skadnetwork.com/",
         "UIBackgroundModes": ["audio"],
         "NSSupportsLiveActivities": true,
         "LSApplicationQueriesSchemes": ["whatsapp", "slack", "twitter", "x"]

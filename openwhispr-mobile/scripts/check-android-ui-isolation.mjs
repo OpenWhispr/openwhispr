@@ -51,6 +51,8 @@ const SHARED_BUILD = [
   /^app\.config\.js$/,
   /^eas\.json$/,
   /^(?:metro|babel|jest)\.config\.js$/,
+  // Its iOS output is the stylesheet, which the fingerprint's style data checks rule by rule.
+  /^tailwind\.config\.js$/,
   /^jest\.setup\.js$/,
   /^react-native\.config\.js$/,
   /^config\/platform-styles(?:-transformer)?\.js$/,
