@@ -801,7 +801,6 @@ class AudioActivityDetector extends EventEmitter {
     const pending = externalPids.filter((processId) => !this._captureApps.has(processId));
     if (!pending.length || this._resolvingCaptureApps || !this._running) return;
     this._resolvingCaptureApps = true;
-    const generation = this._startGeneration;
     Promise.resolve()
       .then(() => this._resolveCaptureAppsFor(pending))
       .catch((err) => {
@@ -810,12 +809,9 @@ class AudioActivityDetector extends EventEmitter {
       })
       .then((apps) => {
         this._resolvingCaptureApps = false;
-        if (!this._running) return;
-        if (generation === this._startGeneration) {
-          for (const processId of pending) {
-            if (this._activeMicPids.has(processId)) {
-              this._captureApps.set(processId, apps.get(processId) ?? null);
-            }
+        for (const processId of pending) {
+          if (this._activeMicPids.has(processId)) {
+            this._captureApps.set(processId, apps.get(processId) ?? null);
           }
         }
         this._reevaluateCaptureApps();
