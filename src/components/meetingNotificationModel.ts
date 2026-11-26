@@ -57,7 +57,7 @@ export function getMeetingNotificationPresentation(
     actionKey: data?.joinUrl ? "meetingNotification.join" : "meetingNotification.start",
     action: data?.joinUrl ? "join" : "start",
     dismissible: true,
-    ...(data?.source === "audio" && data.apps?.length === 1 ? { ignoreApp: data.apps[0] } : {}),
+    ...(data?.apps?.length === 1 ? { ignoreApp: data.apps[0] } : {}),
   };
 }
 
