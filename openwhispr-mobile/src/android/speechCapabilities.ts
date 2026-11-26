@@ -38,3 +38,24 @@ export function speechModelSupportsLanguages(
     );
   });
 }
+
+/** The listed languages a speech model can't transcribe, in the order listed. */
+export function unsupportedSpeechLanguages(
+  model: AndroidSpeechModelId,
+  languages: readonly string[],
+): string[] {
+  return languages.filter((language) => !speechModelSupportsLanguages(model, [language]));
+}
+
+/**
+ * Whether a recording can go to a speech model. The model detects the language itself, so one
+ * listed language it knows is enough; an empty list means auto-detect.
+ */
+export function speechModelCoversRecording(
+  model: AndroidSpeechModelId,
+  languages: readonly string[],
+): boolean {
+  return (
+    languages.length === 0 || unsupportedSpeechLanguages(model, languages).length < languages.length
+  );
+}

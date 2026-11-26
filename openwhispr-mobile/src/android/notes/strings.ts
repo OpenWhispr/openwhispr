@@ -251,6 +251,13 @@ export const notesEnglish = {
   copyTranscript2: 'Copy what was transcribed',
   tryAgain: 'Try again',
   settingsProcessing: 'Settings → Processing',
+  uploadFormats: 'Choose a WAV, MP3, M4A, AAC, OGG/Opus or WEBM file.',
+  uploadLanguagePartly:
+    '{{model}} can’t transcribe {{languages}}. {{languages}} recordings won’t come out right on this phone.',
+  uploadLanguageNone:
+    '{{model}} can’t transcribe {{languages}}. To upload {{languages}} audio, use Cloud.',
+  useCloudForUploads: 'Use Cloud for uploads',
+  languageListAnd: '{{first}} and {{last}}',
   // Calendar prompt (C1–C4)
   connectCalendar: 'Connect your calendar',
   connectCalendarBody: 'See your next meeting here and record it in one tap.',
