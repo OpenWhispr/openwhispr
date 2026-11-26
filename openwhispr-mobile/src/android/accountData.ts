@@ -257,11 +257,11 @@ export function prepareAccountData(user: User): void {
     useSharedDictionaryStore.getState().reset();
     selectAccountData(user);
     const { useNotesStore } =
-      require('@/store/useNotesStore.android') as typeof import('@/store/useNotesStore.android');
+      require('@/android/store/useNotesStore') as typeof import('@/android/store/useNotesStore');
     const { useDictionaryStore } =
-      require('@/store/useDictionaryStore') as typeof import('@/store/useDictionaryStore');
+      require('@/android/store/useDictionaryStore') as typeof import('@/android/store/useDictionaryStore');
     const { useSnippetsStore } =
-      require('@/store/useSnippetsStore') as typeof import('@/store/useSnippetsStore');
+      require('@/android/store/useSnippetsStore') as typeof import('@/android/store/useSnippetsStore');
     useNotesStore.getState().reset();
     useNotesStore.getState().initialize();
     useDictionaryStore.getState().reset();

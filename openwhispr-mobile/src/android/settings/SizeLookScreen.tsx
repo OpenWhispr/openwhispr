@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import {
   Group,
   ListRow,

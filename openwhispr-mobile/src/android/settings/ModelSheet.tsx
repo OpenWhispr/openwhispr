@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { View } from 'react-native';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { BottomSheet, Group, TextAction, showToast, useReduceMotion } from './kit';
 import { ModelRow } from './ModelRow';
 import { MODEL_ROWS, modelName, useModelsReady } from './modelCatalog';

@@ -2,7 +2,7 @@ import { initLlama, type LlamaContext } from 'llama.rn';
 import Constants from 'expo-constants';
 import { modelPath, modelReady } from './models';
 import type { ReasoningRequest, ReasoningResponse, LocalReasoningReadiness } from '@/types';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { AndroidDictation } from '../../modules/android-dictation/src';
 import { withAndroidInference } from './inferenceQueue';
 import i18n from './strings';

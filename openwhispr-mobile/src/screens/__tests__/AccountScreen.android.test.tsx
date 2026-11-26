@@ -65,6 +65,7 @@ jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (selector: (state: object) => unknown) =>
     selector({ user: mockUser, isGuest: false, signOut: mockSignOut }),
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/lib/accountAccess', () => ({
   requiresRealAccount: (user: { isAnonymous?: boolean } | null) => !user || user.isAnonymous,
 }));
@@ -74,9 +75,11 @@ jest.mock('@/store/useUsageStore', () => ({
     load: jest.fn(async () => undefined),
   })),
 }));
+jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: require('zustand').create(() => ({ config: {}, error: null })),
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: (selector: (state: { activeMode: string }) => unknown) =>
     selector({ activeMode: 'cloud' }),

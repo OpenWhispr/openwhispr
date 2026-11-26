@@ -5,8 +5,8 @@ import { useTranslation } from 'react-i18next';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Text } from '@/components/ui/Text';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { useHome } from '../home/kit';
 import { waitForForeground } from '../DeviceCheckScreen';
 import {

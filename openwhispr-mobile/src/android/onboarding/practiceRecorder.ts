@@ -3,7 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
 import { ReasoningService } from '@/android/reasoning/ReasoningService';
 import { getAccountFirstName } from '@/lib/accountDisplay';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
 import { createAndroidJob, processAndroidAudio, type AndroidJob } from '../pipeline';
 
 // Onboarding practice is the free Cloud trial, whatever mode the phone has saved.

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, AppState, Keyboard, Pressable, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { safeHaptics } from '@/lib/utils';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
 import {

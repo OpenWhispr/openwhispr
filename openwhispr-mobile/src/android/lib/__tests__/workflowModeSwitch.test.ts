@@ -19,6 +19,7 @@ jest.mock('@/store/useConfigStore', () => ({
     getState: () => ({ config: mockConfig, updateConfig: mockUpdateConfig }),
   },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: {
     getState: () => ({ activeMode: mockActiveMode, setActiveMode: mockSetActiveMode }),
@@ -27,6 +28,7 @@ jest.mock('@/store/useProcessingModeStore', () => ({
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: mockUser }) },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/lib/privateMode', () => ({
   getPrivateModeReadiness: () => mockPrivateReadiness(),
   getPrivateModeUnavailableMessage: () => 'Native modules are missing.',

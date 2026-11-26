@@ -9,6 +9,7 @@ jest.mock('../../../modules/android-dictation/src/appearance', () => ({
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ config: {}, updateConfig: mockUpdateConfig }) },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 
 import {
   DEFAULT_TRANSLATE_TARGET,

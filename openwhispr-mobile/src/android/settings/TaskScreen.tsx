@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useCustomPromptsStore } from '@/store/useCustomPromptsStore';
 import { resolveCustomPrompt } from '@/config/prompts/registry';

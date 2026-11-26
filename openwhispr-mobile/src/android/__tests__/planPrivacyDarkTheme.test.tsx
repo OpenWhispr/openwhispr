@@ -45,6 +45,7 @@ jest.mock('@/store/useAuthStore', () => ({
     sessionCookie: 'session=member',
   })),
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/lib/referralApi', () => ({
   fetchReferralStats: jest.fn(async () => ({
     referralCode: 'test',
@@ -65,6 +66,7 @@ jest.mock('@/store/useUsageStore.android', () => ({
     load: jest.fn(async () => ({ status: 'loaded' })),
   })),
 }));
+jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore.android'));
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({ register: jest.fn() }),
 }));

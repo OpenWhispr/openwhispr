@@ -1,6 +1,6 @@
 import type { KeyboardTone, TranscriptionRequest } from '@/types';
 import type { DictationProcessingLifecycle } from '@/android/dictation/transcribeAndCleanup';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { abortError } from '@/services/providers/NativeProviderTransport';
 
 export function cleanupToneForRequest(request: TranscriptionRequest): KeyboardTone | undefined {

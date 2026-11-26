@@ -6,8 +6,8 @@ import { spacesRepository } from '@/data/spacesRepository';
 import type { Folder, Note } from '@/data';
 import type { Space } from '@/data/spacesTypes';
 import { getDefaultPrivateWorkspaceId } from '@/sync/teamSpacesCapability';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 import { useHiddenNoteIds } from './pendingDeletes';
 
 /**

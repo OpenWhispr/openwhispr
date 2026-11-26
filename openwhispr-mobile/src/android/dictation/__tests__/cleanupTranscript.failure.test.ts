@@ -15,9 +15,13 @@ jest.mock('@/lib/retry', () => ({
 jest.mock('@/store/useSnippetsStore', () => ({
   useSnippetsStore: { getState: () => ({ isLoaded: true, entries: [] }) },
 }));
+jest.mock('@/android/store/useSnippetsStore', () => jest.requireMock('@/store/useSnippetsStore'));
 jest.mock('@/store/useDictionaryStore', () => ({
   useDictionaryStore: { getState: () => ({ isLoaded: true, entries: [] }) },
 }));
+jest.mock('@/android/store/useDictionaryStore', () =>
+  jest.requireMock('@/store/useDictionaryStore'),
+);
 jest.mock('@/store/useCustomPromptsStore', () => ({
   getActiveCustomCleanupPrompt: () => undefined,
 }));
@@ -26,12 +30,14 @@ let mockActiveMode = 'cloud';
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ config: mockConfig }) },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: mockActiveMode }) },
 }));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: { id: 'u', isAnonymous: false } }) },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 
 const mockProcessText = ReasoningService.processText as jest.Mock;
 const providerCleanupRoute = {

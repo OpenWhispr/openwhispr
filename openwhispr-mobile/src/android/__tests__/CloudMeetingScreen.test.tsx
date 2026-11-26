@@ -194,6 +194,7 @@ jest.mock('@/store/useNotesStore', () => ({
     getState: () => mockNotes,
   }),
 }));
+jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 jest.mock('@/store/useGoogleCalendarStore', () => ({
   useGoogleCalendarStore: (select: (s: unknown) => unknown) =>
     select({ accounts: mockAccounts, load: mockLoadCalendars }),
@@ -212,6 +213,7 @@ jest.mock('@/store/useAuthStore', () => ({
     },
   },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: {
     getState: () => ({ activeMode: mockMode }),

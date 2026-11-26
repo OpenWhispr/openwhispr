@@ -1,5 +1,5 @@
 import { Alert } from 'react-native';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { workflowSaveConfig } from '@/lib/inferenceModes';
 import { androidCopy } from '@/lib/androidCopy';

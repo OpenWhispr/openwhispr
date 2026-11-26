@@ -21,6 +21,7 @@ jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (selector?: (state: MockAuthState) => unknown) =>
     selector ? selector(mockAuthState) : mockAuthState,
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('expo-router', () => ({ router: { push: (...args: unknown[]) => mockPush(...args) } }));
 jest.mock('@/lib/referralApi', () => ({
   fetchReferralStats: (...args: unknown[]) => mockFetchReferralStats(...args),

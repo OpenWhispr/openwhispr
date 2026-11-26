@@ -58,7 +58,7 @@ require('../providers/register');
 const places = require('../processingFable/places') as typeof import('../processingFable/places');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { useConfigStore } =
-  require('@/store/useConfigStore') as typeof import('@/store/useConfigStore');
+  require('@/android/store/useConfigStore') as typeof import('@/android/store/useConfigStore');
 
 const config = (inference: UserConfig['inference']) => ({ inference }) as UserConfig;
 

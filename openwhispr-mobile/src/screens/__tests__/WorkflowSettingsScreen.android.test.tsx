@@ -83,6 +83,7 @@ let mockUser: { id: string; isAnonymous: boolean } | null = null;
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (selector: (state: unknown) => unknown) => selector({ user: mockUser }),
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 const mockPreventRemove = jest.fn();
 const mockDispatch = jest.fn();
 let mockStoredPrompt = '';
@@ -169,6 +170,7 @@ jest.mock('@/store/useConfigStore', () => ({
     { getState: () => ({ config: mockConfig, error: null }) },
   ),
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: (selector: (state: unknown) => unknown) =>
     selector({ setActiveMode: mockSetActiveMode, activeMode: mockActiveMode }),

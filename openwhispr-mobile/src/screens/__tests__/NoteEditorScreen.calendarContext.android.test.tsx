@@ -197,6 +197,7 @@ jest.mock('@/store/useNotesStore', () => ({
   useNotesStore: (selector?: (state: typeof mockNotesState) => unknown) =>
     selector ? selector(mockNotesState) : mockNotesState,
 }));
+jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 
 jest.mock('@/store/useActionsStore', () => ({
   useActionsStore: (selector: (state: typeof mockActionsState) => unknown) =>
@@ -209,6 +210,7 @@ jest.mock('@/store/useAuthStore', () => ({
     { getState: () => mockAuthState },
   ),
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: Object.assign(
@@ -225,11 +227,15 @@ jest.mock('@/store/useConfigStore', () => ({
     { getState: () => mockConfigState },
   ),
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 
 jest.mock('@/store/useDictionaryStore', () => ({
   useDictionaryStore: (selector: (state: typeof mockDictionaryState) => unknown) =>
     selector(mockDictionaryState),
 }));
+jest.mock('@/android/store/useDictionaryStore', () =>
+  jest.requireMock('@/store/useDictionaryStore'),
+);
 
 jest.mock('@/lib/dictationHints', () => ({
   buildEffectiveDictionaryWords: (): string[] => [
@@ -249,6 +255,7 @@ jest.mock('@/store/useUsageStore', () => {
   useUsageStore.getState = () => usageState;
   return { useUsageStore };
 });
+jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 
 let mockKeyboardHeight = 0;
 jest.mock('@/hooks/useKeyboardHeight', () => ({
@@ -262,6 +269,9 @@ jest.mock('@/services/reasoning/ReasoningService', () => ({
   // Off device, so note actions keep the usual dictionary.
   resolveReasoningPlacement: () => ({ localRequired: false }),
 }));
+jest.mock('@/android/reasoning/ReasoningService', () =>
+  jest.requireMock('@/services/reasoning/ReasoningService'),
+);
 
 let mockAppleAvailability = 'available';
 jest.mock('@/lib/appleLLM', () => ({

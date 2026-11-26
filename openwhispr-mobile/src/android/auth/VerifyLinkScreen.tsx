@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
 import { ForgotPassword } from './ForgotPassword';
 import { VerifyEmail } from './VerifyEmail';
 import {

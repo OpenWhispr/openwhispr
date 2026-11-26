@@ -13,7 +13,7 @@ import Animated, {
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { safeHaptics } from '@/lib/utils';
-import type { DictionaryEntry } from '@/store/useDictionaryStore';
+import type { DictionaryEntry } from '@/android/store/useDictionaryStore';
 import { PillButton, useHome } from '../home/kit';
 import { showToast, useReduceMotion } from '../settings/kit';
 import { SectionLabel } from '../notes/look';

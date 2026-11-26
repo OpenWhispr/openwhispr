@@ -2,7 +2,7 @@ import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { useTheme } from '../ThemeProvider';
 import { showToast } from '../settings/kit';
 import { useStyleT } from './strings';

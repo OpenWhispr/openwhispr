@@ -3,7 +3,7 @@ import {
   setBubbleAppearance,
   type BubbleAppearance,
 } from '../../../modules/android-dictation/src/appearance';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
 import type { SettingsKey } from './strings';
 

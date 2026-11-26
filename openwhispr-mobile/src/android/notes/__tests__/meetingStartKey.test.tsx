@@ -23,6 +23,7 @@ jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 jest.mock('@/store/useNotesStore', () => ({
   useNotesStore: { getState: () => ({ isLocalAsrModelReady: async () => true }) },
 }));
+jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 
 function shownSheet(key: { providerId: string } | null, onDevice = false) {
   mockKey = key;

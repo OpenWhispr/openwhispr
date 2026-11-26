@@ -22,6 +22,7 @@ jest.mock('@/lib/sentry', () => ({
 jest.mock('@/store/useUsageStore', () => ({
   useUsageStore: { getState: () => ({ reset: jest.fn(), load: jest.fn() }) },
 }));
+jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 jest.mock('@/services/agent/AgentComposerService', () => ({ clearAllSessions: jest.fn() }));
 jest.mock('@/lib/chat/chatHistory', () => ({
   clearChatHistory: jest.fn(),
@@ -33,14 +34,11 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn(),
 }));
 
-import { useAuthStore } from '@/store/useAuthStore';
-import { useAuthStore as useAndroidAuthStore } from '@/store/useAuthStore.android';
+import { useAuthStore as useAndroidAuthStore } from '@/android/store/useAuthStore';
 import { signInWithApple, signInWithGoogle, signInWithMicrosoft } from '@/lib/authClient';
 
-const stores = [
-  ['ios', useAuthStore],
-  ['android', useAndroidAuthStore],
-] as const;
+// The sign-in spinner fix (#3229) is Android's; iOS keeps main's store.
+const stores = [['android', useAndroidAuthStore]] as const;
 const providers = [
   ['google', 'signInWithGoogle', signInWithGoogle],
   ['apple', 'signInWithApple', signInWithApple],

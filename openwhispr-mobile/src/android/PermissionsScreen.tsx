@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AppState, View, Switch, Alert, PermissionsAndroid, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { AndroidDictation, dictationEvents } from '../../modules/android-dictation/src';
 import { Card, Button, Row, useUiStyles } from './ui';
 export function PermissionsContent() {

@@ -1,5 +1,5 @@
 import { notesRepository } from '@/data';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 
 function escape(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

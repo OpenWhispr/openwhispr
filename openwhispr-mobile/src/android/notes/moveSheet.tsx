@@ -7,7 +7,7 @@ import type { Space } from '@/data/spacesTypes';
 import { canMoveBetweenSpaces } from '@/lib/spacePermissions';
 import { AppFont } from '@/lib/fonts';
 import { safeHaptics } from '@/lib/utils';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 import { BottomSheet, showToast, TextAction } from '../settings/kit';
 import { GlassButton } from '../processingFable/look';
 import { SearchField } from '../controls';

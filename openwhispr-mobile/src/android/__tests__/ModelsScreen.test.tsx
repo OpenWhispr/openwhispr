@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 let mockActiveMode = 'private';
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/store/useAuthStore', () => ({ useAuthStore: () => null }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/android/strings', () => ({
   __esModule: true,
   default: { addResourceBundle: jest.fn(), t: (key: string) => key },
@@ -17,6 +18,7 @@ jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/store/useConfigStore', () => ({ useConfigStore: () => ({}) }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: (selector: (state: { activeMode: string }) => unknown) =>
     selector({ activeMode: mockActiveMode }),

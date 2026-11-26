@@ -2,7 +2,7 @@ import { View } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from '@/components/ui/Text';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { Glyph, type GlyphName } from '../onboarding/PracticeBubble';
 import { GLASS_GRADIENT } from '../onboarding/kit';
 import { Group, ListRow, SettingsPage, Toggle, useSettings } from './kit';

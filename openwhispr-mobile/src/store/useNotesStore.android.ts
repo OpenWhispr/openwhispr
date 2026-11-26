@@ -1,4 +1,2 @@
-import { createAndroidNotesStore } from '@/android/notesStore';
-
-export type { CreateMeetingNoteContext } from './createNotesStore';
-export const useNotesStore = createAndroidNotesStore();
+// Android's copy lives in src/android; shared files still import it from here.
+export * from '@/android/store/useNotesStore';

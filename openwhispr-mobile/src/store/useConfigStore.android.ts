@@ -1,4 +1,2 @@
-import { createConfigStore } from './createConfigStore';
-import { createAndroidConfigLifecycle } from '../android/configStoreLifecycle';
-
-export const useConfigStore = createConfigStore(createAndroidConfigLifecycle);
+// Android's copy lives in src/android; shared files still import it from here.
+export * from '@/android/store/useConfigStore';

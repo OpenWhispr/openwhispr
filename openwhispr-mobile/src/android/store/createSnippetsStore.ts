@@ -2,9 +2,9 @@ import { and, asc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { create } from 'zustand';
 import { db } from '@/db';
 import { snippets } from '@/db/schema';
-import type { Snippet } from '@/lib/snippets';
+import type { Snippet } from '@/android/dictation/snippets';
 import { randomUUID } from '@/lib/uuid';
-import { createLibraryLoad, type CreateLibraryLoad } from './createLibraryLoad';
+import { createLibraryLoad, type CreateLibraryLoad } from '@/android/store/createLibraryLoad';
 
 interface SnippetsStore {
   entries: Snippet[];

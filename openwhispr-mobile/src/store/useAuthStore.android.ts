@@ -1,4 +1,2 @@
-import { createAuthStore } from './createAuthStore';
-import { androidAuthLifecycle } from '@/android/authLifecycle';
-
-export const useAuthStore = createAuthStore(androidAuthLifecycle);
+// Android's copy lives in src/android; shared files still import it from here.
+export * from '@/android/store/useAuthStore';

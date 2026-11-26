@@ -41,10 +41,15 @@ jest.mock('@/android/models', () => ({
 }));
 jest.mock('@/android/LocalTextModel', () => ({ selectedTextModel: () => 'qwen-small' }));
 jest.mock('@/store/useConfigStore', () => ({ useConfigStore: { getState: jest.fn() } }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useTranscriptStore', () => ({ useTranscriptStore: { getState: jest.fn() } }));
+jest.mock('@/android/store/useTranscriptStore', () =>
+  jest.requireMock('@/store/useTranscriptStore'),
+);
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: null }) },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 
 import {
   createAndroidJob,

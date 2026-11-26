@@ -1,5 +1,5 @@
-import { useDictionaryStore, type DictionaryEntry } from '@/store/useDictionaryStore';
-import { useSnippetsStore } from '@/store/useSnippetsStore';
+import { useDictionaryStore, type DictionaryEntry } from '@/android/store/useDictionaryStore';
+import { useSnippetsStore } from '@/android/store/useSnippetsStore';
 import type { Snippet } from '@/android/dictation/snippets';
 import { safeHaptics } from '@/lib/utils';
 import { showToast } from '../settings/kit';

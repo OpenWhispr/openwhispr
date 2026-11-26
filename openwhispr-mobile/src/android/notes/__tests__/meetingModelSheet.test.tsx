@@ -33,6 +33,7 @@ jest.mock('../../settings/kit', () => ({
   useReduceMotion: () => false,
 }));
 jest.mock('@/store/useAuthStore', () => ({ useAuthStore: () => null }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), back: jest.fn() } }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));

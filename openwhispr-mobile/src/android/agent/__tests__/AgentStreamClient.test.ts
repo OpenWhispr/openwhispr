@@ -19,6 +19,7 @@ jest.mock('@/store/useAuthStore', () => ({
     getState: () => ({ sessionCookie: 'test-session-cookie' }),
   },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 
 import { streamAgentText, type AgentMessage } from '@/services/agent/AgentStreamClient.android';
 import { ApiError } from '@/lib/apiClient';

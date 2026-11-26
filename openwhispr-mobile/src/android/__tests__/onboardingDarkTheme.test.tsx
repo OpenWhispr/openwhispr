@@ -116,6 +116,7 @@ jest.mock('@/store/useAuthStore', () => {
   store.getState = () => ({ user, ensureAnonymousSession: jest.fn() });
   return { useAuthStore: store };
 });
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: require('zustand').create(() => ({
     config: { languages: ['en'] },
@@ -123,6 +124,7 @@ jest.mock('@/store/useConfigStore', () => ({
     updateConfig: async () => undefined,
   })),
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('../onboarding/setup', () => ({
   privateSupported: () => true,
   applyCloudConfig: async () => undefined,

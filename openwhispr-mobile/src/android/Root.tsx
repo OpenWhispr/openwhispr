@@ -17,8 +17,8 @@ import {
   SpaceGrotesk_700Bold,
 } from '@expo-google-fonts/space-grotesk';
 import * as SplashScreen from 'expo-splash-screen';
-import { useTranscriptStore } from '@/store/useTranscriptStore';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useTranscriptStore } from '@/android/store/useTranscriptStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 import { startMeetingRecoveryOnce } from '@/lib/meetingRecovery';
 import { initSyncTriggers } from '@/sync/syncEngine';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';

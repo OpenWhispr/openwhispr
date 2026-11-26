@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { fetchMyWorkspaces } from '@/data/remote/workspacesApi';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
 import { useKnownWorkspaces } from './library';
 
 /**

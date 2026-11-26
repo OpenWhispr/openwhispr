@@ -8,6 +8,7 @@ jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text })
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (select: (state: unknown) => unknown) => select({ user: null }),
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('../meetingRouting', () => ({ meetingOnDevice: () => mockOnDevice }));
 jest.mock('@/lib/accountAccess', () => ({ requiresRealAccount: () => true }));
 jest.mock('../ui', () => {

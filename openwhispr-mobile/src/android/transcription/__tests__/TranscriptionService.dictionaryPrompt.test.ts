@@ -17,6 +17,7 @@ jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ sessionCookie: 'test-session-cookie' }) },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('expo-file-system/legacy', () => ({
   getInfoAsync: jest.fn(),
   uploadAsync: jest.fn(),
@@ -51,9 +52,13 @@ jest.mock('@/store/useDictionaryStore', () => ({
     getState: () => ({ isLoaded: true, entries: [{ word: 'Piha' }, { word: 'Biscuit' }] }),
   },
 }));
+jest.mock('@/android/store/useDictionaryStore', () =>
+  jest.requireMock('@/store/useDictionaryStore'),
+);
 jest.mock('@/store/useSnippetsStore', () => ({
   useSnippetsStore: { getState: () => ({ isLoaded: true, entries: [] }) },
 }));
+jest.mock('@/android/store/useSnippetsStore', () => jest.requireMock('@/store/useSnippetsStore'));
 let mockSharedWorkspace: string[] = [];
 jest.mock('@/store/useSharedDictionaryStore', () => ({
   useSharedDictionaryStore: {

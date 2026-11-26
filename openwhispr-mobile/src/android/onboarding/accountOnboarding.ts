@@ -1,5 +1,5 @@
 import { api } from '@/lib/apiClient';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
 
 /**
  * Whether an account has already finished onboarding on Android (decision F2). The phone's own

@@ -41,6 +41,7 @@ jest.mock('@react-navigation/native', () => ({ useScrollToTop: () => undefined }
 jest.mock('react-native-svg', () => ({ SvgXml: require('react-native').View }));
 jest.mock('expo-image', () => ({ Image: require('react-native').View }));
 jest.mock('@/store/useAuthStore', () => ({ useAuthStore: () => null }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/android/settings/kit', () => {
   const { Pressable } = require('react-native');
   return {
@@ -58,6 +59,7 @@ jest.mock('@/android/settings/kit', () => {
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: require('zustand').create(() => ({ config: {}, error: null })),
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 
 const saved = () => readToneStyle(useConfigStore.getState().config);
 const setStyle = (androidToneStyle?: object) =>

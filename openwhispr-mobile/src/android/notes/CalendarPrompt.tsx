@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { useTheme } from '../ThemeProvider';
 import { showToast } from '../settings/kit';

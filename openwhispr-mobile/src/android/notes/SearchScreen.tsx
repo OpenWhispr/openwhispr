@@ -6,7 +6,7 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { notesRepository } from '@/data';
 import type { Note } from '@/data';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 import { SearchField } from '../controls';
 import { safeHaptics } from '@/lib/utils';
 import { useNavigationBarCanvas } from '../navigationBar';

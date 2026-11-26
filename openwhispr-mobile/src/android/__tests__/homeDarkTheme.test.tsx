@@ -26,6 +26,7 @@ jest.mock('expo-video', () => ({ useVideoPlayer: jest.fn(), VideoView: () => nul
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (pick: (s: object) => unknown) => pick({ user: null, isGuest: true }),
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('../home/strings', () => ({ useHomeT: () => (key: string) => key }));
 jest.mock('react-native-gesture-handler', () => ({
   GestureDetector: ({ children }: { children: React.ReactNode }) => children,

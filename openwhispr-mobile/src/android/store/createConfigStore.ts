@@ -1,13 +1,13 @@
 import { create, type StoreApi } from 'zustand';
-import type { UserConfig } from '../types';
-import { StorageService } from '../services/storage/StorageService';
+import type { UserConfig } from '@/types';
+import { StorageService } from '@/services/storage/StorageService';
 import {
   localModeUpgradeConfig,
   noteChatSplitConfig,
   notesLocalModeSplitConfig,
-} from '../lib/inferenceModes';
-import { withoutRetiredModels } from '../lib/retiredModels';
-import { useProcessingModeStore } from './useProcessingModeStore';
+} from '@/lib/inferenceModes';
+import { withoutRetiredModels } from '@/lib/retiredModels';
+import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 
 export interface ConfigState {
   config: UserConfig | null;
@@ -44,7 +44,7 @@ async function prepareConfigChange(
     nextConfig.usageAnalyticsEnabled !== false
   ) {
     const { prepareProductEventsOptIn } =
-      require('../lib/productEvents') as typeof import('../lib/productEvents');
+      require('@/lib/productEvents') as typeof import('@/lib/productEvents');
     await prepareProductEventsOptIn();
   }
 }

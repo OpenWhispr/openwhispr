@@ -11,7 +11,7 @@ import {
 import { Text } from '@/components/ui/Text';
 import * as Clipboard from 'expo-clipboard';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
 import {
   fetchReferralStats,
   fetchReferralInvites,

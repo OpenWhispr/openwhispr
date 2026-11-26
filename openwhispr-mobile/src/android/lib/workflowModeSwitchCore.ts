@@ -1,7 +1,7 @@
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import {
   accountRequiredForCloud,
@@ -16,7 +16,10 @@ import {
   getLocalReasoningUnavailableMessage,
 } from '@/lib/localReasoning';
 import type { LocalModelKey } from '@/lib/localModelCatalog';
-import { type InferenceSelection, type MobileInferenceScope } from '@/lib/mobileProviders';
+import {
+  type InferenceSelection,
+  type MobileInferenceScope,
+} from '@/android/providers/mobileProviders';
 import { getPrivateModeReadiness, getPrivateModeUnavailableMessage } from '@/lib/privateMode';
 
 type SpeechScope = 'dictation' | 'upload';

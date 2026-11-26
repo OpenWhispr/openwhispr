@@ -136,6 +136,7 @@ jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: (select: any) =>
     select({ config: { insightsSyncEnabled: mockSync, androidHistoryDays: 30 } }),
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/android/bubbleResult', () => ({ useBubbleResult: () => ({}) }));
 jest.mock('@/android/Practice', () => ({ Practice: () => null }));
 jest.mock('@/android/pipeline', () => ({
@@ -172,6 +173,7 @@ jest.mock('@/store/useNotesStore', () => ({
     }),
   },
 }));
+jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: 'cloud' }) },
 }));
@@ -195,6 +197,9 @@ jest.mock('@/services/transcription/TranscriptionService', () => ({
   isOggOpus: () => false,
   isLocalModelMissingError: () => false,
 }));
+jest.mock('@/android/transcription/TranscriptionService', () =>
+  jest.requireMock('@/services/transcription/TranscriptionService'),
+);
 jest.mock('@/lib/transcriptScope', () => ({
   captureTranscriptScope: () => null,
   isTranscriptScopeCurrent: () => true,
@@ -203,6 +208,9 @@ jest.mock('@/lib/transcriptScope', () => ({
 jest.mock('@/lib/transcribeAndCleanup', () => ({
   transcribeAndCleanup: (...args: unknown[]) => mockProcessUpload(...args),
 }));
+jest.mock('@/android/dictation/transcribeAndCleanup', () =>
+  jest.requireMock('@/lib/transcribeAndCleanup'),
+);
 jest.mock('@/lib/transcriptionLanguage', () => ({ getPreferredTranscriptionLanguage: () => 'en' }));
 jest.mock('@/lib/permissions', () => ({ isNoSpeechError: () => false }));
 jest.mock('@/lib/transcriptAudio', () => ({
@@ -226,8 +234,10 @@ jest.mock('@/lib/superwall', () => ({
   buildUsageGateParams: () => ({}),
 }));
 jest.mock('@/store/useAuthStore', () => ({ useAuthStore: () => mockUser }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 let mockUsage: Record<string, unknown> | null = null;
 jest.mock('@/store/useUsageStore', () => ({ useUsageStore: () => mockUsage }));
+jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 jest.mock('@/store/useTranscriptStore', () => ({
   createTranscriptId: () => 'initial-upload',
   useTranscriptStore: Object.assign(
@@ -259,6 +269,9 @@ jest.mock('@/store/useTranscriptStore', () => ({
     { getState: () => ({ retryTranscript: mockRetryTranscript }) },
   ),
 }));
+jest.mock('@/android/store/useTranscriptStore', () =>
+  jest.requireMock('@/store/useTranscriptStore'),
+);
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );

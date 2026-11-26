@@ -3,7 +3,7 @@ import { View, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { Toggle } from './settings/kit';
 import { setPrivateMode } from '@/lib/workflowModeSwitch.android';

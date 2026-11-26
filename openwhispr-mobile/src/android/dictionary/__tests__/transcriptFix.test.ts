@@ -26,6 +26,7 @@ jest.mock('@/data', () => ({
 jest.mock('@/store/useNotesStore', () => ({
   useNotesStore: { setState: (...args: unknown[]) => mockSetState(...args) },
 }));
+jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 
 import { countWord, fixWordInTranscript, replaceWord } from '../transcriptFix';
 

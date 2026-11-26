@@ -1,4 +1,4 @@
-import type { DictionaryEntry } from '@/store/useDictionaryStore';
+import type { DictionaryEntry } from '@/android/store/useDictionaryStore';
 import type { Snippet } from '@/android/dictation/snippets';
 
 function distance(a: string, b: string): number {

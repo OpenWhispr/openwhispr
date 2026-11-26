@@ -47,6 +47,7 @@ jest.mock('react-native-svg', () => {
   return { __esModule: true, default: View, Circle: View, Path: View, Rect: View, SvgXml: View };
 });
 jest.mock('@/store/useAuthStore', () => ({ useAuthStore: () => null }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 // The bubble's own glyphs (reanimated) and the onboarding glass, stubbed: only the colours matter.
 jest.mock('../onboarding/PracticeBubble', () => ({
   Glyph: ({ color }: { color: string }) => {
@@ -69,6 +70,7 @@ jest.mock('../../../modules/android-dictation/src/appearance', () => ({
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: require('zustand').create(() => ({ config: {}, error: null })),
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: require('zustand').create(() => ({ activeMode: 'cloud' })),
 }));

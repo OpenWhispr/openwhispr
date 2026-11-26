@@ -70,6 +70,7 @@ jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (selector: (state: { user: object | null }) => unknown) =>
     selector({ user: mockSignedIn ? { id: 'a', isAnonymous: false } : null }),
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/lib/accountAccess', () => ({ requiresRealAccount: (user: unknown) => !user }));
 jest.mock('@/sync/useSyncStore', () => ({
   useSyncStore: (selector: (state: { policyBlocked: boolean }) => unknown) =>
@@ -78,6 +79,7 @@ jest.mock('@/sync/useSyncStore', () => ({
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: require('zustand').create(() => ({ config: {}, error: null })),
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 
 jest.mock('../../../modules/android-dictation/src/appearance', () => ({
   setBubbleAppearance: jest.fn(),

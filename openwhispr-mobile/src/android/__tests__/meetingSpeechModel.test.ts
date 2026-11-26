@@ -4,6 +4,7 @@ const mockUnsupported = new Set<string>();
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ config: mockConfig }) },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('../models', () => ({
   ANDROID_MODELS: {
     'moonshine-tiny': { kind: 'speech' },

@@ -23,10 +23,12 @@ jest.mock('@/android/strings', () => ({
   default: { addResourceBundle: jest.fn(), t: (key: string) => key },
 }));
 jest.mock('@/store/useAuthStore', () => ({ useAuthStore: () => mockAuthState }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useUsageStore', () => ({
   useUsageStore: (selector: (state: { usage: null; load: jest.Mock }) => unknown) =>
     selector({ usage: null, load: jest.fn() }),
 }));
+jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUsageStore'));
 jest.mock('@/lib/alerts', () => ({ confirmAccountDeletion: jest.fn() }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));

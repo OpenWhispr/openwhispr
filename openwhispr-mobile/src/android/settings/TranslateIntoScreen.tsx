@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
 import { Group, ListRow, SettingsPage, useSettings } from './kit';
 import { SearchField } from '../controls';

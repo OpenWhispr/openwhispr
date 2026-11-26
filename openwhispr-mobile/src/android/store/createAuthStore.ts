@@ -17,7 +17,7 @@ import {
   type SocialAuthResult,
 } from '@/lib/authClient';
 import { Sentry } from '@/lib/sentry';
-import { useUsageStore } from '@/store/useUsageStore';
+import { useUsageStore } from '@/android/store/useUsageStore';
 import { clearAllSessions as clearAgentSessions } from '@/services/agent/AgentComposerService';
 import { claimNoteShareTokens, clearNoteShareTokens } from '@/lib/notes/noteShareTokens';
 import { withChatHistory } from '@/lib/chat/withChatHistory';

@@ -1,5 +1,5 @@
 import registry from '@/config/languageRegistry.json';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 
 export type TranslateLanguage = { code: string; label: string; native: string };
 

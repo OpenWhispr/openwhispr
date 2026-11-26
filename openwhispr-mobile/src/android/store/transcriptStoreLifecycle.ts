@@ -1,7 +1,7 @@
 import type { Transcript } from '@/types';
 import { StorageService } from '@/services/storage/StorageService';
 import { garbageCollectTranscriptAudio } from '@/lib/transcriptAudio';
-import type { FailedTranscriptInput, TranscriptState } from './createTranscriptStore';
+import type { FailedTranscriptInput, TranscriptState } from '@/android/store/createTranscriptStore';
 
 export interface TranscriptAccess {
   owner: string | null;

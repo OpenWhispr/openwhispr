@@ -6,9 +6,9 @@ import type { Note, Folder, NoteUpdate, Space } from '@/data';
 import type { ConflictedNote, Segment, Speaker, SpeakerProfile } from '@/data/types';
 import type { CalendarParticipant } from '@/data/calendarTypes';
 import type { Diarizer } from '@/lib/diarization/diarizer';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { deletePrivateNoteCloudCopy, queuePrivateNoteDeletion } from '@/sync/privateNoteDeletion';
 import { createSyncContext } from '@/sync/createSyncContext';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
@@ -38,14 +38,14 @@ import {
   isLocalReasoningRequired,
   shouldUseLocalReasoning,
 } from '@/lib/localReasoning';
-import { promptLocalReasoningFallback } from '@/lib/localReasoningFallback';
+import { promptLocalReasoningFallback } from '@/android/dictation/localReasoningFallback';
 import {
   getCalendarParticipantEmails,
   parseCalendarParticipants,
 } from '@/lib/calendar/meetingContext';
 import { makeContentHash } from '@/lib/utils';
 import { logTranscriptionCompleted } from '@/lib/appsflyer';
-import { ReasoningService } from '@/services/reasoning/ReasoningService';
+import { ReasoningService } from '@/android/reasoning/ReasoningService';
 import type {
   EnrollVoiceProfileInput,
   ReenrollVoiceProfileInput,
@@ -204,11 +204,11 @@ export function createNotesStore(
   /* eslint-disable @typescript-eslint/no-var-requires */
   const loadMeetingPipelineDeps = () => {
     const diarizationService =
-      require('@/services/diarization/DiarizationService') as typeof import('@/services/diarization/DiarizationService');
+      require('@/android/transcription/DiarizationService') as typeof import('@/android/transcription/DiarizationService');
     const diarizerModule =
       require('@/lib/diarization/getDiarizer') as typeof import('@/lib/diarization/getDiarizer');
     const localTranscriptionModule =
-      require('@/services/transcription/LocalTranscriptionService') as typeof import('@/services/transcription/LocalTranscriptionService');
+      require('@/android/transcription/LocalTranscriptionService') as typeof import('@/android/transcription/LocalTranscriptionService');
 
     return {
       processMeeting: diarizationService.processMeeting,
@@ -234,7 +234,7 @@ export function createNotesStore(
     const speechActivityModule =
       require('@/lib/speechActivity') as typeof import('@/lib/speechActivity');
     const audioToolsModule =
-      require('../../modules/audio-tools/src') as typeof import('../../modules/audio-tools/src');
+      require('../../../modules/audio-tools/src') as typeof import('../../../modules/audio-tools/src');
 
     return {
       analyzeSpeechActivity: speechActivityModule.analyzeSpeechActivity,
@@ -250,7 +250,7 @@ export function createNotesStore(
 
   const loadLocalTranscriptionService = () => {
     const localTranscriptionModule =
-      require('@/services/transcription/LocalTranscriptionService') as typeof import('@/services/transcription/LocalTranscriptionService');
+      require('@/android/transcription/LocalTranscriptionService') as typeof import('@/android/transcription/LocalTranscriptionService');
     return localTranscriptionModule.LocalTranscriptionService;
   };
 

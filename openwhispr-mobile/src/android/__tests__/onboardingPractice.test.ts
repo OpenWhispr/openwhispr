@@ -39,6 +39,7 @@ jest.mock('@/android/reasoning/ReasoningService', () => ({
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: { name: 'Josh Padoa', email: 'josh@example.com' } }) },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('../pipeline', () => ({
   createAndroidJob: (mode: string, target?: string, selection?: string) => ({
     mode,

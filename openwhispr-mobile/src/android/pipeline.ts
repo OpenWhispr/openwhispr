@@ -12,8 +12,8 @@ import {
 } from '@/lib/transcriptionLanguage';
 import { ReasoningService } from '@/android/reasoning/ReasoningService';
 import { LocalTranscriptionService } from '@/android/transcription/LocalTranscriptionService';
-import { useConfigStore } from '@/store/useConfigStore';
-import { useTranscriptStore } from '@/store/useTranscriptStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
+import { useTranscriptStore } from '@/android/store/useTranscriptStore';
 import { modelReady } from './models';
 import { selectedTextModel } from './LocalTextModel';
 import { selectedSpeechModel } from './speechSelection';
@@ -196,7 +196,8 @@ function editReplacement(reply: string, selection: string): string {
 
 // Loaded on use: the auth store pulls in the auth client, which dictation itself never needs.
 function senderFirstName(): string | null {
-  const { useAuthStore } = require('@/store/useAuthStore') as typeof import('@/store/useAuthStore');
+  const { useAuthStore } =
+    require('@/android/store/useAuthStore') as typeof import('@/android/store/useAuthStore');
   const { getAccountFirstName } =
     require('@/lib/accountDisplay') as typeof import('@/lib/accountDisplay');
   return getAccountFirstName(useAuthStore.getState().user);

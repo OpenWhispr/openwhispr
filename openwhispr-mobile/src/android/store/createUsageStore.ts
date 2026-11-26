@@ -1,5 +1,5 @@
-import { fetchUsage, type UsageInfo } from '@/data/remote/usageApi';
-import { useAuthStore } from '@/store/useAuthStore';
+import { fetchUsage, type UsageInfo } from '@/android/remote/usageApi';
+import { useAuthStore } from '@/android/store/useAuthStore';
 
 const CACHE_TTL_MS = 60_000;
 

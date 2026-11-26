@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import type { Folder } from '@/data';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 import { safeHaptics } from '@/lib/utils';
 import { BottomSheet, TextAction } from '../settings/kit';
 import { Card, ListRow } from './look';

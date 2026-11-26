@@ -28,6 +28,7 @@ let mockConfig: Record<string, unknown> = { cleanupEnabled: true };
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ config: mockConfig }) },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 
 // Snippets merged into this pipeline: transcribeAndCleanup now reads the snippet
 // store (for final-text expansion) and dictationHints imports both stores. Mock
@@ -37,14 +38,19 @@ let mockUser = { id: 'u', isAnonymous: false };
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: mockUser }) },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 
 jest.mock('@/store/useSnippetsStore', () => ({
   useSnippetsStore: { getState: () => ({ isLoaded: true, entries: [] }) },
 }));
+jest.mock('@/android/store/useSnippetsStore', () => jest.requireMock('@/store/useSnippetsStore'));
 
 jest.mock('@/store/useDictionaryStore', () => ({
   useDictionaryStore: { getState: () => ({ isLoaded: true, entries: [] }) },
 }));
+jest.mock('@/android/store/useDictionaryStore', () =>
+  jest.requireMock('@/store/useDictionaryStore'),
+);
 jest.mock('@/store/useCustomPromptsStore', () => ({
   getActiveCustomCleanupPrompt: () => undefined,
 }));

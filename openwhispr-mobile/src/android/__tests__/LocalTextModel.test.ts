@@ -3,6 +3,7 @@ jest.mock('../models', () => ({ modelPath: () => '/model.gguf', modelReady: asyn
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ config: { androidTextModel: 'qwen-balanced' } }) },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('../../../modules/android-dictation/src', () => ({
   AndroidDictation: {
     releaseParakeet: jest.fn(async () => undefined),

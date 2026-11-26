@@ -23,6 +23,7 @@ jest.mock('@/store/useConfigStore', () => {
     },
   };
 });
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 
 const updateConfig = jest.fn(async () => {});
 beforeEach(() => {

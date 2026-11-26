@@ -12,18 +12,27 @@ const mockLoadSnippets = mockStep('snippets');
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ loadConfig: mockLoadConfig }) },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ initialize: mockInitializeAuth }) },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useTranscriptStore', () => ({
   useTranscriptStore: { getState: () => ({ loadTranscripts: mockLoadTranscripts }) },
 }));
+jest.mock('@/android/store/useTranscriptStore', () =>
+  jest.requireMock('@/store/useTranscriptStore'),
+);
 jest.mock('@/store/useDictionaryStore', () => ({
   useDictionaryStore: { getState: () => ({ load: mockLoadDictionary }) },
 }));
+jest.mock('@/android/store/useDictionaryStore', () =>
+  jest.requireMock('@/store/useDictionaryStore'),
+);
 jest.mock('@/store/useSnippetsStore', () => ({
   useSnippetsStore: { getState: () => ({ load: mockLoadSnippets }) },
 }));
+jest.mock('@/android/store/useSnippetsStore', () => jest.requireMock('@/store/useSnippetsStore'));
 
 import { bootAppData, forgetAppData } from '../appData';
 

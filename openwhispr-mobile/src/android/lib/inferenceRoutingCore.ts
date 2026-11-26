@@ -1,4 +1,4 @@
-import { useConfigStore } from '@/store/useConfigStore';
+import { useConfigStore } from '@/android/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import {
   type InferenceScope,
@@ -6,7 +6,7 @@ import {
   type InferenceRoute,
   type RouteErrorCode,
   resolveMobileInferenceRoute,
-} from '@/lib/mobileProviders';
+} from '@/android/providers/mobileProviders';
 import type { TranscriptionProvider, TranscriptionRequest, TextInferenceSnapshot } from '@/types';
 import { isLocalModelKey, type LocalModelKey } from '@/lib/localModelCatalog';
 import { cloudAccessFor, unsetSelection, workflowSelection } from '@/lib/aiWorkflows';
@@ -41,7 +41,7 @@ export function createInferenceRouting(routingPolicy?: InferenceRoutingPolicy) {
   // Required lazily: the auth store loads the auth client, which routing doesn't otherwise need.
   function currentCloudAccess(): CloudAccess {
     const { useAuthStore } =
-      require('@/store/useAuthStore') as typeof import('@/store/useAuthStore');
+      require('@/android/store/useAuthStore') as typeof import('@/android/store/useAuthStore');
     return cloudAccessFor(useAuthStore.getState().user);
   }
 

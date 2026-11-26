@@ -13,8 +13,8 @@ import { formatNoteMetaDate, markViewer, noteTakenAt } from '@/lib/notes/noteMet
 import { Sentry } from '@/lib/sentry';
 import { safeHaptics } from '@/lib/utils';
 import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useNotesStore } from '@/store/useNotesStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
+import { useNotesStore } from '@/android/store/useNotesStore';
 import { showToast } from '../settings/kit';
 import { EventSheet, PeopleSheet } from './chipSheets';
 import { fetchConferenceLink } from './eventLink';

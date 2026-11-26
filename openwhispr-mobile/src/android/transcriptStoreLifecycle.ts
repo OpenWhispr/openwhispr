@@ -12,7 +12,7 @@ import {
 import type {
   TranscriptLifecycle,
   TranscriptLifecycleContext,
-} from '@/store/transcriptStoreLifecycle';
+} from '@/android/store/transcriptStoreLifecycle';
 
 export interface AndroidTranscriptExtension {
   reset: () => void;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Platform, Alert, PermissionsAndroid } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
-import { MeetingRecordScreen as IOSMeetingRecordScreen } from '../MeetingRecordScreen';
+import { MeetingRecordScreen as IOSMeetingRecordScreen } from '@/screens/MeetingRecordScreen';
 import { MeetingRecordScreen as AndroidMeetingRecordScreen } from '@/android/MeetingRecordScreen';
 // Exercise each platform lifecycle directly; the Android dispatcher has separate routing tests.
 const MeetingRecordScreen = () =>
@@ -232,6 +232,7 @@ jest.mock('@/store/useNotesStore', () => ({
     getState: () => mockNotes,
   }),
 }));
+jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 jest.mock('@/store/useGoogleCalendarStore', () => ({
   useGoogleCalendarStore: (select: (s: unknown) => unknown) =>
     select({ accounts: mockAccounts, load: mockLoadCalendars }),
@@ -250,6 +251,7 @@ jest.mock('@/store/useAuthStore', () => ({
     },
   },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: {
     getState: () => ({ activeMode: mockMode }),

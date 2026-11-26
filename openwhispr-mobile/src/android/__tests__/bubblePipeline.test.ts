@@ -43,6 +43,7 @@ jest.mock('@/store/useAuthStore', () => ({
     subscribe: (listener: () => void) => mockAuthListeners.push(listener),
   },
 }));
+jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));
 let mockScopeChange: () => void = () => {};
 jest.mock('@/lib/transcriptScope', () => ({
   observeTranscriptScope: (change: () => void) => {
@@ -53,6 +54,7 @@ jest.mock('@/lib/transcriptScope', () => ({
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ config: {} }), subscribe: jest.fn() },
 }));
+jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useConfigStore'));
 jest.mock('../strings', () => ({ __esModule: true, default: { t: (key: string) => key } }));
 jest.mock('../practiceSession', () => ({
   usePracticeSession: { getState: () => ({ complete: jest.fn() }) },

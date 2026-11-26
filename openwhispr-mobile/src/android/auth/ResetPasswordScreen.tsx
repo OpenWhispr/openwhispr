@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { resetPasswordWithToken } from '@/lib/authClient.android';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/android/store/useAuthStore';
 import { safeHaptics } from '@/lib/utils';
 import { showToast } from '../settings/kit';
 import { ForgotPassword } from './ForgotPassword';

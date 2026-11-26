@@ -3,8 +3,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import AuthScreen, { isAuthReason } from '@/screens/AuthScreen.android';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { needsEmailVerification } from '@/android/auth/emailVerification';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useUsageStore } from '@/store/useUsageStore.android';
+import { useAuthStore } from '@/android/store/useAuthStore';
+import { useUsageStore } from '@/android/store/useUsageStore';
 import { useEndedSession } from '@/android/auth/endedSession';
 
 export default function AuthRoute() {
