@@ -1544,6 +1544,49 @@ test("a Slack window title whose name could be a channel the user isn't in never
   assert.equal(byName.preview.destinationLabel, "Dee Sign (@design)");
 });
 
+test("a Slack window title asks where when a bot or a deactivated account shares the name", async () => {
+  const member = (id, name, realName, extra = {}) => ({
+    id,
+    name,
+    deleted: false,
+    is_bot: false,
+    profile: { real_name: realName, display_name: "" },
+    ...extra,
+  });
+  const members = [
+    ...FIXTURES.people.members,
+    member("U0POLLY01", "polly", "Polly"),
+    member("B0POLLY01", "pollybot", "Polly", { is_bot: true }),
+    member("U0ROSA001", "rosa", "Rosa"),
+    member("U0ROSA002", "rosa.old", "Rosa", { deleted: true }),
+    member("U0IRIS001", "iris", "Iris"),
+  ];
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok({ ...FIXTURES.people, members })],
+  });
+  // The DM open may be with the bot or the old account, which aren't listed as people.
+  for (const title of ["Polly (DM) - Acme Test - Slack", "Rosa (DM) - Acme Test - Slack"]) {
+    const prepared = await connector.prepare("send_message", { text: "Hi" }, pressedOver(title));
+    assert.equal(prepared.status, "needs_clarification", title);
+  }
+  // A bot's own DM is no one to post to.
+  const helper = await connector.prepare(
+    "send_message",
+    { text: "Hi" },
+    pressedOver("Helper Bot (DM) - Acme Test - Slack")
+  );
+  assert.equal(helper.status, "needs_clarification");
+  // Someone no bot or old account shares a name with is still found, from one read of the people.
+  const iris = await connector.prepare(
+    "send_message",
+    { text: "Hi" },
+    pressedOver("Iris (DM) - Acme Test - Slack")
+  );
+  assert.equal(iris.preview.destinationLabel, "Iris (@iris)");
+  assert.equal(slack.methods().filter((method) => method === "users.list").length, 1);
+});
+
 test("a Slack window title asks where when Slack's lists were cut off", async () => {
   const endless = (key, items) => ({
     ok: true,

@@ -434,13 +434,17 @@ function createSlackConnector({ api, auth, directory, credentials }) {
   // doesn't name the connected workspace (Slack may show another), when not
   // every channel and person was read (a name could be someone else's), or
   // when no name or several conversations match: a guess never picks where a
-  // post goes.
+  // post goes. A bot, an app or a deactivated account counts as a match too,
+  // since its DM is titled with its name, though no one can post to it. People
+  // from another organization (Slack Connect) aren't listed at all, so a DM
+  // with one can still match a colleague of that name; the card names them.
   async function findOpenConversation(title, binding, access, cacheKey) {
     const names = slackTitleNames(title, access.credential.teamName);
     if (names.length === 0) return {};
     const lists = await Promise.all([
       directory.channels(access.token, cacheKey),
       directory.people(access.token, cacheKey),
+      directory.notPeople(access.token, cacheKey),
     ]);
     const failure = lists.find((list) => !list.ok);
     if (failure) return { error: failure.errorCode };
@@ -448,7 +452,9 @@ function createSlackConnector({ api, auth, directory, credentials }) {
     const candidates = lists.flatMap((list) => list.items);
     const exactly = (name) => {
       const resolved = resolveTarget(name, candidates, { exactOnly: true });
-      return resolved.status === "match" ? resolved.candidate : null;
+      return resolved.status === "match" && resolved.candidate.kind !== "not_person"
+        ? resolved.candidate
+        : null;
     };
     const found = new Map();
     for (const name of names) {

@@ -75,6 +75,26 @@ test("people skip bots, deleted users and Slackbot, and carry a handle hint", as
   });
 });
 
+test("bots, deleted users and Slackbot are the ones left out, from the same single read", async () => {
+  const { directory, slack } = await setup({ "users.list": [ok(FIXTURES.people)] });
+
+  const [people, notPeople] = await Promise.all([
+    directory.people("t", "k"),
+    directory.notPeople("t", "k"),
+  ]);
+
+  assert.equal(slack.calls.length, 1, "asked at once, read once");
+  assert.equal(people.items.length, 3);
+  assert.deepEqual(
+    notPeople.items.map((member) => [member.id, member.kind]),
+    [
+      ["USLACKBOT", "not_person"],
+      ["B0HELPER", "not_person"],
+      ["U0GONE", "not_person"],
+    ]
+  );
+});
+
 test("a directory longer than ten pages is marked truncated", async () => {
   const endless = {
     ok: true,
