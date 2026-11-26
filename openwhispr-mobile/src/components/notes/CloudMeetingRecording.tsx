@@ -17,10 +17,11 @@ import {
   isCloudMeetingRecordingAudio,
 } from '@/lib/notes/meetingCapture';
 
-const stoppedMessage = (error: string | null): string => {
+// The reason as its own sentence, when there is one, then what it means for the meeting.
+const withReason = (error: string | null, consequence: string): string => {
   const reason = error?.trim();
-  if (!reason) return 'Recording has stopped.';
-  return `${reason}${/[.!?…]$/.test(reason) ? '' : '.'} Recording has stopped.`;
+  if (!reason) return consequence;
+  return `${reason}${/[.!?…]$/.test(reason) ? '' : '.'} ${consequence}`;
 };
 
 interface CloudMeetingRecordingProps {
@@ -99,7 +100,17 @@ export function CloudMeetingRecording({
         </View>
       </View>
       {status === 'error' && !startFailed ? (
-        <Text className="mx-4 mt-2 text-[13px] text-systemRed">{stoppedMessage(error)}</Text>
+        <Text className="mx-4 mt-2 text-[13px] text-systemRed">
+          {withReason(error, 'Recording has stopped.')}
+        </Text>
+      ) : null}
+      {status === 'recording-only' ? (
+        <Text className="mx-4 mt-2 text-[13px] text-systemOrange">
+          {withReason(
+            error,
+            'Live transcription stopped. Still recording, so the rest can be transcribed after the meeting.',
+          )}
+        </Text>
       ) : null}
       {status === 'interrupted' ? (
         <Text className="mx-4 mt-2 text-[13px] text-systemRed">

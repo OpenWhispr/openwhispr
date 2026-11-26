@@ -77,12 +77,34 @@ describe('deriveCloudMeetingStatus before the first connection', () => {
   });
 });
 
+describe('deriveCloudMeetingStatus after the live stream ended', () => {
+  const base = { started: true, failed: false, capturing: true, reconnecting: false };
+
+  it('reads as recording only, whether or not the stream ever connected', () => {
+    expect(deriveCloudMeetingStatus({ ...base, streamEnded: true })).toBe('recording-only');
+    expect(deriveCloudMeetingStatus({ ...base, connected: false, streamEnded: true })).toBe(
+      'recording-only',
+    );
+    expect(deriveCloudMeetingStatus({ ...base, reconnecting: true, streamEnded: true })).toBe(
+      'recording-only',
+    );
+  });
+
+  it('still shows a stopped mic and an ended session over it', () => {
+    expect(deriveCloudMeetingStatus({ ...base, capturing: false, streamEnded: true })).toBe(
+      'interrupted',
+    );
+    expect(deriveCloudMeetingStatus({ ...base, failed: true, streamEnded: true })).toBe('error');
+  });
+});
+
 describe('isCloudMeetingRecordingAudio', () => {
   it('reads as recording while connecting only once capture has started', () => {
     expect(isCloudMeetingRecordingAudio('connecting', false)).toBe(false);
     expect(isCloudMeetingRecordingAudio('connecting', true)).toBe(true);
     expect(isCloudMeetingRecordingAudio('live', true)).toBe(true);
     expect(isCloudMeetingRecordingAudio('reconnecting', true)).toBe(true);
+    expect(isCloudMeetingRecordingAudio('recording-only', true)).toBe(true);
     expect(isCloudMeetingRecordingAudio('interrupted', true)).toBe(false);
     expect(isCloudMeetingRecordingAudio('error', true)).toBe(false);
   });
@@ -93,6 +115,7 @@ describe('isCloudMeetingCapturing', () => {
     expect(isCloudMeetingCapturing('connecting')).toBe(true);
     expect(isCloudMeetingCapturing('live')).toBe(true);
     expect(isCloudMeetingCapturing('reconnecting')).toBe(true);
+    expect(isCloudMeetingCapturing('recording-only')).toBe(true);
     expect(isCloudMeetingCapturing('interrupted')).toBe(false);
     expect(isCloudMeetingCapturing('error')).toBe(false);
   });
@@ -113,6 +136,7 @@ describe('initialCloudMeetingSession', () => {
       capturing: true,
       stalled: false,
       reconnecting: false,
+      streamEnded: false,
       error: null,
       partialText: '',
       utterances: [],
@@ -353,6 +377,10 @@ describe('meetingBarState', () => {
     expect(
       meetingBarState({ ...cloud, cloudStatus: 'connecting', captureStarted: true }),
     ).toMatchObject({ recordingAudio: true });
+    expect(meetingBarState({ ...cloud, cloudStatus: 'recording-only' })).toMatchObject({
+      label: 'RECORDING ONLY',
+      recordingAudio: true,
+    });
     expect(meetingBarState({ ...cloud, cloudStatus: 'interrupted' }).label).toBe('NOT RECORDING');
     expect(meetingBarState({ ...cloud, cloudStatus: 'error' }).label).toBe('DISCONNECTED');
   });

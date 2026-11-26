@@ -5,7 +5,13 @@
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
 import type { MeetingSessionPhase } from '@/components/notes/MeetingSessionProvider';
 
-export type CloudMeetingStatus = 'connecting' | 'live' | 'reconnecting' | 'interrupted' | 'error';
+export type CloudMeetingStatus =
+  | 'connecting'
+  | 'live'
+  | 'reconnecting'
+  | 'recording-only'
+  | 'interrupted'
+  | 'error';
 
 /**
  * A stopped microphone outranks a reconnecting socket: audio the mic never heard is
@@ -22,10 +28,16 @@ export function deriveCloudMeetingStatus(input: {
    * a recording only starts once its first socket is open.
    */
   connected?: boolean;
+  /**
+   * The live stream gave up for good while the recording goes on, so the rest of the meeting is
+   * transcribed from the file after Stop.
+   */
+  streamEnded?: boolean;
 }): CloudMeetingStatus {
   if (input.failed) return 'error';
   if (!input.started) return 'connecting';
   if (!input.capturing) return 'interrupted';
+  if (input.streamEnded) return 'recording-only';
   if (input.reconnecting) return 'reconnecting';
   if (input.connected === false) return 'connecting';
   return 'live';
@@ -40,13 +52,14 @@ export function isCloudMeetingRecordingAudio(
   captureStarted: boolean,
 ): boolean {
   if (status === 'connecting') return captureStarted;
-  return status === 'live' || status === 'reconnecting';
+  return status === 'live' || status === 'reconnecting' || status === 'recording-only';
 }
 
 /**
  * Whether the screen and lock screen should read as recording. A reconnect still captures
- * audio and sends it once the socket returns, and a session still connecting hasn't lost
- * anything yet; only a stopped mic or an ended session has.
+ * audio and sends it once the socket returns, a session still connecting hasn't lost anything
+ * yet, and one whose live stream ended still writes the recording; only a stopped mic or an
+ * ended session has lost audio.
  */
 export function isCloudMeetingCapturing(status: CloudMeetingStatus): boolean {
   return status !== 'interrupted' && status !== 'error';
@@ -74,6 +87,7 @@ export interface CloudMeetingSessionState {
   capturing: boolean;
   stalled: boolean;
   reconnecting: boolean;
+  streamEnded: boolean;
   error: string | null;
   partialText: string;
   utterances: RealtimeUtterance[];
@@ -99,6 +113,7 @@ export function initialCloudMeetingSession(nowMs: number): CloudMeetingSessionSt
     capturing: true,
     stalled: false,
     reconnecting: false,
+    streamEnded: false,
     error: null,
     partialText: '',
     utterances: [],
@@ -112,7 +127,10 @@ export function initialCloudMeetingSession(nowMs: number): CloudMeetingSessionSt
   };
 }
 
-/** Why a cloud meeting's session never started: nothing was captured and there is no session. */
+/**
+ * Why a cloud meeting never started: its session's start was refused, or the org refused the
+ * meeting before any token was granted. Either way no recording of it is kept.
+ */
 export interface MeetingStartFailure {
   /** The native rejection code (`MIC_UNAVAILABLE`, `MIC_PERMISSION_DENIED`, …); null when none. */
   code: string | null;
@@ -282,6 +300,7 @@ export const STATUS_LABEL: Record<CloudMeetingStatus, string> = {
   connecting: 'CONNECTING',
   live: 'RECORDING',
   reconnecting: 'RECONNECTING',
+  'recording-only': 'RECORDING ONLY',
   interrupted: 'NOT RECORDING',
   error: 'DISCONNECTED',
 };

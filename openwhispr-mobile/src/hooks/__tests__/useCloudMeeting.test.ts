@@ -6,7 +6,7 @@ import type {
   RealtimeSession,
   RealtimeUtterance,
 } from '@/services/transcription/RealtimeMeetingWsService';
-import { reportCaptureInterrupted } from '@/lib/meetingCaptureTelemetry';
+import { reportCaptureInterrupted, reportSessionEnded } from '@/lib/meetingCaptureTelemetry';
 import type { CloudMeetingResult } from '@/hooks/useCloudMeeting';
 
 const mockStart = jest.fn();
@@ -78,6 +78,7 @@ beforeEach(() => {
   mockRemove.mockClear();
   mockGetInfo.mockReset().mockResolvedValue({ exists: false });
   (reportCaptureInterrupted as jest.Mock).mockClear();
+  (reportSessionEnded as jest.Mock).mockClear();
   mockStart.mockReset().mockImplementation((_opts: unknown, callbacks: RealtimeCallbacks) => {
     const start = deferred<RealtimeSession>();
     const drain = deferred<void>();
@@ -370,11 +371,115 @@ describe('useCloudMeeting', () => {
     await goLive(fake);
 
     act(() => {
+      fake.callbacks.onStreamEnded?.({
+        error: new Error('Unauthorized'),
+        capturing: false,
+        refusedStart: false,
+      });
+      fake.callbacks.onError?.({ error: { message: 'Unauthorized' } });
       fake.callbacks.onClose?.();
     });
 
     expect(result.current.status).toBe('error');
+    expect(result.current.error).toBe('Unauthorized');
     expect(result.current.startFailure).toBeNull();
+  });
+
+  it('a meeting the org refused before any token is a start failure', async () => {
+    const { result } = setup(true, 'file:///docs/meeting-7.wav');
+    const fake = latest();
+    await goLive(fake);
+    const message = 'Meeting recording is disabled by your organization.';
+
+    act(() => {
+      fake.callbacks.onStreamEnded?.({
+        error: Object.assign(new Error(message), {
+          status: 403,
+          code: 'POLICY_MEETING_RECORDING_DISABLED',
+        }),
+        capturing: false,
+        refusedStart: true,
+      });
+      fake.callbacks.onError?.({ error: { message } });
+      fake.callbacks.onClose?.();
+    });
+
+    expect(result.current.status).toBe('error');
+    expect(result.current.error).toBe(message);
+    expect(result.current.startFailure).toEqual({
+      code: 'POLICY_MEETING_RECORDING_DISABLED',
+      message,
+    });
+    expect(reportSessionEnded).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a recorded meeting recording once its live stream ends, saying why', async () => {
+    const { result } = setup(true, 'file:///docs/meeting-7.wav');
+    const fake = latest();
+    await goLive(fake);
+    act(() => {
+      fake.callbacks.onConnected?.();
+      fake.callbacks.onPartial?.('half a', 'item-1');
+      fake.callbacks.onReconnecting?.();
+    });
+
+    act(() => {
+      fake.callbacks.onStreamEnded?.({
+        error: new Error('Unauthorized'),
+        capturing: true,
+        refusedStart: false,
+      });
+    });
+
+    expect(result.current.status).toBe('recording-only');
+    expect(result.current.error).toBe('Unauthorized');
+    expect(result.current.partialText).toBe('');
+    expect(result.current.startFailure).toBeNull();
+    expect(reportSessionEnded).toHaveBeenCalledTimes(1);
+    // The clock keeps running: the recording is still taking the meeting.
+    fake.setCapturedMs(9_000);
+    tick(1_000);
+    expect(result.current.capturedSeconds).toBe(9);
+    expect(result.current.status).toBe('recording-only');
+
+    // Stop still finishes the session and hands over the recording for the post-pass.
+    let stopped: Promise<CloudMeetingResult> = Promise.resolve({
+      utterances: [],
+      droppedWindows: [],
+      recordingUri: null,
+    });
+    act(() => {
+      stopped = result.current.stop();
+    });
+    let value: CloudMeetingResult | null = null;
+    await act(async () => {
+      fake.drain.resolve();
+      value = await stopped;
+    });
+    expect(fake.session.stop).toHaveBeenCalledTimes(1);
+    expect((value as unknown as CloudMeetingResult).recordingUri).toBe(
+      'file:///docs/meeting-7.wav',
+    );
+  });
+
+  it('reads a stream-ended meeting as ended once its recording fails too', async () => {
+    const { result } = setup(true, 'file:///docs/meeting-7.wav');
+    const fake = latest();
+    await goLive(fake);
+    act(() => {
+      fake.callbacks.onStreamEnded?.({
+        error: new Error('Unauthorized'),
+        capturing: true,
+        refusedStart: false,
+      });
+    });
+    expect(result.current.status).toBe('recording-only');
+
+    act(() => {
+      mockFailedListeners[0]();
+    });
+
+    expect(result.current.status).toBe('error');
   });
 
   it("the next session starts without the last one's start failure", async () => {

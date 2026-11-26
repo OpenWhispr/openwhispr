@@ -5,7 +5,8 @@
  * event reducer, PCM ring buffer, and flush timer are session-scoped and outlive any
  * leg; only the active socket (currentWs) is swapped — on reconnect (network drop) or
  * rotation (before OpenAI's ~60-min session cap). Reconnects never give up on their own:
- * only a refused token or a policy close ends the session early. A leg that is retired
+ * only a refused token or a policy close ends the stream early, and a recorded meeting keeps
+ * capturing to its file unless the org refused the recording itself. A leg that is retired
  * (rotation, Stop) is committed and kept open until its last turn is transcribed, up to
  * STOP_FLUSH_TIMEOUT_MS, so the final words of a leg are not cut off. One reducer means utterances
  * accumulate across every leg; each leg's messages are rewritten first (item_id
@@ -23,6 +24,7 @@ import {
   LivePCMStreaming,
   addPcmFrameListener,
   addCaptureStateListener,
+  addRecordingFailedListener,
   DEFAULT_SAMPLE_RATE,
   type PcmFrame,
 } from '../../../modules/live-pcm-streaming/src';
@@ -256,6 +258,9 @@ export async function startRealtimeMeetingWs(
   let consecutiveShortLegs = 0;
   let frameSub: { remove(): void } | null = null;
   let captureSub: { remove(): void } | null = null;
+  let recordingFailedSub: { remove(): void } | null = null;
+  // The native writer gave up on the meeting's file (`recording-failed`).
+  let recordingFailed = false;
   let micStopped = false;
   // Flips false on the first release so every exit path can call releaseLease safely.
   let leaseHeld = false;
@@ -282,6 +287,8 @@ export async function startRealtimeMeetingWs(
   let rotating = false;
   let reconnecting = false;
   let closeNotified = false;
+  // The live stream gave up for good while the recording goes on to Stop.
+  let streamEnded = false;
 
   const notifyClose = (): void => {
     if (closeNotified) return;
@@ -443,6 +450,8 @@ export async function startRealtimeMeetingWs(
     frameSub = null;
     captureSub?.remove();
     captureSub = null;
+    recordingFailedSub?.remove();
+    recordingFailedSub = null;
     // Release only once the native stop has settled: re-arming the keyboard's warm mic while
     // this teardown is still deactivating the audio session is the bug the lease prevents.
     Promise.resolve(LivePCMStreaming.stop())
@@ -636,14 +645,39 @@ export async function startRealtimeMeetingWs(
     callbacks.onConnected?.();
   };
 
-  const goTerminal = (error: unknown): void => {
+  // `atStart`: the error answers the meeting's first attempt to connect, made as the user pressed
+  // Start. A refusal that comes after an outage at the start is not a refused start: the meeting
+  // has been recording all along, and its audio is kept.
+  const goTerminal = (error: unknown, atStart = false): void => {
     if (terminated) return;
+    const endError = error instanceof Error ? error : new Error('Realtime session ended');
+    // An org or app-version refusal forbids the recording itself. Any other refusal only ends the
+    // live stream: the recording is the meeting, and what the stream misses is read from it. A
+    // recording that has failed keeps nothing more, so capture then stops as well.
+    const refusedByPolicy = transcriptionPolicyErrorFromApiError(error) !== undefined;
+    if (!streamEnded && opts.recordingUri && !recordingFailed && !refusedByPolicy) {
+      streamEnded = true;
+      clearTimers();
+      // A leg still live (a rotation that fell back to reconnecting) gets what it was owed and
+      // finishes its last turn. From then on it is an outage that never ends: the ring records
+      // what it evicts and Stop records what it still holds, so no captured second is missed.
+      flush();
+      const ws = currentWs;
+      currentWs = null;
+      if (ws) void finishLeg(ws);
+      callbacks.onStreamEnded?.({ error: endError, capturing: true, refusedStart: false });
+      return;
+    }
     terminated = true;
     teardownCapture();
     currentWs = null;
     abandonRing();
-    const message = error instanceof Error ? error.message : 'Realtime session ended';
-    callbacks.onError?.({ error: { message } });
+    callbacks.onStreamEnded?.({
+      error: endError,
+      capturing: false,
+      refusedStart: refusedByPolicy && atStart,
+    });
+    callbacks.onError?.({ error: { message: endError.message } });
     notifyClose();
   };
 
@@ -707,7 +741,7 @@ export async function startRealtimeMeetingWs(
       .catch((error) => {
         reconnecting = false;
         if (terminated) return;
-        goTerminal(error); // 4xx token — utterances still preserved
+        goTerminal(error, first && !announced); // 4xx token — utterances still preserved
       });
   };
 
@@ -799,6 +833,12 @@ export async function startRealtimeMeetingWs(
     captureSub = addCaptureStateListener((event) => {
       callbacks.onCaptureState?.({ capturing: event.state === 'capturing', reason: event.reason });
     });
+    // Before start: a file that can't be opened is reported before start resolves.
+    recordingFailedSub = addRecordingFailedListener(() => {
+      recordingFailed = true;
+      // With the live stream already gone, nothing more of the meeting would be kept.
+      if (streamEnded) goTerminal(new Error('The recording could not be saved'));
+    });
     await acquireCaptureLease('meeting-cloud');
     leaseHeld = true;
     try {
@@ -813,6 +853,8 @@ export async function startRealtimeMeetingWs(
       frameSub = null;
       captureSub?.remove();
       captureSub = null;
+      recordingFailedSub?.remove();
+      recordingFailedSub = null;
       releaseLease();
       throw error;
     }

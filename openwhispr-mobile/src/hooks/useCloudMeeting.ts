@@ -46,8 +46,10 @@ export interface CloudMeeting {
   status: CloudMeetingStatus;
   error: string | null;
   /**
-   * Set when the session itself never started (the start was refused, so nothing was captured
-   * and there is nothing to stop). A session that ends mid-meeting leaves it null.
+   * Set when the meeting was never allowed to start: the session's start was refused (nothing was
+   * captured and there is nothing to stop), or the org refused it before any token was granted
+   * (capture has stopped and what it wrote is not kept). A session that ends mid-meeting leaves
+   * it null.
    */
   startFailure: MeetingStartFailure | null;
   partialText: string;
@@ -107,6 +109,7 @@ export function useCloudMeeting({
   const [capturing, setCapturing] = useState(initial.capturing);
   const [stalled, setStalled] = useState(initial.stalled);
   const [reconnecting, setReconnecting] = useState(initial.reconnecting);
+  const [streamEnded, setStreamEnded] = useState(initial.streamEnded);
   const [error, setError] = useState<string | null>(initial.error);
   const [startFailure, setStartFailure] = useState<MeetingStartFailure | null>(
     initial.startFailure,
@@ -142,6 +145,7 @@ export function useCloudMeeting({
       setCapturing(fresh.capturing);
       setStalled(fresh.stalled);
       setReconnecting(fresh.reconnecting);
+      setStreamEnded(fresh.streamEnded);
       setError(fresh.error);
       setStartFailure(fresh.startFailure);
       setPartialText(fresh.partialText);
@@ -216,6 +220,14 @@ export function useCloudMeeting({
     // The session state itself was reset during the render that enabled this session.
     const isCurrent = (): boolean => generationRef.current === generation;
     const isLive = (): boolean => isCurrent() && !stoppedRef.current;
+    // A refused start: the meeting ends at once and none of its recording is kept.
+    const failStart = (e: unknown): void => {
+      const failure = meetingStartFailureFrom(e);
+      setError(failure.message);
+      setStartFailure(failure);
+      setFailed(true);
+      reportEnded();
+    };
     startRealtimeMeetingWs(
       { language, recordingUri },
       {
@@ -242,6 +254,21 @@ export function useCloudMeeting({
           // A close we didn't initiate means the session ended.
           if (!isLive()) return;
           setFailed(true);
+          reportEnded();
+        },
+        onStreamEnded: ({ error: endError, capturing: keepsRecording, refusedStart }) => {
+          if (!isLive()) return;
+          // The org refused the meeting before any token: refused like a start the mic refused.
+          if (refusedStart) {
+            failStart(endError);
+            return;
+          }
+          // Capture stopped: the onError and onClose that follow end the session.
+          if (!keepsRecording) return;
+          setStreamEnded(true);
+          setReconnecting(false);
+          setPartialText('');
+          setError(endError.message);
           reportEnded();
         },
         onConnected: () => {
@@ -281,12 +308,7 @@ export function useCloudMeeting({
         setStarted(true);
       })
       .catch((e) => {
-        if (cancelled) return;
-        const failure = meetingStartFailureFrom(e);
-        setError(failure.message);
-        setStartFailure(failure);
-        setFailed(true);
-        reportEnded();
+        if (!cancelled) failStart(e);
       });
 
     return () => {
@@ -353,10 +375,12 @@ export function useCloudMeeting({
 
   const status = deriveCloudMeetingStatus({
     started,
-    failed,
+    // With the stream ended, a recording that failed too keeps nothing more of the meeting.
+    failed: failed || (streamEnded && !recording),
     capturing: micCapturing,
     reconnecting,
     connected,
+    streamEnded,
   });
 
   return {

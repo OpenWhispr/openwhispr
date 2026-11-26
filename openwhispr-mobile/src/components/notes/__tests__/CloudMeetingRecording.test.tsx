@@ -123,3 +123,44 @@ describe('CloudMeetingRecording reconnecting line', () => {
     expect(screen.queryByText(/Still recording/)).toBeNull();
   });
 });
+
+const renderRecordingOnly = (error: string | null) =>
+  render(
+    <CloudMeetingRecording
+      status="recording-only"
+      captureStarted
+      recording
+      error={error}
+      capturedSeconds={0}
+      rawNotes=""
+      onChangeRawNotes={jest.fn()}
+      utterances={[]}
+      partialText=""
+      onStop={jest.fn()}
+    />,
+  );
+
+describe('CloudMeetingRecording after the live stream ended', () => {
+  it('reads as recording and says why live text stopped and that the rest comes later', () => {
+    const screen = renderRecordingOnly('Unauthorized');
+
+    expect(screen.getByText('RECORDING ONLY')).toBeTruthy();
+    expect(dotClass(screen)).toContain('bg-systemRed');
+    expect(
+      screen.getByText(
+        'Unauthorized. Live transcription stopped. Still recording, so the rest can be transcribed after the meeting.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Recording has stopped/)).toBeNull();
+  });
+
+  it('says the same without a reason', () => {
+    const screen = renderRecordingOnly(null);
+
+    expect(
+      screen.getByText(
+        'Live transcription stopped. Still recording, so the rest can be transcribed after the meeting.',
+      ),
+    ).toBeTruthy();
+  });
+});

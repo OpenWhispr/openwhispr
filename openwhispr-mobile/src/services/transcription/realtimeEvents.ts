@@ -24,6 +24,16 @@ export interface RealtimeCallbacks {
   onError?: (error: unknown) => void;
   onClose?: () => void;
   /**
+   * The live stream gave up for good: a refused token or a policy close. With `capturing`, the
+   * recording goes on, everything captured from here is in `droppedWindows` to be transcribed
+   * from the file after Stop, and the session isn't over (`onError` may still forward a server
+   * message, but no `onClose` follows). It fires once more, without `capturing`, if the recording
+   * then fails too. Without `capturing`, capture has stopped and `onError` and `onClose` follow;
+   * `refusedStart` then marks an org or app-version refusal of the meeting's first attempt to
+   * connect, a meeting that was never allowed to start.
+   */
+  onStreamEnded?: (end: { error: Error; capturing: boolean; refusedStart: boolean }) => void;
+  /**
    * The session's first leg is open and accepted, fired once. A recorded meeting returns its
    * session before any socket exists, so this is when its stream is actually live.
    */

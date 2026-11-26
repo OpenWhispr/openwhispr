@@ -16,13 +16,14 @@ import {
 } from '../realtimeReconnect';
 import { setDebugRotationMs } from '@/lib/debug/meetingDebug';
 import { acquireCaptureLease, releaseCaptureLease } from '@/lib/captureLease';
-import { MEETING_RECORDING_DISABLED_MESSAGE } from '../policyErrors';
+import { MEETING_RECORDING_DISABLED_MESSAGE, UPGRADE_REQUIRED_MESSAGE } from '../policyErrors';
 import { api } from '@/lib/apiClient';
 import * as Network from 'expo-network';
 import {
   LivePCMStreaming,
   addPcmFrameListener,
   addCaptureStateListener,
+  addRecordingFailedListener,
 } from '../../../../modules/live-pcm-streaming/src';
 
 jest.mock('@/lib/apiClient', () => ({
@@ -48,6 +49,7 @@ jest.mock('../../../../modules/live-pcm-streaming/src', () => ({
   },
   addPcmFrameListener: jest.fn(),
   addCaptureStateListener: jest.fn(),
+  addRecordingFailedListener: jest.fn(),
 }));
 
 const FLUSH_MS = 150;
@@ -158,6 +160,12 @@ function emitFrame(bytes: number[]): void {
   cb?.({ audio: Buffer.from(bytes).toString('base64') });
 }
 
+/** The native writer reports it could not keep the meeting's file. */
+function failRecording(): void {
+  const calls = (addRecordingFailedListener as jest.Mock).mock.calls;
+  (calls[calls.length - 1]?.[0] as (() => void) | undefined)?.();
+}
+
 const committed = (itemId: string): WsMessage => ({
   type: 'input_audio_buffer.committed',
   item_id: itemId,
@@ -208,6 +216,7 @@ beforeEach(() => {
   (LivePCMStreaming.stop as jest.Mock).mockReset().mockResolvedValue(undefined);
   (addPcmFrameListener as jest.Mock).mockReset().mockReturnValue({ remove: jest.fn() });
   (addCaptureStateListener as jest.Mock).mockReset().mockReturnValue({ remove: jest.fn() });
+  (addRecordingFailedListener as jest.Mock).mockReset().mockReturnValue({ remove: jest.fn() });
   (acquireCaptureLease as jest.Mock).mockReset().mockResolvedValue(undefined);
   (releaseCaptureLease as jest.Mock).mockReset();
 });
@@ -291,6 +300,262 @@ describe('startRealtimeMeetingWs — org policy refusal', () => {
     expect(callbacks.onError).toHaveBeenCalledWith({
       error: { message: MEETING_RECORDING_DISABLED_MESSAGE },
     });
+  });
+
+  describe('with a recording', () => {
+    const recordingUri = 'file:///documents/meeting-7.wav';
+
+    it('refuses the start when the first token is refused, stopping capture', async () => {
+      (api.post as jest.Mock).mockRejectedValue(meetingRefusal());
+      const callbacks = { onStreamEnded: jest.fn(), onError: jest.fn(), onClose: jest.fn() };
+
+      await startRealtimeMeetingWs({ recordingUri }, callbacks, { wsFactory });
+      await flushMicro();
+
+      expect(callbacks.onStreamEnded).toHaveBeenCalledTimes(1);
+      expect(callbacks.onStreamEnded).toHaveBeenCalledWith({
+        error: expect.objectContaining({
+          message: MEETING_RECORDING_DISABLED_MESSAGE,
+          code: 'POLICY_MEETING_RECORDING_DISABLED',
+        }),
+        capturing: false,
+        refusedStart: true,
+      });
+      expect(callbacks.onError).toHaveBeenCalledWith({
+        error: { message: MEETING_RECORDING_DISABLED_MESSAGE },
+      });
+      expect(callbacks.onClose).toHaveBeenCalledTimes(1);
+      expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
+      expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
+      expect(api.post as jest.Mock).toHaveBeenCalledTimes(1);
+      expect(FakeWebSocket.instances).toHaveLength(0);
+    });
+
+    it('refuses the start when the app is too old for the first token', async () => {
+      (api.post as jest.Mock).mockRejectedValue(
+        Object.assign(new Error(UPGRADE_REQUIRED_MESSAGE), { status: 426 }),
+      );
+      const callbacks = { onStreamEnded: jest.fn() };
+
+      await startRealtimeMeetingWs({ recordingUri }, callbacks, { wsFactory });
+      await flushMicro();
+
+      expect(callbacks.onStreamEnded).toHaveBeenCalledWith(
+        expect.objectContaining({ capturing: false, refusedStart: true }),
+      );
+      expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops capture when the org refuses a token after the meeting connected', async () => {
+      const callbacks = { onStreamEnded: jest.fn(), onError: jest.fn(), onClose: jest.fn() };
+      const { leg1 } = await boot(callbacks, { recordingUri });
+      await flushMicro(); // the recorded start swaps its first leg in once it opens
+
+      (api.post as jest.Mock).mockClear().mockRejectedValue(meetingRefusal());
+      ageLeg();
+      leg1.serverClose(1006);
+      await flushMicro();
+
+      expect(callbacks.onStreamEnded).toHaveBeenCalledTimes(1);
+      expect(callbacks.onStreamEnded).toHaveBeenCalledWith(
+        expect.objectContaining({ capturing: false, refusedStart: false }),
+      );
+      expect(callbacks.onClose).toHaveBeenCalledTimes(1);
+      expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
+      expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
+    });
+
+    it('is no refused start once a token was granted, even if its leg never opened', async () => {
+      const callbacks = { onStreamEnded: jest.fn() };
+      await startRealtimeMeetingWs({ recordingUri }, callbacks, { wsFactory });
+      await flushMicro();
+      expect(FakeWebSocket.instances).toHaveLength(1);
+
+      (api.post as jest.Mock).mockRejectedValue(meetingRefusal());
+      await jest.advanceTimersByTimeAsync(CONNECT_TIMEOUT_MS + 1); // the granted leg never opens
+      await jest.advanceTimersByTimeAsync(2000); // the retry asks again and is refused
+      await flushMicro();
+
+      expect(callbacks.onStreamEnded).toHaveBeenCalledWith(
+        expect.objectContaining({ capturing: false, refusedStart: false }),
+      );
+    });
+
+    it('is no refused start when the refusal comes after an offline start', async () => {
+      // Offline at Start: the meeting records for a while before the server first answers.
+      (Network.getNetworkStateAsync as jest.Mock).mockResolvedValue({ isConnected: false });
+      const callbacks = { onStreamEnded: jest.fn() };
+      await startRealtimeMeetingWs({ recordingUri }, callbacks, { wsFactory });
+      await jest.advanceTimersByTimeAsync(30_000);
+      expect(api.post as jest.Mock).not.toHaveBeenCalled();
+
+      (Network.getNetworkStateAsync as jest.Mock).mockResolvedValue({ isConnected: true });
+      (api.post as jest.Mock).mockRejectedValue(meetingRefusal());
+      await jest.advanceTimersByTimeAsync(20_000);
+      await flushMicro();
+
+      expect(callbacks.onStreamEnded).toHaveBeenCalledTimes(1);
+      expect(callbacks.onStreamEnded).toHaveBeenCalledWith(
+        expect.objectContaining({ capturing: false, refusedStart: false }),
+      );
+    });
+  });
+});
+
+describe('startRealtimeMeetingWs — a recorded meeting whose live stream ends', () => {
+  // sampleRate 100 → 200 bytes a second, so a 200-byte frame is 1000 ms of capture;
+  // the outage buffer holds 4000 bytes (20 s).
+  const SECOND = new Array(200).fill(3);
+  const recordingUri = 'file:///documents/meeting-7.wav';
+  const unauthorized = (): Error => Object.assign(new Error('Unauthorized'), { status: 401 });
+
+  it('keeps recording when a reconnect token is refused, reading the rest from the file', async () => {
+    const callbacks = { onStreamEnded: jest.fn(), onError: jest.fn(), onClose: jest.fn() };
+    const { session, leg1 } = await boot(callbacks, { sampleRate: 100, recordingUri });
+    emitFrame(SECOND); // 0–1000 ms reaches leg 1, which transcribes all of it
+    await jest.advanceTimersByTimeAsync(FLUSH_MS + 10);
+    leg1.emit(speechStarted('a', 0));
+    leg1.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'a', audio_end_ms: 1000 });
+    leg1.emit(completed('a', 'first second'));
+
+    (api.post as jest.Mock).mockClear().mockRejectedValue(unauthorized());
+    ageLeg();
+    leg1.serverClose(1006);
+    await flushMicro();
+
+    expect(callbacks.onStreamEnded).toHaveBeenCalledTimes(1);
+    expect(callbacks.onStreamEnded).toHaveBeenCalledWith({
+      error: expect.objectContaining({ message: 'Unauthorized' }),
+      capturing: true,
+      refusedStart: false,
+    });
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(LivePCMStreaming.stop).not.toHaveBeenCalled();
+    expect(releaseCaptureLease).not.toHaveBeenCalled();
+
+    for (let i = 0; i < 30; i++) emitFrame(SECOND); // 1000–31000 ms, past the 20 s buffer
+    await jest.advanceTimersByTimeAsync(60_000);
+    // The stream is over for good: no more tokens and no more sockets.
+    expect(api.post as jest.Mock).toHaveBeenCalledTimes(1);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    await session.stop();
+
+    // Evicted from the buffer, then still held at Stop: everything after the refusal, no gap.
+    expect(session.capturedMs()).toBe(31_000);
+    expect(session.droppedWindows()).toEqual([{ startMs: 1000, endMs: 31_000 }]);
+    expect(session.utterances().map((u) => u.text)).toEqual(['first second']);
+    expect(callbacks.onClose).not.toHaveBeenCalled();
+    expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
+    expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps recording when a policy close ends the stream, opening no new leg', async () => {
+    const callbacks = { onStreamEnded: jest.fn(), onClose: jest.fn() };
+    const { session, leg1 } = await boot(callbacks, { sampleRate: 100, recordingUri });
+    await flushMicro();
+
+    ageLeg();
+    leg1.serverClose(1008);
+    await flushMicro();
+    for (let i = 0; i < 3; i++) emitFrame(SECOND);
+    await jest.advanceTimersByTimeAsync(60_000);
+
+    expect(callbacks.onStreamEnded).toHaveBeenCalledWith({
+      error: expect.objectContaining({ message: 'Realtime WebSocket closed (code 1008)' }),
+      capturing: true,
+      refusedStart: false,
+    });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(api.post as jest.Mock).toHaveBeenCalledTimes(1);
+    expect(LivePCMStreaming.stop).not.toHaveBeenCalled();
+
+    await session.stop();
+    expect(session.droppedWindows()).toEqual([{ startMs: 0, endMs: 3000 }]);
+    expect(callbacks.onClose).not.toHaveBeenCalled();
+    expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("retires a rotation's still-live leg when its fallback token is refused, and reports once", async () => {
+    const callbacks = { onStreamEnded: jest.fn() };
+    const { session, leg1 } = await boot(callbacks, { sampleRate: 100, recordingUri });
+    await flushMicro();
+
+    // The rotation's token fetch fails, then the reconnect it falls back to is refused.
+    (api.post as jest.Mock)
+      .mockRejectedValueOnce(new Error('rotate token failed'))
+      .mockRejectedValueOnce(unauthorized());
+    await advanceToRotation();
+    await flushMicro();
+
+    expect(callbacks.onStreamEnded).toHaveBeenCalledTimes(1);
+    expect(leg1.didCommit()).toBe(true);
+    const sentBefore = leg1.appendedBytes();
+    emitFrame(SECOND);
+    await jest.advanceTimersByTimeAsync(FLUSH_MS + 10);
+    // Nothing more goes to the leg being retired.
+    expect(leg1.appendedBytes()).toBe(sentBefore);
+
+    // A close of the retired leg ends nothing twice and reconnects nothing.
+    leg1.serverClose(1008);
+    await jest.advanceTimersByTimeAsync(60_000);
+    expect(callbacks.onStreamEnded).toHaveBeenCalledTimes(1);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(LivePCMStreaming.stop).not.toHaveBeenCalled();
+
+    await session.stop();
+    expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops capture when the stream ends after the recording already failed', async () => {
+    const callbacks = { onStreamEnded: jest.fn(), onError: jest.fn(), onClose: jest.fn() };
+    const { leg1 } = await boot(callbacks, { sampleRate: 100, recordingUri });
+    await flushMicro();
+    failRecording();
+
+    (api.post as jest.Mock).mockClear().mockRejectedValue(unauthorized());
+    ageLeg();
+    leg1.serverClose(1006);
+    await flushMicro();
+
+    expect(callbacks.onStreamEnded).toHaveBeenCalledTimes(1);
+    expect(callbacks.onStreamEnded).toHaveBeenCalledWith(
+      expect.objectContaining({ capturing: false, refusedStart: false }),
+    );
+    expect(callbacks.onError).toHaveBeenCalledWith({ error: { message: 'Unauthorized' } });
+    expect(callbacks.onClose).toHaveBeenCalledTimes(1);
+    expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
+    expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops capture when the recording fails after the stream ended', async () => {
+    const callbacks = { onStreamEnded: jest.fn(), onError: jest.fn(), onClose: jest.fn() };
+    const { session, leg1 } = await boot(callbacks, { sampleRate: 100, recordingUri });
+    await flushMicro();
+
+    (api.post as jest.Mock).mockClear().mockRejectedValue(unauthorized());
+    ageLeg();
+    leg1.serverClose(1006);
+    await flushMicro();
+    expect(LivePCMStreaming.stop).not.toHaveBeenCalled();
+
+    failRecording();
+    await flushMicro();
+
+    expect(callbacks.onStreamEnded).toHaveBeenCalledTimes(2);
+    expect(callbacks.onStreamEnded).toHaveBeenLastCalledWith(
+      expect.objectContaining({ capturing: false, refusedStart: false }),
+    );
+    expect(callbacks.onError).toHaveBeenCalledWith({
+      error: { message: 'The recording could not be saved' },
+    });
+    expect(callbacks.onClose).toHaveBeenCalledTimes(1);
+    expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
+    expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
+
+    // Stop afterwards finds the session already over and stops nothing twice.
+    await session.stop();
+    expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -1491,25 +1756,46 @@ describe('startRealtimeMeetingWs — a meeting that starts offline', () => {
     await stopped;
   });
 
-  it('still ends the session when the first token is refused', async () => {
+  it('keeps recording when the first token is refused for a reason other than policy', async () => {
     (api.post as jest.Mock).mockRejectedValue(
       Object.assign(new Error('Forbidden'), { status: 403 }),
     );
-    const callbacks = { onError: jest.fn(), onClose: jest.fn(), onReconnecting: jest.fn() };
+    const callbacks = {
+      onStreamEnded: jest.fn(),
+      onError: jest.fn(),
+      onClose: jest.fn(),
+      onReconnecting: jest.fn(),
+    };
 
-    await startRealtimeMeetingWs({ recordingUri }, callbacks, { wsFactory });
+    const session = await startRealtimeMeetingWs({ sampleRate: 100, recordingUri }, callbacks, {
+      wsFactory,
+    });
     await flushMicro();
+    for (let i = 0; i < 5; i++) emitFrame(SECOND);
     await jest.advanceTimersByTimeAsync(60_000);
     await flushMicro();
 
     // A 4xx is deterministic: it is not retried and it is not an outage.
     expect(api.post as jest.Mock).toHaveBeenCalledTimes(1);
     expect(callbacks.onReconnecting).not.toHaveBeenCalled();
-    expect(callbacks.onError).toHaveBeenCalledTimes(1);
-    expect(callbacks.onClose).toHaveBeenCalledTimes(1);
+    expect(callbacks.onStreamEnded).toHaveBeenCalledTimes(1);
+    expect(callbacks.onStreamEnded).toHaveBeenCalledWith({
+      error: expect.objectContaining({ message: 'Forbidden' }),
+      capturing: true,
+      refusedStart: false,
+    });
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(callbacks.onClose).not.toHaveBeenCalled();
+    expect(LivePCMStreaming.stop).not.toHaveBeenCalled();
+    expect(releaseCaptureLease).not.toHaveBeenCalled();
+    expect(FakeWebSocket.instances).toHaveLength(0);
+
+    await session.stop();
+
+    // Never streamed: the whole capture is read from the file.
+    expect(session.droppedWindows()).toEqual([{ startMs: 0, endMs: 5000 }]);
     expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
     expect(releaseCaptureLease).toHaveBeenCalledTimes(1);
-    expect(FakeWebSocket.instances).toHaveLength(0);
   });
 
   it('connects later with the leg on the capture clock', async () => {

@@ -328,8 +328,9 @@ export function MeetingSessionProvider({
 
   // Cloud meetings don't pre-check the mic (the realtime session requests it); the note is
   // created up front so live captions have somewhere to land. A session whose start is refused
-  // (no microphone, a call holding the audio session) ends the meeting at once and takes the empty
-  // note with it (abandonFailedCloudStart); one that starts and later fails waits for Stop.
+  // (no microphone, a call holding the audio session, the org's policy) ends the meeting at once
+  // and takes the empty note with it (abandonFailedCloudStart); one that starts and later fails
+  // waits for Stop.
   const startCloud = (input: MeetingStartInput): boolean => {
     if (!isIdle()) return false;
     const context = input.context;
@@ -553,9 +554,9 @@ export function MeetingSessionProvider({
 
   // The failure this session already ended a meeting for: the effect and a Stop can both see it.
   const handledStartFailureRef = useRef<MeetingStartFailure | null>(null);
-  // A cloud start the session refused captured nothing and left no session to stop, so there is
-  // nothing to finish: the meeting ends now rather than waiting for Stop, and its note goes unless
-  // the user already wrote in it. Synchronous, so no newer meeting can start in between.
+  // A cloud start the session or the org refused keeps nothing and leaves no session to stop, so
+  // there is nothing to finish: the meeting ends now rather than waiting for Stop, and its note goes
+  // unless the user already wrote in it. Synchronous, so no newer meeting can start in between.
   const abandonFailedCloudStart = (failure: MeetingStartFailure): void => {
     if (phaseRef.current !== 'cloud-recording' || finishingRef.current) return;
     if (handledStartFailureRef.current === failure) return;
@@ -568,6 +569,9 @@ export function MeetingSessionProvider({
     // First, so the store no longer refuses to delete the live meeting's note.
     returnToIdle();
     if (id == null) return;
+    // An org refusal comes after capture began writing the meeting's file. None of it is kept,
+    // or the launch repair would link it to a kept note for a Retry the org refuses again.
+    FileSystem.deleteAsync(meetingRecordingUri(id), { idempotent: true }).catch(() => undefined);
     // Another account's note is never deleted from here, and nothing about it is shown.
     if (keepNote || !isOwnAccount(fence)) {
       failNoteSafely(id);
@@ -717,7 +721,11 @@ export function MeetingSessionProvider({
     },
   });
 
-  useCapturePausedNotification(meetingActivityPhase === 'recording', capturing);
+  // An ended cloud session never resumes, so it is never announced as paused.
+  useCapturePausedNotification(
+    meetingActivityPhase === 'recording' && !(path === 'cloud' && cloudMeeting.status === 'error'),
+    capturing,
+  );
 
   const value: MeetingSession = {
     phase,

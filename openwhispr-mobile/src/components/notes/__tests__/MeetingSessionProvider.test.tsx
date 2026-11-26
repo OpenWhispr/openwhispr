@@ -8,7 +8,11 @@ import {
 } from '@/components/notes/MeetingSessionProvider';
 import type { CloudMeetingResult } from '@/hooks/useCloudMeeting';
 import { isMeetingActive, stopActiveMeeting } from '@/lib/notes/activeMeeting';
-import { alertCloudMeetingCapture, alertIfPartialCapture } from '@/lib/meetingCaptureAlerts';
+import {
+  alertCloudMeetingCapture,
+  alertIfPartialCapture,
+  useCapturePausedNotification,
+} from '@/lib/meetingCaptureAlerts';
 import { useMeetingLiveActivity } from '@/hooks/useMeetingLiveActivity';
 import { alertMeetingStartFailed } from '@/lib/alerts';
 import { showMicPermissionAlert } from '@/lib/permissions';
@@ -789,6 +793,36 @@ describe('MeetingSessionProvider', () => {
       expect(mockState.updateNote).toHaveBeenCalledWith(42, { content: 'Agenda: pricing' });
       expect(mockState.transitionStatus).toHaveBeenCalledWith(42, 'failed');
       expect(alertMeetingStartFailed).toHaveBeenCalledTimes(1);
+      // The kept note keeps no recording: a Retry of a refused meeting can never succeed.
+      expect(mockDeleteAsync).toHaveBeenCalledWith('file:///docs/meeting-audio/42.wav', {
+        idempotent: true,
+      });
+    });
+
+    it('removes the note and what capture wrote when the org refused the meeting', () => {
+      const view = renderProvider();
+      act(() => {
+        session.startCloud(input);
+      });
+
+      act(() => {
+        refuseCloudStart({
+          code: 'POLICY_MEETING_RECORDING_DISABLED',
+          message: 'Meeting recording is disabled by your organization.',
+        });
+        view.rerender(providerTree());
+      });
+
+      expect(session.phase).toBe('idle');
+      expect(mockState.deleteNote).toHaveBeenCalledWith(42);
+      expect(mockDeleteAsync).toHaveBeenCalledWith('file:///docs/meeting-audio/42.wav', {
+        idempotent: true,
+      });
+      expect(alertMeetingStartFailed).toHaveBeenCalledWith(
+        "Couldn't start recording. Meeting recording is disabled by your organization.",
+      );
+      expect(mockCloud.stop).not.toHaveBeenCalled();
+      expect(mockState.finalizeCloudMeeting).not.toHaveBeenCalled();
     });
 
     it('shows the microphone access alert when permission was denied', () => {
@@ -853,6 +887,73 @@ describe('MeetingSessionProvider', () => {
       expect(mockState.transitionStatus).toHaveBeenCalledWith(42, 'failed');
       expect(alertMeetingStartFailed).not.toHaveBeenCalled();
       expect(mockCloud.stop).not.toHaveBeenCalled();
+    });
+
+    it('never announces a session that ended mid-meeting as paused', () => {
+      const view = renderProvider();
+      act(() => {
+        session.startCloud(input);
+      });
+      act(() => {
+        mockCloud.status = 'error';
+        view.rerender(providerTree());
+      });
+
+      expect(session.capturing).toBe(false);
+      expect(jest.mocked(useCapturePausedNotification)).toHaveBeenLastCalledWith(false, false);
+    });
+
+    it('keeps a meeting whose live stream ended reading as recording everywhere', () => {
+      const view = renderProvider();
+      act(() => {
+        session.startCloud(input);
+      });
+      act(() => {
+        mockCloud.status = 'recording-only';
+        view.rerender(providerTree());
+      });
+
+      expect(session.phase).toBe('cloud-recording');
+      expect(session.capturing).toBe(true);
+      expect(jest.mocked(useCapturePausedNotification)).toHaveBeenLastCalledWith(true, true);
+      expect(jest.mocked(useMeetingLiveActivity)).toHaveBeenLastCalledWith(
+        expect.objectContaining({ phase: 'recording', capturing: true }),
+      );
+      expect(mockDeleteAsync).not.toHaveBeenCalled();
+    });
+
+    it('finishes a meeting whose live stream ended from its recording, as any other', async () => {
+      const dropped = { startMs: 60_000, endMs: 1_800_000 };
+      mockCloud.stop.mockResolvedValue({
+        utterances: [],
+        droppedWindows: [dropped],
+        recordingUri: 'file:///docs/meeting-audio/42.wav',
+      });
+      const view = renderProvider();
+      act(() => {
+        session.startCloud(input);
+      });
+      act(() => {
+        mockCloud.status = 'recording-only';
+        view.rerender(providerTree());
+      });
+
+      await act(async () => {
+        await session.stop();
+      });
+
+      expect(mockCloud.stop).toHaveBeenCalledTimes(1);
+      expect(mockState.finalizeCloudMeeting).toHaveBeenCalledWith(
+        42,
+        expect.objectContaining({
+          droppedWindows: [dropped],
+          recordingUri: 'file:///docs/meeting-audio/42.wav',
+        }),
+        expect.any(Number),
+        expect.anything(),
+      );
+      expect(mockState.transitionStatus).not.toHaveBeenCalled();
+      expect(session.finishedNoteId).toBe(42);
     });
 
     it('a session that ends mid-meeting still waits for Stop', async () => {
