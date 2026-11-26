@@ -12,7 +12,7 @@ import {
   selectedSpeechModel,
   type AndroidSpeechModelId,
 } from './speechSelection';
-import { speechModelSupportsLanguages } from './speechCapabilities';
+import { speechModelCoversRecording, speechModelSupportsLanguages } from './speechCapabilities';
 import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
 
 const diagnostics = __DEV__ || Constants.expoConfig?.extra?.openWhispr?.isDevelopment === true;
@@ -45,7 +45,13 @@ export const LocalSpeechModel = {
         options.language && options.language !== 'auto'
           ? [options.language]
           : getPreferredTranscriptionLanguages();
-      if (!speechModelSupportsLanguages(model, languages))
+      // A meeting needs every language. Anything else here is a recording to transcribe whole:
+      // the model detects its language, so one listed language it knows is enough. Dictation
+      // checks the full list before it records (ensureAndroidModels).
+      const usable = options.wordTimestamps
+        ? speechModelSupportsLanguages(model, languages)
+        : speechModelCoversRecording(model, languages);
+      if (!usable)
         throw new Error(
           i18n.t(model === 'parakeet-v3' ? 'unsupportedLanguage' : 'moonshineEnglishOnly'),
         );

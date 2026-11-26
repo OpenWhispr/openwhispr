@@ -109,13 +109,26 @@ it('rejects a non-English Moonshine request without switching engines or using t
   expect(AndroidDictation!.transcribeMoonshine).not.toHaveBeenCalled();
   expect(AndroidDictation!.transcribeParakeet).not.toHaveBeenCalled();
 });
-it('rejects an unsupported multilingual selection even when no single-language hint is supplied', async () => {
+it('rejects a multilingual selection the model knows none of', async () => {
   jest.mocked(selectedSpeechModel).mockReturnValue('moonshine-small');
-  jest.mocked(getPreferredTranscriptionLanguages).mockReturnValue(['en', 'fr']);
+  jest.mocked(getPreferredTranscriptionLanguages).mockReturnValue(['fr', 'de']);
   await expect(
     LocalSpeechModel.transcribe('file:///sample.wav', { language: 'auto' }),
   ).rejects.toThrow('English only');
   expect(AndroidDictation!.transcribeMoonshine).not.toHaveBeenCalled();
+});
+it('transcribes a recording when the model knows one of the listed languages', async () => {
+  jest.mocked(getPreferredTranscriptionLanguages).mockReturnValue(['en', 'af']);
+  const result = await LocalSpeechModel.transcribe('file:///sample.m4a', {});
+  expect(result).toMatchObject({ endpoint: 'parakeet-v3', text: 'Hello.' });
+  expect(AndroidDictation!.transcribeParakeet).toHaveBeenCalled();
+});
+it('still needs every listed language for a meeting', async () => {
+  jest.mocked(getPreferredTranscriptionLanguages).mockReturnValue(['en', 'af']);
+  await expect(
+    LocalSpeechModel.transcribe('file:///sample.wav', { wordTimestamps: true }),
+  ).rejects.toThrow('25 European');
+  expect(AndroidDictation!.transcribeParakeet).not.toHaveBeenCalled();
 });
 it('keeps the selected model while waiting for another local job', async () => {
   let unblock!: () => void;

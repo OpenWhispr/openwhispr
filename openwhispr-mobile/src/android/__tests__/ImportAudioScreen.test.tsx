@@ -110,6 +110,12 @@ jest.mock('@/store/useUsageStore', () => ({
 jest.mock('@/store/useNotesStore', () => ({
   useNotesStore: { getState: () => ({ loadNotes: jest.fn(), loadFolders: jest.fn() }) },
 }));
+let mockLanguages: string[] = [];
+jest.mock('@/lib/transcriptionLanguage', () => ({
+  getPreferredTranscriptionLanguages: () => mockLanguages,
+}));
+jest.mock('../speechSelection', () => ({ selectedSpeechModel: () => 'parakeet-v3' }));
+jest.mock('../settings/modelCatalog', () => ({ modelName: () => 'Parakeet v3' }));
 jest.mock('@/lib/inferenceRouting', () => ({ snapshotTranscriptionJob: () => mockRoute }));
 jest.mock('@/lib/accountAccess', () => ({
   accountRequiredForCloud: () => false,
@@ -137,6 +143,7 @@ beforeEach(async () => {
   mockMode = 'private';
   mockRoute = { provider: 'local', cleanupRoute: { mode: 'local' } };
   mockFeature = undefined;
+  mockLanguages = [];
 });
 
 it('starts no processing until the user chooses a file, then opens the saved note', async () => {
@@ -154,10 +161,39 @@ it('starts no processing until the user chooses a file, then opens the saved not
   expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(notes)/99');
 });
 
-it('explains provider cleanup even for a private import', () => {
+it('shows no destination chip or processing disclosure', () => {
   mockRoute.cleanupRoute.mode = 'providers';
-  const { getByText } = renderImport();
-  expect(getByText(/Transcript text is sent to your selected cleanup provider/)).toBeTruthy();
+  const view = renderImport();
+  expect(view.getByText('uploadFormats')).toBeTruthy();
+  expect(view.queryByText(/Save to/)).toBeNull();
+  expect(view.queryByText(en.android.importPrivateRemoteCleanup)).toBeNull();
+  expect(view.queryByText(en.android.importLocal)).toBeNull();
+});
+
+it('notes a language the phone model can’t transcribe and still uploads', async () => {
+  mockLanguages = ['en', 'af'];
+  const view = renderImport();
+  expect(view.getByText('uploadLanguagePartly')).toBeTruthy();
+  expect(view.getByText('useCloudForUploads')).toBeTruthy();
+  await act(async () => fireEvent.press(view.getByText('Choose audio file')));
+  expect(mockPick).toHaveBeenCalledWith(mockRoute);
+});
+
+it('turns the upload off when the phone model knows none of the languages', async () => {
+  mockLanguages = ['af'];
+  const view = renderImport();
+  expect(view.getByText('uploadLanguageNone')).toBeTruthy();
+  await act(async () => fireEvent.press(view.getByText('Choose audio file')));
+  expect(mockPick).not.toHaveBeenCalled();
+});
+
+it('shows no language note for Cloud uploads', () => {
+  mockMode = 'cloud';
+  mockRoute.provider = 'cloud';
+  mockLanguages = ['af'];
+  const view = renderImport();
+  expect(view.queryByText('uploadLanguageNone')).toBeNull();
+  expect(view.queryByText('uploadLanguagePartly')).toBeNull();
 });
 
 it('ignores a delayed paywall callback after leaving the import screen', async () => {
@@ -183,14 +219,10 @@ it('cancels on account change and refuses a delayed paywall callback', async () 
   expect(view.getByText(/Your account changed/)).toBeTruthy();
 });
 
-it('renders the selected language for private provider disclosure and import actions', async () => {
+it('renders the selected language for import actions', async () => {
   await testI18n.changeLanguage('de');
-  mockRoute.cleanupRoute.mode = 'providers';
   const view = renderImport();
-  expect(view.getByText(de.android.importPrivateRemoteCleanup)).toBeTruthy();
   expect(view.getByText('Audiodatei auswählen')).toBeTruthy();
-  expect(view.getByText('Speichern in: Research')).toBeTruthy();
-  expect(view.queryByText(en.android.importPrivateRemoteCleanup)).toBeNull();
   await act(async () => fireEvent.press(view.getByText('Audiodatei auswählen')));
   expect(mockPick).toHaveBeenCalledWith(mockRoute);
 });

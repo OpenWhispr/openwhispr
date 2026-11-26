@@ -10,8 +10,13 @@ import { useHome } from './home/kit';
 import { GlassButton } from './processingFable/look';
 import { ProgressBar } from './controls';
 import { BackButton, LinkButton } from './notes/look';
-import { MetaChip } from './notes/noteParts';
 import { notesT } from './notes/strings';
+import { modelName } from './settings/modelCatalog';
+import { selectedSpeechModel } from './speechSelection';
+import { speechModelCoversRecording, unsupportedSpeechLanguages } from './speechCapabilities';
+import { SystemIcon } from '@/components/ui/SystemIcon';
+import registry from '@/config/languageRegistry.json';
+import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
 import { useFileUpload } from '@/hooks/useFileUpload.android';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -40,6 +45,33 @@ function parseId(value?: string): number | undefined {
   return id;
 }
 
+const languageName = (code: string) =>
+  (
+    registry.languages.find((item) => item.code === code) ??
+    registry.languages.find((item) => item.code.split('-')[0] === code)
+  )?.label ?? code;
+
+const languageList = (names: string[]) =>
+  names.length < 2
+    ? names.join('')
+    : notesT('languageListAnd', { first: names.slice(0, -1).join(', '), last: names.at(-1) });
+
+/** On device, the listed languages the speech model can't transcribe; null when it knows them all. */
+function uploadLanguageNote() {
+  const speech = selectedSpeechModel();
+  const languages = getPreferredTranscriptionLanguages();
+  const unsupported = unsupportedSpeechLanguages(speech, languages);
+  if (!unsupported.length) return null;
+  const blocked = !speechModelCoversRecording(speech, languages);
+  return {
+    blocked,
+    message: notesT(blocked ? 'uploadLanguageNone' : 'uploadLanguagePartly', {
+      model: modelName(speech),
+      languages: languageList(unsupported.map(languageName)),
+    }),
+  };
+}
+
 export default function ImportAudioScreen() {
   const { t } = useTranslation('android');
   const errorMessage = (cause: unknown) =>
@@ -57,16 +89,15 @@ export default function ImportAudioScreen() {
   // Refresh the preview when workflow configuration changes; the job takes its
   // own snapshot before the paywall or picker opens.
   useConfigStore((state) => state.config?.inference);
+  // The language note follows the language list and the speech model.
+  useConfigStore((state) => state.config?.languages);
+  useConfigStore((state) => state.config?.preferredLanguage);
+  useConfigStore((state) => state.config?.androidSpeechModel);
   const { register } = useSuperwallGate();
   const focused = useRef(true);
   const accountChanged = useRef(false);
   const requestBusy = useRef(false);
   const requestGeneration = useRef(0);
-  const processingChoice = useRef<{
-    isPrivate: boolean;
-    provider: string;
-    remoteCleanup: boolean;
-  } | null>(null);
   const destination = useRef<ImportDestination | null>(null);
   const [gating, setGating] = useState(false);
   const [error, setError] = useState('');
@@ -80,9 +111,10 @@ export default function ImportAudioScreen() {
         isPrivate: mode === 'private',
       });
       const route = snapshotTranscriptionJob('upload');
-      return { target, route, error: '' };
+      const languageNote = route.provider === 'local' ? uploadLanguageNote() : null;
+      return { target, route, languageNote, error: '' };
     } catch (cause) {
-      return { target: null, route: null, error: errorMessage(cause) };
+      return { target: null, route: null, languageNote: null, error: errorMessage(cause) };
     }
   })();
   const { isProcessing, currentText, stage, cancel, pickAndTranscribeFile } = useFileUpload({
@@ -151,7 +183,8 @@ export default function ImportAudioScreen() {
       isProcessing ||
       accountChanged.current ||
       !preview.target ||
-      !preview.route
+      !preview.route ||
+      preview.languageNote?.blocked
     )
       return;
     const route = preview.route;
@@ -161,11 +194,6 @@ export default function ImportAudioScreen() {
       return;
     }
     destination.current = preview.target;
-    processingChoice.current = {
-      isPrivate: preview.target.isPrivate,
-      provider: route.provider,
-      remoteCleanup: route.cleanupRoute?.mode === 'providers',
-    };
     const requestId = ++requestGeneration.current;
     requestBusy.current = true;
     setError('');
@@ -199,24 +227,6 @@ export default function ImportAudioScreen() {
       if (focused.current) setGating(false);
     }
   };
-  const choice =
-    isProcessing || gating
-      ? processingChoice.current
-      : {
-          isPrivate: mode === 'private',
-          provider: preview.route?.provider,
-          remoteCleanup: preview.route?.cleanupRoute?.mode === 'providers',
-        };
-  // Where the audio goes is said before anything is picked, and while it runs.
-  const disclosure = choice?.isPrivate
-    ? choice.remoteCleanup
-      ? t('importPrivateRemoteCleanup')
-      : t('importPrivateLocal')
-    : choice?.provider === 'local'
-      ? t('importLocal')
-      : choice?.provider === 'byok'
-        ? t('importByok')
-        : t('importCloud');
   return (
     <View style={{ flex: 1, backgroundColor: c.canvas, paddingTop: insets.top }}>
       <View
@@ -231,16 +241,6 @@ export default function ImportAudioScreen() {
         >
           {notesT('uploadAudio')}
         </Text>
-        {(isProcessing ? destination.current : preview.target) ? (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <MetaChip
-              icon="Folder"
-              label={t('importSaveTo', {
-                destination: (isProcessing ? destination.current : preview.target)?.label,
-              })}
-            />
-          </View>
-        ) : null}
         {isProcessing ? (
           <View style={[card, { padding: 16, gap: 12 }]}>
             <Text style={type.rowTitle} accessibilityLiveRegion="polite">
@@ -249,7 +249,7 @@ export default function ImportAudioScreen() {
             {/* The pipeline reports no %, so the bar sweeps. */}
             <ProgressBar />
             <Text style={{ fontSize: 13, lineHeight: 18, color: c.secondary }}>
-              {disclosure} {notesT('stayOnScreen')}
+              {notesT('stayOnScreen')}
             </Text>
             <LinkButton destructive label={notesT('cancelUpload')} onPress={cancel} />
           </View>
@@ -284,12 +284,41 @@ export default function ImportAudioScreen() {
         ) : (
           <View style={[card, { padding: 16, gap: 12 }]}>
             <Text style={{ fontSize: 15, lineHeight: 21, color: c.secondary }}>
-              {t('importFormats')}
+              {notesT('uploadFormats')}
             </Text>
-            <Text style={{ fontSize: 15, lineHeight: 21, color: c.secondary }}>{disclosure}</Text>
+            {preview.languageNote ? (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  gap: 10,
+                  padding: 12,
+                  paddingBottom: 0,
+                  borderRadius: 12,
+                  backgroundColor: c.tile,
+                }}
+              >
+                <View style={{ paddingTop: 2 }}>
+                  <SystemIcon name="info.circle" mdName="Info" size={18} color={c.text} />
+                </View>
+                <View style={{ flex: 1, alignItems: 'flex-start' }}>
+                  <Text style={{ fontSize: 15, lineHeight: 21, color: c.text }}>
+                    {preview.languageNote.message}
+                  </Text>
+                  <LinkButton
+                    label={notesT('useCloudForUploads')}
+                    onPress={() => router.push('/(account)/ai-models')}
+                  />
+                </View>
+              </View>
+            ) : null}
             <GlassButton
               label={t('importChoose')}
-              disabled={gating || accountChanged.current || !!preview.error}
+              disabled={
+                gating ||
+                accountChanged.current ||
+                !!preview.error ||
+                !!preview.languageNote?.blocked
+              }
               onPress={() => {
                 void start();
               }}
