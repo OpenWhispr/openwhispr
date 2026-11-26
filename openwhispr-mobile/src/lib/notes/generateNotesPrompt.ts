@@ -12,11 +12,12 @@ export interface BuildActionSystemPromptInput {
   sharedDictionary?: string[];
 }
 
-// Without an explicit rule the English prompt pulls non-English notes into English.
+// Without an explicit rule the English prompt pulls non-English notes into English. The action's
+// own instructions follow these rules, so one asking for a language (a translation) still wins.
 export const MEETING_OUTPUT_LANGUAGE_RULE =
-  '- Write the notes in the language the meeting was held in, including the section headings: translate the heading names above into that language. Never translate the content into English.';
+  '- Unless the instructions below ask for another language, write the notes in the language the meeting was held in, including the section headings: translate the heading names above into that language. Never translate the content into English unasked.';
 export const NOTE_OUTPUT_LANGUAGE_RULE =
-  '- Write in the language the notes are written in. Never translate them into English.';
+  '- Unless the instructions below ask for another language, write in the language the notes are written in. Never translate them into English unasked.';
 
 const BASE_SYSTEM_PROMPT = `You are a note enhancement assistant. The user will provide raw notes - possibly voice-transcribed, rough, or unstructured. Your job is to clean them up according to the instructions below while preserving all original meaning and information. Output clean markdown.
 

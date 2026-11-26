@@ -69,4 +69,16 @@ describe('buildActionSystemPrompt output language', () => {
       prompt.indexOf('Instructions: '),
     );
   });
+
+  it('lets an action that asks for a language override the language rules', () => {
+    const prompt = buildActionSystemPrompt({
+      actionPrompt: 'Translate these notes into English.',
+      inputKind: 'plain-note',
+      isDefaultGenerateNotesAction: false,
+    });
+    for (const rule of [NOTE_OUTPUT_LANGUAGE_RULE, MEETING_OUTPUT_LANGUAGE_RULE]) {
+      expect(rule).toContain('Unless the instructions below ask for another language');
+    }
+    expect(prompt.endsWith('Instructions: Translate these notes into English.')).toBe(true);
+  });
 });
