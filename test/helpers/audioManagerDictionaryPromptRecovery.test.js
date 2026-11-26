@@ -572,4 +572,29 @@ test("local Whisper recovers dictionary prompt echoes and fragments", async (t) 
       assert.equal(recoveryLog.data.recovered, true);
     }
   );
+
+  await t.test(
+    "a slow, complete dictation keeps its dictionary spellings when the retry only spells them out",
+    async () => {
+      const dictated = "Update the claude.md file and the agents.md file for OpenWhispr.";
+      const calls = queueTranscriptions(window, [
+        { success: true, text: dictated },
+        {
+          success: true,
+          text: "Update the Claude MD file and the agents MD file for Open Whisper.",
+        },
+      ]);
+      const { manager, processedTexts } = createRecoveryManager(
+        "OpenWhispr, claude.md, agents.md, codex"
+      );
+
+      const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+        durationSeconds: 30,
+      });
+
+      assert.equal(calls.length, 2);
+      assert.equal(result.rawText, dictated);
+      assert.deepEqual(processedTexts, [dictated]);
+    }
+  );
 });

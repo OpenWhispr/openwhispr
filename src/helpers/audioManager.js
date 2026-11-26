@@ -236,6 +236,10 @@ const MIN_UNIQUE_WORD_GAIN = 2;
 // or < 0.45 words/s).
 const MIN_PROMPT_TRUNCATION_RECORDING_DURATION_SECONDS = 10;
 const MAX_PROMPT_TRUNCATION_WORDS_PER_SECOND = 0.5;
+// A prompt-free retry spells dictionary terms out ("Open Whisper"), which adds words
+// but no speech, so a truncation counts as recovered only with this much more text.
+const MIN_TRUNCATION_RECOVERY_TEXT_RATIO = 1.25;
+const countLettersAndDigits = (text) => text.replace(/[^\p{L}\p{N}]/gu, "").length;
 
 // A selection edit that fails leaves its transcript behind; it rides out on the
 // error so the failed history entry keeps it. Only those errors carry it: they
@@ -2714,10 +2718,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             Number.isFinite(metadata.durationSeconds) &&
             metadata.durationSeconds >= MIN_SPARSE_RECORDING_DURATION_SECONDS &&
             retryFragment.uniqueWordCount >= initialFragment.uniqueWordCount + MIN_UNIQUE_WORD_GAIN;
+          // When only the sparse check ran the retry, the fragment rules don't apply:
+          // any dictation repeats a word, and spelled-out terms add unique words.
+          const truncationRecovered =
+            sparseRecordingRecovered &&
+            countLettersAndDigits(retryText) >=
+              countLettersAndDigits(result.text) * MIN_TRUNCATION_RECOVERY_TEXT_RATIO;
           const recovered =
             hasRetryText &&
             !retryStillPromptLike &&
-            (strictDictionaryEcho || repeatedFragmentRecovered || sparseRecordingRecovered);
+            (strictDictionaryEcho ||
+              (dictionaryPromptFragment
+                ? repeatedFragmentRecovered || sparseRecordingRecovered
+                : truncationRecovered));
 
           logger.info(
             "Local dictionary-prompt recovery attempt",
