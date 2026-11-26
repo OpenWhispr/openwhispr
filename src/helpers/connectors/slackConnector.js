@@ -502,21 +502,22 @@ function createSlackConnector({ api, auth, directory, credentials }) {
         threadArg ??
         (parsed.threadTs ? { channelId: parsed.query, threadTs: parsed.threadTs } : null);
       const cacheKey = loginCacheKey(binding, credential);
-      // "Smith, Gabe" may be one person, but only by exactly that name; any
-      // other match for a list of people is a looser one.
-      const named = destination
-        ? await findTargetWithRefresh(parsed, binding, access, cacheKey)
-        : null;
-      const wholeName = named?.candidate?.names?.some(
-        (name) => name.toLowerCase() === destination.toLowerCase()
-      );
-      const found = destination
-        ? (!wholeName && (await findGroup(destination, binding, access, cacheKey))) || named
-        : await lookupWithRefresh(
-            (current) => findOpenConversation(slackWindowTitle, binding, current, cacheKey),
-            binding,
-            access
-          );
+      let found;
+      if (destination) {
+        // "Smith, Gabe" may be one person, but only by exactly that name; any
+        // other match for a list of people is a looser one.
+        const named = await findTargetWithRefresh(parsed, binding, access, cacheKey);
+        const wholeName = named.candidate?.names?.some(
+          (name) => name.toLowerCase() === destination.toLowerCase()
+        );
+        found = (!wholeName && (await findGroup(destination, binding, access, cacheKey))) || named;
+      } else {
+        found = await lookupWithRefresh(
+          (current) => findOpenConversation(slackWindowTitle, binding, current, cacheKey),
+          binding,
+          access
+        );
+      }
       if (found.clarify) return found.clarify;
       if (found.error) {
         return prepareFailed(

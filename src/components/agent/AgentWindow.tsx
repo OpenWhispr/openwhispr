@@ -361,7 +361,8 @@ export default function AgentWindow() {
   // step gets a moment before it counts. Once per reply: the user opening the
   // modal counts too, so a reply never reopens a modal the user minimized. An
   // answer that may still be typed at the caret stays in the pill until its
-  // turn ends; a card waiting on the user means it won't be typed.
+  // turn ends; a card waiting on the user means it won't be typed, so the
+  // delivery is cancelled and the expand runs again (cardWaits).
   const latest = messages.at(-1);
   const replyId = latest?.role === "assistant" ? latest.id : null;
   const replyShows = replyId !== null && Boolean(latest?.content || latest?.error);
