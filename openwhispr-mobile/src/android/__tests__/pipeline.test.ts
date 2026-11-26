@@ -20,7 +20,11 @@ jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguage: () => undefined,
   getPreferredTranscriptionLanguages: () => [],
 }));
-jest.mock('@/services/reasoning/ReasoningService', () => ({
+// Shared files reach Android's service through the shared path, as Metro's re-export does.
+jest.mock('@/services/reasoning/ReasoningService', () =>
+  jest.requireMock('@/android/reasoning/ReasoningService'),
+);
+jest.mock('@/android/reasoning/ReasoningService', () => ({
   ReasoningService: { processText: jest.fn() },
 }));
 jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
@@ -49,7 +53,7 @@ import {
   ensureAndroidModels,
 } from '../pipeline';
 import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
-import { ReasoningService } from '@/services/reasoning/ReasoningService';
+import { ReasoningService } from '@/android/reasoning/ReasoningService';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useTranscriptStore } from '@/store/useTranscriptStore';
 import { modelReady } from '../models';

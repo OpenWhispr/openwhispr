@@ -18,7 +18,7 @@ import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
 import { cleanupTranscript } from '@/lib/cleanupTranscript';
 import type { TranscriptionJobRoute } from '@/lib/inferenceRouting';
 import { TranscriptionService } from '@/services/transcription/TranscriptionService';
-import { ReasoningService } from '@/services/reasoning/ReasoningService';
+import { ReasoningService } from '@/android/reasoning/ReasoningService';
 import type { TranscriptionProvider } from '@/types';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
@@ -51,7 +51,11 @@ jest.mock('@/services/transcription/TranscriptionService', () => ({
 jest.mock('@/lib/cleanupTranscript', () => ({
   cleanupTranscript: jest.fn(async () => 'Discarded cleanup.'),
 }));
-jest.mock('@/services/reasoning/ReasoningService', () => ({
+// Shared files reach Android's service through the shared path, as Metro's re-export does.
+jest.mock('@/services/reasoning/ReasoningService', () =>
+  jest.requireMock('@/android/reasoning/ReasoningService'),
+);
+jest.mock('@/android/reasoning/ReasoningService', () => ({
   ReasoningService: {
     processText: jest.fn(async ({ systemPrompt }: { systemPrompt: string }) => ({
       // Edit selection answers in the JSON envelope ported from desktop.

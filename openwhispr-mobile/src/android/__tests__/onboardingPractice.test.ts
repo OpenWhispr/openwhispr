@@ -27,7 +27,11 @@ jest.mock('expo-file-system/legacy', () => ({
 const mockFormat = jest.fn(async (_request: { systemPrompt: string }) => ({
   text: 'Hey Tim,\n\nCan we move our call to Friday at 4pm?\n\nThanks,\nJosh',
 }));
-jest.mock('@/services/reasoning/ReasoningService', () => ({
+// Shared files reach Android's service through the shared path, as Metro's re-export does.
+jest.mock('@/services/reasoning/ReasoningService', () =>
+  jest.requireMock('@/android/reasoning/ReasoningService'),
+);
+jest.mock('@/android/reasoning/ReasoningService', () => ({
   ReasoningService: {
     processText: (request: { systemPrompt: string }) => mockFormat(request),
   },

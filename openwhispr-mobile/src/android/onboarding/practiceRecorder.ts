@@ -1,7 +1,7 @@
 import { PermissionsAndroid } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
-import { ReasoningService } from '@/services/reasoning/ReasoningService';
+import { ReasoningService } from '@/android/reasoning/ReasoningService';
 import { getAccountFirstName } from '@/lib/accountDisplay';
 import { useAuthStore } from '@/store/useAuthStore';
 import { createAndroidJob, processAndroidAudio, type AndroidJob } from '../pipeline';
