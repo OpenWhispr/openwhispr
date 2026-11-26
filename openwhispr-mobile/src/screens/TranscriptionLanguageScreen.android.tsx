@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Alert, FlatList, View } from 'react-native';
-import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import registry from '@/config/languageRegistry.json';
 import { useConfigStore } from '@/store/useConfigStore';
@@ -24,7 +23,8 @@ function Divider() {
 
 /**
  * Settings → Language: what dictation uses now in its own Current card, then every other choice
- * (Auto-detect first, then A to Z). A search filters one list instead. A tap saves and goes back.
+ * (Auto-detect first, then A to Z). A search filters one list instead. A tap saves and moves the
+ * pick into the Current card, staying on the screen.
  */
 export default function LanguageScreen() {
   const t = useSettingsT();
@@ -52,7 +52,8 @@ export default function LanguageScreen() {
       preferredLanguage: code,
       ...(speech ? { androidSpeechModel: speech } : {}),
     });
-    router.back();
+    // Stay on the screen: the pick moves into the Current card above.
+    setQuery('');
   };
 
   const choose = (code: string, label: string) => {
