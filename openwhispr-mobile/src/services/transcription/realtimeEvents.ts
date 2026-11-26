@@ -62,9 +62,9 @@ export interface RealtimeSession {
   /** Audio dropped while no socket could take it, in ms. */
   droppedMs: () => number;
   /**
-   * Stretches of captured audio that never reached a socket, on the capture clock: evicted
-   * from the outage buffer, lost to a failed send, or still buffered when the session ended
-   * with no socket open. Sorted and merged.
+   * Stretches of captured audio with no live transcript, on the capture clock: evicted from
+   * the outage buffer, lost to a failed send, still buffered when the session ended, sent to a
+   * leg that closed before transcribing it, or in a turn the server failed. Sorted and merged.
    */
   droppedWindows: () => AudioWindow[];
 }
@@ -155,6 +155,8 @@ export function createRealtimeEventReducer(callbacks: RealtimeCallbacks): Realti
         speechStarted.delete(itemId);
         speechOpen.delete(itemId);
         const t = timing.get(itemId) ?? { startMs: null, endMs: null };
+        partials.delete(itemId);
+        timing.delete(itemId);
         callbacks.onTranscriptionFailed?.({ itemId, startMs: t.startMs, endMs: t.endMs });
         break;
       }

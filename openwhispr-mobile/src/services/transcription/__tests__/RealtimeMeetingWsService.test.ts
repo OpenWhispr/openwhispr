@@ -960,10 +960,11 @@ describe('startRealtimeMeetingWs — capture lease', () => {
 
   it('releases when the first leg never opens', async () => {
     const startPromise = startRealtimeMeetingWs({}, {}, { wsFactory });
-    const outcome = expect(startPromise).rejects.toThrow('connect timeout');
+    // Handled now: it rejects while the timers advance, before the assertion below awaits it.
+    startPromise.catch(() => undefined);
     await flushMicro();
     await jest.advanceTimersByTimeAsync(CONNECT_TIMEOUT_MS + 1);
-    await outcome;
+    await expect(startPromise).rejects.toThrow('connect timeout');
     await flushMicro();
 
     expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
@@ -1263,7 +1264,7 @@ describe('startRealtimeMeetingWs — dropped audio windows', () => {
   it('starts the mic with only the sample rate when there is no recording file', async () => {
     await boot();
 
-    expect(LivePCMStreaming.start).toHaveBeenCalledWith(24000);
+    expect(LivePCMStreaming.start).toHaveBeenCalledWith(24000, undefined);
   });
 });
 

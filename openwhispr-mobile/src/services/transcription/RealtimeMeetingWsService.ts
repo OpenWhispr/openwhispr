@@ -40,6 +40,7 @@ import {
   classifyClose,
   legItemPrefix,
   namespaceItemId,
+  pcmBytesToMs,
   pcmTailCapBytes,
   shortLegBackoffMs,
   RECONNECT_MAX_RETRIES,
@@ -189,9 +190,9 @@ export async function startRealtimeMeetingWs(
     return timed;
   };
   const pcmRing = new PcmRingBuffer(pcmTailCapBytes(sampleRate), sampleRate);
-  const bytesToMs = (bytes: number): number => Math.floor((bytes * 1000) / (sampleRate * 2));
+  const bytesToMs = (bytes: number): number => Math.floor(pcmBytesToMs(bytes, sampleRate));
   // Window ends round up, so a window never stops short of the audio it lost.
-  const bytesToMsCeil = (bytes: number): number => Math.ceil((bytes * 1000) / (sampleRate * 2));
+  const bytesToMsCeil = (bytes: number): number => Math.ceil(pcmBytesToMs(bytes, sampleRate));
   let capturedBytes = 0;
   // Merged chunks a failed send threw away; the ring counts its own evictions.
   let sendDroppedBytes = 0;
@@ -842,12 +843,10 @@ export async function startRealtimeMeetingWs(
     await acquireCaptureLease('meeting-cloud');
     leaseHeld = true;
     try {
-      // Only pass options when recording, so the plain start stays exactly as it was.
-      if (opts.recordingUri) {
-        await LivePCMStreaming.start(sampleRate, { recordingUri: opts.recordingUri });
-      } else {
-        await LivePCMStreaming.start(sampleRate);
-      }
+      await LivePCMStreaming.start(
+        sampleRate,
+        opts.recordingUri ? { recordingUri: opts.recordingUri } : undefined,
+      );
     } catch (error) {
       frameSub?.remove();
       frameSub = null;

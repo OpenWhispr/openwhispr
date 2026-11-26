@@ -43,6 +43,11 @@ export function pcmTailCapBytes(sampleRate: number): number {
   return sampleRate * 2 * PCM_TAIL_SECONDS;
 }
 
+/** How long `bytes` of PCM16 mono last, in ms, unrounded; callers pick the rounding. */
+export function pcmBytesToMs(bytes: number, sampleRate: number): number {
+  return (bytes * 1000) / (sampleRate * 2);
+}
+
 /** A stretch of captured audio, `[startMs, endMs)` on the capture clock. */
 export interface AudioWindow {
   startMs: number;
@@ -79,10 +84,10 @@ export class PcmRingBuffer {
   private dropped = 0;
   private windows: AudioWindow[] = [];
 
-  /** `sampleRate` (PCM16 mono) gives a dropped chunk its length in ms; it defaults to the rate whose 20 s tail is `maxBytes`. */
+  /** `sampleRate` (PCM16 mono) gives a dropped chunk its length in ms. */
   constructor(
     private readonly maxBytes: number,
-    private readonly sampleRate: number = maxBytes / (2 * PCM_TAIL_SECONDS),
+    private readonly sampleRate: number,
   ) {}
 
   /** `startMs` is where the chunk begins on the capture clock. */
@@ -121,7 +126,7 @@ export class PcmRingBuffer {
 
   private recordDrop(startMs: number, length: number): void {
     // Rounded up so a window never stops short of the audio it lost.
-    const endMs = startMs + Math.ceil((length * 1000) / (this.sampleRate * 2));
+    const endMs = startMs + Math.ceil(pcmBytesToMs(length, this.sampleRate));
     const last = this.windows[this.windows.length - 1];
     // Evictions run oldest first and back to back, so a long outage stays one window.
     if (last && startMs <= last.endMs) {

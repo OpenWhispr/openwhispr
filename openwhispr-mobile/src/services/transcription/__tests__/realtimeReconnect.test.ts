@@ -21,8 +21,10 @@ import {
 import { createRealtimeEventReducer } from '../realtimeEvents';
 
 describe('PcmRingBuffer', () => {
+  const sampleRate = 24000;
+
   it('accumulates chunks while under the cap and drains them in order', () => {
-    const ring = new PcmRingBuffer(100);
+    const ring = new PcmRingBuffer(100, sampleRate);
     ring.push(Buffer.from([1, 2, 3, 4]), 0);
     ring.push(Buffer.from([5, 6]), 0);
     expect(ring.byteLength).toBe(6);
@@ -31,7 +33,7 @@ describe('PcmRingBuffer', () => {
   });
 
   it('drops the oldest chunks when the cap is exceeded, keeping the recent tail', () => {
-    const ring = new PcmRingBuffer(10);
+    const ring = new PcmRingBuffer(10, sampleRate);
     ring.push(Buffer.from([1, 1, 1, 1]), 0); // 4 bytes
     ring.push(Buffer.from([2, 2, 2, 2]), 0); // 8 bytes
     ring.push(Buffer.from([3, 3, 3, 3]), 0); // 12 > 10 → drop oldest ([1,1,1,1])
@@ -41,7 +43,7 @@ describe('PcmRingBuffer', () => {
   });
 
   it('counts the bytes it drops, and a drain does not count as a drop', () => {
-    const ring = new PcmRingBuffer(100);
+    const ring = new PcmRingBuffer(100, sampleRate);
     ring.push(Buffer.alloc(60), 0);
     expect(ring.droppedBytes).toBe(0);
     ring.push(Buffer.alloc(60), 0); // 120 > 100: the oldest chunk goes
@@ -66,7 +68,7 @@ describe('PcmRingBuffer', () => {
   });
 
   it('empties on drain so a subsequent drain returns nothing', () => {
-    const ring = new PcmRingBuffer(100);
+    const ring = new PcmRingBuffer(100, sampleRate);
     ring.push(Buffer.from([9, 9]), 0);
     expect(Buffer.concat(ring.drain()).length).toBe(2);
     expect(ring.byteLength).toBe(0);

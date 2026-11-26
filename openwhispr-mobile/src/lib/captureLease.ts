@@ -3,8 +3,10 @@ import { AppGroupStorage } from '../../modules/app-group-storage/src';
 
 export type CaptureLeaseOwner = 'meeting-cloud' | 'meeting-local';
 
-// Every meeting capture acquires and releases through this file, once each, the release after
-// the native stop (also on unmount and a failed start), so this is what is recording right now.
+// Every meeting capture acquires and releases through this file, once each, so this is what is
+// recording right now. The release follows the native stop, or a failed start. The local
+// recorder's hook also releases on unmount, possibly with the recorder still running; that is
+// harmless only because its provider sits at the app root and unmounts with the app.
 const heldOwners = new Set<CaptureLeaseOwner>();
 
 /** True while a meeting capture holds the lease. */
