@@ -14,6 +14,7 @@ const { killProcess } = require("../utils/process");
 const { isPortAvailable, getAvailableParallelism } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { convertToWav, isPcm16Mono16kWav } = require("./ffmpegUtils");
+const { shortenLongPauses } = require("./pauseShortening");
 const { createAbortError } = require("./abortError");
 const sidecarPidFile = require("./sidecarPidFile");
 const { BIN_SUBDIR: CUDA_BIN_SUBDIR } = require("./whisperCudaManager");
@@ -990,7 +991,7 @@ class WhisperServerManager extends EventEmitter {
     });
 
     // signal is optional; only cancellable uploads pass one.
-    const { language, initialPrompt, signal, skipDecoderThresholds } = options;
+    const { language, initialPrompt, signal, skipDecoderThresholds, shortenPauses } = options;
     if (signal?.aborted) throw createAbortError("whisper-server transcription cancelled");
 
     // whisper.cpp wants 16 kHz mono PCM16; a renderer PCM tap delivers exactly that.
@@ -1000,6 +1001,15 @@ class WhisperServerManager extends EventEmitter {
         throw new Error("FFmpeg not found - required for audio conversion");
       }
       finalBuffer = await this._convertToWav(audioBuffer);
+    }
+    if (shortenPauses) {
+      const shortened = shortenLongPauses(finalBuffer);
+      if (shortened.removedSeconds > 0) {
+        debugLogger.debug("Shortened pauses before decoding", {
+          removedSeconds: shortened.removedSeconds,
+        });
+      }
+      finalBuffer = shortened.buffer;
     }
 
     const boundary = `----WhisperBoundary${Date.now()}`;

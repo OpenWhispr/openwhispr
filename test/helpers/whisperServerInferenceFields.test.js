@@ -4,6 +4,8 @@ const http = require("node:http");
 
 const WhisperServerManager = require("../../src/helpers/whisperServer");
 const WhisperManager = require("../../src/helpers/whisper");
+const { pcm16ToWav } = require("../../src/utils/audioUtils");
+const { makeSine, makeSeededNoise, mix, delayBy, toInt16Buffer } = require("./harness/pcmFixtures");
 const { INFERENCE_DECODER_FIELDS } = WhisperServerManager;
 
 function startCapturingServer() {
@@ -138,4 +140,42 @@ test("transcribeLocalWhisper plumbs skipDecoderThresholds to the server request 
   // Every caller that does not opt out (dictation, note uploads) keeps the raised fields.
   await manager.transcribeLocalWhisper(Buffer.from("audio"), { model: "base" });
   assert.equal(captured[1].skipDecoderThresholds, false);
+});
+
+test("shortenPauses posts the audio with its long pause shortened (#2474)", async (t) => {
+  const { server, port, getBody } = await startCapturingServer();
+  t.after(() => server.close());
+
+  const tone = (atMs) =>
+    delayBy(makeSine({ durationMs: 1500, amplitude: 0.3, sampleRate: 16000 }), atMs, 16000);
+  const noise = makeSeededNoise({ durationMs: 12000, amplitude: 0.002, sampleRate: 16000 });
+  const wav = pcm16ToWav(toInt16Buffer(mix(noise, tone(500), tone(10000))));
+
+  const manager = createManager(port);
+  await manager.transcribe(wav, { language: "en" });
+  const unchangedLength = getBody().length;
+  await manager.transcribe(wav, { language: "en", shortenPauses: true });
+  const shortenedLength = getBody().length;
+
+  // The 8 s pause keeps about 0.75 s: some 7 s of 16 kHz PCM16 leave the request.
+  const removedSeconds = (unchangedLength - shortenedLength) / 32000;
+  assert.ok(removedSeconds > 7 && removedSeconds < 7.5, `removed ${removedSeconds} s`);
+});
+
+test("transcribeLocalWhisper plumbs shortenPauses to the server request (dictation)", async () => {
+  const manager = new WhisperManager();
+  const captured = [];
+  manager.serverManager.isAvailable = () => true;
+  manager.serverManager.start = async () => {};
+  manager.serverManager.transcribe = async (_buffer, options) => {
+    captured.push(options);
+    return { text: "ok" };
+  };
+  manager.getModelPath = () => __filename;
+
+  await manager.transcribeLocalWhisper(Buffer.from("audio"), { model: "base", shortenPauses: true });
+  assert.equal(captured[0].shortenPauses, true);
+
+  await manager.transcribeLocalWhisper(Buffer.from("audio"), { model: "base" });
+  assert.equal(captured[1].shortenPauses, false);
 });
