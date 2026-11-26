@@ -1992,7 +1992,7 @@ const resolveTestCaptureApps = async (pids) =>
   new Map(pids.filter((pid) => CAPTURE_APPS[pid]).map((pid) => [pid, CAPTURE_APPS[pid]]));
 
 for (const platform of ["darwin", "win32"]) {
-  test(`${platform}: an ignored app holding the mic never prompts but still holds it for auto-end`, async (t) => {
+  test(`${platform}: an ignored app holding the mic never prompts, still holds it for auto-end, and prompts once no longer ignored`, async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
     const { detector, children } = createDetector(platform, {
       resolveCaptureApps: resolveTestCaptureApps,
@@ -2009,6 +2009,13 @@ for (const platform of ["darwin", "win32"]) {
 
     assert.equal(detections.length, 0);
     assert.deepEqual(detector.getExternalMicState(), { reliable: true, externalMicActive: true });
+
+    // Settings' "Stop ignoring" while Orca still holds the mic.
+    detector.setIgnoredApps([]);
+    t.mock.timers.tick(SUSTAINED_MS);
+
+    assert.equal(detections.length, 1);
+    assert.deepEqual(detections[0].apps, [CAPTURE_APPS[11]]);
   });
 }
 
