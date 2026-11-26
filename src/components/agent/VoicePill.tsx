@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { Keyboard, Maximize, Mic, MicOff, Minimize, Settings, X } from "../icons";
 import { cn } from "../lib/utils";
@@ -85,6 +85,11 @@ interface VoicePillProps {
   onLeave: () => void;
   /** A card waits behind the pill: its cap brings it back. */
   onShowCard?: () => void;
+  /**
+   * A call started from the agent pill: this pill grows out of that one's width
+   * and place (`drop` px below its own), its cap and controls rising in.
+   */
+  enterFrom?: { width: number; drop: number } | null;
 }
 
 /** A voice call's pill: its status above, then sound, Settings, Expand (or Minimize), Microphone and End. */
@@ -104,6 +109,7 @@ export function VoicePill({
   onStopReply,
   onLeave,
   onShowCard,
+  enterFrom = null,
 }: VoicePillProps) {
   const { t } = useTranslation();
   const dragHandlers = useAgentWindowDrag();
@@ -130,8 +136,18 @@ export function VoicePill({
       ref={pillRef}
       className="relative flex h-[65px] w-[237px] max-w-full shrink-0 flex-col items-center select-none"
       data-voice-pill
+      data-call-enter={enterFrom ? "" : undefined}
+      style={
+        enterFrom
+          ? ({
+              "--call-enter-from": `${enterFrom.width}px`,
+              "--call-enter-drop": `${enterFrom.drop}px`,
+            } as CSSProperties)
+          : undefined
+      }
     >
       <div
+        data-voice-pill-cap
         className="relative z-10 -mb-px flex shrink-0 items-center justify-center"
         style={{ width: CAP_WIDTH, height: CAP_HEIGHT }}
       >
@@ -193,6 +209,7 @@ export function VoicePill({
         )}
       </div>
       <div
+        data-voice-pill-body
         className={cn(
           "relative flex h-[38px] w-full cursor-grab items-center rounded-full border border-border ps-3.5 pe-1.5 text-muted-foreground shadow-[var(--shadow-card)] active:cursor-grabbing",
           surface

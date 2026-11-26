@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 import { Keyboard, Maximize, Mic, Phone, Square, X, type IconComponent } from "../icons";
 import { cn } from "../lib/utils";
@@ -18,6 +18,7 @@ const BUTTONS: Record<AgentPillButton, { icon: IconComponent; label: string }> =
 };
 
 interface AgentPillProps {
+  ref?: Ref<HTMLDivElement>;
   controls: AgentPillControls;
   /** The Sound bars follow the microphone only while the take records. */
   recording: boolean;
@@ -40,6 +41,7 @@ interface AgentPillProps {
 
 /** The agent's pill: what it is doing, then its controls. */
 export function AgentPill({
+  ref,
   controls,
   recording,
   readLevel,
@@ -59,6 +61,7 @@ export function AgentPill({
   const hasStatus = Boolean(notice || controls.waiting || controls.thinking || controls.waveform);
   return (
     <div
+      ref={ref}
       className={cn(
         "flex h-10 max-w-full cursor-grab items-center rounded-full border border-border pe-1.25 select-none active:cursor-grabbing text-muted-foreground shadow-[var(--shadow-card)]",
         hasStatus ? "ps-2.5" : "ps-1.25",
@@ -87,8 +90,8 @@ export function AgentPill({
           {t("agentMode.input.thinking")}
         </span>
       ) : controls.waveform ? (
-        // The dictation waveform's slot (11 bars and their gaps), so the pill keeps its size.
-        <span className="flex h-6 w-[52px] shrink-0 items-center">
+        // The bars' own width, with as much space before them as the divider leaves after.
+        <span className="flex h-6 shrink-0 items-center ps-0.5">
           <SoundBars ref={barsRef} />
         </span>
       ) : null}

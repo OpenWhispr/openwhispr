@@ -77,6 +77,10 @@ const NOTICE_MS = 5000;
 // How long a call's transcript takes to grow out of its pill or shrink back into it
 // (agent-window.css's call-panel rules).
 const CALL_PANEL_MS = 150;
+// A call's pill growing out of the agent pill it replaces (agent-window.css's voice-pill-enter),
+// from that pill's place: the call's 13 px lift, less half the 2 px the agent pill is taller.
+const CALL_ENTER_MS = 260;
+const CALL_ENTER_DROP_PX = 12;
 // What the agent pill says once a call ends on its own.
 const CALL_END_NOTICES: Record<VoiceCallEndReason, string> = {
   meeting: "agentWindow.call.notices.endedForMeeting",
@@ -834,6 +838,9 @@ export default function AgentWindow() {
   const [hiddenCallCard, setHiddenCallCard] = useState<string | null>(null);
   // The call's transcript growing out of its pill after Expand, or shrinking back into it before Minimize.
   const [callPanel, setCallPanel] = useState<"entering" | "leaving" | null>(null);
+  // The agent pill a call starts from: the call's pill grows out of its width and place.
+  const agentPillRef = useRef<HTMLDivElement>(null);
+  const [callEnter, setCallEnter] = useState<{ width: number; drop: number } | null>(null);
   const callPanelTimerRef = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(callPanelTimerRef.current), []);
   const callCardHidden = callCard !== null && callCard.id === hiddenCallCard;
@@ -865,6 +872,16 @@ export default function AgentWindow() {
       return;
     }
     stopReading();
+    const fromWidth =
+      stateRef.current.layout === "modal"
+        ? 0
+        : (agentPillRef.current?.getBoundingClientRect().width ?? 0);
+    // On Windows and Linux the call's own window has no room below its pill, so it grows in place.
+    setCallEnter(
+      fromWidth
+        ? { width: fromWidth, drop: getCachedPlatform() === "darwin" ? CALL_ENTER_DROP_PX : 0 }
+        : null
+    );
     dispatch({ type: "startCall" });
     await voiceCall.start();
   }, [
@@ -1001,6 +1018,18 @@ export default function AgentWindow() {
     callKeepsTranscriptWindow,
     `${state.layout}:${state.call !== null}:${surface.shown}`
   );
+
+  // The call's pill grows in once the resized window shows it, and is done CALL_ENTER_MS later.
+  useEffect(() => {
+    if (callEnter === null) return undefined;
+    if (!state.call || state.layout === "modal") {
+      setCallEnter(null);
+      return undefined;
+    }
+    if (!surface.shown) return undefined;
+    const timer = window.setTimeout(() => setCallEnter(null), CALL_ENTER_MS);
+    return () => window.clearTimeout(timer);
+  }, [callEnter, state.call, state.layout, surface.shown]);
 
   // The animation is over once the window shows the layout it led to, or with the call.
   useEffect(() => {
@@ -1521,6 +1550,7 @@ export default function AgentWindow() {
 
   const pill = (placement: "compact" | "typing" | "modal") => (
     <AgentPill
+      ref={placement === "modal" ? undefined : agentPillRef}
       controls={resolveAgentPillControls(placement, pillStatus(placement))}
       recording={voice.status === "recording"}
       readLevel={voice.readLevel}
@@ -1708,6 +1738,7 @@ export default function AgentWindow() {
       onStopReply={pendingCard || cardSending ? voiceCall.stopSpeech : stopCallReply}
       onLeave={leaveCall}
       onShowCard={!inModal && callCardHidden ? () => setHiddenCallCard(null) : undefined}
+      enterFrom={inModal ? null : callEnter}
     />
   );
   // A question stack's questions still to come show behind it, three at most.
@@ -1740,7 +1771,7 @@ export default function AgentWindow() {
           inTranscriptWindow && "pb-[13px]"
         )}
         data-shown={surface.shown}
-        data-instant={callPanel !== null || undefined}
+        data-instant={callPanel !== null || callEnter !== null || undefined}
         onPointerDown={(event) => {
           if (cardShown) setCardClicked(true);
           setMovedAway(false);

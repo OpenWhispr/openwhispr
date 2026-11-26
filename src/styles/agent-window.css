@@ -125,8 +125,47 @@
   }
 }
 
+/* A call started from the agent pill: its pill grows out of that one (AgentWindow's
+   CALL_ENTER_MS), from its width and place (--call-enter-drop below its own), while the
+   cap rises in behind and the controls fade in. */
+.agent-window-content[data-shown="true"] [data-call-enter] > [data-voice-pill-body] {
+  animation: voice-pill-enter-body 260ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.agent-window-content[data-shown="true"] [data-call-enter] > [data-voice-pill-cap] {
+  animation: voice-pill-enter-cap 260ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.agent-window-content[data-shown="true"] [data-call-enter] > [data-voice-pill-body] > * {
+  animation: voice-pill-enter-controls 260ms ease-out both;
+}
+
+@keyframes voice-pill-enter-body {
+  from {
+    width: var(--call-enter-from);
+    transform: translateY(var(--call-enter-drop));
+  }
+}
+
+@keyframes voice-pill-enter-cap {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+@keyframes voice-pill-enter-controls {
+  from,
+  40% {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .agent-modal[data-call-panel] {
+  .agent-modal[data-call-panel],
+  [data-call-enter] > [data-voice-pill-body],
+  [data-call-enter] > [data-voice-pill-cap],
+  [data-call-enter] > [data-voice-pill-body] > * {
     animation: none !important;
   }
 }

@@ -119,11 +119,7 @@ test("a take's pill shows the call pill's four Sound bars, rising with the micro
   assert.equal(bars.querySelectorAll("span.w-0\\.5").length, 4);
   const slot = host.querySelector(":scope > div > :first-child");
   assert.ok(slot.contains(bars), "the bars use the old logo's space");
-  assert.match(
-    slot.className,
-    /\bw-\[52px\].*\bh-6\b|\bh-6\b.*\bw-\[52px\]/,
-    "the old waveform's slot, so the pill keeps its size"
-  );
+  assert.doesNotMatch(slot.className, /\bw-/, "the slot is the bars' own width");
   runFrames(20);
   assert.ok(
     lifts().some((lift) => lift > 0.05),

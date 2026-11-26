@@ -1935,6 +1935,27 @@ for (const [kind, joinedRequest] of [
   });
 }
 
+test("a call started from the agent pill grows its pill out of that one, then settles", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "typing" }));
+  await view.settle();
+  // happy-dom lays nothing out: the agent pill's width as a real window measures it.
+  const agentPill = view.button("Start Voice Agent").closest(".rounded-full.border");
+  agentPill.getBoundingClientRect = () => ({ width: 181, height: 40 });
+  await React.act(async () => view.button("Start Voice Agent").click());
+  const pill = () => view.host.querySelector("[data-voice-pill]");
+  assert.equal(pill().dataset.callEnter, "", "it grows out of the agent pill");
+  assert.equal(pill().style.getPropertyValue("--call-enter-from"), "181px");
+  assert.equal(
+    view.host.querySelector(".agent-window-content").dataset.instant,
+    "true",
+    "in place of the usual fade"
+  );
+  await view.waitForLayout("pill");
+  await view.settle();
+  assert.equal(pill().dataset.callEnter, undefined, "and is done once it has grown");
+});
+
 test("Call on a take still listening drops it and starts once the take lets go of the microphone", async (t) => {
   const view = await mountWindow(t);
   await React.act(async () => view.main.handlers.hotkey({ external: true }));
