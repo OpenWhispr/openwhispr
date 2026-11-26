@@ -109,14 +109,16 @@ describe('Settings › Language shows the languages dictation uses', () => {
     expect(savedLanguages(['en-US', 'af'], undefined)).toEqual(['en-US', 'af']);
   });
 
-  it('lets an old single pick from Settings win, and its auto mean none', () => {
+  it('lets an old single pick from Settings win', () => {
     const { savedLanguages } = jest.requireActual('../onboarding/languages');
     expect(savedLanguages(['en-US', 'af'], 'fr')).toEqual(['fr']);
-    expect(savedLanguages(['en-US', 'af'], 'auto')).toEqual([]);
   });
 
-  it('is empty, not the phone language, when nothing was picked', () => {
+  it('always has one: the phone language when nothing was picked or the pick was auto', () => {
     const { savedLanguages } = jest.requireActual('../onboarding/languages');
-    expect(savedLanguages(undefined, undefined)).toEqual([]);
+    mockLocale = 'de_DE';
+    expect(savedLanguages(undefined, undefined)).toEqual(['de']);
+    expect(savedLanguages([], undefined)).toEqual(['de']);
+    expect(savedLanguages(['en-US', 'af'], 'auto')).toEqual(['de']);
   });
 });

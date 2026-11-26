@@ -143,7 +143,6 @@ export const settingsTranslations: Record<
     autoDetect: 'Detectar automáticamente',
     languagesPage: 'Idiomas',
     languagesPageBody: 'Con un idioma, el dictado lo espera. Con más, detecta cuál estás hablando.',
-    languagesPageAuto: 'No has elegido idiomas. El dictado detecta cuál estás hablando.',
     recommended: 'Recomendado',
     languagesFooter: '{{count}} idiomas, de la A a la Z. Desplázate para ver el resto.',
     noLanguages: 'Ningún idioma coincide con «{{query}}»',
@@ -451,7 +450,6 @@ export const settingsTranslations: Record<
     languagesPage: 'Langues',
     languagesPageBody:
       'Avec une langue, la dictée l’attend. Avec plusieurs, elle détecte celle que vous parlez.',
-    languagesPageAuto: 'Aucune langue choisie. La dictée détecte celle que vous parlez.',
     recommended: 'Recommandé',
     languagesFooter: '{{count}} langues, de A à Z. Faites défiler pour voir la suite.',
     noLanguages: 'Aucune langue ne correspond à « {{query}} »',
@@ -758,7 +756,6 @@ export const settingsTranslations: Record<
     languagesPage: 'Sprachen',
     languagesPageBody:
       'Mit einer Sprache erwartet das Diktat genau diese. Mit mehreren erkennt es, welche du sprichst.',
-    languagesPageAuto: 'Keine Sprachen gewählt. Das Diktat erkennt, welche du sprichst.',
     recommended: 'Empfohlen',
     languagesFooter: '{{count}} Sprachen, A bis Z. Scrolle für den Rest.',
     noLanguages: 'Keine Sprache passt zu „{{query}}“',
@@ -1061,7 +1058,6 @@ export const settingsTranslations: Record<
     languagesPage: 'Idiomas',
     languagesPageBody:
       'Com um idioma, o ditado espera por ele. Com mais, deteta qual está a falar.',
-    languagesPageAuto: 'Nenhum idioma escolhido. O ditado deteta qual está a falar.',
     recommended: 'Recomendado',
     languagesFooter: '{{count}} idiomas, de A a Z. Role para ver o resto.',
     noLanguages: 'Nenhum idioma corresponde a “{{query}}”',
@@ -1364,7 +1360,6 @@ export const settingsTranslations: Record<
     languagesPage: 'Lingue',
     languagesPageBody:
       'Con una lingua, la dettatura si aspetta quella. Con più lingue, riconosce quella che parli.',
-    languagesPageAuto: 'Nessuna lingua scelta. La dettatura riconosce quella che parli.',
     recommended: 'Consigliato',
     languagesFooter: '{{count}} lingue, dalla A alla Z. Scorri per vedere le altre.',
     noLanguages: 'Nessuna lingua corrisponde a «{{query}}»',
@@ -1669,7 +1664,6 @@ export const settingsTranslations: Record<
     languagesPage: 'Языки',
     languagesPageBody:
       'С одним языком диктовка ждёт именно его. С несколькими — сама определяет, на каком вы говорите.',
-    languagesPageAuto: 'Языки не выбраны. Диктовка сама определяет, на каком вы говорите.',
     recommended: 'Рекомендуется',
     languagesFooter: 'Языков: {{count}}, от А до Я. Прокрутите, чтобы увидеть остальные.',
     noLanguages: 'Нет языков по запросу «{{query}}»',
@@ -1973,7 +1967,6 @@ export const settingsTranslations: Record<
     autoDetect: '自动检测',
     languagesPage: '语言',
     languagesPageBody: '只选一种语言时，听写会按这种语言识别。选多种时，会自动判断你说的是哪种。',
-    languagesPageAuto: '未选择语言。听写会自动判断你说的是哪种。',
     recommended: '推荐',
     languagesFooter: '共 {{count}} 种语言，按字母排序。向下滑动查看更多。',
     noLanguages: '没有与“{{query}}”匹配的语言',
@@ -2259,7 +2252,6 @@ export const settingsTranslations: Record<
     autoDetect: '自動偵測',
     languagesPage: '語言',
     languagesPageBody: '只選一種語言時，聽寫會按這種語言辨識。選多種時，會自動判斷你說的是哪種。',
-    languagesPageAuto: '未選擇語言。聽寫會自動判斷你說的是哪種。',
     recommended: '推薦',
     languagesFooter: '共 {{count}} 種語言，依字母排序。向下滑動查看更多。',
     noLanguages: '沒有符合「{{query}}」的語言',
@@ -2549,7 +2541,6 @@ export const settingsTranslations: Record<
     languagesPage: '言語',
     languagesPageBody:
       '1つだけ選ぶと、その言語で聞き取ります。複数選ぶと、話している言語を自動で判別します。',
-    languagesPageAuto: '言語が選ばれていません。話している言語を自動で判別します。',
     recommended: 'おすすめ',
     languagesFooter: '{{count}} 言語（A〜Z順）。スクロールで続きを表示。',
     noLanguages: '「{{query}}」に一致する言語はありません',
@@ -2848,7 +2839,6 @@ export const settingsTranslations: Record<
     languagesPage: 'اللغات',
     languagesPageBody:
       'مع لغة واحدة، ينتظرها الإملاء. ومع أكثر من لغة، يكتشف اللغة التي تتحدث بها.',
-    languagesPageAuto: 'لم تختر أي لغة. يكتشف الإملاء اللغة التي تتحدث بها.',
     recommended: 'موصى به',
     languagesFooter: '{{count}} لغة، مرتبة أبجديًا. مرّر لعرض الباقي.',
     noLanguages: 'لا توجد لغات تطابق «{{query}}»',

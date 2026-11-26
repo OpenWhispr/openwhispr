@@ -22,11 +22,15 @@ export function initialLanguages(saved: string[] | undefined, preferred?: string
 }
 
 /**
- * The languages dictation is using now, as registry codes: Settings' single pick when one is
- * saved (an explicit 'auto' means none), else the onboarding list. Mirrors
- * getPreferredTranscriptionLanguages, keeping regions so the labels match. Empty = auto-detect.
+ * The languages dictation is using now, as registry codes: Settings' old single pick when one is
+ * saved, else the onboarding list. Mirrors getPreferredTranscriptionLanguages, keeping regions so
+ * the labels match. There is always at least one: with nothing saved (onboarding skipped, or an
+ * old 'auto' pick), it is the phone's language, which Settings then saves.
  */
 export function savedLanguages(saved: string[] | undefined, preferred?: string): string[] {
   const source = preferred ? (preferred === 'auto' ? [] : [preferred]) : (saved ?? []);
-  return [...new Set(source.map(matchLanguage).filter((code): code is string => code !== null))];
+  const picked = [
+    ...new Set(source.map(matchLanguage).filter((code): code is string => code !== null)),
+  ];
+  return picked.length ? picked : initialLanguages(undefined);
 }
