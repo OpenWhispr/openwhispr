@@ -101,9 +101,15 @@ function withPlatformNativeWind(config, options) {
     ...config,
     server: { ...config.server, enhanceMiddleware: undefined },
   };
-  const primary = withNativeWind(withoutMiddleware, options);
+  // Android compiles its own stylesheet input, whose @config names Android's Tailwind config.
+  const { androidInput, androidConfigPath, ...shared } = options;
+  const primary = withNativeWind(withoutMiddleware, {
+    ...shared,
+    input: androidInput,
+    configPath: androidConfigPath,
+  });
   const ios = withIosNativeWind(withoutMiddleware, {
-    ...options,
+    ...shared,
     disableTypeScriptGeneration: true,
   });
   return combineStyleConfigs(config, primary, ios);
