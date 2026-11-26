@@ -4,7 +4,7 @@ import { createSpeakerMatcher, cosineSimilarity } from '@/android/liveSpeakers/s
 import { createLiveSpeakers } from '@/android/liveSpeakers/liveSpeakers';
 import { applySpeakerPass, foldStraySpeakers } from '@/android/liveSpeakers/speakerPass';
 import { speakerRuns } from '@/android/providers/deepgram';
-import type { WebSocketLike } from '@/services/transcription/createRealtimeMeetingWs';
+import type { WebSocketLike } from '@/android/transcription/createRealtimeMeetingWs';
 
 const RATE = 24000;
 const BYTES_PER_MS = (RATE * 2) / 1000;

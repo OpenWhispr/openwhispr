@@ -9,7 +9,7 @@ jest.mock('../insights', () => ({
   recordInsight: jest.fn(),
   countSpokenWords: (text: string) => text.trim().split(/\s+/).length,
 }));
-jest.mock('@/lib/transcribeAndCleanup', () => ({ transcribeAndCleanup: jest.fn() }));
+jest.mock('@/android/dictation/transcribeAndCleanup', () => ({ transcribeAndCleanup: jest.fn() }));
 jest.mock('@/lib/inferenceRouting', () => ({
   snapshotTranscriptionJob: jest.fn(() => ({
     provider: 'local',
@@ -27,7 +27,7 @@ jest.mock('@/services/reasoning/ReasoningService', () =>
 jest.mock('@/android/reasoning/ReasoningService', () => ({
   ReasoningService: { processText: jest.fn() },
 }));
-jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
+jest.mock('@/android/transcription/LocalTranscriptionService', () => ({
   LocalTranscriptionService: { cancelTranscription: jest.fn(async () => undefined) },
 }));
 jest.mock('@/android/models', () => ({
@@ -52,7 +52,7 @@ import {
   applyHistoryRetention,
   ensureAndroidModels,
 } from '../pipeline';
-import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
+import { transcribeAndCleanup } from '@/android/dictation/transcribeAndCleanup';
 import { ReasoningService } from '@/android/reasoning/ReasoningService';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useTranscriptStore } from '@/store/useTranscriptStore';

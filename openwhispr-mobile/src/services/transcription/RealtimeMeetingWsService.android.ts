@@ -1,4 +1,4 @@
-import { createRealtimeMeetingWs } from './createRealtimeMeetingWs';
+import { createRealtimeMeetingWs } from '@/android/transcription/createRealtimeMeetingWs';
 import { createAndroidRealtimeRecovery } from '@/android/realtimeMeetingRecovery';
 import {
   addPcmStopListener,
@@ -10,7 +10,7 @@ export type {
   RealtimeMeetingDeps,
   RealtimeTransportCallbacks as RealtimeCallbacks,
   RealtimeTransportSession as RealtimeSession,
-} from './createRealtimeMeetingWs';
+} from '@/android/transcription/createRealtimeMeetingWs';
 export type { RealtimeUtterance } from './realtimeEvents';
 
 export const startRealtimeMeetingWs = createRealtimeMeetingWs((context) =>

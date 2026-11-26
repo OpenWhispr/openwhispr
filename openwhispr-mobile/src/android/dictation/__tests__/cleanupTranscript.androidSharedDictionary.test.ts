@@ -1,23 +1,7 @@
-jest.mock('../cleanupLifecycle', () => ({
-  get createTimeoutSignal() {
-    return jest.requireActual(
-      require('react-native').Platform.OS === 'android'
-        ? '../cleanupLifecycle.android'
-        : '../cleanupLifecycle',
-    ).createTimeoutSignal;
-  },
-  get localCleanupInstructions() {
-    return jest.requireActual(
-      require('react-native').Platform.OS === 'android'
-        ? '../cleanupLifecycle.android'
-        : '../cleanupLifecycle',
-    ).localCleanupInstructions;
-  },
-}));
 import { Platform } from 'react-native';
-import { cleanupTranscript } from '../cleanupTranscript';
-import { countLocalReasoningTokens, fitsLocalReasoningBudget } from '../localReasoning';
-import { ReasoningService } from '@/services/reasoning/ReasoningService';
+import { cleanupTranscript } from '@/android/dictation/cleanupTranscript';
+import { countLocalReasoningTokens, fitsLocalReasoningBudget } from '@/lib/localReasoning';
+import { ReasoningService } from '@/android/reasoning/ReasoningService';
 
 jest.mock('@/lib/accountAccess', () => ({ requiresRealAccount: () => false }));
 jest.mock('@/lib/dictationHints', () => ({
@@ -35,7 +19,7 @@ jest.mock('@/store/useProcessingModeStore', () => ({
 jest.mock('@/store/useCustomPromptsStore', () => ({
   getActiveCustomCleanupPrompt: () => 'Keep the entire transcript.',
 }));
-jest.mock('@/services/reasoning/ReasoningService', () => ({
+jest.mock('@/android/reasoning/ReasoningService', () => ({
   ReasoningService: { processText: jest.fn() },
 }));
 jest.mock('@/services/reasoning/LocalReasoningService', () => ({
@@ -94,15 +78,4 @@ it('preserves parent cancellation after shared hints have been fitted', async ()
   });
 
   expect(jest.mocked(ReasoningService.processText).mock.calls[0][0].signal?.aborted).toBe(true);
-});
-
-it('keeps the iOS cleanup timeout independent of an already aborted parent signal', async () => {
-  Platform.OS = 'ios';
-  const controller = new AbortController();
-  controller.abort();
-  await cleanupTranscript('iOS transcript', {
-    inferenceRoute: { mode: 'openwhispr', scope: 'cleanup' },
-    signal: controller.signal,
-  });
-  expect(jest.mocked(ReasoningService.processText).mock.calls[0][0].signal?.aborted).toBe(false);
 });

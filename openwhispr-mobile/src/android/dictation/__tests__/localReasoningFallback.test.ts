@@ -3,7 +3,7 @@ import arabic from '@/locales/ar/translation.json';
 import { Alert, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { useConfigStore } from '@/store/useConfigStore';
-import { promptLocalReasoningFallback } from '../localReasoningFallback';
+import { promptLocalReasoningFallback } from '@/android/dictation/localReasoningFallback';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 jest.mock('@/lib/localReasoning', () => ({

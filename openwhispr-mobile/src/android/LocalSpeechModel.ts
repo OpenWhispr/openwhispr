@@ -2,7 +2,7 @@ import { AndroidDictation } from '../../modules/android-dictation/src';
 import { modelPath, modelReady } from './models';
 import { LocalTextModel } from './LocalTextModel';
 import { withAndroidInference } from './inferenceQueue';
-import { tokenTimingsToWhisperSegments } from '@/services/transcription/parakeetSegments';
+import { tokenTimingsToWhisperSegments } from '@/android/transcription/parakeetSegments';
 import type { TranscriptionResponse } from '@/types';
 import i18n from './strings';
 import Constants from 'expo-constants';

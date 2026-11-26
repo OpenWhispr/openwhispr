@@ -28,7 +28,7 @@ import { createRealtimeEventReducer } from '../services/transcription/realtimeEv
 import type {
   RealtimeTransportCallbacks as RealtimeCallbacks,
   RealtimeTransportSession as BaseRealtimeSession,
-} from '../services/transcription/createRealtimeMeetingWs';
+} from '@/android/transcription/createRealtimeMeetingWs';
 import {
   PcmRingBuffer,
   applyLegOffset,
@@ -42,7 +42,7 @@ import {
   CONNECT_TIMEOUT_MS,
 } from '../services/transcription/realtimeReconnect';
 
-export type { RealtimeTransportCallbacks as RealtimeCallbacks } from '../services/transcription/createRealtimeMeetingWs';
+export type { RealtimeTransportCallbacks as RealtimeCallbacks } from '@/android/transcription/createRealtimeMeetingWs';
 export type { RealtimeUtterance } from '../services/transcription/realtimeEvents';
 
 export type RealtimeSession = Omit<BaseRealtimeSession, 'stop'> & { stop(): Promise<void> };

@@ -1,6 +1,6 @@
 import { useDictionaryStore, type DictionaryEntry } from '@/store/useDictionaryStore';
 import { useSnippetsStore } from '@/store/useSnippetsStore';
-import type { Snippet } from '@/lib/snippets';
+import type { Snippet } from '@/android/dictation/snippets';
 import { safeHaptics } from '@/lib/utils';
 import { showToast } from '../settings/kit';
 import { allowWords } from './learned';

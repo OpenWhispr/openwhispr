@@ -42,7 +42,7 @@ export const androidMeetingLifecycle: MeetingLifecycle = {
       context?.checkpoint();
       get().transitionStatus(noteId, 'transcribing');
       const { TranscriptionService } =
-        require('@/services/transcription/TranscriptionService') as typeof import('@/services/transcription/TranscriptionService');
+        require('@/android/transcription/TranscriptionService') as typeof import('@/android/transcription/TranscriptionService');
       const result = await TranscriptionService.transcribe({
         audioUri: note.sourceFile,
         provider: 'cloud',

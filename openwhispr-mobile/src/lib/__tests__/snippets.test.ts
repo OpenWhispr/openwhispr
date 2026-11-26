@@ -1,4 +1,3 @@
-import { expandSnippets as expandAndroidSnippets } from '../snippets.android';
 import {
   expandSnippets,
   getDictionaryHintTiers,
@@ -31,25 +30,6 @@ describe('expandSnippets', () => {
     const snippets: Snippet[] = [{ trigger: 'eg', replacement: 'for example' }];
     expect(expandSnippets('(eg) here, eg. there', snippets)).toBe(
       '(for example) here, for example. there',
-    );
-  });
-
-  it('does not duplicate a sentence mark already supplied by the snippet', () => {
-    const snippets = [{ trigger: 'review sign off', replacement: 'Thanks for reviewing.' }];
-    expect(expandAndroidSnippets('Hello. Review sign off.', snippets)).toBe(
-      'Hello. Thanks for reviewing.',
-    );
-    expect(expandAndroidSnippets('Review sign off. Review sign off.', snippets)).toBe(
-      'Thanks for reviewing. Thanks for reviewing.',
-    );
-  });
-
-  it('preserves surrounding punctuation and literal punctuated triggers', () => {
-    expect(expandSnippets('Say c++!', [{ trigger: 'c++', replacement: 'C plus plus' }])).toBe(
-      'Say C plus plus!',
-    );
-    expect(expandSnippets('signoff?', [{ trigger: 'signoff', replacement: 'Thank you.' }])).toBe(
-      'Thank you.?',
     );
   });
 

@@ -8,7 +8,7 @@ import { safeHaptics } from '@/lib/utils';
 import { useDictionaryStore, type DictionaryEntry } from '@/store/useDictionaryStore';
 import { useSnippetsStore } from '@/store/useSnippetsStore';
 import { Field } from './Field';
-import type { Snippet } from '@/lib/snippets';
+import type { Snippet } from '@/android/dictation/snippets';
 import { createSnippetCloseHandler } from '@/lib/snippetClose';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { useHome } from '../home/kit';

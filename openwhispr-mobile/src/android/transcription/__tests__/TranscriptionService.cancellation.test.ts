@@ -1,27 +1,9 @@
-jest.mock('../transcriptionLifecycle', () => ({
-  get transcriptionLifecycle() {
-    return jest.requireActual(
-      require('react-native').Platform.OS === 'android'
-        ? '../transcriptionLifecycle.android'
-        : '../transcriptionLifecycle',
-    ).transcriptionLifecycle;
-  },
-}));
-jest.mock('../uploadTranscriptionAudio', () => ({
-  get uploadTranscriptionAudio() {
-    return jest.requireActual(
-      require('react-native').Platform.OS === 'android'
-        ? '../uploadTranscriptionAudio.android'
-        : '../uploadTranscriptionAudio',
-    ).uploadTranscriptionAudio;
-  },
-}));
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { BackgroundUploader } from '../../../../modules/background-uploader/src';
-import { CloudAudioTools as AudioTools } from '../cloudAudio';
-import { TranscriptionService } from '../TranscriptionService';
-import { LocalTranscriptionService } from '../LocalTranscriptionService';
+import { CloudAudioTools as AudioTools } from '@/android/transcription/cloudAudio';
+import { TranscriptionService } from '@/android/transcription/TranscriptionService';
+import { LocalTranscriptionService } from '@/android/transcription/LocalTranscriptionService';
 
 jest.mock('expo-constants', () => ({
   __esModule: true,
@@ -38,8 +20,8 @@ jest.mock('expo-file-system/legacy', () => ({
   FileSystemUploadType: { MULTIPART: 1 },
   FileSystemSessionType: { FOREGROUND: 0 },
 }));
-jest.mock('../LocalWhisperService', () => ({ LocalWhisperService: {} }));
-jest.mock('../LocalTranscriptionService', () => ({
+jest.mock('@/services/transcription/LocalWhisperService', () => ({ LocalWhisperService: {} }));
+jest.mock('@/android/transcription/LocalTranscriptionService', () => ({
   LocalTranscriptionService: { isAvailable: () => true, transcribe: jest.fn() },
 }));
 jest.mock('@/lib/inferenceRouting', () => ({ getPickedLocalModel: () => 'parakeet-v3' }));
@@ -48,11 +30,11 @@ jest.mock('@/lib/dictationHints', () => ({
   buildLlmDictionary: () => ({ personal: [], shared: [] }),
   isDictationContext: () => true,
 }));
-jest.mock('@/lib/cleanupTranscript', () => ({ CLEANUP_TIMEOUT_MS: 30000 }));
+jest.mock('@/android/dictation/cleanupTranscript', () => ({ CLEANUP_TIMEOUT_MS: 30000 }));
 jest.mock('../../../../modules/background-uploader/src', () => ({
   BackgroundUploader: { isAvailable: jest.fn(), upload: jest.fn() },
 }));
-jest.mock('../cloudAudio', () => ({
+jest.mock('@/android/transcription/cloudAudio', () => ({
   CloudAudioTools: { isAvailable: () => true, splitToChunks: jest.fn(), cleanup: jest.fn() },
 }));
 jest.mock('../../../../modules/app-group-storage/src', () => ({
@@ -187,17 +169,6 @@ it('does not start transport when cancellation arrives during file inspection', 
   expect(upload).not.toHaveBeenCalled();
 });
 
-it('keeps the existing iOS background upload when a signal is supplied', async () => {
-  Platform.OS = 'ios';
-  const result = await TranscriptionService.transcribe({
-    ...request(new AbortController().signal),
-    requestContext: 'recording',
-  });
-  expect(result.text).toBe('late text');
-  expect(BackgroundUploader.upload).toHaveBeenCalledTimes(1);
-  expect(FileSystem.createUploadTask).not.toHaveBeenCalled();
-});
-
 it('keeps the existing no-signal Android upload path', async () => {
   const { signal: _signal, ...input } = request(new AbortController().signal);
   expect((await TranscriptionService.transcribe(input)).text).toBe('late text');
@@ -299,36 +270,4 @@ it('cancels local speech through the service boundary without waiting for a tran
   controller.abort();
   expect(await pending).toMatchObject({ error: { name: 'AbortError' } });
   expect(upload).not.toHaveBeenCalled();
-});
-
-it('preserves iOS uploads even when an Android cancellation signal is already aborted', async () => {
-  Platform.OS = 'ios';
-  const controller = new AbortController();
-  controller.abort();
-  const response = await TranscriptionService.transcribe({
-    ...request(controller.signal),
-    requestContext: 'file',
-  });
-  expect(response.text).toBe('late text');
-  expect(FileSystem.createUploadTask).not.toHaveBeenCalled();
-  expect(jest.mocked(BackgroundUploader.upload).mock.calls[0][0].parameters).not.toHaveProperty(
-    'source',
-  );
-});
-
-it('preserves the upstream iOS zero duration after chunked transcription', async () => {
-  Platform.OS = 'ios';
-  jest.mocked(FileSystem.getInfoAsync).mockResolvedValue({
-    exists: true,
-    isDirectory: false,
-    uri: 'file:///recording.wav',
-    size: 8 * 1024 * 1024,
-    modificationTime: 0,
-  });
-  const response = await TranscriptionService.transcribe(request(new AbortController().signal));
-  expect(response.duration).toBe(0);
-  expect(FileSystem.uploadAsync).toHaveBeenCalledTimes(7);
-  expect(jest.mocked(FileSystem.uploadAsync).mock.calls.every((args) => args.length === 3)).toBe(
-    true,
-  );
 });

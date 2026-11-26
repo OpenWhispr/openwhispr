@@ -8,7 +8,7 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { SegmentedControl } from '@/components/ui/SegmentedControl.android';
 import { safeHaptics } from '@/lib/utils';
 import { sharedWordKey } from '@/lib/sharedDictionaryHints';
-import type { Snippet } from '@/lib/snippets';
+import type { Snippet } from '@/android/dictation/snippets';
 import { useDictionaryStore, type DictionaryEntry } from '@/store/useDictionaryStore';
 import { useSharedDictionaryStore } from '@/store/useSharedDictionaryStore';
 import { useSnippetsStore } from '@/store/useSnippetsStore';

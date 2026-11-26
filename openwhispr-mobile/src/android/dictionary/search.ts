@@ -1,5 +1,5 @@
 import type { DictionaryEntry } from '@/store/useDictionaryStore';
-import type { Snippet } from '@/lib/snippets';
+import type { Snippet } from '@/android/dictation/snippets';
 
 function distance(a: string, b: string): number {
   if (a === b) return 0;
