@@ -75,10 +75,6 @@ function decodeBitmap(dib) {
   return { width, pixels };
 }
 
-function decodeEntry(data) {
-  return data.subarray(0, 8).equals(PNG_SIGNATURE) ? decodePng(data) : decodeBitmap(data);
-}
-
 // Area-averages a square RGBA image down to `size`, with colour weighted by alpha so transparent
 // pixels count the same whatever colour they carry.
 function premultipliedAt({ width, pixels }, size) {
@@ -118,14 +114,15 @@ test("icon.ico has entries from 16 to 256 px, including 72 and 96 px for desktop
   }
 });
 
-// Entries under 48 px are left out, since they may be hand-tuned. The limit of 4 sits between
-// Pillow's and ffmpeg's Lanczos, bicubic, bilinear and area downscales of icon.png (up to about
-// 2.2) and the blurry ICO this replaced (7.1 and up). macOS sips, whose downscale comes out
-// slightly smaller, scores 5.5 at 48 px and fails although it looks sharp.
+// Entries under 48 px are left out, since they may be hand-tuned. This measures how closely an
+// entry follows icon.png, not how sharp it is. The limit of 4 sits between Pillow's and ffmpeg's
+// Lanczos, bicubic, bilinear and area downscales of icon.png (up to about 2.2) and the blurry ICO
+// this replaced (7.1 and up), so a nearest-neighbour downscale still passes, and a sharp macOS
+// sips rebuild, whose art comes out slightly smaller, fails at 48 px (5.5).
 test("every icon.ico entry of 48 px and up matches icon.png scaled to its size", () => {
   const art = decodePng(fs.readFileSync(path.join(ASSETS, "icon.png")));
   for (const { size, data } of iconEntries.filter((entry) => entry.size >= 48)) {
-    const entry = decodeEntry(data);
+    const entry = data.subarray(0, 8).equals(PNG_SIGNATURE) ? decodePng(data) : decodeBitmap(data);
     assert.equal(entry.width, size);
     const difference = meanDifference(premultipliedAt(entry, size), premultipliedAt(art, size));
     assert.ok(difference < 4, `${size} px entry differs from icon.png by ${difference.toFixed(2)}`);
