@@ -183,6 +183,8 @@ public class LivePCMStreamingModule: Module {
   // Runs on captureQueue. Builds a fresh engine, converter and tap; a restart
   // needs a new converter because the input format may have changed with the
   // route. Leaves `isStreaming` alone and never deactivates the session.
+  // Its callers have just found `isStreaming` true on this queue, the only
+  // queue that clears it, so it is still true here.
   private func startEngine(sampleRate: Double, reason: String?) throws {
     let session = AVAudioSession.sharedInstance()
     // .record without Bluetooth options keeps input on the built-in mic even
@@ -218,10 +220,6 @@ public class LivePCMStreamingModule: Module {
     ).flatMap { AVAudioConverter(from: inputFormat, to: $0) }
 
     stateLock.lock()
-    guard isStreaming else {
-      stateLock.unlock()
-      return
-    }
     audioEngine = engine
     converter = audioConverter
     outputFormat = targetFormat
@@ -382,12 +380,11 @@ public class LivePCMStreamingModule: Module {
     // reach the tap; they must not read as audio coming back.
     engineGeneration += 1
     generationReason = nil
-    let capturedMs = currentCapturedMs()
     stateLock.unlock()
 
     if changed {
       requestBackgroundTime(newInterruption: true)
-      sendCaptureState(.interrupted, reason: "interruption", capturedMs: capturedMs)
+      sendCaptureState(.interrupted, reason: "interruption")
     }
   }
 
@@ -418,7 +415,6 @@ public class LivePCMStreamingModule: Module {
     let before = health.state
     let action = health.tick(atMs: Self.nowMs())
     let after = health.state
-    let capturedMs = currentCapturedMs()
     stateLock.unlock()
 
     let stalled = before == .capturing && after == .interrupted
@@ -426,7 +422,7 @@ public class LivePCMStreamingModule: Module {
     requestBackgroundTime(newInterruption: stalled)
     guard action == .restart else { return }
     if stalled {
-      sendCaptureState(.interrupted, reason: "stalled", capturedMs: capturedMs)
+      sendCaptureState(.interrupted, reason: "stalled")
     }
     restartCapture(reason: "watchdog")
   }
@@ -492,17 +488,11 @@ public class LivePCMStreamingModule: Module {
     NSLog("[LivePCMStreaming] background time released")
   }
 
-  private func sendCaptureState(_ state: CaptureHealthState, reason: String, capturedMs: Int) {
+  private func sendCaptureState(_ state: CaptureHealthState, reason: String) {
     sendEvent("capture-state", [
       "state": state.rawValue,
       "reason": reason,
-      "capturedMs": capturedMs,
     ])
-  }
-
-  // Caller holds stateLock.
-  private func currentCapturedMs() -> Int {
-    return Int(Double(emittedFrames) / outputSampleRate * 1000)
   }
 
   private static func nowMs() -> Int64 {
@@ -555,7 +545,6 @@ public class LivePCMStreamingModule: Module {
     emittedFrames += frames
     let resumed = health.frameArrived(atMs: Self.nowMs())
     let resumeReason = generationReason
-    let capturedMs = currentCapturedMs()
     stateLock.unlock()
 
     if let recordingPcm { writer?.append(recordingPcm) }
@@ -569,7 +558,7 @@ public class LivePCMStreamingModule: Module {
       requestBackgroundTime()
     }
     if resumed, let resumeReason {
-      sendCaptureState(.capturing, reason: resumeReason, capturedMs: capturedMs)
+      sendCaptureState(.capturing, reason: resumeReason)
     }
   }
 

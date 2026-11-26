@@ -5,7 +5,7 @@ import Foundation
 /// mic, no handoff into the app.
 extension DirectDictationTests {
   static func testLease() {
-    leaseSharedVectors()
+    leaseVectors()
     leaseReaderReadsTheDecimalString()
     leaseDirectCaptureRefusedWhileHeld()
     leaseDirectCaptureAllowedOnceStale()
@@ -20,11 +20,8 @@ extension DirectDictationTests {
     return (UserDefaults(suiteName: name)!, name)
   }
 
-  /// The same vectors as the app's copy in
-  /// modules/app-group-storage/tests/CaptureLeasePolicyTests.swift (heartbeatIsHeldOnlyWhileFresh;
-  /// keep the two lists identical),
-  /// so the keyboard and the app can never disagree on whether a meeting holds the microphone.
-  static func leaseSharedVectors() {
+  /// Whether a stored heartbeat holds the microphone: fresh, stale, from the future, or corrupt.
+  static func leaseVectors() {
     let now: Int64 = 1_800_000_000_000
     expect(MeetingCaptureLease.staleAfterMs, 15_000, "lease vectors: stale after 15 s")
     expect(MeetingCaptureLease.isHeld(heartbeatMs: nil, nowMs: now), false, "lease vectors: no heartbeat is free")

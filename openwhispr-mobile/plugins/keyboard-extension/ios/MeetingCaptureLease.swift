@@ -18,9 +18,9 @@ enum KeyboardMicTapRoute: Equatable {
 /// meeting ends. A crash can't remove it, so an old heartbeat counts as free; so does one from the
 /// future, since a clock moved back would otherwise hold the keyboard's mic off until it caught up.
 ///
-/// `isHeld` is a copy of `CaptureLeaseHeartbeat.isHeld` in
-/// modules/app-group-storage/ios/CaptureLeasePolicy.swift: the keyboard target is built only from
-/// this folder. tests/direct/LeaseTests.swift pins both to the same vectors, so change them together.
+/// The app only writes the heartbeat (modules/app-group-storage/ios/AppGroupStorageModule.swift), so
+/// this is the one copy of the rule, pinned by tests/direct/LeaseTests.swift. Change the key or the
+/// 5-second interval there together with this file.
 enum MeetingCaptureLease {
   static let heartbeatKey = "capture_lease_heartbeat_ms"
   static let staleAfterMs: Int64 = 15_000

@@ -1113,11 +1113,10 @@ describe('startRealtimeMeetingWs — stop finishes the last turn', () => {
     const listener = calls[calls.length - 1][0] as (event: {
       state: 'capturing' | 'interrupted';
       reason: string;
-      capturedMs: number;
     }) => void;
-    listener({ state: 'interrupted', reason: 'interruption', capturedMs: 1000 });
+    listener({ state: 'interrupted', reason: 'interruption' });
     expect(onCaptureState).toHaveBeenLastCalledWith({ capturing: false, reason: 'interruption' });
-    listener({ state: 'capturing', reason: 'interruptionEnded', capturedMs: 1000 });
+    listener({ state: 'capturing', reason: 'interruptionEnded' });
     expect(onCaptureState).toHaveBeenLastCalledWith({
       capturing: true,
       reason: 'interruptionEnded',

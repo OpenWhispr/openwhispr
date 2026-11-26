@@ -66,6 +66,8 @@ public class AppGroupStorageModule: Module {
   private var captureLease = CaptureLeasePolicy()
   // Published to the App Group while the lease is held, so the keyboard
   // extension (another process) leaves the microphone to the meeting. Main only.
+  // The keyboard reads it (plugins/keyboard-extension/ios/MeetingCaptureLease.swift)
+  // and counts one older than 15 s as free, so the interval stays well under that.
   private var captureLeaseHeartbeatTimer: Timer?
   private let captureLeaseHeartbeatKey = "capture_lease_heartbeat_ms"
   private let captureLeaseHeartbeatIntervalSeconds: TimeInterval = 5.0
@@ -132,9 +134,7 @@ public class AppGroupStorageModule: Module {
     OnCreate {
       self.initializeSharedState()
       // A crash leaves the last heartbeat behind; a fresh module holds no lease.
-      if !self.isCaptureLeaseHeld() {
-        self.removeCaptureLeaseHeartbeat()
-      }
+      self.removeCaptureLeaseHeartbeat()
       self.addDarwinStartObserver()
       self.addDarwinStatusObserver()
       self.addDarwinDictationModeObserver()

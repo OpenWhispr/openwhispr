@@ -21,8 +21,6 @@ export interface CaptureStateEvent {
   state: 'capturing' | 'interrupted';
   /** 'interruption' | 'stalled' | 'interruptionEnded' | 'configurationChange' | 'mediaServicesReset' | 'watchdog' */
   reason: string;
-  /** Audio captured so far, in ms. */
-  capturedMs: number;
 }
 
 export interface StartOptions {

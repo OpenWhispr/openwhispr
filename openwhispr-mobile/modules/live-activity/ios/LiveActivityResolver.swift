@@ -58,8 +58,10 @@ public enum LiveActivityResolver {
     return nil
   }
 
-  /// Without push updates the stale date can never move later, so a meeting is
-  /// stale only at ActivityKit's cap.
+  /// Without push updates nothing can move the stale date while the app is
+  /// suspended, so a meeting is stale only at ActivityKit's cap, counted from
+  /// `startedAt`. Each resume backdates `startedAt` by captured time only, so the
+  /// stale date moves later by the length of each pause.
   public static func staleDate(for state: RecordingActivityContentState, now: Date) -> Date {
     state.mode == .meeting
       ? state.startedAt.addingTimeInterval(RecordingActivityContentState.maxActivityDuration)
