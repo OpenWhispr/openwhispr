@@ -1,3 +1,11 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/store/useChatStore', () => jest.requireActual('@/android/shared/store/useChatStore'));
+jest.mock('@/store/useSharedDictionaryStore', () =>
+  jest.requireActual('@/android/shared/store/useSharedDictionaryStore'),
+);
+jest.mock('@/sync/sharedDictionaryState', () =>
+  jest.requireActual('@/android/shared/sync/sharedDictionaryState'),
+);
 // Shared files reach Android's copies through these paths, as Metro's re-exports do.
 jest.mock('@/services/transcription/TranscriptionService', () =>
   jest.requireActual('@/android/transcription/TranscriptionService'),
@@ -56,7 +64,13 @@ jest.mock('../../../modules/background-uploader/src', () => ({
 jest.mock('../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
 }));
+jest.mock('@/android/shared/modules/app-group-storage/index', () =>
+  jest.requireMock('../../../modules/app-group-storage/src'),
+);
 jest.mock('../../../modules/audio-tools/src', () => ({ AudioTools: {} }));
+jest.mock('@/android/shared/modules/audio-tools/index', () =>
+  jest.requireMock('../../../modules/audio-tools/src'),
+);
 jest.mock('@/android/dictation/transcribeAndCleanup', () => ({ transcribeAndCleanup: jest.fn() }));
 jest.mock('@/lib/appsflyer', () => ({ logTranscriptionCompleted: jest.fn() }));
 jest.mock('@/android/lib/appsflyer', () => jest.requireMock('@/lib/appsflyer'));
@@ -155,13 +169,22 @@ jest.mock('@/lib/notes/noteShareTokens', () => ({
   claimNoteShareTokens: async () => {},
   clearNoteShareTokens: async () => {},
 }));
+jest.mock('@/android/shared/lib/notes/noteShareTokens', () =>
+  jest.requireMock('@/lib/notes/noteShareTokens'),
+);
 jest.mock('@/services/providers/ProviderCredentials', () => ({
   clearProviderCredentials: async () => {},
 }));
 jest.mock('@/services/agent/AgentComposerService', () => ({ clearAllSessions: jest.fn() }));
+jest.mock('@/android/shared/services/agent/AgentComposerService', () =>
+  jest.requireMock('@/services/agent/AgentComposerService'),
+);
 jest.mock('@/lib/chat/runChatTurn', () => ({
   runChatTurn: (...args: unknown[]) => mockRunChatTurn(...args),
 }));
+jest.mock('@/android/shared/lib/chat/runChatTurn', () =>
+  jest.requireMock('@/lib/chat/runChatTurn'),
+);
 jest.mock('@/store/useUsageStore', () => ({
   useUsageStore: { getState: () => ({ reset: jest.fn() }) },
 }));
@@ -183,9 +206,13 @@ jest.mock('@/sync/privateNoteDeletion', () => ({
   pushPrivateNoteDeletes: async () => {},
   clearPrivateNoteDeletionQueue: jest.fn(),
 }));
+jest.mock('@/android/shared/sync/privateNoteDeletion', () =>
+  jest.requireMock('@/sync/privateNoteDeletion'),
+);
 jest.mock('@/sync/syncSpaces', () => ({
   syncSpaces: async () => ({ capable: false, activeSpaces: [] }),
 }));
+jest.mock('@/android/shared/sync/syncSpaces', () => jest.requireMock('@/sync/syncSpaces'));
 
 beforeEach(() => {
   jest.resetModules();

@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { activateAccountDatabase, blockAccountDatabase } from './database';
 import { runMigrations } from './migrations';
 import { openApplicationDatabase } from '@/android/db/connections';
-import { randomUUID } from '@/lib/uuid';
+import { randomUUID } from '@/android/shared/lib/uuid';
 
 const MANIFEST_KEY = 'android.local-accounts.v1';
 const LEGACY_DATABASE = 'openwhispr_notes.db';
@@ -209,7 +209,7 @@ export async function eraseAccountData(userId: string): Promise<void> {
     });
     await Promise.all(audio.map((uri) => FileSystem.deleteAsync(uri, { idempotent: true })));
     const { StorageService } =
-      require('@/services/storage/StorageService.android') as typeof import('@/services/storage/StorageService.android');
+      require('@/android/shared/services/storage/StorageService') as typeof import('@/android/shared/services/storage/StorageService');
     await StorageService.eraseTranscriptOwner(`history:${account.audioNamespace || 'original'}`);
     const latest = readManifest();
     const erased = latest.accounts.find((entry) => entry.owner === account.owner);
@@ -247,12 +247,12 @@ export function prepareAccountData(user: User): void {
     // Abort old requests and drop visible messages before the database changes; saved chats
     // stay with the account's notes and are available when that account returns.
     const { useChatStore } =
-      require('@/store/useChatStore') as typeof import('@/store/useChatStore');
+      require('@/android/shared/store/useChatStore') as typeof import('@/android/shared/store/useChatStore');
     useChatStore.getState().reset();
     const { useBubbleResult } = require('./bubbleResult') as typeof import('./bubbleResult');
     useBubbleResult.getState().dismiss();
     const { useSharedDictionaryStore } =
-      require('@/store/useSharedDictionaryStore') as typeof import('@/store/useSharedDictionaryStore');
+      require('@/android/shared/store/useSharedDictionaryStore') as typeof import('@/android/shared/store/useSharedDictionaryStore');
     // Invalidate pending loads before changing databases, including failed switches.
     useSharedDictionaryStore.getState().reset();
     selectAccountData(user);

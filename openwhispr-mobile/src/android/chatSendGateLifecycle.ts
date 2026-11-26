@@ -1,8 +1,8 @@
 import { confirmCloudOnce } from '@/android/lib/alerts';
-import { isChatEnabled } from '@/lib/dictationAgent';
+import { isChatEnabled } from '@/android/shared/lib/dictationAgent';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import type {
   ChatSendGateLifecycle,
   ChatSendGateOptions,

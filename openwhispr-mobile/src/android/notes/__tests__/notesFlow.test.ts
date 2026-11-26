@@ -5,6 +5,7 @@ const mockShowToast = jest.fn();
 
 jest.mock('expo-router', () => ({ router: { push: (...args: unknown[]) => mockPush(...args) } }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));
+jest.mock('@/android/shared/lib/utils', () => jest.requireMock('@/lib/utils'));
 jest.mock('@/store/useNotesStore', () => ({
   useNotesStore: {
     getState: () => ({ deleteNote: mockDeleteNote, createNote: mockCreateNote }),

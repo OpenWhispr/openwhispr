@@ -1,11 +1,11 @@
-import { DEFAULT_CLEANUP_PROMPT } from '@/config/prompts/registry';
+import { DEFAULT_CLEANUP_PROMPT } from '@/android/shared/config/prompts/registry';
 import languageRegistry from '@/config/languageRegistry.json';
 import {
   APP_CATEGORY_INSTRUCTIONS,
   TONE_INSTRUCTIONS,
   TONE_PRIORITY_INSTRUCTION,
 } from '@/android/reasoning/composerPrompt';
-import { sharedDictionaryHint } from '@/lib/sharedDictionaryHints';
+import { sharedDictionaryHint } from '@/android/shared/lib/sharedDictionaryHints';
 import type { ReasoningRequest } from '@/android/types';
 
 export interface ProviderPrompt {

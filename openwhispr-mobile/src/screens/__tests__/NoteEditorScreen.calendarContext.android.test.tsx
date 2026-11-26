@@ -1,3 +1,11 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/lib/diarization/transcriptDisplay', () =>
+  jest.requireActual('@/android/shared/lib/diarization/transcriptDisplay'),
+);
+jest.mock('@/lib/notes/meetingNotesInput', () =>
+  jest.requireActual('@/android/shared/lib/notes/meetingNotesInput'),
+);
+jest.mock('@/lib/utils', () => jest.requireActual('@/android/shared/lib/utils'));
 // Match Metro's entry selection when one test file changes platforms.
 // Dictionary's long-press fix has its own tests (src/android/dictionary/__tests__).
 jest.mock('@/android/dictionary/FixWord', () => ({
@@ -36,7 +44,7 @@ import { generateNoteTitle } from '@/utils/generateTitle';
 import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
 import { formatTranscriptForExport } from '@/lib/diarization/transcriptDisplay';
 import { makeContentHash } from '@/lib/utils';
-import { clearLocalReasoningReadinessCache } from '@/lib/localReasoning';
+import { clearLocalReasoningReadinessCache } from '@/android/shared/lib/localReasoning';
 import { extractCorrectionPairs } from '@/android/dictionary/correctionPairs';
 import { learnCorrections } from '@/android/dictionary/learned';
 import { showLearnedToast } from '@/android/dictionary/learnedToast';
@@ -203,6 +211,9 @@ jest.mock('@/store/useActionsStore', () => ({
   useActionsStore: (selector: (state: typeof mockActionsState) => unknown) =>
     selector(mockActionsState),
 }));
+jest.mock('@/android/shared/store/useActionsStore', () =>
+  jest.requireMock('@/store/useActionsStore'),
+);
 
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: Object.assign(
@@ -219,6 +230,9 @@ jest.mock('@/store/useProcessingModeStore', () => ({
     { getState: () => mockProcessingModeState },
   ),
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: Object.assign(
@@ -247,6 +261,7 @@ jest.mock('@/lib/dictationHints', () => ({
     ...mockSharedDictionaryTiers,
   ],
 }));
+jest.mock('@/android/shared/lib/dictationHints', () => jest.requireMock('@/lib/dictationHints'));
 
 jest.mock('@/store/useUsageStore', () => {
   const usageState = { usage: null, load: jest.fn(async () => ({ status: 'skipped' })) };
@@ -261,6 +276,9 @@ let mockKeyboardHeight = 0;
 jest.mock('@/hooks/useKeyboardHeight', () => ({
   useKeyboardHeight: () => mockKeyboardHeight,
 }));
+jest.mock('@/android/shared/hooks/useKeyboardHeight', () =>
+  jest.requireMock('@/hooks/useKeyboardHeight'),
+);
 
 jest.mock('@/services/reasoning/ReasoningService', () => ({
   ReasoningService: {
@@ -277,6 +295,10 @@ let mockAppleAvailability = 'available';
 jest.mock('@/lib/appleLLM', () => ({
   AppleLLM: { getAvailability: jest.fn(async () => ({ status: mockAppleAvailability })) },
 }));
+jest.mock('@/android/shared/lib/appleLLM', () => jest.requireMock('@/lib/appleLLM'));
+// These cases were written against the shared readiness (driven by the AppleLLM mock above), as jest
+// resolved it on beta; keep that, so they check the screen's routing, not Android's model readiness.
+jest.mock('@/android/shared/lib/localReasoning', () => jest.requireActual('@/lib/localReasoning'));
 
 const mockRegisterSuperwallGate = jest.fn(async ({ feature }: { feature?: () => void }) => {
   feature?.();
@@ -285,6 +307,9 @@ const mockRegisterSuperwallGate = jest.fn(async ({ feature }: { feature?: () => 
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({ register: mockRegisterSuperwallGate }),
 }));
+jest.mock('@/android/shared/hooks/useSuperwallGate', () =>
+  jest.requireMock('@/hooks/useSuperwallGate'),
+);
 
 jest.mock('@/utils/generateTitle', () => ({
   generateNoteTitle: jest.fn(),
@@ -297,6 +322,7 @@ jest.mock('@/android/utils/generateTitle', () => ({
 jest.mock('@/lib/privateMode', () => ({
   promptLocalModelFallback: jest.fn(),
 }));
+jest.mock('@/android/shared/lib/privateMode', () => jest.requireMock('@/lib/privateMode'));
 
 jest.mock('@/android/dictionary/correctionPairs', () => ({
   extractCorrectionPairs: jest.fn(() => []),
@@ -327,6 +353,9 @@ jest.mock('@/components/ui/TabScreenHeader', () => ({
       );
     })(),
 }));
+jest.mock('@/android/shared/components/ui/TabScreenHeader', () =>
+  jest.requireMock('@/components/ui/TabScreenHeader'),
+);
 
 jest.mock('@/components/ui/Text', () => ({
   Text: ({ children, ...props }: { children?: React.ReactNode }) => {
@@ -348,6 +377,9 @@ jest.mock('@/components/ui/GlassIconButton', () => ({
       return <MockView>{children}</MockView>;
     })(),
 }));
+jest.mock('@/android/shared/components/ui/GlassIconButton', () =>
+  jest.requireMock('@/components/ui/GlassIconButton'),
+);
 
 jest.mock('@/components/ui/SystemIcon', () => ({
   SystemIcon: () => null,
@@ -455,19 +487,29 @@ jest.mock('@/data', () => ({
     return mockNotesRepository;
   },
 }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 let mockCalendarEvents: unknown[] = [];
 jest.mock('@/data/calendarRepository', () => ({
   calendarRepository: { getUpcomingEvents: () => mockCalendarEvents },
 }));
+jest.mock('@/android/shared/data/calendarRepository', () =>
+  jest.requireMock('@/data/calendarRepository'),
+);
 let mockWorkspacePeople: { type: string; email: string; name: string }[] = [];
 jest.mock('@/data/remote/noteSharingApi', () => ({
   searchNoteAccessPrincipals: jest.fn(async () => ({ suggestions: mockWorkspacePeople })),
 }));
+jest.mock('@/android/shared/data/remote/noteSharingApi', () =>
+  jest.requireMock('@/data/remote/noteSharingApi'),
+);
 let mockCalendarAccounts: unknown[] = [];
 jest.mock('@/store/useGoogleCalendarStore', () => ({
   useGoogleCalendarStore: (selector: (state: unknown) => unknown) =>
     selector({ accounts: mockCalendarAccounts, load: async () => undefined }),
 }));
+jest.mock('@/android/shared/store/useGoogleCalendarStore', () =>
+  jest.requireMock('@/store/useGoogleCalendarStore'),
+);
 
 /*
  * Keep the mocks above self-contained because Jest hoists mock factories before

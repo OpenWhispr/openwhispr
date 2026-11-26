@@ -26,6 +26,7 @@ jest.mock('react-native-reanimated', () => ({
   withTiming: (value: number) => value,
 }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));
+jest.mock('@/android/shared/lib/utils', () => jest.requireMock('@/lib/utils'));
 jest.mock('@/components/ui/SwipeableCard', () => ({
   SwipeableCard: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -51,7 +52,13 @@ jest.mock('@/android/hooks/useAudioRecording', () => jest.requireMock('@/hooks/u
 jest.mock('@/hooks/useAudioWaveform', () => ({
   useAudioWaveform: () => ({ currentAmplitude: 0, waveformData: [] }),
 }));
+jest.mock('@/android/shared/hooks/useAudioWaveform', () =>
+  jest.requireMock('@/hooks/useAudioWaveform'),
+);
 jest.mock('@/components/features/WaveformVisualizer', () => ({ WaveformVisualizer: () => null }));
+jest.mock('@/android/shared/components/features/WaveformVisualizer', () =>
+  jest.requireMock('@/components/features/WaveformVisualizer'),
+);
 jest.mock('react-native-svg', () => {
   const { View: Mark } = require('react-native');
   return {

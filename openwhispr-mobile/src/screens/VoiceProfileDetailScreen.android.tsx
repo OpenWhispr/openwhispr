@@ -4,15 +4,15 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { GroupedList } from '@/components/notes/GroupedList';
 import { SectionHeader } from '@/components/notes/SectionHeader';
-import { SpeakerAvatar } from '@/components/notes/SpeakerAvatar';
+import { SpeakerAvatar } from '@/android/shared/components/notes/SpeakerAvatar';
 import { useNotesStore } from '@/android/store/useNotesStore';
 import { confirmDestructive } from '@/android/lib/alerts';
-import { safeHaptics } from '@/lib/utils';
-import { AppFont } from '@/lib/fonts';
+import { safeHaptics } from '@/android/shared/lib/utils';
+import { AppFont } from '@/android/shared/lib/fonts';
 import {
   supportsVoiceEnrollment,
   VOICE_ENROLLMENT_UNAVAILABLE,
-} from '@/lib/voiceEnrollmentCapability';
+} from '@/android/shared/lib/voiceEnrollmentCapability';
 import { useTheme } from '@/android/ThemeProvider';
 
 const formatDate = (value: string | null): string => {

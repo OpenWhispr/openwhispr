@@ -1,11 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { create } from 'zustand';
-import { notesRepository } from '@/data';
-import { spacesRepository } from '@/data/spacesRepository';
-import type { Folder, Note } from '@/data';
+import { notesRepository } from '@/android/shared/data';
+import { spacesRepository } from '@/android/shared/data/spacesRepository';
+import type { Folder, Note } from '@/android/shared/data';
 import type { Space } from '@/data/spacesTypes';
-import { getDefaultPrivateWorkspaceId } from '@/sync/teamSpacesCapability';
+import { getDefaultPrivateWorkspaceId } from '@/android/shared/sync/teamSpacesCapability';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useNotesStore } from '@/android/store/useNotesStore';
 import { useHiddenNoteIds } from './pendingDeletes';

@@ -1,3 +1,7 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/store/useProcessingModeStore', () =>
+  jest.requireActual('@/android/shared/store/useProcessingModeStore'),
+);
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react-native';
 import * as Haptics from 'expo-haptics';
 import { useConfigStore } from '@/store/useConfigStore';
@@ -77,6 +81,9 @@ jest.mock('@/store/useCustomPromptsStore', () => ({
       resetCustomPrompt: mockResetPrompt,
     }),
 }));
+jest.mock('@/android/shared/store/useCustomPromptsStore', () =>
+  jest.requireMock('@/store/useCustomPromptsStore'),
+);
 const mockSwitch = jest.fn(async (..._args: unknown[]) => 'switched');
 jest.mock('@/lib/workflowModeSwitch.android', () => ({
   switchWorkflowMode: (...args: unknown[]) => mockSwitch(...args),

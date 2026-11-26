@@ -23,6 +23,9 @@ jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: (selector: (state: { activeMode: string }) => unknown) =>
     selector({ activeMode: mockActiveMode }),
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/lib/workflowModeSwitch.android', () => ({ setPrivateMode: jest.fn() }));
 let mockReady = false;
 let mockProgress: Record<string, number> = {};

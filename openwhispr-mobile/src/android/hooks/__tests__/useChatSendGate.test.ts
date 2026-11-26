@@ -1,3 +1,5 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/lib/superwall', () => jest.requireActual('@/android/shared/lib/superwall'));
 import { renderHook } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
@@ -28,11 +30,17 @@ jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAut
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: mockActiveMode }) },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 
 const mockRegister = jest.fn();
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({ register: mockRegister }),
 }));
+jest.mock('@/android/shared/hooks/useSuperwallGate', () =>
+  jest.requireMock('@/hooks/useSuperwallGate'),
+);
 
 const mockShowAccountRequiredAlert = jest.fn();
 jest.mock('@/lib/accountAccess', () => ({

@@ -3,7 +3,10 @@ import type {
   GoogleCalendarAccount,
   GoogleCalendarEvent,
 } from '@/data/calendarTypes';
-import { getHumanParticipants, parseCalendarParticipants } from '@/lib/calendar/meetingContext';
+import {
+  getHumanParticipants,
+  parseCalendarParticipants,
+} from '@/android/shared/lib/calendar/meetingContext';
 
 /**
  * The pure rules behind a note's chips (Figma section N): which calendar event a note links to,

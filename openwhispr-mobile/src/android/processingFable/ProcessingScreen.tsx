@@ -5,7 +5,7 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
 import { useHome } from '../home/kit';
 import { ANDROID_MODELS, useModelDownloads } from '../models';

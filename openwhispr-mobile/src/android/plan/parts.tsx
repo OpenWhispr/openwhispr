@@ -8,9 +8,9 @@ import { useHome } from '../home/kit';
 import { useSettingsLook } from '../settings/look';
 import { useTheme } from '../ThemeProvider';
 import { usePlanT } from './strings';
-import { buildUsageGateParams } from '@/lib/superwall';
-import type { SuperwallPlacement } from '@/lib/superwall';
-import type { useSuperwallGate } from '@/hooks/useSuperwallGate';
+import { buildUsageGateParams } from '@/android/shared/lib/superwall';
+import type { SuperwallPlacement } from '@/android/shared/lib/superwall';
+import type { useSuperwallGate } from '@/android/shared/hooks/useSuperwallGate';
 
 /**
  * A "Go unlimited" door (Settings, Home's low-words card). While a purchase is still on its way

@@ -25,6 +25,9 @@ jest.mock('@/store/useProcessingModeStore', () => ({
     getState: () => ({ activeMode: mockActiveMode, setActiveMode: mockSetActiveMode }),
   },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: mockUser }) },
 }));
@@ -33,13 +36,18 @@ jest.mock('@/lib/privateMode', () => ({
   getPrivateModeReadiness: () => mockPrivateReadiness(),
   getPrivateModeUnavailableMessage: () => 'Native modules are missing.',
 }));
+jest.mock('@/android/shared/lib/privateMode', () => jest.requireMock('@/lib/privateMode'));
 jest.mock('@/lib/localReasoning', () => ({
   getLocalReasoningReadiness: () => mockLocalReasoningReadiness(),
   getLocalReasoningUnavailableMessage: () => 'Apple Intelligence is turned off.',
 }));
+jest.mock('@/android/shared/lib/localReasoning', () => jest.requireMock('@/lib/localReasoning'));
 jest.mock('@/services/providers/ProviderPolicy', () => ({
   getProviderPolicy: () => mockPolicy(),
 }));
+jest.mock('@/android/shared/services/providers/ProviderPolicy', () =>
+  jest.requireMock('@/services/providers/ProviderPolicy'),
+);
 jest.mock('@/services/providers/ProviderCredentials', () => ({
   getProviderCredentialStatus: (reference: string) => mockKeyStatus(reference),
 }));

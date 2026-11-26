@@ -1,5 +1,5 @@
 import { localMeetingNotesPlatform } from '@/android/lib/notes/localMeetingNotesPlatform';
-import { notesRepository } from '@/data';
+import { notesRepository } from '@/android/shared/data';
 import type { Note, Segment, Speaker } from '@/data/types';
 import {
   countLocalInputTokens,
@@ -9,10 +9,13 @@ import {
   isLocalContextLimitError,
   isLocalOutputLimitError,
   toLocalReasoningError,
-} from '@/lib/localReasoning';
-import { formatTranscriptForExport } from '@/lib/diarization/transcriptDisplay';
-import { parseCalendarParticipants } from '@/lib/calendar/meetingContext';
-import { buildMeetingNotesInput, type MeetingNotesContext } from '@/lib/notes/meetingNotesInput';
+} from '@/android/shared/lib/localReasoning';
+import { formatTranscriptForExport } from '@/android/shared/lib/diarization/transcriptDisplay';
+import { parseCalendarParticipants } from '@/android/shared/lib/calendar/meetingContext';
+import {
+  buildMeetingNotesInput,
+  type MeetingNotesContext,
+} from '@/android/shared/lib/notes/meetingNotesInput';
 import { isDefaultGenerateNotesAction } from '@/android/lib/notes/generateNotesPrompt';
 import type { StructuredMeetingNotes } from '@/android/types';
 

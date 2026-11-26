@@ -57,6 +57,7 @@ jest.mock('../calendar', () => ({
   minutesUntil: () => 5,
 }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));
+jest.mock('@/android/shared/lib/utils', () => jest.requireMock('@/lib/utils'));
 jest.mock('../strings', () => ({
   useNotesT: () => (key: string) => key,
   notesT: (key: string) => key,

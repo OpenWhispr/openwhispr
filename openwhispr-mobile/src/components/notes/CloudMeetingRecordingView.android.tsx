@@ -1,9 +1,9 @@
 import type React from 'react';
-import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
+import { useKeyboardHeight } from '@/android/shared/hooks/useKeyboardHeight';
 import { RecordingView } from '@/android/notes/RecordingView';
 import { notesT } from '@/android/notes/strings';
 import { RecordingNoteChips } from '@/android/notes/noteChips';
-import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
+import type { RealtimeUtterance } from '@/android/shared/services/transcription/realtimeEvents';
 import type { CloudMeetingStatus } from '@/hooks/useCloudMeeting';
 
 export interface CloudMeetingRecordingProps {

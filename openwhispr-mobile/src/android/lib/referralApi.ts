@@ -1,6 +1,6 @@
 import { sessionFetch as fetch } from '@/android/lib/sessionFetch';
 import { ApiError, getClientVersionHeader } from '@/android/lib/apiClient';
-import { parseApiErrorBody } from '@/lib/apiErrorBody';
+import { parseApiErrorBody } from '@/android/shared/lib/apiErrorBody';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.openwhispr.com';
 

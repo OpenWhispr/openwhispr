@@ -1,6 +1,9 @@
 jest.mock('@/services/storage/StorageService.android', () =>
   jest.requireMock('@/services/storage/StorageService'),
 );
+jest.mock('@/android/shared/services/storage/StorageService', () =>
+  jest.requireMock('@/services/storage/StorageService.android'),
+);
 jest.mock('@/lib/transcriptAudio.android', () => jest.requireMock('@/lib/transcriptAudio'));
 import { Platform } from 'react-native';
 import type { Transcript } from '@/android/types';
@@ -32,9 +35,15 @@ jest.mock('@/services/providers/NativeProviderTransport', () => ({
   abortError: (message: string) => Object.assign(new Error(message), { name: 'AbortError' }),
 }));
 jest.mock('@/lib/providerJobActivity', () => ({ isProviderJobActive: () => false }));
+jest.mock('@/android/shared/lib/providerJobActivity', () =>
+  jest.requireMock('@/lib/providerJobActivity'),
+);
 jest.mock('../../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: { getItem: () => null },
 }));
+jest.mock('@/android/shared/modules/app-group-storage/index', () =>
+  jest.requireMock('../../../../modules/app-group-storage/src'),
+);
 jest.mock('@/lib/keyboardInferenceRoute', () => ({
   listPendingProviderRecoveryJobs: () => [],
   clearKeyboardProviderRecovery: jest.fn(),
@@ -45,6 +54,9 @@ jest.mock('@/android/lib/keyboardInferenceRoute', () =>
 jest.mock('../../../../modules/audio-tools/src', () => ({
   AudioTools: { isAvailable: () => false, cleanup: async () => {} },
 }));
+jest.mock('@/android/shared/modules/audio-tools/index', () =>
+  jest.requireMock('../../../../modules/audio-tools/src'),
+);
 jest.mock('@/lib/transcribeAndCleanup', () => ({
   transcribeAndCleanup: (...args: unknown[]) => mockTranscribe(...args),
 }));
@@ -52,9 +64,15 @@ jest.mock('@/android/dictation/transcribeAndCleanup', () =>
   jest.requireMock('@/lib/transcribeAndCleanup'),
 );
 jest.mock('@/lib/transcriptionLanguage', () => ({ getPreferredTranscriptionLanguage: () => 'en' }));
+jest.mock('@/android/shared/lib/transcriptionLanguage', () =>
+  jest.requireMock('@/lib/transcriptionLanguage'),
+);
 jest.mock('@/lib/transcriptionErrors', () => ({
   toFriendlyTranscriptionErrorMessage: (error: Error) => error.message,
 }));
+jest.mock('@/android/shared/lib/transcriptionErrors', () =>
+  jest.requireMock('@/lib/transcriptionErrors'),
+);
 jest.mock('@/lib/transcriptAudio', () => ({
   deleteManagedTranscriptAudio: async () => {},
   garbageCollectTranscriptAudio: (...args: unknown[]) => mockCollect(...args),
@@ -68,6 +86,9 @@ jest.mock('@/lib/transcriptAudio', () => ({
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => mockMode },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/lib/inferenceRouting', () => ({
   snapshotTextInference: () => ({}),
   snapshotTranscriptionJob: () => ({ provider: 'cloud' }),

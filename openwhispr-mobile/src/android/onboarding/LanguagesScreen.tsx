@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
-import { AppFont } from '@/lib/fonts';
+import { AppFont } from '@/android/shared/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { LANGUAGES, byCode, initialLanguages } from './languages';

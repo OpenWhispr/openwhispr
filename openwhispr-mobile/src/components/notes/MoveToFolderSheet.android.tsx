@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { Button } from '@/components/ui/Button';
-import { useIosColor } from '@/config/colors.android';
+import { Button } from '@/android/shared/components/ui/Button';
+import { useIosColor } from '@/android/shared/config/colors';
 import {
   createMoveToFolderSheet,
   type MoveFolderPresentation,

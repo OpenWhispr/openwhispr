@@ -60,6 +60,9 @@ jest.mock('@/lib/trackingTransparency', () => ({
   getTrackingAuthorizationStatus: (): Promise<TrackingAuthorizationStatus> =>
     mockGetTrackingAuthorizationStatus(),
 }));
+jest.mock('@/android/shared/lib/trackingTransparency', () =>
+  jest.requireMock('@/lib/trackingTransparency'),
+);
 
 function loadAppsFlyer(platform: 'ios' | 'android' = 'ios'): AppsFlyerModule {
   jest.resetModules();

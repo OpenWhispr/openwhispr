@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LOCAL_OUTPUT_TOKEN_RESERVE } from '@/lib/localReasoning';
+import { LOCAL_OUTPUT_TOKEN_RESERVE } from '@/android/shared/lib/localReasoning';
 import { buildActionSystemPrompt } from '@/android/lib/notes/generateNotesPrompt';
 import type { StructuredMeetingNotes } from '@/android/types';
 

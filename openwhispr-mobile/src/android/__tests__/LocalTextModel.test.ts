@@ -1,3 +1,5 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/lib/retry', () => jest.requireActual('@/android/shared/lib/retry'));
 jest.mock('llama.rn', () => ({ initLlama: jest.fn() }));
 jest.mock('../models', () => ({ modelPath: () => '/model.gguf', modelReady: async () => true }));
 jest.mock('@/store/useConfigStore', () => ({

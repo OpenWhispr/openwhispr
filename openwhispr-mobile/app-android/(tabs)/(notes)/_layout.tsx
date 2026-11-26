@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { customHeaderStackOptions, glassStackOptions } from '@/config/navigation';
+import { customHeaderStackOptions, glassStackOptions } from '@/android/shared/config/navigation';
 
 // A note opened from another tab (Home's upload, the Dictionary) keeps the Notes home under it.
 export const unstable_settings = { initialRouteName: 'index' };

@@ -1,5 +1,5 @@
 import { chooseGoogleAccount } from '../../../modules/android-google-authorization/src';
-import { calendarRepository } from '@/data/calendarRepository';
+import { calendarRepository } from '@/android/shared/data/calendarRepository';
 import type { CalendarRepository, GoogleCalendarAccount } from '@/data/calendarTypes';
 import {
   authorizeGoogleCalendarTokens,
@@ -11,8 +11,8 @@ import {
 import {
   syncGoogleCalendarList,
   syncSelectedGoogleCalendarEventWindow,
-} from '@/services/calendar/googleCalendarSync';
-import { captureGoogleCalendarException } from '@/services/calendar/googleCalendarTelemetry';
+} from '@/android/shared/services/calendar/googleCalendarSync';
+import { captureGoogleCalendarException } from '@/android/shared/services/calendar/googleCalendarTelemetry';
 
 const USERINFO_ENDPOINT = 'https://openidconnect.googleapis.com/v1/userinfo';
 

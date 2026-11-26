@@ -4,7 +4,7 @@ import { View, Pressable } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { safeHaptics } from '@/lib/utils';
+import { safeHaptics } from '@/android/shared/lib/utils';
 import { useTheme } from '@/android/ThemeProvider';
 
 type SectionHeaderProps = {

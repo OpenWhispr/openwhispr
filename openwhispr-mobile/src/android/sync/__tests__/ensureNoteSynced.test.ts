@@ -1,3 +1,5 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/sync/useSyncStore', () => jest.requireActual('@/android/shared/sync/useSyncStore'));
 import * as cloudBackup from '@/lib/cloudBackup';
 import { isCloudBackupEnabled as isAndroidBackupEnabled } from '@/lib/cloudBackup.android';
 import type { Folder, Note } from '@/data';
@@ -30,6 +32,7 @@ jest.mock('@/data', () => ({
   },
   spacesRepository: { listSpaces: jest.fn(() => []) },
 }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 jest.mock('expo-network', () => ({ getNetworkStateAsync: jest.fn() }));
 const mockListeners = new Set<(hasQueuedRun: boolean) => void>();
 jest.mock('@/sync/syncEngine', () => ({

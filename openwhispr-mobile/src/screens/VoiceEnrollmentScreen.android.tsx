@@ -5,7 +5,7 @@ import { Text } from '@/components/ui/Text';
 import { PillAction } from '@/android/settings/kit';
 import { VoiceEnrollmentRecorder } from '@/components/notes/VoiceEnrollmentRecorder';
 import { useNotesStore } from '@/android/store/useNotesStore';
-import { notesRepository } from '@/data';
+import { notesRepository } from '@/android/shared/data';
 import type { SpeakerProfile } from '@/data/types';
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/android/data/notesRepository';
 import {
@@ -13,12 +13,12 @@ import {
   VoiceEnrollmentError,
   type EnrollVoiceProfileInput,
   type ReenrollVoiceProfileInput,
-} from '@/services/diarization/VoiceprintService';
-import { VOICE_ALREADY_TAUGHT_ALERT } from '@/lib/voiceEnrollmentMessages';
+} from '@/android/shared/services/diarization/VoiceprintService';
+import { VOICE_ALREADY_TAUGHT_ALERT } from '@/android/shared/lib/voiceEnrollmentMessages';
 import {
   supportsVoiceEnrollment,
   VOICE_ENROLLMENT_UNAVAILABLE,
-} from '@/lib/voiceEnrollmentCapability';
+} from '@/android/shared/lib/voiceEnrollmentCapability';
 import { useTheme } from '@/android/ThemeProvider';
 
 type SubmitInput = EnrollVoiceProfileInput | ReenrollVoiceProfileInput;

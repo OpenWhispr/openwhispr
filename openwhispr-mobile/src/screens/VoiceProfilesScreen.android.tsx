@@ -3,16 +3,16 @@ import { ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { VoiceProfileList } from '@/components/notes/VoiceProfileList.android';
 import type { RestoreRow } from '@/components/ui/SwipeableCard';
-import { useSuperwallGate } from '@/hooks/useSuperwallGate';
+import { useSuperwallGate } from '@/android/shared/hooks/useSuperwallGate';
 import { useNotesStore } from '@/android/store/useNotesStore';
 import { confirmDestructive } from '@/android/lib/alerts';
-import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
-import { safeHaptics } from '@/lib/utils';
+import { SUPERWALL_PLACEMENTS } from '@/android/shared/lib/superwall';
+import { safeHaptics } from '@/android/shared/lib/utils';
 import type { SpeakerProfile } from '@/data/types';
 import {
   supportsVoiceEnrollment,
   VOICE_ENROLLMENT_UNAVAILABLE,
-} from '@/lib/voiceEnrollmentCapability';
+} from '@/android/shared/lib/voiceEnrollmentCapability';
 import { useTheme } from '@/android/ThemeProvider';
 
 const notesPath = (path: string): string => `/(tabs)/(notes)/${path}`;

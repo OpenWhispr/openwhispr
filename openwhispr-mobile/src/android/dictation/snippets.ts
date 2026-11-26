@@ -2,7 +2,7 @@
 // spoken triggers are replaced with their saved text in the final dictation
 // transcript, and triggers double as dictionary hints so they survive STT/cleanup.
 
-import { sharedWordKey } from '@/lib/sharedDictionaryHints';
+import { sharedWordKey } from '@/android/shared/lib/sharedDictionaryHints';
 import { createSnippetExpander } from '@/android/dictation/snippetExpansion';
 
 export interface Snippet {

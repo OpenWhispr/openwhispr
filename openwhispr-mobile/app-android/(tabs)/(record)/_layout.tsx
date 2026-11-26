@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { glassStackOptions } from '@/config/navigation';
+import { glassStackOptions } from '@/android/shared/config/navigation';
 
 export default function RecordLayout() {
   return (

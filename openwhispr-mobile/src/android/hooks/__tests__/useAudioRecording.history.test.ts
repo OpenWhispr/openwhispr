@@ -16,6 +16,9 @@ jest.mock('expo-file-system/legacy', () => ({
 // permissions.ts re-exports the alert helper, which reaches nativewind through
 // the UI layer — untransformable here and irrelevant to the branch under test.
 jest.mock('@/components/ui/PermissionAlert', () => ({ showPermissionAlert: jest.fn() }));
+jest.mock('@/android/shared/components/ui/PermissionAlert', () =>
+  jest.requireMock('@/components/ui/PermissionAlert'),
+);
 
 const mockAddTranscript = jest.fn(async () => undefined);
 const mockAddFailedTranscript = jest.fn(async () => undefined);
@@ -47,14 +50,19 @@ jest.mock('@/lib/speechActivity', () => ({
   analyzeSpeechActivity: jest.fn(async () => null),
   createNoSpeechError: jest.fn(() => new Error('No speech detected')),
 }));
+jest.mock('@/android/shared/lib/speechActivity', () => jest.requireMock('@/lib/speechActivity'));
 jest.mock('@/lib/transcriptAudio', () => ({
   retainTranscriptAudio: jest.fn(async () => 'file:///docs/transcript-audio/test-id.wav'),
   deleteManagedTranscriptAudio: jest.fn(async () => undefined),
 }));
 jest.mock('@/lib/usageLimitError', () => ({ isUsageLimitError: jest.fn(() => false) }));
+jest.mock('@/android/shared/lib/usageLimitError', () => jest.requireMock('@/lib/usageLimitError'));
 jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguage: jest.fn(() => 'en'),
 }));
+jest.mock('@/android/shared/lib/transcriptionLanguage', () =>
+  jest.requireMock('@/lib/transcriptionLanguage'),
+);
 
 // jest hoists mock factories above the module body, so anything they close over
 // has to be mock-prefixed to survive the hoist.
@@ -79,6 +87,7 @@ jest.mock('@/utils/expoAudio', () => ({
   isExpoAudioAvailable: () => true,
   getDefaultRecorderOptions: () => ({}),
 }));
+jest.mock('@/android/shared/utils/expoAudio', () => jest.requireMock('@/utils/expoAudio'));
 
 const RETAINED_URI = 'file:///docs/transcript-audio/test-id.wav';
 const mockTranscribe = jest.mocked(transcribeAndCleanup);

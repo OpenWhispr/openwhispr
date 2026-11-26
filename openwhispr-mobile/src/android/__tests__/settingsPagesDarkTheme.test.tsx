@@ -59,11 +59,15 @@ jest.mock('../onboarding/kit', () => ({ GLASS_GRADIENT: ['#5588F0', '#3466E2'] }
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: require('react-native').View }));
 jest.mock('../calendar/connect', () => ({ needsReconnect: () => false }));
 jest.mock('@/hooks/useKeyboardHeight', () => ({ useKeyboardHeight: () => 0 }));
+jest.mock('@/android/shared/hooks/useKeyboardHeight', () =>
+  jest.requireMock('@/hooks/useKeyboardHeight'),
+);
 jest.mock('expo-constants', () => ({
   __esModule: true,
   default: { expoConfig: { version: '1' } },
 }));
 jest.mock('@/lib/openExternal', () => ({ openExternal: jest.fn(), openMail: jest.fn() }));
+jest.mock('@/android/shared/lib/openExternal', () => jest.requireMock('@/lib/openExternal'));
 jest.mock('../../../modules/android-dictation/src/appearance', () => ({
   setBubbleAppearance: jest.fn(),
 }));
@@ -74,6 +78,9 @@ jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useC
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: require('zustand').create(() => ({ activeMode: 'cloud' })),
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/store/useCustomPromptsStore', () => ({
   useCustomPromptsStore: require('zustand').create(() => ({
     customPrompts: { cleanup: '' },
@@ -81,6 +88,9 @@ jest.mock('@/store/useCustomPromptsStore', () => ({
     resetCustomPrompt: jest.fn(),
   })),
 }));
+jest.mock('@/android/shared/store/useCustomPromptsStore', () =>
+  jest.requireMock('@/store/useCustomPromptsStore'),
+);
 
 import { ThemeProvider } from '../ThemeProvider';
 import { darkTheme, lightTheme } from '../theme';

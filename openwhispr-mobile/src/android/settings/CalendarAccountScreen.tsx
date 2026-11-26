@@ -2,9 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Text } from '@/components/ui/Text';
-import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
+import { useGoogleCalendarStore } from '@/android/shared/store/useGoogleCalendarStore';
 import type { GoogleCalendarAccount } from '@/data/calendarTypes';
-import { safeHaptics } from '@/lib/utils';
+import { safeHaptics } from '@/android/shared/lib/utils';
 import {
   Badge,
   BottomSheet,

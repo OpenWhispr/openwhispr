@@ -9,6 +9,9 @@ const androidTranscript = jest.requireActual<typeof import('@/lib/notes/remoteTr
   '@/lib/notes/remoteTranscript.android',
 );
 jest.doMock('@/lib/notes/remoteTranscript', () => androidTranscript);
+jest.doMock('@/android/shared/lib/notes/remoteTranscript', () =>
+  jest.requireMock('@/lib/notes/remoteTranscript'),
+);
 const { serializeSegmentsForSync } = androidTranscript;
 const { LocalNotesRepository } =
   require('@/data/local/notesRepository') as typeof import('@/data/local/notesRepository');

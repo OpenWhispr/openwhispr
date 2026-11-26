@@ -1,3 +1,7 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/services/transcription/realtimeEvents', () =>
+  jest.requireActual('@/android/shared/services/transcription/realtimeEvents'),
+);
 import { fireEvent, render } from '@testing-library/react-native';
 import { Platform, ScrollView } from 'react-native';
 import { CloudMeetingRecording as IOSRecording } from '@/components/notes/CloudMeetingRecording';
@@ -10,13 +14,20 @@ let mockKeyboardHeight = 0;
 let mockBottomInset = 0;
 jest.mock('@/android/notes/noteChips', () => ({ RecordingNoteChips: () => null }));
 jest.mock('@/hooks/useKeyboardHeight', () => ({ useKeyboardHeight: () => mockKeyboardHeight }));
+jest.mock('@/android/shared/hooks/useKeyboardHeight', () =>
+  jest.requireMock('@/hooks/useKeyboardHeight'),
+);
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 54, right: 0, bottom: mockBottomInset, left: 0 }),
 }));
 jest.mock('@react-navigation/elements', () => ({ useHeaderHeight: () => 64 }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/Button', () => ({ Button: require('react-native').Pressable }));
+jest.mock('@/android/shared/components/ui/Button', () =>
+  jest.requireMock('@/components/ui/Button'),
+);
 jest.mock('@/config/colors', () => ({ BRAND: '#007AFF', iosColor: (name: string) => name }));
+jest.mock('@/android/shared/config/colors', () => jest.requireMock('@/config/colors'));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/store/useAuthStore', () => ({ useAuthStore: () => null }));
 jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAuthStore'));

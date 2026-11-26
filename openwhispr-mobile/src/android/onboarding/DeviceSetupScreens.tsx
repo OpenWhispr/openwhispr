@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
-import { AppFont } from '@/lib/fonts';
+import { AppFont } from '@/android/shared/lib/fonts';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { ANDROID_MODELS, useModelDownloads, type AndroidModelId } from '../models';
 import { DownloadRing } from '../settings/DownloadRing';

@@ -75,22 +75,33 @@ jest.mock('@/store/useNotesStore', () => {
 });
 jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 jest.mock('@/data', () => ({ notesRepository: { getAllNotes: () => mockNotes } }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 jest.mock('@/data/spacesRepository', () => ({
   spacesRepository: { getPrivateSpace: () => ({ id: 1 }) },
 }));
+jest.mock('@/android/shared/data/spacesRepository', () =>
+  jest.requireMock('@/data/spacesRepository'),
+);
 jest.mock('@/hooks/useManualSyncRefresh', () => ({
   useManualSyncRefresh: () => ({ refreshing: false, onRefresh: jest.fn() }),
 }));
+jest.mock('@/android/shared/hooks/useManualSyncRefresh', () =>
+  jest.requireMock('@/hooks/useManualSyncRefresh'),
+);
 jest.mock('@/lib/notes/noteRouteOwner', () => ({
   withNotesRouteOwner: (params: object) => params,
 }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));
+jest.mock('@/android/shared/lib/utils', () => jest.requireMock('@/lib/utils'));
 jest.mock('@/lib/accountAccess', () => ({ requiresRealAccount: () => false }));
 jest.mock('@/android/lib/accountAccess', () => jest.requireMock('@/lib/accountAccess'));
 jest.mock('@/store/useGoogleCalendarStore', () => {
   const state = { accounts: [], load: () => Promise.resolve() };
   return { useGoogleCalendarStore: (select: (s: unknown) => unknown) => select(state) };
 });
+jest.mock('@/android/shared/store/useGoogleCalendarStore', () =>
+  jest.requireMock('@/store/useGoogleCalendarStore'),
+);
 jest.mock('../../calendar/connect', () => ({
   dismissCalendarPrompt: jest.fn(),
   loadCalendarPromptDismissed: jest.fn(),
@@ -134,6 +145,9 @@ jest.mock('../pendingDeletes', () => ({
 }));
 jest.mock('../workspaceList', () => ({ useLoadWorkspaces: jest.fn() }));
 jest.mock('@/sync/teamSpacesCapability', () => ({ getDefaultPrivateWorkspaceId: () => null }));
+jest.mock('@/android/shared/sync/teamSpacesCapability', () =>
+  jest.requireMock('@/sync/teamSpacesCapability'),
+);
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (select: (state: unknown) => unknown) => select({ user: { id: 'u1' } }),
 }));

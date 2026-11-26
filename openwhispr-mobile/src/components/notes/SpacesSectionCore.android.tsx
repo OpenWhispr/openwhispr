@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { GroupedList } from './GroupedList';
 import { SectionHeader } from './SectionHeader';
 import { SpaceRow } from './SpaceRow';
-import type { Space } from '@/data';
+import type { Space } from '@/android/shared/data';
 
 type SpacesSectionProps = {
   /** Team spaces only — pass an empty array (or none) when the account has no team spaces, in

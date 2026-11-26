@@ -84,6 +84,7 @@ jest.mock('@/android/lib/apiClient', () => jest.requireMock('@/lib/apiClient'));
 jest.mock('@/android/settings/kit', () => ({ showToast: jest.fn() }));
 jest.mock('../settings/kit', () => ({ showToast: jest.fn() }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));
+jest.mock('@/android/shared/lib/utils', () => jest.requireMock('@/lib/utils'));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({
   SystemIcon: ({ color }: { color: string }) => {
@@ -92,6 +93,9 @@ jest.mock('@/components/ui/SystemIcon', () => ({
   },
 }));
 jest.mock('@/components/ui/OpenWhisprMark', () => ({ OpenWhisprMark: () => null }));
+jest.mock('@/android/shared/components/ui/OpenWhisprMark', () =>
+  jest.requireMock('@/components/ui/OpenWhisprMark'),
+);
 jest.mock('react-native-svg', () => {
   const Stub = () => null;
   return {

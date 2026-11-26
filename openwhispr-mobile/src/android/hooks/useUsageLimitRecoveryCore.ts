@@ -1,9 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
-import { useSuperwallGate } from '@/hooks/useSuperwallGate';
-import { buildUsageGateParams, SUPERWALL_PLACEMENTS } from '@/lib/superwall';
-import type { UsageLimitError } from '@/lib/usageLimitError';
+import { useSuperwallGate } from '@/android/shared/hooks/useSuperwallGate';
+import { buildUsageGateParams, SUPERWALL_PLACEMENTS } from '@/android/shared/lib/superwall';
+import type { UsageLimitError } from '@/android/shared/lib/usageLimitError';
 import { useUsageStore, type UsageLoadResult } from '@/android/store/useUsageStore';
 import type { UsageInfo } from '@/android/remote/usageApi';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';

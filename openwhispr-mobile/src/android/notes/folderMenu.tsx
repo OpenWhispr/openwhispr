@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
-import type { Folder } from '@/data';
+import type { Folder } from '@/android/shared/data';
 import { useNotesStore } from '@/android/store/useNotesStore';
-import { safeHaptics } from '@/lib/utils';
+import { safeHaptics } from '@/android/shared/lib/utils';
 import { BottomSheet, TextAction } from '../settings/kit';
 import { Card, ListRow } from './look';
 import { FolderNameSheet } from './sheets';

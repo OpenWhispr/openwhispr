@@ -1,12 +1,12 @@
-import type { Diarizer } from '@/lib/diarization/diarizer';
-import { assertTransition } from '@/lib/diarization/transcriptionStatus';
+import type { Diarizer } from '@/android/shared/lib/diarization/diarizer';
+import { assertTransition } from '@/android/shared/lib/diarization/transcriptionStatus';
 import {
   whisperSegmentsToWords,
   diarizationToTurns,
   speakerLabelFor,
-} from '@/lib/diarization/diarizationBridge';
-import { mergeWordsWithSpeakers } from '@/lib/diarization/mergeSegments';
-import { applyProvisional } from '@/lib/diarization/speakerState';
+} from '@/android/shared/lib/diarization/diarizationBridge';
+import { mergeWordsWithSpeakers } from '@/android/shared/lib/diarization/mergeSegments';
+import { applyProvisional } from '@/android/shared/lib/diarization/speakerState';
 import type { TranscriptionResponse, TranscriptionStatus } from '@/android/types';
 import type { NewSegment, NewSpeaker, Speaker } from '@/data/types';
 

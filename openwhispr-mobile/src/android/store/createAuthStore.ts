@@ -18,9 +18,12 @@ import {
 } from '@/android/lib/authClient';
 import { Sentry } from '@/android/lib/sentry';
 import { useUsageStore } from '@/android/store/useUsageStore';
-import { clearAllSessions as clearAgentSessions } from '@/services/agent/AgentComposerService';
-import { claimNoteShareTokens, clearNoteShareTokens } from '@/lib/notes/noteShareTokens';
-import { withChatHistory } from '@/lib/chat/withChatHistory';
+import { clearAllSessions as clearAgentSessions } from '@/android/shared/services/agent/AgentComposerService';
+import {
+  claimNoteShareTokens,
+  clearNoteShareTokens,
+} from '@/android/shared/lib/notes/noteShareTokens';
+import { withChatHistory } from '@/android/shared/lib/chat/withChatHistory';
 
 const GUEST_SESSION_KEY = 'openwhispr_guest_session';
 const SOCIAL_SIGN_IN_FAILED = 'Sign in failed. Check your connection and try again.';

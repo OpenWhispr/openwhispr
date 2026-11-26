@@ -1,6 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { providerFailureMessages } from '@/android/providers/providerFailureMessages';
-import { createProviderCredentialScope } from './ProviderCredentialScope';
+import { createProviderCredentialScope } from '@/android/shared/services/providers/ProviderCredentialScope';
 import { ProviderExecutionError } from '@/android/providers/ProviderExecutionError';
 export { ProviderExecutionError } from '@/android/providers/ProviderExecutionError';
 import {
@@ -8,7 +8,7 @@ import {
   getModelListBaseCandidates,
   isSecureHttpEndpoint,
   normalizeBaseUrl,
-} from '@/lib/providerEndpoints';
+} from '@/android/shared/lib/providerEndpoints';
 import modelCatalog from '@/config/providerCatalog.json';
 import {
   isMobileProviderId,

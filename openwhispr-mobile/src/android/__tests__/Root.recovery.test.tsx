@@ -120,11 +120,20 @@ jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNo
 jest.mock('@/sync/syncEngine', () => ({ initSyncTriggers: jest.fn() }));
 jest.mock('@/android/sync/syncEngine', () => jest.requireMock('@/sync/syncEngine'));
 jest.mock('@/components/ui/PermissionAlert', () => ({ PermissionAlertMount: () => null }));
+jest.mock('@/android/shared/components/ui/PermissionAlert', () =>
+  jest.requireMock('@/components/ui/PermissionAlert'),
+);
 jest.mock('@/components/superwall/OpenWhisprSuperwallProvider', () => ({
   OpenWhisprSuperwallProvider: require('react-native').View,
 }));
+jest.mock('@/android/shared/components/superwall/OpenWhisprSuperwallProvider', () =>
+  jest.requireMock('@/components/superwall/OpenWhisprSuperwallProvider'),
+);
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/OpenWhisprMark', () => ({ OpenWhisprMark: () => null }));
+jest.mock('@/android/shared/components/ui/OpenWhisprMark', () =>
+  jest.requireMock('@/components/ui/OpenWhisprMark'),
+);
 jest.mock('@/android/ui', () => ({
   Button: ({ label, onPress }: { label: string; onPress: () => void }) =>
     require('react').createElement(
@@ -136,6 +145,9 @@ jest.mock('@/android/ui', () => ({
   useUiPalette: () => ({}),
 }));
 jest.mock('@/hooks/useRevenueCatIdentity', () => ({ useRevenueCatIdentity: () => {} }));
+jest.mock('@/android/shared/hooks/useRevenueCatIdentity', () =>
+  jest.requireMock('@/hooks/useRevenueCatIdentity'),
+);
 jest.mock('../settings/kit', () => ({ SettingsToastHost: () => null }));
 jest.mock('@/android/billing', () => ({ observeAndroidPurchaseUpdates: () => () => {} }));
 jest.mock('@/android/bubblePipeline', () => ({ startBubblePipeline: () => {} }));
@@ -154,6 +166,7 @@ jest.mock('@/data', () => ({
     },
   },
 }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
 jest.mock('@/android/lib/sentry', () => jest.requireMock('@/lib/sentry'));
 jest.mock('@/lib/transcriptAudio', () => ({

@@ -6,8 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { SearchField } from '@/components/ui/SearchField';
 import { GlassBackButton } from '@/components/ui/GlassBackButton';
-import { safeHaptics } from '@/lib/utils';
-import { useIosColor } from '@/config/colors.android';
+import { safeHaptics } from '@/android/shared/lib/utils';
+import { useIosColor } from '@/android/shared/config/colors';
 
 type NotesTopBarProps = {
   showBack?: boolean;

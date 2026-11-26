@@ -7,9 +7,13 @@ jest.mock('@sentry/react-native', () => ({
 jest.mock('@/data/remote/notesApi', () => ({
   deleteNote: jest.fn(),
 }));
+jest.mock('@/android/shared/data/remote/notesApi', () =>
+  jest.requireMock('@/data/remote/notesApi'),
+);
 jest.mock('@/lib/uuid', () => ({
   randomUUID: () => 'test-uuid',
 }));
+jest.mock('@/android/shared/lib/uuid', () => jest.requireMock('@/lib/uuid'));
 jest.mock('@/data', () => ({
   notesRepository: {
     getFolders: jest.fn(() => []),
@@ -33,9 +37,13 @@ jest.mock('@/data', () => ({
     listSpaces: jest.fn(() => []),
   },
 }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: 'cloud' }) },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: null }) },
 }));

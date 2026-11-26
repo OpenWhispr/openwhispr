@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import {
   clearLocalReasoningReadinessCache,
   getLocalReasoningUnavailableMessage,
-} from '@/lib/localReasoning';
+} from '@/android/shared/lib/localReasoning';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import type { LocalReasoningReadiness } from '@/android/types';
 import type { useAndroidCopy } from '@/hooks/useAndroidCopy';

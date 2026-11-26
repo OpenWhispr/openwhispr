@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import { Text } from '@/components/ui/Text';
-import { useIosColor } from '@/config/colors.android';
+import { useIosColor } from '@/android/shared/config/colors';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import type { NoteAccessPrincipalType } from '@/data/remote/noteSharingTypes';
 

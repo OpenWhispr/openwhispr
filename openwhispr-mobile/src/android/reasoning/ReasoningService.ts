@@ -3,7 +3,10 @@ import type { ReasoningRequest, ReasoningResponse, ReasoningRoutingOptions } fro
 import type { InferenceSelection } from '@/android/providers/mobileProviders';
 import { buildProviderPrompt, stripThinkingTags } from '@/android/reasoning/buildProviderPrompt';
 import { api } from '@/android/lib/apiClient';
-import { buildChatOverNotePayload, type ChatOverNoteRequest } from '@/lib/notes/chatOverNote';
+import {
+  buildChatOverNotePayload,
+  type ChatOverNoteRequest,
+} from '@/android/shared/lib/notes/chatOverNote';
 import {
   fitsLocalCleanupOutput,
   fitsLocalReasoningBudget,
@@ -11,7 +14,7 @@ import {
   getLocalReasoningUnavailableMessage,
   isLocalReasoningRequired,
   LocalReasoningError,
-} from '@/lib/localReasoning';
+} from '@/android/shared/lib/localReasoning';
 import {
   buildLocalReasoningInstructions,
   LocalReasoningService,
@@ -88,7 +91,7 @@ export function resolveReasoningPlacement(
     ((usesProviders && !chosenProvider) || localSelected)
   ) {
     const { useProcessingModeStore } =
-      require('@/store/useProcessingModeStore') as typeof import('@/store/useProcessingModeStore');
+      require('@/android/shared/store/useProcessingModeStore') as typeof import('@/android/shared/store/useProcessingModeStore');
     privateContent ||= useProcessingModeStore.getState().activeMode === 'private';
   }
   const localRequired =

@@ -4,7 +4,7 @@ import {
 } from './CloudMeetingRecordingView.android';
 import { LiveTranscriptList } from './LiveTranscriptList.android';
 import { notesT } from '@/android/notes/strings';
-import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
+import type { RealtimeUtterance } from '@/android/shared/services/transcription/realtimeEvents';
 import type { CloudMeetingStatus } from '@/hooks/useCloudMeeting';
 
 const renderTranscript = (

@@ -25,6 +25,9 @@ jest.mock(
 jest.mock('@/components/superwall/SuperwallEntitlementBridge', () => ({
   SuperwallEntitlementBridge: () => null,
 }));
+jest.mock('@/android/shared/components/superwall/SuperwallEntitlementBridge', () =>
+  jest.requireMock('@/components/superwall/SuperwallEntitlementBridge'),
+);
 
 jest.mock('@/components/superwall/SuperwallGateProvider', () => ({
   DisabledSuperwallGateProvider: ({ children }: { children: React.ReactNode }) => children,

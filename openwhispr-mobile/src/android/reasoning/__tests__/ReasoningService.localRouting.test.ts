@@ -28,6 +28,7 @@ jest.mock('@/lib/localReasoning', () => ({
     }
   },
 }));
+jest.mock('@/android/shared/lib/localReasoning', () => jest.requireMock('@/lib/localReasoning'));
 
 jest.mock('@/services/reasoning/LocalReasoningService', () => ({
   buildLocalReasoningInstructions: jest.fn(() => 'local instructions'),

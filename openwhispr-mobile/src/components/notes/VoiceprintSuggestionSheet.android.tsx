@@ -1,8 +1,8 @@
 import { Modal, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { Text } from '@/components/ui/Text';
-import { Button } from '@/components/ui/Button';
-import { useIosColor } from '@/config/colors.android';
+import { Button } from '@/android/shared/components/ui/Button';
+import { useIosColor } from '@/android/shared/config/colors';
 
 interface VoiceprintSuggestionSheetProps {
   visible: boolean;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, View } from 'react-native';
 import { requestVerificationEmail } from '@/android/lib/authClient';
-import { safeHaptics } from '@/lib/utils';
+import { safeHaptics } from '@/android/shared/lib/utils';
 import { showToast } from '../settings/kit';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
 import { useCountdown } from './ForgotPassword';

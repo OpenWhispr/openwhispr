@@ -23,6 +23,9 @@ jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguage: () => undefined,
   getPreferredTranscriptionLanguages: () => [],
 }));
+jest.mock('@/android/shared/lib/transcriptionLanguage', () =>
+  jest.requireMock('@/lib/transcriptionLanguage'),
+);
 jest.mock('@/android/transcription/TranscriptionService', () => ({
   TranscriptionService: {
     transcribe: jest.fn(async ({ provider }: { provider: TranscriptionProvider }) => ({
@@ -66,6 +69,7 @@ jest.mock('@/android/transcription/LocalTranscriptionService', () => ({
   LocalTranscriptionService: { cancelTranscription: jest.fn() },
 }));
 jest.mock('@/lib/permissions', () => ({ isNoSpeechError: () => false }));
+jest.mock('@/android/shared/lib/permissions', () => jest.requireMock('@/lib/permissions'));
 jest.mock('@/android/models', () => ({
   modelReady: async () => true,
   ANDROID_MODELS: {
@@ -93,6 +97,9 @@ jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useC
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: 'private' }) },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/store/useSnippetsStore', () => ({
   useSnippetsStore: {
     getState: () => ({
@@ -111,6 +118,9 @@ jest.mock('@/android/store/useDictionaryStore', () =>
 jest.mock('@/store/useCustomPromptsStore', () => ({
   getActiveCustomCleanupPrompt: () => undefined,
 }));
+jest.mock('@/android/shared/store/useCustomPromptsStore', () =>
+  jest.requireMock('@/store/useCustomPromptsStore'),
+);
 jest.mock('@/store/useTranscriptStore', () => ({ useTranscriptStore: { getState: jest.fn() } }));
 jest.mock('@/android/store/useTranscriptStore', () =>
   jest.requireMock('@/store/useTranscriptStore'),

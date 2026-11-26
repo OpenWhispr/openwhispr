@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/react-native';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { isUsageAnalyticsAllowed } from '@/lib/usageAnalytics';
+import { isUsageAnalyticsAllowed } from '@/android/shared/lib/usageAnalytics';
 
 let didInit = false;
 let watchingConsent = false;

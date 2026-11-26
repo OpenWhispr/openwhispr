@@ -4,10 +4,10 @@ import { CloudOff } from 'lucide-react-native';
 import { GroupedList } from './GroupedList';
 import { SwipeableCard, type RestoreRow } from '@/components/ui/SwipeableCard';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { BRAND, useIosColor } from '@/config/colors.android';
+import { BRAND, useIosColor } from '@/android/shared/config/colors';
 import { formatNoteRowTime } from '@/android/lib/formatNoteRowTime';
 import type { DateBucketKey } from '@/android/lib/groupNotesByDate';
-import type { Note } from '@/data';
+import type { Note } from '@/android/shared/data';
 
 export type NoteRowProps = {
   note: Note;

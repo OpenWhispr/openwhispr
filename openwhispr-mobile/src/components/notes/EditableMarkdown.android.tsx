@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import type React from 'react';
 import { Platform, Pressable, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
-import { AppFont } from '@/lib/fonts';
-import { useIosColor } from '@/config/colors.android';
+import { AppFont } from '@/android/shared/lib/fonts';
+import { useIosColor } from '@/android/shared/config/colors';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface EditableMarkdownProps {

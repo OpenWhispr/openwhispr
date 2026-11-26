@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import type { InferenceMode, InferenceSelection } from '@/android/providers/mobileProviders';
 import { getProviderCredentialReference } from '@/services/providers/ProviderCredentials';
 import type { UserConfig } from '@/android/types';

@@ -7,9 +7,10 @@ import ar from '@/locales/ar/translation.json';
 jest.mock('@/lib/privateMode', () => ({
   ...jest.requireActual('@/lib/privateMode'),
   getPrivateModeUnavailableMessage: () =>
-    jest.requireActual('@/lib/privateMode.android').getPrivateModeUnavailableMessage(),
+    jest.requireActual('@/android/shared/lib/privateMode').getPrivateModeUnavailableMessage(),
 }));
 
+jest.mock('@/android/shared/lib/privateMode', () => jest.requireMock('@/lib/privateMode'));
 jest.mock('@/lib/accountAccess', () => jest.requireActual('@/lib/accountAccess.android'));
 
 const mockUpdateConfig = jest.fn();
@@ -33,6 +34,9 @@ jest.mock('@/store/useProcessingModeStore', () => ({
     getState: () => ({ activeMode: mockActiveMode, setActiveMode: mockSetMode }),
   },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
   LocalTranscriptionService: {
     preferredEngineDescriptor: () => ({ label: 'Parakeet v2' }),
@@ -48,8 +52,11 @@ jest.mock('@/lib/localReasoning', () => ({
   getLocalReasoningReadiness: () => mockTextReadiness(),
   // Jest uses its default resolver; exercise the implementation Metro selects on Android.
   getLocalReasoningUnavailableMessage: (...args: unknown[]) =>
-    jest.requireActual('@/lib/localReasoning.android').getLocalReasoningUnavailableMessage(...args),
+    jest
+      .requireActual('@/android/shared/lib/localReasoning')
+      .getLocalReasoningUnavailableMessage(...args),
 }));
+jest.mock('@/android/shared/lib/localReasoning', () => jest.requireMock('@/lib/localReasoning'));
 
 import { showAccountRequiredAlert } from '@/lib/accountAccess';
 import { switchWorkflowMode } from '@/lib/workflowModeSwitch.android';

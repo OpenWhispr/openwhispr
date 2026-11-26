@@ -11,6 +11,9 @@ jest.mock('expo-file-system/legacy', () => ({
 // permissions.ts re-exports the alert helper, which reaches nativewind through
 // the UI layer — untransformable here and irrelevant to the branch under test.
 jest.mock('@/components/ui/PermissionAlert', () => ({ showPermissionAlert: jest.fn() }));
+jest.mock('@/android/shared/components/ui/PermissionAlert', () =>
+  jest.requireMock('@/components/ui/PermissionAlert'),
+);
 
 const mockAddTranscript = jest.fn();
 jest.mock('@/store/useTranscriptStore', () => ({
@@ -26,6 +29,9 @@ jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: (selector: (state: unknown) => unknown) =>
     selector({ activeMode: 'cloud' }),
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 
 jest.mock('@/lib/inferenceRouting', () => ({
   snapshotTranscriptionJob: () => ({ provider: 'cloud' }),
@@ -51,6 +57,7 @@ jest.mock('@/lib/speechActivity', () => ({
   analyzeSpeechActivity: jest.fn(async () => null),
   createNoSpeechError: jest.fn(),
 }));
+jest.mock('@/android/shared/lib/speechActivity', () => jest.requireMock('@/lib/speechActivity'));
 jest.mock('@/lib/transcriptAudio', () => ({
   retainTranscriptAudio: jest.fn(async () => 'file:///docs/transcript-audio/test-id.wav'),
   deleteManagedTranscriptAudio: jest.fn(),
@@ -58,6 +65,9 @@ jest.mock('@/lib/transcriptAudio', () => ({
 jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguage: jest.fn(() => 'en'),
 }));
+jest.mock('@/android/shared/lib/transcriptionLanguage', () =>
+  jest.requireMock('@/lib/transcriptionLanguage'),
+);
 
 // jest hoists mock factories above the module body, so anything they close over
 // has to be mock-prefixed to survive the hoist.
@@ -82,6 +92,7 @@ jest.mock('@/utils/expoAudio', () => ({
   isExpoAudioAvailable: () => true,
   getDefaultRecorderOptions: () => ({}),
 }));
+jest.mock('@/android/shared/utils/expoAudio', () => jest.requireMock('@/utils/expoAudio'));
 
 beforeEach(() => {
   jest.clearAllMocks();

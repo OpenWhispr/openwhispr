@@ -48,16 +48,24 @@ jest.mock('@/store/useNotesStore', () => {
 });
 jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 jest.mock('@/data', () => ({ notesRepository: { getAllNotes: () => mockNotes } }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 jest.mock('@/data/spacesRepository', () => ({
   spacesRepository: { getPrivateSpace: () => ({ id: 1 }) },
 }));
+jest.mock('@/android/shared/data/spacesRepository', () =>
+  jest.requireMock('@/data/spacesRepository'),
+);
 jest.mock('@/hooks/useManualSyncRefresh', () => ({
   useManualSyncRefresh: () => ({ refreshing: false, onRefresh: jest.fn() }),
 }));
+jest.mock('@/android/shared/hooks/useManualSyncRefresh', () =>
+  jest.requireMock('@/hooks/useManualSyncRefresh'),
+);
 jest.mock('@/lib/notes/noteRouteOwner', () => ({
   withNotesRouteOwner: (params: object) => params,
 }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));
+jest.mock('@/android/shared/lib/utils', () => jest.requireMock('@/lib/utils'));
 jest.mock('../../home/kit', () => ({
   // Settings' look reads these at import time.
   glassEdge: { borderColor: 'rgba(0,0,0,0.06)', boxShadow: 'none' },
@@ -107,6 +115,9 @@ let mockDefaultWorkspace: string | null = null;
 jest.mock('@/sync/teamSpacesCapability', () => ({
   getDefaultPrivateWorkspaceId: () => mockDefaultWorkspace,
 }));
+jest.mock('@/android/shared/sync/teamSpacesCapability', () =>
+  jest.requireMock('@/sync/teamSpacesCapability'),
+);
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (select: (state: unknown) => unknown) => select({ user: { id: 'u1' } }),
 }));

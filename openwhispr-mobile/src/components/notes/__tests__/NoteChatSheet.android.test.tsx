@@ -1,3 +1,7 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/lib/notes/chatOverNote', () =>
+  jest.requireActual('@/android/shared/lib/notes/chatOverNote'),
+);
 import { Platform, TextInput } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import { NoteChatSheet } from '../NoteChatSheet.android';
@@ -9,9 +13,15 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 jest.mock('@/hooks/useKeyboardHeight', () => ({ useKeyboardHeight: () => 0 }));
+jest.mock('@/android/shared/hooks/useKeyboardHeight', () =>
+  jest.requireMock('@/hooks/useKeyboardHeight'),
+);
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/GlassIconButton', () => ({ GlassIconButton: () => null }));
+jest.mock('@/android/shared/components/ui/GlassIconButton', () =>
+  jest.requireMock('@/components/ui/GlassIconButton'),
+);
 jest.mock('@/components/notes/MarkdownRenderer', () => ({
   MarkdownRenderer: ({ content }: { content: string }) => {
     const { Text } = require('react-native');

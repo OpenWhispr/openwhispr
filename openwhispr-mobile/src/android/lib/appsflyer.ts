@@ -4,8 +4,8 @@ import { useConfigStore } from '@/android/store/useConfigStore';
 import {
   getTrackingAuthorizationStatus,
   type TrackingAuthorizationStatus,
-} from '@/lib/trackingTransparency';
-import type { SuperwallPlacement } from '@/lib/superwall';
+} from '@/android/shared/lib/trackingTransparency';
+import type { SuperwallPlacement } from '@/android/shared/lib/superwall';
 import type { TranscriptionProvider } from '@/android/types';
 
 type AppsFlyerSdk = (typeof import('react-native-appsflyer'))['default'];

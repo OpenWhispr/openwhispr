@@ -11,7 +11,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { AppFont } from '@/lib/fonts';
+import { AppFont } from '@/android/shared/lib/fonts';
 import { useTheme } from './ThemeProvider';
 
 /**

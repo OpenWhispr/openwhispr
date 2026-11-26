@@ -4,11 +4,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useKeyboardHeight } from '@/android/shared/hooks/useKeyboardHeight';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import { ProviderExecutionError } from '@/services/providers/ProviderExecution';
 import { getProviderErrorCopyKey } from '@/android/providers/providerErrorCopy';
-import { getLocalReasoningUnavailableMessage } from '@/lib/localReasoning';
+import { getLocalReasoningUnavailableMessage } from '@/android/shared/lib/localReasoning';
 import { MODE_LABELS } from '@/lib/inferenceModes';
 import {
   CLOUD_CLEANUP_NEEDS_ACCOUNT_NOTE,

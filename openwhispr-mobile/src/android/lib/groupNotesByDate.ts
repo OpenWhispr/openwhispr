@@ -1,4 +1,4 @@
-import type { Note } from '@/data';
+import type { Note } from '@/android/shared/data';
 import { groupNotesByDateWithPresentation } from '@/android/lib/groupNotesByDateCore';
 
 export type { DateBucket, DateBucketKey } from '@/android/lib/groupNotesByDateCore';

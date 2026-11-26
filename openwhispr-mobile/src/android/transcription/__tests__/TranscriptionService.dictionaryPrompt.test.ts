@@ -25,6 +25,9 @@ jest.mock('expo-file-system/legacy', () => ({
   FileSystemSessionType: { FOREGROUND: 0 },
 }));
 jest.mock('@/services/transcription/LocalWhisperService', () => ({ LocalWhisperService: {} }));
+jest.mock('@/android/shared/services/transcription/LocalWhisperService', () =>
+  jest.requireMock('@/services/transcription/LocalWhisperService'),
+);
 const mockLocalTranscribe = jest.fn(async () => ({ text: 'local text', duration: 1 }));
 jest.mock('@/android/transcription/LocalTranscriptionService', () => ({
   LocalTranscriptionService: {
@@ -43,6 +46,9 @@ jest.mock('../../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: { setItem: jest.fn() },
   APP_GROUP_KEYS: {},
 }));
+jest.mock('@/android/shared/modules/app-group-storage/index', () =>
+  jest.requireMock('../../../../modules/app-group-storage/src'),
+);
 
 const PERSONAL = ['Piha', 'Biscuit'];
 const WORKSPACE = Array.from({ length: 300 }, (_, i) => `ws${String(i).padStart(8, '0')}`);
@@ -65,6 +71,9 @@ jest.mock('@/store/useSharedDictionaryStore', () => ({
     getState: () => ({ hints: { space: [], workspace: mockSharedWorkspace } }),
   },
 }));
+jest.mock('@/android/shared/store/useSharedDictionaryStore', () =>
+  jest.requireMock('@/store/useSharedDictionaryStore'),
+);
 
 const mockProviderRoute = {
   mode: 'providers',

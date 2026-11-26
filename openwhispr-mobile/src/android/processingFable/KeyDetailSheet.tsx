@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
 import { BottomSheet, TextAction, showToast, useSettings } from '../settings/kit';
 import { useKeyCheck, type KeyProviderId } from '../settings/keyCheck';

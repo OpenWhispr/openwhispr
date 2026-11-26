@@ -6,7 +6,7 @@ import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { AppFont } from '@/lib/fonts';
+import { AppFont } from '@/android/shared/lib/fonts';
 import { GlassButton, SecondaryButton } from '../onboarding/kit';
 import { BottomSheet } from '../settings/kit';
 import { makeStyles, themeFor, useTheme } from '../ThemeProvider';

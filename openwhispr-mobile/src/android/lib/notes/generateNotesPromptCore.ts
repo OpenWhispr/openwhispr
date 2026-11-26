@@ -1,5 +1,5 @@
-import { sharedDictionaryHint } from '@/lib/sharedDictionaryHints';
-import type { Action } from '@/data';
+import { sharedDictionaryHint } from '@/android/shared/lib/sharedDictionaryHints';
+import type { Action } from '@/android/shared/data';
 
 export type GenerateNotesInputKind = 'plain-note' | 'meeting-transcript';
 

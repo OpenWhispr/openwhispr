@@ -3,6 +3,9 @@ const mockGetPolicy = jest.fn();
 jest.mock('@/services/providers/ProviderPolicy', () => ({
   getProviderPolicy: (): Promise<unknown> => mockGetPolicy(),
 }));
+jest.mock('@/android/shared/services/providers/ProviderPolicy', () =>
+  jest.requireMock('@/services/providers/ProviderPolicy'),
+);
 import {
   getInferenceSelection,
   getTranscriptionProvider,
@@ -16,6 +19,9 @@ jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useC
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => mockProcessing },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 let mockUser: { id: string; isAnonymous: boolean } | null = null;
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: mockUser }) },

@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { useSyncStore } from '@/sync/useSyncStore';
+import { useSyncStore } from '@/android/shared/sync/useSyncStore';
 import { requiresRealAccount } from '@/android/lib/accountAccess';
 import { setInsightsSyncConsent, useInsights } from '@/android/insights';
 import { useSettingsLook } from '@/android/settings/look';

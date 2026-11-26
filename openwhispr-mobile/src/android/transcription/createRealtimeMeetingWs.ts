@@ -14,21 +14,21 @@
 import { Buffer } from 'buffer';
 import * as Network from 'expo-network';
 import { api } from '@/android/lib/apiClient';
-import { withRetry, createApiRetryStrategy } from '@/lib/retry';
+import { withRetry, createApiRetryStrategy } from '@/android/shared/lib/retry';
 import {
   LivePCMStreaming,
   addPcmFrameListener,
   DEFAULT_SAMPLE_RATE,
   type PcmFrame,
 } from '../../../modules/live-pcm-streaming/src';
-import { transcriptionPolicyErrorFromApiError } from '@/services/transcription/policyErrors';
-import { createRealtimeEventReducer } from '@/services/transcription/realtimeEvents';
+import { transcriptionPolicyErrorFromApiError } from '@/android/shared/services/transcription/policyErrors';
+import { createRealtimeEventReducer } from '@/android/shared/services/transcription/realtimeEvents';
 import type {
   RealtimeCallbacks,
   RealtimeSession,
   RealtimeUtterance,
   RealtimeEventReducer,
-} from '@/services/transcription/realtimeEvents';
+} from '@/android/shared/services/transcription/realtimeEvents';
 import {
   PcmRingBuffer,
   applyLegOffset,
@@ -40,13 +40,13 @@ import {
   RECONNECT_INITIAL_DELAY_MS,
   RECONNECT_MAX_DELAY_MS,
   CONNECT_TIMEOUT_MS,
-} from '@/services/transcription/realtimeReconnect';
+} from '@/android/shared/services/transcription/realtimeReconnect';
 
 export type {
   RealtimeCallbacks,
   RealtimeSession,
   RealtimeUtterance,
-} from '@/services/transcription/realtimeEvents';
+} from '@/android/shared/services/transcription/realtimeEvents';
 
 const OPENAI_REALTIME_WS_URL = 'wss://api.openai.com/v1/realtime?intent=transcription';
 // bufferedAmount is undefined on RN, so batching sends at this cadence is the only

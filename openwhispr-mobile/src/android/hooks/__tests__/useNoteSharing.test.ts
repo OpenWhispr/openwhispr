@@ -35,6 +35,7 @@ jest.mock('@/store/useNotesStore', () => ({
 }));
 jest.mock('@/android/store/useNotesStore', () => jest.requireMock('@/store/useNotesStore'));
 jest.mock('@/data', () => ({ notesRepository: { getNoteById: jest.fn() } }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 jest.mock('@/sync/ensureNoteSynced', () => ({ ensureNoteSynced: jest.fn() }));
 jest.mock('@/android/sync/ensureNoteSynced', () => jest.requireMock('@/sync/ensureNoteSynced'));
 jest.mock('@/sync/syncEngine', () => ({ requestSync: jest.fn() }));
@@ -60,6 +61,9 @@ jest.mock('@/lib/notes/noteShareTokens', () => ({
   buildNoteShareUrl: (token: string): string => `https://notes.openwhispr.com/n/${token}`,
   buildNoteInviteUrl: (prefix: string): string => `https://notes.openwhispr.com/invite/${prefix}`,
 }));
+jest.mock('@/android/shared/lib/notes/noteShareTokens', () =>
+  jest.requireMock('@/lib/notes/noteShareTokens'),
+);
 jest.mock('@/data/remote/noteSharingApi', () => ({
   getNoteShareState: jest.fn(),
   getExternalSharingMode: jest.fn(),
@@ -73,6 +77,9 @@ jest.mock('@/data/remote/noteSharingApi', () => ({
   revokeNoteInvitation: jest.fn(),
   resendNoteInvitation: jest.fn(),
 }));
+jest.mock('@/android/shared/data/remote/noteSharingApi', () =>
+  jest.requireMock('@/data/remote/noteSharingApi'),
+);
 import * as Clipboard from 'expo-clipboard';
 import { ApiError } from '@/lib/apiClient';
 import * as sharing from '@/data/remote/noteSharingApi';

@@ -1,3 +1,8 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/lib/superwall', () => jest.requireActual('@/android/shared/lib/superwall'));
+jest.mock('@/lib/usageLimitError', () =>
+  jest.requireActual('@/android/shared/lib/usageLimitError'),
+);
 import { Alert, Platform } from 'react-native';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import type { UsageInfo } from '@/data/remote/usageApi';
@@ -35,6 +40,9 @@ jest.mock('expo-router', () => ({
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({ register: mockRegisterSuperwallGate }),
 }));
+jest.mock('@/android/shared/hooks/useSuperwallGate', () =>
+  jest.requireMock('@/hooks/useSuperwallGate'),
+);
 jest.mock('@/store/useUsageStore', () => ({
   useUsageStore: Object.assign(
     (selector: (state: typeof mockUsageStoreState) => unknown) => selector(mockUsageStoreState),

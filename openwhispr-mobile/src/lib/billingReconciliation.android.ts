@@ -3,7 +3,7 @@ import {
   getBillingIdentity,
   isBillingIdentityCurrent,
   type BillingIdentity,
-} from './billingIdentity';
+} from '@/android/shared/lib/billingIdentity';
 
 const inFlight = new Map<string, Promise<UsageInfo>>();
 
@@ -21,7 +21,7 @@ export function reconcileStoreBilling(): Promise<UsageInfo> {
 
 async function performReconciliation(identity: BillingIdentity): Promise<UsageInfo> {
   const { reconcileMobileBilling } =
-    require('@/data/remote/billingApi') as typeof import('@/data/remote/billingApi');
+    require('@/android/shared/data/remote/billingApi') as typeof import('@/android/shared/data/remote/billingApi');
   const { withRevenueCatUser } =
     require('@/android/lib/revenuecat') as typeof import('@/android/lib/revenuecat');
   const checkIdentity = () => {

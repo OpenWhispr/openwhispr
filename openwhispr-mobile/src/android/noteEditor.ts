@@ -5,8 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import { supportsVoiceEnrollment } from '@/lib/voiceEnrollmentCapability';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
+import { supportsVoiceEnrollment } from '@/android/shared/lib/voiceEnrollmentCapability';
 import { ProviderExecutionError } from '@/android/providers/ProviderExecutionError';
 import { getProviderErrorCopyKey } from '@/android/providers/providerErrorCopy';
 import type {

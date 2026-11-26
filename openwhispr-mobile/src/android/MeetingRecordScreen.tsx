@@ -1,6 +1,6 @@
-import { useMeetingCalendar } from '@/hooks/useMeetingCalendar';
-import { useMeetingElapsedTime } from '@/hooks/useMeetingElapsedTime';
-import { useMeetingDraft } from '@/hooks/useMeetingDraft';
+import { useMeetingCalendar } from '@/android/shared/hooks/useMeetingCalendar';
+import { useMeetingElapsedTime } from '@/android/shared/hooks/useMeetingElapsedTime';
+import { useMeetingDraft } from '@/android/shared/hooks/useMeetingDraft';
 import { LocalMeetingRecording } from '@/components/notes/LocalMeetingRecording.android';
 import { useTranslation } from 'react-i18next';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -14,30 +14,33 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Text } from '@/components/ui/Text';
 import { useTheme } from './ThemeProvider';
 import { GlassButton, OutlineButton } from './processingFable/look';
-import { ProcessingWaveform } from '@/components/features/WaveformVisualizer';
-import { notesRepository } from '@/data';
+import { ProcessingWaveform } from '@/android/shared/components/features/WaveformVisualizer';
+import { notesRepository } from '@/android/shared/data';
 import type { Note } from '@/data/types';
 import { useAudioRecording } from '@/android/hooks/useAudioRecording';
-import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
-import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
-import { useSuperwallGate } from '@/hooks/useSuperwallGate';
+import { useKeyboardHeight } from '@/android/shared/hooks/useKeyboardHeight';
+import { getPreferredTranscriptionLanguage } from '@/android/shared/lib/transcriptionLanguage';
+import { useSuperwallGate } from '@/android/shared/hooks/useSuperwallGate';
 import { useNotesStore } from '@/android/store/useNotesStore';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { canRunCloudMeeting } from '@/android/lib/accountAccess';
 import { meetingKey } from './providers/liveMeeting';
 import { meetingOnDevice } from './meetingRouting';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import { CloudMeetingFinishError, useCloudMeeting } from '@/hooks/useCloudMeeting.android';
-import { useMeetingLiveActivity, type MeetingActivityPhase } from '@/hooks/useMeetingLiveActivity';
+import {
+  useMeetingLiveActivity,
+  type MeetingActivityPhase,
+} from '@/android/shared/hooks/useMeetingLiveActivity';
 import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording.android';
-import { canTransition } from '@/lib/diarization/transcriptionStatus';
+import { canTransition } from '@/android/shared/lib/diarization/transcriptionStatus';
 import { MeetingSetup } from '@/android/MeetingSetup';
 import { runSpeakerPass, saveLiveSpeakers } from '@/android/liveSpeakers/session';
 import { forgetLinesSaved, whenLinesSaved } from '@/android/liveSpeakers/whenSaved';
 import { LocalMeetingRecorder } from '@/android/LocalMeetingRecorder';
 import { createLocalMeetingContext } from '@/android/localMeetingContext';
 import { Sentry } from '@/android/lib/sentry';
-import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
+import { SUPERWALL_PLACEMENTS } from '@/android/shared/lib/superwall';
 import type { TranscriptionStatus } from '@/android/types';
 type Phase =
   | 'prompt'

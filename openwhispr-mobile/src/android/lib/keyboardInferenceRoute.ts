@@ -1,6 +1,6 @@
 import { attachKeyboardRecoveryOwner } from '@/android/lib/keyboardRecoveryOwner';
 import { BackgroundUploader } from '../../../modules/background-uploader/src';
-import { AppGroupStorage } from '../../../modules/app-group-storage/src';
+import { AppGroupStorage } from '@/android/shared/modules/app-group-storage/index';
 import { snapshotTranscriptionJob, type TranscriptionJobRoute } from '@/lib/inferenceRouting';
 import type { InferenceSelection } from '@/android/providers/mobileProviders';
 import { resolveMobileInferenceRoute } from '@/android/providers/mobileProviders';

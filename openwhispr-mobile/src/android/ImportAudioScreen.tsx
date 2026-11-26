@@ -16,23 +16,23 @@ import { selectedSpeechModel } from './speechSelection';
 import { speechModelCoversRecording, unsupportedSpeechLanguages } from './speechCapabilities';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import registry from '@/config/languageRegistry.json';
-import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
+import { getPreferredTranscriptionLanguages } from '@/android/shared/lib/transcriptionLanguage';
 import { useFileUpload } from '@/android/hooks/useFileUpload';
-import { useSuperwallGate } from '@/hooks/useSuperwallGate';
+import { useSuperwallGate } from '@/android/shared/hooks/useSuperwallGate';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useNotesStore } from '@/android/store/useNotesStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { useUsageStore } from '@/android/store/useUsageStore';
 import { snapshotTranscriptionJob } from '@/lib/inferenceRouting';
 import { accountRequiredForCloud, showAccountRequiredAlert } from '@/android/lib/accountAccess';
-import { buildUsageGateParams, SUPERWALL_PLACEMENTS } from '@/lib/superwall';
+import { buildUsageGateParams, SUPERWALL_PLACEMENTS } from '@/android/shared/lib/superwall';
 import {
   ImportDestinationError,
   resolveImportDestination,
   saveImportedNote,
   type ImportDestination,
-} from '@/lib/notes/importDestination';
+} from '@/android/shared/lib/notes/importDestination';
 
 function parseId(value?: string): number | undefined {
   if (!value) return undefined;

@@ -1,11 +1,9 @@
-import { Alert, Dimensions, Platform, type AlertButton, type AlertOptions } from 'react-native';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { Alert, Dimensions, type AlertButton, type AlertOptions } from 'react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import NotesListScreen from '../NotesListScreen';
 
 // Shared values in creation order; each row's translateX is the first one it makes.
 const mockSharedValues: { value: number }[] = [];
-let mockPanUpdate: (event: { translationX: number }) => void;
-let mockPanEnd: () => void;
 const mockDeleteNote = jest.fn();
 const mockState = {
   folders: [],
@@ -62,10 +60,6 @@ jest.mock('@/hooks/useManualSyncRefresh', () => ({
 jest.mock('@/components/ui/Fab', () => ({ FAB_BOTTOM_PADDING: 0, Fab: () => null }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
-jest.mock('@/android/accountData', () => ({
-  useAccountData: { getState: () => ({ owner: 'local' }) },
-}));
-jest.mock('@/android/ui', () => ({ AccountButton: () => null }));
 jest.mock('@/components/notes/NotesTopBar', () => ({ NotesTopBar: () => null }));
 jest.mock('@/components/notes/GroupedList', () => {
   const { View } = require('react-native');
@@ -87,17 +81,13 @@ jest.mock('lucide-react-native', () => ({
 }));
 jest.mock('react-native-reanimated', () => {
   const { View } = require('react-native');
-  const { useRef } = require('react');
   return {
     __esModule: true,
     default: { View },
     useSharedValue: (initial: number) => {
-      const ref = useRef(null);
-      if (!ref.current) {
-        ref.current = { value: initial };
-        mockSharedValues.push(ref.current);
-      }
-      return ref.current;
+      const sharedValue = { value: initial };
+      mockSharedValues.push(sharedValue);
+      return sharedValue;
     },
     useAnimatedStyle: () => ({}),
     // Animations land on their target at once, finishing callbacks included.
@@ -117,15 +107,7 @@ jest.mock('react-native-reanimated', () => {
 });
 jest.mock('react-native-gesture-handler', () => {
   const gesture: Record<string, unknown> = {};
-  gesture.activeOffsetX = () => gesture;
-  gesture.onUpdate = (callback: typeof mockPanUpdate) => {
-    mockPanUpdate = callback;
-    return gesture;
-  };
-  gesture.onEnd = (callback: typeof mockPanEnd) => {
-    mockPanEnd = callback;
-    return gesture;
-  };
+  for (const method of ['activeOffsetX', 'onUpdate', 'onEnd']) gesture[method] = () => gesture;
   return {
     Gesture: { Pan: () => gesture },
     GestureDetector: ({ children }: { children: React.ReactNode }) => children,
@@ -137,10 +119,6 @@ type AlertCall = { buttons: AlertButton[]; options: AlertOptions | undefined };
 const swipeToDelete = (): AlertCall => {
   const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   render(<NotesListScreen />);
-  act(() => {
-    mockPanUpdate({ translationX: -100 });
-    mockPanEnd();
-  });
   fireEvent.press(screen.getByLabelText('Delete'));
   expect(alertSpy).toHaveBeenCalledTimes(1);
   const [, , buttons, options] = alertSpy.mock.calls[0];
@@ -152,7 +130,6 @@ const rowTranslateX = (): number => mockSharedValues[0].value;
 beforeEach(() => {
   jest.clearAllMocks();
   mockSharedValues.length = 0;
-  Platform.OS = 'ios';
 });
 
 describe('NotesListScreen swipe to delete', () => {
@@ -164,17 +141,16 @@ describe('NotesListScreen swipe to delete', () => {
   it('brings the note back when Cancel is pressed', () => {
     const { buttons } = swipeToDelete();
 
-    act(() => buttons.find((button) => button.style === 'cancel')?.onPress?.());
+    buttons.find((button) => button.style === 'cancel')?.onPress?.();
 
     expect(rowTranslateX()).toBe(0);
     expect(mockDeleteNote).not.toHaveBeenCalled();
   });
 
   it('brings the note back when Android dismisses the dialog', () => {
-    Platform.OS = 'android';
     const { options } = swipeToDelete();
 
-    act(() => options?.onDismiss?.());
+    options?.onDismiss?.();
 
     expect(rowTranslateX()).toBe(0);
     expect(mockDeleteNote).not.toHaveBeenCalled();

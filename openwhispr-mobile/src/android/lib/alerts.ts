@@ -1,5 +1,5 @@
 import { Alert, Platform, type AlertButton } from 'react-native';
-import { safeHaptics } from '@/lib/utils';
+import { safeHaptics } from '@/android/shared/lib/utils';
 
 type ConfirmCallback = () => void | Promise<void>;
 

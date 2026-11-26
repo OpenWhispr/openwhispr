@@ -1,3 +1,7 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/services/diarization/VoiceprintService', () =>
+  jest.requireActual('@/android/shared/services/diarization/VoiceprintService'),
+);
 import { Alert, Platform } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import VoiceEnrollmentScreen from '../VoiceEnrollmentScreen.android';
@@ -41,6 +45,7 @@ jest.mock('@/android/data/notesRepository', () => jest.requireMock('@/data/local
 jest.mock('@/data', () => ({
   notesRepository: { getSpeakerProfiles: () => mockSavedProfiles },
 }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 jest.mock('@/components/notes/VoiceEnrollmentRecorder', () => ({
   VoiceEnrollmentRecorder: (props: any) => {
     mockRecorderProps = props;
@@ -147,7 +152,7 @@ describe('VoiceEnrollmentScreen', () => {
 
   it('reloads profiles when the one being retrained was deleted, so the screen says it is gone', async () => {
     const { VOICE_ENROLLMENT_PROFILE_NOT_FOUND, VoiceEnrollmentError } = jest.requireActual(
-      '@/services/diarization/VoiceprintService',
+      '@/android/shared/services/diarization/VoiceprintService',
     );
     mockParams = { profileId: '2' };
     mockSavedProfiles = [{ id: 2, displayName: 'Alice', isOwner: 0 }];

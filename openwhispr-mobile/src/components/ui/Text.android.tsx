@@ -1,7 +1,7 @@
 import { createContext, forwardRef, useContext } from 'react';
 import { StyleSheet, Text as RNText, type TextProps, type TextStyle } from 'react-native';
 import { cssInterop } from 'nativewind';
-import { displayFontFamily, fontFamilyForWeight } from '@/lib/fonts';
+import { displayFontFamily, fontFamilyForWeight } from '@/android/shared/lib/fonts';
 
 // A span without its own weight (e.g. an accent-coloured word) keeps its
 // parent's face; picking one by its missing weight would drop it to regular

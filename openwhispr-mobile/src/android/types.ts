@@ -276,8 +276,8 @@ export interface AuthUser {
 
 // Note types
 export type NoteType = 'personal' | 'meeting' | 'upload';
-export type { Note, Folder, Action, NoteUpdate, ActionUpdate } from '@/data';
-export type { TranscriptionStatus } from '@/lib/diarization/diarizer';
+export type { Note, Folder, Action, NoteUpdate, ActionUpdate } from '@/android/shared/data';
+export type { TranscriptionStatus } from '@/android/shared/lib/diarization/diarizer';
 
 // Dictionary types
 export type DictionaryWords = string[];

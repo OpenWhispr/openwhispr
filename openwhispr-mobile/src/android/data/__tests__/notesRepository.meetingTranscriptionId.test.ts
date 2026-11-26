@@ -1,7 +1,7 @@
 import {
   getMeetingTranscriptionId,
   meetingTranscriptionIdKey,
-} from '@/lib/notes/meetingTranscriptionId';
+} from '@/android/shared/lib/notes/meetingTranscriptionId';
 import { LocalNotesRepository } from '@/data/local/notesRepository';
 import { createMemoryRepository } from '@/android/data/__tests__/testDb';
 

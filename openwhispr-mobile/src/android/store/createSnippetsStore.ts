@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { db } from '@/db';
 import { snippets } from '@/android/db/schema';
 import type { Snippet } from '@/android/dictation/snippets';
-import { randomUUID } from '@/lib/uuid';
+import { randomUUID } from '@/android/shared/lib/uuid';
 import { createLibraryLoad, type CreateLibraryLoad } from '@/android/store/createLibraryLoad';
 
 interface SnippetsStore {

@@ -10,6 +10,7 @@ jest.mock('@/lib/appleLLM', () => ({
     countTokens: jest.fn(async () => null),
   },
 }));
+jest.mock('@/android/shared/lib/appleLLM', () => jest.requireMock('@/lib/appleLLM'));
 
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => mockAuthState },
@@ -19,6 +20,9 @@ jest.mock('@/android/store/useAuthStore', () => jest.requireMock('@/store/useAut
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => mockProcessingState },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => mockConfigState },

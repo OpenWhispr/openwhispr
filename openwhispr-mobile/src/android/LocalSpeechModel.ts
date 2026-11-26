@@ -13,7 +13,7 @@ import {
   type AndroidSpeechModelId,
 } from './speechSelection';
 import { speechModelCoversRecording, speechModelSupportsLanguages } from './speechCapabilities';
-import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
+import { getPreferredTranscriptionLanguages } from '@/android/shared/lib/transcriptionLanguage';
 
 const diagnostics = __DEV__ || Constants.expoConfig?.extra?.openWhispr?.isDevelopment === true;
 

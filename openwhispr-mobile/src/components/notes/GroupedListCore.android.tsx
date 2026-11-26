@@ -6,7 +6,7 @@ import {
   NOTES_ROW_CONTENT_INSET,
   NOTES_ROW_PADDING_X,
   NOTES_ROW_PADDING_Y,
-} from './tokens';
+} from '@/android/shared/components/notes/tokens';
 
 type GroupedListProps = {
   radius?: number;

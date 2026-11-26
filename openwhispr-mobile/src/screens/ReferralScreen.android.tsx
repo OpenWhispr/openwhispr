@@ -19,7 +19,7 @@ import {
   type ReferralStats,
   type ReferralInvite,
 } from '@/android/lib/referralApi';
-import { safeHaptics, isValidEmail } from '@/lib/utils';
+import { safeHaptics, isValidEmail } from '@/android/shared/lib/utils';
 import { handleAccountRequiredError, requiresRealAccount } from '@/android/lib/accountAccess';
 import { router } from 'expo-router';
 import {

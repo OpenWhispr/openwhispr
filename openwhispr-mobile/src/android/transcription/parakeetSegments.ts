@@ -1,4 +1,4 @@
-import type { ParakeetTokenTiming } from '../../../modules/parakeet-asr/src';
+import type { ParakeetTokenTiming } from '@/android/shared/modules/parakeet-asr/index';
 import type { WhisperSegment } from '@/android/types';
 
 // Parakeet TDT emits SentencePiece subword tokens; a token starting with the boundary marker

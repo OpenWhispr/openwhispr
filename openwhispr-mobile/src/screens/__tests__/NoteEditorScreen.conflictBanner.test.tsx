@@ -90,7 +90,6 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 jest.mock('expo-router', () => ({
-  useFocusEffect: jest.fn(),
   useLocalSearchParams: () => ({ id: '7' }),
   useRouter: () => ({
     push: jest.fn(),

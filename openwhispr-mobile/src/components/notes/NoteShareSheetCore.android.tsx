@@ -13,32 +13,35 @@ import { MenuView, type MenuAction } from '@react-native-menu/menu';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
-import { useIosColor } from '@/config/colors.android';
+import { useIosColor } from '@/android/shared/config/colors';
 import { useTheme } from '@/android/ThemeProvider';
-import { GlassIconButton } from '@/components/ui/GlassIconButton';
+import { GlassIconButton } from '@/android/shared/components/ui/GlassIconButton';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { INVALID_EMAIL_ERROR, useNoteSharing } from '@/android/hooks/useNoteSharing';
 import type { UserConfig } from '@/android/types';
 import type { NoteShareCopy } from './NoteSharePrincipalCore.android';
-import { useSuperwallGate } from '@/hooks/useSuperwallGate';
-import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
+import { useSuperwallGate } from '@/android/shared/hooks/useSuperwallGate';
+import { SUPERWALL_PLACEMENTS } from '@/android/shared/lib/superwall';
 import { confirmDestructive } from '@/android/lib/alerts';
-import { isValidEmail } from '@/lib/utils';
+import { isValidEmail } from '@/android/shared/lib/utils';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { useNotesStore } from '@/android/store/useNotesStore';
 import { useUsageStore } from '@/android/store/useUsageStore';
 import { requestSync } from '@/android/sync/syncEngine';
-import { useSyncStore } from '@/sync/useSyncStore';
-import { emailDomain, isPersonalEmailDomain } from '@/lib/notes/noteShareDomains';
-import { isShareVisibilityAllowed } from '@/lib/notes/noteSharePolicy';
-import { isScopeGrant } from '@/lib/notes/noteShareAccess';
+import { useSyncStore } from '@/android/shared/sync/useSyncStore';
+import { emailDomain, isPersonalEmailDomain } from '@/android/shared/lib/notes/noteShareDomains';
+import { isShareVisibilityAllowed } from '@/android/shared/lib/notes/noteSharePolicy';
+import { isScopeGrant } from '@/android/shared/lib/notes/noteShareAccess';
 import type { ShareVisibility } from '@/data/remote/noteSharingTypes';
 import { GroupedList } from './GroupedList';
 import { NoteShareAccessList } from './NoteShareAccessList';
 import { NoteShareInviteField } from './NoteShareInviteField';
-import { ShareActionRow, ShareActionStrip } from './NoteShareActions';
+import {
+  ShareActionRow,
+  ShareActionStrip,
+} from '@/android/shared/components/notes/NoteShareActions';
 import { RowIcon } from './NoteSharePrincipal';
-import { ShareTextButton } from './ShareTextButton';
+import { ShareTextButton } from '@/android/shared/components/notes/ShareTextButton';
 
 export interface NoteShareSheetProps {
   noteId: number;

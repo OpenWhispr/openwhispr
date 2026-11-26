@@ -3,11 +3,11 @@ import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { usePlacement, useSuperwall } from 'expo-superwall';
 import type { PaywallResult, PaywallSkippedReason, PaywallState } from 'expo-superwall';
-import { SuperwallGateContext } from '@/hooks/useSuperwallGate';
+import { SuperwallGateContext } from '@/android/shared/hooks/useSuperwallGate';
 import type {
   RegisterSuperwallGateOptions,
   SuperwallPurchaseCompletion,
-} from '@/hooks/useSuperwallGate';
+} from '@/android/shared/hooks/useSuperwallGate';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { requiresRealAccount } from '@/android/lib/accountAccess';
 import { useUsageStore } from '@/android/store/useUsageStore';
@@ -16,12 +16,12 @@ import {
   resolveSuperwallPlacementName,
   SUPERWALL_PLACEMENTS,
   type SuperwallPlacement,
-} from '@/lib/superwall';
+} from '@/android/shared/lib/superwall';
 import { Sentry } from '@/android/lib/sentry';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';
 import { logPaywallViewed, logSubscription } from '@/android/lib/appsflyer';
 import { recordPurchaseForBilling } from './recordPurchaseForBilling';
-import { createAffiliatePaywallSession } from '@/lib/affiliatePaywall';
+import { createAffiliatePaywallSession } from '@/android/shared/lib/affiliatePaywall';
 
 type Props = {
   children: React.ReactNode;

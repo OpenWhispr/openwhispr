@@ -50,7 +50,7 @@ export async function meetingSpeechModel(
   const wanted =
     languages ??
     (
-      require('@/lib/transcriptionLanguage') as typeof import('@/lib/transcriptionLanguage')
+      require('@/android/shared/lib/transcriptionLanguage') as typeof import('@/android/shared/lib/transcriptionLanguage')
     ).getPreferredTranscriptionLanguages();
   const selected = selectedSpeechModel();
   const candidates = [

@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import { Toggle } from './settings/kit';
 import { setPrivateMode } from '@/lib/workflowModeSwitch.android';
 import {
@@ -21,7 +21,7 @@ import { Button, Card, Row, useUiStyles } from './ui';
 import type { AndroidSpeechModelId } from './speechSelection';
 import type { UserConfig } from '@/android/types';
 import { speechModelSupportsLanguages } from './speechCapabilities';
-import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
+import { getPreferredTranscriptionLanguages } from '@/android/shared/lib/transcriptionLanguage';
 export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { t } = useTranslation();
   const styles = useUiStyles();

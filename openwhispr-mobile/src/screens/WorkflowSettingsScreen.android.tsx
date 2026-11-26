@@ -3,27 +3,27 @@ import { ActivityIndicator, AppState, Keyboard, Linking, Pressable, View } from 
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useNavigation, usePreventRemove } from '@react-navigation/native';
-import { SettingsScreen } from '@/components/ui/SettingsScreen';
+import { SettingsScreen } from '@/android/shared/components/ui/SettingsScreen';
 import {
   SettingsRow,
   SettingsSection,
   SettingsTextFieldRow,
 } from '@/components/ui/SettingsSection';
 import { Text } from '@/components/ui/Text';
-import { Toast } from '@/components/ui/Toast';
+import { Toast } from '@/android/shared/components/ui/Toast';
 import { workflowSettingsPlatform } from './workflowSettingsPlatform';
-import { useToast } from '@/hooks/useToast';
+import { useToast } from '@/android/shared/hooks/useToast';
 import { confirmDestructive } from '@/android/lib/alerts';
 // The Android design's blue switch, not the iOS system-green one.
 import { Toggle } from '@/android/settings/kit';
 import { useTheme } from '@/android/ThemeProvider';
-import { OnDeviceModelSection } from '@/components/settings/OnDeviceModelSection';
-import { useConfigToggle } from '@/hooks/useConfigToggle';
-import { useCustomPromptsStore } from '@/store/useCustomPromptsStore';
-import { resolveCustomPrompt } from '@/config/prompts/registry';
+import { OnDeviceModelSection } from '@/android/shared/components/settings/OnDeviceModelSection';
+import { useConfigToggle } from '@/android/shared/hooks/useConfigToggle';
+import { useCustomPromptsStore } from '@/android/shared/store/useCustomPromptsStore';
+import { resolveCustomPrompt } from '@/android/shared/config/prompts/registry';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import type { LocalReasoningReadiness, UserConfig } from '@/android/types';
 import {
   type ProviderCredential,
@@ -43,27 +43,27 @@ import {
   workflowSelection,
   workflowSwitchedOff,
 } from '@/lib/aiWorkflows';
-import { isLocalModelKey } from '@/lib/localModelCatalog';
-import { getDictationAgentName } from '@/lib/dictationAgent';
-import { safeHaptics } from '@/lib/utils';
+import { isLocalModelKey } from '@/android/shared/lib/localModelCatalog';
+import { getDictationAgentName } from '@/android/shared/lib/dictationAgent';
+import { safeHaptics } from '@/android/shared/lib/utils';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { type ModeSwitchResult, switchWorkflowMode } from '@/lib/workflowModeSwitch';
-import { getPrivateModeReadiness } from '@/lib/privateMode';
+import { getPrivateModeReadiness } from '@/android/shared/lib/privateMode';
 import {
   getLocalReasoningReadiness,
   getLocalReasoningUnavailableMessage,
   isLocalReasoningUnsupported,
-} from '@/lib/localReasoning';
+} from '@/android/shared/lib/localReasoning';
 import {
   discoverProviderModels,
   testProviderConnection,
 } from '@/services/providers/ProviderExecution';
-import { getProviderPolicy } from '@/services/providers/ProviderPolicy';
+import { getProviderPolicy } from '@/android/shared/services/providers/ProviderPolicy';
 import {
   getModelListBaseCandidates,
   isSecureHttpEndpoint,
   normalizeBaseUrl,
-} from '@/lib/providerEndpoints';
+} from '@/android/shared/lib/providerEndpoints';
 import {
   defaultModelId,
   getMobileProvidersForScope,

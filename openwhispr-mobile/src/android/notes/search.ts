@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import type { Note } from '@/data';
+import type { Note } from '@/android/shared/data';
 
 export type MatchPlace = 'title' | 'notes' | 'summary' | 'transcript';
 

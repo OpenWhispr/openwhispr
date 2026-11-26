@@ -5,11 +5,11 @@ import { MenuView } from '@react-native-menu/menu';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { GlassCapsule, GlassIconButton } from '@/components/ui/GlassIconButton';
-import { displayFontFamily } from '@/lib/fonts';
-import type { TranscriptBlock } from '@/lib/diarization/transcriptDisplay';
+import { GlassCapsule, GlassIconButton } from '@/android/shared/components/ui/GlassIconButton';
+import { displayFontFamily } from '@/android/shared/lib/fonts';
+import type { TranscriptBlock } from '@/android/shared/lib/diarization/transcriptDisplay';
 import { SpeakerTranscript } from './SpeakerTranscript';
-import { useIosColor } from '@/config/colors.android';
+import { useIosColor } from '@/android/shared/config/colors';
 
 interface TranscriptSheetProps {
   visible: boolean;

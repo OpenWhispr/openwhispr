@@ -77,6 +77,7 @@ jest.mock('@/sync/useSyncStore', () => ({
   useSyncStore: (selector: (state: { policyBlocked: boolean }) => unknown) =>
     selector({ policyBlocked: false }),
 }));
+jest.mock('@/android/shared/sync/useSyncStore', () => jest.requireMock('@/sync/useSyncStore'));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: require('zustand').create(() => ({ config: {}, error: null })),
 }));

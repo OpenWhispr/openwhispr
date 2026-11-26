@@ -17,12 +17,17 @@ jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useC
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: 'cloud', setActiveMode: jest.fn() }) },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/lib/privateMode', () => ({
   getPrivateModeReadiness: async () => ({ status: 'ready' }),
 }));
+jest.mock('@/android/shared/lib/privateMode', () => jest.requireMock('@/lib/privateMode'));
 jest.mock('@/lib/localReasoning', () => ({
   getLocalReasoningReadiness: async () => ({ status: 'ready' }),
 }));
+jest.mock('@/android/shared/lib/localReasoning', () => jest.requireMock('@/lib/localReasoning'));
 
 it('keeps the upstream default workflow-switch API', () => {
   expect(Object.keys(defaultSwitch).sort()).toEqual(['pickLocalModel', 'switchWorkflowMode']);

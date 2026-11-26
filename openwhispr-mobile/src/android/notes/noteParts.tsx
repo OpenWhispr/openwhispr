@@ -1,10 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, ScrollView, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
-import { safeHaptics } from '@/lib/utils';
+import { safeHaptics } from '@/android/shared/lib/utils';
 import { SegmentedControl } from '@/components/ui/SegmentedControl.android';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
-import type { TranscriptBlock } from '@/lib/diarization/transcriptDisplay';
+import type { TranscriptBlock } from '@/android/shared/lib/diarization/transcriptDisplay';
 import { useReduceMotion } from '../settings/kit';
 import { BackButton, IconButton, useNotesLook } from './look';
 import { initialsOf } from './initials';

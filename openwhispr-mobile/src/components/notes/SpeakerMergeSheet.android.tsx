@@ -3,8 +3,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Modal, Platform, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import type { Speaker } from '@/data/types';
-import { useIosColor } from '@/config/colors.android';
-import { getSpeakerDisplayColor, getSpeakerDisplayName } from '@/lib/diarization/transcriptDisplay';
+import { useIosColor } from '@/android/shared/config/colors';
+import {
+  getSpeakerDisplayColor,
+  getSpeakerDisplayName,
+} from '@/android/shared/lib/diarization/transcriptDisplay';
 
 interface SpeakerMergeSheetProps {
   visible: boolean;

@@ -7,8 +7,8 @@ import {
   ApiError,
   UPGRADE_REQUIRED_MESSAGE,
 } from '@/android/lib/apiClient';
-import { parseApiErrorBody } from '@/lib/apiErrorBody';
-import { withRetry } from '@/lib/retry';
+import { parseApiErrorBody } from '@/android/shared/lib/apiErrorBody';
+import { withRetry } from '@/android/shared/lib/retry';
 import { stripThinkingTags } from '@/android/reasoning/buildProviderPrompt';
 
 // Single budget for the entire streaming call: connect + receive.

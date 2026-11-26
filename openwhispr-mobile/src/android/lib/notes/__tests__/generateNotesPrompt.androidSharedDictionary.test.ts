@@ -1,5 +1,9 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/lib/sharedDictionaryHints', () =>
+  jest.requireActual('@/android/shared/lib/sharedDictionaryHints'),
+);
 import { buildActionSystemPrompt } from '@/lib/notes/generateNotesPrompt.android';
-import { DESKTOP_DEFAULT_NOTE_SYSTEM_PROMPT } from '@/lib/notes/desktopDefaultNotesPrompt';
+import { DESKTOP_DEFAULT_NOTE_SYSTEM_PROMPT } from '@/android/shared/lib/notes/desktopDefaultNotesPrompt';
 import { sharedDictionaryHint } from '@/lib/sharedDictionaryHints';
 
 it('keeps the desktop notes contract while appending personal and shared spellings', () => {

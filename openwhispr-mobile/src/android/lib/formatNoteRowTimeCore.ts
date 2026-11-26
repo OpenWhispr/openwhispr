@@ -1,5 +1,5 @@
 import type { DateBucketKey } from '@/android/lib/groupNotesByDate';
-import { parseNoteTimestamp } from '@/lib/parseNoteTimestamp';
+import { parseNoteTimestamp } from '@/android/shared/lib/parseNoteTimestamp';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 

@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { safeHaptics } from '@/lib/utils';
+import { safeHaptics } from '@/android/shared/lib/utils';
 import { useDictionaryStore, type DictionaryEntry } from '@/android/store/useDictionaryStore';
 import { useSnippetsStore } from '@/android/store/useSnippetsStore';
 import { Field } from './Field';

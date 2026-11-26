@@ -97,6 +97,9 @@ const MockText = require('react-native').Text;
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/GradientGlassSurface', () => ({ GradientGlassSurface: () => null }));
+jest.mock('@/android/shared/components/ui/GradientGlassSurface', () =>
+  jest.requireMock('@/components/ui/GradientGlassSurface'),
+);
 jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockPush(...args) },
   useLocalSearchParams: () => ({ scope: mockScope }),
@@ -110,9 +113,11 @@ jest.mock('@/lib/localReasoning', () => ({
   ...jest.requireActual('@/lib/localReasoning'),
   getLocalReasoningReadiness: (...args: unknown[]) => mockLocalReadiness(...args),
 }));
+jest.mock('@/android/shared/lib/localReasoning', () => jest.requireMock('@/lib/localReasoning'));
 jest.mock('@/lib/privateMode', () => ({
   getPrivateModeReadiness: () => mockPrivateReadiness(),
 }));
+jest.mock('@/android/shared/lib/privateMode', () => jest.requireMock('@/lib/privateMode'));
 jest.mock('@/lib/workflowModeSwitch', () => ({
   switchWorkflowMode: (...args: unknown[]) => mockSwitchMode(...args),
   leavingLocalModeWithLocalReasoning: async () => mockLocalReasoningReady,
@@ -132,14 +137,23 @@ jest.mock('@/components/settings/OnDeviceModelSection', () => ({
     </MockText>
   ),
 }));
+jest.mock('@/android/shared/components/settings/OnDeviceModelSection', () =>
+  jest.requireMock('@/components/settings/OnDeviceModelSection'),
+);
 const mockToggle = jest.fn();
 jest.mock('@/hooks/useConfigToggle', () => ({
   useConfigToggle: (key: string) => (value: unknown) => mockToggle(key, value),
 }));
+jest.mock('@/android/shared/hooks/useConfigToggle', () =>
+  jest.requireMock('@/hooks/useConfigToggle'),
+);
 jest.mock('@/store/useCustomPromptsStore', () => ({
   useCustomPromptsStore: (selector: (state: unknown) => unknown) =>
     selector({ customPrompts: { cleanup: mockStoredPrompt } }),
 }));
+jest.mock('@/android/shared/store/useCustomPromptsStore', () =>
+  jest.requireMock('@/store/useCustomPromptsStore'),
+);
 jest.mock('@react-navigation/elements', () => ({ useHeaderHeight: () => 0 }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ dispatch: mockDispatch }),
@@ -163,6 +177,7 @@ jest.mock('@/components/ui/Toast', () => ({
       </MockText>
     ) : null,
 }));
+jest.mock('@/android/shared/components/ui/Toast', () => jest.requireMock('@/components/ui/Toast'));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: Object.assign(
     (selector: (state: unknown) => unknown) =>
@@ -175,6 +190,9 @@ jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: (selector: (state: unknown) => unknown) =>
     selector({ setActiveMode: mockSetActiveMode, activeMode: mockActiveMode }),
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/services/providers/ProviderExecution', () => ({
   discoverProviderModels: (...args: unknown[]) => mockDiscoverModels(...args),
   testProviderConnection: (...args: unknown[]) => mockTestConnection(...args),
@@ -183,6 +201,9 @@ jest.mock('@/services/providers/ProviderExecution', () => ({
 jest.mock('@/services/providers/ProviderPolicy', () => ({
   getProviderPolicy: () => mockPolicy(),
 }));
+jest.mock('@/android/shared/services/providers/ProviderPolicy', () =>
+  jest.requireMock('@/services/providers/ProviderPolicy'),
+);
 const mockGetCredential = jest.fn().mockResolvedValue(null);
 jest.mock('@/services/providers/ProviderCredentials', () => ({
   getProviderCredentialReference: jest.fn(async (providerId: string, endpoint?: string) =>

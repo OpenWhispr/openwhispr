@@ -1,8 +1,14 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/sync/syncContext', () => jest.requireActual('@/android/shared/sync/syncContext'));
+jest.mock('@/sync/useSyncStore', () => jest.requireActual('@/android/shared/sync/useSyncStore'));
 jest.mock('@/android/accountData', () => ({ assertAccountDataOwner: jest.fn() }));
 jest.mock('@/sync/privateNoteDeletion', () => ({
   pushPrivateNoteDeletes: jest.fn(),
   clearPrivateNoteDeletionQueue: jest.fn(),
 }));
+jest.mock('@/android/shared/sync/privateNoteDeletion', () =>
+  jest.requireMock('@/sync/privateNoteDeletion'),
+);
 // syncEngine.ts pulls in a long chain of stores/repositories/sync modules.
 // Every dependency is mocked so this file can exercise runSyncNow's gating
 // and error-handling logic (in particular the new policyBlocked state) in
@@ -77,9 +83,13 @@ jest.mock('@/data', () => ({
     dropRemoteIdsForAccountLink: jest.fn(),
   },
 }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 
 const mockFetchUsage = jest.fn();
 jest.mock('@/lib/chat/chatHistory', () => ({ clearChatHistory: jest.fn() }));
+jest.mock('@/android/shared/lib/chat/chatHistory', () =>
+  jest.requireMock('@/lib/chat/chatHistory'),
+);
 jest.mock('@/data/remote/usageApi', () => ({
   fetchUsage: (...args: unknown[]) => mockFetchUsage(...args),
 }));
@@ -99,36 +109,49 @@ const mockSyncSpaces = jest.fn();
 jest.mock('@/sync/syncSpaces', () => ({
   syncSpaces: (...args: unknown[]) => mockSyncSpaces(...args),
 }));
+jest.mock('@/android/shared/sync/syncSpaces', () => jest.requireMock('@/sync/syncSpaces'));
 jest.mock('@/sync/pullFolders', () => ({
   pullFolders: (...args: unknown[]) => mockPullFolders(...args),
 }));
+jest.mock('@/android/shared/sync/pullFolders', () => jest.requireMock('@/sync/pullFolders'));
 jest.mock('@/sync/pullFoldersTeam', () => ({
   pullFoldersTeam: (...args: unknown[]) => mockPullFoldersTeam(...args),
 }));
+jest.mock('@/android/shared/sync/pullFoldersTeam', () =>
+  jest.requireMock('@/sync/pullFoldersTeam'),
+);
 jest.mock('@/sync/pullNotes', () => ({
   pullNotes: (...args: unknown[]) => mockPullNotes(...args),
 }));
+jest.mock('@/android/shared/sync/pullNotes', () => jest.requireMock('@/sync/pullNotes'));
 jest.mock('@/sync/pullNotesTeam', () => ({
   pullNotesTeam: (...args: unknown[]) => mockPullNotesTeam(...args),
 }));
+jest.mock('@/android/shared/sync/pullNotesTeam', () => jest.requireMock('@/sync/pullNotesTeam'));
 jest.mock('@/sync/pushFolders', () => ({
   pushFolders: (...args: unknown[]) => mockPushFolders(...args),
 }));
+jest.mock('@/android/shared/sync/pushFolders', () => jest.requireMock('@/sync/pushFolders'));
 jest.mock('@/sync/pushNotes', () => ({
   pushNotes: (...args: unknown[]) => mockPushNotes(...args),
 }));
+jest.mock('@/android/shared/sync/pushNotes', () => jest.requireMock('@/sync/pushNotes'));
 jest.mock('@/sync/pullDictionary', () => ({
   pullDictionary: (...args: unknown[]) => mockPullDictionary(...args),
 }));
+jest.mock('@/android/shared/sync/pullDictionary', () => jest.requireMock('@/sync/pullDictionary'));
 jest.mock('@/sync/pushDictionary', () => ({
   pushDictionary: (...args: unknown[]) => mockPushDictionary(...args),
 }));
+jest.mock('@/android/shared/sync/pushDictionary', () => jest.requireMock('@/sync/pushDictionary'));
 jest.mock('@/sync/pullSnippets', () => ({
   pullSnippets: (...args: unknown[]) => mockPullSnippets(...args),
 }));
+jest.mock('@/android/shared/sync/pullSnippets', () => jest.requireMock('@/sync/pullSnippets'));
 jest.mock('@/sync/pushSnippets', () => ({
   pushSnippets: (...args: unknown[]) => mockPushSnippets(...args),
 }));
+jest.mock('@/android/shared/sync/pushSnippets', () => jest.requireMock('@/sync/pushSnippets'));
 
 const mockPullSharedDictionary = jest.fn();
 jest.mock('@/sync/pullSharedDictionary', () => ({
@@ -146,6 +169,9 @@ jest.mock('@/store/useSharedDictionaryStore', () => ({
   },
   loadSharedDictionaryIfOwnedBy: (...args: unknown[]) => mockLoadSharedDictionaryIfOwnedBy(...args),
 }));
+jest.mock('@/android/shared/store/useSharedDictionaryStore', () =>
+  jest.requireMock('@/store/useSharedDictionaryStore'),
+);
 
 jest.mock('@/store/useDictionaryStore', () => ({
   useDictionaryStore: { getState: () => ({ reset: jest.fn(), load: jest.fn() }) },
@@ -162,6 +188,9 @@ const mockRunInitialBackfillIfNeeded = jest.fn();
 jest.mock('@/sync/initialBackfill', () => ({
   runInitialBackfillIfNeeded: (...args: unknown[]) => mockRunInitialBackfillIfNeeded(...args),
 }));
+jest.mock('@/android/shared/sync/initialBackfill', () =>
+  jest.requireMock('@/sync/initialBackfill'),
+);
 
 import { requestSync, subscribeSyncCompletion } from '@/sync/syncEngine';
 import { requestSync as requestAndroidSync } from '@/sync/syncEngine.android';

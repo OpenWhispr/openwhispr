@@ -11,13 +11,13 @@ import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-ha
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
-import { GlassIconButton } from '@/components/ui/GlassIconButton';
-import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
+import { GlassIconButton } from '@/android/shared/components/ui/GlassIconButton';
+import { GradientGlassSurface } from '@/android/shared/components/ui/GradientGlassSurface';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
+import { useKeyboardHeight } from '@/android/shared/hooks/useKeyboardHeight';
 import { useSheetDragToDismiss } from '@/android/hooks/useSheetDragToDismiss';
 import { makeStyles } from '@/android/ThemeProvider';
-import { useIosColor } from '@/config/colors.android';
+import { useIosColor } from '@/android/shared/config/colors';
 
 const SHEET_RADIUS = 28;
 // Gap below the safe-area inset, leaving a sliver of the dimmed screen above the

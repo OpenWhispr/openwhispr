@@ -7,22 +7,22 @@ import registry from '@/config/languageRegistry.json';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useUsageStore } from '@/android/store/useUsageStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
+import { useGoogleCalendarStore } from '@/android/shared/store/useGoogleCalendarStore';
 import { needsReconnect } from '@/android/calendar/connect';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
-import { useSyncStore } from '@/sync/useSyncStore';
+import { useSyncStore } from '@/android/shared/sync/useSyncStore';
 import { requestSync } from '@/android/sync/syncEngine';
 import { requiresRealAccount } from '@/android/lib/accountAccess';
-import { getAccountDisplay } from '@/lib/accountDisplay';
-import { safeHaptics } from '@/lib/utils';
+import { getAccountDisplay } from '@/android/shared/lib/accountDisplay';
+import { safeHaptics } from '@/android/shared/lib/utils';
 import { AndroidDictation } from '../../modules/android-dictation/src';
 import { useHome } from '@/android/home/kit';
 import { useSettingsLook } from '@/android/settings/look';
 import { LinkText, WordsMeter, openUpgrade } from '@/android/plan/parts';
 import { usePlanT } from '@/android/plan/strings';
-import { useSuperwallGate } from '@/hooks/useSuperwallGate';
-import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
+import { useSuperwallGate } from '@/android/shared/hooks/useSuperwallGate';
+import { SUPERWALL_PLACEMENTS } from '@/android/shared/lib/superwall';
 import {
   Badge,
   Group,

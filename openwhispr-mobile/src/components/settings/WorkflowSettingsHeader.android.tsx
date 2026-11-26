@@ -3,8 +3,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { safeHaptics } from '@/lib/utils';
-import { useIosColor } from '@/config/colors.android';
+import { safeHaptics } from '@/android/shared/lib/utils';
+import { useIosColor } from '@/android/shared/config/colors';
 
 // Android's native toolbar truncates long workflow names at large text sizes.
 // An intrinsic-height header keeps the full title and back control available.

@@ -6,9 +6,9 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { useUsageStore } from '@/android/store/useUsageStore';
-import { useSuperwallGate } from '@/hooks/useSuperwallGate';
-import { SUPERWALL_PLACEMENTS, buildUsageGateParams } from '@/lib/superwall';
-import { createStripeBillingPortalSession } from '@/data/remote/billingApi';
+import { useSuperwallGate } from '@/android/shared/hooks/useSuperwallGate';
+import { SUPERWALL_PLACEMENTS, buildUsageGateParams } from '@/android/shared/lib/superwall';
+import { createStripeBillingPortalSession } from '@/android/shared/data/remote/billingApi';
 import {
   restoreAndroidPurchases,
   refreshAndroidBillingAccess,

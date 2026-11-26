@@ -1,4 +1,4 @@
-import { notesRepository } from '@/data';
+import { notesRepository } from '@/android/shared/data';
 import { useNotesStore } from '@/android/store/useNotesStore';
 
 function escape(text: string): string {

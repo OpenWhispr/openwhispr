@@ -12,13 +12,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
-import { GlassIconButton } from '@/components/ui/GlassIconButton';
+import { GlassIconButton } from '@/android/shared/components/ui/GlassIconButton';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { MarkdownRenderer } from '@/components/notes/MarkdownRenderer';
-import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
-import { BRAND } from '@/config/colors';
-import { useIosColor } from '@/config/colors.android';
-import type { ChatOverNoteMessage } from '@/lib/notes/chatOverNote';
+import { useKeyboardHeight } from '@/android/shared/hooks/useKeyboardHeight';
+import { BRAND } from '@/android/shared/config/colors';
+import { useIosColor } from '@/android/shared/config/colors';
+import type { ChatOverNoteMessage } from '@/android/shared/lib/notes/chatOverNote';
 import type { NoteChatSuggestion } from '@/android/lib/notes/noteChatSuggestions';
 
 const INPUT_KEYBOARD_GAP = 10;

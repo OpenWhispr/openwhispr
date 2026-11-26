@@ -23,6 +23,7 @@ jest.mock('@/data', () => ({
     replaceSegments: (...args: unknown[]) => mockReplace(...args),
   },
 }));
+jest.mock('@/android/shared/data', () => jest.requireMock('@/data'));
 jest.mock('@/store/useNotesStore', () => ({
   useNotesStore: { setState: (...args: unknown[]) => mockSetState(...args) },
 }));

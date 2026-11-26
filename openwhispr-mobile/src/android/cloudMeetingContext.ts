@@ -1,5 +1,5 @@
 import { useAuthStore } from '@/android/store/useAuthStore';
-import { notesRepository } from '@/data';
+import { notesRepository } from '@/android/shared/data';
 import { Sentry } from '@/android/lib/sentry';
 import { createLocalMeetingContext } from './localMeetingContext';
 

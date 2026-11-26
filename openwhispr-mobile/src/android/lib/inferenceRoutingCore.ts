@@ -1,5 +1,5 @@
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import {
   type InferenceScope,
   type InferenceSelection,
@@ -12,7 +12,7 @@ import type {
   TranscriptionRequest,
   TextInferenceSnapshot,
 } from '@/android/types';
-import { isLocalModelKey, type LocalModelKey } from '@/lib/localModelCatalog';
+import { isLocalModelKey, type LocalModelKey } from '@/android/shared/lib/localModelCatalog';
 import { cloudAccessFor, unsetSelection, workflowSelection } from '@/lib/aiWorkflows';
 import type { CloudAccess } from '@/lib/inferenceModes';
 
@@ -94,7 +94,7 @@ export function createInferenceRouting(routingPolicy?: InferenceRoutingPolicy) {
     }
     // Load policy only when direct provider execution is actually requested.
     const { getProviderPolicy } =
-      require('@/services/providers/ProviderPolicy') as typeof import('@/services/providers/ProviderPolicy');
+      require('@/android/shared/services/providers/ProviderPolicy') as typeof import('@/android/shared/services/providers/ProviderPolicy');
     const policy = await getProviderPolicy();
     const result = resolveMobileInferenceRoute({
       scope,

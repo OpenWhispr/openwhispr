@@ -52,13 +52,20 @@ const mockRegister = jest.fn(async () => undefined);
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({ register: mockRegister }),
 }));
+jest.mock('@/android/shared/hooks/useSuperwallGate', () =>
+  jest.requireMock('@/hooks/useSuperwallGate'),
+);
 jest.mock('@/lib/superwall', () => ({
   SUPERWALL_PLACEMENTS: { accountBillingOpen: 'billing', cloudUsageLimitReached: 'limit' },
   buildUsageGateParams: () => ({ wordsRemaining: 0 }),
 }));
+jest.mock('@/android/shared/lib/superwall', () => jest.requireMock('@/lib/superwall'));
 jest.mock('@/data/remote/billingApi', () => ({
   createStripeBillingPortalSession: jest.fn(async () => 'https://billing.example/portal'),
 }));
+jest.mock('@/android/shared/data/remote/billingApi', () =>
+  jest.requireMock('@/data/remote/billingApi'),
+);
 jest.mock('../billing', () => ({
   useAndroidBillingStatus: require('zustand').create(() => ({ accounts: {}, since: {} })),
   restoreAndroidPurchases: jest.fn(async () => 'none'),

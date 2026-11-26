@@ -1,4 +1,4 @@
-import type { Action } from '@/data';
+import type { Action } from '@/android/shared/data';
 
 /**
  * Figma E4, "Write the summary as": the built-in templates, then any of the user's own

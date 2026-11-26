@@ -1,3 +1,7 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/services/transcription/realtimeEvents', () =>
+  jest.requireActual('@/android/shared/services/transcription/realtimeEvents'),
+);
 import { render } from '@testing-library/react-native';
 import { LiveTranscriptListView } from '../LiveTranscriptListView.android';
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
@@ -5,6 +9,7 @@ import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents'
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/config/colors', () => ({ BRAND: '#007AFF' }));
+jest.mock('@/android/shared/config/colors', () => jest.requireMock('@/config/colors'));
 
 const line = (itemId: string, text: string): RealtimeUtterance => ({
   itemId,

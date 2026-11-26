@@ -1,4 +1,4 @@
-import { androidCopy } from '@/lib/androidCopy';
+import { androidCopy } from '@/android/shared/lib/androidCopy';
 import type { AccountAccessPresentation } from '@/android/lib/accountAccessCore';
 
 const ANDROID_FEATURE_KEYS: Record<string, string> = {

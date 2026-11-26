@@ -3,7 +3,7 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { GroupedList } from './GroupedList';
 import { SectionHeader } from './SectionHeader';
-import { SpeakerAvatar } from './SpeakerAvatar';
+import { SpeakerAvatar } from '@/android/shared/components/notes/SpeakerAvatar';
 import { SwipeableCard, type RestoreRow } from '@/components/ui/SwipeableCard';
 import type { SpeakerProfile } from '@/data/types';
 import { useTheme } from '@/android/ThemeProvider';

@@ -60,7 +60,10 @@ function androidFiles(): string[] {
     for (const entry of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
       const rel = path.posix.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name !== '__tests__' && entry.name !== 'assets') walk(rel);
+        // src/android/shared holds Android's copies of formerly shared files, as main had them;
+        // like the originals, they aren't held to the Android theme rules.
+        if (entry.name !== '__tests__' && entry.name !== 'assets' && rel !== 'src/android/shared')
+          walk(rel);
       } else if (/\.(tsx?|jsx?)$/.test(entry.name)) out.push(rel);
     }
   };

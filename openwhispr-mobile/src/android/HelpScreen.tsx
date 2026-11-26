@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
-import { openExternal, openMail } from '@/lib/openExternal';
+import { openExternal, openMail } from '@/android/shared/lib/openExternal';
 import { Group, ListRow, SettingsPage, useSettings } from './settings/kit';
 
 export default function HelpScreen() {

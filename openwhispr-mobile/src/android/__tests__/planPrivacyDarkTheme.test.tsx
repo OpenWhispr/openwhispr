@@ -71,8 +71,15 @@ jest.mock('@/android/store/useUsageStore', () => jest.requireMock('@/store/useUs
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({ register: jest.fn() }),
 }));
+jest.mock('@/android/shared/hooks/useSuperwallGate', () =>
+  jest.requireMock('@/hooks/useSuperwallGate'),
+);
 jest.mock('@/lib/superwall', () => ({ SUPERWALL_PLACEMENTS: { accountBillingOpen: 'billing' } }));
+jest.mock('@/android/shared/lib/superwall', () => jest.requireMock('@/lib/superwall'));
 jest.mock('@/data/remote/billingApi', () => ({ createStripeBillingPortalSession: jest.fn() }));
+jest.mock('@/android/shared/data/remote/billingApi', () =>
+  jest.requireMock('@/data/remote/billingApi'),
+);
 jest.mock('../billing', () => ({
   useAndroidBillingStatus: require('zustand').create(() => ({ accounts: {} })),
   restoreAndroidPurchases: jest.fn(),

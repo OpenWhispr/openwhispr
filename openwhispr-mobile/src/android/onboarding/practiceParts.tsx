@@ -14,7 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
-import { AppFont } from '@/lib/fonts';
+import { AppFont } from '@/android/shared/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { makeStyles } from '../ThemeProvider';
 import { AccentText, GLASS_GRADIENT, onboardingColorsFor, useOnboardingColors } from './kit';

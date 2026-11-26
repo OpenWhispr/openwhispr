@@ -11,11 +11,11 @@ import Animated, {
 } from 'react-native-reanimated';
 import { GlassContainer } from 'expo-glass-effect';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
-import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
-import { Glass } from '@/components/ui/Glass';
+import { GradientGlassSurface } from '@/android/shared/components/ui/GradientGlassSurface';
+import { Glass } from '@/android/shared/components/ui/Glass';
 import { TAB_BAR_CLEARANCE } from '@/components/ui/tabBarClearance';
-import { safeHaptics } from '@/lib/utils';
-import { BRAND, useIosColor } from '@/config/colors.android';
+import { safeHaptics } from '@/android/shared/lib/utils';
+import { BRAND, useIosColor } from '@/android/shared/config/colors';
 import { makeStyles } from '@/android/ThemeProvider';
 
 const SIZE = 56;

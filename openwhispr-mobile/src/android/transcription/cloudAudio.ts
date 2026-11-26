@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { AudioTools, type ChunkResult } from '../../../modules/audio-tools/src';
+import { AudioTools, type ChunkResult } from '@/android/shared/modules/audio-tools/index';
 import { abortError } from '@/services/providers/NativeProviderTransport';
 
 function androidAudio() {

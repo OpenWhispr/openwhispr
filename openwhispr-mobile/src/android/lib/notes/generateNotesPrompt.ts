@@ -3,7 +3,7 @@ import {
   MEETING_CONTENT_RULES,
   type BuildActionSystemPromptInput as CommonPromptInput,
 } from '@/android/lib/notes/generateNotesPromptCore';
-import { DESKTOP_DEFAULT_NOTE_SYSTEM_PROMPT } from '@/lib/notes/desktopDefaultNotesPrompt';
+import { DESKTOP_DEFAULT_NOTE_SYSTEM_PROMPT } from '@/android/shared/lib/notes/desktopDefaultNotesPrompt';
 export { isDefaultGenerateNotesAction } from '@/android/lib/notes/generateNotesPromptCore';
 export type { GenerateNotesInputKind } from '@/android/lib/notes/generateNotesPromptCore';
 

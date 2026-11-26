@@ -11,8 +11,8 @@ import {
 } from 'react-native';
 import { useSpeakerRenameLayout } from './speakerRenameLayout';
 import { Text } from '@/components/ui/Text';
-import { AppFont } from '@/lib/fonts';
-import { useIosColor } from '@/config/colors.android';
+import { AppFont } from '@/android/shared/lib/fonts';
+import { useIosColor } from '@/android/shared/config/colors';
 
 export interface SpeakerRenameSuggestion {
   label: string;

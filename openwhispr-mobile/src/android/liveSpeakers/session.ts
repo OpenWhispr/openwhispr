@@ -1,10 +1,10 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
-import { notesRepository } from '@/data';
+import { notesRepository } from '@/android/shared/data';
 import type { NewSpeaker } from '@/data/types';
-import { applyProvisional } from '@/lib/diarization/speakerState';
-import { mapUtterancesToSegments } from '@/lib/notes/cloudMeetingSegments';
-import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
+import { applyProvisional } from '@/android/shared/lib/diarization/speakerState';
+import { mapUtterancesToSegments } from '@/android/shared/lib/notes/cloudMeetingSegments';
+import type { RealtimeUtterance } from '@/android/shared/services/transcription/realtimeEvents';
 import { useNotesStore } from '@/android/store/useNotesStore';
 import { modelPath, modelReady } from '@/android/models';
 import { applySpeakerPass, type PassLine } from './speakerPass';

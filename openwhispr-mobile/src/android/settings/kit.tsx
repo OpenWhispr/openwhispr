@@ -23,7 +23,7 @@ import { noOrphan, useSettingsT } from './strings';
 import type { Scheme } from '../theme';
 import { useNavigationBar, useNavigationBarCanvas } from '../navigationBar';
 import { themeFor, useTheme, type AndroidTheme } from '../ThemeProvider';
-import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
+import { useKeyboardHeight } from '@/android/shared/hooks/useKeyboardHeight';
 import { TAB_BAR_HEIGHT } from '../tabBar';
 
 /** Figma "Android · Settings" tokens on top of the shared Home tokens, for a theme. */

@@ -1,6 +1,6 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { TextInput, View } from 'react-native';
-import { AppFont } from '@/lib/fonts';
+import { AppFont } from '@/android/shared/lib/fonts';
 import { useTheme } from '../ThemeProvider';
 import { applyFormat } from './formatText';
 import { LiveMarkdown, NotesReadView } from './liveMarkdown';

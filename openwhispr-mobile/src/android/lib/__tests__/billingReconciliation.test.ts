@@ -116,6 +116,9 @@ jest.mock('@/android/lib/revenuecat', () => ({
 }));
 jest.mock('@/lib/revenuecat.android', () => ({ withRevenueCatUser: jest.fn() }));
 jest.mock('@/data/remote/billingApi', () => ({ reconcileMobileBilling: jest.fn() }));
+jest.mock('@/android/shared/data/remote/billingApi', () =>
+  jest.requireMock('@/data/remote/billingApi'),
+);
 
 beforeEach(() => {
   jest.clearAllMocks();

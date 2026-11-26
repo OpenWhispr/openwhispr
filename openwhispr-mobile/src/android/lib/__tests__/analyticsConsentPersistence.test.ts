@@ -18,12 +18,21 @@ jest.mock('@/services/storage/StorageService', () => ({
     getConfig: () => mockGetConfig(),
   },
 }));
+jest.mock('@/android/shared/services/storage/StorageService', () =>
+  jest.requireMock('@/services/storage/StorageService'),
+);
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ resetToDefault: jest.fn() }) },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/lib/trackingTransparency', () => ({
   getTrackingAuthorizationStatus: () => Promise.resolve('notSupported'),
 }));
+jest.mock('@/android/shared/lib/trackingTransparency', () =>
+  jest.requireMock('@/lib/trackingTransparency'),
+);
 jest.mock('react-native-appsflyer', () => ({
   __esModule: true,
   default: {

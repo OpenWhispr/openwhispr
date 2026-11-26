@@ -3,7 +3,7 @@ import { downloadAndroidModel, modelPath, modelReady, removeAndroidModel } from 
 import { withAndroidInference } from '@/android/inferenceQueue';
 import { LocalTextModel } from '@/android/LocalTextModel';
 import i18n from '@/android/strings';
-import type { Diarizer } from '@/lib/diarization/diarizer';
+import type { Diarizer } from '@/android/shared/lib/diarization/diarizer';
 
 let generation = 0;
 const model = 'meeting-speakers';

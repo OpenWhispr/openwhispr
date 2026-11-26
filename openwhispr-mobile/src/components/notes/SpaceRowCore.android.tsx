@@ -3,8 +3,8 @@ import { View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { GroupedList } from './GroupedList';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import type { Space } from '@/data';
-import { useIosColor } from '@/config/colors.android';
+import type { Space } from '@/android/shared/data';
+import { useIosColor } from '@/android/shared/config/colors';
 
 type SpaceRowProps = {
   space: Space;

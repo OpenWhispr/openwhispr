@@ -3,7 +3,7 @@ import { Alert, AppState, Keyboard, Pressable, TextInput, View } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/android/store/useConfigStore';
-import { safeHaptics } from '@/lib/utils';
+import { safeHaptics } from '@/android/shared/lib/utils';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
 import {
   CircleButton,

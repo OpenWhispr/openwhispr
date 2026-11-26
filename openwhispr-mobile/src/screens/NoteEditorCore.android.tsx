@@ -17,38 +17,44 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
 import { useNotesStore } from '@/android/store/useNotesStore';
-import { useActionsStore } from '@/store/useActionsStore';
+import { useActionsStore } from '@/android/shared/store/useActionsStore';
 import { useAuthStore } from '@/android/store/useAuthStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useProcessingModeStore } from '@/android/shared/store/useProcessingModeStore';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { extractCorrectionPairs } from '@/android/dictionary/correctionPairs';
 import { learnCorrections } from '@/android/dictionary/learned';
 import { showLearnedToast } from '@/android/dictionary/learnedToast';
 import { applyTranscriptFix, FixWordCard, type FixTarget } from '@/android/dictionary/FixWord';
 import { countWord } from '@/android/dictionary/transcriptFix';
-import { buildDictationHintTiers, buildEffectiveDictionaryWords } from '@/lib/dictationHints';
+import {
+  buildDictationHintTiers,
+  buildEffectiveDictionaryWords,
+} from '@/android/shared/lib/dictationHints';
 import { useActionProcessing } from '@/android/hooks/useActionProcessing';
-import { useSuperwallGate } from '@/hooks/useSuperwallGate';
+import { useSuperwallGate } from '@/android/shared/hooks/useSuperwallGate';
 import { SummaryEditor, type SummaryEditorHandle } from '@/android/notes/SummaryEditor';
 import { LiveMarkdown, NotesReadView } from '@/android/notes/liveMarkdown';
 import { toggleCheck } from '@/android/notes/liveMarkdownSpans';
-import { resolveNoteBodyView, type NoteBodyView } from '@/lib/notes/noteBodyTabs';
+import { resolveNoteBodyView, type NoteBodyView } from '@/android/shared/lib/notes/noteBodyTabs';
 import { NoteShareSheet } from '@/components/notes/NoteShareSheet';
-import { ConflictBanner } from '@/components/notes/ConflictBanner';
-import { VoiceSetupBanner } from '@/components/notes/VoiceSetupBanner';
-import { ThatsMeSheet } from '@/components/notes/ThatsMeSheet';
-import { shouldOfferVoiceSetup, voiceSetupCandidates } from '@/lib/notes/voiceSetupPrompt';
+import { ConflictBanner } from '@/android/shared/components/notes/ConflictBanner';
+import { VoiceSetupBanner } from '@/android/shared/components/notes/VoiceSetupBanner';
+import { ThatsMeSheet } from '@/android/shared/components/notes/ThatsMeSheet';
+import {
+  shouldOfferVoiceSetup,
+  voiceSetupCandidates,
+} from '@/android/shared/lib/notes/voiceSetupPrompt';
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/android/data/notesRepository';
-import { VOICE_ALREADY_TAUGHT_ALERT } from '@/lib/voiceEnrollmentMessages';
+import { VOICE_ALREADY_TAUGHT_ALERT } from '@/android/shared/lib/voiceEnrollmentMessages';
 import { formatNoteMetaDate, markViewer, noteTakenAt } from '@/android/lib/notes/noteMeta';
 import { SpeakerRenameSheet } from '@/components/notes/SpeakerRenameSheet';
 import { SpeakerMergeSheet } from '@/components/notes/SpeakerMergeSheet';
 import { VoiceprintSuggestionSheet } from '@/components/notes/VoiceprintSuggestionSheet';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { TabScreenHeader } from '@/components/ui/TabScreenHeader';
-import { buildNoteShareContent, exportNote } from '@/lib/noteExport';
-import { AppFont } from '@/lib/fonts';
-import { makeContentHash, safeHaptics } from '@/lib/utils';
+import { TabScreenHeader } from '@/android/shared/components/ui/TabScreenHeader';
+import { buildNoteShareContent, exportNote } from '@/android/shared/lib/noteExport';
+import { AppFont } from '@/android/shared/lib/fonts';
+import { makeContentHash, safeHaptics } from '@/android/shared/lib/utils';
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
 import {
   handleAccountRequiredError,
@@ -60,19 +66,19 @@ import {
   getLocalReasoningUnavailableMessage,
   isLocalReasoningRequired,
   shouldUseLocalReasoning,
-} from '@/lib/localReasoning';
+} from '@/android/shared/lib/localReasoning';
 import { providerDisplayName } from '@/android/providers/mobileProviders';
 import { promptLocalReasoningFallback } from '@/android/dictation/localReasoningFallback';
 import { confirmCloudOnce, confirmDestructive } from '@/android/lib/alerts';
-import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
+import { buildMeetingNotesInput } from '@/android/shared/lib/notes/meetingNotesInput';
 import { isDefaultGenerateNotesAction } from '@/android/lib/notes/generateNotesPrompt';
-import { isRegenerableNoteTitle } from '@/lib/notes/regenerableNoteTitle';
+import { isRegenerableNoteTitle } from '@/android/shared/lib/notes/regenerableNoteTitle';
 import {
   getCalendarSpeakerLabelSuggestions,
   parseCalendarParticipants,
-} from '@/lib/calendar/meetingContext';
-import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
-import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
+} from '@/android/shared/lib/calendar/meetingContext';
+import { SUPERWALL_PLACEMENTS } from '@/android/shared/lib/superwall';
+import { useKeyboardHeight } from '@/android/shared/hooks/useKeyboardHeight';
 import type { Note } from '@/data/types';
 import type { ReasoningRoutingOptions } from '@/android/types';
 import {
@@ -80,7 +86,7 @@ import {
   getSpeakerDisplayName,
   groupTranscriptSegments,
   type TranscriptBlock,
-} from '@/lib/diarization/transcriptDisplay';
+} from '@/android/shared/lib/diarization/transcriptDisplay';
 
 import {
   FormatBar,

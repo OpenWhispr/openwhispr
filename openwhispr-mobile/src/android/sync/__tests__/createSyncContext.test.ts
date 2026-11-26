@@ -1,3 +1,5 @@
+// Forked unchanged in src/android/shared: one module for both paths in this test.
+jest.mock('@/sync/syncContext', () => jest.requireActual('@/android/shared/sync/syncContext'));
 jest.mock('@/store/useAuthStore', () => {
   const { create } = jest.requireActual<typeof import('zustand')>('zustand');
   return {

@@ -4,6 +4,7 @@ jest.mock('@/lib/localReasoning', () => ({
   getLocalReasoningReadiness: () => mockLocalReadiness(),
   canRunLocalReasoning: (readiness: { status?: string } | null) => readiness?.status === 'ready',
 }));
+jest.mock('@/android/shared/lib/localReasoning', () => jest.requireMock('@/lib/localReasoning'));
 import { chooseOnboardingMode } from '@/lib/onboardingMode';
 import { OnboardingError } from '@/lib/onboardingErrors';
 
@@ -31,15 +32,22 @@ jest.mock('@/android/store/useConfigStore', () => jest.requireMock('@/store/useC
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ resetToDefault: mockResetMode }) },
 }));
+jest.mock('@/android/shared/store/useProcessingModeStore', () =>
+  jest.requireMock('@/store/useProcessingModeStore'),
+);
 jest.mock('@/store/useOnboardingStore', () => ({
   useOnboardingStore: {
     getState: () => ({ currentStep: mockCurrentStep, chooseMode: mockChooseMode }),
   },
 }));
+jest.mock('@/android/shared/store/useOnboardingStore', () =>
+  jest.requireMock('@/store/useOnboardingStore'),
+);
 let mockAccountHistory = false;
 jest.mock('@/sync/syncIdentity', () => ({
   hasRealAccountHistory: () => mockAccountHistory,
 }));
+jest.mock('@/android/shared/sync/syncIdentity', () => jest.requireMock('@/sync/syncIdentity'));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: {
     getState: () => ({
