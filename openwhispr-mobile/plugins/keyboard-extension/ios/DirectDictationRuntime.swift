@@ -82,6 +82,10 @@ final class DirectDictationRuntime {
       readCookie: { userId in KeyboardCredentialStore.readCookie(accessGroup: appGroupId, userId: userId) },
       readTone: { defaults?.string(forKey: "keyboard_dictation_tone") ?? "default" },
       readTranslation: { directDictationTranslation() },
+      readRoutePortTypes: {
+        let route = AVAudioSession.sharedInstance().currentRoute
+        return (route.inputs + route.outputs).map { $0.portType.rawValue }
+      },
       encode: { pcm, m4a, gain in try DirectAudioEncoder.encodeAAC(pcmURL: pcm, m4aURL: m4a, gain: gain) },
       // The job id format the keyboard already uses: <ms>-<UUID>.
       makeJobId: { "\(Int64(Date().timeIntervalSince1970 * 1000))-\(UUID().uuidString)" },
