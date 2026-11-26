@@ -150,6 +150,15 @@ test("cleanup rejects copied instructions in every prompt language written with 
       assert.throws(validate, { code: "CLEANUP_OUTPUT_INVALID", messageKey: ADDED_TEXT }, locale);
     }
   }
+  // The prompt is written without accents; a correctly accented copy is still a copy.
+  assert.throws(
+    () =>
+      assertValidCleanupOutput("Okay.", "Eres un procesador de texto ÚNICAMENTE.", {
+        prompt: cleanupPromptFor("es"),
+        dictionary: [],
+      }),
+    { code: "CLEANUP_OUTPUT_INVALID", messageKey: ADDED_TEXT }
+  );
 });
 
 test("cleanup keeps dictation that shares words with its instructions", async () => {

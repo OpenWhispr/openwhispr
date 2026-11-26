@@ -13,6 +13,8 @@ const MAX_UNSPOKEN_LONG_WORDS = 1;
 const LONG_WORD_LENGTH = 4;
 // Written without spaces, six of these words are a short everyday phrase.
 const UNSPACED_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+// The de, es, fr, it and pt prompts are written without accents.
+const LATIN_ACCENTS = /(?<=\p{Script=Latin})\p{M}+/gu;
 
 interface CleanupInstructions {
   prompt: string;
@@ -56,16 +58,18 @@ function copiesInstructions(
   output: string,
   { prompt, dictionary }: CleanupInstructions
 ): boolean {
-  const rawTokens = comparisonTokens(rawText);
+  const tokens = (text: string) =>
+    comparisonTokens(text.normalize("NFD").replace(LATIN_ACCENTS, ""));
+  const rawTokens = tokens(rawText);
   const stretches =
     rawTokens.length > SPOKEN_RUN_SPAN ? wordRuns(rawTokens, SPOKEN_RUN_SPAN) : [rawTokens];
   const dictionaryWords = new Set(
-    dictionary.map(comparisonTokens).flatMap((tokens) => (tokens.length === 1 ? tokens : []))
+    dictionary.map(tokens).flatMap((entry) => (entry.length === 1 ? entry : []))
   );
   const promptRuns = new Set(
-    wordRuns(comparisonTokens(prompt), COPIED_RUN_LENGTH).map((run) => run.join(" "))
+    wordRuns(tokens(prompt), COPIED_RUN_LENGTH).map((run) => run.join(" "))
   );
-  return wordRuns(comparisonTokens(output), COPIED_RUN_LENGTH).some((run) => {
+  return wordRuns(tokens(output), COPIED_RUN_LENGTH).some((run) => {
     const text = run.join(" ");
     if (!promptRuns.has(text) || UNSPACED_SCRIPT.test(text)) return false;
     // Cleanup writes spoken numbers as digits and is told to use the dictionary's spellings.
