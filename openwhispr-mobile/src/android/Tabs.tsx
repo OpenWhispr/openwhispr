@@ -144,8 +144,6 @@ export default function AndroidTabs() {
     <Tabs tabBar={(props) => <AndroidTabBar {...props} />} screenOptions={{ headerShown: false }}>
       <Tabs.Screen name="(record)" options={{ title: t('home') }} />
       <Tabs.Screen name="(notes)" options={{ title: h('tabNotes') }} />
-      {/* Chat isn't part of the Android beta. The route stays registered for iOS, so hide it. */}
-      <Tabs.Screen name="(chat)" options={{ href: null }} />
       <Tabs.Screen name="(dictionary)" options={{ title: t('dictionary') }} />
       <Tabs.Screen name="(style)" options={{ title: t('style') }} />
     </Tabs>

@@ -23,6 +23,7 @@ test('recognises files only Android loads', () => {
     'modules/android-dictation/android/src/main/Bubble.kt',
     'modules/background-uploader/android/build.gradle',
     'app/android-setup.tsx',
+    'app-android/(tabs)/(notes)/index.tsx',
     'app/(tabs)/(style)/index.tsx',
     'assets/android/adaptive-icon-foreground.png',
     'plugins/android-billing/withAndroidBilling.js',

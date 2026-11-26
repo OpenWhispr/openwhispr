@@ -40,14 +40,12 @@ jest.mock('expo-router/unstable-native-tabs', () => {
   };
   const Trigger = ({
     name,
-    hidden,
     children,
   }: {
     name: string;
-    hidden?: boolean;
     children: React.ReactNode;
   }): React.ReactNode => {
-    if (!hidden) mockTabNames.push(name);
+    mockTabNames.push(name);
     return children;
   };
   Trigger.Label = (): null => null;
