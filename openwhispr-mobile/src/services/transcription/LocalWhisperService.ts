@@ -3,6 +3,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { TranscriptionResponse } from '../../types';
 import { refreshKeyboardEngine } from './keyboardEngineRefresh';
 
+// whisper.rn's value for "detect the language"; any other string pins the decoder to it.
+const WHISPER_AUTO_LANGUAGE = 'auto';
+
 export interface LocalModelInfo {
   name: string;
   size: number;
@@ -75,8 +78,9 @@ export class LocalWhisperService {
     await this.initializeModel(modelPath);
   }
 
-  private static preferredModelsForLanguage(language = 'en'): string[] {
-    const normalized = language.trim().toLowerCase();
+  // No hint (undefined) means auto-detect, which needs a multilingual model.
+  private static preferredModelsForLanguage(language?: string): string[] {
+    const normalized = (language ?? '').trim().toLowerCase();
     if (!normalized || normalized === 'auto') {
       return ['base', 'tiny'];
     }
@@ -86,7 +90,7 @@ export class LocalWhisperService {
     return ['base', 'tiny'];
   }
 
-  static async getRecommendedModelForLanguage(language = 'en'): Promise<string> {
+  static async getRecommendedModelForLanguage(language?: string): Promise<string> {
     const preferredModels = this.preferredModelsForLanguage(language);
     const availableModels = await this.getAvailableModels();
     return (
@@ -96,7 +100,7 @@ export class LocalWhisperService {
     );
   }
 
-  static async prepareForLanguage(language = 'en'): Promise<void> {
+  static async prepareForLanguage(language?: string): Promise<void> {
     const modelName = await this.getRecommendedModelForLanguage(language);
     const models = await this.getAvailableModels();
     const model = models.find((candidate) => candidate.name === modelName);
@@ -125,7 +129,8 @@ export class LocalWhisperService {
           }
         : {
             modelName: options.modelName ?? 'base',
-            language: options.language ?? language,
+            // No hint is auto-detect, not English: only the legacy positional form defaults to 'en'.
+            language: options.language ?? WHISPER_AUTO_LANGUAGE,
             wordTimestamps: options.wordTimestamps ?? false,
             prompt: options.prompt,
           };
