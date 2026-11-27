@@ -149,6 +149,50 @@ test("ignoring the app behind an audio prompt closes it without a mic cooldown",
   assert.equal(engine.activeDetections.size, 0);
 });
 
+test("an audio prompt matched to a calendar event offers no app to ignore", () => {
+  const { engine, audioDetector, shown } = createEngine();
+  engine.reminderScheduler.getActiveMeetingState = () => ({
+    activeMeeting: {
+      id: "evt-1",
+      summary: "Weekly standup",
+      start_time: new Date(Date.now() - 60_000).toISOString(),
+    },
+    activeEvents: [],
+    upcomingEvents: [],
+  });
+
+  engine.setPreferences({ audioDetection: true, processDetection: true });
+  audioDetector.emit("sustained-audio-detected", {
+    durationMs: 2000,
+    detectedAt: 0,
+    apps: [{ id: "orca.exe", name: "Orca" }],
+  });
+
+  assert.equal(shown[0].variant, "underway");
+  assert.equal(shown[0].apps, undefined, "the calendar says this is a meeting");
+});
+
+test("an audio prompt from a browser or calling app offers no app to ignore", () => {
+  const { engine, audioDetector, shown } = createEngine();
+
+  engine.setPreferences({ audioDetection: true, processDetection: true });
+  audioDetector.emit("sustained-audio-detected", {
+    durationMs: 2000,
+    detectedAt: 0,
+    apps: [{ id: "google chrome", name: "Google Chrome" }],
+  });
+  engine.handleDetectionNotificationClosed(shown[0].detectionId);
+  audioDetector.emit("sustained-audio-detected", {
+    durationMs: 2000,
+    detectedAt: 1,
+    apps: [{ id: "zoom.us", name: "zoom.us" }],
+  });
+
+  assert.equal(shown.length, 2);
+  assert.equal(shown[0].apps, undefined, "ignoring Chrome would silence every Meet call in it");
+  assert.equal(shown[1].apps, undefined);
+});
+
 test("a detection card closed without a response allows the next prompt", () => {
   const { engine, audioDetector, shown } = createEngine();
 

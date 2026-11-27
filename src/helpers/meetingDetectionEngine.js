@@ -13,6 +13,7 @@ const { tagEventAttendeesJson } = require("./eventAttendees");
 const createMeetingAutoEndController = require("./meetingAutoEndController");
 const { createMeetingAudioActivityMonitor } = require("./meetingAudioActivityMonitor");
 const { broadcastToWindows } = require("./windowBroadcast");
+const { isIgnorableCaptureApp } = require("./meetingCaptureApps");
 
 const IMMINENT_THRESHOLD_MS = 5 * 60 * 1000;
 const AUTO_END_TICK_MS = 1000;
@@ -512,6 +513,13 @@ class MeetingDetectionEngine {
       detection.event = event;
     }
 
+    // The apps the card may offer to ignore: none when a calendar event says
+    // this is a meeting, or when any of them is a browser or calling app.
+    const ignorableApps =
+      variant === "detected" && data?.apps?.length && data.apps.every(isIgnorableCaptureApp)
+        ? data.apps
+        : null;
+
     this.windowManager.showMeetingNotification({
       detectionId,
       source,
@@ -520,8 +528,7 @@ class MeetingDetectionEngine {
       variant,
       joinUrl,
       ...(recordingRefusal ? { recordingRefusal } : {}),
-      // The apps holding the mic, so the card can offer to ignore one.
-      ...(data?.apps?.length ? { apps: data.apps } : {}),
+      ...(ignorableApps ? { apps: ignorableApps } : {}),
     });
   }
 

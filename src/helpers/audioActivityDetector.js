@@ -10,6 +10,11 @@ const execAsync = promisify(exec);
 const CHECK_INTERVAL_MS = process.platform === "win32" ? 15 * 1000 : 3 * 1000;
 const SUSTAINED_THRESHOLD_CHECKS = 2;
 const SUSTAINED_EVENT_DRIVEN_MS = 2 * 1000;
+// How long past the sustained threshold a prompt waits for its captures' apps
+// to be named (a process listing can take seconds on a busy Mac), and how
+// often it looks again meanwhile.
+const APP_LOOKUP_GRACE_MS = 3 * 1000;
+const APP_LOOKUP_RECHECK_MS = 250;
 const COOLDOWN_MS = 5 * 60 * 1000;
 const INACTIVE_RESET_MS = 60 * 1000;
 // PipeWire/PulseAudio emit 'change' subscribe events several times a second on
@@ -73,11 +78,11 @@ class AudioActivityDetector extends EventEmitter {
   // corroborates macOS device activity that cannot be attributed to a process;
   // without it such activity never prompts. `resolveCaptureApps` maps capture
   // pids to their apps (see meetingCaptureApps.js), which the prompt names and
-  // the user's ignore list matches; without it no app is ever ignored.
+  // the user's ignore list matches; without it no app is named or ignored.
   constructor(
     getExcludedProcessIds = () => [...getOwnProcessPids()],
     isMeetingAppRunning = () => false,
-    resolveCaptureApps = async () => new Map()
+    resolveCaptureApps = null
   ) {
     super();
     this._getExcludedProcessIds = getExcludedProcessIds;
@@ -790,10 +795,11 @@ class AudioActivityDetector extends EventEmitter {
     return this._ignoredAppIds.has(this._captureApps.get(processId)?.id);
   }
 
-  // A pid counts as meeting evidence until its app is known, so a slow or
-  // failed lookup costs at worst a prompt for an ignored app, never a missed
-  // meeting.
+  // A pid counts as meeting evidence until its app is known. The prompt waits a
+  // bounded while for a pending lookup, so only a stuck or failed one costs a
+  // prompt for an ignored app, never a missed meeting.
   _lookUpCaptureApps(externalPids) {
+    if (!this._resolveCaptureApps) return;
     for (const processId of this._captureApps.keys()) {
       if (!externalPids.includes(processId)) this._captureApps.delete(processId);
     }
@@ -953,30 +959,49 @@ class AudioActivityDetector extends EventEmitter {
       if (!this.audioActiveStart) this.audioActiveStart = Date.now();
 
       if (!this._sustainedTimer) {
-        this._sustainedTimer = setTimeout(() => {
-          this._sustainedTimer = null;
-          if (this._userRecording || this._micWarmHold || this.hasPrompted) return;
-          if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
-          if (!this._isUnattributedActivityCorroborated()) return;
-
-          this._markPrompted();
-          const now = Date.now();
-          const durationMs = now - this.audioActiveStart;
-          const attributed = this._lastKnownMicAttributed;
-          const apps = this._promptApps();
-          debugLogger.info(
-            "Sustained audio activity detected (event-driven)",
-            { durationMs, attributed, apps: apps.map((app) => app.name) },
-            "meeting"
-          );
-          this.emit("sustained-audio-detected", { durationMs, detectedAt: now, attributed, apps });
-        }, SUSTAINED_EVENT_DRIVEN_MS);
+        this._scheduleSustainedPrompt(
+          SUSTAINED_EVENT_DRIVEN_MS,
+          Date.now() + SUSTAINED_EVENT_DRIVEN_MS + APP_LOOKUP_GRACE_MS
+        );
       }
     } else {
       this._clearSustainedTimer();
       this.audioActiveStart = null;
       if (this.hasPrompted) this._startResetTimer();
     }
+  }
+
+  _scheduleSustainedPrompt(delayMs, appLookupDeadline) {
+    this._sustainedTimer = setTimeout(() => {
+      this._sustainedTimer = null;
+      if (this._userRecording || this._micWarmHold || this.hasPrompted) return;
+      if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
+      if (!this._isUnattributedActivityCorroborated()) return;
+      // A capture whose app is still being looked up may be an ignored one: a
+      // lookup that names it clears this timer, and the deadline bounds the
+      // wait so a stuck lookup still prompts.
+      if (this._hasUnnamedEvidence() && Date.now() < appLookupDeadline) {
+        this._scheduleSustainedPrompt(APP_LOOKUP_RECHECK_MS, appLookupDeadline);
+        return;
+      }
+
+      this._markPrompted();
+      const now = Date.now();
+      const durationMs = now - this.audioActiveStart;
+      const attributed = this._lastKnownMicAttributed;
+      const apps = this._promptApps();
+      debugLogger.info(
+        "Sustained audio activity detected (event-driven)",
+        { durationMs, attributed, apps: apps.map((app) => app.name) },
+        "meeting"
+      );
+      this.emit("sustained-audio-detected", { durationMs, detectedAt: now, attributed, apps });
+    }, delayMs);
+  }
+
+  _hasUnnamedEvidence() {
+    if (!this._resolveCaptureApps) return false;
+    return [...this._externalCapturePids].some((processId) => !this._captureApps.has(processId));
   }
 
   // ---------------------------------------------------------------------------

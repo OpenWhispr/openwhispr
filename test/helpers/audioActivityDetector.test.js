@@ -2077,6 +2077,71 @@ test("win32: a capture whose app can't be named still prompts", async (t) => {
   assert.deepEqual(detections[0].apps, []);
 });
 
+// A process listing can take seconds on a busy Mac, longer than the sustained
+// threshold, and every new capture looks its app up again.
+function createSlowLookupDetector(t) {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  let finishLookup;
+  const { detector, children } = createDetector("win32", {
+    resolveCaptureApps: () =>
+      new Promise((resolve) => {
+        finishLookup = (pids) => resolve(new Map(pids.map((pid) => [pid, CAPTURE_APPS[pid]])));
+      }),
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+  return { detector, children, detections, finishLookup: (pids) => finishLookup(pids) };
+}
+
+test("win32: an ignored app doesn't prompt when its lookup outlasts the sustained threshold", async (t) => {
+  const { detector, children, detections, finishLookup } = createSlowLookupDetector(t);
+  detector.setIgnoredApps(["orca.exe"]);
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 0, "the prompt waits for the capture's app");
+
+  finishLookup([11]);
+  await flushImmediate();
+  t.mock.timers.tick(5000);
+  assert.equal(detections.length, 0);
+});
+
+test("win32: a slow lookup that names another app prompts once it is named", async (t) => {
+  const { detector, children, detections, finishLookup } = createSlowLookupDetector(t);
+  detector.setIgnoredApps(["orca.exe"]);
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 22\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 0);
+
+  finishLookup([22]);
+  await flushImmediate();
+  t.mock.timers.tick(250);
+  assert.equal(detections.length, 1);
+  assert.deepEqual(detections[0].apps, [CAPTURE_APPS[22]], "the card can offer to ignore it");
+});
+
+test("win32: a lookup that never finishes still prompts after a bounded wait", async (t) => {
+  const { detector, children, detections } = createSlowLookupDetector(t);
+  detector.setIgnoredApps(["orca.exe"]);
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS + 2500);
+  assert.equal(detections.length, 0);
+
+  t.mock.timers.tick(500);
+  assert.equal(detections.length, 1, "a stuck lookup must never cost a meeting");
+  assert.deepEqual(detections[0].apps, []);
+});
+
 test("win32: a prompt with a capture it can't name names no app", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children } = createDetector("win32", {

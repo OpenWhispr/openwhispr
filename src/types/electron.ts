@@ -222,7 +222,7 @@ export interface MeetingNotificationData {
     | "POLICY_EXTERNAL_ATTENDEES"
     | "POLICY_ATTENDEES_UNVERIFIABLE"
   >;
-  /** Apps whose microphone use raised an audio prompt. */
+  /** Apps behind an uncorroborated audio prompt that the card may offer to ignore. */
   apps?: MeetingDetectionApp[];
 }
 

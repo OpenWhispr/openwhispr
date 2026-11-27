@@ -84,3 +84,45 @@ test("a capture missing from the cached process list is looked up in a fresh one
   assert.deepEqual(fetches, ["fetch", "invalidate", "fetch"]);
   assert.deepEqual([...apps], [[42, { id: "orca", name: "orca" }]]);
 });
+
+test("Windows' unattributable session (pid 0) is never named", async () => {
+  const { resolveCaptureApps, fetches } = loadWithProcessLists([
+    [
+      { pid: 0, name: "[System Process]" },
+      { pid: 42, name: "Orca.exe" },
+    ],
+  ]);
+  assert.deepEqual([...(await resolveCaptureApps([0]))], []);
+  assert.deepEqual(fetches, [], "pid 0 alone needs no process listing");
+  const apps = await resolveCaptureApps([0, 42]);
+  assert.deepEqual([...apps.keys()], [42]);
+});
+
+test("browsers and calling apps can't be ignored, since their next capture may be a meeting", () => {
+  const { isIgnorableCaptureApp } = loadWithProcessLists([]);
+  for (const id of [
+    "google chrome",
+    "chrome.exe",
+    "msedge.exe",
+    "firefox",
+    "safari",
+    "arc",
+    "brave browser",
+    "com.apple.webkit.gpu",
+    "zoom.us",
+    "cpthost.exe",
+    "microsoft teams",
+    "ms-teams.exe",
+    "ms-teams_modulehost.exe",
+    "webexmeetingsapp.exe",
+    "facetime",
+    "avconferenced",
+    "slack",
+    "discord.exe",
+  ]) {
+    assert.equal(isIgnorableCaptureApp({ id }), false, id);
+  }
+  for (const id of ["orca", "orca.exe", "wispr flow", "superwhisper", "pacat", "sox"]) {
+    assert.equal(isIgnorableCaptureApp({ id }), true, id);
+  }
+});
