@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+// The bundled catalog, which also lists the providers the app ships itself.
 const { bundledRegistryData: registry } = require("../../src/models/registryData.js");
 
 // Upload, the batch queue and Chat's mic read keys through this switch, so a

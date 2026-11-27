@@ -46,7 +46,7 @@ const segment = (overrides: Partial<Segment> = {}): Segment =>
 
 const offer = (overrides: Partial<Parameters<typeof shouldOfferVoiceSetup>[0]> = {}) =>
   shouldOfferVoiceSetup({
-    isOnDeviceMeeting: true,
+    hasSpeakerLabels: true,
     transcriptStatus: 'done',
     hasOwnerProfile: false,
     dismissed: false,
@@ -59,8 +59,13 @@ describe('shouldOfferVoiceSetup', () => {
     expect(offer()).toBe(true);
   });
 
-  it('never offers it for a meeting not recorded on this device', () => {
-    expect(offer({ isOnDeviceMeeting: false })).toBe(false);
+  it('offers voice setup for a labelled meeting without a recording', () => {
+    // The banner works from embeddings held in memory; the recording is already gone.
+    expect(offer({ hasSpeakerLabels: true })).toBe(true);
+  });
+
+  it('never offers it for a meeting without speaker labels', () => {
+    expect(offer({ hasSpeakerLabels: false })).toBe(false);
   });
 
   it('waits until the transcript is done', () => {

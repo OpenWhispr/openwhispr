@@ -140,6 +140,7 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/onboarding/DemoStep.tsx": ["auto"],
   "src/components/onboarding/LanguageSelectionStep.tsx": ["auto"],
   "src/components/onboarding/UseCaseStep.tsx": ["auto"],
+  "src/components/settings/billing/AddSeatsDialog.tsx": ["inherit"],
   "src/components/settings/ChatAgentSettings.tsx": ["auto"],
   "src/components/settings/ProfileSection.tsx": ["inherit"],
   "src/components/settings/TeamSettingsDialog.tsx": ["auto"],

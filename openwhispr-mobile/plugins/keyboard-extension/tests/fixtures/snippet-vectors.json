@@ -1,0 +1,205 @@
+[
+  {
+    "name": "basic",
+    "snippets": [
+      {
+        "trigger": "my email",
+        "replacement": "a@b.co"
+      }
+    ],
+    "text": "send it to my email please",
+    "expected": "send it to a@b.co please"
+  },
+  {
+    "name": "case-insensitive",
+    "snippets": [
+      {
+        "trigger": "my email",
+        "replacement": "a@b.co"
+      }
+    ],
+    "text": "Send it to My Email now",
+    "expected": "Send it to a@b.co now"
+  },
+  {
+    "name": "longest-first",
+    "snippets": [
+      {
+        "trigger": "ask",
+        "replacement": "ASK"
+      },
+      {
+        "trigger": "investor ask",
+        "replacement": "our raise"
+      }
+    ],
+    "text": "the investor ask is big and I ask why",
+    "expected": "the our raise is big and I ASK why"
+  },
+  {
+    "name": "inside-word",
+    "snippets": [
+      {
+        "trigger": "ask",
+        "replacement": "ASK"
+      }
+    ],
+    "text": "a basket for asking, ask",
+    "expected": "a basket for asking, ASK"
+  },
+  {
+    "name": "punctuation-boundaries",
+    "snippets": [
+      {
+        "trigger": "my email",
+        "replacement": "a@b.co"
+      }
+    ],
+    "text": "(my email). Or my email, thanks! \"my email\"",
+    "expected": "(a@b.co). Or a@b.co, thanks! \"a@b.co\""
+  },
+  {
+    "name": "start-and-end",
+    "snippets": [
+      {
+        "trigger": "my email",
+        "replacement": "a@b.co"
+      }
+    ],
+    "text": "my email is the start and the end is my email",
+    "expected": "a@b.co is the start and the end is a@b.co"
+  },
+  {
+    "name": "exact-text",
+    "snippets": [
+      {
+        "trigger": "my email",
+        "replacement": "a@b.co"
+      }
+    ],
+    "text": "my email",
+    "expected": "a@b.co"
+  },
+  {
+    "name": "adjacent",
+    "snippets": [
+      {
+        "trigger": "my email",
+        "replacement": "a@b.co"
+      }
+    ],
+    "text": "my email my email",
+    "expected": "a@b.co a@b.co"
+  },
+  {
+    "name": "regex-metacharacters",
+    "snippets": [
+      {
+        "trigger": "c++ (fast)",
+        "replacement": "C++"
+      }
+    ],
+    "text": "I like c++ (fast) a lot",
+    "expected": "I like C++ a lot"
+  },
+  {
+    "name": "literal-replacement",
+    "snippets": [
+      {
+        "trigger": "sig",
+        "replacement": "$1 \\ & $& $$"
+      }
+    ],
+    "text": "add my sig here",
+    "expected": "add my $1 \\ & $& $$ here"
+  },
+  {
+    "name": "unicode-german",
+    "snippets": [
+      {
+        "trigger": "straße",
+        "replacement": "Hauptstraße 1"
+      }
+    ],
+    "text": "die Straße ist lang",
+    "expected": "die Hauptstraße 1 ist lang"
+  },
+  {
+    "name": "unicode-cjk",
+    "snippets": [
+      {
+        "trigger": "名前",
+        "replacement": "Chad"
+      }
+    ],
+    "text": "私の 名前 です",
+    "expected": "私の Chad です"
+  },
+  {
+    "name": "blank-trigger",
+    "snippets": [
+      {
+        "trigger": "   ",
+        "replacement": "X"
+      }
+    ],
+    "text": "nothing   changes here",
+    "expected": "nothing   changes here"
+  },
+  {
+    "name": "trimmed-trigger",
+    "snippets": [
+      {
+        "trigger": "  My Email ",
+        "replacement": "a@b.co"
+      }
+    ],
+    "text": "reach my email today",
+    "expected": "reach a@b.co today"
+  },
+  {
+    "name": "multiline",
+    "snippets": [
+      {
+        "trigger": "sign off",
+        "replacement": "Thanks,\nChad"
+      }
+    ],
+    "text": "Hello\nsign off",
+    "expected": "Hello\nThanks,\nChad"
+  },
+  {
+    "name": "no-snippets",
+    "snippets": [],
+    "text": "unchanged text",
+    "expected": "unchanged text"
+  },
+  {
+    "name": "empty-text",
+    "snippets": [
+      {
+        "trigger": "my email",
+        "replacement": "a@b.co"
+      }
+    ],
+    "text": "",
+    "expected": ""
+  },
+  {
+    "name": "variables",
+    "now": [2026, 11, 18, 9, 5],
+    "locale": "en-US",
+    "snippets": [
+      {
+        "trigger": "stamp",
+        "replacement": "Logged {{date}} ({{locale}})"
+      },
+      {
+        "trigger": "raw",
+        "replacement": "{{clipboard}} {{Date}} {{ date }} {date} {{{date}}}"
+      }
+    ],
+    "text": "stamp, raw, then put {{date}} in the template",
+    "expected": "Logged 11/18/2026 (en-US), {{clipboard}} {{Date}} {{ date }} {date} {11/18/2026}, then put {{date}} in the template"
+  }
+]

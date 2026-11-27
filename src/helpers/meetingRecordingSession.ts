@@ -176,11 +176,13 @@ export function createMeetingRecordingStartCoordinator(): MeetingRecordingStartC
   };
 
   const cancelActiveStart = (expectedSessionId?: string | null): Promise<void> | null => {
-    if (
-      !activeStart ||
-      activeStart.committed ||
-      (expectedSessionId != null && activeStart.sessionId !== expectedSessionId)
-    ) {
+    if (expectedSessionId != null && activeStart?.sessionId !== expectedSessionId) {
+      const queued = pendingStarts.find((operation) => operation.sessionId === expectedSessionId);
+      if (!queued) return null;
+      queued.canceled = true;
+      return queued.settled;
+    }
+    if (!activeStart || activeStart.committed) {
       return null;
     }
 

@@ -1,5 +1,5 @@
 import type { FolderItem, MeetingDestinationContext } from "../types/electron";
-import { defaultFolderDisplayName } from "./notes/shared";
+import { folderPathLabel } from "./notes/shared";
 const key = (name: string) => `meetingNotification.folders.${name}`;
 export function meetingLocationLabel(
   shared: boolean,
@@ -18,7 +18,7 @@ export function meetingFolderLabel(
   return meetingLocationLabel(
     space?.kind === "team",
     space?.name ?? "",
-    defaultFolderDisplayName(folder, t),
+    folderPathLabel(folder, context.folders, t),
     t
   );
 }

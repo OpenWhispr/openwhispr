@@ -1,4 +1,11 @@
-import { MAX_SNIPPET_TRIGGER_LENGTH, type Snippet } from "../../utils/snippets";
+import i18n from "../../i18n";
+import {
+  MAX_SNIPPET_TRIGGER_LENGTH,
+  SNIPPET_VARIABLE_NAMES,
+  resolveSnippetVariables,
+  snippetLocale,
+  type Snippet,
+} from "../../utils/snippets";
 import type { ToolDefinition, ToolResult } from "./ToolRegistry";
 import { cleanWordList } from "./dictionaryTool";
 
@@ -11,6 +18,8 @@ const normalizeTrigger = (trigger: string) => trigger.trim().normalize("NFC").to
 
 const quoteList = (triggers: string[]) => triggers.map((t) => `"${t}"`).join(", ");
 
+const variableList = SNIPPET_VARIABLE_NAMES.map((name) => `{{${name}}}`).join(", ");
+
 /**
  * Snippet bodies stay out of the system prompt: they can run to paragraphs
  * and are only needed when a command names one. The trigger list rides in the
@@ -21,7 +30,7 @@ export function createSnippetTool(snippets: Snippet[]): ToolDefinition {
 
   return {
     name: "get_snippet",
-    description: `Fetch the exact saved text behind one of the user's snippets by its spoken trigger phrase. Saved triggers: ${triggerList}.`,
+    description: `Fetch the exact saved text behind one of the user's snippets by its spoken trigger phrase. Any ${variableList} in it comes back filled in, as dictation fills it, and "template" then holds the text as saved. Saved triggers: ${triggerList}.`,
     parameters: {
       type: "object",
       properties: {
@@ -46,9 +55,17 @@ export function createSnippetTool(snippets: Snippet[]): ToolDefinition {
           displayText: `No snippet with trigger "${requested}". Saved triggers: ${triggerList}`,
         };
       }
+      // Dictating the trigger fills these variables, so inserting it through
+      // the agent must too; the template lets an edit keep them.
+      const text = resolveSnippetVariables(snippet.replacement, {
+        locale: snippetLocale(i18n.language),
+      });
       return {
         success: true,
-        data: { trigger: snippet.trigger, text: snippet.replacement },
+        data:
+          text === snippet.replacement
+            ? { trigger: snippet.trigger, text }
+            : { trigger: snippet.trigger, text, template: snippet.replacement },
         displayText: `Snippet "${snippet.trigger}"`,
       };
     },
@@ -72,8 +89,7 @@ function parseSnippetInputs(values: unknown): Snippet[] {
 export function createUpdateSnippetsTool(actions: SnippetActions): ToolDefinition {
   return {
     name: "update_snippets",
-    description:
-      "Create, replace, or delete the user's snippets. A snippet is a short spoken trigger phrase that expands into saved text during dictation. Adding a trigger that already exists replaces its saved text.",
+    description: `Create, replace, or delete the user's snippets. A snippet is a short spoken trigger phrase that expands into saved text during dictation. Adding a trigger that already exists replaces its saved text. Saved text may include ${variableList}, filled in each time the snippet is used.`,
     parameters: {
       type: "object",
       properties: {

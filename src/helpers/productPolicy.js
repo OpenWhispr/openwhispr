@@ -1,5 +1,8 @@
 const rules = require("../stores/policyRules.ts");
 
+// These authenticate with saved credentials whatever the mode says.
+const SAVED_KEY_PROVIDERS = new Set(["corti-realtime", "tinfoil-realtime", "elevenlabs-realtime"]);
+
 // A verdict still on its way for an identity nothing says is managed (no
 // device policy, no server calling the policy unresolvable) restricts no
 // channel; new remote work waits for it all the same (mayStart in ipcHandlers).
@@ -32,10 +35,7 @@ function realtimeSelection(options = {}, provider = options.provider ?? "openai-
   if (provider === "local") return { mode: "local", provider };
   if (provider === "enterprise-realtime")
     return { mode: "enterprise", provider: options.managedContext?.provider };
-  // These use the saved key whatever the mode says (SAVED_KEY_PROVIDERS).
-  const byok =
-    options.mode === "byok" ||
-    ["tinfoil-realtime", "corti-realtime", "elevenlabs-realtime"].includes(provider);
+  const byok = options.mode === "byok" || SAVED_KEY_PROVIDERS.has(provider);
   return {
     mode: byok ? "providers" : "openwhispr",
     provider: provider === "orukeet" ? "custom" : provider.replace(/-realtime$/, ""),
@@ -197,6 +197,7 @@ function runningOperationAllowed(snapshot, accountId, appVersion, channel, args)
 }
 
 module.exports = {
+  SAVED_KEY_PROVIDERS,
   policyRefusalKey,
   productOperationAllowed,
   productPolicyState,

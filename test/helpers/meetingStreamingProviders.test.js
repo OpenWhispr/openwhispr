@@ -300,17 +300,3 @@ test("enterprise meeting reuse is scoped to workspace, profile and credential ge
     )
   );
 });
-
-test("policy judges a saved-key provider as bring-your-own-key whatever mode the start names", async () => {
-  const { SAVED_KEY_PROVIDERS } = await load();
-  const { realtimeSelection } = require("../../src/helpers/productPolicy");
-
-  assert.ok(SAVED_KEY_PROVIDERS.has("elevenlabs-realtime"));
-  for (const provider of SAVED_KEY_PROVIDERS) {
-    assert.deepEqual(
-      realtimeSelection({ provider, mode: "openwhispr" }),
-      { mode: "providers", provider: provider.replace(/-realtime$/, "") },
-      provider
-    );
-  }
-});

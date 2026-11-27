@@ -44,6 +44,7 @@ test("the upload folder list follows the active workspace's Private", async (t) 
     cachePrefix: "openwhispr-upload-private-folders-",
     noExternal: ["react-i18next"],
     mockModules: {
+      "/ui/useToast": "export const useToast = () => ({ toast: () => {} });",
       "react-i18next": `const t=(key)=>key; export const useTranslation=()=>({t}); export const initReactI18next={type:"3rdParty",init(){}};`,
       "/hooks/useAuth": "export const useAuth=()=>({isSignedIn:true});",
       "/hooks/useUsage": "export const useUsage=()=>({ hasPaidAccessOptimistic: false });",
@@ -127,6 +128,7 @@ test("after a switch, the saved upload's folder picker stays on the note's own P
     cachePrefix: "openwhispr-upload-private-folders-",
     noExternal: ["react-i18next"],
     mockModules: {
+      "/ui/useToast": "export const useToast = () => ({ toast: () => {} });",
       "react-i18next": `const t=(key)=>key; export const useTranslation=()=>({t}); export const initReactI18next={type:"3rdParty",init(){}};`,
       "/hooks/useAuth": "export const useAuth=()=>({isSignedIn:true});",
       "/hooks/useUsage": "export const useUsage=()=>({ hasPaidAccessOptimistic: false });",

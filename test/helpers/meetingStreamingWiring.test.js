@@ -219,6 +219,7 @@ test("enterprise renewal cannot restore sockets after policy or configuration re
           throw Object.assign(new Error("replacement refused"), { code });
         },
         debugLogger: { error() {} },
+        requeueUnsentMeetingAudio() {},
         resetMeetingReconnectAudio() {},
         meetingReconnectAudioBytes: { mic: 0, system: 0 },
         isSignInRefusal: () => false,
@@ -284,6 +285,7 @@ function reconnectHarness(Streaming, options, overrides = {}) {
       fetchRealtimeToken: async (_event, _options, streams) => (streams ? ["k", "k"] : "k"),
       withMeetingSourceConnectOpts: (connectOpts) => connectOpts,
       assertMeetingAllowed() {},
+      requeueUnsentMeetingAudio() {},
       replayMeetingReconnectAudio: () => true,
       resetMeetingReconnectAudio() {},
       debugLogger: { error() {}, info() {} },
@@ -547,7 +549,7 @@ for (const when of ["before reconnect", "during token lookup", "during handshake
         },
       }
     );
-    target._stopMeetingForPolicy = (reason, auditReason) => {
+    target._stopMeetingForPolicy = (reason, _expectedSessionId, auditReason) => {
       policyStops.push([reason, auditReason]);
     };
     const recovery = reconnect();
@@ -591,6 +593,126 @@ test("a late token refusal from a stopped reconnect cannot end the next meeting"
   assert.equal(target._meetingMicStreaming, replacement);
 });
 
+// Runs the real reconnect with its replay closures. The clients it connects record
+// what they are sent, under the source the meeting attached them for.
+function reconnectReplayHarness({ mic, system }) {
+  const start = source.indexOf("const resetMeetingReconnectAudio =");
+  const end = source.indexOf("const assertMeetingAllowed =", start);
+  const replayed = { mic: [], system: [] };
+  class Streaming {
+    isConnected = false;
+    async connect() {
+      this.isConnected = true;
+    }
+    async disconnect() {}
+    sendAudio(buffer, capturedAt) {
+      replayed[this.label].push([buffer[0], capturedAt]);
+      return true;
+    }
+  }
+  const target = { _meetingMicStreaming: mic, _meetingSystemStreaming: system };
+  const closures = vm.runInNewContext(
+    `(function () {
+      ${meetingDrainHelpers}
+      ${source.slice(start, end)}
+      return { reconnectMeetingStreams, queueMeetingReconnectAudio };
+    }).call(target)`,
+    {
+      target,
+      Buffer,
+      cancelMeetingReconnect: null,
+      drainingMeetingStreams: new Map(),
+      meetingReplayIncomplete: false,
+      withMeetingSourceConnectOpts: (options) => options,
+      meetingReconnectPromise: null,
+      meetingLocalMode: false,
+      meetingConnectionOptions: { provider: "elevenlabs-realtime", mode: "byok" },
+      meetingConnectionWin: { isDestroyed: () => false, webContents: { send() {} } },
+      meetingConnectionKey: null,
+      meetingReconnectCount: 0,
+      meetingReconnectedAt: 0,
+      meetingReconnectAudioBuffers: { mic: [], system: [] },
+      meetingReconnectAudioBytes: { mic: 0, system: 0 },
+      meetingReconnectReplaySources: new Set(),
+      MAX_MEETING_RECONNECTS: 3,
+      MEETING_RECONNECT_STABLE_MS: 10000,
+      MEETING_RECONNECT_BUFFER_MAX_BYTES: 24000 * 2 * 30,
+      MEETING_STREAM_SAMPLE_RATE: 24000,
+      MEETING_SYSTEM_VAD_THRESHOLD: 0.3,
+      credentialGeneration: 0,
+      resolveEnterpriseMeetingOptions: async (_event, current) => current,
+      enterpriseMeetingConnectOptions: async () => ({}),
+      getMeetingConnectionKey: () => "key",
+      getMeetingStreamingClient: () => Streaming,
+      attachMeetingStreamingHandlers: (streaming, _win, label) => {
+        streaming.label = label;
+      },
+      fetchRealtimeToken: async (_event, _options, streams) => (streams ? ["k", "k"] : "k"),
+      assertMeetingAllowed() {},
+      debugLogger: { error() {}, info() {} },
+      isSignInRefusal: () => false,
+      isAudioPolicyRefusal: () => false,
+    }
+  );
+  return { ...closures, replayed };
+}
+
+test("a reconnect replays what its dropped clients never sent ahead of the outage's audio", async () => {
+  // ElevenLabs' client queues what it takes, and hands over once what never left.
+  const dropped = (...unsent) => ({
+    isConnected: false,
+    disconnect: async () => {},
+    takeUnsentAudio: () => unsent.splice(0),
+  });
+  const run = reconnectReplayHarness({
+    mic: dropped({ buffer: Buffer.from([1]), capturedAt: 1000 }),
+    system: dropped({ buffer: Buffer.from([2]), capturedAt: 2000 }),
+  });
+  const reconnected = run.reconnectMeetingStreams();
+  run.queueMeetingReconnectAudio("mic", Buffer.from([3]), 3000);
+  run.queueMeetingReconnectAudio("system", Buffer.from([4]), 4000);
+  assert.equal(await reconnected, true);
+  assert.deepEqual(run.replayed, {
+    mic: [
+      [1, 1000],
+      [3, 3000],
+    ],
+    system: [
+      [2, 2000],
+      [4, 4000],
+    ],
+  });
+});
+
+test("a reconnect leaves the queue of a client that is still connected alone", async () => {
+  let asked = false;
+  const run = reconnectReplayHarness({
+    mic: { isConnected: false, disconnect: async () => {} },
+    system: {
+      isConnected: true,
+      disconnect: async () => {},
+      takeUnsentAudio: () => {
+        asked = true;
+        return [];
+      },
+    },
+  });
+  assert.equal(await run.reconnectMeetingStreams(), true);
+  assert.equal(asked, false, "its stop still has that queue to send");
+});
+
+test("a reconnect takes nothing from a dropped client that queues nothing", async () => {
+  // The other providers' clients send what they take, and have no queue to hand over.
+  const run = reconnectReplayHarness({
+    mic: { isConnected: false, disconnect: async () => {} },
+    system: null,
+  });
+  const reconnected = run.reconnectMeetingStreams();
+  run.queueMeetingReconnectAudio("mic", Buffer.from([3]), 3000);
+  assert.equal(await reconnected, true);
+  assert.deepEqual(run.replayed.mic, [[3, 3000]]);
+});
+
 test("a reconnect refused under org policy ends the meeting instead of restoring old sockets", () => {
   const reconnectCatch = source.slice(
     source.indexOf('debugLogger.error("Meeting stream reconnect failed"'),
@@ -602,6 +724,6 @@ test("a reconnect refused under org policy ends the meeting instead of restoring
   );
   assert.match(
     source,
-    /this\._stopMeetingForPolicy = \(reason = "policyRestricted", auditReason\) => \{[\s\S]{0,900}?meetingConnectionOptions = null;[\s\S]{0,900}?broadcastToWindows\("meeting-transcription-error", reason\)/
+    /this\._stopMeetingForPolicy = \(reason = "policyRestricted", expectedSessionId, auditReason\) => \{[\s\S]{0,900}?meetingConnectionOptions = null;[\s\S]{0,900}?broadcastToWindows\("meeting-transcription-error", reason\)/
   );
 });

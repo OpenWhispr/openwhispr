@@ -156,6 +156,23 @@ test("per-provider transcription model memory", async (t) => {
       assert.equal(memory[`${context}:corti`], "corti-transcribe");
     }
   });
+
+  await t.test("setCloudTranscriptionForAllScopes keeps the model for OpenWhispr Cloud", () => {
+    state().setCloudTranscriptionProvider("openai");
+    state().setCloudTranscriptionModel("gpt-4o-transcribe");
+
+    state().setCloudTranscriptionForAllScopes({
+      useLocalWhisper: false,
+      cloudTranscriptionMode: "openwhispr",
+      cloudTranscriptionProvider: "openwhispr",
+    });
+
+    assert.equal(state().cloudTranscriptionProvider, "openwhispr");
+    assert.equal(state().cloudTranscriptionModel, "gpt-4o-transcribe");
+    assert.equal(state().meetingCloudTranscriptionModel, "gpt-4o-transcribe");
+    assert.equal(state().uploadCloudTranscriptionModel, "gpt-4o-transcribe");
+    assert.equal(state().transcriptionModelByProvider["dictation:openai"], "gpt-4o-transcribe");
+  });
 });
 
 test("unset upload/meeting local providers inherit dictation, and onboarding mirrors them", async (t) => {
@@ -240,6 +257,37 @@ test("explicit model click commits the clicked model, not the remembered one", a
     "the custom URL slot must never be touched by the commit sequence (#1459/#1463)"
   );
 });
+
+// The rule goes by capability, not by provider: Groq is not a Note Recording provider at
+// all, and Gemini's one streaming model is dictation-only. ElevenLabs is covered above.
+for (const batchOnly of ["groq", "gemini"]) {
+  test(`dictation moving to ${batchOnly} leaves Note Recording on the provider it inherited`, async (t) => {
+    installBrowserGlobals(t, {
+      initialStorage: {
+        _providerSettingsMigrated: "1",
+        uploadTranscriptionMigrated: "true",
+        meetingFollowsTranscription: "false",
+        cloudTranscriptionProvider: "deepgram",
+        cloudTranscriptionModel: "nova-3",
+        meetingTranscriptionMode: "providers",
+      },
+    });
+    const vite = await createRendererServer(t, {
+      cachePrefix: "openwhispr-meeting-inherit-test-",
+    });
+    const { useSettingsStore, selectResolvedMeetingTranscription } = await vite.ssrLoadModule(
+      "/stores/settingsStore.ts"
+    );
+    const state = () => useSettingsStore.getState();
+    assert.equal(state().meetingCloudTranscriptionProvider, "");
+
+    state().switchCloudTranscriptionProvider("dictation", batchOnly);
+
+    const meeting = selectResolvedMeetingTranscription(state());
+    assert.equal(meeting.cloudTranscriptionProvider, "deepgram");
+    assert.equal(meeting.cloudTranscriptionModel, "nova-3");
+  });
+}
 
 test("corrupt persisted model memory hydrates as empty, not a crash", async (t) => {
   installBrowserGlobals(t, {

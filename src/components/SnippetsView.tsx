@@ -19,8 +19,64 @@ import { Textarea } from "./ui/textarea";
 import { useSettings } from "../hooks/useSettings";
 import { useListsOwnerRevision } from "../hooks/useListsOwnerRevision";
 import { getCachedPlatform } from "../utils/platform";
-import type { Snippet } from "../utils/snippets";
+import { Tooltip } from "./ui/tooltip";
+import {
+  SNIPPET_VARIABLE_NAMES,
+  resolveSnippetVariables,
+  snippetLocale,
+  type Snippet,
+} from "../utils/snippets";
 import DictionaryEmptyIllustration from "./DictionaryEmptyIllustration";
+
+interface SnippetVariableChipsProps {
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  value: string;
+  onChange: (value: string) => void;
+}
+
+// Each chip previews what it fills in right now, in the locale dictation uses.
+function SnippetVariableChips({
+  textareaRef,
+  value,
+  onChange,
+}: SnippetVariableChipsProps): React.ReactElement {
+  const { t, i18n } = useTranslation();
+  const locale = snippetLocale(i18n.language);
+
+  const insert = (token: string): void => {
+    const textarea = textareaRef.current;
+    const start = textarea?.selectionStart ?? value.length;
+    const end = textarea?.selectionEnd ?? value.length;
+    onChange(value.slice(0, start) + token + value.slice(end));
+    const caret = start + token.length;
+    requestAnimationFrame(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(caret, caret);
+    });
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      <span className="me-0.5 text-[11px] text-foreground/45">
+        {t("dictionary.snippets.variablesLabel")}
+      </span>
+      {SNIPPET_VARIABLE_NAMES.map((name) => {
+        const token = `{{${name}}}`;
+        return (
+          <Tooltip key={name} content={resolveSnippetVariables(token, { locale })}>
+            <button
+              type="button"
+              onClick={() => insert(token)}
+              className="rounded border border-border/70 bg-muted/40 px-1 py-px font-mono text-[10px] leading-tight text-muted-foreground/80 transition-colors hover:border-primary/40 hover:text-foreground active:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 dark:border-white/10"
+            >
+              {token}
+            </button>
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
+}
 
 interface EditSnippetDialogProps {
   snippet: Snippet | null;
@@ -38,6 +94,7 @@ function EditSnippetDialog({
   const { t } = useTranslation();
   const [trigger, setTrigger] = useState("");
   const [replacement, setReplacement] = useState("");
+  const replacementRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (snippet) {
@@ -87,11 +144,17 @@ function EditSnippetDialog({
             <Textarea
               dir="auto"
               id="snippet-replacement"
+              ref={replacementRef}
               autoFocus
               value={replacement}
               onChange={(e) => setReplacement(e.target.value)}
               placeholder={t("dictionary.snippets.replacementPlaceholder")}
               className="min-h-[96px] text-xs"
+            />
+            <SnippetVariableChips
+              textareaRef={replacementRef}
+              value={replacement}
+              onChange={setReplacement}
             />
           </div>
           <DialogFooter className="pt-2">
@@ -124,6 +187,7 @@ function SnippetsEditor({ listsOwner }: { listsOwner: number }): React.ReactElem
   const [panelOpen, setPanelOpen] = useState(false);
   const [editing, setEditing] = useState<Snippet | null>(null);
   const triggerInputRef = useRef<HTMLInputElement>(null);
+  const expansionRef = useRef<HTMLTextAreaElement>(null);
 
   const triggerExists = (value: string, except?: string) => {
     const lower = value.toLowerCase();
@@ -223,6 +287,7 @@ function SnippetsEditor({ listsOwner }: { listsOwner: number }): React.ReactElem
     <div className="rounded-xl border border-primary/30 px-3 pb-2 pt-2.5 dark:border-primary/40">
       <Textarea
         dir="auto"
+        ref={expansionRef}
         autoFocus
         value={expansion}
         onChange={(e) => setExpansion(e.target.value)}
@@ -234,6 +299,7 @@ function SnippetsEditor({ listsOwner }: { listsOwner: number }): React.ReactElem
         rows={4}
         className="min-h-[72px] resize-none rounded-none border-0 bg-transparent text-xs text-foreground shadow-none placeholder:text-foreground/45 hover:border-0 focus:border-0 focus:ring-0"
       />
+      <SnippetVariableChips textareaRef={expansionRef} value={expansion} onChange={setExpansion} />
       <div className="flex items-center justify-between pt-1.5">
         <div dir="ltr" className="flex items-center gap-0.5">
           <kbd className="rounded border border-border/70 bg-muted/40 px-1 py-px font-mono text-[10px] leading-tight text-muted-foreground/70 dark:border-white/10">

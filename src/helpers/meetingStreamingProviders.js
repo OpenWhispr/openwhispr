@@ -5,6 +5,7 @@ const CortiStreaming = require("./cortiStreaming");
 const ElevenLabsStreaming = require("./elevenLabsStreaming");
 const { TinfoilRealtimeStreaming } = require("./tinfoilRealtimeStreaming");
 const { SarvamMeetingStreaming } = require("./sarvamRealtimeStreaming");
+const { SAVED_KEY_PROVIDERS } = require("./productPolicy");
 
 const STREAMING_CLIENT_BY_PROVIDER = {
   "openai-realtime": OpenAIRealtimeStreaming,
@@ -26,9 +27,6 @@ const getMeetingStreamingClient = (provider) => {
   if (!StreamingClient) throw new Error(`Unsupported meeting streaming provider: ${provider}`);
   return StreamingClient;
 };
-
-// These authenticate with saved credentials whatever the mode says.
-const SAVED_KEY_PROVIDERS = new Set(["corti-realtime", "tinfoil-realtime", "elevenlabs-realtime"]);
 
 // A connection that authenticates with a saved key also records the count of key
 // saves it opened under, so a start never reuses one opened before a save.
@@ -55,7 +53,6 @@ const getMeetingConnectionKey = (options = {}, credentialGeneration = null) =>
 module.exports = {
   STREAMING_CLIENT_BY_PROVIDER,
   ALLOWED_MEETING_PROVIDERS,
-  SAVED_KEY_PROVIDERS,
   getMeetingStreamingClient,
   getMeetingConnectionKey,
 };

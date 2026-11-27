@@ -641,6 +641,7 @@
       "failed": "Impossibile verificare l’accesso.",
       "microphone": "Attiva OpenWhispr in Microfono.",
       "accessibility": "Trascina OpenWhispr in Accessibilità e attivalo.",
+      "selectApp": "In Privacy e sicurezza, apri System & App Protection Override e seleziona OpenWhispr.",
       "systemAudio": "Attiva OpenWhispr in Solo registrazione audio di sistema.",
       "screenContext": "Trascina OpenWhispr in Registrazione schermo e audio di sistema e attivalo.",
       "settings": "Impostazioni",
@@ -1630,7 +1631,7 @@
         "label": "Profilo"
       },
       "plansBilling": {
-        "description": "Piani, utilizzo e fatturazione",
+        "description": "Gestisci il piano, l’utilizzo e la fatturazione.",
         "label": "Piano e fatturazione"
       },
       "workspaceGeneral": {
@@ -1682,47 +1683,16 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "workspaceTitle": "Fatturazione dell'area di lavoro",
-      "workspaceDescription": "Ogni area di lavoro ha il proprio piano, i propri posti e un responsabile della fatturazione.",
-      "billableSeat": "Il tuo posto è fatturabile",
-      "nonBillableSeat": "Accesso solo amministratore · nessun posto a pagamento",
-      "managedBy": "La fatturazione è gestita da {{owner}}.",
-      "addSeat": "Aggiungi posto",
-      "seatUpdated_one": "Capacità dell'area di lavoro aggiornata a {{count}} posto",
-      "seatUpdated_other": "Capacità dell'area di lavoro aggiornata a {{count}} posti",
-      "seatUpdateFailed": "Impossibile aggiornare i posti dell'area di lavoro",
-      "businessWorkspaceOnly": "Disponibile per le aree di lavoro",
-      "personalPlanTitle": "Piano personale",
-      "providedBy": "Piano personale: Free · Accesso a pagamento fornito da {{workspaces}}",
-      "confirmSeats": {
-        "title": "Aggiungere un posto all'area di lavoro?",
-        "description_one": "Amplia {{workspace}} a {{count}} posto. Stripe calcolerà la modifica in modo proporzionale.",
-        "description_other": "Amplia {{workspace}} a {{count}} posti. Stripe calcolerà la modifica in modo proporzionale.",
-        "newCapacity": "Nuova capacità",
-        "chargeToday": "Addebito di oggi",
-        "confirm": "Aggiungi posto"
-      }
+      "seatUpdateFailed": "Impossibile aggiornare i posti dell'area di lavoro"
     },
     "account": {
-      "badges": {
-        "free": "Gratuito",
-        "limitReached": "Limite cloud raggiunto",
-        "pastDue": "Scaduto",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "Prova"
-      },
       "billing": {
         "couldNotOpenDescription": "Si è verificato un problema nell'apertura della pagina di fatturazione. Riprova.",
         "couldNotOpenTitle": "Impossibile aprire la fatturazione",
-        "manageBilling": "Gestisci fatturazione",
-        "opening": "Apertura...",
-        "updatePaymentMethod": "Aggiorna metodo di pagamento",
         "contactOwnerTitle": "Contatta il proprietario dell'area di lavoro",
         "contactOwnerDescription": "Solo il proprietario dell'area di lavoro può aggiornarne la fatturazione.",
         "manageInAppStore": "Gestisci nell'App Store",
-        "manageInGooglePlay": "Gestisci su Google Play",
-        "managedInMobileStore": "Addebitato tramite lo store di app del tuo telefono. Gestiscilo dal telefono."
+        "manageInGooglePlay": "Gestisci su Google Play"
       },
       "checkout": {
         "couldNotOpenDescription": "Si è verificato un problema nell'apertura della pagina di pagamento. Riprova.",
@@ -1741,27 +1711,12 @@
         "title": "Dati dell'ultimo accesso",
         "description": "La sincronizzazione e le modifiche all'account sono in pausa finché OpenWhispr non potrà raggiungere i suoi server."
       },
-      "pastDue": {
-        "description": "Sei nel piano gratuito per ora. Aggiorna il metodo di pagamento per tornare a Pro.",
-        "title": "Non siamo riusciti a elaborare il pagamento"
-      },
-      "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} parole di OpenWhispr Cloud questa settimana",
-        "byokUnlimited": "Le tue chiavi API e i modelli locali restano utilizzabili senza limiti.",
-        "nextBilling": "Prossima fatturazione: {{date}}",
-        "pastDue": "{{used}} / {{limit}} parole di OpenWhispr Cloud questa settimana — aggiorna il pagamento per ripristinare Pro",
-        "trial": "{{days}} giorni rimanenti — trascrizioni illimitate",
-        "unlimited": "Illimitato",
-        "accessUntil": "Accesso fino al {{date}}",
-        "storePaymentIssue": "Lo store di app non è riuscito a rinnovare questo abbonamento. Aggiorna lì il metodo di pagamento per mantenere il tuo piano."
-      },
       "planLabels": {
         "free": "Gratuito",
         "pro": "Pro",
         "business": "Business",
         "trial": "Prova"
       },
-      "rollingWeeklyLimit": "Limite settimanale progressivo",
       "signOut": {
         "endMeetingDescription": "Uscendo dall'account si interrompe la registrazione della riunione in corso. Quanto registrato finora resta nella sua nota.",
         "endMeetingTitle": "Interrompere la registrazione della riunione?",
@@ -1785,81 +1740,24 @@
       "pricing": {
         "title": "Piani",
         "billedYearly": "Fatturazione annuale",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "per sempre",
-          "features": [
-            "## OpenWhispr Cloud",
-            "2.000 parole/settimana di trascrizione",
-            "5 ore di registrazioni riunioni/mese",
-            "## Sempre gratuito",
-            "Modelli IA locali illimitati",
-            "Trascrizione cloud illimitata con le tue chiavi API",
-            "Oltre 100 lingue supportate",
-            "Dizionario personalizzato",
-            "Nessuna conservazione dei dati",
-            "Supporto della comunità"
-          ]
-        },
         "pro": {
           "name": "Pro",
           "monthlyPrice": "$8",
-          "monthlyPeriod": "/mese",
-          "annualPrice": "$80",
-          "annualPeriod": "/anno",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "Tutte le funzionalità Free +",
-          "features": [
-            "Trascrizione cloud illimitata",
-            "20 ore di registrazioni riunioni/mese",
-            "Sincronizzazione tra dispositivi",
-            "Condividi note con link pubblici",
-            "Accesso personale all'API",
-            "Integrazione MCP in tutte le tue app",
-            "App mobile con cloud illimitato",
-            "Supporto via e-mail"
-          ],
-          "cta": "Inizia",
-          "switchToAnnual": "Passa all'annuale"
+          "annualEquivalent": "$6.67"
         },
         "business": {
           "name": "Business",
           "monthlyPrice": "$16",
-          "monthlyPeriod": "/mese",
-          "annualPrice": "$160",
-          "annualPeriod": "/anno",
           "annualEquivalent": "$13.33",
-          "includesPrefix": "Tutte le funzionalità Pro +",
-          "badge": "Più popolare",
-          "features": [
-            "Registrazioni riunioni illimitate",
-            "Ruoli e gestione dei membri dell'area di lavoro",
-            "Modalità assistente",
-            "Chatta con i tuoi dati",
-            "Supporto prioritario"
-          ],
-          "cta": "Inizia",
-          "switchToAnnual": "Passa all'annuale"
+          "cta": "Inizia"
         },
         "enterprise": {
           "name": "Enterprise",
           "price": "Personalizzato",
-          "subtitle": "Per sicurezza avanzata e supporto dedicato",
-          "includesPrefix": "Tutte le funzionalità Business +",
-          "features": [
-            "Crediti API gestiti",
-            "Sincronizzazione cloud tra dispositivi",
-            "Funzionalità di team e amministrazione",
-            "SSO e conformità",
-            "Supporto dedicato"
-          ],
           "cta": "Contatta le vendite",
           "upgradeCta": "Passa a Enterprise",
           "askOwner": "Chiedi a {{name}} di eseguire l'upgrade del tuo spazio di lavoro."
         },
-        "currentPlan": "Piano attuale",
-        "yourPersonalPlan": "Il tuo piano personale",
         "yourWorkspacePlan": "Il piano del tuo workspace",
         "manage": "Gestisci",
         "coveredByWorkspace": "Incluso nel piano della tua area di lavoro",
@@ -1881,11 +1779,7 @@
           "confirm": "Conferma"
         }
       },
-      "signedOutPlans": {
-        "button": "Crea account gratuito"
-      },
       "user": "Utente",
-      "wordsRemaining": "{{remaining}} rimanenti",
       "deleteAccount": {
         "label": "Elimina account",
         "labelDescription": "Elimina permanentemente il tuo account e i dati cloud personali. Gli altri utenti locali e i contenuti degli spazi di lavoro vengono conservati.",
@@ -1936,10 +1830,6 @@
           "noPassword": "Nessuna password è impostata per questo account.",
           "generic": "Qualcosa è andato storto. Riprova."
         }
-      },
-      "planUnavailable": {
-        "title": "Piano non disponibile",
-        "description": "Non siamo riusciti a caricare il tuo piano. Il tuo accesso resta invariato."
       }
     },
     "agentConfig": {
@@ -3094,26 +2984,12 @@
         "resentNoEmail": "Invito aggiornato, ma non è stato possibile recapitare l'e-mail."
       },
       "billing": {
-        "plan": "Piano",
-        "seats": "Posti",
-        "ownerOnly": "Solo il proprietario dell'area di lavoro può gestire l'abbonamento.",
         "nextInvoice": "Prossima fattura",
-        "manageStripe": "Gestisci in Stripe",
-        "startSubscription": "Avvia abbonamento",
-        "provisionedPlan": "Configurato da OpenWhispr. Contatta le vendite per modificare il piano o i posti.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
           "free": "Free",
           "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "Attivo",
-          "trialing": "In prova",
-          "past_due": "In ritardo",
-          "canceled": "Annullato",
-          "incomplete": "Incompleto",
-          "unpaid": "Non pagato"
         }
       },
       "developer": {
@@ -3251,6 +3127,327 @@
       "upgradeCta": "Esegui l'upgrade",
       "upgradedTitle": "Upgrade completato",
       "upgradedDescription": "{{workspace}} è ora su Enterprise."
+    },
+    "billing": {
+      "addSeats": {
+        "title": "Aggiungi posti",
+        "invoiceDate": "Prossima fattura · {{date}}",
+        "quantity": "Posti da aggiungere",
+        "decrease": "Riduci posti",
+        "increase": "Aumenta posti",
+        "now": "Ora",
+        "after": "Dopo",
+        "inUse": "In uso",
+        "pending": "Posti in sospeso",
+        "available": "Disponibili",
+        "total": "Posti totali",
+        "price": "Prezzo",
+        "perMonth": "{{price}} / posto / mese",
+        "proration": "Aggiunto alla prossima fattura",
+        "confirm_one": "Aggiungi {{count}} posto",
+        "confirm_other": "Aggiungi {{count}} posti",
+        "confirm_many": "Aggiungi {{count}} posti",
+        "adding": "Aggiunta in corso…",
+        "failure": "Impossibile confermare la modifica. Verifica del totale dei posti in corso.",
+        "success": "{{workspace}} ora ha {{count}} posti.",
+        "limitReached": "L’area di lavoro ha raggiunto il limite di posti.",
+        "occupancyMinimum": "Il totale deve essere di almeno {{minimum}} per coprire i posti occupati.",
+        "previewFailed": "Impossibile caricare i prezzi."
+      },
+      "free": {
+        "inviteTeammates": "Invita colleghi",
+        "upgradeToBusiness": "Passa a Business",
+        "proHint": "Solo tu? Pro costa {{price}} / mese.",
+        "viewPersonal": "Vedi piano personale",
+        "countFailed": "Impossibile verificare chi fa parte di quest'area di lavoro."
+      },
+      "errors": {
+        "noTeammates": "Invita un collega prima di attivare Business."
+      },
+      "picker": {
+        "label": "Piano mostrato",
+        "personal": "Personale",
+        "workspaces": "Aree di lavoro",
+        "loadFailed": "Impossibile caricare le aree di lavoro"
+      },
+      "workspaceUnavailable": {
+        "title": "Piano dell'area di lavoro non disponibile",
+        "description": "Il tuo accesso non è cambiato."
+      },
+      "tiles": {
+        "upgradeWorkspace": "Esegui l'upgrade di un'area di lavoro",
+        "createWorkspace": "Crea area di lavoro"
+      },
+      "plans": {
+        "pricePerMonth": "{{price}} / mese",
+        "pricePerMonthYearly": "{{price}} / mese, fatturazione annuale",
+        "pricePerSeat": "{{price}} / utente / mese",
+        "pricePerSeatYearly": "{{price}} / utente / mese, fatturazione annuale",
+        "yourPlan": "Il tuo piano",
+        "pro": {
+          "includes": "Tutto di Free, più",
+          "features": {
+            "unlimitedCloud": "Trascrizione cloud illimitata",
+            "syncDevices": "Sincronizzazione tra dispositivi",
+            "publicLinks": "Link pubblici per le note",
+            "apiMcp": "Accesso personale ad API e MCP",
+            "mobileApp": "App mobile"
+          }
+        },
+        "business": {
+          "includes": "Tutto di Pro, più",
+          "features": {
+            "workspaceRoles": "Ruoli e membri dell'area di lavoro",
+            "assistantMode": "Modalità assistente",
+            "chatOverData": "Chatta con i tuoi dati",
+            "prioritySupport": "Supporto prioritario"
+          }
+        },
+        "enterprise": {
+          "includes": "Tutto di Business, più",
+          "features": {
+            "managedCredits": "Crediti API gestiti",
+            "ssoCompliance": "SSO e conformità",
+            "adminControls": "Controlli e criteri di amministrazione",
+            "dedicatedSupport": "Supporto dedicato"
+          }
+        }
+      },
+      "personal": {
+        "blocks": {
+          "currentPlan": "Piano attuale",
+          "usage": "Utilizzo",
+          "billingDetails": "Dettagli di fatturazione"
+        },
+        "signedOut": {
+          "title": "Accesso non effettuato",
+          "body": "Accedi per vedere il tuo piano."
+        },
+        "failed": {
+          "title": "Piano non disponibile",
+          "body": "Il tuo accesso non cambia."
+        },
+        "actions": {
+          "cancelTrial": "Annulla la prova",
+          "cancelBusiness": "Disdici Business",
+          "keepPlan": "Mantieni {{plan}}",
+          "subscribePro": "Abbonati a Pro",
+          "manageBilling": "Gestisci fatturazione",
+          "updatePayment": "Aggiorna pagamento",
+          "cancelPro": "Annulla Pro"
+        },
+        "usage": {
+          "cloudTranscription": "Trascrizione cloud",
+          "unlimited": "Illimitata",
+          "wordsValue": "{{used}} / {{limit}} parole",
+          "wordsLeft": "Restano {{remaining}} parole negli ultimi 7 giorni",
+          "rolling": "Conta gli ultimi 7 giorni. I modelli locali e le tue chiavi API sono illimitati.",
+          "limitReached": "Limite raggiunto. I modelli locali e le tue chiavi API funzionano ancora."
+        },
+        "stores": {
+          "appStore": "App Store",
+          "playStore": "Google Play",
+          "unknown": "Lo store di app del tuo telefono"
+        },
+        "badges": {
+          "stripeTrial": "Periodo di prova",
+          "trial_one": "Prova · {{count}} giorno rimasto",
+          "trial_other": "Prova · {{count}} giorni rimasti",
+          "pastDue": "Pagamento scaduto",
+          "cancelled": "Annullato",
+          "yearly": "Annuale",
+          "monthly": "Mensile"
+        },
+        "price": {
+          "trialStarts": "La fatturazione inizia il {{date}}",
+          "trialYearlyStarts": "Fatturazione annuale dal {{date}}",
+          "free": "$0",
+          "billedYearly": "Fatturazione annuale"
+        },
+        "banners": {
+          "endingDated": {
+            "title": "{{plan}} termina il {{date}}",
+            "body": "Puoi mantenere il tuo piano nel portale di fatturazione."
+          },
+          "ending": {
+            "title": "La scadenza di {{plan}} è programmata",
+            "body": "Puoi mantenere il tuo piano nel portale di fatturazione."
+          },
+          "paymentFailedRetry": {
+            "title": "Pagamento non riuscito",
+            "body": "Si applicano i limiti del piano gratuito fino al pagamento. Prossimo tentativo il {{date}}."
+          },
+          "coveredPastDue": {
+            "title": "{{workspace}} ti copre già",
+            "body": "Verifica il pagamento non riuscito nel portale di fatturazione."
+          },
+          "coveredPastDueUnnamed": {
+            "title": "Un workspace ti copre già",
+            "body": "Verifica il pagamento non riuscito nel portale di fatturazione."
+          },
+          "coveredStripeTrial": {
+            "title": "{{workspace}} ti copre già",
+            "body": "Al termine della prova, Pro diventerà un abbonamento a pagamento."
+          },
+          "coveredStripeTrialUnnamed": {
+            "title": "Un workspace ti copre già",
+            "body": "Al termine della prova, Pro diventerà un abbonamento a pagamento."
+          },
+          "coveredPaying": {
+            "title": "{{workspace}} ti copre già",
+            "body": "Stai ancora pagando {{plan}}."
+          },
+          "coveredPayingUnnamed": {
+            "title": "Un workspace ti copre già",
+            "body": "Stai ancora pagando {{plan}}."
+          },
+          "coveredStore": {
+            "title": "{{workspace}} ti copre già",
+            "body": "Puoi consultare il tuo acquisto di {{plan}} nello store del telefono."
+          },
+          "coveredStoreUnnamed": {
+            "title": "Un workspace ti copre già",
+            "body": "Puoi consultare il tuo acquisto di {{plan}} nello store del telefono."
+          },
+          "covered": {
+            "title": "{{workspace}} ti copre",
+            "body": "Il tuo posto nel workspace ti dà un utilizzo illimitato anche qui."
+          },
+          "coveredUnnamed": {
+            "title": "Un workspace ti copre",
+            "body": "Il tuo posto nel workspace ti dà un utilizzo illimitato anche qui."
+          },
+          "paymentFailed": {
+            "title": "Pagamento non riuscito",
+            "body": "Si applicano i limiti Free finché il pagamento non va a buon fine."
+          },
+          "storeRenewalFailed": {
+            "title": "Rinnovo non riuscito",
+            "body": "Lo store di app del tuo telefono sta riprovando. Aggiorna lì il pagamento."
+          },
+          "weeklyLimit": {
+            "title": "Limite settimanale raggiunto",
+            "body": "La trascrizione cloud torna man mano che escono dal conteggio le parole di oltre 7 giorni fa. I modelli locali e le tue chiavi API funzionano ancora."
+          }
+        },
+        "details": {
+          "nextInvoice": "Prossima fattura",
+          "finalInvoice": "Fattura finale",
+          "firstInvoice": "Prima fattura",
+          "nextRetry": "Prossimo tentativo di addebito",
+          "amountDue": "Importo dovuto",
+          "ends": "Termina il",
+          "ended": "Terminato il",
+          "billingContact": "Contatto per la fatturazione",
+          "periodEnds": "Il periodo attuale termina",
+          "billedThrough": "Fatturato tramite",
+          "accessUntil": "Accesso fino al"
+        }
+      },
+      "workspace": {
+        "managedAccount": "Account gestito",
+        "billingDetails": "Dettagli di fatturazione",
+        "workspaceDetails": "Dettagli dell'area di lavoro",
+        "badges": {
+          "trial_one": "Prova · {{count}} giorno rimasto",
+          "trial_other": "Prova · {{count}} giorni rimasti",
+          "trialUndated": "Prova",
+          "pastDue": "Scaduto",
+          "unpaid": "Non pagato",
+          "incomplete": "Incompleto",
+          "cancelled": "Annullato",
+          "paused": "In pausa"
+        },
+        "interval": {
+          "monthly": "Mensile",
+          "annual": "Annuale"
+        },
+        "planLine": {
+          "seatPrice": "{{price}} per posto al mese",
+          "customPricing": "Prezzi personalizzati",
+          "free": "$0",
+          "invoicedByOpenWhispr": "Fatturato da OpenWhispr",
+          "paidBy": "Pagato da {{workspace}}",
+          "personalApplies": "Si applica il tuo piano personale"
+        },
+        "actions": {
+          "manageBilling": "Gestisci fatturazione",
+          "updatePayment": "Aggiorna pagamento",
+          "finishCheckout": "Completa il pagamento",
+          "keepPlan": "Mantieni {{plan}}",
+          "resubscribe": "Abbonati di nuovo",
+          "openConsole": "Apri console",
+          "upgradeEnterprise": "Passa a Enterprise",
+          "viewPersonal": "Vedi piano personale",
+          "copyEmail": "Copia email"
+        },
+        "banners": {
+          "ends": {
+            "title": "{{plan}} termina il {{date}}",
+            "body": "I tuoi membri mantengono {{plan}} fino ad allora."
+          },
+          "endsUndated": {
+            "title": "{{plan}} sta per terminare",
+            "body": "I tuoi membri mantengono {{plan}} fino alla fine del periodo attuale."
+          },
+          "paymentFailed": {
+            "title": "Pagamento non riuscito",
+            "body": "Aggiorna il metodo di pagamento per ripristinare {{plan}} per i tuoi membri."
+          },
+          "paused": {
+            "title": "{{plan}} è in pausa",
+            "body": "I tuoi membri usano i loro piani personali finché il pagamento non va a buon fine."
+          },
+          "checkoutIncomplete": {
+            "title": "Pagamento non completato",
+            "body": "Completa il pagamento per attivare {{plan}} per i tuoi membri."
+          },
+          "ended": {
+            "title": "{{plan}} è terminato il {{date}}",
+            "body": "I tuoi membri sono tornati ai loro piani personali."
+          },
+          "endedUndated": {
+            "title": "{{plan}} è terminato",
+            "body": "I tuoi membri sono tornati ai loro piani personali."
+          },
+          "memberPaymentProblem": {
+            "title": "{{workspace}} ha un problema di pagamento",
+            "body": "Si applica il tuo piano personale finché il pagamento dello spazio di lavoro non va a buon fine."
+          },
+          "memberPaused": {
+            "title": "Il piano di {{workspace}} è in pausa",
+            "body": "Si applica il tuo piano personale finché non torna attivo."
+          }
+        },
+        "usage": {
+          "seats": "Posti",
+          "members": "Membri",
+          "noSeatsLeft": "Nessun posto disponibile",
+          "noSeatsLeftWithInvites_one": "Nessun posto disponibile · {{count}} invito in sospeso",
+          "noSeatsLeftWithInvites_other": "Nessun posto disponibile · {{count}} inviti in sospeso",
+          "pendingInvites_one": "{{count}} invito in sospeso",
+          "pendingInvites_other": "{{count}} inviti in sospeso"
+        },
+        "details": {
+          "nextInvoice": "Prossima fattura",
+          "nextRetry": "Prossimo tentativo di pagamento",
+          "amountDue": "Importo dovuto",
+          "billingContact": "Contatto per la fatturazione",
+          "finalInvoice": "Fattura finale",
+          "firstInvoice": "Prima fattura",
+          "ends": "Termina",
+          "ended": "Terminato",
+          "billing": "Fatturazione",
+          "periodEnds": "Il periodo attuale termina",
+          "workspace": "Area di lavoro",
+          "yourRole": "Il tuo ruolo",
+          "yourSeat": "Il tuo posto",
+          "managedBy": "Gestito da",
+          "invoicedByOpenWhispr": "Fatturato da OpenWhispr",
+          "paidSeat": "Posto a pagamento",
+          "noPaidSeat": "Nessun posto a pagamento"
+        }
+      }
     }
   },
   "models": {
@@ -3365,6 +3562,7 @@
         "gemini_gemini_3_8_flash": "Il modello Flash più capace",
         "gemini_gemini_4_argon": "Il modello di ragionamento di frontiera di Google",
         "tinfoil_kimi_k3": "Modello di punta privato di Moonshot con ragionamento nativo e visione, contesto 256K",
+        "tinfoil_kimi_k3_1_pro": "Modello di punta privato di Moonshot per coding a lungo termine e lavoro agentico, contesto 256K",
         "tinfoil_deepseek_v4_1_flash": "Modello DeepSeek privato e veloce con ragionamento opzionale, contesto 1M"
       },
       "enterprise": {
@@ -3418,6 +3616,9 @@
         "liquidai_lfm2_2_6b_q4_k_m": "LFM2 bilanciato per una pulizia di qualità superiore",
         "liquidai_lfm2_5_350m_q8_0": "Modello ultraleggero per una pulizia rapida della dettatura",
         "liquidai_lfm2_5_230m_q8_0": "Modello minuscolo, pulizia istantanea su hardware modesto",
+        "liquidai_lfm3_1_7b_qad_q4_0": "Il più recente modello piccolo di Liquid AI",
+        "liquidai_lfm3_vl_2b_qad_q4_0": "Modello di visione LFM3 di Liquid AI, qui usato per il testo",
+        "liquidai_lfm3_omni_2b_q4_0": "Modello multimodale LFM3 di Liquid AI, qui usato per il testo",
         "qwen_qwen3_5_0_8b_q4_k_m": "Qwen3.5 minuscolo per la pulizia più rapida",
         "qwen_qwen3_8_27b_q4_k_m": "Il modello Qwen più capace per computer da 32 GB",
         "qwen_qwen3_6_35b_a3b_q4_k_m": "Modello mixture-of-experts veloce, 3B di parametri attivi",
@@ -3529,6 +3730,9 @@
     "mutationErrors": {
       "folderNameRequired": "Inserisci un nome per la cartella.",
       "folderAlreadyExists": "Esiste già una cartella con questo nome.",
+      "folderNameTakenIn": "“{{name}}” è già usato in “{{parent}}”. Il nome di una cartella può essere usato una sola volta in ogni spazio.",
+      "folderNameTakenTopLevel": "“{{name}}” è già usato al livello principale. Il nome di una cartella può essere usato una sola volta in ogni spazio.",
+      "reservedSubfolderName": "“{{name}}” è il nome di una cartella predefinita in Privato, quindi una sottocartella non può usarlo.",
       "folderNotFound": "Impossibile trovare questa cartella.",
       "defaultFolderImmutable": "Le cartelle predefinite non possono essere modificate.",
       "spaceNameRequired": "Inserisci un nome per lo spazio.",
@@ -3582,6 +3786,8 @@
       "confirmMoveInTitle": "Spostare in {{space}}?",
       "confirmMoveIn": "Tutti in {{space}} potranno vedere e modificare questa nota. Le note non potranno più essere spostate fuori da un teamspace.",
       "confirmMoveInFolder": "Tutti in {{space}} potranno vedere e modificare questa cartella e le sue note. Le cartelle e le note non potranno più essere spostate fuori da un teamspace.",
+      "confirmMoveInFolderSubfolders": "Tutti in {{space}} potranno vedere e modificare questa cartella, insieme a {{subfolders}} e {{notes}}. Le cartelle e le note non potranno più essere spostate fuori da un teamspace.",
+      "confirmMoveInSubfolder": "Tutti in {{space}} potranno vedere e modificare questa sottocartella e le sue note. Diventerà una cartella di livello principale in {{space}} e questo spostamento non può essere annullato.",
       "cantMoveOut": "Le note non possono essere spostate fuori da un teamspace.",
       "cantMoveTeammate": "Solo il proprietario della nota o un amministratore del workspace può spostarla in un altro spazio.",
       "moved": "“{{title}}” spostata in {{target}}",
@@ -3658,7 +3864,7 @@
         "title": "Teamspace",
         "description": "Un'area condivisa all'interno di un workspace. Aggiungi persone o team per dare loro accesso."
       },
-      "contents": "Ogni spazio può contenere cartelle e note.",
+      "contents": "Ogni spazio può contenere cartelle e note, e ogni cartella può avere sottocartelle.",
       "done": "Ho capito",
       "reopen": "Scopri come sono organizzati gli spazi"
     },
@@ -3671,13 +3877,18 @@
       "title": "Cartelle",
       "soon": "Presto",
       "folderName": "Nome cartella",
+      "topLevel": "Livello principale",
       "couldNotCreate": "Impossibile creare la cartella",
       "couldNotRename": "Impossibile rinominare la cartella",
       "couldNotDelete": "Impossibile eliminare la cartella",
       "deleteTitle": "Eliminare la cartella?",
       "deleteDescription": "Questa azione eliminerà definitivamente \"{{name}}\" e le sue {{count}} nota/e. Questa operazione non può essere annullata.",
       "deleteDescriptionEmpty": "Questa azione eliminerà definitivamente \"{{name}}\". Questa operazione non può essere annullata.",
-      "deleteConfirm": "Elimina cartella e note"
+      "deleteDescriptionSubfolders": "Questa azione eliminerà definitivamente \"{{name}}\" insieme a {{subfolders}} e {{notes}}. Questa operazione non può essere annullata.",
+      "subfolderCount_one": "{{count}} sottocartella",
+      "subfolderCount_other": "{{count}} sottocartelle",
+      "deleteConfirm": "Elimina cartella e note",
+      "recordingInFolder": "“{{title}}” in questa cartella è in registrazione. Interrompi la registrazione, poi elimina la cartella."
     },
     "list": {
       "title": "Note",
@@ -3717,6 +3928,7 @@
       "generateSummary": "Genera riepilogo AI",
       "generateWithTemplate": "Genera con {{template}}",
       "startWriting": "Inizia a scrivere...",
+      "tabToLeave": "Premi Esc, poi Tab o Maiusc+Tab per uscire dall’editor.",
       "staleIndicator": "Il contenuto è cambiato dall'ultimo miglioramento",
       "live": "Dal vivo",
       "transcript": "Trascrizione",
@@ -3846,7 +4058,6 @@
           "matchCase": "Maiuscole/minuscole",
           "close": "Chiudi"
         },
-        "count": "Parole: {{words}} · Caratteri: {{chars}}",
         "link": {
           "header": "Collega nota",
           "empty": "Digita il titolo di una nota…",
@@ -3863,7 +4074,15 @@
           "title": "Indice",
           "empty": "Aggiungi titoli per creare l'indice."
         }
-      }
+      },
+      "lostNoteCopy": {
+        "title": "Le tue ultime modifiche sono in una nuova nota",
+        "description": "“{{title}}” è stata eliminata prima che venissero salvate, quindi sono state salvate in una nuova nota in Privato.",
+        "open": "Apri nota"
+      },
+      "muteMic": "Disattiva microfono",
+      "unmuteMic": "Riattiva microfono",
+      "micMuted": "Microfono disattivato"
     },
     "participants": {
       "attendee": "partecipante",
@@ -4003,15 +4222,26 @@
         "title": "L'audio della riunione è diventato silenzioso",
         "description": "Non si sente nessuno da qualche minuto. Se la chiamata è ancora in corso, controlla il dispositivo di uscita audio."
       },
+      "externalAttendeesBlocked": "A questa riunione partecipano persone esterne alla tua organizzazione. La tua organizzazione non ne consente la trascrizione.",
+      "externalAttendeesUnverifiable": "OpenWhispr non ha potuto verificare tutte le persone invitate. La tua organizzazione consente la trascrizione solo delle riunioni interne.",
+      "externalAttendeesStopped": "La registrazione è stata interrotta perché tra gli invitati c’è una persona esterna alla tua organizzazione. Puoi continuare a prendere appunti.",
+      "internalAttendeesQuestion": "Tutte le persone presenti alla riunione fanno parte della tua organizzazione?",
+      "internalAttendeesConfirm": "Sì, avvia",
       "recordingDisabledByOrg": "La registrazione delle riunioni è disattivata dalla tua organizzazione.",
       "stoppedSarvamKeyChanged": "La registrazione è stata interrotta perché la chiave API di Sarvam è cambiata.",
       "stoppedAccountChanged": "La registrazione si è interrotta perché sei uscito dall'account o hai cambiato account.",
       "stoppedPolicyUnresolved": "La registrazione si è interrotta perché non è stato possibile verificare le impostazioni della tua organizzazione.",
-      "stoppedWorkspaceChanged": "La registrazione si è interrotta perché hai cambiato workspace."
+      "stoppedWorkspaceChanged": "La registrazione si è interrotta perché hai cambiato workspace.",
+      "recordingCopy": {
+        "title": "Registrazione spostata in una nuova nota",
+        "description": "“{{title}}” è stata eliminata durante la registrazione. La trascrizione viene salvata in una nuova nota in Privato.",
+        "open": "Apri nota"
+      }
     },
     "meetingPill": {
       "returnToNote": "Torna alla registrazione",
-      "waitingForMicrophone": "In attesa del microfono"
+      "waitingForMicrophone": "In attesa del microfono",
+      "micMuted": "Microfono disattivato"
     },
     "context": {
       "moveToFolder": "Sposta nella cartella",
@@ -4020,6 +4250,7 @@
       "searchFolders": "Cerca cartelle...",
       "noResults": "Nessuna cartella trovata",
       "newFolder": "Nuova cartella",
+      "newSubfolder": "Nuova sottocartella",
       "showInFileManager": "Mostra in {{manager}}"
     },
     "actions": {
@@ -4254,6 +4485,7 @@
         "members_one": "{{count}} membro",
         "members_other": "{{count}} membri"
       },
+      "subfolders": "Sottocartelle",
       "banner": {
         "title": {
           "team": "Il tuo teamspace",
@@ -4326,6 +4558,7 @@
       "triggerPlaceholder": "es. mio calendario",
       "replacementLabel": "Sostituzione",
       "replacementPlaceholder": "Testo da inserire quando pronunci il trigger…",
+      "variablesLabel": "Inserisci",
       "create": "Crea snippet",
       "duplicate": "Esiste già uno snippet con questo trigger",
       "emptyTitle": "Quello che non dovresti dover dire",
@@ -6663,7 +6896,7 @@
         "FOLDER_UNAVAILABLE": "Questa destinazione non è disponibile. Scegli un’altra cartella.",
         "SPACE_UNAVAILABLE": "Questa destinazione non è disponibile. Scegli un’altra cartella.",
         "FOLDER_NAME_REQUIRED": "Inserisci un nome per la cartella.",
-        "FOLDER_NAME_TAKEN": "Esiste già una cartella con questo nome in questa posizione.",
+        "FOLDER_NAME_TAKEN": "Esiste già una cartella con questo nome in questo spazio.",
         "CREATE_FAILED": "Impossibile completare. Riprova.",
         "LINKED_NOTE_CHANGED": "Controlla la destinazione, poi partecipa di nuovo.",
         "NOTE_UNAVAILABLE": "Questa nota non è disponibile. Riprova senza crearne un’altra.",

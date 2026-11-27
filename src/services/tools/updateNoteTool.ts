@@ -70,7 +70,7 @@ export function createUpdateNoteTool(scope: NoteScope): ToolDefinition {
         folder: {
           type: "string",
           description:
-            "Folder name to move the note to. Created automatically if it does not exist.",
+            'Folder to move the note to: a plain folder name, or the "Parent / Child" label list_folders shows for a subfolder. Created automatically if it does not exist; a new subfolder needs an existing parent.',
         },
       },
       required: ["id"],

@@ -12,8 +12,8 @@ jest.mock('../../../../modules/parakeet-asr/src', () => ({
     isAvailable: jest.fn(() => true),
     modelSpec: jest.fn(async () => ({
       repo: 'FluidInference/parakeet-tdt-0.6b-v2-coreml',
-      directory: '/AppSupport/FluidAudio/Models/parakeet-tdt-0.6b-v2-coreml',
-      stagingDirectory: '/AppSupport/FluidAudio/Models/parakeet-tdt-0.6b-v2-coreml.downloading',
+      directory: '/AppSupport/FluidAudio/Models/parakeet-tdt-0.6b-v2',
+      stagingDirectory: '/AppSupport/FluidAudio/Models/parakeet-tdt-0.6b-v2.downloading',
       entries: ['Decoder.mlmodelc', 'parakeet_vocab.json'],
     })),
   },
@@ -34,7 +34,7 @@ import {
 const REPO = 'FluidInference/parakeet-tdt-0.6b-v2-coreml';
 /** The repo's current commit, pinned for the whole run so listing, transfers and staging agree. */
 const REVISION = 'ee09c569f73759e6d44c9bd16766f477b2b36d39';
-const INSTALL = 'file:///AppSupport/FluidAudio/Models/parakeet-tdt-0.6b-v2-coreml';
+const INSTALL = 'file:///AppSupport/FluidAudio/Models/parakeet-tdt-0.6b-v2';
 const STAGING = `${INSTALL}.downloading`;
 /** Records which revision the staged files were fetched from. */
 const MARKER = `${STAGING}/.revision`;

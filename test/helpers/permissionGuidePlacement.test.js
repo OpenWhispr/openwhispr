@@ -77,3 +77,36 @@ test("an overlay wider than the display is trimmed to fit", async () => {
   assert.equal(bounds.width, 400);
   assert.equal(bounds.x, 0);
 });
+
+test("keeping Settings clear takes the first free side: below, above, right, then left", async () => {
+  const { computeGuideBounds } = await load();
+  const place = (settingsBounds) =>
+    computeGuideBounds({ settingsBounds, workArea, size, keepSettingsClear: true });
+
+  assert.deepEqual(place({ x: 232, y: 100, width: 723, height: 504 }), {
+    x: 314,
+    y: 604,
+    ...size,
+  });
+  assert.deepEqual(place({ x: 232, y: 300, width: 723, height: 600 }), {
+    x: 314,
+    y: 176,
+    ...size,
+  });
+  assert.deepEqual(place({ x: 100, y: 60, width: 723, height: 860 }), { x: 823, y: 60, ...size });
+  assert.deepEqual(place({ x: 700, y: 60, width: 723, height: 860 }), { x: 140, y: 60, ...size });
+});
+
+test("with no room beside Settings the guide keeps its usual spot instead of disappearing", async () => {
+  const { computeGuideBounds } = await load();
+  const crowded = { x: 394, y: 60, width: 723, height: 860 };
+
+  assert.deepEqual(
+    computeGuideBounds({ settingsBounds: crowded, workArea, size, keepSettingsClear: true }),
+    computeGuideBounds({ settingsBounds: crowded, workArea, size })
+  );
+  assert.deepEqual(
+    computeGuideBounds({ settingsBounds: null, workArea, size, keepSettingsClear: true }),
+    computeGuideBounds({ settingsBounds: null, workArea, size })
+  );
+});

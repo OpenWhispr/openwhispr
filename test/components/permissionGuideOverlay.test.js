@@ -36,6 +36,9 @@ test("guide exposes native drag only for supported steps and keeps a keyboard al
   const drag = render({});
   assert.match(drag, /draggable="true"/);
   assert.match(drag, /onboarding.permissionGuide.missingApp/);
+  const picker = render({ selectApp: true, canDrag: false });
+  assert.match(picker, /onboarding.permissionGuide.selectApp/);
+  assert.doesNotMatch(picker, /draggable|onboarding.permissionGuide.missingApp/);
   const microphone = render({ permission: "microphone", canDrag: false });
   assert.doesNotMatch(microphone, /draggable="true"/);
   const restart = render({ permission: "screen-context", granted: true, needsRelaunch: true });

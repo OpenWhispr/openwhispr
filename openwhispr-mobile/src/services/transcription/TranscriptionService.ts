@@ -1,5 +1,10 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { AudioPurpose, TranscriptionRequest, TranscriptionResponse } from '../../types';
+import {
+  AudioPurpose,
+  TranscriptionRequest,
+  TranscriptionResponse,
+  WhisperSegment,
+} from '../../types';
 import {
   API_ENDPOINTS,
   CLOUD_CHUNK_CONCURRENCY,
@@ -17,10 +22,10 @@ import {
   isDictationContext,
 } from '../../lib/dictationHints';
 import {
-  GROQ_PROMPT_CHARS,
   MAX_SHARED_KEYTERMS,
   PROMPT_HEAD_TERMS,
   WHISPER_PROMPT_CHARS,
+  cloudDictationPrompt,
   dictionaryPromptLimit,
   formatDictionaryPrompt,
   promptLimitKeepingPersonal,
@@ -294,7 +299,17 @@ const uploadWithRetry = async (
 // Minimal status/text extraction for chunk uploads, which hit the plain
 // transcribe endpoint and only need the raw text back (no fused cleanup or
 // server-timing parsing — those are single-shot concerns).
-const parseChunkTranscriptionText = (response: { status: number; body: string }): string => {
+// Null when the chunk heard no speech.
+const parseChunkTranscriptionText = (response: { status: number; body: string }): string | null => {
+  // One silent stretch of a long recording is no words, not a failed transcription;
+  // throwing here would discard every other chunk's text.
+  if (
+    response.status === 422 &&
+    typeof response.body === 'string' &&
+    /NO_SPEECH_DETECTED|no speech/i.test(response.body)
+  ) {
+    return null;
+  }
   if (response.status === 401) {
     throw new Error('Session expired. Please sign in again.');
   }
@@ -523,19 +538,8 @@ export class TranscriptionService {
       parameters.clientAudioMimeType = finalMimeType;
       parameters.clientAudioFileName = uploadFileName;
     }
-    // OpenWhispr Cloud's Groq provider keeps only the head 896 characters, its
-    // Whisper decoder reads only the decoder window, and its Gemini route keeps
-    // the first PROMPT_HEAD_TERMS terms, so shared words fill at most that;
-    // personal words are never cut.
-    const promptTiers = buildDictationHintTiers(isDictationContext(options.requestContext));
-    const prompt = formatDictionaryPrompt(
-      promptTiers,
-      promptLimitKeepingPersonal(promptTiers, GROQ_PROMPT_CHARS),
-      {
-        sharedChars: sharedDictionaryPromptChars(GROQ_PROMPT_CHARS),
-        sharedWords: MAX_SHARED_KEYTERMS,
-        totalTerms: PROMPT_HEAD_TERMS,
-      },
+    const prompt = cloudDictationPrompt(
+      buildDictationHintTiers(isDictationContext(options.requestContext)),
     );
     if (prompt) {
       parameters.prompt = prompt;
@@ -574,11 +578,18 @@ export class TranscriptionService {
       );
       if (plan === 'ogg') {
         const { chunks } = await AudioTools.splitOggOpus(audioUri, CLOUD_INLINE_LIMIT);
-        return this.transcribeChunked(chunks, 'audio/ogg', parameters, sessionCookie);
+        // Ogg chunks are cut by size, so their lengths in time are unknown.
+        return this.transcribeChunked(chunks, 'audio/ogg', parameters, sessionCookie, null);
       }
       if (plan === 'wav') {
         const { chunks } = await AudioTools.splitToChunks(audioUri, CLOUD_CHUNK_SECONDS);
-        return this.transcribeChunked(chunks, 'audio/wav', parameters, sessionCookie);
+        return this.transcribeChunked(
+          chunks,
+          'audio/wav',
+          parameters,
+          sessionCookie,
+          CLOUD_CHUNK_SECONDS,
+        );
       }
     }
 
@@ -781,11 +792,13 @@ export class TranscriptionService {
     chunkMimeType: string,
     parameters: Record<string, string>,
     sessionCookie: string,
+    chunkSeconds: number | null,
   ): Promise<TranscriptionResponse> {
     try {
       const texts: string[] = new Array(chunkUris.length);
       let nextIndex = 0;
       let firstError: unknown = null;
+      let heardNoSpeech = false;
 
       const worker = async (): Promise<void> => {
         while (firstError === null) {
@@ -812,7 +825,9 @@ export class TranscriptionService {
                 ),
               'transcribe',
             );
-            texts[index] = parseChunkTranscriptionText(response);
+            const chunkText = parseChunkTranscriptionText(response);
+            if (chunkText === null) heardNoSpeech = true;
+            texts[index] = chunkText ?? '';
           } catch (error) {
             firstError ??= error;
             return;
@@ -823,7 +838,25 @@ export class TranscriptionService {
       const workerCount = Math.min(CLOUD_CHUNK_CONCURRENCY, chunkUris.length);
       await Promise.all(Array.from({ length: workerCount }, () => worker()));
       if (firstError !== null) throw firstError;
-      return { text: stitchChunkTexts(texts), duration: 0, provider: 'cloud' };
+      const text = stitchChunkTexts(texts);
+      // A wholly silent recording reports no speech as a single upload does, so callers
+      // show their no-speech state rather than saving an empty transcript.
+      if (!text && heardNoSpeech) throw new Error('No speech detected');
+      if (chunkSeconds === null) return { text, duration: 0, provider: 'cloud' };
+      // Per-chunk times let a meeting place this text on its recording's clock. They are
+      // nominal: the native splitter starts a new chunk only at a decoded-buffer boundary,
+      // so each chunk overshoots by up to about a second. Fine for coarse placement, not
+      // for alignment.
+      const segments: WhisperSegment[] = [];
+      texts.forEach((chunkText, index) => {
+        if (!chunkText.trim()) return;
+        segments.push({
+          text: chunkText,
+          t0: index * chunkSeconds * 100,
+          t1: (index + 1) * chunkSeconds * 100,
+        });
+      });
+      return { text, duration: 0, provider: 'cloud', segments };
     } finally {
       await AudioTools.cleanup(chunkUris);
     }

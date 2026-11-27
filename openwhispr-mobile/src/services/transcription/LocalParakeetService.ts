@@ -5,6 +5,7 @@ import {
   downloadParakeetModel,
   stagedParakeetBytes,
 } from './parakeetModelDownloader';
+import { refreshKeyboardEngine } from './keyboardEngineRefresh';
 import { tokenTimingsToWhisperSegments } from './parakeetSegments';
 
 export interface ParakeetTranscribeServiceOptions {
@@ -57,6 +58,7 @@ export class LocalParakeetService {
     onProgress?: (progress: number) => void,
   ): Promise<void> {
     await downloadParakeetModel(version, { onProgress });
+    refreshKeyboardEngine();
   }
 
   static async cancelModelDownload(version: ParakeetVersion): Promise<void> {
@@ -76,6 +78,7 @@ export class LocalParakeetService {
       }
       await ParakeetASR.deleteModel(version);
     });
+    refreshKeyboardEngine();
   }
 
   /**

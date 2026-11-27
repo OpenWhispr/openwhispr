@@ -182,3 +182,52 @@ test("with meeting recording off, a linked event only joins and a link-less one 
     "read only as the description"
   );
 });
+
+test("an outside guest leaves only Join or a manual note", async (t) => {
+  const { root, container, UpcomingMeetings, vite } = await mountUpcomingMeetings(t);
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.11.0",
+    policy: {
+      minAppVersion: null,
+      features: {},
+      meetings: { externalAttendees: "blocked", internalDomains: ["corp.com"] },
+    },
+  });
+  const opened = [],
+    joins = [];
+  globalThis.window.electronAPI.openExternal = (url) => opened.push(url);
+  globalThis.window.electronAPI.joinCalendarMeeting = async (...args) => joins.push(args);
+  const event = {
+    ...eventLaterToday(),
+    attendees: '[{"email":"a@outside.com"}]',
+    attendees_count: 1,
+  };
+  const linked = {
+    ...event,
+    id: "linked",
+    hangout_link: "https://meet.google.com/abc-defg-hij",
+    attendees: '[{"email":"me@corp.com","self":true}]',
+    organizer_email: "host@outside.com",
+  };
+  await React.act(async () =>
+    root.render(
+      React.createElement(UpcomingMeetings, {
+        isLoading: false,
+        isConnected: true,
+        onConnectCalendar() {},
+        events: [linked, event],
+      })
+    )
+  );
+  const button = (label) =>
+    findElement(container, (el) => el.tagName === "BUTTON" && el.textContent.trim() === label);
+  assert.equal(Boolean(button("upcoming.joinAndTranscribe")), false);
+  for (const label of ["meetingNotification.joinOnly", "upcoming.takeNotes"])
+    await React.act(async () =>
+      button(label).dispatchEvent({ type: "click", bubbles: true, button: 0, preventDefault() {} })
+    );
+  assert.deepEqual(opened, [linked.hangout_link]);
+  assert.deepEqual(joins, [[event.id, true]]);
+});

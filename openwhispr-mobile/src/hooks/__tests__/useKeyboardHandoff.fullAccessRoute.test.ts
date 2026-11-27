@@ -32,6 +32,7 @@ const mockHandoffStoreState = {
 };
 const mockSubscription = { remove: jest.fn() };
 const mockMarkRecoveryDeepLink = jest.fn();
+const mockMarkKeyboardSettingsLink = jest.fn();
 const mockAddTranscript = jest.fn();
 const mockAddFailedTranscript = jest.fn();
 const mockCleanupTranscript = jest.fn();
@@ -63,6 +64,7 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
     KEYBOARD_PENDING_TRANSCRIPT_JOB_ID: 'keyboard_pending_transcript_job_id',
     KEYBOARD_ORPHANED_RAW_TRANSCRIPT: 'keyboard_orphaned_raw_transcript',
     KEYBOARD_ORPHANED_RAW_TRANSCRIPT_JOB_ID: 'keyboard_orphaned_raw_transcript_job_id',
+    KEYBOARD_ORPHANED_TRANSCRIPT_CLEANED_JOB_ID: 'keyboard_orphaned_transcript_cleaned_job_id',
     KEYBOARD_TRANSCRIPTION_ERROR: 'keyboard_transcription_error',
     KEYBOARD_CANCEL_REQUESTED: 'keyboard_cancel_requested',
     KEYBOARD_COMPRESSED_AUDIO_UNSUPPORTED: 'keyboard_compressed_audio_unsupported',
@@ -91,6 +93,10 @@ jest.mock('@/store/useKeyboardRecoveryStore', () => ({
   useKeyboardRecoveryStore: {
     getState: () => ({ markRecoveryDeepLink: mockMarkRecoveryDeepLink }),
   },
+}));
+jest.mock('@/lib/keyboardSettingsLink', () => ({
+  KEYBOARD_SETTINGS_ROUTE: 'keyboard-settings',
+  markKeyboardSettingsLink: () => mockMarkKeyboardSettingsLink(),
 }));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: 'cloud' }) },
@@ -139,6 +145,15 @@ jest.mock('@/lib/transcribeAndCleanup', () => ({
 jest.mock('@/lib/keyboardToneSync', () => ({
   snapshotKeyboardTone: jest.fn(),
   readKeyboardToneSnapshot: jest.fn(() => null),
+}));
+// The translation sync reads the dictionary store through the direct-dictation inputs, which
+// opens the notes database; translateTranscript pulls in the router through accountAccess.
+jest.mock('@/lib/keyboardTranslationSync', () => ({
+  snapshotKeyboardTranslation: jest.fn(() => null),
+  readKeyboardTranslationSnapshot: jest.fn(() => null),
+}));
+jest.mock('@/lib/translateTranscript', () => ({
+  translateTranscript: jest.fn(async (text: string) => ({ text, translated: false })),
 }));
 jest.mock('@/lib/keyboardAgentSync', () => ({
   snapshotKeyboardAgentRequest: jest.fn(() => null),
@@ -191,6 +206,8 @@ import {
 import { readKeyboardAgentJob, snapshotKeyboardAgentRequest } from '@/lib/keyboardAgentSync';
 import { withActiveProviderJob } from '@/lib/providerJobActivity';
 import { recordDictationCompleted } from '@/lib/productEvents';
+import { readKeyboardTranslationSnapshot } from '@/lib/keyboardTranslationSync';
+import { translateTranscript } from '@/lib/translateTranscript';
 import { useKeyboardHandoff } from '../useKeyboardHandoff';
 import {
   CAPTURE_ACCOUNT,
@@ -284,6 +301,21 @@ describe('useKeyboardHandoff — keyboard-full-access route', () => {
 
     await waitFor(() => expect(storage.startNativeRecording).toHaveBeenCalled());
     expect(storage.setKeyboardStatus).toHaveBeenCalledWith('recording', null);
+    expect(mockMarkRecoveryDeepLink).not.toHaveBeenCalled();
+    expect(mockMarkKeyboardSettingsLink).not.toHaveBeenCalled();
+  });
+});
+
+describe('useKeyboardHandoff — keyboard-settings route', () => {
+  // Keyboard Settings… opens the Keyboard screen through expo-router; the hook only stamps the link
+  // so a concurrent warm resume doesn't replace that screen with Home.
+  it('stamps the link and starts no recording', async () => {
+    mountWithInitialUrl('openwhispr://keyboard-settings');
+
+    await waitFor(() => expect(mockMarkKeyboardSettingsLink).toHaveBeenCalled());
+    expect(storage.startNativeRecording).not.toHaveBeenCalled();
+    expect(storage.setKeyboardStatus).not.toHaveBeenCalled();
+    expect(mockHandoffStoreState.setActive).not.toHaveBeenCalled();
     expect(mockMarkRecoveryDeepLink).not.toHaveBeenCalled();
   });
 });
@@ -1039,5 +1071,181 @@ describe('keyboard capture identity through the real product-event queue', () =>
 
     expect(storage.setItem).toHaveBeenCalledWith('keyboard_pending_transcript', 'clean transcript');
     expect(mockProductEvents.dictations()).toEqual([]);
+  });
+});
+
+describe('keyboard translation', () => {
+  const markTiming = (AppGroupStorage as unknown as { markKeyboardTiming: jest.Mock })
+    .markKeyboardTiming;
+
+  afterEach(() => {
+    (readKeyboardTranslationSnapshot as jest.Mock).mockReset().mockReturnValue(null);
+  });
+
+  it('passes the job snapshot as the target and records what was translated', async () => {
+    (readKeyboardTranslationSnapshot as jest.Mock).mockImplementation((jobId: string) =>
+      jobId === '100-job' ? 'es' : null,
+    );
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? '100-job' : null,
+    );
+    mockTranscribeAndCleanup.mockImplementationOnce(
+      async (
+        _request: unknown,
+        lifecycle: { onStage: (stage: string, details?: { fusedCleanup?: boolean }) => void },
+      ) => {
+        lifecycle.onStage('transcribing', { fusedCleanup: false });
+        lifecycle.onStage('cleaning', { fusedCleanup: false });
+        markTiming.mockClear();
+        storage.setKeyboardStatus.mockClear();
+        lifecycle.onStage('translating');
+        return {
+          text: 'Hola.',
+          originalText: 'hello',
+          translatedTo: 'es',
+          transcription: { text: 'Hola.', duration: 1, provider: 'cloud', translatedTo: 'es' },
+        };
+      },
+    );
+
+    mountWithInitialUrl('openwhispr://ignored');
+    await act(async () => {
+      await mockRecordingStoppedListener?.(stopEvent('100-job'));
+    });
+
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ translationTarget: 'es' }),
+      expect.anything(),
+    );
+    // Translating keeps the keyboard's cleaning state and leaves cleanup's timing alone.
+    expect(storage.setKeyboardStatus).toHaveBeenCalledWith('cleaning', null);
+    expect(markTiming).toHaveBeenCalledWith('translate_start');
+    expect(markTiming).not.toHaveBeenCalledWith('cleanup_start');
+    expect(mockAddTranscript).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'Hola.', originalText: 'hello', translatedTo: 'es' }),
+    );
+  });
+
+  it('sends no target when the snapshot is Off', async () => {
+    (readKeyboardTranslationSnapshot as jest.Mock).mockReturnValue(null);
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? '100-job' : null,
+    );
+
+    mountWithInitialUrl('openwhispr://ignored');
+    await act(async () => {
+      await mockRecordingStoppedListener?.(stopEvent('100-job'));
+    });
+
+    const [request] = mockTranscribeAndCleanup.mock.calls[0] as [Record<string, unknown>];
+    expect(request.translationTarget).toBeUndefined();
+  });
+
+  it('keeps the target on a failed row so a retry translates it', async () => {
+    (readKeyboardTranslationSnapshot as jest.Mock).mockReturnValue('es');
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? '100-job' : null,
+    );
+    mockTranscribeAndCleanup.mockRejectedValueOnce(new Error('offline'));
+
+    mountWithInitialUrl('openwhispr://ignored');
+    await act(async () => {
+      await mockRecordingStoppedListener?.(stopEvent('100-job'));
+    });
+
+    expect(mockAddFailedTranscript).toHaveBeenCalledWith(
+      expect.objectContaining({ translationTarget: 'es' }),
+    );
+  });
+
+  it('translates a recovered orphan transcript with its job snapshot', async () => {
+    (readKeyboardTranslationSnapshot as jest.Mock).mockImplementation((jobId: string) =>
+      jobId === '100-job' ? 'es' : null,
+    );
+    (translateTranscript as jest.Mock).mockResolvedValueOnce({ text: 'Hola.', translated: true });
+    (readKeyboardInferenceRoute as jest.Mock).mockReturnValue({
+      provider: 'cloud',
+      cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
+    });
+    storage.getItem.mockImplementation((key: string) => {
+      if (key === 'keyboard_orphaned_raw_transcript') return 'raw transcript';
+      if (key === 'keyboard_orphaned_raw_transcript_job_id') return '100-job';
+      if (key === 'keyboard_recording_job_id') return '100-job';
+      return null;
+    });
+
+    mountWithInitialUrl('openwhispr://ignored');
+
+    await waitFor(() =>
+      expect(mockAddTranscript).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: 'Hola.',
+          originalText: 'raw transcript',
+          translatedTo: 'es',
+        }),
+      ),
+    );
+    expect(translateTranscript).toHaveBeenCalledWith(
+      'clean transcript',
+      expect.objectContaining({
+        target: 'es',
+        inferenceRoute: { mode: 'openwhispr', scope: 'cleanup' },
+      }),
+    );
+  });
+
+  it('translates an orphan the server already cleaned without cleaning it again', async () => {
+    (readKeyboardTranslationSnapshot as jest.Mock).mockImplementation((jobId: string) =>
+      jobId === '100-job' ? 'es' : null,
+    );
+    (translateTranscript as jest.Mock).mockResolvedValueOnce({ text: 'Hola.', translated: true });
+    (readKeyboardInferenceRoute as jest.Mock).mockReturnValue({
+      provider: 'cloud',
+      cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
+    });
+    storage.getItem.mockImplementation((key: string) => {
+      if (key === 'keyboard_orphaned_raw_transcript') return 'Server cleaned text.';
+      if (key === 'keyboard_orphaned_raw_transcript_job_id') return '100-job';
+      if (key === 'keyboard_orphaned_transcript_cleaned_job_id') return '100-job';
+      if (key === 'keyboard_recording_job_id') return '100-job';
+      return null;
+    });
+
+    mountWithInitialUrl('openwhispr://ignored');
+
+    await waitFor(() =>
+      expect(mockAddTranscript).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'Hola.', translatedTo: 'es' }),
+      ),
+    );
+    expect(mockCleanupTranscript).not.toHaveBeenCalled();
+    expect(translateTranscript).toHaveBeenCalledWith(
+      'Server cleaned text.',
+      expect.objectContaining({ target: 'es' }),
+    );
+    expect(storage.removeItem).toHaveBeenCalledWith('keyboard_orphaned_transcript_cleaned_job_id');
+  });
+
+  it('still cleans an orphan whose cleaned mark belongs to another job', async () => {
+    (readKeyboardInferenceRoute as jest.Mock).mockReturnValue({
+      provider: 'cloud',
+      cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
+    });
+    storage.getItem.mockImplementation((key: string) => {
+      if (key === 'keyboard_orphaned_raw_transcript') return 'raw transcript';
+      if (key === 'keyboard_orphaned_raw_transcript_job_id') return '100-job';
+      if (key === 'keyboard_orphaned_transcript_cleaned_job_id') return '99-job';
+      if (key === 'keyboard_recording_job_id') return '100-job';
+      return null;
+    });
+
+    mountWithInitialUrl('openwhispr://ignored');
+
+    await waitFor(() =>
+      expect(mockAddTranscript).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'clean transcript' }),
+      ),
+    );
+    expect(mockCleanupTranscript).toHaveBeenCalled();
   });
 });

@@ -34,6 +34,9 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   sarvamCredentialChanged: "notes.meeting.stoppedSarvamKeyChanged",
   // Org-policy refusal codes, from the main process or the server.
   POLICY_MEETING_RECORDING_DISABLED: "notes.meeting.recordingDisabledByOrg",
+  POLICY_EXTERNAL_ATTENDEES: "notes.meeting.externalAttendeesBlocked",
+  POLICY_ATTENDEES_UNVERIFIABLE: "notes.meeting.externalAttendeesUnverifiable",
+  POLICY_EXTERNAL_ATTENDEES_STOPPED: "notes.meeting.externalAttendeesStopped",
   AUDIO_PURPOSE_REQUIRED: "notes.meeting.restrictedByOrg",
   POLICY_UNRESOLVABLE: "common.policyUnresolved",
   POLICY_MODEL_BLOCKED: LOCAL_MODEL_REFUSAL_MESSAGE_KEYS.POLICY_MODEL_BLOCKED,

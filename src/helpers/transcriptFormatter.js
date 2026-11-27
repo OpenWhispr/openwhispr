@@ -58,7 +58,7 @@ function parseNoteDate(createdAt) {
 
 function resolveRecordingStartMs(segments, note) {
   const segmentTimestamps = segments
-    .map((seg) => seg.timestamp)
+    .flatMap((seg) => [seg.timestamp, seg.recordingStartTimestamp])
     .filter((ts) => typeof ts === "number" && Number.isFinite(ts));
 
   if (segmentTimestamps.length > 0) {
@@ -87,20 +87,38 @@ function normalizeSegmentTimestamps(segments, note) {
   });
 }
 
-function mergeSegments(segments) {
+function mergeSegments(segments, { preserveTimedCues = false } = {}) {
   const merged = [];
-  let lastTimestamp = null;
   for (const seg of segments) {
     if (!seg.text?.trim()) continue;
-    const ts = seg.timestamp || 0;
-    const last = merged[merged.length - 1];
-    if (last && speakerKey(last) === speakerKey(seg) && ts - lastTimestamp < 2) {
+    const timestamp = seg.timestamp || 0;
+    const endTimestamp =
+      Number.isFinite(seg.endTimestamp) && seg.endTimestamp > timestamp
+        ? seg.endTimestamp
+        : undefined;
+    const last = merged.at(-1);
+    const hasCueBoundary =
+      preserveTimedCues && (last?.endTimestamp !== undefined || endTimestamp !== undefined);
+    if (
+      last &&
+      !hasCueBoundary &&
+      speakerKey(last) === speakerKey(seg) &&
+      timestamp - last.lastTimestamp < 2
+    ) {
       last.text = last.text + " " + seg.text.trim();
-      last.endTimestamp = ts;
+      last.lastTimestamp = timestamp;
+      if (endTimestamp !== undefined) {
+        last.endTimestamp = Math.max(last.endTimestamp ?? timestamp, endTimestamp);
+      }
     } else {
-      merged.push({ ...seg, timestamp: ts, endTimestamp: ts, text: seg.text.trim() });
+      merged.push({
+        ...seg,
+        timestamp,
+        endTimestamp,
+        lastTimestamp: timestamp,
+        text: seg.text.trim(),
+      });
     }
-    lastTimestamp = ts;
   }
   return merged;
 }
@@ -175,21 +193,26 @@ function formatTxt(note, segments, speakerMappings, { recorderLabel } = {}) {
 }
 
 function formatSrt(segments, speakerMappings, note = {}, { recorderLabel } = {}) {
-  const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
+  const merged = mergeSegments(normalizeSegmentTimestamps(segments, note), {
+    preserveTimedCues: true,
+  });
   // Upload transcripts carry no speaker identity at all; prefixing every cue
   // with "Unknown Speaker:" would defeat the subtitle use case. Meeting
   // segments always serialize a source, so they keep their labels.
   const hasSpeakerIdentity = merged.some((seg) => seg.speaker || seg.speakerName || seg.source);
-  // Untimed text has one cue at 0; it spans the recording when its length is known.
+  // Older uploads can have a source duration even when their final cue has no end.
+  const last = merged.at(-1);
   const lastEnd =
-    isUntimed(segments) && note.audio_duration_seconds > 0 ? note.audio_duration_seconds : null;
+    last && !last.source && note.audio_duration_seconds > last.lastTimestamp
+      ? note.audio_duration_seconds
+      : undefined;
   const entries = [];
   for (let i = 0; i < merged.length; i++) {
     const seg = merged[i];
-    const nextTs =
-      i + 1 < merged.length ? merged[i + 1].timestamp : (lastEnd ?? seg.endTimestamp + 3);
+    const nextStart = merged[i + 1]?.timestamp;
+    const cueEnd = seg.endTimestamp ?? nextStart ?? lastEnd ?? seg.lastTimestamp + 3;
     entries.push(`${i + 1}`);
-    entries.push(`${formatSrtTimestamp(seg.timestamp)} --> ${formatSrtTimestamp(nextTs)}`);
+    entries.push(`${formatSrtTimestamp(seg.timestamp)} --> ${formatSrtTimestamp(cueEnd)}`);
     entries.push(
       hasSpeakerIdentity
         ? `${resolveSpeaker(seg, speakerMappings, recorderLabel)}: ${seg.text}`
@@ -209,19 +232,22 @@ function formatJson(note, segments, speakerMappings, { recorderLabel } = {}) {
   if (!untimed) {
     for (const seg of merged) speakersSet.add(resolveSpeaker(seg, speakerMappings, recorderLabel));
   }
-  const lastSeg = merged[merged.length - 1];
+  const knownDuration = note.audio_duration_seconds > 0 ? note.audio_duration_seconds : 0;
+  // The source duration describes the entire upload. Appended live audio can extend it.
+  const durationSeconds =
+    knownDuration > 0 && !merged.some((seg) => seg.source)
+      ? knownDuration
+      : merged.reduce(
+          (latest, seg) => Math.max(latest, seg.lastTimestamp, seg.endTimestamp ?? 0),
+          knownDuration
+        );
 
   return JSON.stringify(
     {
       metadata: {
         title,
         date: dateStr,
-        duration_seconds:
-          untimed && note.audio_duration_seconds > 0
-            ? Math.round(note.audio_duration_seconds)
-            : lastSeg
-              ? Math.round(lastSeg.endTimestamp)
-              : 0,
+        duration_seconds: Math.round(durationSeconds),
         speaker_count: speakersSet.size,
         segment_count: merged.length,
       },

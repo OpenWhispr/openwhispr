@@ -29,6 +29,11 @@ it('removes the recording owned by the deleted note', () => {
   repo.updateNoteMeta(note.id, { sourceFile: uri });
   repo.hardDeleteNote(note.id);
   expect(FileSystem.deleteAsync).toHaveBeenCalledWith(uri, { idempotent: true });
+  // And what that recording still owed the transcript.
+  expect(FileSystem.deleteAsync).toHaveBeenCalledWith(
+    `${FileSystem.documentDirectory}meeting-${note.id}.backfill.json`,
+    { idempotent: true },
+  );
 });
 
 it('restores a missing recording path without moving the note in lists', () => {

@@ -504,3 +504,25 @@ test("a local decode that finishes after revocation delivers no text", async () 
     assert.deepEqual(plain(finals), revoked ? [] : ["said as the policy changed"]);
   }
 });
+
+test("an outside guest stops new local decodes and suppresses an in-flight result or error", async () => {
+  for (const outcome of ["already-stopped", "result", "error"]) {
+    const { context, decode, finals } = chunkHarness();
+    let refused = outcome === "already-stopped";
+    let decodes = 0;
+    context._meetingAdmission = {
+      activeRefusal: () => (refused ? "POLICY_EXTERNAL_ATTENDEES" : null),
+    };
+    context.parakeetManager.transcribeLocalParakeet = () => {
+      decodes++;
+      return decode.promise;
+    };
+    const pending = context.transcribe();
+    refused = true;
+    if (outcome === "error") decode.reject(new Error("Disconnected"));
+    else decode.resolve({ success: true, text: "late" });
+    await pending;
+    assert.equal(decodes, outcome === "already-stopped" ? 0 : 1);
+    assert.deepEqual(plain(finals), []);
+  }
+});

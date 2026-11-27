@@ -5,6 +5,10 @@ jest.mock('@/lib/keyboardInferenceRoute', () => ({
   clearKeyboardProviderRecovery: mockClearKeyboardProviderRecovery,
 }));
 const mockAppGroupGetItem = jest.fn((_key: string): string | null => null);
+const mockTranslationSnapshot = jest.fn((_jobId: string): string | null => null);
+jest.mock('@/lib/keyboardTranslationSync', () => ({
+  readKeyboardTranslationSnapshot: (jobId: string) => mockTranslationSnapshot(jobId),
+}));
 jest.mock('../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: { getItem: mockAppGroupGetItem },
 }));
@@ -106,6 +110,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockListPendingProviderRecoveryJobs.mockReturnValue([]);
   mockAppGroupGetItem.mockReturnValue(null);
+  mockTranslationSnapshot.mockReturnValue(null);
   mockProcessingModeState.activeMode = 'cloud';
   mockTranscribeAndCleanup.mockResolvedValue({
     text: 'clean transcript',
@@ -169,6 +174,26 @@ describe('useTranscriptStore retry support', () => {
     ]);
   });
 
+  it('stops an outbox import if its owner changes while audio is copied', async () => {
+    let current = true;
+    mockRetainTranscriptAudio.mockImplementationOnce(async () => {
+      current = false;
+      return 'file://docs/transcript-audio/t1.m4a';
+    });
+    await useTranscriptStore
+      .getState()
+      .addFailedTranscript(
+        { id: 't1', audioUrl: 'file://group/t1.m4a', provider: 'cloud', errorMessage: 'offline' },
+        { mayWrite: () => current, keepSourceAudio: true },
+      );
+    expect(mockRetainTranscriptAudio).toHaveBeenCalledWith(
+      'file://group/t1.m4a',
+      expect.objectContaining({ keepSource: true }),
+    );
+    expect(mockSaveTranscripts).not.toHaveBeenCalled();
+    expect(useTranscriptStore.getState().transcripts).toEqual([]);
+  });
+
   it('retries a failed transcript and updates the same row on success', async () => {
     useTranscriptStore.setState({ transcripts: [failedTranscript()] });
 
@@ -199,6 +224,68 @@ describe('useTranscriptStore retry support', () => {
       source: 'keyboard',
       provider: 'cloud',
     });
+  });
+
+  it('keeps the translation target on a failed keyboard row', async () => {
+    await useTranscriptStore.getState().addFailedTranscript({
+      id: 't1',
+      audioUrl: 'file://tmp/source.m4a',
+      provider: 'cloud',
+      requestContext: 'keyboard',
+      translationTarget: 'es',
+      errorMessage: 'network down',
+    });
+
+    const [row] = useTranscriptStore.getState().transcripts;
+    expect(row.translationTarget).toBe('es');
+    // Nothing was translated yet.
+    expect(row.translatedTo).toBeUndefined();
+  });
+
+  it('retries a keyboard row into its translation target and records what was translated', async () => {
+    useTranscriptStore.setState({ transcripts: [failedTranscript({ translationTarget: 'es' })] });
+    mockTranscribeAndCleanup.mockResolvedValueOnce({
+      text: 'Hola.',
+      originalText: 'raw transcript',
+      transcription: { text: 'Hola.', duration: 3, provider: 'cloud', translatedTo: 'es' },
+      cleanupApplied: true,
+      fusedCleanup: false,
+      translatedTo: 'es',
+    });
+
+    const updated = await useTranscriptStore.getState().retryTranscript('t1');
+
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ translationTarget: 'es' }),
+    );
+    expect(updated).toEqual(
+      expect.objectContaining({
+        text: 'Hola.',
+        originalText: 'raw transcript',
+        translatedTo: 'es',
+        translationTarget: undefined,
+      }),
+    );
+  });
+
+  it('drops translatedTo when the retry types the text untranslated', async () => {
+    useTranscriptStore.setState({ transcripts: [failedTranscript({ translationTarget: 'es' })] });
+
+    const updated = await useTranscriptStore.getState().retryTranscript('t1');
+
+    expect(updated.translatedTo).toBeUndefined();
+  });
+
+  it('sends no translation target when retrying an in-app recording', async () => {
+    useTranscriptStore.setState({
+      transcripts: [failedTranscript({ requestContext: 'recording', translationTarget: 'es' })],
+    });
+
+    await useTranscriptStore.getState().retryTranscript('t1');
+
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ translationTarget: undefined }),
+    );
   });
 
   it('releases the retained audio when a retry succeeds', async () => {
@@ -539,6 +626,92 @@ it('retries an On-Device recording on Cloud after switching to Cloud', async () 
   );
 });
 
+describe('retries a local keyboard row on the device', () => {
+  const localKeyboardRow = (): Transcript =>
+    failedTranscript({
+      provider: 'local',
+      localOnly: true,
+      audioUrl: 'file://docs/transcript-audio/t1.wav',
+      audioFileName: 'job-1.wav',
+      audioMimeType: 'audio/wav',
+    });
+
+  it.each(['cloud', 'providers', 'private'] as const)(
+    'stays On-Device in %s mode',
+    async (mode) => {
+      mockProcessingModeState.activeMode = mode;
+      mockIsWavAudioFile.mockReturnValue(true);
+      mockTranscribeAndCleanup.mockResolvedValueOnce({
+        text: 'raw transcript',
+        originalText: 'raw transcript',
+        transcription: { text: 'raw transcript', duration: 3, provider: 'local' },
+        cleanupApplied: false,
+        fusedCleanup: false,
+      });
+      useTranscriptStore.setState({ transcripts: [localKeyboardRow()] });
+      await useTranscriptStore.getState().retryTranscript('t1');
+      expect(mockSnapshotTranscriptionJob).not.toHaveBeenCalled();
+      expect(mockTranscribeAndCleanup).toHaveBeenCalledTimes(1);
+      expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: 'local',
+          inferenceRoute: undefined,
+          cleanupRoute: { mode: 'local', scope: 'cleanup' },
+        }),
+      );
+    },
+  );
+
+  it('sends no translation target, even when the row carries one', async () => {
+    mockProcessingModeState.activeMode = 'private';
+    mockIsWavAudioFile.mockReturnValue(true);
+    mockTranscribeAndCleanup.mockResolvedValueOnce({
+      text: 'raw transcript',
+      originalText: 'raw transcript',
+      transcription: { text: 'raw transcript', duration: 3, provider: 'local' },
+      cleanupApplied: false,
+      fusedCleanup: false,
+    });
+    useTranscriptStore.setState({
+      transcripts: [{ ...localKeyboardRow(), translationTarget: 'es' }],
+    });
+    await useTranscriptStore.getState().retryTranscript('t1');
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'local', translationTarget: undefined }),
+    );
+  });
+
+  it('fails rather than uploading when the local model is gone', async () => {
+    mockProcessingModeState.activeMode = 'cloud';
+    mockTranscribeAndCleanup.mockRejectedValueOnce(
+      new Error('Local transcription is not available. Please download a model.'),
+    );
+    useTranscriptStore.setState({ transcripts: [localKeyboardRow()] });
+    await expect(useTranscriptStore.getState().retryTranscript('t1')).rejects.toThrow();
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledTimes(1);
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'local' }),
+    );
+    expect(useTranscriptStore.getState().transcripts[0]).toMatchObject({
+      provider: 'local',
+      localOnly: true,
+      status: 'failed',
+    });
+  });
+
+  it('keeps the flag when the outbox saves the row', async () => {
+    useTranscriptStore.setState({ transcripts: [] });
+    await useTranscriptStore.getState().addFailedTranscript({
+      id: 't1',
+      audioUrl: 'file://docs/transcript-audio/t1.wav',
+      provider: 'local',
+      localOnly: true,
+      errorMessage: 'failed',
+    });
+    expect(useTranscriptStore.getState().transcripts[0]).toMatchObject({ localOnly: true });
+  });
+});
+
 it('saves the rerouted text routes when a rerouted retry fails', async () => {
   useTranscriptStore.setState({
     transcripts: [
@@ -659,6 +832,59 @@ describe('durable provider recovery across all jobs', () => {
       mockClearKeyboardProviderRecovery.mock.invocationCallOrder[0],
     );
     expect(mockTranscribeAndCleanup).not.toHaveBeenCalled();
+  });
+
+  it("keeps a keyboard job's translation target for its retry and says what a raw row skipped", async () => {
+    mockGetTranscripts.mockResolvedValueOnce([
+      failedTranscript({ id: 't1', jobId: 't1', translationTarget: 'es' }),
+    ]);
+    mockTranslationSnapshot.mockReturnValue('es');
+    mockListPendingProviderRecoveryJobs.mockReturnValue([
+      {
+        jobId: 't1-retry-5',
+        route,
+        requestContext: 'keyboard',
+        result: { text: 'retried raw', route },
+      },
+      {
+        jobId: 'kb-raw',
+        route,
+        requestContext: 'keyboard',
+        result: { text: 'keyboard raw', route },
+      },
+      {
+        jobId: 'kb-pending',
+        route,
+        requestContext: 'keyboard',
+        audioUri: 'file://docs/transcript-audio/kb-pending.m4a',
+      },
+      {
+        jobId: 'file-pending',
+        route,
+        requestContext: 'file',
+        audioUri: 'file://docs/transcript-audio/file-pending.m4a',
+      },
+    ]);
+    await useTranscriptStore.getState().loadTranscripts();
+    const rows = useTranscriptStore.getState().transcripts;
+    const byId = (id: string) => rows.find((row) => row.id === id);
+    const untranslated =
+      'Recovered the raw transcript after an interruption. Cleanup and translation were not repeated.';
+    // A raw recovery is final: it wasn't translated, and nothing retries it.
+    expect(byId('t1')).toEqual(
+      expect.objectContaining({ status: 'completed', cleanupWarning: untranslated }),
+    );
+    expect(byId('t1')?.translationTarget).toBeUndefined();
+    expect(byId('kb-raw')).toEqual(
+      expect.objectContaining({ status: 'completed', cleanupWarning: untranslated }),
+    );
+    expect(byId('kb-raw')?.translationTarget).toBeUndefined();
+    // A failed row keeps the target, so its retry translates as the dictation would have.
+    expect(byId('kb-pending')).toEqual(
+      expect.objectContaining({ status: 'failed', translationTarget: 'es' }),
+    );
+    expect(byId('kb-pending')?.translatedTo).toBeUndefined();
+    expect(byId('file-pending')?.translationTarget).toBeUndefined();
   });
 
   it('keeps pending recovery data if saving history fails', async () => {

@@ -16,7 +16,12 @@ jest.mock('../parakeetModelDownloader', () => ({
   stagedParakeetBytes: jest.fn(async () => 0),
 }));
 
+jest.mock('@/lib/keyboardLocalEngine', () => ({
+  refreshKeyboardLocalEngine: jest.fn(async () => undefined),
+}));
+
 import { ParakeetASR } from '../../../../modules/parakeet-asr/src';
+import { refreshKeyboardLocalEngine } from '@/lib/keyboardLocalEngine';
 import { LocalParakeetService } from '../LocalParakeetService';
 import {
   cancelParakeetDownload,
@@ -122,6 +127,13 @@ describe('LocalParakeetService.transcribe', () => {
     await LocalParakeetService.deleteModel('v2');
     expect(mockNative.release).toHaveBeenCalledTimes(1);
     expect(mockNative.deleteModel).toHaveBeenCalledWith('v2');
+  });
+
+  it("refreshes the keyboard's engine after a download and after a delete", async () => {
+    await LocalParakeetService.downloadModel('v3');
+    expect(refreshKeyboardLocalEngine).toHaveBeenCalledTimes(1);
+    await LocalParakeetService.deleteModel('v3');
+    expect(refreshKeyboardLocalEngine).toHaveBeenCalledTimes(2);
   });
 
   it("downloads through the background downloader with the caller's callback", async () => {

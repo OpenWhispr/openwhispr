@@ -11,6 +11,9 @@ private enum TestEnvironment {
   static var landscape = false
   static var tablet = false
   static var proxy = TestTextProxy()
+  /// hasFullAccess: on, as Mac Catalyst reports it (off would cover the keys with the Full
+  /// Access panel).
+  static var fullAccess = true
 
   static func install() {
     func stub(_ cls: AnyClass, _ selector: Selector, _ block: Any) {
@@ -28,6 +31,8 @@ private enum TestEnvironment {
       MainActor.assumeIsolated { tablet ? .pad : .phone }
     }
     stub(UIDevice.self, #selector(getter: UIDevice.userInterfaceIdiom), idiomStub)
+    let fullAccessStub: @convention(block) (AnyObject) -> Bool = { _ in MainActor.assumeIsolated { fullAccess } }
+    stub(UIInputViewController.self, #selector(getter: UIInputViewController.hasFullAccess), fullAccessStub)
   }
 
   static func reset() {
@@ -35,6 +40,55 @@ private enum TestEnvironment {
     landscape = false
     tablet = false
     proxy = TestTextProxy()
+    fullAccess = true
+  }
+}
+
+/// Stands in for DirectDictationRuntime: records what the keyboard asks of it.
+@MainActor
+private final class FakeDirectDictation: DirectDictationControlling {
+  var canRecordHere = true
+  var readDocumentID: (() -> UUID?)?
+  var readContextBefore: (() -> String?)?
+  var hasHeldDictation = false
+  var onHeldChange: (() -> Void)?
+  var heldInserts = 0
+  var heldDiscards = 0
+  func insertHeld() { heldInserts += 1 }
+  func discardHeld() { heldDiscards += 1 }
+  func fieldChanged() {}
+  var state: DirectDictationState = .idle
+  var onStateChange: ((DirectDictationState) -> Void)?
+  var onLevel: ((Float) -> Void)?
+  var onText: ((String) -> Void)?
+  var onLocalModelLog: ((String) -> Void)?
+  var onLocalModelReadyChange: (() -> Void)?
+  var attaches = 0
+  /// What `attaches` was when the last `start()` ran.
+  var attachesAtStart: Int?
+  var starts = 0
+  var confirms = 0
+  var cancels = 0
+  var appears = 0
+  var disappears = 0
+  var warmUps = 0
+  var releases = 0
+
+  func attach(to view: UIView) { attaches += 1 }
+  func warmUp() { warmUps += 1 }
+  func releaseLocalModelWhenIdle() { releases += 1 }
+  func start() {
+    starts += 1
+    attachesAtStart = attaches
+  }
+  func confirm() { confirms += 1 }
+  func cancel() { cancels += 1 }
+  func keyboardWillDisappear() { disappears += 1 }
+  func keyboardDidAppear() { appears += 1 }
+
+  func push(_ next: DirectDictationState) {
+    state = next
+    onStateChange?(next)
   }
 }
 
@@ -46,19 +100,81 @@ private final class TestTextProxy: NSObject, UITextDocumentProxy {
   var documentInputMode: UITextInputMode?
   var documentIdentifier = UUID()
   var hasText = false
-  var keyboardType: UIKeyboardType = .default
-  var returnKeyType: UIReturnKeyType = .default
-  var enablesReturnKeyAutomatically = false
+  // Counted, so a test can tell whether the keyboard reads the field's traits.
+  private(set) var traitReads = 0
+  private var storedKeyboardType: UIKeyboardType = .default
+  private var storedReturnKeyType: UIReturnKeyType = .default
+  private var storedEnablesReturnKeyAutomatically = false
+  var keyboardType: UIKeyboardType {
+    get { traitReads += 1; return storedKeyboardType }
+    set { storedKeyboardType = newValue }
+  }
+  var returnKeyType: UIReturnKeyType {
+    get { traitReads += 1; return storedReturnKeyType }
+    set { storedReturnKeyType = newValue }
+  }
+  var enablesReturnKeyAutomatically: Bool {
+    get { traitReads += 1; return storedEnablesReturnKeyAutomatically }
+    set { storedEnablesReturnKeyAutomatically = newValue }
+  }
+  func resetTraitReads() { traitReads = 0 }
   var autocapitalizationType: UITextAutocapitalizationType = .sentences
   var smartQuotesType: UITextSmartQuotesType = .default
   var isSecureTextEntry = false
+  var autocorrectionType: UITextAutocorrectionType = .default
+  var spellCheckingType: UITextSpellCheckingType = .default
+  var textContentType: UITextContentType!
   private(set) var inserted = [String]()
+  private(set) var deletes = 0
+  private(set) var cursorMoves = [Int]()
+  /// A field that reports its text at once: inserts and deletes change the text before
+  /// the cursor. Off, the proxy is a host that reports nothing by itself, as most tests need.
+  var tracksText = false
 
-  func adjustTextPosition(byCharacterOffset offset: Int) {}
+  func adjustTextPosition(byCharacterOffset offset: Int) {
+    cursorMoves.append(offset)
+    guard tracksText else { return }
+    // UTF-16 units, as hosts count them.
+    var before = Array((documentContextBeforeInput ?? "").utf16)
+    var after = Array((documentContextAfterInput ?? "").utf16)
+    if offset < 0 {
+      let moved = min(-offset, before.count)
+      after.insert(contentsOf: before.suffix(moved), at: 0)
+      before.removeLast(moved)
+    } else {
+      let moved = min(offset, after.count)
+      before.append(contentsOf: after.prefix(moved))
+      after.removeFirst(moved)
+    }
+    documentContextBeforeInput = String(utf16CodeUnits: before, count: before.count)
+    documentContextAfterInput = String(utf16CodeUnits: after, count: after.count)
+  }
   func setMarkedText(_ markedText: String, selectedRange: NSRange) {}
   func unmarkText() {}
-  func insertText(_ text: String) { inserted.append(text) }
-  func deleteBackward() {}
+  /// When insertText last returned, for the simulator harness's latency measurement.
+  private(set) var lastInsertAt: CFTimeInterval = 0
+  func insertText(_ text: String) {
+    defer { lastInsertAt = CACurrentMediaTime() }
+    inserted.append(text)
+    guard tracksText else { return }
+    documentContextBeforeInput = (documentContextBeforeInput ?? "") + text
+    hasText = true
+  }
+  func deleteBackward() {
+    deletes += 1
+    guard tracksText, var before = documentContextBeforeInput, !before.isEmpty else { return }
+    before.removeLast()
+    documentContextBeforeInput = before
+    hasText = !before.isEmpty || !(documentContextAfterInput ?? "").isEmpty
+  }
+}
+
+/// Counts feedback calls: a simulator has no Taptic Engine to feel.
+private final class CountingKeyFeedback: KeyFeedbackGenerating {
+  var clicks = 0, taps = 0, ticks = 0
+  func click() { clicks += 1 }
+  func tap() { taps += 1 }
+  func tick() { ticks += 1 }
 }
 
 private enum TestPage {
@@ -72,10 +188,14 @@ private extension KeyboardViewController {
 
   /// The production keyboard laid out at `width` and its content height (or `height`), in
   /// the stubbed TestEnvironment.
-  static func makeLaidOutKeyboard(width: CGFloat, page: TestPage = .letters, height: CGFloat? = nil)
-    -> KeyboardViewController
-  {
+  static func makeLaidOutKeyboard(
+    width: CGFloat, page: TestPage = .letters, height: CGFloat? = nil,
+    prepare: (KeyboardViewController) -> Void = { _ in }
+  ) -> KeyboardViewController {
     let controller = KeyboardViewController()
+    // Before the view loads: an appearance override set later doesn't reach colours that
+    // an off-window view has already resolved.
+    prepare(controller)
     controller.loadViewIfNeeded()
     if page != .letters {
       controller.handleModeKeyTapped()
@@ -130,12 +250,81 @@ private extension KeyboardViewController {
   }
   func touchTestDismissCard() { hideAgentReviewCard() }
   func touchTestTextDidChange() { textDidChange(nil) }
+  func touchTestTextWillChange() { textWillChange(nil) }
   func touchTestInsertTranscript(_ text: String) { insertSmartText(text) }
   func touchTestTapLetter(_ index: Int) { handleCharacterKeyTapped(characterButtons[index]) }
+  /// A finger going down on a letter key, then its lift (inside) or its loss (outside, cancelled).
+  func touchTestPressLetter(_ index: Int) { handleCharacterKeyDown(characterButtons[index]) }
+  func touchTestLiftLetter(_ index: Int) {
+    handleCharacterKeyTapped(characterButtons[index])
+    handleCharacterKeyReleased(characterButtons[index])
+  }
+  func touchTestLoseLetter(_ index: Int) { handleCharacterKeyReleased(characterButtons[index]) }
+  private var touchTestDeleteKey: KeyButton? {
+    func find(_ view: UIView) -> KeyButton? {
+      if let key = view as? KeyButton, key.accessibilityLabel == "delete" { return key }
+      for subview in view.subviews { if let found = find(subview) { return found } }
+      return nil
+    }
+    return find(keyboardRowsStack)
+  }
+  func touchTestPressDelete() { if let key = touchTestDeleteKey { handleOtherKeyDown(key) } }
+  func touchTestPressReturn() { if let key = returnButton { handleOtherKeyDown(key) } }
+  func touchTestSetFeedback(_ feedback: KeyFeedbackGenerating) { keyFeedback = feedback }
+  /// The letter's long press starting, as the accent row would open.
+  func touchTestAccentHoldBegins(_ index: Int) {
+    let key = characterButtons[index]
+    if let letter = key.output?.first { beginAccentHold(on: key, letter: letter) }
+  }
+  var touchTestAccentRowOpen: Bool { accentKey != nil }
   func touchTestTapReturn() { handleReturnTapped() }
-  func touchTestTapDelete() { handleBackspaceTapped() }
+  func touchTestTapDelete() { handleBackspaceTapped(touchTestDeleteKey) }
   func touchTestTapMode() { handleModeKeyTapped() }
   func touchTestQuote(_ character: String) -> String? { smartQuoteSubstitution(for: character) }
+  func touchTestUseDirect(_ direct: DirectDictationControlling) {
+    directDictation = direct
+    attachDirectDictation()
+  }
+  func touchTestRefreshPill() { refreshRecordButton() }
+  func touchTestSetHostIsOwnApp(_ value: Bool) { hostIsOwnApp = value }
+  var touchTestPillTitle: String? { recordButton.configuration?.title }
+  var touchTestPillOpensApp: Bool { pillOpensApp }
+  var touchTestPillActions: [String] { recordButton.actions(forTarget: self, forControlEvent: .touchUpInside) ?? [] }
+  var touchTestCanvasShown: Bool { recordingCanvas.isUserInteractionEnabled }
+  func touchTestTapDirectPill() { handleDirectRecordTapped() }
+  func touchTestTapDarwinPill() { handleDarwinRecordTapped() }
+  func touchTestTapMeetingPill() { handleMeetingRecordingTapped() }
+  func touchTestTapAgentButton() { handleAgentButtonTapped() }
+  func touchTestTapFollowUp() { handleAgentReviewFollowUpTapped() }
+  var touchTestReviewShown: Bool { isAgentReviewShown }
+  /// The note the review card flashes in its header; nil while none shows.
+  var touchTestReviewNote: String? { agentReviewHeaderLabel.isHidden ? nil : agentReviewHeaderLabel.text }
+  var touchTestAgentRecordingActive: Bool { isAgentRecordingActive }
+  func touchTestPoll() { pollRecordingState() }
+  var touchTestDarwinStartPending: Bool { isDarwinStartPending }
+  /// The SwiftUI link over the pill takes the tap and opens OpenWhispr.
+  var touchTestPillLinkLive: Bool { dictationLinkHosting?.view.isUserInteractionEnabled == true }
+  func touchTestTapInsertHeld() { handleInsertHeldTapped() }
+  func touchTestTapProcessingCancel() { handleProcessingCancelTapped() }
+  var touchTestProcessingCancelShown: Bool { !processingCancelButton.isHidden }
+  func touchTestTapConfirm() { handleStopRecordingTapped() }
+  func touchTestTapCancel() { handleCancelRecordingTapped() }
+  func touchTestDirectWillDisappear() { directKeyboardWillDisappear() }
+  var touchTestOptionsButton: KeyButton { optionsButton }
+  func touchTestRefreshOptions() { refreshOptionsButton() }
+  /// What the options menu's deferred element hands UIKit each time the menu opens.
+  func touchTestOptionsMenuElements() -> [UIMenuElement] { makeOptionsMenuElements() }
+  /// What the Translate menu's Off and language actions run.
+  func touchTestSelectTranslation(_ code: String?) {
+    KeyboardHandoffProvider.shared.setTranslationTarget(code)
+    translationTargetDidChange()
+  }
+  /// The opener the dictation Link hands over; nil before its view has appeared.
+  func touchTestSetOpener(_ opener: OpenURLAction?) { openURLAction = opener }
+  /// What the menu's Keyboard Settings… row runs.
+  func touchTestOpenKeyboardSettings() { openKeyboardSettings() }
+  /// The poll that runs while the app transcribes a handed-off recording.
+  func touchTestWaitForTranscript() { waitForTranscript() }
 }
 
 private struct TouchChecks {
@@ -159,8 +348,23 @@ private struct TouchChecks {
 private enum KeyboardTouchTests {
   @MainActor
   static func main() {
+    #if targetEnvironment(simulator)
+    // Built as an app for the simulator (run-keyboard-sim-harness.py): UIKit runs the show.
+    runSimHarnessApp()
+    #else
+    runOnMac()
+    #endif
+  }
+
+  @MainActor
+  static func runOnMac() {
     var checks = TouchChecks()
     TestEnvironment.install()
+    // `--screenshots <directory>` renders the visual-review PNGs instead of testing.
+    if let flag = CommandLine.arguments.firstIndex(of: "--screenshots"), CommandLine.arguments.count > flag + 1 {
+      KeyboardScreenshots.render(to: URL(fileURLWithPath: CommandLine.arguments[flag + 1]))
+      return
+    }
     checkSyntheticRows(&checks)
     checkEdgeTies(&checks)
     checkOtherControls(&checks)
@@ -192,6 +396,17 @@ private enum KeyboardTouchTests {
     checkFieldAwareKeys(&checks)
     checkLayoutChanges(&checks)
     checkTyping(&checks)
+    checkRollover(&checks)
+    checkEdgeTouchDelay(&checks)
+    checkDirectDictation(&checks)
+    checkDirectLocalModelReadiness(&checks)
+    checkDirectHeldDictation(&checks)
+    checkMeetingHoldsMicrophone(&checks)
+    checkMeetingHoldsAssistantMicrophone(&checks)
+    checkOptionsButton(&checks)
+    checkTranslationSelectionRefreshesPill(&checks)
+    checkKeyboardSettingsRefused(&checks)
+    checkTypingHelp(&checks)
 
     print("Keyboard touch routing: \(checks.count - checks.failures.count)/\(checks.count) passed")
     if !checks.failures.isEmpty {
@@ -354,6 +569,7 @@ private enum KeyboardTouchTests {
     landscape: Bool = false,
     tablet: Bool = false,
     proxy: TestTextProxy? = nil,
+    prepare: (KeyboardViewController) -> Void = { _ in },
     _ checks: inout TouchChecks
   ) {
     TestEnvironment.reset()
@@ -362,7 +578,7 @@ private enum KeyboardTouchTests {
     TestEnvironment.landscape = landscape
     TestEnvironment.tablet = tablet
     TestEnvironment.proxy = proxy ?? TestTextProxy()
-    let controller = KeyboardViewController.makeLaidOutKeyboard(width: width, page: page)
+    let controller = KeyboardViewController.makeLaidOutKeyboard(width: width, page: page, prepare: prepare)
     let rows = controller.touchTestRows
     let layout = "\(Int(width)) pt \(name) \(page)"
     checks.check(
@@ -615,6 +831,123 @@ private enum KeyboardTouchTests {
 
   /// Shift, delete and quotes.
   @MainActor
+  /// Rollover: a letter still held when another key goes down types at once, so fast typing
+  /// keeps the order the keys went down in, whatever order the fingers lift.
+  /// Letter indexes on QWERTY: q 0, e 2, h 15.
+  static func checkRollover(_ checks: inout TouchChecks) {
+    TestEnvironment.reset()
+    defer { TestEnvironment.reset() }
+
+    func keyboard() -> (KeyboardViewController, TestTextProxy) {
+      let proxy = TestTextProxy()
+      TestEnvironment.proxy = proxy
+      return (KeyboardViewController.makeLaidOutKeyboard(width: 402), proxy)
+    }
+
+    var (board, proxy) = keyboard()
+    board.touchTestPressLetter(15)
+    board.touchTestLiftLetter(15)
+    checks.check("rollover: a single tap types once (\(proxy.inserted))", proxy.inserted == ["H"])
+
+    (board, proxy) = keyboard()
+    board.touchTestPressLetter(15)
+    board.touchTestPressLetter(2)
+    checks.check("rollover: a held letter types when the next key goes down (\(proxy.inserted))", proxy.inserted == ["H"])
+    board.touchTestLiftLetter(2)
+    board.touchTestLiftLetter(15)
+    checks.check(
+      "rollover: keys keep the order they went down in, lifted in reverse (\(proxy.inserted))",
+      proxy.inserted == ["H", "e"]
+    )
+
+    (board, proxy) = keyboard()
+    board.touchTestPressLetter(15)
+    board.touchTestPressLetter(2)
+    board.touchTestLiftLetter(15)
+    board.touchTestLiftLetter(2)
+    checks.check("rollover: a committed letter isn't typed again at its lift (\(proxy.inserted))", proxy.inserted == ["H", "e"])
+
+    (board, proxy) = keyboard()
+    board.touchTestPressLetter(15)
+    board.touchTestLoseLetter(15)
+    checks.check("rollover: a press that slides off types nothing, as before (\(proxy.inserted))", proxy.inserted.isEmpty)
+
+    (board, proxy) = keyboard()
+    board.touchTestPressLetter(15)
+    board.touchTestPressLetter(2)
+    board.touchTestLoseLetter(15)
+    board.touchTestLiftLetter(2)
+    checks.check("rollover: a committed letter stays typed if its finger slides off (\(proxy.inserted))", proxy.inserted == ["H", "e"])
+
+    (board, proxy) = keyboard()
+    board.touchTestPressLetter(2)
+    board.touchTestPressLetter(15)
+    board.touchTestAccentHoldBegins(2)
+    checks.check("rollover: a committed letter opens no accent row", !board.touchTestAccentRowOpen)
+    board.touchTestLiftLetter(2)
+    board.touchTestLiftLetter(15)
+    checks.check("rollover: and adds nothing at its lift (\(proxy.inserted))", proxy.inserted == ["E", "h"])
+
+    (board, proxy) = keyboard()
+    board.touchTestPressLetter(2)
+    board.touchTestAccentHoldBegins(2)
+    checks.check("rollover: (setup) holding e opens its accent row", board.touchTestAccentRowOpen)
+    board.touchTestPressLetter(15)
+    checks.check("rollover: a letter showing its accent row isn't typed by the next key (\(proxy.inserted))", proxy.inserted.isEmpty)
+
+    (board, proxy) = keyboard()
+    board.touchTestPressLetter(15)
+    board.touchTestPressDelete()
+    checks.check("rollover: delete going down types the held letter first (\(proxy.inserted))", proxy.inserted == ["H"])
+    board.touchTestLiftLetter(15)
+    checks.check("rollover: once (\(proxy.inserted))", proxy.inserted == ["H"])
+
+    // Feedback (click and haptic) comes when a key is touched, as on Apple's keyboard: never
+    // again when it types, so taps stay even when rollover types a letter early.
+    let feedback = CountingKeyFeedback()
+    (board, proxy) = keyboard()
+    board.touchTestSetFeedback(feedback)
+    board.touchTestPressLetter(15)
+    checks.check("feedback: a letter taps as it's touched", feedback.taps == 1 && feedback.clicks == 1)
+    board.touchTestLiftLetter(15)
+    checks.check("feedback: and not again as it types (\(feedback.taps))", feedback.taps == 1 && proxy.inserted == ["H"])
+    board.touchTestPressLetter(2)
+    board.touchTestPressLetter(15)
+    checks.check("feedback: rollover taps once per press (\(feedback.taps))", feedback.taps == 3)
+    board.touchTestLiftLetter(2)
+    board.touchTestLiftLetter(15)
+    checks.check("feedback: nothing at the lifts (\(feedback.taps))", feedback.taps == 3)
+    board.touchTestPressDelete()
+    checks.check("feedback: delete taps as it's touched (\(feedback.taps))", feedback.taps == 4)
+    board.touchTestTapDelete()
+    checks.check("feedback: and not again as it deletes (\(feedback.taps))", feedback.taps == 4)
+    board.touchTestTapLetter(0)
+    checks.check("feedback: a key typed with no touch (VoiceOver) still taps (\(feedback.taps))", feedback.taps == 5)
+    let emptyField = TestTextProxy()
+    emptyField.enablesReturnKeyAutomatically = true
+    TestEnvironment.proxy = emptyField
+    let greyed = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+    let greyedFeedback = CountingKeyFeedback()
+    greyed.touchTestSetFeedback(greyedFeedback)
+    greyed.touchTestPressReturn()
+    checks.check("feedback: a greyed return key gives none", greyedFeedback.taps == 0 && greyedFeedback.clicks == 0)
+  }
+
+  /// iOS holds back touches near the screen's edges while it checks for a system gesture;
+  /// on a phone they reached the keys about 80 ms late. The keyboard turns that off.
+  @MainActor
+  static func checkEdgeTouchDelay(_ checks: inout TouchChecks) {
+    let gate = TestLongPress(target: nil, action: nil)
+    gate.delaysTouchesBegan = true
+    let other = TestLongPress(target: nil, action: nil)
+    other.delaysTouchesBegan = true
+    KeyboardViewController.stopDelayingTouches([gate, other])
+    checks.check("edge touches: the window's gestures no longer hold back touches", !gate.delaysTouchesBegan && !other.delaysTouchesBegan)
+    KeyboardViewController.stopDelayingTouches(nil)
+    checks.check("edge touches: no window is fine", true)
+  }
+
+  @MainActor
   static func checkTyping(_ checks: inout TouchChecks) {
     TestEnvironment.reset()
     defer { TestEnvironment.reset() }
@@ -681,3 +1014,546 @@ private enum KeyboardTouchTests {
     )
   }
 }
+
+/// A Local snapshot's model loads seconds after the keyboard appears (and can be released while
+/// it shows): the keyboard attaches the microphone page then and redraws the pill.
+@MainActor
+private func checkDirectLocalModelReadiness(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let direct = FakeDirectDictation()
+  direct.canRecordHere = false
+  keyboard.touchTestUseDirect(direct)
+  keyboard.touchTestRefreshPill()
+  checks.check("local ready: loading reads Activate", (keyboard.touchTestPillTitle == "Tap to speak" && keyboard.touchTestPillOpensApp))
+
+  let attachesBefore = direct.attaches
+  direct.canRecordHere = true
+  direct.onLocalModelReadyChange?()
+  checks.check("local ready: the microphone page is attached once the model is ready", direct.attaches == attachesBefore + 1)
+  checks.check("local ready: the pill reads Tap to speak", (keyboard.touchTestPillTitle == "Tap to speak" && !keyboard.touchTestPillOpensApp))
+  checks.check("local ready: the pill starts a direct take", keyboard.touchTestPillActions == ["handleDirectRecordTapped"])
+
+  direct.canRecordHere = false
+  direct.onLocalModelReadyChange?()
+  checks.check("local ready: a released model puts the pill back to Activate", (keyboard.touchTestPillTitle == "Tap to speak" && keyboard.touchTestPillOpensApp))
+
+  // A take in progress owns the pill: readiness changing mid-take doesn't redraw it.
+  direct.canRecordHere = true
+  direct.push(.transcribing)
+  direct.onLocalModelReadyChange?()
+  checks.check("local ready: a take in progress keeps its pill", keyboard.touchTestPillTitle == "Transcribing")
+  direct.push(.idle)
+
+  // Belt and braces: a tap attaches the page before starting, whatever happened before.
+  keyboard.touchTestRefreshPill()
+  let attachesBeforeTap = direct.attaches
+  keyboard.touchTestTapDirectPill()
+  checks.check("local ready: a tap attaches before it starts", direct.attachesAtStart == attachesBeforeTap + 1)
+}
+
+/// A dictation that ended while the keyboard was covered and could not be typed by itself is
+/// offered on the pill, with the X to discard it.
+@MainActor
+private func checkDirectHeldDictation(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let direct = FakeDirectDictation()
+  keyboard.touchTestUseDirect(direct)
+  keyboard.touchTestRefreshPill()
+  checks.check("held: nothing waiting reads Tap to speak", (keyboard.touchTestPillTitle == "Tap to speak" && !keyboard.touchTestPillOpensApp))
+
+  direct.hasHeldDictation = true
+  direct.onHeldChange?()
+  checks.check("held: a waiting dictation reads Insert dictation", keyboard.touchTestPillTitle == "Insert dictation")
+  checks.check("held: the pill inserts it", keyboard.touchTestPillActions == ["handleInsertHeldTapped"])
+  checks.check("held: the X is offered", keyboard.touchTestProcessingCancelShown)
+
+  keyboard.touchTestTapInsertHeld()
+  checks.check("held: a tap asks for the dictation", direct.heldInserts == 1 && direct.starts == 0)
+  direct.hasHeldDictation = false
+  direct.onHeldChange?()
+  checks.check("held: once inserted the pill is back to Tap to speak", (keyboard.touchTestPillTitle == "Tap to speak" && !keyboard.touchTestPillOpensApp))
+  checks.check("held: and the X is gone", !keyboard.touchTestProcessingCancelShown)
+
+  direct.hasHeldDictation = true
+  direct.onHeldChange?()
+  keyboard.touchTestTapProcessingCancel()
+  checks.check("held: the X discards it", direct.heldDiscards == 1 && direct.heldInserts == 1)
+}
+
+/// The options button shows the translation target as a badge in place of its icon. The
+/// values are written to the App Group suite itself, as the app would, and put back after.
+@MainActor
+private func checkOptionsButton(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+  guard let defaults = KeyboardHandoffProvider.shared.sharedDefaults() else {
+    checks.check("options button: the App Group suite opens", false)
+    return
+  }
+  let keys = [
+    "keyboard_translation_target", "keyboard_translation_languages",
+    "keyboard_translation_applicable", "keyboard_translation_recents",
+  ]
+  let saved = keys.map { defaults.object(forKey: $0) }
+  defer {
+    for (key, value) in zip(keys, saved) {
+      if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) }
+    }
+  }
+  defaults.set(#"[{"code":"es","label":"Spanish"},{"code":"fr","label":"French"}]"#, forKey: keys[1])
+  defaults.set("1", forKey: keys[2])
+  defaults.set("es", forKey: keys[0])
+  defaults.removeObject(forKey: keys[3])
+
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let button = keyboard.touchTestOptionsButton
+  checks.check(
+    "options button with a target: titled ES (got \(button.title(for: .normal) ?? "nil"))",
+    button.title(for: .normal) == "ES"
+  )
+  checks.check("options button with a target: no icon", button.image(for: .normal) == nil)
+  checks.check("options button with a target: says so", button.accessibilityValue == "Translating to Spanish")
+
+  // The menu is built each time it opens, from what the App Group says then.
+  checks.check(
+    "options menu: one element, built as it opens",
+    button.menu?.children.count == 1 && button.menu?.children.first is UIDeferredMenuElement
+  )
+  let elements = keyboard.touchTestOptionsMenuElements()
+  checks.check(
+    "options menu: Tone, Translate to, Keyboard Settings… (got \(elements.map(\.title)))",
+    elements.count == 3 && elements[0] is UIMenu
+      && (elements[1] as? UIMenu)?.title == "Translate to"
+      && (elements[2] as? UIAction)?.title == "Keyboard Settings…"
+  )
+  func translateRows() -> [UIMenuElement] {
+    let opened = keyboard.touchTestOptionsMenuElements()
+    return opened.count > 1 ? (opened[1] as? UIMenu)?.children ?? [] : []
+  }
+  func checkedTitles(_ rows: [UIMenuElement]) -> [String] {
+    rows.flatMap { ($0 as? UIMenu)?.children ?? [$0] }
+      .compactMap { $0 as? UIAction }.filter { $0.state == .on }.map(\.title)
+  }
+
+  // Another keyboard (or the app) picks French while this one shows: opening the menu shows
+  // it ticked, and the badge follows.
+  defaults.set("fr", forKey: keys[0])
+  let picked = translateRows()
+  checks.check("options menu: Off and All languages (got \(picked.map(\.title)))", picked.map(\.title) == ["Off", "All languages"])
+  checks.check("options menu: a pick made elsewhere is ticked (got \(checkedTitles(picked)))", checkedTitles(picked) == ["French"])
+  checks.check(
+    "options menu: opening it syncs the badge (got \(button.title(for: .normal) ?? "nil"))",
+    button.title(for: .normal) == "FR" && button.accessibilityValue == "Translating to French"
+  )
+
+  // No list yet (the app hasn't run since the update): no empty All languages submenu.
+  defaults.removeObject(forKey: keys[1])
+  let unlisted = translateRows()
+  checks.check("options menu without languages: Off only (got \(unlisted.map(\.title)))", unlisted.map(\.title) == ["Off"])
+  checks.check("options menu without languages: Off is ticked", checkedTitles(unlisted) == ["Off"])
+  checks.check("options menu without languages: the badge goes back to the icon", button.image(for: .normal) != nil)
+  defaults.set(#"[{"code":"es","label":"Spanish"},{"code":"fr","label":"French"}]"#, forKey: keys[1])
+
+  defaults.removeObject(forKey: keys[0])
+  keyboard.touchTestRefreshOptions()
+  checks.check("options button with translation off: an icon", button.image(for: .normal) != nil)
+  checks.check(
+    "options button with translation off: no title (got \(button.title(for: .normal) ?? "nil"))",
+    (button.title(for: .normal) ?? "").isEmpty
+  )
+  checks.check("options button with translation off: no value", button.accessibilityValue == nil)
+
+  // Without Full Access nothing can reach the App Group: no menu, dimmed.
+  TestEnvironment.fullAccess = false
+  keyboard.touchTestRefreshOptions()
+  checks.check(
+    "options button without Full Access: no menu, dimmed and locked",
+    button.menu == nil && button.alpha < 1 && !button.isUserInteractionEnabled
+  )
+}
+
+/// Picking a language or Off can change whether the direct path takes the dictation, so the
+/// pill's route follows at once, but never over a state that owns the pill.
+@MainActor
+private func checkTranslationSelectionRefreshesPill(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+  guard let defaults = KeyboardHandoffProvider.shared.sharedDefaults() else {
+    checks.check("translate pick: the App Group suite opens", false)
+    return
+  }
+  let keys = [
+    "keyboard_translation_target", "keyboard_translation_languages",
+    "keyboard_translation_applicable", "keyboard_translation_recents",
+  ]
+  let saved = keys.map { defaults.object(forKey: $0) }
+  defer {
+    for (key, value) in zip(keys, saved) {
+      if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) }
+    }
+  }
+  defaults.set(#"[{"code":"es","label":"Spanish"}]"#, forKey: keys[1])
+  defaults.set("1", forKey: keys[2])
+  defaults.removeObject(forKey: keys[0])
+
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let direct = FakeDirectDictation()
+  keyboard.touchTestUseDirect(direct)
+  // Stood down (a snapshot that can't run on its own), then a pick it can run.
+  direct.canRecordHere = false
+  keyboard.touchTestRefreshPill()
+  checks.check("translate pick: stood down reads Activate", (keyboard.touchTestPillTitle == "Tap to speak" && keyboard.touchTestPillOpensApp))
+  direct.canRecordHere = true
+  keyboard.touchTestSelectTranslation("es")
+  checks.check(
+    "translate pick: a language the path can run reads Tap to speak (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    (keyboard.touchTestPillTitle == "Tap to speak" && !keyboard.touchTestPillOpensApp)
+  )
+  checks.check("translate pick: and the pill starts a direct take", keyboard.touchTestPillActions == ["handleDirectRecordTapped"])
+
+  direct.canRecordHere = false
+  keyboard.touchTestSelectTranslation(nil)
+  checks.check("translate pick: Off that stands it down reads Activate", (keyboard.touchTestPillTitle == "Tap to speak" && keyboard.touchTestPillOpensApp))
+
+  // A timed issue state owns the pill until its timer puts it back.
+  direct.canRecordHere = true
+  direct.push(.failed(.noSpeech))
+  direct.state = .idle
+  keyboard.touchTestSelectTranslation("es")
+  checks.check(
+    "translate pick: an issue state stays (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    keyboard.touchTestPillTitle == "No speech"
+  )
+  // Going away ends the issue's timer, so the same controller shown again follows a pick.
+  keyboard.viewWillDisappear(false)
+  keyboard.touchTestSelectTranslation("es")
+  checks.check(
+    "translate pick: after the keyboard went away mid-issue the pill follows again (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    (keyboard.touchTestPillTitle == "Tap to speak" && !keyboard.touchTestPillOpensApp)
+  )
+  keyboard.touchTestRefreshPill()
+
+  // So does a handed-off recording the app is still transcribing.
+  direct.canRecordHere = false
+  keyboard.touchTestRefreshPill()
+  keyboard.touchTestWaitForTranscript()
+  direct.canRecordHere = true
+  keyboard.touchTestSelectTranslation("es")
+  checks.check(
+    "translate pick: a transcript on its way keeps the pill (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    (keyboard.touchTestPillTitle == "Tap to speak" && keyboard.touchTestPillOpensApp)
+  )
+  // Going away ends that wait, so the same controller shown again is back at rest.
+  keyboard.viewWillDisappear(false)
+  keyboard.touchTestSelectTranslation("es")
+  checks.check(
+    "translate pick: after the keyboard went away the pill follows again (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    (keyboard.touchTestPillTitle == "Tap to speak" && !keyboard.touchTestPillOpensApp)
+  )
+}
+
+/// Keyboard Settings… opens the app through the dictation Link's opener. When iOS refuses it,
+/// or there's no opener yet, the pill says to open OpenWhispr, but never over a take.
+@MainActor
+private func checkKeyboardSettingsRefused(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let direct = FakeDirectDictation()
+  keyboard.touchTestUseDirect(direct)
+  keyboard.touchTestRefreshPill()
+  let restTitle = keyboard.touchTestPillTitle
+
+  if #available(iOS 16.0, *) {
+    final class Opened { var urls = [URL]() }
+    let opened = Opened()
+    keyboard.touchTestSetOpener(OpenURLAction { url in
+      opened.urls.append(url)
+      return .handled
+    })
+    keyboard.touchTestOpenKeyboardSettings()
+    checks.check(
+      "keyboard settings: opens the app's settings link (got \(opened.urls))",
+      opened.urls.map(\.host) == ["keyboard-settings"]
+    )
+    checks.check("keyboard settings: an accepted open leaves the pill", keyboard.touchTestPillTitle == restTitle)
+
+    keyboard.touchTestSetOpener(OpenURLAction { _ in .discarded })
+    keyboard.touchTestOpenKeyboardSettings()
+    checks.check(
+      "keyboard settings refused: the pill says to open OpenWhispr (got \(keyboard.touchTestPillTitle ?? "nil"))",
+      keyboard.touchTestPillTitle == "Open OpenWhispr"
+    )
+    keyboard.touchTestRefreshPill()
+  }
+
+  keyboard.touchTestSetOpener(nil)
+  keyboard.touchTestOpenKeyboardSettings()
+  checks.check(
+    "keyboard settings without an opener: the pill says the same (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    keyboard.touchTestPillTitle == "Open OpenWhispr"
+  )
+  keyboard.touchTestRefreshPill()
+
+  // A take owns the pill: the failure is only logged.
+  direct.push(.recording)
+  keyboard.touchTestOpenKeyboardSettings()
+  checks.check(
+    "keyboard settings during a take: the take keeps the pill",
+    keyboard.touchTestCanvasShown && keyboard.touchTestPillTitle != "Open OpenWhispr"
+  )
+  direct.push(.idle)
+}
+
+/// The pill and the recording canvas when the keyboard records and transcribes itself.
+@MainActor
+private func checkDirectDictation(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let direct = FakeDirectDictation()
+  keyboard.touchTestUseDirect(direct)
+  keyboard.touchTestRefreshPill()
+  checks.check("direct: eligible and the app not alive reads Tap to speak", (keyboard.touchTestPillTitle == "Tap to speak" && !keyboard.touchTestPillOpensApp))
+  checks.check("direct: the pill starts a direct take", keyboard.touchTestPillActions == ["handleDirectRecordTapped"])
+  checks.check("direct: the attached field supplies its identifier", direct.readDocumentID?() == TestEnvironment.proxy.documentIdentifier)
+  keyboard.touchTestTapDirectPill()
+  checks.check("direct: tapping starts once", direct.starts == 1)
+
+  direct.canRecordHere = false
+  keyboard.touchTestRefreshPill()
+  checks.check("direct: not eligible reads Activate", (keyboard.touchTestPillTitle == "Tap to speak" && keyboard.touchTestPillOpensApp))
+  checks.check("direct: not eligible keeps the handoff", !keyboard.touchTestPillActions.contains("handleDirectRecordTapped"))
+
+  direct.canRecordHere = true
+  keyboard.touchTestSetHostIsOwnApp(true)
+  keyboard.touchTestRefreshPill()
+  checks.check("direct: an alive app keeps its own path", keyboard.touchTestPillActions == ["handleDarwinRecordTapped"])
+  keyboard.touchTestSetHostIsOwnApp(false)
+  keyboard.touchTestRefreshPill()
+
+  direct.push(.recording)
+  checks.check("direct: recording shows the canvas", keyboard.touchTestCanvasShown)
+  keyboard.touchTestTapConfirm()
+  checks.check("direct: the check mark confirms", direct.confirms == 1)
+  keyboard.touchTestTapCancel()
+  checks.check("direct: the cross cancels", direct.cancels == 1)
+
+  direct.push(.transcribing)
+  checks.check("direct: transcribing hides the canvas", !keyboard.touchTestCanvasShown)
+  checks.check("direct: transcribing reads Transcribing", keyboard.touchTestPillTitle == "Transcribing")
+  keyboard.touchTestRefreshPill()
+  checks.check("direct: a pill refresh keeps Transcribing", keyboard.touchTestPillTitle == "Transcribing")
+
+  direct.push(.failed(.limitReached))
+  checks.check("direct: limit reached reads Limit reached", keyboard.touchTestPillTitle == "Limit reached")
+  direct.push(.failed(.captureUnavailable))
+  checks.check("direct: capture unavailable reads Tap to open app", keyboard.touchTestPillTitle == "Tap to open app")
+  direct.push(.failed(.noSpeech))
+  checks.check("direct: no speech reads No speech", keyboard.touchTestPillTitle == "No speech")
+
+  direct.push(.idle)
+  direct.onText?("hello")
+  checks.check("direct: text goes into the field", TestEnvironment.proxy.inserted == ["hello"])
+
+  // Music started or AirPods connected after the pill was drawn: the tap checks again.
+  direct.canRecordHere = true
+  keyboard.touchTestRefreshPill()
+  direct.canRecordHere = false
+  let startsBefore = direct.starts
+  keyboard.touchTestTapDirectPill()
+  checks.check("direct: a tap after audio started doesn't record here", direct.starts == startsBefore)
+  checks.check("direct: and the pill falls back to Activate", (keyboard.touchTestPillTitle == "Tap to speak" && keyboard.touchTestPillOpensApp))
+
+  // start() declined without a state change (still failed): the pill must not be left dead.
+  direct.canRecordHere = true
+  direct.state = .failed(.tryAgain)
+  keyboard.touchTestRefreshPill()
+  keyboard.touchTestTapDirectPill()
+  checks.check("direct: a declined tap leaves a working pill", keyboard.touchTestPillActions == ["handleDirectRecordTapped"])
+  direct.state = .idle
+
+  // iOS recreated the keyboard mid-take: the new one picks the take up.
+  direct.state = .recording
+  let replacement = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  replacement.touchTestUseDirect(direct)
+  checks.check("direct: a new keyboard shows the take in progress", replacement.touchTestCanvasShown)
+  let disappearsBefore = direct.disappears
+  keyboard.touchTestDirectWillDisappear()
+  checks.check("direct: the replaced keyboard going away doesn't end the take", direct.disappears == disappearsBefore)
+  replacement.touchTestDirectWillDisappear()
+  checks.check("direct: the keyboard that owns the take going away does", direct.disappears == disappearsBefore + 1)
+}
+
+
+/// While the app records a meeting it writes a capture-lease heartbeat to the App Group; the
+/// keyboard must start no audio: no take of its own, no start notification to the app's warm mic,
+/// no link into the app. The heartbeat is written to the App Group suite itself, as the app would.
+@MainActor
+private func checkMeetingHoldsMicrophone(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+  guard let defaults = KeyboardHandoffProvider.shared.sharedDefaults() else {
+    checks.check("meeting: the App Group suite opens", false)
+    return
+  }
+  let keys = [MeetingCaptureLease.heartbeatKey, "keyboard_recording_job_id"]
+  let saved = keys.map { defaults.object(forKey: $0) }
+  defer {
+    for (key, value) in zip(keys, saved) {
+      if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) }
+    }
+  }
+  func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
+  func startMeeting() { defaults.set(String(nowMs()), forKey: MeetingCaptureLease.heartbeatKey) }
+  defaults.removeObject(forKey: MeetingCaptureLease.heartbeatKey)
+  defaults.set("before-meeting", forKey: "keyboard_recording_job_id")
+
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let direct = FakeDirectDictation()
+  keyboard.touchTestUseDirect(direct)
+
+  // Drawn during a meeting: the pill's tap only explains.
+  startMeeting()
+  keyboard.touchTestRefreshPill()
+  checks.check(
+    "meeting: the pill starts nothing (got \(keyboard.touchTestPillActions))",
+    keyboard.touchTestPillActions == ["handleMeetingRecordingTapped"]
+  )
+  checks.check("meeting: the link into the app is off", !keyboard.touchTestPillLinkLive && !keyboard.touchTestPillOpensApp)
+  keyboard.touchTestTapMeetingPill()
+  checks.check(
+    "meeting: a tap shows the hint (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    keyboard.touchTestPillTitle == "Unavailable while a meeting is recording"
+  )
+  checks.check("meeting: a tap starts no direct take", direct.starts == 0)
+  checks.check("meeting: a tap leaves no pending start", !keyboard.touchTestDarwinStartPending)
+
+  // Drawn before the meeting began, for the app's warm mic: the tap checks again.
+  defaults.removeObject(forKey: MeetingCaptureLease.heartbeatKey)
+  keyboard.touchTestSetHostIsOwnApp(true)
+  keyboard.touchTestRefreshPill()
+  checks.check("meeting: with none, an alive app records in place", keyboard.touchTestPillActions == ["handleDarwinRecordTapped"])
+  startMeeting()
+  keyboard.touchTestTapDarwinPill()
+  checks.check(
+    "a mic tap during a meeting posts no start notification",
+    defaults.string(forKey: "keyboard_recording_job_id") == "before-meeting" && !keyboard.touchTestDarwinStartPending
+  )
+  checks.check("meeting: a warm-mic tap shows the hint", keyboard.touchTestPillTitle == "Unavailable while a meeting is recording")
+  keyboard.touchTestSetHostIsOwnApp(false)
+
+  // Drawn before the meeting began, for a take of the keyboard's own.
+  defaults.removeObject(forKey: MeetingCaptureLease.heartbeatKey)
+  keyboard.touchTestRefreshPill()
+  checks.check("meeting: with none, the keyboard records itself", keyboard.touchTestPillActions == ["handleDirectRecordTapped"])
+  startMeeting()
+  keyboard.touchTestTapDirectPill()
+  checks.check("meeting: a direct tap starts no take", direct.starts == 0)
+
+  // Drawn before the meeting began, for the link into the app: the poll turns it off.
+  defaults.removeObject(forKey: MeetingCaptureLease.heartbeatKey)
+  direct.canRecordHere = false
+  keyboard.touchTestRefreshPill()
+  checks.check("meeting: with none, the pill opens the app", keyboard.touchTestPillLinkLive)
+  startMeeting()
+  keyboard.touchTestPoll()
+  checks.check(
+    "a mic tap during a meeting opens no handoff (link live: \(keyboard.touchTestPillLinkLive))",
+    !keyboard.touchTestPillLinkLive && keyboard.touchTestPillActions == ["handleMeetingRecordingTapped"]
+  )
+
+  // The app crashed mid-meeting: 15 s on, the heartbeat is stale and the poll reopens the route.
+  defaults.set(String(nowMs() - 15_001), forKey: MeetingCaptureLease.heartbeatKey)
+  keyboard.touchTestPoll()
+  checks.check("meeting: a stale heartbeat reopens the link", keyboard.touchTestPillLinkLive)
+  direct.canRecordHere = true
+  startMeeting()
+  keyboard.touchTestRefreshPill()
+  // The meeting ended: the app removed the key. A tap on the pill drawn for it redraws, never hints.
+  defaults.removeObject(forKey: MeetingCaptureLease.heartbeatKey)
+  keyboard.touchTestTapMeetingPill()
+  checks.check(
+    "meeting: once it ends, a tap redraws the open route (got \(keyboard.touchTestPillActions))",
+    keyboard.touchTestPillActions == ["handleDirectRecordTapped"] && keyboard.touchTestPillTitle == "Tap to speak"
+  )
+  keyboard.touchTestTapDirectPill()
+  checks.check("meeting: once it ends, dictation works again", direct.starts == 1)
+}
+
+/// The voice assistant and the review card's follow-up record too, so a meeting refuses them. The
+/// app holding the lease also stops its keep-alive heartbeat, so the app reads as not alive here,
+/// as it does on a phone during a meeting.
+@MainActor
+private func checkMeetingHoldsAssistantMicrophone(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+  guard let defaults = KeyboardHandoffProvider.shared.sharedDefaults() else {
+    checks.check("meeting assistant: the App Group suite opens", false)
+    return
+  }
+  let keys = [
+    MeetingCaptureLease.heartbeatKey, "keyboard_recording_job_id", "keyboard_agent_request",
+    "keyboard_agent_enabled", "keyboard_agent_applicable",
+  ]
+  let saved = keys.map { defaults.object(forKey: $0) }
+  defer {
+    for (key, value) in zip(keys, saved) {
+      if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) }
+    }
+  }
+  defaults.set("1", forKey: "keyboard_agent_enabled")
+  defaults.set("1", forKey: "keyboard_agent_applicable")
+  defaults.set("before-meeting", forKey: "keyboard_recording_job_id")
+  defaults.removeObject(forKey: "keyboard_agent_request")
+  defaults.set(String(Int64(Date().timeIntervalSince1970 * 1000)), forKey: MeetingCaptureLease.heartbeatKey)
+
+  func nothingStarted(_ keyboard: KeyboardViewController) -> Bool {
+    defaults.string(forKey: "keyboard_agent_request") == nil
+      && defaults.string(forKey: "keyboard_recording_job_id") == "before-meeting"
+      && !keyboard.touchTestDarwinStartPending && !keyboard.touchTestAgentRecordingActive
+  }
+
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let direct = FakeDirectDictation()
+  keyboard.touchTestUseDirect(direct)
+  keyboard.touchTestRefreshPill()
+
+  // Voice assistant with the pill at rest: nothing starts and the pill says why.
+  keyboard.touchTestTapAgentButton()
+  checks.check("meeting: the voice assistant starts nothing", nothingStarted(keyboard) && direct.starts == 0)
+  checks.check(
+    "meeting: the voice assistant shows the hint on a resting pill (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    keyboard.touchTestPillTitle == "Unavailable while a meeting is recording"
+  )
+
+  // A take of the keyboard's own owns the pill: the assistant's tap leaves it showing.
+  keyboard.touchTestRefreshPill()
+  direct.push(.transcribing)
+  keyboard.touchTestTapAgentButton()
+  checks.check(
+    "meeting: the voice assistant keeps a busy pill (got \(keyboard.touchTestPillTitle ?? "nil"))",
+    keyboard.touchTestPillTitle == "Transcribing" && nothingStarted(keyboard)
+  )
+  direct.push(.idle)
+
+  // The review card's follow-up: the card stays, says why, and nothing records.
+  keyboard.touchTestShowAgentResult()
+  keyboard.touchTestTapFollowUp()
+  checks.check(
+    "meeting: the follow-up shows the hint on the card (got \(keyboard.touchTestReviewNote ?? "nil"))",
+    keyboard.touchTestReviewShown && keyboard.touchTestReviewNote == "Unavailable while a meeting is recording"
+  )
+  checks.check("meeting: the follow-up starts nothing", nothingStarted(keyboard))
+  keyboard.touchTestDismissCard()
+}
+
+/// A long press whose state a test can set.
+final class TestLongPress: UILongPressGestureRecognizer {}

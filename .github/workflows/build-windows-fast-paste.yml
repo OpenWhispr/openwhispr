@@ -41,9 +41,11 @@ jobs:
             Write-Host "Binary built successfully"
             Get-Item "windows-fast-paste.exe" | Select-Object Name, Length
             $capabilities = & .\windows-fast-paste.exe --capabilities
-            if ($capabilities -notmatch "selection-copy-v1") {
-              Write-Error "Binary does not advertise selection-copy-v1"
-              exit 1
+            foreach ($capability in "selection-copy-v1", "media-key-v1") {
+              if ($capabilities -notmatch $capability) {
+                Write-Error "Binary does not advertise $capability"
+                exit 1
+              }
             }
           } else {
             Write-Error "Binary not found"
@@ -68,7 +70,7 @@ jobs:
           tag_name: windows-fast-paste-v${{ inputs.version || '2.0.0' }}
           name: Windows Fast Paste v${{ inputs.version || '2.0.0' }}
           body: |
-            Prebuilt Windows fast-paste binary for clipboard paste and selection-copy operations.
+            Prebuilt Windows fast-paste binary for clipboard paste, selection-copy and media-key operations.
 
             Uses Win32 SendInput API with automatic terminal detection for
             paste (Ctrl+V/Ctrl+Shift+V) and copy (Ctrl+C/Ctrl+Shift+C).

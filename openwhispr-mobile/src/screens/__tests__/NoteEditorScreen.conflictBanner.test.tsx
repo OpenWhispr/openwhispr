@@ -38,6 +38,7 @@ const mockNotesState = {
   updateNote: mockUpdateNote,
   deleteNote: mockDeleteNote,
   retryMeetingTranscription: mockRetryMeetingTranscription,
+  isMeetingAwaitingConnection: jest.fn(async (_noteId: number) => false),
   getNoteById: jest.fn((id: number) => (mockNote?.id === id ? mockNote : null)),
   getNoteSegments: jest.fn(() => mockSegments),
   getNoteSpeakers: jest.fn(() => mockSpeakers),
@@ -93,6 +94,8 @@ const mockDictionaryState = {
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
+
+jest.mock('@/lib/captureLease', () => ({ isCaptureLeaseHeld: () => false }));
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: '7' }),

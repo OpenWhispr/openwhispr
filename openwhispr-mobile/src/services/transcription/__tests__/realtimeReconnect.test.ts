@@ -1,8 +1,10 @@
 import { Buffer } from 'buffer';
 import {
   PcmRingBuffer,
+  mergeAudioWindows,
   classifyClose,
   namespaceItemId,
+  legItemPrefix,
   applyLegOffset,
   shouldRotate,
   pcmTailCapBytes,
@@ -12,35 +14,97 @@ import {
   RECONNECT_INITIAL_DELAY_MS,
   RECONNECT_MAX_DELAY_MS,
   CONNECT_TIMEOUT_MS,
+  STOP_FLUSH_TIMEOUT_MS,
+  SHORT_LEG_MS,
+  shortLegBackoffMs,
 } from '../realtimeReconnect';
 import { createRealtimeEventReducer } from '../realtimeEvents';
 
 describe('PcmRingBuffer', () => {
+  const sampleRate = 24000;
+
   it('accumulates chunks while under the cap and drains them in order', () => {
-    const ring = new PcmRingBuffer(100);
-    ring.push(Buffer.from([1, 2, 3, 4]));
-    ring.push(Buffer.from([5, 6]));
+    const ring = new PcmRingBuffer(100, sampleRate);
+    ring.push(Buffer.from([1, 2, 3, 4]), 0);
+    ring.push(Buffer.from([5, 6]), 0);
     expect(ring.byteLength).toBe(6);
     const drained = Buffer.concat(ring.drain());
     expect([...drained]).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
   it('drops the oldest chunks when the cap is exceeded, keeping the recent tail', () => {
-    const ring = new PcmRingBuffer(10);
-    ring.push(Buffer.from([1, 1, 1, 1])); // 4 bytes
-    ring.push(Buffer.from([2, 2, 2, 2])); // 8 bytes
-    ring.push(Buffer.from([3, 3, 3, 3])); // 12 > 10 → drop oldest ([1,1,1,1])
+    const ring = new PcmRingBuffer(10, sampleRate);
+    ring.push(Buffer.from([1, 1, 1, 1]), 0); // 4 bytes
+    ring.push(Buffer.from([2, 2, 2, 2]), 0); // 8 bytes
+    ring.push(Buffer.from([3, 3, 3, 3]), 0); // 12 > 10 → drop oldest ([1,1,1,1])
     expect(ring.byteLength).toBe(8);
     const drained = Buffer.concat(ring.drain());
     expect([...drained]).toEqual([2, 2, 2, 2, 3, 3, 3, 3]);
   });
 
+  it('counts the bytes it drops, and a drain does not count as a drop', () => {
+    const ring = new PcmRingBuffer(100, sampleRate);
+    ring.push(Buffer.alloc(60), 0);
+    expect(ring.droppedBytes).toBe(0);
+    ring.push(Buffer.alloc(60), 0); // 120 > 100: the oldest chunk goes
+    ring.push(Buffer.alloc(60), 0);
+    expect(ring.droppedBytes).toBe(120);
+    expect(ring.byteLength).toBe(60);
+    ring.drain();
+    expect(ring.droppedBytes).toBe(120); // a drain sends audio, it does not drop it
+  });
+
+  it('records where each evicted chunk sat on the capture clock', () => {
+    // sampleRate 100 → 200 bytes a second, so a 200-byte chunk is 1000 ms; cap 400 bytes.
+    const ring = new PcmRingBuffer(400, 100);
+    ring.push(Buffer.alloc(200), 0);
+    ring.push(Buffer.alloc(200), 1000);
+    expect(ring.droppedWindows).toEqual([]);
+    ring.push(Buffer.alloc(200), 2000); // 600 > 400: the chunk at 0 ms goes
+    ring.push(Buffer.alloc(200), 3000); // the chunk at 1000 ms goes, joining the first window
+    expect(ring.droppedWindows).toEqual([{ startMs: 0, endMs: 2000 }]);
+    ring.drain();
+    expect(ring.droppedWindows).toEqual([{ startMs: 0, endMs: 2000 }]); // a drain drops nothing
+  });
+
   it('empties on drain so a subsequent drain returns nothing', () => {
-    const ring = new PcmRingBuffer(100);
-    ring.push(Buffer.from([9, 9]));
+    const ring = new PcmRingBuffer(100, sampleRate);
+    ring.push(Buffer.from([9, 9]), 0);
     expect(Buffer.concat(ring.drain()).length).toBe(2);
     expect(ring.byteLength).toBe(0);
     expect(ring.drain()).toEqual([]);
+  });
+});
+
+describe('mergeAudioWindows', () => {
+  it('sorts windows and joins those closer than a second', () => {
+    expect(
+      mergeAudioWindows([
+        { startMs: 5000, endMs: 6000 },
+        { startMs: 0, endMs: 1000 },
+        { startMs: 1500, endMs: 3000 },
+      ]),
+    ).toEqual([
+      { startMs: 0, endMs: 3000 },
+      { startMs: 5000, endMs: 6000 },
+    ]);
+  });
+
+  it('keeps windows a full second apart separate and folds one inside another', () => {
+    expect(
+      mergeAudioWindows([
+        { startMs: 0, endMs: 1000 },
+        { startMs: 2000, endMs: 3000 },
+        { startMs: 2200, endMs: 2500 },
+      ]),
+    ).toEqual([
+      { startMs: 0, endMs: 1000 },
+      { startMs: 2000, endMs: 3000 },
+    ]);
+  });
+
+  it('returns nothing for nothing', () => {
+    expect(mergeAudioWindows([])).toEqual([]);
   });
 });
 
@@ -105,6 +169,136 @@ describe('namespaceItemId', () => {
   });
 });
 
+describe('createRealtimeEventReducer pending items', () => {
+  it('counts committed items until they complete or fail', () => {
+    const reducer = createRealtimeEventReducer({});
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: 'a' });
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: 'b' });
+    expect(reducer.pendingItemCount()).toBe(2);
+    reducer.handleEvent({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'a',
+      transcript: 'hi',
+    });
+    reducer.handleEvent({
+      type: 'conversation.item.input_audio_transcription.failed',
+      item_id: 'b',
+    });
+    expect(reducer.pendingItemCount()).toBe(0);
+  });
+});
+
+describe('createRealtimeEventReducer failed turns and per-leg pending', () => {
+  it('reports a failed turn with the timing it knows, and counts pending items per prefix', () => {
+    const onTranscriptionFailed = jest.fn();
+    const reducer = createRealtimeEventReducer({ onTranscriptionFailed });
+    reducer.handleEvent({
+      type: 'input_audio_buffer.speech_started',
+      item_id: 'L1:f',
+      audio_start_ms: 500,
+    });
+    reducer.handleEvent({
+      type: 'input_audio_buffer.speech_stopped',
+      item_id: 'L1:f',
+      audio_end_ms: 1500,
+    });
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: 'L1:f' });
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: 'L2:g' });
+    expect(reducer.pendingItemCountWithPrefix('L1:')).toBe(1);
+    expect(reducer.pendingItemCountWithPrefix('L2:')).toBe(1);
+
+    reducer.handleEvent({
+      type: 'conversation.item.input_audio_transcription.failed',
+      item_id: 'L1:f',
+    });
+
+    expect(onTranscriptionFailed).toHaveBeenCalledWith({
+      itemId: 'L1:f',
+      startMs: 500,
+      endMs: 1500,
+    });
+    expect(reducer.pendingItemCountWithPrefix('L1:')).toBe(0);
+    expect(reducer.pendingItemCount()).toBe(1);
+    expect(reducer.utterances()).toEqual([]);
+  });
+
+  it('lists pending items of one prefix with their timing and knows which VAD started', () => {
+    const reducer = createRealtimeEventReducer({});
+    reducer.handleEvent({
+      type: 'input_audio_buffer.speech_started',
+      item_id: 'L1:v',
+      audio_start_ms: 1000,
+    });
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: 'L1:v' });
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: 'L1:m' });
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: 'L2:n' });
+
+    expect(reducer.pendingItemTimings('L1:')).toEqual([
+      { itemId: 'L1:v', startMs: 1000, endMs: null },
+      { itemId: 'L1:m', startMs: null, endMs: null },
+    ]);
+    expect(reducer.isSpeechStarted('L1:v')).toBe(true);
+    expect(reducer.isSpeechStarted('L1:m')).toBe(false);
+  });
+
+  it('lists the turns under a prefix whose speech has started and not stopped', () => {
+    const reducer = createRealtimeEventReducer({});
+    const started = (itemId: string): void =>
+      reducer.handleEvent({ type: 'input_audio_buffer.speech_started', item_id: itemId });
+    started('L1:open');
+    started('L1:stopped');
+    started('L2:open');
+    reducer.handleEvent({ type: 'input_audio_buffer.speech_stopped', item_id: 'L1:stopped' });
+
+    expect(reducer.openSpeechItemIds('L1:')).toEqual(['L1:open']);
+
+    reducer.handleEvent({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'L1:open',
+      transcript: 'words',
+    });
+    expect(reducer.openSpeechItemIds('L1:')).toEqual([]);
+    reducer.dropPendingItems('L2:');
+    expect(reducer.openSpeechItemIds('L2:')).toEqual([]);
+  });
+
+  it('reports a failed turn it has no timing for with null times', () => {
+    const onTranscriptionFailed = jest.fn();
+    const reducer = createRealtimeEventReducer({ onTranscriptionFailed });
+    reducer.handleEvent({
+      type: 'conversation.item.input_audio_transcription.failed',
+      item_id: 'x',
+    });
+    expect(onTranscriptionFailed).toHaveBeenCalledWith({ itemId: 'x', startMs: null, endMs: null });
+  });
+});
+
+describe('dropPendingItems', () => {
+  it('forgets only the pending items under the given leg prefix', () => {
+    const reducer = createRealtimeEventReducer({});
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: namespaceItemId(1, 'a') });
+    reducer.handleEvent({ type: 'input_audio_buffer.committed', item_id: namespaceItemId(2, 'a') });
+    reducer.handleEvent({
+      type: 'input_audio_buffer.committed',
+      item_id: namespaceItemId(11, 'b'),
+    });
+
+    reducer.dropPendingItems(legItemPrefix(1));
+
+    expect(reducer.pendingItemCount()).toBe(2);
+  });
+});
+
+describe('shortLegBackoffMs', () => {
+  it('waits nothing after a healthy leg and doubles up to the cap after short ones', () => {
+    expect(SHORT_LEG_MS).toBe(5000);
+    expect(shortLegBackoffMs(0)).toBe(0);
+    expect(shortLegBackoffMs(1)).toBe(1000);
+    expect(shortLegBackoffMs(2)).toBe(2000);
+    expect(shortLegBackoffMs(5)).toBe(15000);
+  });
+});
+
 describe('applyLegOffset', () => {
   it('passes an event through untouched when the offset is zero (leg 0)', () => {
     const event = { type: 'x', audio_start_ms: 100, audio_end_ms: 500 };
@@ -135,8 +329,9 @@ describe('reconnect constants', () => {
     expect(ROTATE_ON_RECONNECT_THRESHOLD_MS).toBeLessThan(60 * 60 * 1000);
   });
 
-  it('exposes a bounded reconnect backoff budget', () => {
-    expect(RECONNECT_MAX_RETRIES).toBe(6);
+  it('never runs out of reconnect attempts, with a capped backoff', () => {
+    expect(RECONNECT_MAX_RETRIES).toBe(Number.POSITIVE_INFINITY);
+    expect(STOP_FLUSH_TIMEOUT_MS).toBe(3000);
     expect(RECONNECT_INITIAL_DELAY_MS).toBe(1000);
     expect(RECONNECT_MAX_DELAY_MS).toBe(15000);
     expect(CONNECT_TIMEOUT_MS).toBe(15000);

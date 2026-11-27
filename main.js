@@ -22,7 +22,6 @@ const {
   ipcMain,
   net,
   session,
-  systemPreferences,
 } = require("electron");
 const path = require("path");
 const http = require("http");
@@ -1665,11 +1664,6 @@ async function startApp() {
   });
   sidecarRegistry.register("qdrant", () => semanticSearch.stop());
 
-  if (process.platform === "win32") {
-    const nircmdStatus = clipboardManager.getNircmdStatus();
-    debugLogger.debug("Windows paste tool status", nircmdStatus);
-  }
-
   trayManager.setWindows(windowManager.mainWindow, windowManager.controlPanelWindow);
   trayManager.setWindowManager(windowManager);
   trayManager.setCreateControlPanelCallback(() => windowManager.createControlPanelWindow());
@@ -1983,8 +1977,8 @@ async function startApp() {
     // If accessibility is missing, notify the normal control panel after the
     // protected macOS features have started. During onboarding the permissions
     // screen owns this guidance, so its event has no ControlPanel listener.
-    const checkAndNotifyAccessibility = () => {
-      if (!systemPreferences.isTrustedAccessibilityClient(false)) {
+    const checkAndNotifyAccessibility = async () => {
+      if (!(await clipboardManager.checkAccessibilityPermissions(true))) {
         debugLogger.info("[Accessibility] macOS accessibility not trusted — notifying renderers");
         if (isLiveWindow(windowManager.controlPanelWindow)) {
           windowManager.controlPanelWindow.webContents.send("accessibility-missing");
@@ -2021,10 +2015,10 @@ async function startApp() {
 
     // Allow renderer to request an accessibility check (e.g. on sign-in).
     // Also sends accessibility-missing events if untrusted.
-    ipcMain.handle("check-accessibility-trusted", () => {
-      const trusted = systemPreferences.isTrustedAccessibilityClient(false);
+    ipcMain.handle("check-accessibility-trusted", async () => {
+      const trusted = await clipboardManager.checkAccessibilityPermissions(true);
       if (!trusted) {
-        checkAndNotifyAccessibility();
+        await checkAndNotifyAccessibility();
       }
       return trusted;
     });

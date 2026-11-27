@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import type { Transcript } from '@/types';
 
 let mockRouteParams: { proCompletion?: string } = {};
 const mockRouterSetParams = jest.fn();
@@ -11,7 +12,7 @@ const mockProcessingModeStoreState = {
   setActiveMode: jest.fn(),
 };
 const mockTranscriptStoreState = {
-  transcripts: [],
+  transcripts: [] as Transcript[],
   deleteTranscript: jest.fn(),
   retryTranscript: jest.fn(),
 };
@@ -129,7 +130,13 @@ jest.mock('@/lib/permissions', () => ({
   isNoSpeechError: jest.fn(() => false),
   showMicPermissionAlert: jest.fn(),
 }));
-jest.mock('@/lib/utils', () => ({ formatRelativeTime: jest.fn(), safeHaptics: jest.fn() }));
+const mockSafeHaptics = jest.fn();
+jest.mock('@/lib/utils', () => ({
+  formatRelativeTime: jest.fn(),
+  safeHaptics: (...args: unknown[]) => mockSafeHaptics(...args),
+}));
+let mockLeaseHeld = false;
+jest.mock('@/lib/captureLease', () => ({ isCaptureLeaseHeld: () => mockLeaseHeld }));
 jest.mock('@/config/colors', () => ({ BRAND: '#000000', iosColor: jest.fn(() => '#000000') }));
 jest.mock('../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: { getItem: jest.fn(), setItem: jest.fn() },
@@ -156,6 +163,32 @@ jest.mock('@/components/ui/UsageMeter', () => ({ UsageLimitBanner: () => null })
 jest.mock('@/components/ui/GradientGlassSurface', () => ({ GradientGlassSurface: () => null }));
 
 import HomeScreen from '../HomeScreen';
+
+describe('HomeScreen recent transcriptions', () => {
+  afterEach(() => {
+    mockTranscriptStoreState.transcripts = [];
+  });
+
+  it('shows the newest 30 entries in descending order', () => {
+    mockTranscriptStoreState.transcripts = Array.from(
+      { length: 31 },
+      (_, index): Transcript => ({
+        id: String(index),
+        text: `Dictation ${index}`,
+        createdAt: index,
+        updatedAt: index,
+        provider: 'cloud',
+      }),
+    );
+    render(<HomeScreen />);
+
+    const rows = screen.getAllByText(/^Dictation \d+$/);
+    expect(rows).toHaveLength(30);
+    expect(rows[0]).toHaveTextContent('Dictation 30');
+    expect(rows[29]).toHaveTextContent(/^Dictation 1$/);
+    expect(screen.queryByText('Dictation 0')).toBeNull();
+  });
+});
 
 describe('HomeScreen Pro completion', () => {
   beforeEach(() => {
@@ -189,6 +222,29 @@ describe('HomeScreen Pro completion', () => {
 
     expect(mockRouterSetParams).not.toHaveBeenCalled();
     expect(Alert.alert).not.toHaveBeenCalled();
+  });
+});
+
+describe('HomeScreen dictation during a meeting', () => {
+  afterEach(() => {
+    mockLeaseHeld = false;
+  });
+
+  it('refuses the record button before the haptic or the paywall', async () => {
+    mockLeaseHeld = true;
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    render(<HomeScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('home-record-button'));
+    });
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Error',
+      'A meeting is being recorded. End it to dictate.',
+    );
+    expect(mockSafeHaptics).not.toHaveBeenCalled();
+    expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
   });
 });
 

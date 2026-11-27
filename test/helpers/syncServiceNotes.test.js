@@ -18,7 +18,7 @@ const {
   window: windowStub,
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
-const { createFakeCloud, createAccountCloud } = require("./harness/fakeCloud.js");
+const { createFakeCloud, createAccountCloud, deltaSince } = require("./harness/fakeCloud.js");
 const { TEAM_SPACE, joinTeamSpace, saveNoteIn } = require("./harness/teamSpace.js");
 const { assertNoContentRegression, snapshotNotes } = require("./harness/invariants.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
@@ -318,7 +318,7 @@ test("a cloud tombstone hard-deletes the local note", async (t) => {
   assert.ok(listCalls.length > 0);
   assert.equal(
     queryParam(listCalls[0].path, "since"),
-    "2026-07-01T00:00:00.000Z",
+    deltaSince("2026-07-01T00:00:00.000Z"),
     "the delta page must be requested with the stored cursor"
   );
   assert.equal(db.getNoteByClientId("client-tombstoned"), null, "the local row must be removed");
@@ -438,6 +438,55 @@ test("a pending local delete issues the DELETE and then hard-deletes locally", a
   assert.deepEqual(deletes[0].body, { id: cloudRow.id });
   assert.equal(db.getNote(local.id), null, "the local row is only removed after the cloud ack");
   assert.ok(cloud.note(cloudRow.id).deleted_at, "the cloud row is tombstoned");
+});
+
+test("a cloud tombstone keeps an unsent edit as a new note, but not this device's own delete", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+
+  const seedDeletedElsewhere = async (clientNoteId, fields) => {
+    const cloudRow = cloud.seedNote({
+      client_note_id: clientNoteId,
+      title: clientNoteId,
+      content: "from the cloud",
+      created_at: "2026-07-20T08:00:00.000Z",
+      updated_at: "2026-07-20T08:00:00.000Z",
+    });
+    const local = db.saveNote(clientNoteId, "edited here", "personal").note;
+    updateNote(db, local.id, {
+      client_note_id: clientNoteId,
+      cloud_id: cloudRow.id,
+      created_at: LOCAL_EARLY,
+      updated_at: LOCAL_EARLY,
+      ...fields,
+    });
+    await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: cloudRow.id } });
+    return local;
+  };
+  const edited = await seedDeletedElsewhere("client-edited", { sync_status: "pending" });
+  const failed = await seedDeletedElsewhere("client-failed", { sync_status: "error" });
+  const mine = await seedDeletedElsewhere("client-mine", {
+    sync_status: "pending",
+    deleted_at: LOCAL_LATE,
+  });
+
+  // Tombstones only travel on the delta page, so this account must own its cursor.
+  localStorageStub.setItem("lastSyncedAt.accountId", "user-harness");
+  localStorageStub.setItem("lastSyncedAt.notes", "2026-07-01T00:00:00.000Z");
+  await service.syncAll(true);
+
+  for (const { id, clientNoteId } of [
+    { id: edited.id, clientNoteId: "client-edited" },
+    { id: failed.id, clientNoteId: "client-failed" },
+  ]) {
+    assert.equal(db.getNoteByClientId(clientNoteId), null, "the deleted identity is gone");
+    const kept = db.getNote(id);
+    assert.equal(kept.content, "edited here", "the unsent edit survives");
+    assert.equal(kept.deleted_at, null);
+  }
+  assert.equal(db.getNoteByClientId("client-mine"), null);
+  assert.equal(db.getNote(mine.id) ?? null, null, "this device's own delete stands");
 });
 
 test("a 500 on the delete leaves the tombstone pending and the local row intact", async (t) => {
@@ -686,7 +735,7 @@ test("an account returning after another account synced gets its cursors back", 
   const secondA = await signInAs(t, db, cloudA, "account-a");
   await secondA.syncAll(true);
   const pulls = cloudA.logFor("/api/notes/list");
-  assert.equal(queryParam(pulls[pulls.length - 1].path, "since"), cursorA);
+  assert.equal(queryParam(pulls[pulls.length - 1].path, "since"), deltaSince(cursorA));
   assert.deepEqual(
     db.getNotes(null, 100, null).map((note) => note.title),
     [],
@@ -1800,7 +1849,15 @@ for (const refresh of [false, true]) {
     await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: row.id } });
     await service.pullNotes(false);
     assert.equal(copiesOf(db, row.id).length, 0);
-    assert.equal(noteCount(db), 0, "the original cloud note has no remaining ghost");
+    if (refresh) {
+      assert.equal(noteCount(db), 0, "the original cloud note has no remaining ghost");
+    } else {
+      // The copy's unsent unlink has no other copy, so it stays as a new note.
+      const notes = db.db.prepare("SELECT * FROM notes").all();
+      assert.equal(notes.length, 1);
+      assert.equal(notes[0].cloud_id, null, "it no longer stands for the deleted cloud note");
+      assert.equal(notes[0].calendar_event_id, "");
+    }
   });
 }
 
