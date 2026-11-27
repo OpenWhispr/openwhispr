@@ -134,8 +134,15 @@ class DebugLogFiles(private val directory: File, private val maxBytes: Long = De
 
   fun hasLog() = current.exists() || previous.exists()
 
-  /** The whole log, oldest line first. */
+  /**
+   * The whole log, oldest line first. JS lines arrive in batches, so the file can hold them a moment
+   * after native lines written later; every line starts with the same timestamp format, so a stable
+   * sort on it puts them back in order.
+   */
   fun copyTo(out: java.io.OutputStream) {
-    listOf(previous, current).filter { it.exists() }.forEach { file -> file.inputStream().use { it.copyTo(out) } }
+    val lines = listOf(previous, current).filter { it.exists() }.flatMap { it.readLines() }.filter { it.isNotEmpty() }
+    val writer = out.bufferedWriter()
+    lines.sortedBy { it.take(28) }.forEach { writer.write(it); writer.write("\n") }
+    writer.flush()
   }
 }

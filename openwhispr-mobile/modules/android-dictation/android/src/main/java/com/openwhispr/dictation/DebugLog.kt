@@ -102,7 +102,11 @@ object DebugLog {
   /** Lines JS formatted with the same rules. */
   fun js(lines: List<String>) {
     if (!enabled) return
-    lines.forEach { queue.offer(DebugLogFormat.jsLine(it)) }
+    lines.forEach { line ->
+      val clean = DebugLogFormat.jsLine(line)
+      queue.offer(clean)
+      Log.i(TAG, clean)
+    }
   }
 
   /**

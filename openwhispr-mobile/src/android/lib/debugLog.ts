@@ -20,14 +20,12 @@ export type { DebugFields } from './debugLogFormat';
 
 /**
  * The opt-in debug log's JS side (Settings › Analytics › Debug logging). Lines are formatted here
- * with the native rules (see debugLogFormat.ts) and handed to the android-dictation module in
- * batches; the module owns the file and the switch. Nothing is formatted while the switch is off.
+ * with the native rules (see debugLogFormat.ts) and handed to the android-dictation module, which
+ * queues them for its writer thread; the module owns the file and the switch. Nothing is formatted while the switch is off.
  *
  * Log ids, codes, counts and durations only: never what anyone said, wrote or recorded, never a
  * file name, an email, a token or a key.
  */
-const FLUSH_MS = 500;
-const FLUSH_LINES = 50;
 
 let enabled: boolean | null = null;
 let nativeModule: typeof NativeModule | undefined;
@@ -48,7 +46,6 @@ function native(): typeof NativeModule {
   return nativeModule;
 }
 let queue: string[] = [];
-let timer: ReturnType<typeof setTimeout> | null = null;
 
 function readEnabled(): boolean {
   if (enabled === null) {
@@ -67,8 +64,6 @@ export function isDebugLogging(): boolean {
 }
 
 export function flushDebugLog(): void {
-  if (timer) clearTimeout(timer);
-  timer = null;
   if (!queue.length) return;
   const lines = queue;
   queue = [];
@@ -87,8 +82,9 @@ export function debugLog(
 ): void {
   if (!readEnabled()) return;
   queue.push(formatLine(new Date(), level, area, event, fields));
-  if (queue.length >= FLUSH_LINES) flushDebugLog();
-  else if (!timer) timer = setTimeout(flushDebugLog, FLUSH_MS);
+  // Written at once: the bubble's headless task stops JS timers when a dictation ends, so a
+  // line left waiting for a timer could sit in the queue until the next one.
+  flushDebugLog();
 }
 
 export const dlog = {
@@ -122,6 +118,4 @@ export function startTimer(): () => number {
 export function resetDebugLogForTests(value: boolean | null = null): void {
   enabled = value;
   queue = [];
-  if (timer) clearTimeout(timer);
-  timer = null;
 }

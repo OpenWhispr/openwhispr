@@ -55,4 +55,13 @@ class DebugLogFormatTest {
     files.clear()
     assertFalse(files.hasLog())
   }
+
+  @Test fun theExportPutsBatchedLinesBackInTimeOrder() {
+    val files = DebugLogFiles(temporary.newFolder("order"))
+    files.append(listOf("2026-11-27T15:38:01.890+0200 I bubble state", "2026-11-27T15:38:01.884+0200 E dict failed"))
+    val out = java.io.ByteArrayOutputStream()
+    files.copyTo(out)
+    assertEquals(listOf("2026-11-27T15:38:01.884+0200 E dict failed", "2026-11-27T15:38:01.890+0200 I bubble state"),
+      out.toString().trim().lines())
+  }
 }
