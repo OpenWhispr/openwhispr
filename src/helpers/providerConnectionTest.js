@@ -209,7 +209,9 @@ function resolveProviderRequest(config) {
     if (!new Set(["http:", "https:"]).has(parsed.protocol)) {
       throw new ConnectionTestError("invalidUrl", "The endpoint must use HTTP or HTTPS.");
     }
-    if (parsed.protocol === "http:" && !isPrivateHost(parsed.hostname)) {
+    // Only the reasoning scope carries the user's opt-in for plain HTTP on public hosts.
+    const allowInsecureHttp = scope === "reasoning" && config?.allowInsecureHttp === true;
+    if (parsed.protocol === "http:" && !allowInsecureHttp && !isPrivateHost(parsed.hostname)) {
       throw new ConnectionTestError(
         "httpsRequired",
         "Public endpoints must use HTTPS. HTTP is only allowed on private addresses."

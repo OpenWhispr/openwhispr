@@ -798,7 +798,11 @@
     },
     "custom": {
       "endpointWithProtocol": "Saisissez une URL de base complète avec protocole (ex : https://server/v1).",
-      "httpsRequired": "HTTPS requis (HTTP autorisé seulement en réseau local).",
+      "httpsRequired": "HTTPS requis (HTTP autorisé seulement en réseau local). Pour utiliser HTTP non chiffré sur une adresse publique, activez « Autoriser HTTP non sécurisé » sous l’URL du point de terminaison.",
+      "allowInsecureHttp": {
+        "label": "Autoriser HTTP non sécurisé",
+        "help": "Permet à ce point de terminaison d’utiliser http:// non chiffré sur des adresses publiques. Votre clé API et votre texte sont envoyés sans chiffrement : ne l’utilisez que pour un serveur de confiance sur un réseau que vous contrôlez."
+      },
       "endpointInvalid": "Le point de terminaison personnalisé est invalide ou non configuré. Vérifiez l'URL du point de terminaison dans Réglages → Modèles IA.",
       "endpointUnauthorized": "Le endpoint a rejeté la requête (401/403). Ajoutez une clé API ou ajustez l'authentification du serveur.",
       "endpointTitle": "URL du endpoint",

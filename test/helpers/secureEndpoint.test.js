@@ -110,3 +110,32 @@ test("secure HTTP endpoints reject non-HTTP schemes even on private hosts", asyn
   assert.equal(isSecureHttpEndpoint("ftp://192.168.1.20/v1"), false);
   assert.equal(isSecureHttpEndpoint("ws://127.0.0.1:5001/v1"), false);
 });
+
+test("allowInsecureHttp opts public hosts into plain http, and nothing else", async () => {
+  const { isSecureHttpEndpoint } = await load();
+  const allow = { allowInsecureHttp: true };
+
+  // Off by default and when explicitly off: public http stays rejected.
+  assert.equal(isSecureHttpEndpoint("http://public.example.com/v1"), false);
+  assert.equal(isSecureHttpEndpoint("http://public.example.com/v1", {}), false);
+  assert.equal(
+    isSecureHttpEndpoint("http://public.example.com/v1", { allowInsecureHttp: false }),
+    false
+  );
+
+  // On: public DNS names and public IPs are accepted over http.
+  assert.equal(isSecureHttpEndpoint("http://public.example.com/v1", allow), true);
+  assert.equal(isSecureHttpEndpoint("http://203.0.113.7:8080/v1", allow), true);
+  assert.equal(isSecureHttpEndpoint("http://10.example.com/v1", allow), true);
+
+  // Private hosts and https are unaffected either way.
+  assert.equal(isSecureHttpEndpoint("http://192.168.1.20:5001/v1", allow), true);
+  assert.equal(isSecureHttpEndpoint("https://api.example.com/v1", allow), true);
+
+  // Other schemes and junk input stay rejected even with the opt-in.
+  assert.equal(isSecureHttpEndpoint("ftp://public.example.com/v1", allow), false);
+  assert.equal(isSecureHttpEndpoint("ws://public.example.com/v1", allow), false);
+  assert.equal(isSecureHttpEndpoint("file:///etc/passwd", allow), false);
+  assert.equal(isSecureHttpEndpoint("not-a-url", allow), false);
+  assert.equal(isSecureHttpEndpoint("", allow), false);
+});

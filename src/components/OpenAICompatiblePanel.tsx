@@ -13,6 +13,8 @@ import ModelCardList from "./ui/ModelCardList";
 import SearchableModelList, { MODEL_SEARCH_THRESHOLD } from "./ui/SearchableModelList";
 import { buildApiUrl, getModelListBaseCandidates, normalizeBaseUrl } from "../config/constants";
 import { isSecureHttpEndpoint } from "../utils/urlUtils";
+import { Toggle } from "./ui/toggle";
+import { useSettingsStore } from "../stores/settingsStore";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { ConnectionCheckAnnouncer } from "./ui/ConnectionCheckAnnouncer";
 import { ProviderCheckField } from "./ui/ProviderCheckField";
@@ -70,6 +72,11 @@ export default function OpenAICompatiblePanel({
   modelNeeds,
 }: OpenAICompatiblePanelProps) {
   const { t } = useTranslation();
+  // This panel only serves reasoning/cleanup endpoints, so the opt-in never reaches transcription.
+  // A locked address (OpenRouter) is always https and has nothing to opt into.
+  const storedAllowInsecureHttp = useSettingsStore((s) => s.allowInsecureCustomReasoningHttp);
+  const setAllowInsecureHttp = useSettingsStore((s) => s.setAllowInsecureCustomReasoningHttp);
+  const allowInsecureHttp = !lockedBaseUrl && provider === "custom" && storedAllowInsecureHttp;
   const [draftBase, setDraftBase] = useState(baseUrl);
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -121,7 +128,14 @@ export default function OpenAICompatiblePanel({
   const check = useConnectionAutoCheck({
     // The model is this panel's own (or "" under a tab that is only browsed), so a saved model
     // the server no longer lists fails as modelNotFound.
-    config: { scope: "reasoning", provider, baseUrl: normalizedBase, apiKey, model },
+    config: {
+      scope: "reasoning",
+      provider,
+      baseUrl: normalizedBase,
+      apiKey,
+      model,
+      ...(allowInsecureHttp ? { allowInsecureHttp: true } : {}),
+    },
     // A hidden panel is not ready to ask; a shown one asks again, and the main process answers
     // a check it remembers at once.
     ready: checkReady && visible,
@@ -150,7 +164,11 @@ export default function OpenAICompatiblePanel({
   // The status describes the applied address, so it waits while another one is typed.
   const endpointCheck = isDraftDirty ? { ...check, phase: "idle" as const, failure: null } : check;
   const failureReason =
-    !apiKey.trim() && refused ? t("reasoning.custom.endpointUnauthorized") : undefined;
+    !apiKey.trim() && refused
+      ? t("reasoning.custom.endpointUnauthorized")
+      : check.failure?.errorCode === "httpsRequired"
+        ? t("reasoning.custom.httpsRequired")
+        : undefined;
   // While the check covers the address, its reason under the field replaces the list's line.
   const listErrorShown =
     Boolean(modelsError) && (lockedBaseUrl || !checkReady || check.phase === "connected");
@@ -200,7 +218,7 @@ export default function OpenAICompatiblePanel({
           return;
         }
 
-        if (!isSecureHttpEndpoint(normalized)) {
+        if (!isSecureHttpEndpoint(normalized, { allowInsecureHttp })) {
           if (isMountedRef.current && latestBaseRef.current === normalized) {
             setModelsError(t("reasoning.custom.httpsRequired"));
             setModelsLoading(false);
@@ -321,7 +339,7 @@ export default function OpenAICompatiblePanel({
         }
       }
     },
-    [baseUrl, lockedBaseUrl, provider, modelNeeds, testedModels, t]
+    [baseUrl, lockedBaseUrl, provider, modelNeeds, testedModels, allowInsecureHttp, t]
   );
 
   useEffect(() => {
@@ -431,6 +449,23 @@ export default function OpenAICompatiblePanel({
               </code>{" "}
               (Together).
             </p>
+          )}
+          {provider === "custom" && (
+            <div className="flex items-start justify-between gap-3 pt-2">
+              <div className="flex-1 min-w-0">
+                <h4 className="text-sm font-medium text-foreground">
+                  {t("reasoning.custom.allowInsecureHttp.label")}
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  {t("reasoning.custom.allowInsecureHttp.help")}
+                </p>
+              </div>
+              <Toggle
+                checked={storedAllowInsecureHttp}
+                onChange={setAllowInsecureHttp}
+                ariaLabel={t("reasoning.custom.allowInsecureHttp.label")}
+              />
+            </div>
           )}
         </div>
       )}

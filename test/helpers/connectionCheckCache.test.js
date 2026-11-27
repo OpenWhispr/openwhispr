@@ -50,6 +50,7 @@ test("every part of a check is part of its identity", async () => {
     { ...CONFIG, clientSecret: "corti-secret" },
     { ...CONFIG, environment: "eu" },
     { ...CONFIG, tenant: "acme" },
+    { ...CONFIG, allowInsecureHttp: true },
   ];
   await Promise.all(variants.map((config) => ask(config)));
   assert.equal(sent.length, variants.length);

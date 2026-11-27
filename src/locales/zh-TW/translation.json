@@ -798,7 +798,11 @@
     },
     "custom": {
       "endpointWithProtocol": "請輸入包含通訊協定的完整 URL（例如 https://server/v1）。",
-      "httpsRequired": "需使用 HTTPS（僅限本機網路可使用 HTTP）。",
+      "httpsRequired": "需使用 HTTPS（僅限本機網路可使用 HTTP）。若要在公開位址使用未加密的 HTTP，請在端點 URL 下方開啟「允許不安全的 HTTP」。",
+      "allowInsecureHttp": {
+        "label": "允許不安全的 HTTP",
+        "help": "允許此端點在公開位址使用未加密的 http://。API 金鑰與文字會以明文傳送，因此僅限用於您可控網路中的可信伺服器。"
+      },
       "endpointInvalid": "自訂端點無效或未設定。請在設定 → AI 模型中檢查端點 URL。",
       "endpointUnauthorized": "端點拒絕了請求（401/403）。請新增 API Key 或調整伺服器驗證設定。",
       "endpointTitle": "端點 URL",
