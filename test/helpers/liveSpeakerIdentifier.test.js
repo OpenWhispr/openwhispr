@@ -753,6 +753,23 @@ test("gated: at the cap a new voice is folded onto the nearest speaker, as witho
   assert.equal(id.getConfirmedSpeakerCount(), 1);
 });
 
+test("gated: at the cap a weak match labels the speaker but stays out of its voice", () => {
+  const { id } = gatedIdentifier();
+  id.setSpeakerLimit({ maxSpeakers: 2, gated: true });
+  hear(id, voiceA, 0, 2);
+  assert.equal(hear(id, voiceB, 10, 12).speakerId, "speaker_1");
+
+  const overflow = unit([0.5, 0, Math.sqrt(0.75)]);
+  assert.equal(hear(id, overflow, 30, 3).speakerId, "speaker_0");
+  assert.deepEqual(id.getSpeakerEmbedding("speaker_0"), voiceA);
+
+  hear(id, similarToVoiceA(0.9), 40, 3);
+  assert.ok(
+    cosineSimilarity(id.getSpeakerEmbedding("speaker_0"), voiceA) < 1,
+    "a match on the ungated threshold still trains the speaker at the cap"
+  );
+});
+
 test("turning the gate off drops candidates and behaves as before", () => {
   const { id } = gatedIdentifier();
   hear(id, voiceA, 0, 2);

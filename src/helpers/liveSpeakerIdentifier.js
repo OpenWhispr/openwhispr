@@ -956,7 +956,9 @@ class LiveSpeakerIdentifier {
     if (speakerId) {
       // At the cap the label is only a fallback until the final embedding
       // actually matches it; otherwise the next cap increase inherits a mixed voice.
-      if (updateCentroid && (!forced || this._foldedVoiceMatches(embedding, speakerId))) {
+      // A weak match there is as likely an overflow voice as the same one drifting.
+      const labelOnly = forced || (weakMatch && this.transientEmbeddings.size >= this.maxSpeakers);
+      if (updateCentroid && (!labelOnly || this._foldedVoiceMatches(embedding, speakerId))) {
         this._updateCentroid(speakerId, embedding);
       }
       return {
@@ -991,8 +993,15 @@ class LiveSpeakerIdentifier {
     };
   }
 
+  // Joining a speaker from the cap takes the ungated threshold: the gate's looser
+  // one is for a voice drifting from itself, not for one folded onto another.
   _foldedVoiceMatches(embedding, speakerId) {
     if (this._findTransientMatch(embedding) !== speakerId) return false;
+    const similarity = speakerEmbeddings.cosineSimilarity(
+      embedding,
+      this.transientEmbeddings.get(speakerId)
+    );
+    if (similarity < MATCH_THRESHOLD) return false;
     const profile = this._findStoredProfileMatch(embedding);
     return !profile || this.transientProfileIds.get(speakerId) === profile.id;
   }
