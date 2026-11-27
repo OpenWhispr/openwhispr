@@ -7,6 +7,7 @@ import {
 import { useConfigStore } from '@/android/store/useConfigStore';
 import type { LocalReasoningReadiness } from '@/android/types';
 import type { useAndroidCopy } from '@/hooks/useAndroidCopy';
+import { dlog } from '@/android/lib/debugLog';
 
 type FallbackCallback = () => void | Promise<void>;
 
@@ -40,6 +41,12 @@ export function promptLocalReasoningFallback({
   const canEnableLocal = Platform.OS === 'ios' && readiness.status === 'disabled' && onEnableLocal;
   // A provider takes the user's own key, so it needs no OpenWhispr account.
   const canUseCloud = (signedIn || !!destinationName) && onUseCloudOnce;
+  dlog.info('asst', 'local.unavailable', {
+    state: readiness.status,
+    cloud: !!canUseCloud,
+    signed_in: signedIn,
+    provider: destinationName ? 'byok' : undefined,
+  });
   const buttons = [
     { text: copy('cancel', 'Cancel'), style: 'cancel' as const },
     ...(Platform.OS === 'android'
@@ -78,7 +85,10 @@ export function promptLocalReasoningFallback({
             text: copy('editorFeedback.useDestination', `Use ${destinationName ?? 'Cloud'} Once`, {
               destination: destinationName ?? copy('editorFeedback.cloudName', 'Cloud'),
             }),
-            onPress: () => run(onUseCloudOnce),
+            onPress: () => {
+              dlog.info('asst', 'local.fallback', { result: 'use_once' });
+              run(onUseCloudOnce);
+            },
           },
         ]
       : [

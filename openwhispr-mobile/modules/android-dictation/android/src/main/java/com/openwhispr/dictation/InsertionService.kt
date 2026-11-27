@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
@@ -36,7 +35,7 @@ class InsertionService : AccessibilityService() {
       node.hintText?.toString(),
     )
 
-  override fun onServiceConnected() { instance = this; refreshTyping(); DictationService.emit?.invoke("onStatusChange", emptyMap()) }
+  override fun onServiceConnected() { DebugLog.init(this); instance = this; DebugLog.event('I', "app", "accessibility.connected"); refreshTyping(); DictationService.emit?.invoke("onStatusChange", emptyMap()) }
   // Focus and window changes only decide whether the bubble shows. They check whether the focused
   // field takes text and isn't a password. A field's text is read when dictation starts, and again
   // for 45 s after the bubble typed into it, from that field alone, so a word fixed there can be
@@ -48,12 +47,12 @@ class InsertionService : AccessibilityService() {
   private fun pollField() {
     val field = watched ?: return
     val now = SystemClock.uptimeMillis()
-    if (!watch.active(now)) { Log.i(TAG, "Watch window over"); stopWatch(); return }
-    if (!runCatching { field.refresh() }.getOrDefault(false)) { Log.i(TAG, "Watched field gone (refresh failed)"); stopWatch(); return }
+    if (!watch.active(now)) { DebugLog.logcat(TAG, "Watch window over"); stopWatch(); return }
+    if (!runCatching { field.refresh() }.getOrDefault(false)) { DebugLog.logcat(TAG, "Watched field gone (refresh failed)"); stopWatch(); return }
     val current = readField(field).text
-    if (current != lastLogged) { Log.i(TAG, "Field now ${current.length} chars"); lastLogged = current }
+    if (current != lastLogged) { DebugLog.logcat(TAG, "Field now ${current.length} chars"); lastLogged = current }
     val edit = watch.sample(current, field.isPassword, now)
-    if (edit != null) Log.i(TAG, "Field edit reported (${edit.second.length} chars)")
+    if (edit != null) DebugLog.logcat(TAG, "Field edit reported (${edit.second.length} chars)")
     if (edit != null) DictationService.emit?.invoke("onFieldEdited", mapOf("before" to edit.first, "after" to edit.second))
     if (watch.watching) handler.postDelayed(poll, FieldWatch.POLL_MS) else stopWatch()
   }
@@ -61,11 +60,11 @@ class InsertionService : AccessibilityService() {
     stopWatch()
     watched = AccessibilityNodeInfo.obtain(field)
     watch.start(text, SystemClock.uptimeMillis())
-    Log.i(TAG, "Watching the dictated field for ${FieldWatch.WINDOW_MS / 1000} s")
+    DebugLog.logcat(TAG, "Watching the dictated field for ${FieldWatch.WINDOW_MS / 1000} s")
     handler.postDelayed(poll, FieldWatch.POLL_MS)
   }
   private fun stopWatch() {
-    if (watched != null) Log.i(TAG, "Field watch ended")
+    if (watched != null) DebugLog.logcat(TAG, "Field watch ended")
     handler.removeCallbacks(poll)
     watch.stop(); watched?.recycle(); watched = null
   }
@@ -148,15 +147,22 @@ class InsertionService : AccessibilityService() {
    * Writes [text] where the dictation started. With [highlight] (Edit selection), the new words stay
    * selected for 1.2 s, the field's own highlight showing what changed, then the caret moves after them.
    */
-  fun insert(text: String, highlight: Boolean = false, complete: (Boolean) -> Unit) {
-    val captured = target ?: return complete(false)
+  fun insert(text: String, highlight: Boolean = false, run: String? = null, done: (Boolean) -> Unit) {
+    val pkg = targetApp
+    fun outcome(ok: Boolean, reason: String) {
+      DebugLog.event(if (ok) 'I' else 'W', "ins", "result", "run" to run, "method" to "set_text", "ok" to ok,
+        "reason" to reason, "pkg" to pkg, "chars" to text.length)
+      done(ok)
+    }
+    val complete: (Boolean) -> Unit = { ok -> outcome(ok, if (ok) "verified" else "not_verified") }
+    val captured = target ?: return outcome(false, "no_target")
     val current = focusedField()
-    if (current == null) { clearTarget(); return complete(false) }
-    if (!current.isEditable || current.isPassword) { current.recycle(); clearTarget(); return complete(false) }
+    if (current == null) { clearTarget(); return outcome(false, "no_focus") }
+    if (!current.isEditable || current.isPassword) { current.recycle(); clearTarget(); return outcome(false, "not_editable") }
     val (currentText, start, end) = readField(current)
     val plan = if (current != captured.node) null
       else InsertionPlan.plan(captured.text, captured.start, captured.end, currentText, start, end, text)
-    if (plan == null) { current.recycle(); clearTarget(); return complete(false) }
+    if (plan == null) { current.recycle(); clearTarget(); return outcome(false, if (current != captured.node) "field_changed" else "no_plan") }
     val result = plan.text
     val inserted = current.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
       putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, result)
@@ -166,12 +172,13 @@ class InsertionService : AccessibilityService() {
       if (highlight && wordsStart in 0..plan.cursor) select(current, wordsStart, plan.cursor) else select(current, plan.cursor, plan.cursor)
     }
     clearTarget()
-    if (!inserted) { current.recycle(); return complete(false) }
+    if (!inserted) { current.recycle(); return outcome(false, "set_text_refused") }
     // Some editors acknowledge an action without applying it. Verify the result;
     // never retry a write because that can duplicate text in another application.
     handler.postDelayed({
       val after = runCatching { if (current.refresh()) readField(current).text else null }.getOrNull()
       val verified = after != null && InsertionPlan.landed(currentText, after, text)
+      if (after == null) DebugLog.event('W', "ins", "field_gone", "run" to run, "pkg" to pkg)
       if (verified && highlight && wordsStart >= 0)
         handler.postDelayed({ settleHighlight(wordsStart, plan.cursor) }, BubbleMenuPolicy.EDIT_HIGHLIGHT_MS)
       // Dictionary's C11: watch the field for a word the user fixes after the paste.

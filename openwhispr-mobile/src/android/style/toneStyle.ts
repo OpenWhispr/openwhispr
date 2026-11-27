@@ -1,5 +1,6 @@
 import { useConfigStore } from '@/android/store/useConfigStore';
 import type { KeyboardTone, UserConfig } from '@/android/types';
+import { dlog } from '@/android/lib/debugLog';
 
 /**
  * Tone & Style on Android: the tone cleanup writes in, picked per kind of app. Categories, tones
@@ -178,5 +179,8 @@ export function dictationToneStyle(
   const style = readToneStyle(config);
   if (!style.enabled) return undefined;
   const appCategory = toneKindForApp(app);
-  return { appCategory, tone: style.tones[appCategory] };
+  const tone = style.tones[appCategory];
+  // The kind of app and the tone only: never the app's name or the style's words.
+  dlog.info('style', 'applied', { category: appCategory, tone });
+  return { appCategory, tone };
 }

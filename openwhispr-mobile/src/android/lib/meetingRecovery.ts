@@ -9,6 +9,8 @@ import { Sentry } from '@/android/lib/sentry';
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
 import { createMeetingRecoveryLifecycle } from '@/android/lib/meetingRecoveryLifecycle';
 import { useNotesStore } from '@/android/store/useNotesStore';
+import { dlog, newRunId } from '@/android/lib/debugLog';
+import { setMeetingDebugRun } from '@/android/meetingModels';
 import type { TranscriptionStatus } from '@/android/types';
 
 export const MEETING_RESUME_MARKER_PREFIX = 'meetingResumeAttempted:';
@@ -50,9 +52,17 @@ export async function recoverOrphanedMeetings(deps: MeetingRecoveryDeps): Promis
         note.transcriptionStatus != null &&
         ORPHANED_STATUSES.has(note.transcriptionStatus),
     );
+  // Debug log: how many were found, resumed and left failed (with Retry).
+  let recovered = 0;
+  let dropped = 0;
+  let failed = 0;
+  const report = () => {
+    if (orphans.length)
+      dlog.info('meet', 'recovery', { found: orphans.length, recovered, dropped, failed });
+  };
 
   for (const note of orphans) {
-    if (deps.isCurrent?.() === false) return;
+    if (deps.isCurrent?.() === false) return report();
     const markerKey = `${MEETING_RESUME_MARKER_PREFIX}${note.id}`;
     const alreadyAttempted = deps.storage.getItem(markerKey) != null;
     const resumable =
@@ -65,12 +75,14 @@ export async function recoverOrphanedMeetings(deps: MeetingRecoveryDeps): Promis
         deps.markFailed(note.id);
       }
     } catch (error) {
+      failed += 1;
       deps.reportError(error, note.id);
       deps.storage.removeItem(markerKey);
       continue;
     }
 
     if (!resumable) {
+      dropped += 1;
       if (alreadyAttempted) deps.storage.removeItem(markerKey);
       continue;
     }
@@ -78,16 +90,19 @@ export async function recoverOrphanedMeetings(deps: MeetingRecoveryDeps): Promis
     // Before the marker: the note is already failed, so a background launch
     // killed while waiting leaves it failed with Retry and no stale marker.
     await deps.waitUntilActive();
-    if (deps.isCurrent?.() === false) return;
+    if (deps.isCurrent?.() === false) return report();
     deps.storage.setItem(markerKey, '1');
     try {
       // Sequential on purpose: each resume runs on-device ASR + diarization.
       await deps.resume(note.id);
+      recovered += 1;
     } catch (error) {
+      failed += 1;
       deps.reportError(error, note.id);
     }
     deps.storage.removeItem(markerKey);
   }
+  report();
 }
 
 const MEETING_RECORDING_FILE = /^meeting-(\d+)\.wav$/;
@@ -109,15 +124,24 @@ export interface MeetingRecordingRepairDeps {
  * notes can only have deleted their recording through that path).
  */
 export async function repairMeetingRecordings(deps: MeetingRecordingRepairDeps): Promise<void> {
+  let restored = 0;
+  let deleted = 0;
   for (const name of await deps.listRecordingFiles()) {
-    if (deps.isCurrent?.() === false) return;
+    if (deps.isCurrent?.() === false) break;
     const noteId = Number(MEETING_RECORDING_FILE.exec(name)?.[1]);
     if (!noteId) continue;
     const note = deps.getNote(noteId);
     const uri = deps.recordingUri(noteId);
-    if (!note) deps.deleteFile(uri);
-    else if (note.noteType === 'meeting' && note.sourceFile == null) deps.restorePath(noteId, uri);
+    if (!note) {
+      deps.deleteFile(uri);
+      deleted += 1;
+    } else if (note.noteType === 'meeting' && note.sourceFile == null) {
+      deps.restorePath(noteId, uri);
+      restored += 1;
+    }
   }
+  if (restored || deleted)
+    dlog.info('meet', 'recovery.files', { recovered: restored, dropped: deleted });
 }
 
 interface AppStateLike {
@@ -191,7 +215,11 @@ export function startMeetingRecoveryOnce(): void {
             .filter((note) => createdBeforeRuntime(note, RUNTIME_STARTED_AT_MS)),
         markFailed: (noteId) => useNotesStore.getState().transitionStatus(noteId, 'failed'),
         waitUntilActive: () => waitForAppActive(AppState),
-        resume: (noteId) => useNotesStore.getState().retryMeetingTranscription(noteId),
+        resume: (noteId) => {
+          // A resumed meeting is its own run in the debug log.
+          setMeetingDebugRun(newRunId('m'));
+          return useNotesStore.getState().retryMeetingTranscription(noteId);
+        },
         storage: run.getStorage(),
         reportError: (error, noteId) =>
           Sentry.captureException(error, {

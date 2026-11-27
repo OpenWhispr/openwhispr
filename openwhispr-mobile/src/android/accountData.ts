@@ -5,6 +5,7 @@ import { activateAccountDatabase, blockAccountDatabase } from './database';
 import { runMigrations } from './migrations';
 import { openApplicationDatabase } from '@/android/db/connections';
 import { randomUUID } from '@/android/shared/lib/uuid';
+import { dlog } from '@/android/lib/debugLog';
 
 const MANIFEST_KEY = 'android.local-accounts.v1';
 const LEGACY_DATABASE = 'openwhispr_notes.db';
@@ -161,7 +162,14 @@ export function selectAccountData(user: User): void {
       error: null,
       blocked: false,
     });
+    // The kind of account only; the owner holds the account id.
+    dlog.info('auth', 'account_change', {
+      revision: previous.revision + 1,
+      kind: !user ? 'local' : user.isAnonymous ? 'anonymous' : 'account',
+      linked: !!linked && linked === account,
+    });
   } catch (error) {
+    dlog.failure('auth', 'account_change.failed', error, { revision: previous.revision });
     useAccountData.setState({
       error: error instanceof Error ? error.message : 'Local account data could not be opened.',
     });
@@ -217,7 +225,9 @@ export async function eraseAccountData(userId: string): Promise<void> {
     erased.pendingAudio = [];
     erased.erasureComplete = true;
     localStorage.setItem(MANIFEST_KEY, JSON.stringify(latest));
+    dlog.info('auth', 'account_data.erased', { count: audio.length });
   } catch (error) {
+    dlog.failure('auth', 'account_data.erase_failed', error);
     useAccountData.setState({
       error: 'The account was deleted, but its local data could not be fully erased. Please retry.',
     });

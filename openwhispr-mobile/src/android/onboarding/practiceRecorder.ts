@@ -5,6 +5,8 @@ import { ReasoningService } from '@/android/reasoning/ReasoningService';
 import { getAccountFirstName } from '@/android/shared/lib/accountDisplay';
 import { useAuthStore } from '@/android/store/useAuthStore';
 import { createAndroidJob, processAndroidAudio, type AndroidJob } from '../pipeline';
+import { dlog, newRunId } from '@/android/lib/debugLog';
+import { failureFields } from '@/android/dictation/dictationLog';
 
 // Onboarding practice is the free Cloud trial, whatever mode the phone has saved.
 const PRACTICE_ROUTE: AndroidJob['route'] = {
@@ -47,6 +49,11 @@ async function formatPractice(
     return result.text.trim() || text;
   } catch (error) {
     // The cleaned dictation is still a good result; formatting is the bonus.
+    dlog.warn('dict', 'practice.format_failed', {
+      run: job.run,
+      surface: 'practice',
+      ...failureFields(error),
+    });
     console.warn(
       '[onboarding] practice formatting failed',
       job.route.provider,
@@ -103,6 +110,8 @@ export class PracticeRecorder {
   private starting: Promise<boolean> | null = null;
   private cancelRequested = false;
   private controller: AbortController | null = null;
+  // The debug log's id for the take being recorded.
+  private runId = '';
 
   /**
    * Starts listening; resolves false when a cancel came in while it started. A second call while one
@@ -124,10 +133,23 @@ export class PracticeRecorder {
 
   private async open(): Promise<boolean> {
     const dictation = AndroidDictation!;
+    this.runId = newRunId('d');
     try {
       await dictation.startRecording(true);
     } catch (error) {
-      if (!ALREADY_ACTIVE.test((error as Error).message)) throw error;
+      if (!ALREADY_ACTIVE.test((error as Error).message)) {
+        dlog.error('dict', 'capture.failed', {
+          run: this.runId,
+          surface: 'practice',
+          ...failureFields(error),
+        });
+        throw error;
+      }
+      dlog.warn('dict', 'capture.reopen', {
+        run: this.runId,
+        surface: 'practice',
+        why: 'already_active',
+      });
       await discard(await dictation.stopRecording(true).catch(() => null));
       await dictation.startRecording(true);
     }
@@ -136,6 +158,7 @@ export class PracticeRecorder {
       return false;
     }
     this.recording = true;
+    dlog.info('dict', 'capture.start', { run: this.runId, surface: 'practice' });
     return true;
   }
 
@@ -149,6 +172,7 @@ export class PracticeRecorder {
     }
     if (!this.recording || !AndroidDictation) return;
     this.recording = false;
+    dlog.info('dict', 'capture.discard', { run: this.runId, surface: 'practice' });
     await discard(await AndroidDictation.stopRecording(true).catch(() => null));
   }
 
@@ -176,10 +200,17 @@ export class PracticeRecorder {
     if (!AndroidDictation) throw new Error('Dictation is not available on this device.');
     this.recording = false;
     const audio = await AndroidDictation.stopRecording(false);
+    const run = this.runId || undefined;
+    dlog.info('dict', 'capture.done', {
+      run,
+      surface: 'practice',
+      mode: base.mode,
+      audio_ms: audio.durationMs,
+    });
     const controller = new AbortController();
     this.controller = controller;
     try {
-      const job: AndroidJob = { ...base, route: PRACTICE_ROUTE };
+      const job: AndroidJob = { ...base, route: PRACTICE_ROUTE, run };
       const text = (await processAndroidAudio(audio, job, controller.signal, () => {})).trim();
       return format ? await formatPractice(text, format, job, controller.signal) : text;
     } finally {

@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
-import android.util.Log
 
 /**
  * Keeps the floating bubble on across app updates, phone restarts and launches. The user's choice
@@ -30,6 +29,7 @@ object BubbleRestore {
    * whether a start was sent.
    */
   fun restore(context: Context, fromApp: Boolean): Boolean {
+    DebugLog.init(context)
     val preferences = preferences(context)
     val running = DictationService.instance != null
     if (running && (!fromApp || !startedInBackground)) return false
@@ -39,17 +39,18 @@ object BubbleRestore {
       overlay = Settings.canDrawOverlays(context),
       microphone = context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED,
     )
-    if (!start) return false
+    if (!start) { DebugLog.event('I', "app", "bubble_restore", "result" to "not_wanted_or_blocked", "background" to !fromApp); return false }
     return try {
       // No size extra: the service reads the stored Size & look appearance, which a later
       // setAppearance may have changed since setEnabled saved this size.
       context.startForegroundService(Intent(context, DictationService::class.java))
       startedInBackground = !fromApp
+      DebugLog.event('I', "app", "bubble_restore", "result" to "started", "background" to !fromApp)
       true
     } catch (error: RuntimeException) {
       // Android 12+ refuses some background starts (ForegroundServiceStartNotAllowedException). The
       // choice stays saved, so the bubble comes back the next time OpenWhispr opens.
-      Log.w(TAG, "Bubble restore was refused", error)
+      DebugLog.logcat(TAG, "Bubble restore was refused", error)
       false
     }
   }

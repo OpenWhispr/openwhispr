@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 import { AudioTools, type ChunkResult } from '@/android/shared/modules/audio-tools/index';
 import { abortError } from '@/services/providers/NativeProviderTransport';
+import { dlog, startTimer } from '@/android/lib/debugLog';
+import { uploadDebugRun } from './uploadTranscriptionAudio';
 
 function androidAudio() {
   const { AndroidDictation } =
@@ -24,8 +26,12 @@ export const CloudAudioTools = {
     const id = native.prepareCloudAudio();
     const cancel = () => native.cancelCloudAudio(id);
     signal?.addEventListener('abort', cancel, { once: true });
+    const elapsed = startTimer();
     try {
       const result = await native.splitCloudAudio(uri, seconds, id);
+      const run = uploadDebugRun();
+      if (run)
+        dlog.info('upload', 'split', { run, count: result.chunks.length, seconds, ms: elapsed() });
       if (signal?.aborted) {
         await native.cleanupCloudAudio(result.chunks);
         throw abortError('Transcription cancelled.');

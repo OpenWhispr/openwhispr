@@ -37,6 +37,8 @@
   <string name="ow_status_model_needed">يلزم تنزيل نموذج</string>
   <string name="ow_status_download">تنزيل</string>
   <string name="ow_status_failed">لم ينجح ذلك</string>
+  <string name="ow_status_meeting_recording">جارٍ تسجيل اجتماع</string>
+  <string name="ow_status_stop_to_dictate">أوقفه لتبدأ الإملاء</string>
   <string name="ow_menu_assistant">المساعد</string>
   <string name="ow_menu_assistant_body">يكتب أو يرد نيابة عنك</string>
   <string name="ow_menu_translate">ترجمة</string>

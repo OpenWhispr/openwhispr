@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/react-native';
 import { useConfigStore } from '@/android/store/useConfigStore';
 import { isUsageAnalyticsAllowed } from '@/android/shared/lib/usageAnalytics';
+import { startDebugLogLifecycle } from '@/android/lib/debugLogLifecycle';
 
 let didInit = false;
 let watchingConsent = false;
@@ -29,7 +30,22 @@ function syncConsent(): void {
   initSentry();
 }
 
+/**
+ * A tagged error report: the microphone was refused (with who held it) or the bubble's pipeline
+ * timed out. Tags only, never a log line; `beforeSend` drops it without Usage analytics consent.
+ */
+const waitingReports: { kind: string; tags: Record<string, string> }[] = [];
+export function reportNativeError(kind: string, tags: Record<string, string>): void {
+  // Consent may still be loading; keep a few until Sentry starts (or drop them if it never does).
+  if (!didInit) {
+    if (waitingReports.length < 20) waitingReports.push({ kind, tags });
+    return;
+  }
+  Sentry.captureMessage(kind, { level: 'error', tags: { android_error: kind, ...tags } });
+}
+
 export function initSentry(): void {
+  startDebugLogLifecycle(reportNativeError);
   if (!watchingConsent) {
     watchingConsent = true;
     useConfigStore.subscribe(syncConsent);
@@ -56,6 +72,7 @@ export function initSentry(): void {
   });
 
   didInit = true;
+  waitingReports.splice(0).forEach(({ kind, tags }) => reportNativeError(kind, tags));
 }
 
 export { Sentry };

@@ -7,6 +7,8 @@ import { PermissionsContent } from './PermissionsScreen';
 import { usePracticeSession } from './practiceSession';
 import { useBubbleResult } from './bubbleResult';
 import { makeStyles } from './ThemeProvider';
+import { dlog } from '@/android/lib/debugLog';
+import { failureFields } from '@/android/dictation/dictationLog';
 
 const useStyles = makeStyles((t) => ({
   body: { fontSize: 16, lineHeight: 24, color: t.tokens.secondary },
@@ -46,9 +48,10 @@ export function Practice({
     );
     const active = visible && AppState.currentState === 'active';
     usePracticeSession.setState({ active });
-    void AndroidDictation?.setPractice(active).catch((failure: Error) =>
-      Alert.alert(t('errorTitle'), failure.message),
-    );
+    void AndroidDictation?.setPractice(active).catch((failure: Error) => {
+      dlog.error('dict', 'practice.failed', { surface: 'practice', ...failureFields(failure) });
+      Alert.alert(t('errorTitle'), failure.message);
+    });
   }, [t, visible]);
   useEffect(() => {
     usePracticeSession.setState({ completedMode: null });
@@ -71,6 +74,7 @@ export function Practice({
   useEffect(() => {
     if (revision > initialRevision.current && completedMode === 'dictate') {
       initialRevision.current = revision;
+      dlog.info('dict', 'practice.passed', { surface: 'practice', mode: completedMode });
       setPassed(true);
       success.current?.();
     }

@@ -1,5 +1,6 @@
 import { and, asc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { create } from 'zustand';
+import { dlog } from '@/android/lib/debugLog';
 import { db } from '@/db';
 import { snippets } from '@/android/db/schema';
 import type { Snippet } from '@/android/dictation/snippets';
@@ -163,7 +164,9 @@ export function createSnippetsStore({
         changed = applyAddOne(trigger, replacement);
       });
       if (!changed) return;
-      set({ entries: readAllActiveEntries() });
+      const entries = readAllActiveEntries();
+      set({ entries });
+      dlog.info('words', 'changed', { action: 'add', snippets: entries.length });
       triggerSync();
     },
 
@@ -189,7 +192,9 @@ export function createSnippetsStore({
         changed = true;
       });
       if (!changed) return;
-      set({ entries: readAllActiveEntries() });
+      const entries = readAllActiveEntries();
+      set({ entries });
+      dlog.info('words', 'changed', { action: 'update', snippets: entries.length });
       triggerSync();
     },
 
@@ -199,7 +204,9 @@ export function createSnippetsStore({
         changed = softDeleteOne(trigger);
       });
       if (!changed) return;
-      set({ entries: readAllActiveEntries() });
+      const entries = readAllActiveEntries();
+      set({ entries });
+      dlog.info('words', 'changed', { action: 'remove', snippets: entries.length });
       triggerSync();
     },
   }));

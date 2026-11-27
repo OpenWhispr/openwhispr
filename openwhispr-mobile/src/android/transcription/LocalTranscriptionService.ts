@@ -11,6 +11,8 @@ import {
   type LocalEngineAvailability,
   type LocalEngineChoice,
 } from '@/android/shared/services/transcription/localEngine';
+import { dlog, startTimer } from '@/android/lib/debugLog';
+import { failureFields } from '@/android/dictation/dictationLog';
 
 export interface LocalEngineDescriptor {
   engine: 'parakeet' | 'whisper' | 'moonshine';
@@ -113,7 +115,27 @@ export class LocalTranscriptionService {
   ): Promise<TranscriptionResponse> {
     if (Platform.OS === 'android') {
       const { LocalSpeechModel } = await import('@/android/LocalSpeechModel');
-      return LocalSpeechModel.transcribe(audioUri, options);
+      const elapsed = startTimer();
+      const fields = { lang: options.language ?? 'auto' };
+      try {
+        const response = await LocalSpeechModel.transcribe(audioUri, options);
+        dlog.info('dict', 'local.transcribed', {
+          model: options.model,
+          lang: fields.lang,
+          kind: response.endpoint,
+          ms: elapsed(),
+          chars: response.text?.length ?? 0,
+        });
+        return response;
+      } catch (error) {
+        dlog.error('dict', 'local.failed', {
+          model: options.model,
+          lang: fields.lang,
+          ms: elapsed(),
+          ...failureFields(error),
+        });
+        throw error;
+      }
     }
     const { languages, choice } = await this.resolveEngine(options.model);
 
@@ -198,6 +220,7 @@ export class LocalTranscriptionService {
     if (Platform.OS === 'android') {
       const { LocalSpeechModel } = await import('@/android/LocalSpeechModel');
       LocalSpeechModel.cancel();
+      dlog.info('dict', 'local.cancel');
       return;
     }
     await Promise.all([

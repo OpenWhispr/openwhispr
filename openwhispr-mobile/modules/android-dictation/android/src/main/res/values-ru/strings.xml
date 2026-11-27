@@ -37,6 +37,8 @@
   <string name="ow_status_model_needed">Нужно загрузить модель</string>
   <string name="ow_status_download">Загрузить</string>
   <string name="ow_status_failed">Не получилось</string>
+  <string name="ow_status_meeting_recording">Идёт запись встречи</string>
+  <string name="ow_status_stop_to_dictate">Остановите, чтобы диктовать</string>
   <string name="ow_menu_assistant">Ассистент</string>
   <string name="ow_menu_assistant_body">Напишет или ответит за вас</string>
   <string name="ow_menu_translate">Перевод</string>

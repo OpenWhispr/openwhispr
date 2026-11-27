@@ -45,6 +45,7 @@ import {
 import { useSyncStore } from '@/android/shared/sync/useSyncStore';
 import { ApiError, isPolicyCloudBackupBlockedError } from '@/android/lib/apiClient';
 import { withChatHistory } from '@/android/shared/lib/chat/withChatHistory';
+import { dlog, startTimer } from '@/android/lib/debugLog';
 
 export type SyncReason = 'after-write' | 'foreground' | 'sign-in' | 'manual';
 
@@ -76,6 +77,22 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
   let pendingTriggerWaiters: Array<() => void> = [];
   let postWriteTimer: ReturnType<typeof setTimeout> | null = null;
   const syncCompletionListeners = new Set<(hasQueuedRun: boolean) => void>();
+
+  // One debug-log line per table pass: how long it took and whether it threw. Counts come from
+  // the passes themselves (dictionary and snippets) where they're known.
+  async function logged<T>(table: string, run: () => Promise<T>): Promise<T> {
+    const elapsed = startTimer();
+    try {
+      const result = await run();
+      dlog.info('sync', 'table', { table, ok: true, ms: elapsed() });
+      return result;
+    } catch (error) {
+      if (error instanceof SyncCancelledError)
+        dlog.info('sync', 'table', { table, ok: false, cancelled: true, ms: elapsed() });
+      else dlog.failure('sync', 'table', error, { table, ok: false, ms: elapsed() });
+      throw error;
+    }
+  }
 
   function subscribeSyncCompletion(listener: (hasQueuedRun: boolean) => void): () => void {
     syncCompletionListeners.add(listener);
@@ -188,6 +205,7 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
       return subscriptionCached;
     } catch (err) {
       if (err instanceof SyncCancelledError) throw err;
+      dlog.failure('sync', 'subscription_check', err);
       // Fail closed: if we can't verify, don't sync. Avoids accidental free
       // cloud writes when the usage endpoint is unreachable.
       Sentry.addBreadcrumb({
@@ -219,6 +237,7 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
       const linkedFromAnonymous = lastUserId !== null && isLinkFromAnonymous(lastUserId);
       if (lastUserId && !linkedFromAnonymous) {
         policy.onAccountMismatch?.();
+        dlog.info('sync', 'account_wipe', { reason: 'account_changed' });
         // Account switched on this device. Wipe the previous user's local
         // data before pulling the new user's — otherwise we'd leak the
         // previous user's folders/notes into the new user's view.
@@ -251,6 +270,7 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
           message: `anonymous ${lastUserId} linked to ${userId}; re-adopting local rows`,
           level: 'info',
         });
+        dlog.info('sync', 'account_link', { reason: 'anonymous_linked' });
         notesRepository.dropRemoteIdsForAccountLink();
         clearPrivateNoteDeletionQueue();
         resetAllPullCursors();
@@ -286,7 +306,7 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
   ): Promise<void> {
     try {
       checkpoint();
-      await pullSharedDictionary(checkpoint, workspaces);
+      await logged('shared_dictionary.pull', () => pullSharedDictionary(checkpoint, workspaces));
       checkpoint();
     } catch (err) {
       if (err instanceof SyncCancelledError) throw err;
@@ -335,6 +355,9 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
     // through pendingTrigger and run once this one settles.
     inFlight = true;
     const { checkpoint, dispose } = createSyncContext();
+    const passElapsed = startTimer();
+    // How the pass ended, for the debug log's pass.end line.
+    let passOutcome = 'gated';
 
     try {
       checkpoint();
@@ -385,6 +408,12 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
         .getState()
         .set({ status: 'running', lastError: null, subscriptionRequired, policyBlocked: false });
       Sentry.addBreadcrumb({ category: 'sync', message: `start (${reason})`, level: 'info' });
+      dlog.info('sync', 'pass.start', {
+        reason,
+        mode: personalSyncAllowed ? 'full' : 'team_only',
+        cloud: cloudBackupEnabled,
+        subscription_required: subscriptionRequired,
+      });
 
       // Runs first, ahead of any content pass: probes team-spaces capability
       // and mirrors space membership so the team pull passes below can resolve
@@ -392,7 +421,7 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
       // predates team spaces, so those passes are skipped entirely.
       let spacesResult: SyncSpacesResult;
       try {
-        spacesResult = await syncSpaces(checkpoint);
+        spacesResult = await logged('spaces', () => syncSpaces(checkpoint));
         checkpoint();
       } catch (err) {
         if (err instanceof SyncCancelledError) throw err;
@@ -402,6 +431,7 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
         // lands in the top-level catch as status:'error' + Sentry. Full-sync
         // runs still surface the failure normally.
         if (personalSyncAllowed || !isQuietNetworkError(err)) throw err;
+        passOutcome = 'offline';
         endRunQuietly('spaces pass: network-level error (offline?); ending quietly', err);
         return;
       }
@@ -415,7 +445,7 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
       checkpoint();
 
       if (personalSyncAllowed) {
-        await runInitialBackfillIfNeeded(userId, checkpoint);
+        await logged('backfill', () => runInitialBackfillIfNeeded(userId, checkpoint));
         checkpoint();
 
         // Personal and team passes are independent crawls with independent
@@ -423,13 +453,15 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
         // already local by the time the note arrives. A team pass that parks
         // (space or folder not mirrored yet) completes normally — the next run
         // picks up where it stopped.
-        await pullFolders(checkpoint);
+        await logged('folders.pull', () => pullFolders(checkpoint));
         checkpoint();
-        if (spacesResult.capable) await pullFoldersTeam(checkpoint);
+        if (spacesResult.capable)
+          await logged('team_folders.pull', () => pullFoldersTeam(checkpoint));
         checkpoint();
-        await pullNotes(checkpoint);
+        await logged('notes.pull', () => pullNotes(checkpoint));
         checkpoint();
-        if (spacesResult.capable) await pullNotesTeam(checkpoint);
+        if (spacesResult.capable)
+          await logged('team_notes.pull', () => pullNotesTeam(checkpoint));
         checkpoint();
 
         // Re-check the gate before any upload. The toggle is lazy — turning cloud
@@ -449,10 +481,10 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
 
         await retryPrivateNoteDeletes(checkpoint);
         checkpoint(true);
-        await pushFolders(false, checkpoint);
+        await logged('folders.push', () => pushFolders(false, checkpoint));
         checkpoint();
         checkpoint(true);
-        await pushNotes(false, checkpoint);
+        await logged('notes.push', () => pushNotes(false, checkpoint));
         checkpoint();
 
         // Dictionary sync is independent of notes/folders. Isolate its errors so a
@@ -477,19 +509,23 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
             return false;
           }
         };
-        if (await dictionaryPassStopped(() => pullDictionary(checkpoint))) return;
+        if (await dictionaryPassStopped(() =>
+            logged('dictionary.pull', () => pullDictionary(checkpoint)),
+          )) return;
         checkpoint(true);
-        if (await dictionaryPassStopped(() => pushDictionary(checkpoint))) return;
+        if (await dictionaryPassStopped(() =>
+            logged('dictionary.push', () => pushDictionary(checkpoint)),
+          )) return;
 
         // Snippets sync is likewise independent. Isolate its errors too (with the
         // same policy-block exception as dictionary above), and skip it entirely
         // once the endpoint has been seen as unavailable this session.
         if (!snippetsEndpointUnavailable) {
           try {
-            await pullSnippets(checkpoint);
+            await logged('snippets.pull', () => pullSnippets(checkpoint));
             checkpoint();
             checkpoint(true);
-            await pushSnippets(checkpoint);
+            await logged('snippets.push', () => pushSnippets(checkpoint));
             checkpoint();
           } catch (err) {
             if (err instanceof SyncCancelledError) throw err;
@@ -523,6 +559,7 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
           lastError: null,
           lastSyncAt: new Date().toISOString(),
         });
+        passOutcome = 'done';
       } else if (spacesResult.capable) {
         // Team-only pass: the personal gate is closed (backup off, or
         // unsubscribed), but team collaboration is free and unaffected by
@@ -530,15 +567,15 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
         // Everything paid-gated (backfill, personal pulls/pushes, dictionary,
         // snippets) is skipped entirely.
         try {
-          await pullFoldersTeam(checkpoint);
+          await logged('team_folders.pull', () => pullFoldersTeam(checkpoint));
           checkpoint();
-          await pullNotesTeam(checkpoint);
-          checkpoint();
-          checkpoint(true);
-          await pushFolders(true, checkpoint);
+          await logged('team_notes.pull', () => pullNotesTeam(checkpoint));
           checkpoint();
           checkpoint(true);
-          await pushNotes(true, checkpoint);
+          await logged('team_folders.push', () => pushFolders(true, checkpoint));
+          checkpoint();
+          checkpoint(true);
+          await logged('team_notes.push', () => pushNotes(true, checkpoint));
           checkpoint();
 
           useNotesStore.getState().loadFolders();
@@ -546,6 +583,7 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
           useNotesStore.getState().loadNotes();
 
           useSyncStore.getState().set({ status: 'idle', lastError: null });
+          passOutcome = 'done';
         } catch (err) {
           if (err instanceof SyncCancelledError) throw err;
           // A policy block or a real server error (ApiError, e.g. 5xx) is a
@@ -553,6 +591,7 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
           // like a full-sync failure would. Anything else ends quietly (see
           // isQuietNetworkError) — the next trigger retries.
           if (!isQuietNetworkError(err)) throw err;
+          passOutcome = 'offline';
           endRunQuietly('team-only pass: network-level error (offline?); ending quietly', err);
         }
       } else {
@@ -565,6 +604,7 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
       Sentry.addBreadcrumb({ category: 'sync', message: 'done', level: 'info' });
     } catch (err) {
       if (err instanceof SyncCancelledError) {
+        passOutcome = 'cancelled';
         useSyncStore.getState().set({ status: 'idle', lastError: null });
         return;
       }
@@ -575,13 +615,17 @@ export function createSyncEngine(policy: SyncPlatformPolicy = {}) {
       // mutating anything for the row that tripped it) so the next sync
       // retries once the policy allows it again.
       if (isPolicyCloudBackupBlockedError(err)) {
+        passOutcome = 'policy_blocked';
         stopSyncForPolicyBlock();
         return;
       }
+      passOutcome = 'failed';
+      dlog.failure('sync', 'pass.failed', err, { reason, ms: passElapsed() });
       const error = err instanceof Error ? err : new Error(String(err));
       useSyncStore.getState().set({ status: 'error', lastError: error });
       Sentry.captureException(error, { tags: { sync: 'runSync' } });
     } finally {
+      dlog.info('sync', 'pass.end', { reason, outcome: passOutcome, ms: passElapsed() });
       dispose();
       inFlight = false;
       // Replaying it would return before reaching this block, so listeners told

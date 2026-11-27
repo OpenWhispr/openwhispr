@@ -25,6 +25,8 @@ import { usePracticeSession } from './practiceSession';
 import { bootAppData } from './appData';
 import { useAccountData } from './accountData';
 import { runHeadlessStartup } from './headlessStartup';
+import { dlog } from '@/android/lib/debugLog';
+import { failureFields } from './dictation/dictationLog';
 
 const discard = (audio: Recording | null) => {
   if (audio) void FileSystem.deleteAsync(audio.uri, { idempotent: true }).catch(() => undefined);
@@ -41,12 +43,16 @@ async function dictationJob(
   selection: string,
   mode: DictationMode,
   app: string | undefined,
+  run?: string,
 ): Promise<AndroidJob> {
   // The bubble can run before the app is opened; its data must be loaded first.
   await bootAppData();
   const { error, blocked } = useAccountData.getState();
-  if (error || blocked) throw new Error(error ?? i18n.t('bootError'));
-  return createAndroidJob(mode, translateTarget(), selection, app);
+  if (error || blocked) {
+    dlog.warn('pipe', 'job.blocked', { run, why: error ? 'account_error' : 'blocked' });
+    throw new Error(error ?? i18n.t('bootError'));
+  }
+  return createAndroidJob(mode, translateTarget(), selection, app, run);
 }
 
 /** Why the Assistant can't run right now, for the menu's greyed row: "" when it can. */
@@ -73,6 +79,16 @@ export function syncBubbleMenu(): void {
   if (key === sentMenu) return;
   sentMenu = key;
   AndroidDictation?.setMenuContext?.(context);
+}
+
+// Home's "A meeting is recording" copy, loaded on use: Home's strings register their own bundle.
+function meetingRecordingCopy(fallback: string): string {
+  try {
+    const { HOME_NAMESPACE } = require('./home/strings') as typeof import('./home/strings');
+    return i18n.t('meetingRecording', { ns: HOME_NAMESPACE });
+  } catch {
+    return fallback;
+  }
 }
 
 const PIPELINE_MESSAGES = () => ({
@@ -102,22 +118,32 @@ export function startBubblePipeline(): void {
   // A dictation the account change cut off: it must still settle, or the bubble keeps "Writing".
   let abandoned: AbortController | null = null;
   const stopped = (current: AbortController) => {
-    if (current.signal.aborted && current === abandoned)
+    if (current.signal.aborted && current === abandoned) {
+      dlog.warn('pipe', 'abandoned', { why: 'account_change' });
       void native.setStatus('retry', { message: 'failed' });
+    }
     return current.signal.aborted;
   };
-  const prepare = (selection: string, mode: DictationMode, app: string | undefined) => {
+  const prepare = (
+    selection: string,
+    mode: DictationMode,
+    app: string | undefined,
+    run?: string,
+  ) => {
     controller?.abort();
     controller = new AbortController();
-    job = dictationJob(selection, mode, app);
+    dlog.info('pipe', 'job.prepare', { run, mode, selection: !!selection, pkg: app || undefined });
+    job = dictationJob(selection, mode, app, run);
     // Reported when the recording arrives; a dictation cancelled before then has nothing to report.
     job.catch(() => undefined);
   };
-  const run = async (audio: Recording) => {
+  const run = async (audio: Recording & { run?: string }) => {
     const current = controller;
     const pending = job;
+    const runId = audio.run;
     if (!current || !pending) {
       // The account changed after this dictation started; there is nothing to write it into.
+      dlog.warn('pipe', 'abandoned', { run: runId, why: 'no_job' });
       discard(audio);
       void native.setStatus('retry', { message: 'failed' });
       return;
@@ -126,13 +152,26 @@ export function startBubblePipeline(): void {
     try {
       const prepared = await pending;
       if (stopped(current)) return;
+      dlog.info('pipe', 'job.ready', {
+        run: runId,
+        mode: prepared.mode,
+        audio_ms: audio.durationMs,
+      });
       const text = await processAndroidAudio(audio, prepared, current.signal, () =>
         native.setStatus('processing'),
       );
       if (stopped(current)) return;
       // Edited words stay highlighted a moment so the change is easy to see.
-      const inserted = await native.insert(text, { highlight: prepared.mode === 'edit' });
+      const inserted = await native.insert(text, {
+        highlight: prepared.mode === 'edit',
+        run: runId,
+      });
       if (stopped(current)) return;
+      dlog.info('pipe', 'result', {
+        run: runId,
+        status: inserted ? 'success' : 'not_inserted',
+        chars: text.length,
+      });
       if (!inserted) {
         // The words are safe in Home; the bubble offers to open them. With typing access off
         // nothing can paste, so they also go on the clipboard and the tab offers to turn it on.
@@ -148,6 +187,7 @@ export function startBubblePipeline(): void {
     } catch (error) {
       if (stopped(current)) return;
       if (error instanceof AndroidCleanupError) {
+        dlog.warn('pipe', 'result', { run: runId, status: 'recover', why: 'cleanup_warning' });
         useBubbleResult.getState().setResult(error.transcript, i18n.t('cleanupRecovery'));
         void native.setStatus('recover');
         return;
@@ -158,6 +198,12 @@ export function startBubblePipeline(): void {
       // missing model have nothing worth sending again; anything else keeps the recording for Retry.
       const failure = bubbleFailure(error, audio.noSpeech, PIPELINE_MESSAGES());
       keep = failure.keep;
+      dlog.error('pipe', 'result', {
+        ...failureFields(error),
+        run: runId,
+        status: keep ? 'retry_kept' : 'retry',
+        reason: failure.message,
+      });
       void native.setStatus(keep ? 'retry-kept' : 'retry', { message: failure.message });
     } finally {
       if (keep) kept = audio;
@@ -172,17 +218,20 @@ export function startBubblePipeline(): void {
     // on it) changes nothing a job holds: no job can capture a scope before there is an owner.
     if (!previous) return;
     // Only a dictation still running; one the user cancelled already settled.
-    if (controller && !controller.signal.aborted) abandoned = controller;
+    if (controller && !controller.signal.aborted) {
+      abandoned = controller;
+      dlog.warn('pipe', 'account_change', { why: 'running_job_abandoned' });
+    }
     controller?.abort();
     job = null;
     dropKept();
     useBubbleResult.getState().dismiss();
   });
   let lastMode: DictationMode = 'dictate';
-  dictationEvents.addListener('onStart', ({ selection, mode, app }) => {
+  dictationEvents.addListener('onStart', ({ selection, mode, app, run }) => {
     dropKept();
     lastMode = bubbleMode(mode, selection);
-    prepare(selection, lastMode, app);
+    prepare(selection, lastMode, app, run);
   });
   dictationEvents.addListener('onRecording', (audio) => {
     void run(audio);
@@ -195,12 +244,18 @@ export function startBubblePipeline(): void {
       return;
     }
     // A retried take runs in the mode it was recorded in.
-    prepare(selection, bubbleMode(lastMode, selection), app);
+    const retryRun = (audio as Recording & { run?: string }).run;
+    dlog.info('pipe', 'retry', { run: retryRun, audio_ms: audio.durationMs });
+    prepare(selection, bubbleMode(lastMode, selection), app, retryRun);
     void run(audio);
   });
   dictationEvents.addListener('onDismiss', dropKept);
-  dictationEvents.addListener('onError', ({ message }) => {
-    useBubbleResult.getState().setResult('', message);
+  dictationEvents.addListener('onError', ({ message, owner, run }) => {
+    dlog.warn('pipe', 'bubble_error', { run, owner: owner || undefined });
+    // The microphone is the meeting's: say so, rather than the recorder's own refusal.
+    useBubbleResult
+      .getState()
+      .setResult('', owner === 'meeting' ? meetingRecordingCopy(message) : message);
   });
   dictationEvents.addListener('onCancel', () => {
     controller?.abort();

@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/react-native';
 import { notesRepository } from '@/android/shared/data';
+import { dlog } from '@/android/lib/debugLog';
 
 // A park is a normal, self-healing outcome the first time or two: the space or
 // folder a row needs simply hasn't been mirrored yet, and the next run's
@@ -27,6 +28,8 @@ function readStreak(stateKey: string, rowId: string): number {
 export function recordPark(stateKey: string, rowId: string, message: string): void {
   const streak = readStreak(stateKey, rowId) + 1;
   notesRepository.setSyncState(stateKey, `${rowId}:${streak}`);
+  // The state key names the crawl (an identifier); the row id and message stay out.
+  dlog.warn('sync', 'parked', { table: stateKey, n: streak });
   if (streak >= ESCALATE_AFTER_RUNS) {
     Sentry.captureMessage(`${message} (parked ${streak} consecutive syncs)`, 'warning');
     return;

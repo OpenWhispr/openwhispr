@@ -2,6 +2,7 @@ import { meetingAudioContext } from '@/lib/meetingAudioStorage';
 import { repairAndroidMeetingRecordingPaths } from '@/android/meetingRecordingRepair';
 import { Sentry } from '@/android/lib/sentry';
 import { useNotesStore } from '@/android/store/useNotesStore';
+import { dlog } from '@/android/lib/debugLog';
 
 // The explicit extension loads the unchanged default implementation. Eager loading
 // preserves its process-start cutoff before this asynchronous account scan begins.
@@ -25,7 +26,10 @@ export function startMeetingRecoveryOnce(): void {
   if (started.has(audio.key)) return;
   started.add(audio.key);
   repairAndroidMeetingRecordingPaths(audio)
-    .catch((error) => Sentry.captureException(error, { tags: { feature: 'meeting-recovery' } }))
+    .catch((error) => {
+      dlog.failure('meet', 'recovery.repair_failed', error);
+      Sentry.captureException(error, { tags: { feature: 'meeting-recovery' } });
+    })
     .then(() => {
       if (!audio.isCurrent()) return;
       // Failed notes may already be open when the asynchronous path repair finishes.

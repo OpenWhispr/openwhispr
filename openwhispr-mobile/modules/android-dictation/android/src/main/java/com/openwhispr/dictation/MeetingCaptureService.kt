@@ -14,6 +14,8 @@ class MeetingCaptureService : Service() {
     var pendingStart: ((Exception?) -> Unit)? = null
     internal var pendingRoute: MeetingCaptureRoute? = null
     var pendingToken: String? = null
+    /** The debug log's run id for the next meeting, set by JS just before it starts one. */
+    @Volatile var nextRun: String? = null
     fun finishStart(error: Exception?) {
       val callback = pendingStart
       pendingStart = null; pendingRoute = null; pendingToken = null
@@ -22,11 +24,14 @@ class MeetingCaptureService : Service() {
   }
   internal var route: MeetingCaptureRoute? = null; private set
   private var captureToken: String? = null
+  private var run: String? = null
+  private var startedAt = 0L
   private var recorder: WavRecorder? = null
   /** Loudness of the meeting's latest read, 0..1; 0 when nothing is recording. */
   val level: Float get() = recorder?.level ?: 0f
   private val handler = Handler(Looper.getMainLooper())
   override fun onBind(intent: Intent?) = null
+  override fun onCreate() { super.onCreate(); DebugLog.init(this) }
   @Synchronized override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     if (intent?.action == "stop") {
       if (intent.getStringExtra("captureToken") != captureToken || captureToken == null) {
@@ -34,7 +39,7 @@ class MeetingCaptureService : Service() {
         return START_NOT_STICKY
       }
       Thread {
-        runCatching { stopCapture() }
+        runCatching { stopCapture("notification_stop") }
           .onSuccess { route?.let { DictationService.emit?.invoke(it.stopEvent, eventIdentity()) } }
           .onFailure { error -> emitError(error) }
         stopSelf()
@@ -51,6 +56,7 @@ class MeetingCaptureService : Service() {
     route = captureRoute
     captureToken = pendingToken
     instance = this
+    run = nextRun.also { nextRun = null } ?: DebugLogFormat.runId('m')
     try {
       val sampleRate = intent?.getIntExtra("sampleRate", 24000) ?: 24000
       require(sampleRate == 24000) { "Meetings require 24 kHz audio." }
@@ -72,15 +78,21 @@ class MeetingCaptureService : Service() {
       check(directory.isDirectory || directory.mkdirs()) { "Unable to open meeting audio storage." }
       val destination = File(directory, if (noteId > 0) "meeting-$noteId.wav" else "meeting-capture-${System.currentTimeMillis()}.wav")
       var frameNumber = 0
+      DebugLog.event('I', "mic", "fgs.start", "run" to run, "service" to "meeting", "local" to captureRoute.localOnly)
       recorder = WavRecorder(this, sampleRate, destination, captureRoute.maximumSeconds,
         onFrame = captureRoute.frameListener { bytes, timestamp -> DictationService.emit?.invoke("pcm-frame", mapOf("audio" to Base64.encodeToString(bytes, Base64.NO_WRAP), "frameNumber" to frameNumber++, "timestampMs" to timestamp)) },
         onFailure = { error -> handler.post {
           emitError(error)
-          Thread { runCatching { stopCapture() }; stopSelf() }.start()
-        } })
+          val limit = error.message == "Recording reached its time limit."
+          val reason = if (!limit) "error" else if (captureRoute.localOnly) "limit_59m" else "limit_2h"
+          Thread { runCatching { stopCapture(reason, error) }; stopSelf() }.start()
+        } }, owner = "meeting", run = run)
       recorder!!.start()
+      startedAt = SystemClock.elapsedRealtime()
+      DebugLog.event('I', "meet", "capture.start", "run" to run, "local" to captureRoute.localOnly, "rate" to sampleRate)
       finishStart(null)
     } catch (error: Exception) {
+      DebugLog.event('E', "meet", "capture.start_failed", "run" to run, "error" to DebugLogFormat.error(error))
       finishStart(error)
       recorder?.close(); recorder = null; stopSelf()
     }
@@ -92,14 +104,20 @@ class MeetingCaptureService : Service() {
     route?.let { DictationService.emit?.invoke(it.errorEvent,
       eventIdentity() + ("message" to (error.message ?: getString(R.string.ow_meeting_stopped)))) }
   }
-  @Synchronized fun stopCapture() {
+  /** [reason] is for the debug log: `requested` (the app asked), `notification_stop`, a time limit, `error`, `destroyed`. */
+  @Synchronized fun stopCapture(reason: String = "requested", error: Throwable? = null) {
     val active = recorder ?: return
     recorder = null
-    try { active.stop(false) } finally { active.close(); stopForeground(STOP_FOREGROUND_REMOVE) }
+    DebugLog.event(if (error == null) 'I' else 'W', "meet", "capture.stop", "run" to run, "reason" to reason,
+      "duration_ms" to SystemClock.elapsedRealtime() - startedAt, "error" to error?.let(DebugLogFormat::error))
+    try { active.stop(false) } finally {
+      active.close(); stopForeground(STOP_FOREGROUND_REMOVE)
+      DebugLog.event('I', "mic", "fgs.stop", "run" to run, "service" to "meeting")
+    }
   }
   override fun onDestroy() {
     instance = null
-    Thread { runCatching { stopCapture() } }.start()
+    Thread { runCatching { stopCapture("destroyed") } }.start()
     finishStart(IllegalStateException("Recording interrupted."))
     super.onDestroy()
   }

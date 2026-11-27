@@ -37,6 +37,8 @@
   <string name="ow_status_model_needed">Un modèle à télécharger</string>
   <string name="ow_status_download">Télécharger</string>
   <string name="ow_status_failed">Ça n’a pas marché</string>
+  <string name="ow_status_meeting_recording">Réunion en cours d’enregistrement</string>
+  <string name="ow_status_stop_to_dictate">Arrêtez-la pour dicter</string>
   <string name="ow_menu_assistant">Assistant</string>
   <string name="ow_menu_assistant_body">Écrit ou répond pour vous</string>
   <string name="ow_menu_translate">Traduire</string>

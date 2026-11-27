@@ -52,7 +52,8 @@ export type BubbleMessage =
   | 'out-of-words'
   | 'sign-in'
   | 'model-needed'
-  | 'failed';
+  | 'failed'
+  | 'meeting-recording';
 export interface BubbleStatusOptions {
   /** retry / retry-kept: what the status tab says. */
   message?: BubbleMessage;
@@ -87,7 +88,7 @@ interface NativeDictation {
    */
   setStatus(status: BubbleStatusValue, options?: BubbleStatusOptions): Promise<void>;
   /** Writes the text where the dictation started; `highlight` keeps edited words selected for 1.2 s. */
-  insert(text: string, options?: { highlight?: boolean }): Promise<boolean>;
+  insert(text: string, options?: { highlight?: boolean; run?: string }): Promise<boolean>;
   /** Stores what the hold menu shows. Missing on builds before the hold menu. */
   setMenuContext?(context: BubbleMenuContext): void;
   /** Puts text on the clipboard (typing access is off, so nothing can paste). */
@@ -151,17 +152,61 @@ interface NativeDictation {
   ): Promise<number[]>;
   /** Drops queued voiceprints and frees the speaker model. */
   releaseSpeakerEmbedder(): void;
+  // Debug log (Settings › Analytics). Missing on builds before it.
+  setDebugLogging?(enabled: boolean): void;
+  isDebugLogging?(): boolean;
+  /** Lines already formatted by src/android/lib/debugLogFormat.ts. */
+  debugLog?(lines: string[]): void;
+  hasDebugLog?(): Promise<boolean>;
+  clearDebugLog?(): Promise<void>;
+  /** Writes header + log to a cache file for the share sheet; returns its file:// URI. */
+  exportDebugLog?(header: string): Promise<string>;
+  /** The run id for the next meeting capture, so native and JS lines share it. */
+  setMeetingRun?(run: string | null): void;
+  /** Who holds the microphone, or null when it's free. */
+  getMicrophoneOwner?(): MicrophoneOwner | null;
+  getDebugInfo?(): DebugInfo;
+  /** Errors the native side saw (refused microphone, pipeline timeout), for Sentry. */
+  takeErrorReports?(): Record<string, string>[];
+}
+export type MicrophoneOwner = 'meeting' | 'bubble' | 'in_app' | 'practice';
+export interface DebugInfo {
+  manufacturer: string;
+  model: string;
+  release: string;
+  sdk: number;
+  ignoringBatteryOptimizations: boolean;
+  microphone: boolean;
+  overlay: boolean;
+  accessibility: boolean;
+  notifications: boolean;
+  bubbleRunning: boolean;
+  meetingRunning: boolean;
+  processAgeMs: number;
+  module: string;
+  enabled: boolean;
+  enabledSince: number;
+  onAtLaunch: boolean;
+  micOwner: MicrophoneOwner | null;
+  micModule: string | null;
+  micHeldMs: number | null;
 }
 export const AndroidDictation =
   Platform.OS === 'android' ? requireNativeModule<NativeDictation>('AndroidDictation') : null;
 export const dictationEvents = AndroidDictation
   ? new EventEmitter<{
       /** `app`: the package of the app whose field was focused at the start ("" for none). */
-      onStart: (event: { selection: string; mode?: string; app?: string }) => void;
-      onRecording: (event: Recording) => void;
+      onStart: (event: { selection: string; mode?: string; app?: string; run?: string }) => void;
+      /** `run`: the debug log's id for this dictation, made by the bubble. */
+      onRecording: (event: Recording & { run?: string }) => void;
       onRetry: (event: { selection: string; app?: string }) => void;
       onDismiss: () => void;
-      onError: (event: { message: string }) => void;
+      /** `owner`: who held the microphone when it couldn't start ("meeting", …), "" otherwise. */
+      onError: (event: { message: string; owner?: string; run?: string }) => void;
+      /** The native side has an error report waiting (takeErrorReports). */
+      onErrorReport: () => void;
+      /** The bubble's "Meeting recording" tab was tapped: the app opens. */
+      onOpenApp: () => void;
       onCancel: () => void;
       onOpenResult: () => void;
       onOpenPlans: () => void;

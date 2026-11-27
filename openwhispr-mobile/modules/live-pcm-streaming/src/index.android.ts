@@ -1,5 +1,7 @@
 import { EventEmitter, requireNativeModule } from 'expo';
 import { PermissionsAndroid, Platform } from 'react-native';
+import { dlog } from '../../../src/android/lib/debugLog';
+import { meetingDebugRun } from '../../../src/android/meetingModels';
 
 type EventSubscription = {
   remove(): void;
@@ -46,11 +48,19 @@ export const LivePCMStreaming = {
       require('../../../src/lib/meetingAudioStorage') as typeof import('../../../src/lib/meetingAudioStorage');
     const audio = meetingAudioContext();
     const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
-    if (result !== PermissionsAndroid.RESULTS.GRANTED)
+    if (result !== PermissionsAndroid.RESULTS.GRANTED) {
+      dlog.warn('meet', 'mic_permission', { run: meetingDebugRun(), result: 'denied' });
       throw new Error('Microphone permission is required to record a meeting.');
+    }
     if (Number(Platform.Version) >= 33)
       await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
-    if (signal?.aborted || !audio.isCurrent()) throw new Error('Meeting cancelled.');
+    if (signal?.aborted || !audio.isCurrent()) {
+      dlog.info('meet', 'capture.cancelled', {
+        run: meetingDebugRun(),
+        why: signal?.aborted ? 'aborted' : 'account_change',
+      });
+      throw new Error('Meeting cancelled.');
+    }
     return AndroidModule.startPCM(sampleRate, noteId ?? null, audio.namespace);
   },
 

@@ -1,3 +1,4 @@
+import { dlog } from '@/android/lib/debugLog';
 import { uncheckedSync, type SyncCheckpoint } from '@/android/shared/sync/syncContext';
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db';
@@ -124,6 +125,7 @@ async function walkPages(
 
     for (const remote of entries) {
       applyRemote(remote);
+      pulledThisPass += 1;
       if (remote.updated_at > maxes.updatedAt) {
         maxes.updatedAt = remote.updated_at;
         maxes.id = remote.id;
@@ -144,8 +146,12 @@ async function walkPages(
 // Two-phase pull: first sync walks the (created_at, id) snapshot keyset; later
 // syncs walk the (updated_at, id) delta keyset. `maxes.updatedAt` is tracked
 // across both phases so the first sync persists a correct delta boundary.
+// Rows applied by the current pull, for the debug log (one pull runs at a time).
+let pulledThisPass = 0;
+
 export async function pullSnippets(checkpoint: SyncCheckpoint = uncheckedSync): Promise<void> {
   checkpoint();
+  pulledThisPass = 0;
   const since = notesRepository.getSyncState(SNIPPETS_CURSOR_KEY);
   const sinceId = notesRepository.getSyncState(SNIPPETS_CURSOR_ID_KEY);
   const maxes = { updatedAt: since ?? '', id: sinceId ?? '' };
@@ -162,4 +168,5 @@ export async function pullSnippets(checkpoint: SyncCheckpoint = uncheckedSync): 
 
   if (maxes.updatedAt) notesRepository.setSyncState(SNIPPETS_CURSOR_KEY, maxes.updatedAt);
   if (maxes.id) notesRepository.setSyncState(SNIPPETS_CURSOR_ID_KEY, maxes.id);
+  dlog.info('words', 'sync.pull', { table: 'snippets', pulled: pulledThisPass, snapshot: !since });
 }

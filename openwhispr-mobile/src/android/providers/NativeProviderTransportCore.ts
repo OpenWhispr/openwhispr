@@ -1,4 +1,5 @@
 import type { BackgroundUploader as BackgroundUploaderType } from '../../../modules/background-uploader/src';
+import { dlog, hostOf, safeError, startTimer } from '@/android/lib/debugLog';
 
 // The native transport's timeout is idle-based; whisper decodes of a 25 MB file
 // and long chat completions can stay silent for minutes. Swift clamps it to 300
@@ -30,6 +31,29 @@ function headersToRecord(headers: HeadersInit | undefined): Record<string, strin
   return Object.fromEntries(new Headers(headers).entries());
 }
 
+// One `net provider` line per BYOK request: the host only (never the path, a query or a key), the
+// status and how long it took. Never a body, which can echo the request.
+function logProvider(
+  method: string,
+  url: string,
+  file: boolean,
+  ms: number,
+  status?: number,
+  error?: unknown,
+) {
+  const route = `${method} ${hostOf(url).split('@').pop()}`;
+  if (error !== undefined) {
+    const aborted = (error as { name?: unknown } | null)?.name === 'AbortError';
+    if (aborted) dlog.info('net', 'provider.aborted', { route, file, ms });
+    else dlog.warn('net', 'provider.failed', { route, file, ms, error: safeError(error) });
+    return;
+  }
+  const fields = { route, file, ms, status };
+  if (status !== undefined && status >= 500) dlog.error('net', 'provider', fields);
+  else if (status !== undefined && status >= 400) dlog.warn('net', 'provider', fields);
+  else dlog.info('net', 'provider', fields);
+}
+
 function nativeResponse(result: {
   status: number;
   body: string;
@@ -55,15 +79,23 @@ export async function requestProviderNative(url: string, init: RequestInit): Pro
     throw abortError();
   }
   init.signal?.addEventListener('abort', abort, { once: true });
+  const method = init.method === 'GET' ? 'GET' : 'POST';
+  const elapsed = startTimer();
   try {
-    const result = await uploader.requestProvider({
-      requestId: id,
-      url,
-      method: init.method === 'GET' ? 'GET' : 'POST',
-      headers: headersToRecord(init.headers),
-      ...(typeof init.body === 'string' ? { body: init.body } : {}),
-      timeoutSeconds: PROVIDER_REQUEST_TIMEOUT_SECONDS,
-    });
+    const result = await uploader
+      .requestProvider({
+        requestId: id,
+        url,
+        method,
+        headers: headersToRecord(init.headers),
+        ...(typeof init.body === 'string' ? { body: init.body } : {}),
+        timeoutSeconds: PROVIDER_REQUEST_TIMEOUT_SECONDS,
+      })
+      .catch((error: unknown) => {
+        logProvider(method, url, false, elapsed(), undefined, error);
+        throw error;
+      });
+    logProvider(method, url, false, elapsed(), result.status);
     if (init.signal?.aborted) throw abortError();
     return nativeResponse(result);
   } finally {
@@ -104,21 +136,28 @@ export function createNativeProviderFileRequest(
     }
     input.signal?.addEventListener('abort', abort, { once: true });
     const stopObserving = scope?.observe(abort);
+    const elapsed = startTimer();
     try {
-      const result = await uploader.requestProvider({
-        requestId: id,
-        url: input.url,
-        method: 'POST',
-        headers: input.headers,
-        fileUri: input.fileUri,
-        fileFieldName: input.fileFieldName,
-        fileMimeType: input.fileMimeType,
-        fileName: input.fileName,
-        parameters: input.parameters,
-        routeSnapshot,
-        recoveryAudioUri: input.recoveryAudioUri,
-        timeoutSeconds: PROVIDER_REQUEST_TIMEOUT_SECONDS,
-      });
+      const result = await uploader
+        .requestProvider({
+          requestId: id,
+          url: input.url,
+          method: 'POST',
+          headers: input.headers,
+          fileUri: input.fileUri,
+          fileFieldName: input.fileFieldName,
+          fileMimeType: input.fileMimeType,
+          fileName: input.fileName,
+          parameters: input.parameters,
+          routeSnapshot,
+          recoveryAudioUri: input.recoveryAudioUri,
+          timeoutSeconds: PROVIDER_REQUEST_TIMEOUT_SECONDS,
+        })
+        .catch((error: unknown) => {
+          logProvider('POST', input.url, true, elapsed(), undefined, error);
+          throw error;
+        });
+      logProvider('POST', input.url, true, elapsed(), result.status);
       if (input.signal?.aborted || (scope && !scope.isCurrent())) throw abortError();
       return nativeResponse(result);
     } finally {

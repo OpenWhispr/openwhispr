@@ -76,9 +76,14 @@ class ProviderTransport(private val context: Context) {
     } else (options["body"] as? String ?: "").toRequestBody("application/json; charset=utf-8".toMediaType())
     val call = client.newCall(builder.method(method, if (method == "GET") null else body).build())
     if (calls.putIfAbsent(id, call) != null) fail("PROVIDER_INVALID_REQUEST", "Request is already running.")
+    val startedAt = System.currentTimeMillis()
+    val route = "$method ${url.host}"
+    val audio = options["fileUri"] is String
     try {
       if (cancelled.remove(id)) call.cancel()
       call.execute().use { response ->
+        DebugLog.event(if (response.code >= 400) 'W' else 'I', "net", "provider", "route" to route, "status" to response.code,
+          "ms" to System.currentTimeMillis() - startedAt, "type" to if (audio) "audio" else "json")
         val source = response.body?.source()
         val limit = 8L * 1024 * 1024
         if (source?.request(limit + 1) == true) fail("PROVIDER_INVALID_RESPONSE", "Provider response is too large.")
@@ -86,6 +91,8 @@ class ProviderTransport(private val context: Context) {
           "url" to response.request.url.toString(), "headers" to response.headers.toMap())
       }
     } catch (error: Exception) {
+      DebugLog.event('W', "net", "provider.failed", "route" to route, "ms" to System.currentTimeMillis() - startedAt,
+        "class" to error.javaClass.simpleName, "code" to (error as? CodedException)?.code)
       if (error is CodedException) throw error
       if (call.isCanceled()) fail("PROVIDER_CANCELLED", "Provider request cancelled.")
       if (error is SSLHandshakeException || error is SSLPeerUnverifiedException)

@@ -41,6 +41,8 @@ import {
   RECONNECT_MAX_DELAY_MS,
   CONNECT_TIMEOUT_MS,
 } from '@/android/shared/services/transcription/realtimeReconnect';
+import { dlog, startTimer } from '@/android/lib/debugLog';
+import { meetingDebugRun } from './meetingModels';
 
 export type { RealtimeTransportCallbacks as RealtimeCallbacks } from '@/android/transcription/createRealtimeMeetingWs';
 export type { RealtimeUtterance } from '@/android/shared/services/transcription/realtimeEvents';
@@ -109,6 +111,14 @@ export async function startRealtimeMeetingWs(
 ): Promise<RealtimeSession> {
   const sampleRate = opts.sampleRate ?? DEFAULT_SAMPLE_RATE;
   const wsFactory = deps.wsFactory ?? defaultWsFactory;
+  // Debug log only: which meeting, how much audio went out, how much is waiting.
+  const run = meetingDebugRun();
+  const provider = deps.fetchClientSecret ? 'byok' : 'openwhispr';
+  const bytesPerSecond = sampleRate * 2;
+  let sentBytes = 0;
+  let nextSentLogSeconds = 60;
+  let backlogLoggedSeconds = 0;
+  let reconnectAttempt = 0;
 
   const tokenBody = (): Record<string, unknown> => ({
     purpose: 'meeting',
@@ -118,6 +128,23 @@ export async function startRealtimeMeetingWs(
   });
 
   const fetchClientSecret = async (): Promise<string> => {
+    const elapsed = startTimer();
+    try {
+      const secret = await mintClientSecret();
+      dlog.info('meet', 'ws.token', { run, provider, ok: true, ms: elapsed() });
+      return secret;
+    } catch (error) {
+      dlog.failure('meet', 'ws.token', error, {
+        run,
+        provider,
+        ok: false,
+        ms: elapsed(),
+        status: (error as { status?: number } | null)?.status,
+      });
+      throw error;
+    }
+  };
+  const mintClientSecret = async (): Promise<string> => {
     if (deps.fetchClientSecret) return deps.fetchClientSecret();
     try {
       const { clientSecret } = await api.post<TokenResponse>(
@@ -183,12 +210,25 @@ export async function startRealtimeMeetingWs(
   const enqueuePcm = (buf: Buffer): void => {
     const expectedBytes = pcmRing.byteLength + buf.length;
     pcmRing.push(buf);
-    if (pcmRing.byteLength < expectedBytes) coverageIncomplete = true;
+    if (pcmRing.byteLength < expectedBytes) {
+      if (!coverageIncomplete) dlog.warn('meet', 'ws.backlog_dropped', { run });
+      coverageIncomplete = true;
+    }
+  };
+  const logBacklog = (): void => {
+    const seconds = Math.floor(pcmRing.byteLength / bytesPerSecond);
+    if (seconds >= backlogLoggedSeconds + 10) {
+      backlogLoggedSeconds = seconds;
+      dlog.warn('meet', 'ws.backlog', { run, seconds });
+    }
   };
 
   const flush = (): void => {
     const ws = currentWs;
-    if (!ws || ws.readyState !== WS_OPEN) return; // during an outage this no-ops; PCM keeps buffering
+    if (!ws || ws.readyState !== WS_OPEN) {
+      logBacklog();
+      return; // during an outage this no-ops; PCM keeps buffering
+    }
     const chunks = pcmRing.drain();
     if (chunks.length === 0) return;
     // Merge by bytes; base64 concatenation is only valid on 3-byte-aligned chunks.
@@ -197,6 +237,12 @@ export async function startRealtimeMeetingWs(
       ws.send(
         JSON.stringify({ type: 'input_audio_buffer.append', audio: merged.toString('base64') }),
       );
+      backlogLoggedSeconds = 0;
+      sentBytes += merged.length;
+      if (sentBytes / bytesPerSecond >= nextSentLogSeconds) {
+        dlog.info('meet', 'audio_sent', { run, seconds: Math.floor(sentBytes / bytesPerSecond) });
+        nextSentLogSeconds += 60;
+      }
     } catch {
       // We cannot know whether the server received this audio; never claim full coverage.
       coverageIncomplete = true;
@@ -386,6 +432,7 @@ export async function startRealtimeMeetingWs(
       ]);
       legMeta.set(ws, { ...meta, legacyProtocol: true, closed: false, pendingItems: new Set() });
       connectingWs = ws;
+      const elapsed = startTimer();
       let settled = false;
       let timer: ReturnType<typeof setTimeout>;
       const settle = (): void => {
@@ -401,12 +448,20 @@ export async function startRealtimeMeetingWs(
         } catch {
           // ignore
         }
+        dlog.warn('meet', 'ws.open', {
+          run,
+          n: meta.legIndex,
+          ok: false,
+          why: 'timeout',
+          ms: elapsed(),
+        });
         reject(new Error('Realtime WebSocket connect timeout'));
       }, CONNECT_TIMEOUT_MS);
 
       ws.onopen = () => {
         if (settled) return;
         settle();
+        dlog.info('meet', 'ws.open', { run, n: meta.legIndex, ok: true, ms: elapsed() });
         resolve(ws);
       };
       ws.onmessage = (e) => handleMessage(ws, e);
@@ -420,10 +475,24 @@ export async function startRealtimeMeetingWs(
         } catch {
           // ignore
         }
+        dlog.warn('meet', 'ws.open', {
+          run,
+          n: meta.legIndex,
+          ok: false,
+          why: 'error',
+          ms: elapsed(),
+        });
         reject(new Error('Realtime WebSocket connection error'));
       };
       ws.onclose = (e) => {
         const code = (e as { code?: number } | undefined)?.code;
+        dlog.info('meet', 'ws.close', {
+          run,
+          n: meta.legIndex,
+          close_code: code,
+          state: settled ? 'open' : 'connecting',
+          ours: legMeta.get(ws)?.closed === true,
+        });
         if (!settled) {
           settle();
           reject(new Error(`Realtime WebSocket closed before open (code ${code ?? 'unknown'})`));
@@ -473,6 +542,7 @@ export async function startRealtimeMeetingWs(
     if (terminated) return;
     terminalError = error instanceof Error ? error : new Error(String(error));
     terminated = true;
+    dlog.failure('meet', 'ws.terminal', terminalError, { run });
     closeAllLegs(terminalError);
     teardownCapture();
     const message = error instanceof Error ? error.message : 'Realtime session ended';
@@ -486,8 +556,11 @@ export async function startRealtimeMeetingWs(
     if (terminated || finishing || reconnecting || rotating) return;
     reconnecting = true;
     callbacks.onReconnecting?.();
+    reconnectAttempt = 0;
     withRetry(
       async () => {
+        reconnectAttempt += 1;
+        dlog.info('meet', 'ws.reconnect', { run, attempt: reconnectAttempt });
         // Bail once stopped so a stop() mid-backoff can't keep opening sockets / fetching
         // tokens; a 4xx-shaped status makes the strategy give up immediately.
         if (terminated || finishing)
@@ -512,11 +585,13 @@ export async function startRealtimeMeetingWs(
           return;
         }
         swapCurrentLeg(ws);
+        dlog.info('meet', 'ws.reconnected', { run, attempt: reconnectAttempt });
         callbacks.onReconnected?.();
       })
       .catch((error) => {
         reconnecting = false;
         if (terminated) return;
+        dlog.failure('meet', 'ws.reconnect_failed', error, { run, attempt: reconnectAttempt });
         goTerminal(error); // budget exhausted / 4xx token — utterances still preserved
       });
   };
@@ -524,6 +599,7 @@ export async function startRealtimeMeetingWs(
   const rollLeg = async (): Promise<void> => {
     if (terminated || finishing || reconnecting || rotating) return;
     rotating = true;
+    dlog.info('meet', 'ws.rotate', { run, n: legIndex + 1 });
     try {
       const clientSecret = await fetchClientSecret();
       const newWs = await openLeg(clientSecret);
@@ -557,6 +633,13 @@ export async function startRealtimeMeetingWs(
     }
     if (ws !== currentWs || terminated || rotating || reconnecting) return; // re-check post-await
     const decision = classifyClose(code, isConnected, sessionAgeMs);
+    dlog.warn('meet', 'ws.lost', {
+      run,
+      close_code: code,
+      result: decision,
+      offline: !isConnected,
+      seconds: Math.floor(sessionAgeMs / 1000),
+    });
     if (decision === 'terminal') {
       goTerminal(new Error(`Realtime WebSocket closed (code ${code ?? 'unknown'})`));
     } else if (decision === 'rotate') {
@@ -601,6 +684,20 @@ export async function startRealtimeMeetingWs(
         if (failure?.status === 'rejected') throw failure.reason;
         if (coverageIncomplete)
           throw new Error('The connection was interrupted. The transcript may be incomplete.');
+        dlog.info('meet', 'ws.finished', {
+          run,
+          ok: true,
+          segments: reducer.utterances().length,
+          seconds: Math.floor(sentBytes / bytesPerSecond),
+        });
+      } catch (error) {
+        dlog.failure('meet', 'ws.finished', error, {
+          run,
+          ok: false,
+          segments: reducer.utterances().length,
+          seconds: Math.floor(sentBytes / bytesPerSecond),
+        });
+        throw error;
       } finally {
         terminated = true;
         closeAllLegs(new Error('Meeting ended.'));
@@ -632,6 +729,7 @@ export async function startRealtimeMeetingWs(
       throw new Error('Meeting cancelled.');
     }
   } catch (error) {
+    dlog.failure('meet', 'capture_failed', error, { run, cloud: true });
     opts.signal?.removeEventListener('abort', abort);
     frameSub?.remove();
     frameSub = null;
@@ -645,6 +743,7 @@ export async function startRealtimeMeetingWs(
 
   sessionStartedAt = Date.now();
   flushTimer = setInterval(flush, FLUSH_INTERVAL_MS);
+  dlog.info('meet', 'ws.session', { run, provider, rate: sampleRate, lang: opts.language });
 
   try {
     const firstWs = await openLeg(firstSecret);

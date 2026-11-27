@@ -27,6 +27,8 @@ import {
   requestProviderFileNative,
   requestProviderNative,
 } from './NativeProviderTransport';
+import { dlog, startTimer } from '@/android/lib/debugLog';
+import { failureFields } from '@/android/dictation/dictationLog';
 
 type ProviderRoute = Extract<InferenceRoute, { mode: 'providers' }>;
 
@@ -594,20 +596,36 @@ export function createProviderExecution(
   const execute = <T>(
     input: ProviderSetupInput,
     operation: (scoped: ProviderExecutionDependencies, signal: AbortSignal) => Promise<T>,
+    task = 'text',
   ): Promise<T> => {
-    const scope = createProviderCredentialScope(input.route.credentialRef, input.signal);
-    const scoped: ProviderExecutionDependencies = {
-      ...dependencies,
-      request: (url, init) => {
-        scope.assertActive();
-        return dependencies.request(url, { ...init, signal: scope.signal });
+    // One line per provider call: which provider, model and task, how long, and how it ended.
+    const elapsed = startTimer();
+    const fields = { task, provider: input.route?.providerId, model: input.route?.modelId };
+    return run().then(
+      (result) => {
+        dlog.info('net', 'provider.done', { ...fields, ms: elapsed() });
+        return result;
       },
-      requestFile: (request) => {
-        scope.assertActive();
-        return dependencies.requestFile({ ...request, signal: scope.signal });
+      (error: unknown) => {
+        dlog.error('net', 'provider.error', { ...fields, ms: elapsed(), ...failureFields(error) });
+        throw error;
       },
-    };
-    return scope.run(() => operation(scoped, scope.signal)).finally(scope.dispose);
+    );
+    function run(): Promise<T> {
+      const scope = createProviderCredentialScope(input.route.credentialRef, input.signal);
+      const scoped: ProviderExecutionDependencies = {
+        ...dependencies,
+        request: (url, init) => {
+          scope.assertActive();
+          return dependencies.request(url, { ...init, signal: scope.signal });
+        },
+        requestFile: (request) => {
+          scope.assertActive();
+          return dependencies.requestFile({ ...request, signal: scope.signal });
+        },
+      };
+      return scope.run(() => operation(scoped, scope.signal)).finally(scope.dispose);
+    }
   };
   const withTypedKey = (
     scoped: ProviderExecutionDependencies,
@@ -618,14 +636,20 @@ export function createProviderExecution(
     processProviderText: (input) =>
       execute(input, (scoped, signal) => processText(scoped, { ...input, signal })),
     transcribeWithProvider: (input) =>
-      execute(input, (scoped, signal) => transcribe(scoped, { ...input, signal })),
+      execute(input, (scoped, signal) => transcribe(scoped, { ...input, signal }), 'transcribe'),
     discoverProviderModels: (input) =>
-      execute(input, (scoped, signal) =>
-        discoverModels(withTypedKey(scoped, input.apiKey), { ...input, signal }),
+      execute(
+        input,
+        (scoped, signal) =>
+          discoverModels(withTypedKey(scoped, input.apiKey), { ...input, signal }),
+        'models',
       ),
     testProviderConnection: (input) =>
-      execute(input, (scoped, signal) =>
-        testConnection(withTypedKey(scoped, input.apiKey), { ...input, signal }),
+      execute(
+        input,
+        (scoped, signal) =>
+          testConnection(withTypedKey(scoped, input.apiKey), { ...input, signal }),
+        'test',
       ),
   };
 }

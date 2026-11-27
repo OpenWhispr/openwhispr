@@ -37,6 +37,8 @@
   <string name="ow_status_model_needed">需要下載模型</string>
   <string name="ow_status_download">下載</string>
   <string name="ow_status_failed">沒有成功</string>
+  <string name="ow_status_meeting_recording">正在錄製會議</string>
+  <string name="ow_status_stop_to_dictate">停止後即可聽寫</string>
   <string name="ow_menu_assistant">助理</string>
   <string name="ow_menu_assistant_body">替你撰寫或回覆</string>
   <string name="ow_menu_translate">翻譯</string>

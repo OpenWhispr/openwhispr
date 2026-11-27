@@ -6,6 +6,7 @@ import {
 } from '@/android/lib/authClient';
 import { useUsageStore } from '@/android/store/useUsageStore';
 import { Sentry } from '@/android/lib/sentry';
+import { dlog, startTimer } from '@/android/lib/debugLog';
 import type { AuthStoreLifecycle } from '@/android/store/createAuthStore';
 import { forgetEndedSession, markSessionEnded, readEndedSession } from './auth/endedSession';
 
@@ -47,6 +48,7 @@ function prepareLocalData(user: AuthUser | null): void {
 
 /** The server ended the account on screen: keep its workspace, ask it to sign in again (F4). */
 function endSession(user: AuthUser): void {
+  dlog.warn('auth', 'session_ended', { kind: user.isAnonymous ? 'anonymous' : 'account' });
   if (user.isAnonymous) {
     // An anonymous session has no account to sign in to again; it ends as it always did.
     prepareLocalData(null);
@@ -63,7 +65,9 @@ function endSession(user: AuthUser): void {
  * account; an ended one keeps the workspace and shows the sheet; no answer changes nothing.
  */
 async function verifySavedSession(opened: AuthUser): Promise<void> {
+  const elapsed = startTimer();
   const check = await androidAuth().checkSession(SESSION_CHECK_TIMEOUT_MS);
+  dlog.info('auth', 'session_check', { state: check.state, ms: elapsed(), surface: 'background' });
   const { user: onScreen, isGuest } = authState().getState();
   // Someone signed in, out or as a guest meanwhile: their own state stands.
   if (isGuest || onScreen?.id !== opened.id) return;
@@ -72,6 +76,7 @@ async function verifySavedSession(opened: AuthUser): Promise<void> {
   } else if (check.state === 'valid') {
     if (check.user.id !== opened.id) {
       Sentry.captureMessage('Saved Android session belonged to another account', 'warning');
+      dlog.warn('auth', 'session_other_account');
       prepareLocalData(check.user);
     } else {
       forgetEndedSession();
@@ -106,6 +111,7 @@ export const androidAuthLifecycle: AuthStoreLifecycle = {
       const open = async (user: AuthUser) => {
         await claimNoteShares(user);
         openWorkspace(user);
+        dlog.info('auth', 'restored', { kind: user.isAnonymous ? 'anonymous' : 'account' });
         set({ user, sessionCookie: cookie, isGuest: false, isInitialized: true, isLoading: false });
       };
       const { checkSession, readSavedSession } = androidAuth();
@@ -120,7 +126,14 @@ export const androidAuthLifecycle: AuthStoreLifecycle = {
       }
       // A session that already expired, or one with no account saved beside it, is asked about
       // once, for at most 5 s. No session at all (signed out, a new install) never waits.
+      const checkElapsed = startTimer();
       const check = cookie ? await checkSession(SESSION_CHECK_TIMEOUT_MS) : null;
+      if (check)
+        dlog.info('auth', 'session_check', {
+          state: check.state,
+          ms: checkElapsed(),
+          surface: 'launch',
+        });
       if (check?.state === 'valid') {
         forgetEndedSession();
         await open(check.user);
@@ -138,6 +151,7 @@ export const androidAuthLifecycle: AuthStoreLifecycle = {
       useUsageStore.getState().reset();
       set({ user: null, sessionCookie: null, isGuest, isInitialized: true, isLoading: false });
     } catch (error) {
+      dlog.failure('auth', 'initialize.failed', error);
       set({ isInitialized: true, isLoading: false });
       // Android keeps the database blocked until ownership is selected. Let
       // Root stop startup at its original failure instead of masking it with
@@ -181,6 +195,7 @@ export function observeEndedSessions(): () => void {
   return androidUsage().subscribe((state, previous) => {
     if (!state.sessionRejected || previous.sessionRejected) return;
     const { user, isGuest } = authState().getState();
+    dlog.warn('auth', 'unauthorized', { route: 'GET /api/usage' });
     if (user && !isGuest && !user.isAnonymous) markSessionEnded(user);
   });
 }

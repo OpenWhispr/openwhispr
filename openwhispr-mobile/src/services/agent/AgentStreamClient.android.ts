@@ -10,6 +10,8 @@ import {
 import { parseApiErrorBody } from '@/android/shared/lib/apiErrorBody';
 import { withRetry } from '@/android/shared/lib/retry';
 import { stripThinkingTags } from '@/android/reasoning/buildProviderPrompt';
+import { dlog, startTimer } from '@/android/lib/debugLog';
+import { failureFields } from '@/android/dictation/dictationLog';
 
 // Single budget for the entire streaming call: connect + receive.
 const AGENT_STREAM_TIMEOUT_MS = 55_000;
@@ -144,7 +146,13 @@ async function readNdjsonStream(reader: ReadableStreamDefaultReader<Uint8Array>)
           typeof parsed.message === 'string' ? parsed.message : 'Stream error',
         );
       }
-      // Unknown types (e.g. tool_call) are silently skipped.
+      // Unknown types (e.g. tool_call) are silently skipped; the log keeps a tool call's name.
+      if (parsed.type === 'tool_call' || parsed.type === 'tool_result')
+        dlog.info('asst', 'tool', {
+          tool: typeof parsed.name === 'string' ? parsed.name : undefined,
+          kind: parsed.type,
+          outcome: typeof parsed.status === 'string' ? parsed.status : undefined,
+        });
     }
   }
 }
@@ -161,6 +169,33 @@ async function readNdjsonStream(reader: ReadableStreamDefaultReader<Uint8Array>)
  * lines, premature stream end). Throws ApiError on non-2xx responses.
  */
 export async function streamAgentText(options: StreamAgentTextOptions): Promise<string> {
+  const elapsed = startTimer();
+  let fields: Record<string, string | number | undefined> = { history: options.messages.length };
+  try {
+    const { getInferenceSelection } =
+      require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
+    const selection = options.inferenceRoute ?? getInferenceSelection('agent');
+    fields = {
+      ...fields,
+      mode: selection?.mode ?? 'openwhispr',
+      provider: selection?.providerId,
+      model: selection?.modelId,
+    };
+  } catch {
+    /* The log must never stop a request. */
+  }
+  dlog.info('asst', 'stream.start', fields);
+  try {
+    const text = await streamAgentTextOnRoute(options);
+    dlog.info('asst', 'stream.end', { ...fields, ms: elapsed(), chars: text.length });
+    return text;
+  } catch (error) {
+    dlog.error('asst', 'stream.failed', { ...fields, ms: elapsed(), ...failureFields(error) });
+    throw error;
+  }
+}
+
+async function streamAgentTextOnRoute(options: StreamAgentTextOptions): Promise<string> {
   const { messages, systemPrompt, sessionId, signal: externalSignal, maxRetries } = options;
   const { getInferenceSelection, resolveMobileProviderRoute } =
     require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');

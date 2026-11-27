@@ -7,6 +7,8 @@ import type { MeetingLifecycle } from '@/android/store/createNotesStore';
 import { createLocalMeetingContext } from './localMeetingContext';
 import { createCloudMeetingContext } from './cloudMeetingContext';
 import { meetingOnDevice } from './meetingRouting';
+import { dlog, newRunId, startTimer } from '@/android/lib/debugLog';
+import { setMeetingDebugRun } from './meetingModels';
 
 const latestRetryAttempts = new Map<string, symbol>();
 
@@ -28,6 +30,14 @@ export const androidMeetingLifecycle: MeetingLifecycle = {
     const attempt = Symbol();
     // A newer Local or Cloud retry invalidates callbacks from older uploads.
     latestRetryAttempts.set(attemptKey, attempt);
+    const run = newRunId('m');
+    setMeetingDebugRun(run);
+    const elapsed = startTimer();
+    dlog.info('meet', 'retry', {
+      run,
+      mode: note.isPrivate || meetingOnDevice() ? 'local' : 'cloud',
+      private: !!note.isPrivate,
+    });
     if (note.isPrivate || meetingOnDevice()) {
       await get().runMeetingPipeline(
         noteId,
@@ -68,7 +78,15 @@ export const androidMeetingLifecycle: MeetingLifecycle = {
         ],
         result.duration,
       );
+      dlog.info('meet', 'save', {
+        run,
+        ok: true,
+        segments: 1,
+        seconds: Math.round(result.duration),
+        ms: elapsed(),
+      });
     } catch (error) {
+      dlog.failure('meet', 'save', error, { run, ok: false, ms: elapsed() });
       const restoreRetry = () => {
         if (latestRetryAttempts.get(attemptKey) !== attempt) return;
         if (notesRepository.getTranscriptionStatus(noteId) === 'transcribing')

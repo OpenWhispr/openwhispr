@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { dlog, startTimer } from '@/android/lib/debugLog';
 
 /** What a key check comes back with, named after desktop's ConnectionStatusIcon states. */
 export type KeyCheckState = 'idle' | 'checking' | 'connected' | 'failed' | 'unverified';
@@ -48,6 +49,17 @@ export async function checkProviderKey(
 ): Promise<KeyCheckResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), KEY_CHECK_TIMEOUT_MS);
+  const elapsed = startTimer();
+  const logResult = (result: KeyCheckResult): KeyCheckResult => {
+    dlog.info('set', 'key_check', {
+      provider,
+      state: result.state,
+      reason: result.reason,
+      status: result.status,
+      ms: elapsed(),
+    });
+    return result;
+  };
   try {
     const request = (url: string) =>
       fetcher(url, {
@@ -66,14 +78,14 @@ export async function checkProviderKey(
         data?: { is_management_key?: boolean; is_provisioning_key?: boolean };
       } | null;
       if (body?.data?.is_management_key || body?.data?.is_provisioning_key)
-        return { state: 'failed', reason: 'managementKey' };
+        return logResult({ state: 'failed', reason: 'managementKey' });
     }
-    return result;
+    return logResult(result);
   } catch {
-    return {
+    return logResult({
       state: 'unverified',
       reason: controller.signal.aborted ? 'timeout' : 'network',
-    };
+    });
   } finally {
     clearTimeout(timer);
   }

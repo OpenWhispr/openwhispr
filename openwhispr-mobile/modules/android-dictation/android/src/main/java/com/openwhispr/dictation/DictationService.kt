@@ -96,7 +96,13 @@ class DictationService : Service() {
   private var hiddenUntil = 0L
   private val hidden get() = System.currentTimeMillis() < hiddenUntil
 
-  private val maximumRecording = Runnable { if (state == BubbleState.LISTENING) finish(false) }
+  /** The debug log's id for the dictation in flight, from [begin] to its result. */
+  private var run: String? = null
+  /** Why the next [setState] happens, for the debug log. */
+  private var why = "other"
+  /** Whether the bubble was on screen last time [updateVisibility] ran, so only changes are logged. */
+  private var shownLogged: Boolean? = null
+  private val maximumRecording = Runnable { if (state == BubbleState.LISTENING) { why = "cap_5m"; finish(false) } }
   private val unhide = Runnable { unhide() }
   private val idleShrink = Runnable { idle = true; updateShrink() }
   private val stillWriting = Runnable { if (state == BubbleState.PROCESSING) showTab(StatusMessage.STILL_WRITING) }
@@ -106,6 +112,9 @@ class DictationService : Service() {
   private val pending = BubbleEventQueue()
   private val pipelineTimeout = Runnable {
     if (HeadlessPipeline.ready || !pending.holdsRecording) return@Runnable
+    DebugLog.event('E', "pipe", "timeout", "run" to run, "wait_ms" to BubblePolicy.PIPELINE_READY_TIMEOUT_MS,
+      "has_react" to (emit != null))
+    DebugLog.report("pipeline_timeout", "wait_ms" to BubblePolicy.PIPELINE_READY_TIMEOUT_MS.toString(), "has_react" to (emit != null).toString())
     pending.park(); retryKept = true; fail(StatusMessage.FAILED)
   }
   private val screens = object : Application.ActivityLifecycleCallbacks {
@@ -121,6 +130,8 @@ class DictationService : Service() {
   override fun onBind(intent: Intent?) = null
   override fun onCreate() {
     super.onCreate(); instance = this
+    DebugLog.init(this)
+    DebugLog.event('I', "bubble", "service.created", "since_ms" to DebugLog.processAgeMs())
     BubbleColors.read(resources.configuration)
     shownConfig = Configuration(resources.configuration)
     application.registerActivityLifecycleCallbacks(screens)
@@ -207,7 +218,7 @@ class DictationService : Service() {
     // The keyboard restarting after a light/dark switch reports itself gone for a moment: with the
     // menu open (a finger may be on it), wait out the settle time and look again before acting.
     if (menu != null && BubbleMenuPolicy.holdsKeyboardLoss(typing, value, sinceSwitch)) {
-      android.util.Log.i("OpenWhisprBubble", "Keyboard gone ${sinceSwitch} ms after a theme switch with the menu open: checking again")
+      DebugLog.logcat("OpenWhisprBubble", "Keyboard gone ${sinceSwitch} ms after a theme switch with the menu open: checking again")
       handler.removeCallbacks(recheckKeyboard)
       handler.postDelayed(recheckKeyboard, BubbleMenuPolicy.THEME_SETTLE_MS - (sinceSwitch ?: 0) + 50)
       return
@@ -215,7 +226,7 @@ class DictationService : Service() {
     // A light/dark switch redraws the keyboard and the app below; the menu (and the finger on it) stays.
     val keepMenu = menu != null && changed &&
       !BubbleMenuPolicy.keyboardClosesMenu(typing, value, top != keyboardTop, field != focusedField, sinceSwitch)
-    if (menu != null && changed) android.util.Log.i(
+    if (menu != null && changed) DebugLog.logcat(
       "OpenWhisprBubble",
       "Keyboard changed with the menu open (typing $typing→$value, top $keyboardTop→$top, " +
         "field ${if (field != focusedField) "changed" else "same"}, ${sinceSwitch ?: "-"} ms after a theme switch): " +
@@ -261,6 +272,7 @@ class DictationService : Service() {
     val busy = state != BubbleState.READY || stopping
     if (appVisible && !practiceVisible) {
       closeMenu()
+      if (state != BubbleState.READY) why = "app_foreground"
       if (state == BubbleState.LISTENING) finish(true)
       if (state == BubbleState.PROCESSING) { deliver("onCancel"); setState(BubbleState.READY) }
       // Dismiss, so a recording the bubble parked for Retry is deleted rather than left behind.
@@ -271,6 +283,18 @@ class DictationService : Service() {
       tab.hide(false)
     }
     val visible = BubblePolicy.visible(appVisible, practiceVisible, InsertionService.instance != null, typing, hidden, busy)
+    if (visible != shownLogged) {
+      shownLogged = visible
+      DebugLog.event('I', "bubble", "visible", "visible" to visible, "keyboard" to typing, "background" to !appVisible,
+        "state" to state, "reason" to when {
+          visible -> if (busy) "busy" else "typing"
+          appVisible && !practiceVisible -> "app_open"
+          InsertionService.instance == null -> "no_accessibility"
+          hidden -> "hidden"
+          !typing -> "not_typing"
+          else -> "policy"
+        })
+    }
     if (!visible && dragging) endDrag()
     if (!visible) { closeMenu(); if (tab.showing) tab.hide(false); learnedTab?.hide(false) }
     root?.visibility = if (visible) View.VISIBLE else View.GONE
@@ -450,10 +474,10 @@ class DictationService : Service() {
     val learned = learnedTab ?: return false
     // Never over a status tab or an open menu: the bubble's own message comes first.
     if (state != BubbleState.READY || root?.isShown != true || dragging || tab.showing || menu != null) {
-      android.util.Log.i("OpenWhisprLearn", "Learned pill not shown: state=$state shown=${root?.isShown} dragging=$dragging")
+      DebugLog.logcat("OpenWhisprLearn", "Learned pill not shown: state=$state shown=${root?.isShown} dragging=$dragging")
       return false
     }
-    android.util.Log.i("OpenWhisprLearn", "Learned pill shown (${text.words.size} words)")
+    DebugLog.logcat("OpenWhisprLearn", "Learned pill shown (${text.words.size} words)")
     val dot = appearance.shrinkToDot && shrink >= 1f
     if (dot && !learned.showing) {
       face?.pulse { learned.show(text, bubbleRect(), dockRight, true) }
@@ -488,6 +512,8 @@ class DictationService : Service() {
     handler.removeCallbacks(stillWriting)
     if (value == state) { updateVisibility(); syncPipeline(); return }
     val previous = state
+    DebugLog.event('I', "bubble", "state", "run" to run, "from" to previous, "to" to value, "why" to why)
+    why = "other"
     // A new dictation takes the bubble's place; the learned tab goes at once.
     if (value != BubbleState.READY) learnedTab?.hide(false)
     state = value
@@ -538,6 +564,7 @@ class DictationService : Service() {
     StatusMessage.SIGN_IN -> getString(R.string.ow_status_signed_out) to getString(R.string.ow_status_sign_in)
     StatusMessage.MODEL_NEEDED -> getString(R.string.ow_status_model_needed) to getString(R.string.ow_status_download)
     StatusMessage.FAILED -> getString(R.string.ow_status_failed) to getString(R.string.ow_bubble_retry)
+    StatusMessage.MEETING_RECORDING -> getString(R.string.ow_status_meeting_recording) to getString(R.string.ow_status_stop_to_dictate)
   }
   private fun act(message: StatusMessage) {
     when (message) {
@@ -549,6 +576,8 @@ class DictationService : Service() {
       StatusMessage.OUT_OF_WORDS -> { tab.hide(); dismiss(); openApp("onOpenPlans") }
       StatusMessage.SIGN_IN -> { tab.hide(); dismiss(); openApp("onOpenSignIn") }
       StatusMessage.MODEL_NEEDED -> { tab.hide(); dismiss(); openApp("onOpenModels") }
+      // The meeting screen, or its notification, is where it stops: open the app.
+      StatusMessage.MEETING_RECORDING -> { tab.hide(); dismiss(); openApp("onOpenApp") }
       StatusMessage.MIC_OFF -> {
         tab.hide(); dismiss()
         startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -572,6 +601,7 @@ class DictationService : Service() {
 
   /** Errors get a short shake and two ticks, never red; then the tab says what happened. */
   private fun fail(message: StatusMessage) {
+    why = message.wire
     setState(BubbleState.RETRY)
     face?.shake(dp(4f))
     face?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -879,10 +909,15 @@ class DictationService : Service() {
   // Dictation --------------------------------------------------------------------------------
 
   private fun begin(next: BubbleMode) {
-    if (state != BubbleState.READY || stopping) return
+    if (state != BubbleState.READY || stopping) {
+      DebugLog.event('W', "bubble", "begin.ignored", "state" to state, "reason" to if (stopping) "stopping" else "not_ready")
+      return
+    }
     retryKept = false
+    run = DebugLogFormat.runId(when (next) { BubbleMode.DICTATE -> 'd'; BubbleMode.TRANSLATE -> 't'; else -> 'a' })
+    DebugLog.event('I', "bubble", "begin", "run" to run, "mode" to next.wire, "keyboard" to typing)
     if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-      mode = next; fail(StatusMessage.MIC_OFF); return
+      mode = next; DebugLog.event('W', "mic", "permission_denied", "run" to run); fail(StatusMessage.MIC_OFF); return
     }
     try {
       val selected = InsertionService.instance?.captureTarget().orEmpty()
@@ -890,22 +925,32 @@ class DictationService : Service() {
       foreground(true)
       // 20 ms reads, so the bars follow every syllable; the meter keeps them still for room noise.
       val meter = VoiceMeter(windowMs = LEVEL_WINDOW_MS)
-      recorder = WavRecorder(this, readMillis = LEVEL_WINDOW_MS, measure = meter::level).also { recording ->
+      recorder = WavRecorder(this, readMillis = LEVEL_WINDOW_MS, measure = meter::level, owner = "bubble", run = run).also { recording ->
         recording.onLevel = { voice -> handler.post { face?.setLevel(voice) } }
         recording.start()
       }
+      why = "begin"
       setState(BubbleState.LISTENING)
-      deliver("onStart", mapOf("selection" to selected, "mode" to next.wire, "app" to targetApp()))
+      deliver("onStart", mapOf("selection" to selected, "mode" to next.wire, "app" to targetApp(), "run" to (run ?: "")))
       handler.postDelayed(maximumRecording, 300000)
     } catch (error: Exception) {
       recorder?.close(); recorder = null; foreground(false)
-      deliver("onError", mapOf("message" to (error.message ?: "Microphone could not start.")))
-      fail(if (error is SecurityException) StatusMessage.MIC_OFF else StatusMessage.FAILED)
+      val owner = (error as? WavRecorder.MicrophoneBusyException)?.holder?.owner
+      DebugLog.event('E', "bubble", "begin.error", "run" to run, "error" to DebugLogFormat.error(error), "owner" to owner)
+      if (error is WavRecorder.MicrophoneBusyException) DebugLog.report("mic_lock_refused", "requester" to "bubble",
+        "owner" to (owner ?: "unknown"), "held_ms" to (error.holder?.heldMs()?.toString() ?: ""))
+      deliver("onError", mapOf("message" to (error.message ?: "Microphone could not start."), "owner" to (owner ?: ""), "run" to (run ?: "")))
+      fail(when {
+        error is SecurityException -> StatusMessage.MIC_OFF
+        owner == "meeting" -> StatusMessage.MEETING_RECORDING
+        else -> StatusMessage.FAILED
+      })
     }
   }
   private fun finish(cancel: Boolean) {
     if (state != BubbleState.LISTENING) return
     handler.removeCallbacks(maximumRecording)
+    if (why == "other") why = if (cancel) "cancel" else "stop"
     val active = recorder; recorder = null
     stopping = true
     if (cancel) mode = BubbleMode.DICTATE
@@ -916,13 +961,14 @@ class DictationService : Service() {
         handler.post {
           stopping = false; foreground(false)
           if (cancel || result == null) { InsertionService.instance?.clearTarget(); deliver("onCancel") }
-          else deliver("onRecording", result)
+          else deliver("onRecording", result + ("run" to (run ?: "")))
           updateVisibility(); syncPipeline()
         }
       } catch (error: Exception) {
         handler.post {
           stopping = false; foreground(false)
-          deliver("onError", mapOf("message" to (error.message ?: "Recording failed.")))
+          DebugLog.event('E', "bubble", "finish.error", "run" to run, "error" to DebugLogFormat.error(error))
+          deliver("onError", mapOf("message" to (error.message ?: "Recording failed."), "run" to (run ?: "")))
           fail(StatusMessage.FAILED)
         }
       } finally { active?.close() }
@@ -990,7 +1036,11 @@ class DictationService : Service() {
    * copied (typing access is off, the words are on the clipboard).
    */
   fun status(value: String, options: Map<String, Any?> = emptyMap()) {
-    if (state == BubbleState.LISTENING) return
+    if (state == BubbleState.LISTENING) {
+      DebugLog.event('W', "bubble", "status.ignored", "run" to run, "status" to value, "reason" to "listening")
+      return
+    }
+    why = "app_" + value
     retryKept = value == "retry-kept"
     when (value) {
       "processing" -> setState(BubbleState.PROCESSING)
@@ -1025,6 +1075,7 @@ class DictationService : Service() {
     learnedTab?.destroy(); learnedTab = null
     root?.let { runCatching { windows.removeView(it) } }; root = null; face = null; menu = null; column = null; cancelButton = null
     InsertionService.instance?.clearTarget(); deliver("onCancel")
+    DebugLog.event('I', "bubble", "service.destroyed", "state" to state)
     application.unregisterActivityLifecycleCallbacks(screens); HeadlessPipeline.stop(this)
     instance = null; emit?.invoke("onStatusChange", emptyMap()); super.onDestroy()
   }
