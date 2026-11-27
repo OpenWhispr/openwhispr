@@ -688,6 +688,7 @@ class WhisperManager extends EventEmitter {
       vadConfig,
       signal: options.signal,
       skipDecoderThresholds: options.skipDecoderThresholds === true,
+      shortenPauses: options.shortenPauses === true,
     });
   }
 
@@ -778,6 +779,7 @@ class WhisperManager extends EventEmitter {
       initialPrompt,
       signal: options.signal,
       skipDecoderThresholds: options.skipDecoderThresholds,
+      shortenPauses: options.shortenPauses,
     });
     const elapsed = Date.now() - startTime;
 

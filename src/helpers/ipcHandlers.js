@@ -5328,6 +5328,8 @@ class IPCHandlers {
         const result = await this.whisperManager.transcribeLocalWhisper(audioBlob, {
           ...requestOptions,
           ...vadOptions,
+          // Silero already drops pauses; without it, pauses can make Whisper skip speech (#2474).
+          shortenPauses: !vadOptions.vadEnabled,
           signal: this._productRequestContext.getStore().signal,
         });
 

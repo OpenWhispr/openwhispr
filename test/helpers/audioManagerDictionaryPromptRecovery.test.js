@@ -536,4 +536,114 @@ test("local Whisper recovers dictionary prompt echoes and fragments", async (t) 
     assert.equal(fallbackCalls, 1);
     assert.equal(calls.length, 2);
   });
+
+  await t.test(
+    "a long pause-heavy dictation truncated by prompt bias uses the prompt-free retry (#2474)",
+    async () => {
+      globalThis.__dictionaryPromptRecoveryLogs.length = 0;
+      // In #2474, a 92.3s audio with long pauses stopped halfway through with 38 words
+      // ending in an invented word, whereas without prompt it produced all 62 words.
+      const truncatedText =
+        "First part of the long discussion before the pause runner for the project";
+      const fullText =
+        "First part of the long discussion before the pause passes and we continue with the complete remaining dictation all the way to the end of the recording without losing anything";
+
+      const calls = queueTranscriptions(window, [
+        { success: true, text: truncatedText },
+        { success: true, text: fullText },
+      ]);
+      const { manager, processedTexts } = createRecoveryManager();
+
+      const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+        durationSeconds: 92.3,
+      });
+
+      assert.equal(result.rawText, fullText);
+      assert.deepEqual(processedTexts, [fullText]);
+      assert.equal(calls.length, 2);
+      assert.equal(calls[1].options.initialPrompt, undefined);
+      assert.equal(calls[1].options.skipVad, true);
+
+      const recoveryLog = globalThis.__dictionaryPromptRecoveryLogs.find(
+        ({ message }) => message === "Local dictionary-prompt recovery attempt"
+      );
+      assert.ok(recoveryLog, "expected recovery log");
+      assert.equal(recoveryLog.data.reason, "prompt-truncated");
+      assert.equal(recoveryLog.data.recovered, true);
+    }
+  );
+
+  await t.test(
+    "a slow, complete dictation keeps its dictionary spellings when the retry only spells them out",
+    async () => {
+      const dictated = "Update the claude.md file and the agents.md file for OpenWhispr.";
+      const calls = queueTranscriptions(window, [
+        { success: true, text: dictated },
+        {
+          success: true,
+          text: "Update the Claude MD file and the agents MD file for Open Whisper.",
+        },
+      ]);
+      const { manager, processedTexts } = createRecoveryManager(
+        "OpenWhispr, claude.md, agents.md, codex"
+      );
+
+      const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+        durationSeconds: 30,
+      });
+
+      assert.equal(calls.length, 2);
+      assert.equal(result.rawText, dictated);
+      assert.deepEqual(processedTexts, [dictated]);
+    }
+  );
+
+  await t.test("with dictation VAD on, a sparse long dictation is decoded once", async (t) => {
+    setSettings({ ...baseSettings, dictationSileroEnabled: true });
+    t.after(() => setSettings(baseSettings));
+    const sparseText = "First part of the discussion before the pause";
+    const calls = queueTranscriptions(window, [
+      { success: true, text: sparseText },
+      {
+        success: true,
+        text: `${sparseText} and everything said after it, all the way to the end.`,
+      },
+    ]);
+    const { manager } = createRecoveryManager();
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+      durationSeconds: 92.3,
+    });
+
+    assert.equal(result.rawText, sparseText);
+    assert.equal(calls.length, 1);
+  });
+
+  await t.test(
+    "a long dictation at a normal pace, or a slow one under 10 s, is decoded once",
+    async () => {
+      for (const { text, durationSeconds } of [
+        // 0.53 words/s, just above the truncation limit.
+        {
+          text: "We should meet again next week to review the budget and plan the launch for spring.",
+          durationSeconds: 30,
+        },
+        // Sparse, but shorter than a truncation retry needs.
+        { text: "Call me back tomorrow.", durationSeconds: 9 },
+      ]) {
+        const calls = queueTranscriptions(window, [
+          { success: true, text },
+          { success: true, text: `${text} And everything else I said after a long pause.` },
+        ]);
+        const { manager } = createRecoveryManager();
+
+        const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+          durationSeconds,
+        });
+
+        assert.equal(calls.length, 1, `${durationSeconds} s`);
+        assert.equal(result.rawText, text);
+      }
+    }
+  );
 });
