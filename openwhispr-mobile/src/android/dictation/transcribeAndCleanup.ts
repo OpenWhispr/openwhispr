@@ -26,6 +26,8 @@ import {
   transcriptionOnly,
 } from '@/android/dictation/dictationLifecycle';
 import type { TranscriptionRequest, TranscriptionResponse } from '@/android/types';
+import { dlog, startTimer, wordCount } from '@/android/lib/debugLog';
+import { bindRun, failureFields } from '@/android/dictation/dictationLog';
 
 type ProcessingStage = 'transcribing' | 'cleaning';
 
@@ -43,6 +45,8 @@ export interface DictationProcessingLifecycle {
   // returned — the caller discards it. Lets a keyboard cancel avoid paying for
   // cleanup of a result the user already abandoned.
   shouldCancel?: () => boolean;
+  /** The debug log's id for this dictation, carried on every line it writes. */
+  run?: string;
 }
 
 export interface DictationProcessingResult {
@@ -141,6 +145,12 @@ function transcriptionRetry(lifecycle: DictationProcessingLifecycle): RetryOptio
       !lifecycle.shouldCancel?.() &&
       isRetryableTranscriptionError(error),
     onRetry: (attempt, error, delayMs) => {
+      dlog.warn('dict', 'retry', {
+        run: lifecycle.run,
+        retry: attempt,
+        wait_ms: delayMs,
+        ...failureFields(error),
+      });
       if (__DEV__) {
         console.warn(
           `[transcribeAndCleanup] transcription failed; retry ${attempt} in ${delayMs}ms`,
@@ -149,6 +159,40 @@ function transcriptionRetry(lifecycle: DictationProcessingLifecycle): RetryOptio
       }
     },
   };
+}
+
+// One `dict transcribed` / `dict failed` line per transcription, retries included: where it ran,
+// how long it took and how much came back. Never the words.
+async function loggedTranscription(
+  request: TranscriptionRequest,
+  lifecycle: DictationProcessingLifecycle,
+  fused: boolean,
+  transcribe: () => Promise<TranscriptionResponse>,
+): Promise<TranscriptionResponse> {
+  const elapsed = startTimer();
+  const fields = {
+    run: lifecycle.run,
+    provider: request.provider,
+    model: request.inferenceRoute?.modelId,
+    lang: request.language ?? 'auto',
+    kind: fused ? 'fused' : 'serial',
+  };
+  try {
+    const result = await transcribe();
+    dlog.info('dict', 'transcribed', {
+      ...fields,
+      provider: result.provider ?? request.provider,
+      ms: elapsed(),
+      server_ms: result.processingMs,
+      chars: (result.originalText || result.text).length,
+      words: wordCount(result.originalText || result.text),
+      cleanup: fused ? !!result.cleanupApplied : undefined,
+    });
+    return result;
+  } catch (error) {
+    dlog.error('dict', 'failed', { ...fields, ms: elapsed(), ...failureFields(error) });
+    throw error;
+  }
 }
 
 async function shouldAttemptFusedCloudCleanup(request: TranscriptionRequest): Promise<boolean> {
@@ -201,9 +245,8 @@ async function runSerialTranscribeAndCleanup(
   lifecycle: DictationProcessingLifecycle,
 ): Promise<DictationProcessingResult> {
   lifecycle.onStage?.('transcribing', { fusedCleanup: false });
-  const transcription = await withRetry(
-    () => TranscriptionService.transcribe(request),
-    transcriptionRetry(lifecycle),
+  const transcription = await loggedTranscription(request, lifecycle, false, () =>
+    withRetry(() => TranscriptionService.transcribe(request), transcriptionRetry(lifecycle)),
   );
   lifecycle.onTranscribeDone?.(transcription);
 
@@ -215,15 +258,20 @@ async function runSerialTranscribeAndCleanup(
   // A transcript made on this iPhone leaves it only for the cleanup route pinned for it;
   // otherwise it is cleaned by On-Device cleanup or not at all.
   if (transcription.provider === 'local' && !cleansLocalTranscript(request)) {
+    dlog.info('clean', 'skipped', { run: lifecycle.run, why: 'local_transcript' });
     return rawTranscriptResult(transcription);
   }
 
   // Cancelled while transcribing: skip the cleanup call entirely. The
   // caller discards this result, so cleaning it would only waste the work.
   if (lifecycle.shouldCancel?.()) {
+    dlog.info('clean', 'skipped', { run: lifecycle.run, why: 'cancelled' });
     return rawTranscriptResult(transcription);
   }
-  if (await skipsLocalModeCleanup(request)) return rawTranscriptResult(transcription);
+  if (await skipsLocalModeCleanup(request)) {
+    dlog.info('clean', 'skipped', { run: lifecycle.run, why: 'no_model' });
+    return rawTranscriptResult(transcription);
+  }
 
   let cleanupWarning: string | undefined;
   lifecycle.onStage?.('cleaning', { fusedCleanup: false });
@@ -241,6 +289,7 @@ async function runSerialTranscribeAndCleanup(
     appCategory: request.keyboardAppCategory,
     includeSnippetTriggers: isDictationContext(request.requestContext),
     context: cleanupContextForRequest(request.requestContext),
+    run: lifecycle.run,
   });
   const cleanupApplied = finalText !== originalText;
   const cleanedTranscription: TranscriptionResponse = {
@@ -269,9 +318,11 @@ async function runTranscribeAndCleanup(
   if (!transcriptionOnly(lifecycle) && (await shouldAttemptFusedCloudCleanup(request))) {
     lifecycle.onStage?.('transcribing', { fusedCleanup: true });
     try {
-      const transcription = await withRetry(
-        () => TranscriptionService.transcribeWithCloudCleanup(request),
-        transcriptionRetry(lifecycle),
+      const transcription = await loggedTranscription(request, lifecycle, true, () =>
+        withRetry(
+          () => TranscriptionService.transcribeWithCloudCleanup(request),
+          transcriptionRetry(lifecycle),
+        ),
       );
       lifecycle.onTranscribeDone?.(transcription);
 
@@ -307,6 +358,7 @@ async function runTranscribeAndCleanup(
         appCategory: request.keyboardAppCategory,
         includeSnippetTriggers: isDictationContext(request.requestContext),
         context: cleanupContextForRequest(request.requestContext),
+        run: lifecycle.run,
       });
       const cleanedTranscription: TranscriptionResponse = {
         ...transcription,
@@ -328,6 +380,11 @@ async function runTranscribeAndCleanup(
       if (!TranscriptionService.isFusedCleanupUnavailableError(error)) {
         throw error;
       }
+      dlog.warn('clean', 'fallback', {
+        run: lifecycle.run,
+        why: 'fused_unavailable',
+        ...failureFields(error),
+      });
       lifecycle.onFusedCleanupFallback?.(error);
     }
   }
@@ -367,6 +424,13 @@ async function processTranscriptionJob(
   if (!snippetState.isLoaded || snippetState.entries.length === 0) return result;
 
   const expanded = expandSnippets(result.text, snippetState.entries);
+  dlog.info('words', 'snippets', {
+    run: lifecycle.run,
+    snippets: snippetState.entries.length,
+    expanded: expanded !== result.text,
+    in_chars: result.text.length,
+    out_chars: expanded.length,
+  });
   if (expanded === result.text) return result;
 
   return {
@@ -381,6 +445,7 @@ export async function transcribeAndCleanup(
   lifecycle: DictationProcessingLifecycle = {},
 ): Promise<DictationProcessingResult> {
   const [preparedRequest, preparedLifecycle] = prepareDictation(request, lifecycle);
+  bindRun(request.jobId ?? request.clientTranscriptionId, lifecycle.run);
   return withActiveProviderJob(
     request.provider === 'byok' ? (request.jobId ?? request.clientTranscriptionId) : undefined,
     () => processTranscriptionJob(preparedRequest, preparedLifecycle),

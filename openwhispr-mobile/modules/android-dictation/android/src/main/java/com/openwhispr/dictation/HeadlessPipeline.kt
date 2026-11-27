@@ -1,7 +1,6 @@
 package com.openwhispr.dictation
 
 import android.content.Context
-import android.util.Log
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactInstanceEventListener
 import com.facebook.react.bridge.Arguments
@@ -28,13 +27,15 @@ object HeadlessPipeline {
   fun start(context: Context) {
     wanted = true
     val host = (context.applicationContext as? ReactApplication)?.reactHost
-    if (host == null) { Log.w(TAG, "No React host to run the bubble pipeline"); return }
+    if (host == null) { DebugLog.logcat(TAG, "No React host to run the bubble pipeline", warn = true); DebugLog.event('E', "pipe", "no_react_host"); return }
     val running = host.currentReactContext
     if (running != null && running.hasActiveReactInstance()) { startTask(running); return }
+    DebugLog.event('I', "pipe", "react_host.start", "has_react" to (running != null))
     if (waiting == null) {
       val listener = object : ReactInstanceEventListener {
         override fun onReactContextInitialized(context: ReactContext) {
           host.removeReactInstanceEventListener(this)
+          DebugLog.event('I', "app", "react_host.created")
           waiting = null
           if (wanted) startTask(context)
         }
@@ -60,6 +61,6 @@ object HeadlessPipeline {
     val tasks = HeadlessJsTaskContext.getInstance(context)
     if (taskId != 0 && tasks.isTaskRunning(taskId)) return
     taskId = tasks.startTask(HeadlessJsTaskConfig(TASK, Arguments.createMap(), 0, true))
-    Log.i(TAG, "Pipeline task started")
+    DebugLog.logcat(TAG, "Pipeline task started")
   }
 }

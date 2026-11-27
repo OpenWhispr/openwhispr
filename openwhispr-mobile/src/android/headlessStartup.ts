@@ -1,3 +1,4 @@
+import { logJsStart } from '@/android/lib/jsStartLog';
 import { runMigrations } from '@/db/migrate';
 import { initSentry } from '@/android/lib/sentry';
 
@@ -9,6 +10,7 @@ let ran = false;
  * Migrations are idempotent, so the app running them again later in the same runtime is harmless.
  */
 export function runHeadlessStartup(): void {
+  logJsStart('headless');
   if (ran) return;
   ran = true;
   initSentry();

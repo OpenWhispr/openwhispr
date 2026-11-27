@@ -38,6 +38,9 @@ import { CouldNotOpen, LaunchSplash, SignedOutSheet } from './launch/LaunchScree
 import { reportAndroidOnboardingDone } from './onboarding/accountOnboarding';
 import { prefetchSpeakerModel } from './liveSpeakers/speakerModel';
 import { ThemeProvider, useTheme } from './ThemeProvider';
+import { logJsStart } from './lib/jsStartLog';
+
+logJsStart('app');
 
 /** The speaker model waits this long after launch, so it never competes with the first screen. */
 export const SPEAKER_MODEL_DELAY_MS = 15_000;

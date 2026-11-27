@@ -7,6 +7,7 @@ import Purchases, {
   STOREKIT_VERSION,
 } from 'react-native-purchases';
 import { Sentry } from '@/android/lib/sentry';
+import { dlog } from '@/android/lib/debugLog';
 import {
   getAppsFlyerAttributionConsent,
   getAppsFlyerRevenueId,
@@ -239,6 +240,7 @@ export function createRevenueCatClient(observerMode: boolean, androidAttribution
   }
 
   function reportRevenueCatError(operation: string, error: unknown): void {
+    dlog.failure('auth', 'revenuecat.failed', error, { action: operation });
     Sentry.captureException(error, { tags: { feature: 'revenuecat', operation } });
   }
 
@@ -263,6 +265,7 @@ export function createRevenueCatClient(observerMode: boolean, androidAttribution
       });
       if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.INFO);
       configured = true;
+      dlog.info('auth', 'revenuecat.configured', { mode: observerMode ? 'observer' : 'purchases' });
       if (attributionEnabled()) {
         const refresh = (): void => {
           withIdentity(syncRevenueAttribution).catch((error) => {
@@ -283,6 +286,7 @@ export function createRevenueCatClient(observerMode: boolean, androidAttribution
     if (!configured) return false;
     try {
       await withIdentity(() => logInWithAttribution(userId));
+      dlog.info('auth', 'revenuecat.identified');
       return true;
     } catch (error) {
       reportRevenueCatError('identify', error);
@@ -295,6 +299,7 @@ export function createRevenueCatClient(observerMode: boolean, androidAttribution
     if (!configured) return;
     try {
       await withIdentity(logOutWithAttribution);
+      dlog.info('auth', 'revenuecat.reset');
     } catch (error) {
       reportRevenueCatError('reset', error);
     }

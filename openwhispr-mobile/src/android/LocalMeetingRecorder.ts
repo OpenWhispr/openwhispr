@@ -2,6 +2,8 @@ import { randomUUID } from '@/android/shared/lib/uuid';
 import * as FileSystem from 'expo-file-system/legacy';
 import { AndroidDictation, dictationEvents } from '../../modules/android-dictation/src';
 import { meetingAudioContext, meetingAudioDirectory } from '@/lib/meetingAudioStorage';
+import { dlog } from '@/android/lib/debugLog';
+import { meetingDebugRun } from './meetingModels';
 
 /** A recording owns one durable note file. Permission is checked before the note is created. */
 export class LocalMeetingRecorder {
@@ -36,6 +38,9 @@ export class LocalMeetingRecorder {
       if (noteId !== this.noteId || captureId !== this.captureId || this.closed || this.notified)
         return;
       this.notified = true;
+      if (error)
+        dlog.failure('meet', 'capture.error', error, { run: meetingDebugRun(), local: true });
+      else dlog.info('meet', 'capture.ended', { run: meetingDebugRun(), local: true });
       this.onStopped(error);
     };
     this.subscriptions = [
@@ -53,6 +58,7 @@ export class LocalMeetingRecorder {
         if (this.closed) throw this.cancelled();
       })
       .catch(async (error: unknown) => {
+        dlog.failure('meet', 'capture_failed', error, { run: meetingDebugRun(), local: true });
         await this.stop().catch(() => undefined);
         throw error;
       });

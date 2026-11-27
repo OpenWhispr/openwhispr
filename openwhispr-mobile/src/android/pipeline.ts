@@ -31,6 +31,8 @@ import {
   SELECTION_EDIT_SYSTEM_PROMPT,
   SelectionEditError,
 } from './selectionEdit';
+import { dlog, startTimer } from '@/android/lib/debugLog';
+import { failureFields, recordingRun, routeFields } from '@/android/dictation/dictationLog';
 
 export type DictationMode = 'dictate' | 'translate' | 'write' | 'edit';
 export class AndroidCleanupError extends Error {
@@ -56,6 +58,8 @@ export interface AndroidJob {
   tone?: KeyboardTone;
   /** Tone & Style's kind of app for this dictation, set with `tone` while it is on. */
   appCategory?: ToneKind;
+  /** The debug log's id for this dictation (the bubble's, made at its start). */
+  run?: string;
 }
 
 /**
@@ -95,11 +99,12 @@ export function createAndroidJob(
   target = 'Spanish',
   selection = '',
   app?: string,
+  run?: string,
 ): AndroidJob {
   const config = useConfigStore.getState().config;
   const now = new Date();
   const toneStyle = dictationToneStyle(config, app);
-  return {
+  const job: AndroidJob = {
     eventId: Crypto.randomUUID(),
     startedAt: now.toISOString(),
     localDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
@@ -112,7 +117,34 @@ export function createAndroidJob(
     language: getPreferredTranscriptionLanguage(),
     tone: toneStyle?.tone,
     appCategory: toneStyle?.appCategory,
+    run,
   };
+  logJobCreated(job);
+  return job;
+}
+
+// Where each part of a dictation will run: ids and names only, never the words or the selection.
+function logJobCreated(job: AndroidJob): void {
+  const { route } = job;
+  dlog.info('pipe', 'job.created', {
+    run: job.run,
+    mode: job.mode,
+    provider: route.provider,
+    model: route.inferenceRoute?.modelId,
+    lang: job.language ?? 'auto',
+    tone: job.tone,
+    category: job.appCategory,
+    selection: !!job.selection,
+  });
+  const text = job.mode === 'dictate' ? route.cleanupRoute : assistantRoute(route).route;
+  dlog.info('pipe', 'job.route', {
+    run: job.run,
+    scope: job.mode === 'dictate' ? 'cleanup' : assistantRoute(route).scope,
+    ...routeFields(text),
+    reason: (job.mode === 'dictate' ? route.cleanupUnavailable : assistantRoute(route).unavailable)
+      ? 'unavailable'
+      : undefined,
+  });
 }
 export async function ensureAndroidModels(job: AndroidJob): Promise<void> {
   const speech = selectedSpeechModel();
@@ -219,6 +251,7 @@ export async function processAndroidAudio(
   const controller = new AbortController();
   const abort = () => controller.abort();
   const signal = controller.signal;
+  const run = job.run ?? recordingRun(recording);
   const stopObserving = observeTranscriptScope(abort);
   parentSignal.addEventListener('abort', abort, { once: true });
   const assertCurrent = () => {
@@ -227,8 +260,18 @@ export async function processAndroidAudio(
   };
   try {
     assertCurrent();
-    if (recording.noSpeech) throw new Error(i18n.t('noSpeech'));
-    await ensureAndroidModels(job);
+    if (recording.noSpeech) {
+      dlog.info('dict', 'skipped', { run, why: 'no_speech', audio_ms: recording.durationMs });
+      throw new Error(i18n.t('noSpeech'));
+    }
+    await ensureAndroidModels(job).catch((error: unknown) => {
+      dlog.warn('dict', 'models_missing', {
+        run,
+        provider: job.route.provider,
+        ...failureFields(error),
+      });
+      throw error;
+    });
     assertCurrent();
     const cancelSpeech = () => {
       if (job.route.provider === 'local') void LocalTranscriptionService.cancelTranscription();
@@ -251,6 +294,7 @@ export async function processAndroidAudio(
         signal,
         transcriptionOnly: job.mode !== 'dictate',
         shouldCancel: () => signal.aborted,
+        run,
         onStage: (value) => stage(value === 'cleaning' ? 'cleaning' : 'processing'),
       },
     ).finally(() => signal.removeEventListener('abort', cancelSpeech));
@@ -260,9 +304,31 @@ export async function processAndroidAudio(
     let text = output.text;
     if (job.mode !== 'dictate') {
       const assistant = assistantRoute(job.route);
-      if (assistant.unavailable) throw new Error(assistant.unavailable);
+      const area = job.mode === 'translate' ? 'trans' : 'asst';
+      const target = {
+        run,
+        scope: assistant.scope,
+        ...routeFields(assistant.route),
+      };
+      if (assistant.unavailable) {
+        dlog.warn(area, 'skipped', { ...target, why: 'unavailable' });
+        throw new Error(assistant.unavailable);
+      }
       stage('cleaning');
       const assistantStartedAt = Date.now();
+      const elapsed = startTimer();
+      dlog.info(
+        area,
+        'request',
+        job.mode === 'translate'
+          ? { ...target, source_lang: job.language ?? 'auto', target_lang: job.target }
+          : {
+              ...target,
+              kind: job.mode,
+              selection: !!job.selection,
+              in_chars: output.originalText.length,
+            },
+      );
       const result = await ReasoningService.processText({
         text:
           job.mode === 'edit'
@@ -281,14 +347,31 @@ export async function processAndroidAudio(
               : { isPrivateNote: job.route.provider === 'local' },
         signal,
         maxTokens: actionMaxTokens(job),
+      }).catch((error: unknown) => {
+        dlog.error(area, 'failed', { ...target, ...failureFields(error), ms: elapsed() });
+        throw error;
+      });
+      dlog.info(area, 'done', {
+        ...target,
+        model: result.model || target.model,
+        ms: elapsed(),
+        out_chars: result.text.length,
       });
       console.info(
         assistantLogLine(job.mode, assistant, result.model, Date.now() - assistantStartedAt),
       );
-      text = job.mode === 'edit' ? editReplacement(result.text, job.selection) : result.text;
+      try {
+        text = job.mode === 'edit' ? editReplacement(result.text, job.selection) : result.text;
+      } catch (error) {
+        dlog.warn(area, 'rejected', { run, kind: job.mode, why: 'edit_not_applied' });
+        throw error;
+      }
     }
     assertCurrent();
-    if (!text.trim()) throw new Error(i18n.t('noSpeech'));
+    if (!text.trim()) {
+      dlog.info('dict', 'empty', { run, mode: job.mode });
+      throw new Error(i18n.t('noSpeech'));
+    }
     // Count spoken input, never the expanded snippet or generated response.
     if (job.mode === 'dictate') {
       try {
@@ -320,6 +403,7 @@ export async function processAndroidAudio(
         await applyHistoryRetention();
       } catch (error) {
         console.warn('[dictation] history could not be saved', error);
+        dlog.warn('dict', 'history.failed', { run, ...failureFields(error) });
       }
     }
     assertCurrent();

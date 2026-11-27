@@ -194,8 +194,8 @@ class LearnedTab(
     row.pivotX = if (right) row.measuredWidth.toFloat() else 0f
     row.pivotY = pillHeight / 2f
     runCatching { windows.updateViewLayout(root, layout) }
-      .onFailure { android.util.Log.w("OpenWhisprLearn", "Pill layout failed", it) }
-    android.util.Log.i("OpenWhisprLearn", "Pill window at ${layout.x},${layout.y} size ${root.measuredWidth}x${root.measuredHeight} pill ${row.measuredWidth} bubble $bubble attached=${root.isAttachedToWindow} visible=${root.visibility}")
+      .onFailure { DebugLog.logcat("OpenWhisprLearn", "Pill layout failed", it) }
+    DebugLog.logcat("OpenWhisprLearn", "Pill window at ${layout.x},${layout.y} size ${root.measuredWidth}x${root.measuredHeight} pill ${row.measuredWidth} bubble $bubble attached=${root.isAttachedToWindow} visible=${root.visibility}")
   }
 
   /** Grows the pill out of the bubble (or back into it): from the bubble's middle, small and clear. */
@@ -218,7 +218,7 @@ class LearnedTab(
         private var cancelled = false
         override fun onAnimationCancel(animation: Animator) { cancelled = true }
         override fun onAnimationEnd(animation: Animator) {
-          android.util.Log.i("OpenWhisprLearn", "Pill ${if (out) "grew" else "shrank"} cancelled=$cancelled alpha=${row.alpha} scale=${row.scaleX} shown=${row.isShown} w=${row.width}")
+          DebugLog.logcat("OpenWhisprLearn", "Pill ${if (out) "grew" else "shrank"} cancelled=$cancelled alpha=${row.alpha} scale=${row.scaleX} shown=${row.isShown} w=${row.width}")
           if (!cancelled) end()
         }
       })

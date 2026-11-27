@@ -17,6 +17,7 @@ import {
   type SocialAuthResult,
 } from '@/android/lib/authClient';
 import { Sentry } from '@/android/lib/sentry';
+import { dlog } from '@/android/lib/debugLog';
 import { useUsageStore } from '@/android/store/useUsageStore';
 import { clearAllSessions as clearAgentSessions } from '@/android/shared/services/agent/AgentComposerService';
 import {
@@ -109,10 +110,11 @@ export function createAuthStore(lifecycle: AuthStoreLifecycle = {}) {
       await anonymousSignInInFlight?.catch(() => undefined);
       const result = await signInWithEmail(email, password);
       if (result.error || !result.user) {
+        dlog.warn('auth', 'sign_in.failed', { method: 'email' });
         set({ isLoading: false, error: result.error || 'Sign in failed' });
         return;
       }
-      await applyAuthenticatedSession(set, result);
+      await applyAuthenticatedSession(set, result, undefined, 'email');
     },
 
     signUp: async (email, password, name) => {
@@ -120,10 +122,11 @@ export function createAuthStore(lifecycle: AuthStoreLifecycle = {}) {
       await anonymousSignInInFlight?.catch(() => undefined);
       const result = await signUpWithEmail(email, password, name);
       if (result.error || !result.user) {
+        dlog.warn('auth', 'sign_up.failed', { method: 'email' });
         set({ isLoading: false, error: result.error || 'Sign up failed' });
         return;
       }
-      await applyAuthenticatedSession(set, result, name || email.split('@')[0]);
+      await applyAuthenticatedSession(set, result, name || email.split('@')[0], 'email_sign_up');
     },
 
     signInWithGoogle: () => runSocialSignIn(set, 'google', signInWithGoogleApi),
@@ -141,6 +144,7 @@ export function createAuthStore(lifecycle: AuthStoreLifecycle = {}) {
         lifecycle.prepareLocalData?.(null);
         useUsageStore.getState().reset();
         set({ user: null, sessionCookie: null, isGuest: true, error: null });
+        dlog.info('auth', 'guest');
       } finally {
         set({ isLoading: false });
       }
@@ -167,6 +171,7 @@ export function createAuthStore(lifecycle: AuthStoreLifecycle = {}) {
           // must be loud. No response, or a 5xx, is the offline-at-first-launch
           // case the foreground retry exists for; it must not read as an outage.
           const refused = result.status !== null && result.status < 500;
+          dlog.warn('auth', 'anonymous.failed', { status: result.status, refused });
           Sentry.captureMessage('Anonymous session could not be created', {
             level: refused ? 'error' : 'warning',
             tags: { feature: 'onboarding-auth' },
@@ -180,6 +185,7 @@ export function createAuthStore(lifecycle: AuthStoreLifecycle = {}) {
         // to send a welcome or verification email to yet.
         lifecycle.prepareLocalData?.(result.user);
         set({ user: result.user, sessionCookie: result.sessionCookie, isGuest: false });
+        dlog.info('auth', 'signed_in', { method: 'anonymous' });
       })().finally(() => {
         anonymousSignInInFlight = null;
       });
@@ -194,6 +200,7 @@ export function createAuthStore(lifecycle: AuthStoreLifecycle = {}) {
       // later sign-up to claim (see initSyncTriggers), so it keeps its chats too.
       const { user } = useAuthStore.getState();
       const realAccount = user !== null && !user.isAnonymous;
+      dlog.info('auth', 'signed_out', { kind: !user ? 'guest' : realAccount ? 'account' : 'anonymous' });
       await signOutApi();
       await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
       useUsageStore.getState().reset();
@@ -232,7 +239,9 @@ export function createAuthStore(lifecycle: AuthStoreLifecycle = {}) {
         clearAgentSessions();
         if (!lifecycle.accountScopedChats) withChatHistory((chats) => chats.clearChatHistory());
         set({ user: null, sessionCookie: null, isGuest: false, isLoading: false });
+        dlog.info('auth', 'account_deleted');
       } catch (error) {
+        dlog.failure('auth', 'account_delete.failed', error);
         set({ isLoading: false, error: error instanceof Error ? error.message : 'Delete failed' });
         throw error;
       }
@@ -245,6 +254,7 @@ export function createAuthStore(lifecycle: AuthStoreLifecycle = {}) {
     set: SetState,
     result: SessionResult,
     fallbackName?: string,
+    method?: string,
   ): Promise<void> {
     await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
     await initAuthenticatedUser(result.user, fallbackName);
@@ -252,6 +262,7 @@ export function createAuthStore(lifecycle: AuthStoreLifecycle = {}) {
     try {
       lifecycle.prepareLocalData?.(result.user);
     } catch (error) {
+      dlog.failure('auth', 'local_data.failed', error, { method });
       await clearSession();
       useUsageStore.getState().reset();
       set({
@@ -273,6 +284,7 @@ export function createAuthStore(lifecycle: AuthStoreLifecycle = {}) {
       loadingProvider: null,
       error: result.error ?? null,
     });
+    dlog.info('auth', 'signed_in', { method, has_user: !!result.user });
   }
 
   // A sign-in that throws (offline, or a request the client timed out) must still clear its
@@ -286,20 +298,26 @@ export function createAuthStore(lifecycle: AuthStoreLifecycle = {}) {
     set({ isLoading: true, loadingProvider: provider, error: null });
     try {
       await anonymousSignInInFlight?.catch(() => undefined);
-      await applyOAuthResult(set, await signIn());
+      await applyOAuthResult(set, await signIn(), provider);
     } catch (error) {
+      dlog.failure('auth', 'sign_in.failed', error, { method: provider });
       console.warn(`[auth] ${provider} sign-in failed:`, error);
       set({ isLoading: false, loadingProvider: null, error: SOCIAL_SIGN_IN_FAILED });
     }
   }
 
-  async function applyOAuthResult(set: SetState, result: SocialAuthResult): Promise<void> {
+  async function applyOAuthResult(
+    set: SetState,
+    result: SocialAuthResult,
+    method?: string,
+  ): Promise<void> {
     if (!result.success) {
+      dlog.warn('auth', 'sign_in.failed', { method, cancelled: !result.error });
       set({ isLoading: false, loadingProvider: null, error: result.error || null });
       return;
     }
     const user = result.sessionCookie ? await getSession() : null;
-    await applyAuthenticatedSession(set, { user, sessionCookie: result.sessionCookie });
+    await applyAuthenticatedSession(set, { user, sessionCookie: result.sessionCookie }, undefined, method);
   }
 
   return useAuthStore;

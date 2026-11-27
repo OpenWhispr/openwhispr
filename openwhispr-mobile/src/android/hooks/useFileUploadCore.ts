@@ -18,6 +18,25 @@ import { isUsageLimitError, type UsageLimitError } from '@/android/shared/lib/us
 import { randomUUID } from '@/android/shared/lib/uuid';
 import { MAX_FILE_SIZE } from '@/android/shared/config/constants';
 import type { TranscriptionProvider } from '@/android/types';
+import { dlog, newRunId, startTimer, wordCount } from '@/android/lib/debugLog';
+import { setUploadDebugRun } from '@/android/transcription/uploadTranscriptionAudio';
+
+const KNOWN_EXTENSIONS = new Set([
+  'aac',
+  'flac',
+  'm4a',
+  'mp3',
+  'mp4',
+  'mpeg',
+  'mpga',
+  'ogg',
+  'opus',
+  'wav',
+  'webm',
+]);
+/** The extension as a class for the debug log: a known audio type, `other` or `none`; never the name. */
+const extensionClass = (extension: string | undefined) =>
+  !extension ? 'none' : KNOWN_EXTENSIONS.has(extension) ? extension : 'other';
 
 export interface UseFileUploadOptions {
   onComplete?: (text: string) => void;
@@ -135,6 +154,11 @@ export function useFileUploadCore<
   const pickAndTranscribeFile = async (route?: TranscriptionJobRoute) => {
     const attempt = lifecycle?.begin();
     if (lifecycle && !attempt) return;
+    // Debug log: one run per pick, carried by the transport's progress lines.
+    const run = newRunId('u');
+    const elapsed = startTimer();
+    let failureLogged = false;
+    setUploadDebugRun(run);
     try {
       const pickedRoute = attempt?.snapshotRoute(route);
       const pinnedProvider = pickedRoute?.provider;
@@ -161,6 +185,7 @@ export function useFileUploadCore<
       attempt?.picked(result);
 
       if (result.canceled) {
+        dlog.info('upload', 'picked', { run, result: 'cancelled' });
         return;
       }
 
@@ -173,8 +198,17 @@ export function useFileUploadCore<
         : undefined;
       const isMimeAllowed = file.mimeType ? allowedMimeTypes.has(file.mimeType) : false;
       const isExtensionAllowed = extension ? allowedExtensions.has(extension) : false;
+      dlog.info('upload', 'picked', {
+        run,
+        mime: file.mimeType,
+        size: file.size,
+        ext: extensionClass(extension),
+        provider: transcriptionProvider,
+      });
 
       if (!isMimeAllowed && !isExtensionAllowed) {
+        dlog.warn('upload', 'rejected', { run, why: 'not_audio', mime: file.mimeType });
+        failureLogged = true;
         throw new Error(
           'Unsupported file type. Please select a WAV, MP3, M4A, AAC, OGG/Opus, or WEBM audio file.',
         );
@@ -185,6 +219,8 @@ export function useFileUploadCore<
       }
 
       if (file.size && file.size > MAX_FILE_SIZE) {
+        dlog.warn('upload', 'rejected', { run, why: 'too_large', size: file.size });
+        failureLogged = true;
         throw new Error(
           `File is too large. Please select an audio file under ${MAX_FILE_SIZE_MB}MB.`,
         );
@@ -249,6 +285,8 @@ export function useFileUploadCore<
       // transcoded before local transcription. Cloud sends the original file.
       const runTranscription = async (provider: TranscriptionProvider) => {
         const request = attempt?.beginRequest(provider);
+        const requestTimer = startTimer();
+        dlog.info('upload', 'submitted', { run, provider });
         let audioUri = retainedAudioUrl;
         const tempUris: string[] = [];
         try {
@@ -302,11 +340,28 @@ export function useFileUploadCore<
             });
 
           attempt?.check();
+          dlog.info('upload', 'done', {
+            run,
+            provider: processedResult.transcription.provider,
+            ok: true,
+            ms: requestTimer(),
+            duration_ms: Math.round((processedResult.transcription.duration ?? 0) * 1000),
+            chars: finalText.length,
+            words: wordCount(finalText),
+            cleaned: finalText !== processedResult.originalText,
+          });
           setCurrentText(finalText);
           onComplete(finalText, file.name);
           if (attempt?.saveToHistory() === false)
             await deleteManagedTranscriptAudio(retainedAudioUrl);
         } catch (error) {
+          dlog.failure('upload', 'failed', error, {
+            run,
+            provider,
+            ms: requestTimer(),
+            status: (error as { status?: number } | null)?.status,
+          });
+          failureLogged = true;
           request?.markError(error);
           throw error;
         } finally {
@@ -317,6 +372,8 @@ export function useFileUploadCore<
 
       const retryWithCloud = async () => {
         if (attempt && !attempt.beginRetry()) return;
+        dlog.info('upload', 'retry', { run, provider: 'cloud' });
+        setUploadDebugRun(run);
         setIsProcessing(true);
         try {
           jobRoute = { provider: 'cloud', ...snapshotTextInference('cloud') };
@@ -332,6 +389,7 @@ export function useFileUploadCore<
             lifecycle ? lifecycle.toFriendlyError(retryError) : toFriendlyUploadError(retryError),
           );
         } finally {
+          setUploadDebugRun(null);
           if (attempt) attempt.finishRetry();
           else setIsProcessing(false);
         }
@@ -367,11 +425,14 @@ export function useFileUploadCore<
         throw error;
       }
     } catch (error) {
+      if (!failureLogged)
+        dlog.failure('upload', 'failed', error, { run, ms: elapsed(), why: 'before_upload' });
       if (attempt?.ignoreError(error)) return;
       const friendly = lifecycle ? lifecycle.toFriendlyError(error) : toFriendlyUploadError(error);
       options.onError?.(friendly);
       throw friendly;
     } finally {
+      setUploadDebugRun(null);
       if (attempt) await attempt.finish();
       else setIsProcessing(false);
     }

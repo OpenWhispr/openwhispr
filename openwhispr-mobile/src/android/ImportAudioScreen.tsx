@@ -33,6 +33,7 @@ import {
   saveImportedNote,
   type ImportDestination,
 } from '@/android/shared/lib/notes/importDestination';
+import { dlog } from '@/android/lib/debugLog';
 
 function parseId(value?: string): number | undefined {
   if (!value) return undefined;
@@ -126,6 +127,7 @@ export default function ImportAudioScreen() {
     onComplete: (text, fileName) => {
       if (!destination.current) return;
       const note = saveImportedNote(destination.current, text, fileName, t('importDefaultTitle'));
+      dlog.info('upload', 'save', { ok: true, chars: text.length });
       setCompletedNoteId(note.id);
       useNotesStore.getState().loadNotes();
       useNotesStore.getState().loadFolders();
@@ -147,6 +149,7 @@ export default function ImportAudioScreen() {
       useAuthStore.subscribe((state, previous) => {
         if (state.user?.id !== previous.user?.id) {
           accountChanged.current = true;
+          dlog.info('upload', 'cancel', { why: 'account_change' });
           cancel();
           setError(t('importAccountChanged'));
         }
@@ -161,6 +164,7 @@ export default function ImportAudioScreen() {
         style: 'destructive',
         onPress: () => {
           pendingNavigation.current = data.action;
+          dlog.info('upload', 'cancel', { why: 'user_cancel' });
           cancel();
         },
       },
@@ -189,7 +193,9 @@ export default function ImportAudioScreen() {
       return;
     const route = preview.route;
     const user = useAuthStore.getState().user;
+    dlog.info('upload', 'start', { provider: route.provider });
     if (route.provider === 'cloud' && accountRequiredForCloud(user)) {
+      dlog.warn('upload', 'rejected', { why: 'account_required', provider: route.provider });
       showAccountRequiredAlert('audio import');
       return;
     }
@@ -221,6 +227,7 @@ export default function ImportAudioScreen() {
         });
       } else begin();
     } catch (cause) {
+      dlog.failure('upload', 'gate_failed', cause, { provider: route.provider });
       if (focused.current) setError(errorMessage(cause));
     } finally {
       requestBusy.current = false;

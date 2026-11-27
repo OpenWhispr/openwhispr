@@ -27,13 +27,30 @@ import { runSpeakerPass, saveLiveSpeakers } from './liveSpeakers/session';
 import { forgetLinesSaved, whenLinesSaved } from './liveSpeakers/whenSaved';
 import { prefetchSpeakerModel } from './liveSpeakers/speakerModel';
 import type { TranscriptionStatus } from '@/android/types';
+import { dlog, newRunId } from '@/android/lib/debugLog';
+import { setMeetingDebugRun } from './meetingModels';
+import { AndroidDictation } from '../../modules/android-dictation/src';
 
 type Phase = 'prompt' | 'recording' | 'cancelling' | 'cancel-failed';
 type Capture = {
   noteId: number;
   sourceFile: string;
   context: ReturnType<typeof createCloudMeetingContext>;
+  /** Debug-log run id; native capture lines carry it too (setMeetingRun). */
+  run: string;
 };
+
+/** Names the meeting for the debug log, here and in the native capture service. */
+function startMeetingRun(): string {
+  const run = newRunId('m');
+  setMeetingDebugRun(run);
+  try {
+    AndroidDictation?.setMeetingRun?.(run);
+  } catch {
+    /* The log must never break a meeting. */
+  }
+  return run;
+}
 
 /** Android Cloud lifecycle only; the default screen continues to own Local and iOS. */
 export function CloudMeetingScreen(): React.JSX.Element {
@@ -105,8 +122,9 @@ export function CloudMeetingScreen(): React.JSX.Element {
   }, []);
 
   const cancel = useCallback(
-    async (run: Capture | null, leave = false): Promise<void> => {
+    async (run: Capture | null, leave = false, why = 'cancel'): Promise<void> => {
       if (!run || capture.current !== run) return;
+      dlog.info('meet', 'stop', { run: run.run, reason: why, cloud: true });
       let draftError: unknown;
       try {
         saveRaw(run);
@@ -125,6 +143,7 @@ export function CloudMeetingScreen(): React.JSX.Element {
           run.context.recoverInterruptedNoteWhenOwnerReturns(run.sourceFile, () =>
             markFailed(run.noteId),
           );
+        dlog.info('meet', 'cancelled', { run: run.run, saved: ownsSaved });
         if (mounted.current && !capture.current) {
           setPhase('prompt');
           if (leave && focused.current && ownsSaved && generation.current === request)
@@ -132,6 +151,7 @@ export function CloudMeetingScreen(): React.JSX.Element {
         }
         run.context.dispose();
       } catch (error) {
+        dlog.failure('meet', 'cancel_failed', error, { run: run.run });
         Sentry.captureException(error);
         if (mounted.current && !capture.current && run.context.ownsSavedNote()) {
           capture.current = run;
@@ -150,12 +170,15 @@ export function CloudMeetingScreen(): React.JSX.Element {
     },
     [cancelCloud, markFailed, saveRaw],
   );
-  const invalidate = useCallback(() => {
-    generation.current += 1;
-    busy.current = false;
-    cancel(capture.current).catch(Sentry.captureException);
-    if (mounted.current) setStarting(false);
-  }, [cancel]);
+  const invalidate = useCallback(
+    (why = 'screen_left') => {
+      generation.current += 1;
+      busy.current = false;
+      cancel(capture.current, false, why).catch(Sentry.captureException);
+      if (mounted.current) setStarting(false);
+    },
+    [cancel],
+  );
   useFocusEffect(
     useCallback(() => {
       focused.current = true;
@@ -168,17 +191,17 @@ export function CloudMeetingScreen(): React.JSX.Element {
   useEffect(() => {
     const auth = useAuthStore.subscribe((state, previous) => {
       if (state.user?.id !== previous.user?.id || state.sessionCookie !== previous.sessionCookie)
-        invalidate();
+        invalidate('account_change');
     });
     const mode = useProcessingModeStore.subscribe((state, previous) => {
-      if (state.activeMode !== previous.activeMode) invalidate();
+      if (state.activeMode !== previous.activeMode) invalidate('mode_change');
     });
     return () => {
       auth();
       mode();
     };
   }, [invalidate]);
-  useEffect(invalidate, [params.folderId, params.spaceId, invalidate]);
+  useEffect(() => invalidate('destination_change'), [params.folderId, params.spaceId, invalidate]);
   useEffect(() => {
     const run = capture.current;
     if (phase !== 'recording' || !run) return;
@@ -231,12 +254,13 @@ export function CloudMeetingScreen(): React.JSX.Element {
             const sourceFile = `${directory}meeting-${note.id}.wav`;
             notesRepository.updateNoteMeta(note.id, { sourceFile });
             const context = createCloudMeetingContext(note.id);
-            const run = { noteId: note.id, sourceFile, context };
+            const run = { noteId: note.id, sourceFile, context, run: startMeetingRun() };
+            dlog.info('meet', 'start', { run: run.run, cloud: true });
             capture.current = run;
             context.signal.addEventListener(
               'abort',
               () => {
-                cancel(run).catch(Sentry.captureException);
+                cancel(run, false, 'context_lost').catch(Sentry.captureException);
               },
               { once: true },
             );
@@ -246,6 +270,7 @@ export function CloudMeetingScreen(): React.JSX.Element {
             finishing.current = false;
             setPhase('recording');
           } catch (error) {
+            dlog.failure('meet', 'start_failed', error, { cloud: true });
             if (created != null && current()) markFailed(created);
             Sentry.captureException(error);
             if (current()) Alert.alert(t('errorTitle'), t('meetingInterrupted'));
@@ -266,135 +291,152 @@ export function CloudMeetingScreen(): React.JSX.Element {
   // Stop and save opens the note at once (Figma R2b). The last words, the transcript and the
   // summary finish here in the background and report to the note's Summary card; leaving this
   // screen no longer cancels them, and a different account or a lost note stops them writing.
-  const finish = useCallback(async (): Promise<void> => {
-    const run = capture.current;
-    if (!run || !run.context.ownsNote() || finishing.current) return;
-    finishing.current = true;
-    const identity = useAuthStore.getState();
-    const owned = () => {
-      const current = useAuthStore.getState();
-      return (
-        run.context.ownsNote() &&
-        current.user?.id === identity.user?.id &&
-        current.sessionCookie === identity.sessionCookie
-      );
-    };
-    let draftSaved = true;
-    try {
-      saveRaw(run);
-    } catch (error) {
-      draftSaved = false;
-      Sentry.captureException(error);
-    }
-    const draft = raw.current;
-    const elapsed = cloudElapsed;
-    const liveError = cloudStatus === 'error';
-    // What was heard so far shows on the Transcript tab while the last words save.
-    try {
-      const status = notesRepository.getNoteById(run.noteId)?.transcriptionStatus;
-      if (status != null && canTransition(status as TranscriptionStatus, 'transcribing'))
-        useNotesStore.getState().transitionStatus(run.noteId, 'transcribing');
-      if (cloud.utterances.length > 0)
-        notesRepository.replaceSegments(
-          run.noteId,
-          mapUtterancesToSegments(cloud.utterances, elapsed).map((segment, index) => ({
-            ...segment,
-            noteId: run.noteId,
-            speakerLabel: cloud.speakerLabels?.[cloud.utterances[index].itemId] ?? null,
-          })),
+  const finish = useCallback(
+    async (why = 'user_stop'): Promise<void> => {
+      const run = capture.current;
+      if (!run || !run.context.ownsNote() || finishing.current) return;
+      finishing.current = true;
+      dlog.info('meet', 'stop', { run: run.run, reason: why, cloud: true });
+      const identity = useAuthStore.getState();
+      const owned = () => {
+        const current = useAuthStore.getState();
+        return (
+          run.context.ownsNote() &&
+          current.user?.id === identity.user?.id &&
+          current.sessionCookie === identity.sessionCookie
         );
-    } catch (error) {
-      Sentry.captureException(error);
-    }
-    const stopping = stopCloud().then(
-      (utterances) => ({ utterances, interrupted: null as Error | null }),
-      (error: unknown) => ({
-        utterances: error instanceof CloudMeetingFinishError ? error.utterances : [],
-        interrupted: error instanceof Error ? error : new Error(String(error)),
-      }),
-    );
-    capture.current = null;
-    setCloudFinish(run.noteId, { stage: 'saving' });
-    setPhase('prompt');
-    setExitToNote(run.noteId);
-
-    const abandon = () => {
-      setCloudFinish(run.noteId, null);
-      run.context.recoverInterruptedNoteWhenOwnerReturns(run.sourceFile, () =>
-        markFailed(run.noteId),
-      );
-      run.context.dispose();
-    };
-    const settle = async (): Promise<void> => {
-      const { utterances, interrupted } = await stopping;
-      if (!owned()) return abandon();
-      setCloudFinish(run.noteId, { stage: 'finishing' });
+      };
+      let draftSaved = true;
       try {
-        if (!draftSaved) {
-          useNotesStore.getState().updateNote(run.noteId, { content: draft });
-          draftSaved = true;
-        }
-        const labels = cloud.speakerResult?.();
-        // Saved with the lines, not after the title, so the note never shows them unlabelled.
-        if (labels)
-          whenLinesSaved(run.noteId, () =>
-            saveLiveSpeakers(run.noteId, utterances, elapsed, labels),
-          );
-        await useNotesStore.getState().finalizeCloudMeeting(run.noteId, utterances, elapsed, {
-          incomplete: interrupted !== null || liveError,
-        });
+        saveRaw(run);
       } catch (error) {
-        forgetLinesSaved(run.noteId);
-        if (!owned()) return abandon();
+        draftSaved = false;
         Sentry.captureException(error);
-        setCloudFinish(run.noteId, {
-          stage: 'failed',
-          retry: () => {
-            settle().catch(Sentry.captureException);
-          },
-        });
-        return;
       }
-      if (!owned()) return abandon();
-      forgetLinesSaved(run.noteId);
-      const speakers = cloud.speakerResult?.();
-      if (speakers) {
-        // Minutes for a long meeting, so the note opens first and corrects itself after.
-        runSpeakerPass(
-          { noteId: run.noteId, utterances, elapsedSeconds: elapsed, result: speakers },
-          {
-            // The context is disposed by then; the same account and a live note are enough.
-            isCurrent: () => {
-              const current = useAuthStore.getState();
-              const note = notesRepository.getNoteById(run.noteId);
-              return (
-                current.user?.id === identity.user?.id &&
-                current.sessionCookie === identity.sessionCookie &&
-                !!note &&
-                !note.deletedAt
-              );
+      const draft = raw.current;
+      const elapsed = cloudElapsed;
+      const liveError = cloudStatus === 'error';
+      // What was heard so far shows on the Transcript tab while the last words save.
+      try {
+        const status = notesRepository.getNoteById(run.noteId)?.transcriptionStatus;
+        if (status != null && canTransition(status as TranscriptionStatus, 'transcribing'))
+          useNotesStore.getState().transitionStatus(run.noteId, 'transcribing');
+        if (cloud.utterances.length > 0)
+          notesRepository.replaceSegments(
+            run.noteId,
+            mapUtterancesToSegments(cloud.utterances, elapsed).map((segment, index) => ({
+              ...segment,
+              noteId: run.noteId,
+              speakerLabel: cloud.speakerLabels?.[cloud.utterances[index].itemId] ?? null,
+            })),
+          );
+      } catch (error) {
+        Sentry.captureException(error);
+      }
+      const stopping = stopCloud().then(
+        (utterances) => ({ utterances, interrupted: null as Error | null }),
+        (error: unknown) => ({
+          utterances: error instanceof CloudMeetingFinishError ? error.utterances : [],
+          interrupted: error instanceof Error ? error : new Error(String(error)),
+        }),
+      );
+      capture.current = null;
+      setCloudFinish(run.noteId, { stage: 'saving' });
+      setPhase('prompt');
+      setExitToNote(run.noteId);
+
+      const abandon = () => {
+        setCloudFinish(run.noteId, null);
+        run.context.recoverInterruptedNoteWhenOwnerReturns(run.sourceFile, () =>
+          markFailed(run.noteId),
+        );
+        run.context.dispose();
+      };
+      const settle = async (): Promise<void> => {
+        const { utterances, interrupted } = await stopping;
+        if (!owned()) return abandon();
+        setCloudFinish(run.noteId, { stage: 'finishing' });
+        try {
+          if (!draftSaved) {
+            useNotesStore.getState().updateNote(run.noteId, { content: draft });
+            draftSaved = true;
+          }
+          const labels = cloud.speakerResult?.();
+          // Saved with the lines, not after the title, so the note never shows them unlabelled.
+          if (labels)
+            whenLinesSaved(run.noteId, () =>
+              saveLiveSpeakers(run.noteId, utterances, elapsed, labels),
+            );
+          await useNotesStore.getState().finalizeCloudMeeting(run.noteId, utterances, elapsed, {
+            incomplete: interrupted !== null || liveError,
+          });
+          dlog.info('meet', 'save', {
+            run: run.run,
+            ok: true,
+            segments: utterances.length,
+            seconds: elapsed,
+            incomplete: interrupted !== null || liveError,
+          });
+        } catch (error) {
+          dlog.failure('meet', 'save', error, {
+            run: run.run,
+            ok: false,
+            segments: utterances.length,
+          });
+          forgetLinesSaved(run.noteId);
+          if (!owned()) return abandon();
+          Sentry.captureException(error);
+          setCloudFinish(run.noteId, {
+            stage: 'failed',
+            retry: () => {
+              settle().catch(Sentry.captureException);
             },
-          },
-        ).catch(Sentry.captureException);
-      }
-      setCloudFinish(run.noteId, null);
-      run.context.dispose();
-      if (interrupted) Alert.alert(t('meetingInterrupted'), interrupted.message);
-    };
-    await settle();
-  }, [
-    stopCloud,
-    cloudElapsed,
-    cloudStatus,
-    cloud.utterances,
-    cloud.speakerLabels,
-    cloud.speakerResult,
-    saveRaw,
-    markFailed,
-    t,
-  ]);
+          });
+          return;
+        }
+        if (!owned()) return abandon();
+        forgetLinesSaved(run.noteId);
+        const speakers = cloud.speakerResult?.();
+        if (speakers) {
+          // Minutes for a long meeting, so the note opens first and corrects itself after.
+          runSpeakerPass(
+            { noteId: run.noteId, utterances, elapsedSeconds: elapsed, result: speakers },
+            {
+              // The context is disposed by then; the same account and a live note are enough.
+              isCurrent: () => {
+                const current = useAuthStore.getState();
+                const note = notesRepository.getNoteById(run.noteId);
+                return (
+                  current.user?.id === identity.user?.id &&
+                  current.sessionCookie === identity.sessionCookie &&
+                  !!note &&
+                  !note.deletedAt
+                );
+              },
+            },
+          ).catch(Sentry.captureException);
+        }
+        setCloudFinish(run.noteId, null);
+        run.context.dispose();
+        if (interrupted) Alert.alert(t('meetingInterrupted'), interrupted.message);
+      };
+      await settle();
+    },
+    [
+      stopCloud,
+      cloudElapsed,
+      cloudStatus,
+      cloud.utterances,
+      cloud.speakerLabels,
+      cloud.speakerResult,
+      saveRaw,
+      markFailed,
+      t,
+    ],
+  );
   useEffect(() => {
-    if (cloud.stopRequested && phase === 'recording') finish().catch(Sentry.captureException);
+    if (cloud.stopRequested && phase === 'recording')
+      finish('notification_stop').catch(Sentry.captureException);
   }, [cloud.stopRequested, phase, finish]);
   useEffect(() => {
     if (exitToNote != null && phase === 'prompt') router.replace(`/(tabs)/(notes)/${exitToNote}`);
@@ -402,7 +444,7 @@ export function CloudMeetingScreen(): React.JSX.Element {
   usePreventRemove(phase !== 'prompt', () => {
     if (phase === 'cancelling') return;
     if (phase === 'cancel-failed') {
-      cancel(capture.current, true).catch(Sentry.captureException);
+      cancel(capture.current, true, 'cancel_retry').catch(Sentry.captureException);
       return;
     }
     const run = capture.current;
@@ -450,7 +492,7 @@ export function CloudMeetingScreen(): React.JSX.Element {
         noteId={noteId}
         onStop={() => {
           if (phase === 'cancel-failed')
-            cancel(capture.current, true).catch(Sentry.captureException);
+            cancel(capture.current, true, 'cancel_retry').catch(Sentry.captureException);
           else finish().catch(Sentry.captureException);
         }}
       />

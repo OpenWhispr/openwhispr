@@ -108,10 +108,21 @@ beforeEach(() => {
 
 it('a tap dictates, even over highlighted text', async () => {
   jest.mocked(processAndroidAudio).mockResolvedValue('Tomorrow at 4 works.');
-  mockListeners.onStart({ selection: 'old words', mode: 'dictate', app: 'com.whatsapp' });
+  mockListeners.onStart({
+    selection: 'old words',
+    mode: 'dictate',
+    app: 'com.whatsapp',
+    run: 'd-ab12',
+  });
   await flush();
-  // The app the field is in goes with the job, for Tone & Style.
-  expect(createAndroidJob).toHaveBeenCalledWith('dictate', 'Spanish', 'old words', 'com.whatsapp');
+  // The app the field is in goes with the job, for Tone & Style; the bubble's run id for the log.
+  expect(createAndroidJob).toHaveBeenCalledWith(
+    'dictate',
+    'Spanish',
+    'old words',
+    'com.whatsapp',
+    'd-ab12',
+  );
   mockListeners.onRecording(audio);
   await flush();
   expect(native.insert).toHaveBeenCalledWith('Tomorrow at 4 works.', { highlight: false });
@@ -137,7 +148,13 @@ it.each([
   mockListeners.onStart({ selection, mode });
   mockListeners.onRecording(audio);
   await flush();
-  expect(createAndroidJob).toHaveBeenCalledWith(expected, 'Spanish', selection, undefined);
+  expect(createAndroidJob).toHaveBeenCalledWith(
+    expected,
+    'Spanish',
+    selection,
+    undefined,
+    undefined,
+  );
   // Only an edit keeps its new words highlighted.
   expect(native.insert).toHaveBeenCalledWith('Done.', { highlight: expected === 'edit' });
   expect(native.setStatus).toHaveBeenLastCalledWith('success');
@@ -152,7 +169,13 @@ it('a retried take runs in the mode it was recorded in', async () => {
   jest.mocked(processAndroidAudio).mockResolvedValueOnce('Hola.');
   mockListeners.onRetry({ selection: '', app: 'com.Slack' });
   await flush();
-  expect(createAndroidJob).toHaveBeenLastCalledWith('translate', 'Spanish', '', 'com.Slack');
+  expect(createAndroidJob).toHaveBeenLastCalledWith(
+    'translate',
+    'Spanish',
+    '',
+    'com.Slack',
+    undefined,
+  );
 });
 
 it('with typing access off, the words go on the clipboard and the tab offers to turn it on', async () => {
@@ -265,7 +288,7 @@ it('waits for app data before creating the job', async () => {
   expect(createAndroidJob).not.toHaveBeenCalled();
   loaded();
   await flush();
-  expect(createAndroidJob).toHaveBeenCalledWith('dictate', 'Spanish', '', undefined);
+  expect(createAndroidJob).toHaveBeenCalledWith('dictate', 'Spanish', '', undefined, undefined);
   expect(native.insert).toHaveBeenCalledWith('Hi.', { highlight: false });
 });
 

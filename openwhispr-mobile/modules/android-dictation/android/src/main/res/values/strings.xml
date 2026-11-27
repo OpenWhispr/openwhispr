@@ -37,6 +37,8 @@
   <string name="ow_status_model_needed">Needs a model download</string>
   <string name="ow_status_download">Download</string>
   <string name="ow_status_failed">That didn’t work</string>
+  <string name="ow_status_meeting_recording">Meeting recording</string>
+  <string name="ow_status_stop_to_dictate">Stop it to dictate</string>
   <string name="ow_menu_assistant">Assistant</string>
   <string name="ow_menu_assistant_body">Write or reply for you</string>
   <string name="ow_menu_translate">Translate</string>

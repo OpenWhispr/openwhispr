@@ -1,5 +1,6 @@
 import { fetchUsage, type UsageInfo } from '@/android/remote/usageApi';
 import { useAuthStore } from '@/android/store/useAuthStore';
+import { dlog, errorCode } from '@/android/lib/debugLog';
 
 const CACHE_TTL_MS = 60_000;
 
@@ -97,6 +98,22 @@ export function createUsageState<ExtraState extends object>(
           return { status: 'stale', usage: get().usage };
         }
 
+        const previousUsage = get().usage;
+        if (
+          previousUsage?.plan !== freshUsage.plan ||
+          previousUsage?.isSubscribed !== freshUsage.isSubscribed ||
+          previousUsage?.isTrial !== freshUsage.isTrial ||
+          previousUsage?.status !== freshUsage.status
+        )
+          dlog.info('auth', 'entitlement', {
+            old_tier: previousUsage?.plan,
+            new_tier: freshUsage.plan,
+            state: freshUsage.status,
+            subscribed: freshUsage.isSubscribed,
+            trial: freshUsage.isTrial,
+            source: freshUsage.entitlementSources?.providerStore ?? undefined,
+            workspaces: freshUsage.entitlementSources?.workspaceIds?.length,
+          });
         set({
           usage: freshUsage,
           isLoading: false,
@@ -107,6 +124,11 @@ export function createUsageState<ExtraState extends object>(
         return { status: 'loaded', usage: freshUsage, loadedAt: freshLoadedAt };
       } catch (error) {
         const isCurrent = getUsageOwnerKey() === ownerKey && get().activeRequestId === requestId;
+        dlog.warn('auth', 'usage.failed', {
+          status: (error as { status?: number } | null)?.status,
+          code: errorCode(error),
+          stale: !isCurrent,
+        });
         const failure = lifecycle.onFailure(error, isCurrent);
         if (failure.state) set(failure.state);
         return failure.status === 'stale'

@@ -41,6 +41,8 @@ import {
   RECONNECT_MAX_DELAY_MS,
   CONNECT_TIMEOUT_MS,
 } from '@/android/shared/services/transcription/realtimeReconnect';
+import { dlog, startTimer } from '@/android/lib/debugLog';
+import { meetingDebugRun } from '@/android/meetingModels';
 
 export type {
   RealtimeCallbacks,
@@ -147,6 +149,15 @@ export function createRealtimeMeetingWs(
   ): Promise<RealtimeTransportSession> {
     const sampleRate = opts.sampleRate ?? DEFAULT_SAMPLE_RATE;
     const wsFactory = deps.wsFactory ?? defaultWsFactory;
+    // Debug log only: which meeting, how much audio went out, how much is waiting.
+    const run = meetingDebugRun();
+    const provider = deps.fetchClientSecret ? 'byok' : 'openwhispr';
+    const bytesPerSecond = sampleRate * 2;
+    let sentBytes = 0;
+    let nextSentLogSeconds = 60;
+    let backlogLoggedSeconds = 0;
+    let backlogDropLogged = false;
+    let reconnectAttempt = 0;
 
     const tokenBody = (): Record<string, unknown> => ({
       purpose: 'meeting',
@@ -156,6 +167,23 @@ export function createRealtimeMeetingWs(
     });
 
     const fetchClientSecret = async (): Promise<string> => {
+      const elapsed = startTimer();
+      try {
+        const secret = await mintClientSecret();
+        dlog.info('meet', 'ws.token', { run, provider, ok: true, ms: elapsed() });
+        return secret;
+      } catch (error) {
+        dlog.failure('meet', 'ws.token', error, {
+          run,
+          provider,
+          ok: false,
+          ms: elapsed(),
+          status: (error as { status?: number } | null)?.status,
+        });
+        throw error;
+      }
+    };
+    const mintClientSecret = async (): Promise<string> => {
       if (deps.fetchClientSecret) return deps.fetchClientSecret();
       try {
         const { clientSecret } = await api.post<TokenResponse>(
@@ -207,12 +235,26 @@ export function createRealtimeMeetingWs(
     const enqueuePcm = (buf: Buffer): void => {
       const expectedBytes = pcmRing.byteLength + buf.length;
       pcmRing.push(buf);
-      if (pcmRing.byteLength < expectedBytes) lifecycle?.audioIncomplete();
+      if (pcmRing.byteLength < expectedBytes) {
+        if (!backlogDropLogged) dlog.warn('meet', 'ws.backlog_dropped', { run });
+        backlogDropLogged = true;
+        lifecycle?.audioIncomplete();
+      }
+    };
+    const logBacklog = (): void => {
+      const seconds = Math.floor(pcmRing.byteLength / bytesPerSecond);
+      if (seconds >= backlogLoggedSeconds + 10) {
+        backlogLoggedSeconds = seconds;
+        dlog.warn('meet', 'ws.backlog', { run, seconds });
+      }
     };
 
     const flush = (): void => {
       const ws = transport.currentWs;
-      if (!ws || ws.readyState !== WS_OPEN) return; // during an outage this no-ops; PCM keeps buffering
+      if (!ws || ws.readyState !== WS_OPEN) {
+        logBacklog();
+        return; // during an outage this no-ops; PCM keeps buffering
+      }
       const chunks = pcmRing.drain();
       if (chunks.length === 0) return;
       // Merge by bytes; base64 concatenation is only valid on 3-byte-aligned chunks.
@@ -221,6 +263,12 @@ export function createRealtimeMeetingWs(
         ws.send(
           JSON.stringify({ type: 'input_audio_buffer.append', audio: merged.toString('base64') }),
         );
+        backlogLoggedSeconds = 0;
+        sentBytes += merged.length;
+        if (sentBytes / bytesPerSecond >= nextSentLogSeconds) {
+          dlog.info('meet', 'audio_sent', { run, seconds: Math.floor(sentBytes / bytesPerSecond) });
+          nextSentLogSeconds += 60;
+        }
       } catch {
         lifecycle?.audioIncomplete();
       }
@@ -296,6 +344,7 @@ export function createRealtimeMeetingWs(
         legMeta.set(ws, meta);
         lifecycle?.registerLeg(ws, meta);
         connectingWs = ws;
+        const elapsed = startTimer();
         let settled = false;
         let timer: ReturnType<typeof setTimeout>;
         const settle = (): void => {
@@ -311,12 +360,20 @@ export function createRealtimeMeetingWs(
           } catch {
             // ignore
           }
+          dlog.warn('meet', 'ws.open', {
+            run,
+            n: meta.legIndex,
+            ok: false,
+            why: 'timeout',
+            ms: elapsed(),
+          });
           reject(new Error('Realtime WebSocket connect timeout'));
         }, CONNECT_TIMEOUT_MS);
 
         ws.onopen = () => {
           if (settled) return;
           settle();
+          dlog.info('meet', 'ws.open', { run, n: meta.legIndex, ok: true, ms: elapsed() });
           resolve(ws);
         };
         ws.onmessage = (e) => handleMessage(ws, e);
@@ -330,10 +387,23 @@ export function createRealtimeMeetingWs(
           } catch {
             // ignore
           }
+          dlog.warn('meet', 'ws.open', {
+            run,
+            n: meta.legIndex,
+            ok: false,
+            why: 'error',
+            ms: elapsed(),
+          });
           reject(new Error('Realtime WebSocket connection error'));
         };
         ws.onclose = (e) => {
           const code = (e as { code?: number } | undefined)?.code;
+          dlog.info('meet', 'ws.close', {
+            run,
+            n: meta.legIndex,
+            close_code: code,
+            state: settled ? 'open' : 'connecting',
+          });
           if (!settled) {
             settle();
             reject(new Error(`Realtime WebSocket closed before open (code ${code ?? 'unknown'})`));
@@ -379,6 +449,7 @@ export function createRealtimeMeetingWs(
 
     const goTerminal = (error: unknown): void => {
       if (transport.terminated) return;
+      dlog.failure('meet', 'ws.terminal', error, { run });
       if (lifecycle) lifecycle.terminal(error);
       else transport.terminated = true;
       teardownCapture();
@@ -395,8 +466,11 @@ export function createRealtimeMeetingWs(
       if (transport.terminated || lifecycle?.finishing || reconnecting || rotating) return;
       reconnecting = true;
       callbacks.onReconnecting?.();
+      reconnectAttempt = 0;
       withRetry(
         async () => {
+          reconnectAttempt += 1;
+          dlog.info('meet', 'ws.reconnect', { run, attempt: reconnectAttempt });
           // Bail once stopped so a stop() mid-backoff can't keep opening sockets / fetching
           // tokens; a 4xx-shaped status makes the strategy give up immediately.
           if (transport.terminated || lifecycle?.finishing)
@@ -421,11 +495,13 @@ export function createRealtimeMeetingWs(
             return;
           }
           swapCurrentLeg(ws);
+          dlog.info('meet', 'ws.reconnected', { run, attempt: reconnectAttempt });
           callbacks.onReconnected?.();
         })
         .catch((error) => {
           reconnecting = false;
           if (transport.terminated) return;
+          dlog.failure('meet', 'ws.reconnect_failed', error, { run, attempt: reconnectAttempt });
           goTerminal(error); // budget exhausted / 4xx token — utterances still preserved
         });
     };
@@ -433,6 +509,7 @@ export function createRealtimeMeetingWs(
     const rollLeg = async (): Promise<void> => {
       if (transport.terminated || lifecycle?.finishing || reconnecting || rotating) return;
       rotating = true;
+      dlog.info('meet', 'ws.rotate', { run, n: legIndex + 1 });
       // The default transport advances the offset before connecting; a recovery
       // lifecycle accounts for connection time when the replacement is swapped in.
       if (!lifecycle) cumulativeOffsetMs += Date.now() - legStartedAt;
@@ -473,6 +550,13 @@ export function createRealtimeMeetingWs(
       }
       if (ws !== transport.currentWs || transport.terminated || rotating || reconnecting) return; // re-check post-await
       const decision = classifyClose(code, isConnected, sessionAgeMs);
+      dlog.warn('meet', 'ws.lost', {
+        run,
+        close_code: code,
+        result: decision,
+        offline: !isConnected,
+        seconds: Math.floor(sessionAgeMs / 1000),
+      });
       if (decision === 'terminal') {
         goTerminal(new Error(`Realtime WebSocket closed (code ${code ?? 'unknown'})`));
       } else if (decision === 'rotate') {
@@ -485,6 +569,7 @@ export function createRealtimeMeetingWs(
     const stop = (): void => {
       if (transport.terminated) return;
       transport.terminated = true;
+      dlog.info('meet', 'ws.stop', { run, seconds: Math.floor(sentBytes / bytesPerSecond) });
       const ws = transport.currentWs;
       flush();
       closeWs(ws, { commit: true });
@@ -518,6 +603,7 @@ export function createRealtimeMeetingWs(
       if (lifecycle) await lifecycle.startCapture();
       else await LivePCMStreaming.start(sampleRate);
     } catch (error) {
+      dlog.failure('meet', 'capture_failed', error, { run, cloud: true });
       lifecycle?.beforeFrameCleanup();
       transport.frameSub?.remove();
       transport.frameSub = null;
@@ -527,6 +613,7 @@ export function createRealtimeMeetingWs(
 
     sessionStartedAt = Date.now();
     transport.flushTimer = setInterval(flush, FLUSH_INTERVAL_MS);
+    dlog.info('meet', 'ws.session', { run, provider, rate: sampleRate, lang: opts.language });
 
     try {
       transport.currentWs = await openLeg(firstSecret);

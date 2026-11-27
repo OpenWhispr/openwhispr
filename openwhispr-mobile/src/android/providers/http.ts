@@ -1,5 +1,19 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { ProviderExecutionError } from '@/android/providers/ProviderExecutionError';
+import { dlog, hostOf, startTimer } from '@/android/lib/debugLog';
+
+// The host, status and time of a provider call; never its path, query, key or body.
+function logCall(name: string, url: string, ms: number, status?: number, failed?: string) {
+  const fields = {
+    route: `POST ${hostOf(url).split('@').pop()}`,
+    provider: name,
+    ms,
+    status,
+    reason: failed,
+  };
+  if (failed || (status !== undefined && status >= 400)) dlog.warn('net', 'provider', fields);
+  else dlog.info('net', 'provider', fields);
+}
 
 /** The provider failure for an HTTP status, in the same codes the OpenAI-compatible client uses. */
 export function statusError(name: string, status: number): ProviderExecutionError {
@@ -60,11 +74,14 @@ export async function uploadFile(
   });
   const cancel = () => void task.cancelAsync().catch(() => undefined);
   signal?.addEventListener('abort', cancel);
+  const elapsed = startTimer();
   try {
     const result = await task.uploadAsync().catch(() => {
+      logCall(name, url, elapsed(), undefined, 'network');
       throw networkError(name);
     });
     if (!result) throw Object.assign(new Error('Aborted'), { name: 'AbortError' });
+    logCall(name, url, elapsed(), result.status);
     if (result.status < 200 || result.status >= 300) throw statusError(name, result.status);
     return JSON.parse(result.body) as unknown;
   } finally {
@@ -73,10 +90,19 @@ export async function uploadFile(
 }
 
 export async function requestJson(name: string, url: string, init: RequestInit): Promise<unknown> {
+  const elapsed = startTimer();
   const response = await fetch(url, init).catch((error: unknown) => {
+    logCall(
+      name,
+      url,
+      elapsed(),
+      undefined,
+      (error as Error)?.name === 'AbortError' ? 'aborted' : 'network',
+    );
     if ((error as Error)?.name === 'AbortError') throw error;
     throw networkError(name);
   });
+  logCall(name, url, elapsed(), response.status);
   if (!response.ok) throw statusError(name, response.status);
   return (await response.json()) as unknown;
 }

@@ -19,6 +19,27 @@ import {
   buildLocalReasoningInstructions,
   LocalReasoningService,
 } from '@/services/reasoning/LocalReasoningService';
+import { dlog, startTimer } from '@/android/lib/debugLog';
+import { failureFields } from '@/android/dictation/dictationLog';
+
+// Cleanup's lines go under `clean`, everything else (Assistant, translate, note chat) under `asst`.
+const logArea = (scope: string | undefined) => (!scope || scope === 'cleanup' ? 'clean' : 'asst');
+
+// Where processText will send a request, for the log only: it must never throw.
+function placementFields(request: ReasoningRequest): Record<string, string | boolean | undefined> {
+  try {
+    const placement = resolveReasoningPlacement(request);
+    return {
+      scope: request.inferenceScope ?? 'cleanup',
+      mode: placement.selection?.mode ?? 'openwhispr',
+      provider: placement.selection?.providerId,
+      model: placement.selection?.modelId,
+      local: placement.localRequired,
+    };
+  } catch {
+    return { scope: request.inferenceScope ?? 'cleanup' };
+  }
+}
 
 interface ApiErrorLike {
   status?: number;
@@ -139,6 +160,7 @@ export class ReasoningService {
     }
 
     let data: ReasonApiResponse;
+    const elapsed = startTimer();
     try {
       data = await api.post<ReasonApiResponse>('/api/reason', body, {
         signal: options.signal,
@@ -156,6 +178,16 @@ export class ReasoningService {
       throw error;
     }
 
+    dlog.info('net', 'reason.reply', {
+      route: 'POST /api/reason',
+      ms: elapsed(),
+      provider: data.provider || 'cloud',
+      model: data.model || 'unknown',
+      server_ms: data.processingMs,
+      client_prompt: !!options.systemPrompt,
+      dict_sent: (options.customDictionary?.length ?? 0) + (options.sharedDictionary?.length ?? 0),
+      empty: !data.text || undefined,
+    });
     const keepText = options.keepTextOnEmptyReply ?? true;
     const content = stripThinkingTags(data.text || (keepText ? text : ''));
 
@@ -174,6 +206,30 @@ export class ReasoningService {
   }
 
   static async processText(request: ReasoningRequest): Promise<ReasoningResponse> {
+    const area = logArea(request.inferenceScope);
+    const fields = placementFields(request);
+    const elapsed = startTimer();
+    dlog.info(area, 'reasoning.request', {
+      ...fields,
+      in_chars: request.text?.length ?? 0,
+      system: !!request.systemPrompt,
+    });
+    try {
+      const result = await ReasoningService.processTextOnRoute(request);
+      dlog.info(area, 'reasoning.done', {
+        ...fields,
+        model: result.model || (fields.model as string | undefined),
+        ms: elapsed(),
+        out_chars: result.text.length,
+      });
+      return result;
+    } catch (error) {
+      dlog.error(area, 'reasoning.failed', { ...fields, ms: elapsed(), ...failureFields(error) });
+      throw error;
+    }
+  }
+
+  private static async processTextOnRoute(request: ReasoningRequest): Promise<ReasoningResponse> {
     const {
       text,
       systemPrompt,
@@ -230,6 +286,7 @@ export class ReasoningService {
             (Platform.OS !== 'ios' || scope !== 'cleanup' || (await fitsLocalCleanupOutput(text)));
 
           if (!fits) {
+            dlog.warn(logArea(scope), 'local.too_long', { scope, cloud: allowCloudFallback });
             if (!allowCloudFallback) {
               throw new LocalReasoningError(
                 'LOCAL_CONTEXT_LIMIT',
@@ -244,6 +301,11 @@ export class ReasoningService {
             } catch (error) {
               // A cancelled or timed-out request is over; it must not start again in the cloud.
               if (!allowCloudFallback || signal?.aborted) throw error;
+              dlog.warn(logArea(scope), 'local.fallback', {
+                scope,
+                why: 'local_failed',
+                ...failureFields(error),
+              });
             }
           }
         } else if (!allowCloudFallback) {

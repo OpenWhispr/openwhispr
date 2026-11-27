@@ -18,6 +18,11 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 class AndroidDictationModule : Module() {
+  companion object {
+    private val instances = java.util.concurrent.atomic.AtomicInteger(0)
+  }
+  /** This instance's number since the process started (`m1`, `m2`, …), for the debug log. */
+  private val instanceNumber = instances.incrementAndGet()
   private var recorder: WavRecorder? = null
   private val sampleDecodes = ConcurrentHashMap<String, AtomicBoolean>()
   private val cloudAudioJobs = ConcurrentHashMap<String, AtomicBoolean>()
@@ -66,25 +71,33 @@ class AndroidDictationModule : Module() {
   private val themeFade = ThemeFade()
   override fun definition() = ModuleDefinition {
     Name("AndroidDictation")
-    Events("onStart", "onRecording", "onRetry", "onDismiss", "onError", "onCancel", "onOpenResult", "onOpenPlans", "onOpenSignIn", "onOpenModels", "onStatusChange", "pcm-frame", "pcm-error", "pcm-stopped", "local-meeting-stopped", "local-meeting-error", "onNavigationBarChange", "onFieldEdited", "onLearnedUndo", "onLearnedRedo", "onOpenDictionary")
-    OnCreate { DictationService.emit = { event, data -> sendEvent(event, data) } }
+    Events("onStart", "onRecording", "onRetry", "onDismiss", "onError", "onCancel", "onOpenResult", "onOpenPlans", "onOpenSignIn", "onOpenModels", "onOpenApp", "onErrorReport", "onStatusChange", "pcm-frame", "pcm-error", "pcm-stopped", "local-meeting-stopped", "local-meeting-error", "onNavigationBarChange", "onFieldEdited", "onLearnedUndo", "onLearnedRedo", "onOpenDictionary")
+    OnCreate {
+      appContext.reactContext?.let { DebugLog.init(it) }
+      DebugLog.event('I', "app", "module.created", "module" to "m$instanceNumber", "since_ms" to DebugLog.processAgeMs())
+      DictationService.emit = { event, data -> sendEvent(event, data) }
+    }
     // The bubble pipeline listens, in the app or in a headless task: send what the bubble held.
     AsyncFunction("pipelineReady") {
       HeadlessPipeline.ready = true
-      android.util.Log.i("OpenWhisprBubble", "Pipeline ready")
+      DebugLog.logcat("OpenWhisprBubble", "Pipeline ready")
+      DebugLog.event('I', "pipe", "ready", "module" to "m$instanceNumber")
       DictationService.instance?.pipelineReady()
     }.runOnQueue(Queues.MAIN)
     OnActivityEntersForeground {
+      DebugLog.event('I', "app", "foreground", "module" to "m$instanceNumber")
       navigationBar.attach(appContext.currentActivity)
       DictationService.appVisible = true
       DictationService.instance?.unhide()
       DictationService.instance?.updateVisibility()
     }
     OnActivityEntersBackground {
+      DebugLog.event('I', "app", "background", "module" to "m$instanceNumber")
       DictationService.appVisible = false
       DictationService.instance?.updateVisibility()
     }
     OnDestroy {
+      DebugLog.event('I', "app", "module.destroyed", "module" to "m$instanceNumber", "state" to if (recorder != null) "recording" else "idle")
       android.os.Handler(android.os.Looper.getMainLooper()).post { navigationBar.detach(); themeFade.clear() }
       sampleDecodes.values.forEach { it.set(true) }
       sampleDecodes.clear()
@@ -112,6 +125,39 @@ class AndroidDictationModule : Module() {
       require(noteId > 0) { "Invalid meeting note." }
       stopMeetingCapture(noteId, captureId, promise)
     }.runOnQueue(Queues.MAIN)
+    // Debug log (Settings › Analytics). Lines from JS are already formatted by src/android/lib/debugLog.ts.
+    Function("setDebugLogging") { enabled: Boolean -> DebugLog.setEnabled(context, enabled) }
+    Function("isDebugLogging") { DebugLog.init(context); DebugLog.enabled }
+    Function("debugLog") { lines: List<String> -> DebugLog.js(lines) }
+    AsyncFunction("hasDebugLog") { DebugLog.init(context); DebugLog.hasLog() }
+    AsyncFunction("clearDebugLog") { DebugLog.init(context); DebugLog.clear(); null }
+    AsyncFunction("exportDebugLog") { header: String -> DebugLog.init(context); "file://" + DebugLog.export(header).absolutePath }
+    Function("newDebugRun") { kind: String -> DebugLogFormat.runId(kind.firstOrNull() ?: 'x') }
+    Function("setMeetingRun") { run: String? -> MeetingCaptureService.nextRun = run }
+    /** Who holds the microphone: `meeting`, `bubble`, `in_app`, `practice`, or null when it's free. */
+    /** Errors the native side saw while JS wasn't listening, for Sentry (sent only with Usage analytics on). */
+    Function("takeErrorReports") { DebugLog.init(context); DebugLog.takeReports() }
+    Function("getMicrophoneOwner") { WavRecorder.holder?.owner }
+    Function("getDebugInfo") {
+      DebugLog.init(context)
+      val power = context.getSystemService(PowerManager::class.java)
+      val lock = WavRecorder.holder
+      val granted = { permission: String -> context.checkSelfPermission(permission) == android.content.pm.PackageManager.PERMISSION_GRANTED }
+      mapOf(
+        "manufacturer" to Build.MANUFACTURER, "model" to Build.MODEL, "release" to Build.VERSION.RELEASE, "sdk" to Build.VERSION.SDK_INT,
+        "ignoringBatteryOptimizations" to (power?.isIgnoringBatteryOptimizations(context.packageName) ?: false),
+        "microphone" to granted(android.Manifest.permission.RECORD_AUDIO),
+        "overlay" to Settings.canDrawOverlays(context),
+        "accessibility" to (InsertionService.instance != null),
+        "notifications" to (Build.VERSION.SDK_INT < 33 || granted("android.permission.POST_NOTIFICATIONS")),
+        "bubbleRunning" to (DictationService.instance != null),
+        "meetingRunning" to (MeetingCaptureService.instance != null),
+        "processAgeMs" to DebugLog.processAgeMs(),
+        "module" to "m$instanceNumber",
+        "enabled" to DebugLog.enabled, "enabledSince" to DebugLog.enabledSince, "onAtLaunch" to DebugLog.onAtLaunch,
+        "micOwner" to lock?.owner, "micModule" to lock?.module?.let { "m$it" }, "micHeldMs" to lock?.heldMs(),
+      )
+    }
     Function("isPCMRecording") { MeetingCaptureService.instance?.route?.localOnly == false }
     AsyncFunction("transcribeParakeet") { uri: String, modelDirectory: String, promise: Promise ->
       parakeet.transcribe(localFile(uri), localFile(modelDirectory), promise)
@@ -250,8 +296,11 @@ class AndroidDictationModule : Module() {
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("insert") { text: String, options: Map<String, Any?>?, promise: Promise ->
       val service = InsertionService.instance
-      if (service == null) promise.resolve(false)
-      else service.insert(text, highlight = options?.get("highlight") == true) { promise.resolve(it) }
+      if (service == null) {
+        DebugLog.event('W', "ins", "result", "run" to options?.get("run") as? String, "ok" to false, "reason" to "no_accessibility")
+        promise.resolve(false)
+      }
+      else service.insert(text, highlight = options?.get("highlight") == true, run = options?.get("run") as? String) { promise.resolve(it) }
     }.runOnQueue(Queues.MAIN)
     // What the hold menu shows: the Translate target, why the Assistant is greyed ("" = available),
     // and what holding the bubble does ("menu", or "talk" with the Assistant off; older builds sent "nothing"). Kept for the bubble's next start.
@@ -268,17 +317,28 @@ class AndroidDictationModule : Module() {
     }
     // With typing access off nothing can paste: the words go on the clipboard instead.
     Function("copyText") { text: String ->
+      DebugLog.event('I', "ins", "clipboard", "chars" to text.length)
       val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
       clipboard.setPrimaryClip(android.content.ClipData.newPlainText("OpenWhispr", text))
     }
     // [voiceLevel]: getRecordingLevel hears the voice above the room, as the bubble's bars do (practice bubble).
     AsyncFunction("startRecording") { voiceLevel: Boolean? ->
-      check(recorder == null) { "A recording is already active." }
+      if (recorder != null) {
+        DebugLog.event('W', "mic", "lock.refused", "requester" to "in_app", "reason" to "module_recorder_active", "module" to "m$instanceNumber")
+        throw IllegalStateException("A recording is already active.")
+      }
+      // The practice bubble asks for the voice level; Home's try doesn't.
+      val owner = if (voiceLevel == true) "practice" else "in_app"
       val next = if (voiceLevel == true) {
         val meter = VoiceMeter(windowMs = DictationService.LEVEL_WINDOW_MS)
-        WavRecorder(context, readMillis = DictationService.LEVEL_WINDOW_MS, measure = meter::level)
-      } else WavRecorder(context)
-      try { next.start(); recorder = next } catch (error: Exception) { next.close(); throw error }
+        WavRecorder(context, readMillis = DictationService.LEVEL_WINDOW_MS, measure = meter::level, owner = owner, module = instanceNumber)
+      } else WavRecorder(context, owner = owner, module = instanceNumber)
+      try { next.start(); recorder = next } catch (error: Exception) {
+        next.close()
+        if (error is WavRecorder.MicrophoneBusyException) DebugLog.report("mic_lock_refused", "requester" to owner,
+          "owner" to (error.holder?.owner ?: "unknown"), "held_ms" to (error.holder?.heldMs()?.toString() ?: ""))
+        throw error
+      }
     }
     Function("getRecordingLevel") { recorder?.level ?: 0f }
     Function("getMeetingLevel") { MeetingCaptureService.instance?.level ?: 0f }

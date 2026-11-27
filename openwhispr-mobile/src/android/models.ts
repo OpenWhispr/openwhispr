@@ -6,6 +6,7 @@ import { withAndroidInference } from './inferenceQueue';
 import { MOONSHINE_MODELS } from './moonshineModels';
 import { Platform } from 'react-native';
 import { MEETING_MODELS } from './meetingModels';
+import { dlog, startTimer } from './lib/debugLog';
 
 export const ANDROID_MODELS = {
   ...MOONSHINE_MODELS,
@@ -112,10 +113,20 @@ export async function downloadAndroidModel(
   if (active.has(id)) throw new Error(i18n.t('downloadBusy'));
   const job: { download?: FileSystem.DownloadResumable; cancelled: boolean } = { cancelled: false };
   active.set(id, job);
+  const elapsed = startTimer();
+  // The debug log gets the 25 % steps only, not every progress event.
+  let loggedStep = 0;
+  let checksum: 'ok' | 'bad' | undefined;
   const progress = (fraction: number) => {
     publishProgress(id, fraction);
     onProgress?.(fraction);
+    const step = Math.floor(fraction * 4);
+    if (step > loggedStep && step < 4) {
+      loggedStep = step;
+      dlog.info('model', 'download.progress', { model: id, percent: step * 25, ms: elapsed() });
+    }
   };
+  dlog.info('model', 'download.start', { model: id, bytes: ANDROID_MODELS[id].bytes });
   progress(0);
   let completed = 0;
   try {
@@ -172,8 +183,11 @@ export async function downloadAndroidModel(
           info.isDirectory ||
           info.size !== file.bytes ||
           (await AndroidDictation!.sha256(temporary)) !== file.sha256
-        )
+        ) {
+          checksum = 'bad';
           throw new Error(i18n.t('downloadVerification'));
+        }
+        checksum = 'ok';
         if (job.cancelled) throw new Error(i18n.t('downloadCancelled'));
         await FileSystem.moveAsync({ from: temporary, to: file.destination });
         completed += file.bytes;
@@ -183,6 +197,21 @@ export async function downloadAndroidModel(
         await FileSystem.deleteAsync(temporary, { idempotent: true });
       }
     }
+    dlog.info('model', 'download.done', {
+      model: id,
+      bytes: completed,
+      ms: elapsed(),
+      checksum: checksum ?? 'ok',
+    });
+  } catch (error) {
+    dlog.failure('model', 'download.failed', error, {
+      model: id,
+      bytes: completed,
+      ms: elapsed(),
+      checksum,
+      cancelled: job.cancelled,
+    });
+    throw error;
   } finally {
     active.delete(id);
     publishProgress(id);
@@ -205,4 +234,5 @@ export async function removeAndroidModel(id: AndroidModelId): Promise<void> {
     for (const file of filesFor(id)) verifiedFiles.delete(file.destination);
     await FileSystem.deleteAsync(modelPath(id), { idempotent: true });
   });
+  dlog.info('model', 'deleted', { model: id });
 }

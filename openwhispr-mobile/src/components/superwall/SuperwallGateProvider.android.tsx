@@ -18,6 +18,7 @@ import {
   type SuperwallPlacement,
 } from '@/android/shared/lib/superwall';
 import { Sentry } from '@/android/lib/sentry';
+import { dlog } from '@/android/lib/debugLog';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';
 import { logPaywallViewed, logSubscription } from '@/android/lib/appsflyer';
 import { recordPurchaseForBilling } from './recordPurchaseForBilling';
@@ -380,6 +381,7 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
       }
       const placement = activePlacementRef.current;
       if (placement) logPaywallViewed(placement);
+      dlog.info('auth', 'paywall', { placement, result: 'shown' });
       debugLog('paywall presented', {
         placement,
         paywall: paywallInfo.name,
@@ -400,6 +402,12 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
       setPresentationState({ status: 'dismissed', result });
       const placement = activePlacementRef.current;
       debugLog('paywall dismissed', { placement, result: describePaywallResult(result) });
+      // The result type only: a purchase's product goes in `plan`.
+      dlog.info('auth', 'paywall', {
+        placement,
+        result: result.type,
+        plan: result.type === 'purchased' ? result.productId : undefined,
+      });
       Sentry.addBreadcrumb({
         category: 'superwall',
         message: 'paywall dismissed',
@@ -450,6 +458,11 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
     },
     onSkip(reason) {
       setPresentationState({ status: 'skipped', reason });
+      dlog.info('auth', 'paywall', {
+        placement: activePlacementRef.current,
+        result: 'skipped',
+        reason: reason.type,
+      });
       debugLog('paywall SKIPPED', {
         placement: activePlacementRef.current,
         reason: describePaywallSkip(reason),
@@ -472,6 +485,7 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
     },
     onError(error) {
       setPresentationState({ status: 'error', error });
+      dlog.error('auth', 'paywall', { placement: activePlacementRef.current, result: 'error' });
       debugLog('paywall ERROR', { placement: activePlacementRef.current, error });
       const presentedGate = presentationGatesRef.current[0];
       if (presentedGate) {
@@ -567,6 +581,11 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
       // Onboarding still moves on silently, with or without an offer.
       const passesThroughWhenBlocked = !requiresAccount && (!creatorOffer || isOnboarding);
       if (signal?.aborted) return false;
+      dlog.info('auth', 'paywall.register', {
+        placement,
+        signed_in: !!user,
+        ready: isConfigured && !configurationError,
+      });
       debugLog('register', {
         placement,
         requiresAccount,

@@ -14,6 +14,8 @@ import {
 } from './speechSelection';
 import { speechModelCoversRecording, speechModelSupportsLanguages } from './speechCapabilities';
 import { getPreferredTranscriptionLanguages } from '@/android/shared/lib/transcriptionLanguage';
+import { dlog, startTimer } from '@/android/lib/debugLog';
+import { meetingDebugRun } from './meetingModels';
 
 const diagnostics = __DEV__ || Constants.expoConfig?.extra?.openWhispr?.isDevelopment === true;
 
@@ -55,7 +57,11 @@ export const LocalSpeechModel = {
         throw new Error(
           i18n.t(model === 'parakeet-v3' ? 'unsupportedLanguage' : 'moonshineEnglishOnly'),
         );
-      if (!(await modelReady(model))) throw new Error(i18n.t('speechDownloadNeeded'));
+      const ready = await modelReady(model);
+      // Meetings only (word timings); dictation and uploads log on their own paths.
+      if (options.wordTimestamps)
+        dlog[ready ? 'info' : 'warn']('meet', 'model', { run: meetingDebugRun(), model, ready });
+      if (!ready) throw new Error(i18n.t('speechDownloadNeeded'));
       await LocalTextModel.release();
       if (model === 'parakeet-v3') await AndroidDictation!.releaseMoonshine();
       else await AndroidDictation!.releaseParakeet();
@@ -66,6 +72,7 @@ export const LocalSpeechModel = {
         else AndroidDictation!.cancelMoonshine();
       };
       options.signal?.addEventListener('abort', cancel, { once: true });
+      const elapsed = startTimer();
       const result = await (async () =>
         model === 'parakeet-v3'
           ? await AndroidDictation!.transcribeParakeet(uri, modelPath(model))
@@ -73,6 +80,14 @@ export const LocalSpeechModel = {
         () => options.signal?.removeEventListener('abort', cancel),
       );
       if (job !== generation || options.signal?.aborted) throw new Error(i18n.t('cancelled'));
+      if (options.wordTimestamps)
+        dlog.info('meet', 'chunk', {
+          run: meetingDebugRun(),
+          model,
+          audio_ms: Math.round((result.duration ?? 0) * 1000),
+          ms: result.processingMs ?? elapsed(),
+          chars: result.text.length,
+        });
       if (diagnostics)
         console.log(`[android-speech] model=${model} elapsedMs=${result.processingMs}`);
       return {

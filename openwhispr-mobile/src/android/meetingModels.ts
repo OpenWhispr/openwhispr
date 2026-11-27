@@ -20,3 +20,15 @@ export const MEETING_MODELS = {
     ],
   },
 } as const;
+
+let meetingRun: string | null = null;
+/**
+ * The debug-log run id (`m-…`) of the meeting being recorded or processed, so its socket, chunk
+ * and save lines carry the same `run` as the screen's. Logging only; nothing reads it otherwise.
+ */
+export function setMeetingDebugRun(run: string | null): void {
+  meetingRun = run;
+}
+export function meetingDebugRun(): string | undefined {
+  return meetingRun ?? undefined;
+}

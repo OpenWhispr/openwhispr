@@ -12,6 +12,7 @@ import {
   setProviderCredential,
   subscribeProviderCredentialChanges,
 } from '@/services/providers/ProviderCredentials';
+import { dlog } from '@/android/lib/debugLog';
 import { LIVE_MODEL, isLiveProvider } from '../providers/liveMeeting';
 import { OPENROUTER_MODELS, RETIRING, TEXT_DEFAULT } from './androidModels';
 import type { KeyProviderId } from './keyCheck';
@@ -118,6 +119,7 @@ export async function saveKey(provider: KeyProviderId, apiKey: string): Promise<
   await setProviderCredential(await getProviderCredentialReference(provider), {
     apiKey: apiKey.trim(),
   });
+  dlog.info('set', 'api_key', { provider, saved: true });
 }
 
 /** Saves the key once, then runs each ticked task on it. Dictation goes first: it sets the mode. */
@@ -128,5 +130,6 @@ export async function applyKeyToTasks(
 ): Promise<void> {
   await saveKey(provider, apiKey);
   const ordered = SHEET_TASKS.filter((task) => tasks.includes(task));
+  dlog.info('set', 'api_key.tasks', { provider, count: ordered.length });
   for (const task of ordered) await runTaskOnKey(provider, task);
 }

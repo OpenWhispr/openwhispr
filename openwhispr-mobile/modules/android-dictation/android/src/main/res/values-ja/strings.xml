@@ -37,6 +37,8 @@
   <string name="ow_status_model_needed">モデルのダウンロードが必要</string>
   <string name="ow_status_download">ダウンロード</string>
   <string name="ow_status_failed">うまくいきませんでした</string>
+  <string name="ow_status_meeting_recording">会議を録音中</string>
+  <string name="ow_status_stop_to_dictate">停止すると音声入力できます</string>
   <string name="ow_menu_assistant">アシスタント</string>
   <string name="ow_menu_assistant_body">代わりに書く・返信する</string>
   <string name="ow_menu_translate">翻訳</string>

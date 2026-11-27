@@ -1,3 +1,4 @@
+import { dlog } from '@/android/lib/debugLog';
 import { uncheckedSync, type SyncCheckpoint } from '@/android/shared/sync/syncContext';
 import * as Sentry from '@sentry/react-native';
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
@@ -169,6 +170,7 @@ async function walkPages(
 
     for (const remote of entries) {
       applyRemote(remote);
+      pulledThisPass += 1;
       if (remote.updated_at > maxes.updatedAt) {
         maxes.updatedAt = remote.updated_at;
         maxes.id = remote.id;
@@ -205,8 +207,12 @@ async function walkPages(
 //
 // `maxes.updatedAt` is tracked across both phases so the first sync persists a
 // correct delta boundary for subsequent runs.
+// Rows applied by the current pull, for the debug log (one pull runs at a time).
+let pulledThisPass = 0;
+
 export async function pullDictionary(checkpoint: SyncCheckpoint = uncheckedSync): Promise<void> {
   checkpoint();
+  pulledThisPass = 0;
   const since = notesRepository.getSyncState(DICTIONARY_CURSOR_KEY);
   const sinceId = notesRepository.getSyncState(DICTIONARY_CURSOR_ID_KEY);
   const maxes = { updatedAt: since ?? '', id: sinceId ?? '' };
@@ -248,4 +254,10 @@ export async function pullDictionary(checkpoint: SyncCheckpoint = uncheckedSync)
   if (maxes.updatedAt) notesRepository.setSyncState(DICTIONARY_CURSOR_KEY, maxes.updatedAt);
   if (maxes.id) notesRepository.setSyncState(DICTIONARY_CURSOR_ID_KEY, maxes.id);
   if (backfill && complete) notesRepository.setSyncState(DICTIONARY_SHARED_AT_BACKFILL_KEY, '1');
+  dlog.info('words', 'sync.pull', {
+    table: 'dictionary',
+    pulled: pulledThisPass,
+    snapshot: !since || backfill,
+    complete,
+  });
 }

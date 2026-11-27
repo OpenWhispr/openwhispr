@@ -32,6 +32,8 @@ import {
   UNSUPPORTED_LANGUAGE_MESSAGE,
 } from '@/android/shared/lib/localReasoning';
 import { withRetry, createApiRetryStrategy } from '@/android/shared/lib/retry';
+import { dlog } from '@/android/lib/debugLog';
+import { failureFields, routeFields } from '@/android/dictation/dictationLog';
 
 // Only 'keyboard' and 'recording' are dictation, where the prompt is told the assistant's name.
 type DictationCleanupContext = 'keyboard' | 'recording';
@@ -48,6 +50,8 @@ interface CleanupOptions
   appCategory?: ToneAppCategory;
   includeSnippetTriggers?: boolean;
   context?: CleanupContext;
+  /** The debug log's id for the dictation this cleans. */
+  run?: string;
 }
 
 export const CLEANUP_TIMEOUT_MS = 12_000;
@@ -113,7 +117,12 @@ export async function cleanupTranscript(
   options: CleanupOptions = {},
 ): Promise<string> {
   const cfg = useConfigStore.getState().config;
-  if (!(cfg?.cleanupEnabled ?? true)) return rawText;
+  const run = options.run;
+  const skipped = (why: string) => dlog.info('clean', 'skipped', { run, why });
+  if (!(cfg?.cleanupEnabled ?? true)) {
+    skipped('off');
+    return rawText;
+  }
   // The serial pass goes through /api/reason, which refuses an anonymous
   // onboarding session (the fused pass inside /api/transcribe does not). Skip
   // the doomed round trip and hand the transcript back as is — exactly what
@@ -121,7 +130,10 @@ export async function cleanupTranscript(
   // Nothing to clean. Sending empty text to the reasoning model invites it to
   // echo its own instructions ("Transcribed speech to clean…") as the result,
   // which would then be inserted as a phantom transcript.
-  if (!rawText.trim()) return rawText;
+  if (!rawText.trim()) {
+    skipped('too_short');
+    return rawText;
+  }
 
   const preferred = cfg?.preferredLanguage;
   const lang = preferred && preferred !== 'auto' ? preferred : undefined;
@@ -137,6 +149,7 @@ export async function cleanupTranscript(
 
   const snapshottedRoute = options.inferenceRoute ?? options.cleanupRoute;
   if (options.cleanupUnavailable) {
+    skipped('policy');
     options.onSkipped?.(options.cleanupUnavailable);
     return rawText;
   }
@@ -144,6 +157,7 @@ export async function cleanupTranscript(
   const requireProvider =
     options.requireProvider || (!configuredRoute && activeMode === 'providers');
   if (requireProvider && !snapshottedRoute && configuredRoute?.mode !== 'providers') {
+    skipped('no_provider');
     options.onSkipped?.('Choose a cleanup provider in AI Models. Your raw transcript is saved.');
     return rawText;
   }
@@ -151,6 +165,7 @@ export async function cleanupTranscript(
     (configuredRoute?.mode === 'openwhispr' || !configuredRoute) &&
     requiresRealAccount(useAuthStore.getState().user)
   ) {
+    skipped('guest');
     options.onSkipped?.('Sign in to use OpenWhispr cleanup. Your raw transcript is saved.');
     return rawText;
   }
@@ -161,6 +176,7 @@ export async function cleanupTranscript(
     policy: { status: 'unmanaged' },
   });
   if (!resolved.ok) {
+    skipped('no_route');
     options.onSkipped?.('The cleanup route is unavailable. Your raw transcript is saved.');
     return rawText;
   }
@@ -203,6 +219,7 @@ export async function cleanupTranscript(
   if (inferenceRoute.mode === 'local') {
     const localRun = await prepareLocalRun(rawText);
     if ('skipReason' in localRun) {
+      skipped('no_model');
       options.onSkipped?.(`${localRun.skipReason} Your raw transcript is saved.`);
       return rawText;
     }
@@ -224,6 +241,14 @@ export async function cleanupTranscript(
     );
   }
   const finalRequest = withDictionary(dictionary);
+  const target = {
+    run,
+    ...routeFields(inferenceRoute),
+    tone: options.tone,
+    category: options.tone && options.tone !== 'default' ? options.appCategory : undefined,
+    dict_sent: dictionary.personal.length + dictionary.shared.length,
+    dict_total: hintTiers.reduce((total, tier) => total + tier.length, 0),
+  };
 
   try {
     const startedAt = Date.now();
@@ -243,6 +268,12 @@ export async function cleanupTranscript(
         initialDelay: CLEANUP_INITIAL_RETRY_DELAY_MS,
         onRetry: (attempt, error, delayMs) => {
           retryCount = attempt;
+          dlog.warn('clean', 'retry', {
+            run,
+            retry: attempt,
+            wait_ms: delayMs,
+            ...failureFields(error),
+          });
           if (__DEV__) {
             console.log(
               `[cleanup] retry=${attempt} delayMs=${delayMs} error=${
@@ -263,11 +294,29 @@ export async function cleanupTranscript(
     // A reasoning model can spend its whole reply thinking; an empty result
     // would otherwise replace the transcript with nothing.
     if (!result.text.trim()) {
+      dlog.warn('clean', 'fallback', {
+        ...target,
+        why: 'rejected_empty',
+        ms: Date.now() - startedAt,
+      });
       options.onSkipped?.('Cleanup returned no text. Your raw transcript is saved.');
       return rawText;
     }
+    dlog.info('clean', 'done', {
+      ...target,
+      model: result.model || target.model,
+      ms: Date.now() - startedAt,
+      retry: retryCount || undefined,
+      in_chars: rawText.length,
+      out_chars: result.text.length,
+    });
     return result.text;
   } catch (err) {
+    dlog.error('clean', 'fallback', {
+      ...target,
+      why: (err as { name?: unknown } | null)?.name === 'AbortError' ? 'timeout' : 'error',
+      ...failureFields(err),
+    });
     options.onSkipped?.(`${cleanupFailureReason(err)} Your raw transcript is saved.`);
     if (configuredRoute?.mode !== 'providers')
       console.warn('Reasoning failed after retries, using original transcription:', err);

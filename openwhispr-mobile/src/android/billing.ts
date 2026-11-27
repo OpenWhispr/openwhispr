@@ -9,6 +9,7 @@ import { getUsageOwnerKey, useUsageStore } from '@/android/store/useUsageStore';
 import { withRevenueCatUser } from '@/android/lib/revenuecat';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';
 import { Sentry } from '@/android/lib/sentry';
+import { dlog } from '@/android/lib/debugLog';
 
 export type BillingStatus = 'checking' | 'payment-pending' | 'access-pending' | 'idle';
 const STATUS_KEY = 'android-billing-status-v1';
@@ -40,6 +41,8 @@ export const useAndroidBillingStatus = create<{
 const WAITING: BillingStatus[] = ['checking', 'access-pending'];
 function setStatus(billingId: string, status: BillingStatus): void {
   const state = useAndroidBillingStatus.getState();
+  if (state.accounts[billingId] !== status)
+    dlog.info('auth', 'billing_status', { from: state.accounts[billingId], to: status });
   const accounts = { ...state.accounts, [billingId]: status };
   const since = { ...state.since };
   if (!WAITING.includes(status)) delete since[billingId];
@@ -296,6 +299,7 @@ export function observeAndroidPurchaseUpdates(): () => void {
 export const androidPurchaseController: CustomPurchaseControllerContext = {
   async onPurchase(params) {
     if (params.platform !== 'android') return { type: 'failed', error: 'Unsupported store.' };
+    dlog.info('auth', 'purchase.start', { plan: params.productId, kind: params.basePlanId });
     let account: BillingAccount | undefined;
     try {
       account = await currentBillingAccount();
@@ -332,15 +336,20 @@ export const androidPurchaseController: CustomPurchaseControllerContext = {
       });
     } catch (error) {
       const problem = error as { code?: string; userCancelled?: boolean; message?: string };
-      if (problem.userCancelled || problem.code === PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR)
+      if (problem.userCancelled || problem.code === PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR) {
+        dlog.info('auth', 'purchase', { result: 'cancelled' });
         return { type: 'cancelled' };
+      }
       if (problem.code === PURCHASES_ERROR_CODE.PAYMENT_PENDING_ERROR) {
         if (account) setStatus(account.billingId, 'payment-pending');
+        dlog.info('auth', 'purchase', { result: 'pending' });
         return { type: 'pending' };
       }
+      dlog.failure('auth', 'purchase', error, { result: 'failed' });
       return { type: 'failed', error: problem.message || 'Purchase could not be completed.' };
     }
     // Store success remains success even if the account changes or verification is offline.
+    dlog.info('auth', 'purchase', { result: 'purchased' });
     setStatus(account.billingId, 'access-pending');
     void refreshAccountAccess(account).catch((error) => {
       Sentry.captureException(error, {
@@ -352,6 +361,7 @@ export const androidPurchaseController: CustomPurchaseControllerContext = {
   async onPurchaseRestore() {
     try {
       const result = await restoreAndroidPurchases();
+      dlog.info('auth', 'restore', { result });
       if (result === 'restored') return { type: 'restored' };
       return {
         type: 'failed',
@@ -363,6 +373,7 @@ export const androidPurchaseController: CustomPurchaseControllerContext = {
               : 'No active Google Play purchase was restored. Existing access is unchanged.',
       };
     } catch (error) {
+      dlog.failure('auth', 'restore', error, { result: 'failed' });
       return { type: 'failed', error: (error as Error).message };
     }
   },

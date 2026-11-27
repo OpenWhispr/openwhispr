@@ -7,6 +7,8 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { AndroidDictation, type Recording } from '../../../modules/android-dictation/src';
 import { useHomeT } from './strings';
 import { useHome } from './kit';
+import { dlog, newRunId } from '@/android/lib/debugLog';
+import { failureFields } from '@/android/dictation/dictationLog';
 
 const BARS = 48;
 const BAR_MAX = 48;
@@ -39,6 +41,8 @@ export function TryItRecorder({
   const [levels, setLevels] = useState<number[]>(() => Array(BARS).fill(0));
   const active = useRef(false);
   const finishing = useRef(false);
+  // The debug log's id for this try, carried with the recording to its transcription.
+  const run = useRef(newRunId('d'));
 
   useEffect(() => {
     let cancelled = false;
@@ -50,6 +54,11 @@ export function TryItRecorder({
         );
         if (cancelled) return;
         if (microphone !== PermissionsAndroid.RESULTS.GRANTED) {
+          dlog.warn('dict', 'capture.refused', {
+            run: run.current,
+            surface: 'home',
+            why: 'permission',
+          });
           Alert.alert(tAndroid('errorTitle'), t('microphoneNeeded'));
           onCancel();
           return;
@@ -60,6 +69,7 @@ export function TryItRecorder({
           return;
         }
         active.current = true;
+        dlog.info('dict', 'capture.start', { run: run.current, surface: 'home' });
         setRecording(true);
         const startedAt = Date.now();
         timer = setInterval(() => {
@@ -69,7 +79,23 @@ export function TryItRecorder({
         }, 70);
       } catch (error) {
         if (cancelled) return;
-        Alert.alert(tAndroid('errorTitle'), (error as Error).message);
+        // A meeting holding the microphone gets its own words, not the recorder's refusal.
+        let owner: string | null = null;
+        try {
+          owner = AndroidDictation?.getMicrophoneOwner?.() ?? null;
+        } catch {
+          owner = null;
+        }
+        dlog.error('dict', 'capture.failed', {
+          run: run.current,
+          surface: 'home',
+          owner: owner ?? undefined,
+          ...failureFields(error),
+        });
+        Alert.alert(
+          tAndroid('errorTitle'),
+          owner === 'meeting' ? t('meetingRecording') : (error as Error).message,
+        );
         onCancel();
       }
     };
@@ -89,6 +115,7 @@ export function TryItRecorder({
   const discard = () => {
     if (finishing.current) return;
     finishing.current = true;
+    dlog.info('dict', 'capture.discard', { run: run.current, surface: 'home' });
     if (active.current) {
       active.current = false;
       void AndroidDictation?.stopRecording(true).catch(() => undefined);
@@ -101,8 +128,21 @@ export function TryItRecorder({
     finishing.current = true;
     active.current = false;
     try {
-      onDone(await AndroidDictation!.stopRecording(false));
+      const recording = await AndroidDictation!.stopRecording(false);
+      dlog.info('dict', 'capture.done', {
+        run: run.current,
+        surface: 'home',
+        audio_ms: recording.durationMs,
+        no_speech: recording.noSpeech,
+      });
+      const tagged: Recording & { run?: string } = { ...recording, run: run.current };
+      onDone(tagged);
     } catch (error) {
+      dlog.error('dict', 'capture.failed', {
+        run: run.current,
+        surface: 'home',
+        ...failureFields(error),
+      });
       Alert.alert(tAndroid('errorTitle'), (error as Error).message);
       onCancel();
     }

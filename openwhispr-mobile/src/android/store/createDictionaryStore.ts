@@ -1,5 +1,6 @@
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { create } from 'zustand';
+import { dlog } from '@/android/lib/debugLog';
 import { db } from '@/db';
 import { dictionaryEntries } from '@/android/db/schema';
 import { randomUUID } from '@/android/shared/lib/uuid';
@@ -204,14 +205,18 @@ export function createDictionaryStore(createLoad: CreateLibraryLoad = createLibr
     addWords: (input: string) => {
       const changed = addUnique(input.split(','), 'manual');
       if (!changed) return;
-      set({ entries: readAllActiveEntries() });
+      const entries = readAllActiveEntries();
+      set({ entries });
+      dlog.info('words', 'changed', { action: 'add', words: entries.length });
       triggerSync();
     },
 
     addLearnedWords: (incoming: string[]) => {
       const changed = addUnique(incoming, 'learned');
       if (!changed) return;
-      set({ entries: readAllActiveEntries() });
+      const entries = readAllActiveEntries();
+      set({ entries });
+      dlog.info('words', 'changed', { action: 'learned', words: entries.length });
       triggerSync();
     },
 
@@ -221,7 +226,9 @@ export function createDictionaryStore(createLoad: CreateLibraryLoad = createLibr
         changed = softDeleteOne(word);
       });
       if (!changed) return;
-      set({ entries: readAllActiveEntries() });
+      const entries = readAllActiveEntries();
+      set({ entries });
+      dlog.info('words', 'changed', { action: 'remove', words: entries.length });
       triggerSync();
     },
 
@@ -237,7 +244,9 @@ export function createDictionaryStore(createLoad: CreateLibraryLoad = createLibr
         .where(isNull(dictionaryEntries.deletedAt))
         .run();
       if ((tombstoned.changes ?? 0) === 0) return;
-      set({ entries: readAllActiveEntries() });
+      const entries = readAllActiveEntries();
+      set({ entries });
+      dlog.info('words', 'changed', { action: 'clear', words: entries.length });
       triggerSync();
     },
   }));

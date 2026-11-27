@@ -90,5 +90,5 @@ export async function upgradeSavedModels(): Promise<void> {
     remembered[task as keyof typeof remembered] = updated;
   }
   if (rememberedChanged) change.rememberedInference = remembered;
-  if (changed || rememberedChanged) await updateConfig(change);
+  if (changed || rememberedChanged) await updateConfig(change, 'retired_move');
 }

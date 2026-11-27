@@ -1,3 +1,4 @@
+import { dlog } from '@/android/lib/debugLog';
 import {
   SyncCancelledError,
   uncheckedSync,
@@ -254,6 +255,15 @@ export async function pushDictionary(checkpoint: SyncCheckpoint = uncheckedSync)
     }
   }
 
+  dlog.info('words', 'sync.push', {
+    table: 'dictionary',
+    count: pending.length,
+    creates: creates.length,
+    updates: updates.length,
+    deletes: deletes.length,
+    failed,
+    ok: failed === 0,
+  });
   if (failed > 0) {
     throw new Error(`pushDictionary: ${failed} operation(s) failed`);
   }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
@@ -10,6 +10,11 @@ import { setInsightsSyncConsent, useInsights } from '@/android/insights';
 import { useSettingsLook } from '@/android/settings/look';
 import { Group, ListRow, SettingsPage, showToast } from '@/android/settings/kit';
 import { noOrphan, useSettingsT } from '@/android/settings/strings';
+import { isDebugLogging, setDebugLogging } from '@/android/lib/debugLog';
+
+// Loaded when used: it reads the account, plan and model stores for the share header.
+const debugLogShare = () =>
+  require('@/android/lib/debugLogShare') as typeof import('@/android/lib/debugLogShare');
 
 /** Settings → Privacy → Analytics: two switches and what is never collected. */
 export default function AnalyticsScreen() {
@@ -20,6 +25,18 @@ export default function AnalyticsScreen() {
   const policyBlocked = useSyncStore((state) => state.policyBlocked);
   const insightsPaused = useInsights((state) => state.consentPaused);
   const [saving, setSaving] = useState(false);
+  const [debugOn, setDebugOn] = useState(isDebugLogging);
+  const [logKept, setLogKept] = useState(false);
+  useEffect(() => {
+    try {
+      void debugLogShare()
+        .hasDebugLog()
+        .then(setLogKept)
+        .catch(() => undefined);
+    } catch {
+      /* No log on this build. */
+    }
+  }, []);
 
   const guard = async (work: () => Promise<void>) => {
     if (saving) return;
@@ -40,6 +57,30 @@ export default function AnalyticsScreen() {
       if (error) throw new Error(error);
       showToast(t(usageAnalyticsEnabled ? 'analyticsOn' : 'analyticsOff'), 'neutral');
     });
+
+  const setDebug = (value: boolean) => {
+    setDebugLogging(value);
+    setDebugOn(value);
+    if (value) setLogKept(true);
+    showToast(t(value ? 'debugLoggingOn' : 'debugLoggingOff'), 'neutral');
+  };
+
+  const shareLogs = () => void guard(() => debugLogShare().shareDebugLog());
+
+  const deleteLogs = () =>
+    Alert.alert(t('deleteLogsTitle'), t('deleteLogsBody'), [
+      { text: t('cancel'), style: 'cancel' },
+      {
+        text: t('delete'),
+        style: 'destructive',
+        onPress: () =>
+          void guard(async () => {
+            await debugLogShare().clearDebugLog();
+            setLogKept(false);
+            showToast(t('logsDeleted'), 'neutral');
+          }),
+      },
+    ]);
 
   const setStats = (value: boolean) => {
     if (value && !signedIn) {
@@ -83,6 +124,17 @@ export default function AnalyticsScreen() {
             onValueChange: setStats,
           }}
         />
+      </Group>
+      <Group title={t('troubleshooting')} footer={t('debugLoggingFooter')} inset={14}>
+        <ListRow
+          title={t('debugLogging')}
+          subtitle={t('debugLoggingBody')}
+          toggle={{ value: debugOn, disabled: saving, onValueChange: setDebug }}
+        />
+        {(debugOn || logKept) && (
+          <ListRow title={t('shareLogs')} subtitle={t('shareLogsBody')} onPress={shareLogs} />
+        )}
+        {logKept && <ListRow title={t('deleteLogs')} destructive onPress={deleteLogs} />}
       </Group>
       <Group title={t('neverCollected')} inset={14}>
         {(['wordsTranscripts', 'audioRecordings', 'notesDictionary'] as const).map((key) => (

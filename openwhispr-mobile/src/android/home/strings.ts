@@ -60,6 +60,7 @@ export const homeEnglish = {
   done: 'Done',
   discard: 'Discard recording',
   microphoneNeeded: 'Allow the microphone to try dictation.',
+  meetingRecording: 'A meeting is recording. Stop it first to dictate.',
   close: 'Close',
   olderRecordings: 'Older recordings',
   savedBeforeAccountsCount: '{{count}} saved before accounts',

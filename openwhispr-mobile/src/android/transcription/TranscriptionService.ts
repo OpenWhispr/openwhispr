@@ -36,6 +36,19 @@ import { wordLimitErrorFromBody } from '@/android/shared/services/transcription/
 import { transcriptionPolicyErrorFromResponse } from '@/android/shared/services/transcription/policyErrors';
 import { transcriptionLifecycle } from '@/android/transcription/transcriptionLifecycle';
 import { uploadTranscriptionAudio } from '@/android/transcription/uploadTranscriptionAudio';
+import { dlog } from '@/android/lib/debugLog';
+import { runFor } from '@/android/dictation/dictationLog';
+
+// How many dictionary words went with a request, and how many there were: counts, never the words.
+function dictionaryCounts(
+  tiers: string[][],
+  prompt: string,
+): { dict_sent: number; dict_total: number } {
+  return {
+    dict_sent: prompt ? prompt.split(', ').length : 0,
+    dict_total: tiers.reduce((total, tier) => total + tier.length, 0),
+  };
+}
 
 const TRANSCRIBE_ENDPOINT = '/api/transcribe';
 const TRANSCRIBE_AND_CLEAN_ENDPOINT =
@@ -446,6 +459,7 @@ export class TranscriptionService {
       APP_GROUP_KEYS.KEYBOARD_COMPRESSED_AUDIO_UNSUPPORTED_AT_MS,
       String(Date.now()),
     );
+    dlog.warn('dict', 'wav_retry', { run: runFor(request.clientTranscriptionId ?? request.jobId) });
     if (__DEV__) {
       console.warn(
         `[transcription] compressed keyboard audio rejected; retrying as WAV fileSize=${converted.fileSizeBytes ?? 'unknown'}`,
@@ -612,6 +626,13 @@ export class TranscriptionService {
           CLOUD_CHUNK_SECONDS,
           ...transcriptionLifecycle.signalArguments(options),
         );
+        dlog.info('dict', 'chunked', {
+          run: runFor(clientTranscriptionId),
+          count: chunks.length,
+          audio_ms: durationMs,
+          bytes: fileSizeBytes,
+          ...dictionaryCounts(promptTiers, prompt),
+        });
         return this.transcribeChunked(
           chunks,
           'audio/wav',
@@ -670,6 +691,17 @@ export class TranscriptionService {
       ...transcriptionLifecycle.signalArguments(options),
     );
     const uploadMs = Date.now() - uploadStartedAt;
+    dlog.info('dict', 'upload', {
+      run: runFor(clientTranscriptionId),
+      route: `POST ${endpointPath}`,
+      status: response.status,
+      ms: uploadMs,
+      method: useBackgroundSession ? 'background' : 'in_process',
+      bytes: fileSizeBytes,
+      mime: finalMimeType,
+      fused: !!options.fusedCleanup,
+      ...dictionaryCounts(promptTiers, prompt),
+    });
 
     // No speech is an expected outcome (silence, background noise), not a
     // failure. The server signals it with 422 + NO_SPEECH_DETECTED. Surface a
@@ -935,6 +967,7 @@ export class TranscriptionService {
     language?: string,
     requestContext?: TranscriptionRequest['requestContext'],
     signal?: AbortSignal,
+    runId?: string,
   ): Promise<TranscriptionResponse> {
     if (!LocalTranscriptionService.isAvailable()) {
       throw new Error(
@@ -960,11 +993,20 @@ export class TranscriptionService {
     );
     const { getPickedLocalModel } =
       require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
+    const model = getPickedLocalModel(requestContext === 'file' ? 'upload' : 'dictation');
     const response = await LocalTranscriptionService.transcribe(audioUri, {
       ...transcriptionLifecycle.signalOptions({ signal }),
       language,
       prompt: prompt || undefined,
-      model: getPickedLocalModel(requestContext === 'file' ? 'upload' : 'dictation'),
+      model,
+    });
+    dlog.info('dict', 'local.done', {
+      run: runId,
+      model: typeof model === 'string' ? model : undefined,
+      kind: response.endpoint,
+      lang: language ?? 'auto',
+      ms: Date.now() - startedAt,
+      ...dictionaryCounts(promptTiers, prompt),
     });
     if (__DEV__) {
       console.log(
@@ -1110,14 +1152,18 @@ export class TranscriptionService {
             })
           : undefined;
         const promptLimit = dictionaryPromptLimit(route);
-        const prompt = formatDictionaryPrompt(
-          buildDictationHintTiers(isDictationContext(request.requestContext)),
-          promptLimit,
-          {
-            sharedChars: sharedDictionaryPromptChars(promptLimit),
-            sharedWords: MAX_SHARED_KEYTERMS,
-          },
-        );
+        const byokTiers = buildDictationHintTiers(isDictationContext(request.requestContext));
+        const prompt = formatDictionaryPrompt(byokTiers, promptLimit, {
+          sharedChars: sharedDictionaryPromptChars(promptLimit),
+          sharedWords: MAX_SHARED_KEYTERMS,
+        });
+        dlog.info('dict', 'provider.request', {
+          run: runFor(recoveryJobId),
+          provider: route.providerId,
+          model: route.modelId,
+          lang: language ?? 'auto',
+          ...dictionaryCounts(byokTiers, prompt),
+        });
         const result = await transcribeWithProvider({
           route,
           audioUri,
@@ -1148,6 +1194,7 @@ export class TranscriptionService {
           language,
           request.requestContext,
           ...transcriptionLifecycle.signalArguments(request),
+          runFor(request.clientTranscriptionId ?? request.jobId),
         );
 
       case 'cloud':

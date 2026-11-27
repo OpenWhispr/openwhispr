@@ -23,7 +23,9 @@ enum class StatusMessage(val wire: String, val hasAction: Boolean) {
   COPIED("copied", true),
   SIGN_IN("sign-in", true),
   MODEL_NEEDED("model-needed", true),
-  FAILED("failed", true);
+  FAILED("failed", true),
+  /** The meeting service holds the microphone. */
+  MEETING_RECORDING("meeting-recording", true);
 
   companion object {
     fun fromWire(value: String?) = entries.firstOrNull { it.wire == value }

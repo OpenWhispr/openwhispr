@@ -82,6 +82,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     done: 'Listo',
     discard: 'Descartar grabación',
     microphoneNeeded: 'Permite el micrófono para probar el dictado.',
+    meetingRecording: 'Se está grabando una reunión. Detenla primero para dictar.',
   },
   fr: {
     hide: 'Masquer',
@@ -163,6 +164,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     done: 'Terminé',
     discard: 'Supprimer l’enregistrement',
     microphoneNeeded: 'Autorisez le micro pour essayer la dictée.',
+    meetingRecording: 'Une réunion est en cours d’enregistrement. Arrêtez-la d’abord pour dicter.',
   },
   de: {
     hide: 'Ausblenden',
@@ -244,6 +246,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     done: 'Fertig',
     discard: 'Aufnahme verwerfen',
     microphoneNeeded: 'Erlaube das Mikrofon, um das Diktieren auszuprobieren.',
+    meetingRecording: 'Ein Meeting wird aufgenommen. Beende es zuerst, um zu diktieren.',
   },
   pt: {
     hide: 'Ocultar',
@@ -325,6 +328,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     done: 'Concluir',
     discard: 'Descartar gravação',
     microphoneNeeded: 'Permita o microfone para experimentar o ditado.',
+    meetingRecording: 'Uma reunião está sendo gravada. Pare-a primeiro para ditar.',
   },
   it: {
     hide: 'Nascondi',
@@ -406,6 +410,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     done: 'Fatto',
     discard: 'Elimina registrazione',
     microphoneNeeded: 'Consenti il microfono per provare la dettatura.',
+    meetingRecording: 'È in corso la registrazione di una riunione. Interrompila prima di dettare.',
   },
   ru: {
     hide: 'Скрыть',
@@ -487,6 +492,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     done: 'Готово',
     discard: 'Удалить запись',
     microphoneNeeded: 'Разрешите микрофон, чтобы попробовать диктовку.',
+    meetingRecording: 'Идёт запись встречи. Сначала остановите её, чтобы диктовать.',
   },
   'zh-CN': {
     hide: '隐藏',
@@ -568,6 +574,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     done: '完成',
     discard: '丢弃录音',
     microphoneNeeded: '请允许使用麦克风以试用听写。',
+    meetingRecording: '正在录制会议。请先停止录制再听写。',
   },
   'zh-TW': {
     hide: '隱藏',
@@ -649,6 +656,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     done: '完成',
     discard: '捨棄錄音',
     microphoneNeeded: '請允許使用麥克風以試用聽寫。',
+    meetingRecording: '正在錄製會議。請先停止錄製再聽寫。',
   },
   ja: {
     hide: '非表示',
@@ -730,6 +738,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     done: '完了',
     discard: '録音を破棄',
     microphoneNeeded: '音声入力を試すにはマイクを許可してください。',
+    meetingRecording: '会議を録音中です。音声入力するには先に録音を停止してください。',
   },
   ar: {
     hide: 'إخفاء',
@@ -811,5 +820,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     done: 'تم',
     discard: 'تجاهل التسجيل',
     microphoneNeeded: 'اسمح بالميكروفون لتجربة الإملاء.',
+    meetingRecording: 'يتم تسجيل اجتماع. أوقفه أولاً لتتمكن من الإملاء.',
   },
 };

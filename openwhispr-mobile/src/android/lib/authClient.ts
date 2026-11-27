@@ -2,6 +2,7 @@ import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { storageAdapter } from '@better-auth/expo/client';
 import { sessionFetch } from '@/android/lib/sessionFetch';
+import { dlog } from '@/android/lib/debugLog';
 import {
   COOKIE_STORAGE_KEY,
   SESSION_DATA_STORAGE_KEY,
@@ -137,6 +138,10 @@ export async function checkSession(timeoutMs: number): Promise<SessionCheck> {
     });
     const user = mapAuthUser(data?.user);
     if (user) return { state: 'valid', user };
+    dlog.info('auth', 'session_refused', {
+      status: error?.status,
+      transient: !!error && isTransientSessionFailure(error),
+    });
     if (error && isTransientSessionFailure(error)) return { state: 'unknown' };
     if (!error || error.status === 401 || error.status === 403) {
       await clearStoredAuthValue(SESSION_DATA_STORAGE_KEY);
@@ -144,6 +149,7 @@ export async function checkSession(timeoutMs: number): Promise<SessionCheck> {
     }
     return { state: 'unknown' };
   } catch (error) {
+    dlog.failure('auth', 'session_check.failed', error);
     if (
       error &&
       typeof error === 'object' &&
