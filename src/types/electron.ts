@@ -1556,6 +1556,7 @@ export interface LlamaServerStatus {
   modelName: string | null;
   backend: GpuBackend;
   gpuAccelerated: boolean;
+  gpuFallbackReason: "out_of_memory" | "startup_failed" | null;
 }
 
 export interface VulkanGpuResult {
@@ -2833,6 +2834,9 @@ declare global {
       /** Stops the llamaServerStart tagged `requestId` from waiting, and from swapping its model in. */
       llamaServerCancelStart: (requestId: string) => Promise<void>;
       llamaServerStatus: () => Promise<LlamaServerStatus>;
+      onLlamaGpuFallback: (
+        callback: (data: { reason: "out_of_memory" | "startup_failed" }) => void
+      ) => () => void;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;
       getComputerProfile: () => Promise<ComputerProfile>;

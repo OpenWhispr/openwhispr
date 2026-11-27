@@ -14,6 +14,7 @@ import { useDialogs } from "../hooks/useDialogs";
 import { useSignOut } from "../hooks/useSignOut";
 import { useHotkey } from "../hooks/useHotkey";
 import { useToast } from "./ui/useToast";
+import { useLlamaGpuFallbackToast } from "../hooks/useLlamaGpuFallbackToast";
 import { useUpdater } from "../hooks/useUpdater";
 import { updatePolicyMessageKey } from "../utils/updatePolicyMessage";
 import { useSettings } from "../hooks/useSettings";
@@ -227,6 +228,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const updateReadyToastShown = useRef(false);
   const { hotkey } = useHotkey();
   const { toast } = useToast();
+  useLlamaGpuFallbackToast(toast, t);
   const { useCleanupModel } = useSettings();
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
   const canAutoStartMeeting = useMeetingAutoTranscriptionCheck({
