@@ -1,8 +1,9 @@
 import { Stack } from 'expo-router';
 import { customHeaderStackOptions, glassStackOptions } from '@/android/shared/config/navigation';
 
-// A note opened from another tab (Home's upload, the Dictionary) keeps the Notes home under it.
-export const unstable_settings = { initialRouteName: 'index' };
+// No unstable_settings.initialRouteName here: with one, a cold start's "/" resolves to this tab's
+// index instead of Home's, so the app opened on Notes. A withAnchor push still puts the index (the
+// first screen below) under a note opened from another tab.
 
 export default function NotesLayout() {
   return (

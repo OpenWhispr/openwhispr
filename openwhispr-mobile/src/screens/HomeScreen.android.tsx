@@ -180,7 +180,8 @@ export default function AndroidHome() {
         (current) =>
           current && { ...current, doneText: h('savedToFolder', { folder: destination.label }) },
       );
-      // Open it, as Notes' upload does; Back from it lands on the Notes home.
+      // Open it, as Notes' upload does; Back from it lands on the Notes home. The anchor is the Notes
+      // stack's first screen (its index), since the stack sets no initialRouteName (see its layout).
       router.push(`/(tabs)/(notes)/${noteId}`, { withAnchor: true });
     },
   });
