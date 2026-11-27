@@ -2171,3 +2171,18 @@ test("linux: an ignored app's capture does not drive meeting prompts", async (t)
   assert.equal(detections.length, 0);
   assert.deepEqual(detector.getExternalMicState(), { reliable: true, externalMicActive: true });
 });
+
+test("linux: polling skips an ignored app's capture once it is named", async () => {
+  const orca = { stdout: JSON.stringify([{ properties: { "application.process.id": "11" } }]) };
+  const { detector } = createDetector("linux", {
+    resolveCaptureApps: resolveTestCaptureApps,
+    execResponses: [orca, orca],
+  });
+  detector._running = true;
+  detector.setIgnoredApps(["orca.exe"]);
+
+  assert.equal(await detector._checkLinux(), true, "a capture counts until its app is named");
+  await flushImmediate();
+  assert.equal(await detector._checkLinux(), false);
+  detector.stop();
+});
