@@ -7,6 +7,13 @@ on:
       - '.github/workflows/build-windows-key-listener.yml'
     branches:
       - main
+  # Build and test only on PRs, so a source or parser regression fails before
+  # merge instead of leaving the last release in place.
+  pull_request:
+    paths:
+      - 'resources/windows-key-listener.c'
+      - '.github/workflows/build-windows-key-listener.yml'
+      - 'test/native/windowsKeyListenerHotkey.c'
   workflow_dispatch:
     inputs:
       version:
@@ -57,12 +64,14 @@ jobs:
         shell: pwsh
 
       - name: Upload artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7
         with:
           name: windows-key-listener
           path: windows-key-listener-win32-x64.zip
 
       - name: Create or update release
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: windows-key-listener-v${{ inputs.version || '1.0.0' }}

@@ -2123,12 +2123,15 @@ async function startApp() {
         try {
           windowManager.resetWindowsPushState();
           await dropUnsupportedStartupHold();
-          hotkeyManager.useWindowsDictationTapFallback();
+          const hotkey = hotkeyManager.useWindowsDictationTapFallback();
           for (const browserWindow of BrowserWindow.getAllWindows()) {
             if (isLiveWindow(browserWindow)) {
               browserWindow.webContents.send("windows-ptt-unavailable", {
                 reason: "startup_failed",
-                message: i18nMain.t("windows.pttUnavailable"),
+                hotkey,
+                message: hotkey
+                  ? i18nMain.t("windows.listenerBlocked", { hotkey })
+                  : i18nMain.t("windows.pttUnavailable"),
               });
             }
           }

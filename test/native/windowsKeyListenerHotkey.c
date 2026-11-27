@@ -1,22 +1,30 @@
-#include <assert.h>
-
 #define main WindowsKeyListenerMain
 #include "../../resources/windows-key-listener.c"
 #undef main
 
-int main(void) {
-    assert(ParseCompoundHotkey("Delete") == VK_DELETE);
-    assert(ParseCompoundHotkey("Del") == VK_DELETE);
-    assert(ParseCompoundHotkey("Alt+Delete") == VK_DELETE);
-    assert(g_requireAlt);
+// Not assert(): a build with NDEBUG would turn every check into a no-op.
+static int failures = 0;
+#define EXPECT(condition)                                                     \
+    do {                                                                      \
+        if (!(condition)) {                                                   \
+            fprintf(stderr, "FAIL line %d: %s\n", __LINE__, #condition);      \
+            failures++;                                                       \
+        }                                                                     \
+    } while (0)
 
-    assert(ParseCompoundHotkey("Backspace") == VK_BACK);
-    assert(ParseCompoundHotkey("Left") == VK_LEFT);
-    assert(ParseCompoundHotkey("Up") == VK_UP);
-    assert(ParseCompoundHotkey("Right") == VK_RIGHT);
-    assert(ParseCompoundHotkey("Down") == VK_DOWN);
-    assert(ParseCompoundHotkey("PrintScreen") == VK_SNAPSHOT);
-    assert(ParseCompoundHotkey("Control+PrintScreen") == VK_SNAPSHOT);
-    assert(g_requireCtrl);
-    return 0;
+int main(void) {
+    EXPECT(ParseCompoundHotkey("Delete") == VK_DELETE);
+    EXPECT(ParseCompoundHotkey("Del") == VK_DELETE);
+    EXPECT(ParseCompoundHotkey("Alt+Delete") == VK_DELETE);
+    EXPECT(g_requireAlt);
+
+    EXPECT(ParseCompoundHotkey("Backspace") == VK_BACK);
+    EXPECT(ParseCompoundHotkey("Left") == VK_LEFT);
+    EXPECT(ParseCompoundHotkey("Up") == VK_UP);
+    EXPECT(ParseCompoundHotkey("Right") == VK_RIGHT);
+    EXPECT(ParseCompoundHotkey("Down") == VK_DOWN);
+    EXPECT(ParseCompoundHotkey("PrintScreen") == VK_SNAPSHOT);
+    EXPECT(ParseCompoundHotkey("Control+PrintScreen") == VK_SNAPSHOT);
+    EXPECT(g_requireCtrl);
+    return failures == 0 ? 0 : 1;
 }

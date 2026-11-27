@@ -164,7 +164,8 @@
     "close": "Fermer"
   },
   "windows": {
-    "pttUnavailable": "L'écouteur de touches d'OpenWhispr n'est pas disponible."
+    "pttUnavailable": "L'écouteur de touches d'OpenWhispr n'est pas disponible.",
+    "listenerBlocked": "Windows a bloqué l'écouteur de touches d'OpenWhispr, ce que peut faire un antivirus. Jusqu'au redémarrage d'OpenWhispr, la dictée utilise \"{{hotkey}}\" en mode Appui, et Maintenir ainsi que les raccourcis composés uniquement de touches de modification sont désactivés."
   },
   "common": {
     "continue": "Continuer",
@@ -5376,6 +5377,9 @@
       "hotkeyChanged": {
         "title": "Raccourci modifié",
         "description": "\"{{original}}\" n'était pas disponible. \"{{fallback}}\" sera utilisé à la place. Vous pouvez le modifier dans les Paramètres."
+      },
+      "keyListenerBlocked": {
+        "title": "Écouteur de touches bloqué"
       },
       "hotkeyUnavailable": {
         "title": "Raccourci indisponible",

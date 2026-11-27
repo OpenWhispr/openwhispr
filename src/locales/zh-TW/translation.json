@@ -164,7 +164,8 @@
     "close": "關閉"
   },
   "windows": {
-    "pttUnavailable": "OpenWhispr 按鍵監聽程式無法使用。"
+    "pttUnavailable": "OpenWhispr 按鍵監聽程式無法使用。",
+    "listenerBlocked": "Windows 封鎖了 OpenWhispr 按鍵監聽程式，防毒軟體可能會這樣做。在重新啟動 OpenWhispr 之前，聽寫將以點按模式使用 \"{{hotkey}}\"，按住模式和僅含修飾鍵的快捷鍵皆已停用。"
   },
   "common": {
     "continue": "繼續",
@@ -4988,6 +4989,9 @@
       "hotkeyChanged": {
         "title": "快捷鍵已變更",
         "description": "\"{{original}}\" 無法使用，已改用 \"{{fallback}}\"。您可以在設定中變更。"
+      },
+      "keyListenerBlocked": {
+        "title": "按鍵監聽程式已被封鎖"
       },
       "hotkeyUnavailable": {
         "title": "快捷鍵無法使用",

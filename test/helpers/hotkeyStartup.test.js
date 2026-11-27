@@ -525,7 +525,23 @@ for (const { savedHotkey, activeHotkeys } of [
     await triggerWindowsListenerStartupFailure(f, writes);
 
     assert.equal(f.cache._cachedActivationMode, "tap");
-    assert.ok(f.notifications.some(([event]) => event === "windows-ptt-unavailable"));
+    // One toast covers both the shortcut and the mode, even when the shortcut stays.
+    assert.deepEqual(
+      JSON.parse(
+        JSON.stringify(f.notifications.filter(([event]) => event === "windows-ptt-unavailable"))
+      ),
+      [
+        [
+          "windows-ptt-unavailable",
+          {
+            reason: "startup_failed",
+            hotkey: activeHotkeys.join(","),
+            message: "windows.listenerBlocked",
+          },
+        ],
+      ]
+    );
+    assert.ok(!f.notifications.some(([event]) => event === "hotkey-fallback-used"));
     assert.ok(
       f.notifications.some(
         ([event, data]) =>
@@ -539,14 +555,6 @@ for (const { savedHotkey, activeHotkeys } of [
     for (const hotkey of activeHotkeys) f.globalShortcuts.get(hotkey)();
     assert.deepEqual(triggered, activeHotkeys);
     assert.equal(f.globalShortcuts.get("F8"), meetingBinding, "leave the other slot bound");
-    if (savedHotkey.startsWith("Control+Super")) {
-      assert.ok(
-        f.notifications.some(
-          ([event, data]) =>
-            event === "hotkey-fallback-used" && data.fallback === activeHotkeys.join(",")
-        )
-      );
-    }
     assert.equal(f.env.DICTATION_KEY, savedHotkey);
     assert.equal(f.env.ACTIVATION_MODE, "push");
     assert.deepEqual(writes, []);
@@ -690,4 +698,51 @@ test("a rejected Windows Hold retry does not save the session's Tap mode", async
   onModeChanged(null, "push");
   await tick();
   assert.equal(notifications[0]?.[1].persist, false);
+});
+
+test("the dictation window explains a blocked Windows key listener once", async (t) => {
+  let root;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  let listenerUnavailable;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        onWindowsPushToTalkUnavailable(callback) {
+          listenerUnavailable = callback;
+          return () => {
+            listenerUnavailable = undefined;
+          };
+        },
+      },
+    },
+  });
+  const container = installHookDom(t);
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-hotkey-toast-" });
+  const { useMainProcessNotifications } = await vite.ssrLoadModule(
+    "/hooks/useMainProcessNotifications.tsx"
+  );
+  const toasts = [];
+  const toast = (options) => {
+    toasts.push(options);
+    return String(toasts.length);
+  };
+  const dismiss = () => {};
+  const translate = (key) => key;
+  function DictationWindow() {
+    useMainProcessNotifications({ toast, dismiss, t: translate });
+    return null;
+  }
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(DictationWindow)));
+
+  listenerUnavailable({ reason: "error", message: "exited" });
+  listenerUnavailable({ reason: "startup_failed", hotkey: null, message: "unavailable" });
+  assert.equal(toasts.length, 0, "the hotkey failure toast covers a session with no shortcut");
+
+  listenerUnavailable({ reason: "startup_failed", hotkey: "F8", message: "blocked, use F8" });
+  assert.equal(toasts.length, 1);
+  assert.equal(toasts[0].title, "app.toasts.keyListenerBlocked.title");
+  assert.equal(toasts[0].description, "blocked, use F8");
 });

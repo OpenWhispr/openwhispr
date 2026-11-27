@@ -601,29 +601,30 @@ class HotkeyManager extends EventEmitter {
     return this._pushToTalkListenerBlockReason() ?? i18nMain.t("windows.pttUnavailable");
   }
 
+  // Returns the dictation shortcut that works in Tap, or null if none does.
+  // The caller tells the user about the replacement and the mode change.
   useWindowsDictationTapFallback() {
     const slot = this._ensureSlot("dictation");
-    if (!slot.callback) return;
+    if (!slot.callback) return null;
 
     const unavailableHotkeys = slot.hotkeys.filter((_hotkey, index) => !slot.accelerators[index]);
-    if (unavailableHotkeys.length === 0) return;
-
-    const original = unavailableHotkeys.join(",");
-    const workingHotkeys = slot.hotkeys.filter((_hotkey, index) => slot.accelerators[index]);
-    if (workingHotkeys.length > 0) {
-      // Keep the accelerators that are already registered with Electron.
-      slot.hotkeys = workingHotkeys;
-      slot.accelerators = slot.accelerators.filter(Boolean);
-    } else if (
-      !FALLBACK_HOTKEYS.some((hotkey) => this.setupShortcuts(hotkey, slot.callback).success)
-    ) {
-      this.notifyHotkeyFailure(original, { error: i18nMain.t("windows.pttUnavailable") });
-      return;
+    if (unavailableHotkeys.length > 0) {
+      const workingHotkeys = slot.hotkeys.filter((_hotkey, index) => slot.accelerators[index]);
+      if (workingHotkeys.length > 0) {
+        // Keep the accelerators that are already registered with Electron.
+        slot.hotkeys = workingHotkeys;
+        slot.accelerators = slot.accelerators.filter(Boolean);
+      } else if (
+        !FALLBACK_HOTKEYS.some((hotkey) => this.setupShortcuts(hotkey, slot.callback).success)
+      ) {
+        this.notifyHotkeyFailure(unavailableHotkeys.join(","), {
+          error: i18nMain.t("windows.pttUnavailable"),
+        });
+        return null;
+      }
+      this.notifyActiveHotkey(slot.hotkeys.join(","));
     }
-
-    const active = slot.hotkeys.join(",");
-    this.notifyActiveHotkey(active);
-    this.notifyHotkeyFallback(original, active);
+    return slot.hotkeys.join(",") || null;
   }
 
   async setActivationMode(mode) {
@@ -1395,7 +1396,9 @@ class HotkeyManager extends EventEmitter {
         const fallbackResult = this.setupShortcuts(fallback, callback);
         if (fallbackResult.success) {
           debugLogger.log(`[HotkeyManager] Fallback hotkey "${fallback}" registered successfully`);
-          // A Windows listener failure only changes bindings for this session.
+          // Without the Windows listener a fallback is only for this session, so
+          // the next launch retries the saved hotkey (e.g. a re-created window
+          // after the helper was blocked).
           if (!this._isWindowsKeyListenerUnavailable()) {
             await this._persistHotkeyToEnvFile(fallback);
           }

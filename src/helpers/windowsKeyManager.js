@@ -14,6 +14,11 @@ const EventEmitter = require("events");
 const fs = require("fs");
 const debugLogger = require("./debugLogger");
 
+// The helper prints READY within milliseconds. Antivirus software can hold it
+// at launch while it shows a prompt, or end it once its keyboard hook starts.
+const READY_TIMEOUT_MS = 10000;
+const STARTUP_GRACE_MS = 5000;
+
 class WindowsKeyManager extends EventEmitter {
   constructor() {
     super();
@@ -63,7 +68,7 @@ class WindowsKeyManager extends EventEmitter {
       });
     } catch (error) {
       debugLogger.error("[WindowsKeyManager] Failed to spawn process", { error: error.message });
-      this._reportStartupFailure(error);
+      this._reportListenerFailure(error, false);
       return;
     }
 
@@ -75,8 +80,26 @@ class WindowsKeyManager extends EventEmitter {
     });
 
     let ready = false;
+    // A listener counts as started once it has run for STARTUP_GRACE_MS after READY.
+    let started = false;
+    let startupTimer = setTimeout(() => {
+      if (this.listeners.get(key) !== child) return;
+      this._stopKey(key);
+      this._reportListenerFailure(
+        new Error(`Windows key listener did not report READY within ${READY_TIMEOUT_MS} ms`),
+        false
+      );
+    }, READY_TIMEOUT_MS);
+    startupTimer.unref?.();
     const handleLine = (line) => {
-      if (line === "READY") ready = true;
+      if (line === "READY" && !ready) {
+        ready = true;
+        clearTimeout(startupTimer);
+        startupTimer = setTimeout(() => {
+          started = true;
+        }, STARTUP_GRACE_MS);
+        startupTimer.unref?.();
+      }
       this.handleOutputLine(line, key);
     };
     let lineBuffer = "";
@@ -104,9 +127,9 @@ class WindowsKeyManager extends EventEmitter {
 
     child.on("error", (error) => {
       if (this.listeners.get(key) !== child) return;
+      clearTimeout(startupTimer);
       this.listeners.delete(key);
-      if (ready) this.reportError(error);
-      else this._reportStartupFailure(error);
+      this._reportListenerFailure(error, started);
     });
 
     // exit can precede the final KEY_UP on stdout; close waits for the pipe to drain.
@@ -116,17 +139,18 @@ class WindowsKeyManager extends EventEmitter {
         handleLine(trailingLine);
       }
 
+      clearTimeout(startupTimer);
       // Intentional stops and spawn errors already retired the child.
       if (this.listeners.get(key) !== child) return;
       this.listeners.delete(key);
       if (ready && !code && !signal) return;
 
-      const error = new Error(
-        `Windows key listener exited${ready ? "" : " before READY"} with code ${code ?? "null"} signal ${signal ?? "null"}`
+      this._reportListenerFailure(
+        new Error(
+          `Windows key listener exited${ready ? "" : " before READY"} with code ${code ?? "null"} signal ${signal ?? "null"}`
+        ),
+        started
       );
-      // A helper can reject one key while other listeners still work.
-      if (ready || this.listeners.size > 0) this.reportError(error);
-      else this._reportStartupFailure(error);
     });
   }
 
@@ -182,6 +206,12 @@ class WindowsKeyManager extends EventEmitter {
     return this.isAvailable()
       ? { available: true }
       : { available: false, reason: "binary_missing" };
+  }
+
+  _reportListenerFailure(error, started) {
+    // A helper can reject one key while other listeners still work.
+    if (started || this.listeners.size > 0) this.reportError(error);
+    else this._reportStartupFailure(error);
   }
 
   _reportStartupFailure(error) {

@@ -3672,7 +3672,11 @@ EOF`,
                       </span>
                       <ActivationModeSelector
                         value={activationMode}
-                        onChange={setActivationMode}
+                        // Main may be running a session-only mode; selecting it
+                        // again must not save it over the user's saved mode.
+                        onChange={(mode) => {
+                          if (mode !== activationMode) setActivationMode(mode);
+                        }}
                         pushDisabledReason={pushToTalkUnavailableReason ?? undefined}
                       />
                     </div>

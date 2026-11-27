@@ -143,7 +143,8 @@
     "loginItems": "As configurações de itens de início não estão disponíveis nesta plataforma."
   },
   "windows": {
-    "pttUnavailable": "O listener de teclas do OpenWhispr não está disponível."
+    "pttUnavailable": "O listener de teclas do OpenWhispr não está disponível.",
+    "listenerBlocked": "O Windows bloqueou o listener de teclas do OpenWhispr, algo que um antivírus pode fazer. Até você reiniciar o OpenWhispr, o ditado usa \"{{hotkey}}\" no modo Toque, e Segurar e os atalhos só com teclas modificadoras ficam desativados."
   },
   "common": {
     "continue": "Continuar",
@@ -5016,6 +5017,9 @@
       "hotkeyChanged": {
         "title": "Atalho alterado",
         "description": "\"{{original}}\" não estava disponível. Usando \"{{fallback}}\" em vez disso. Você pode alterar isso nas Configurações."
+      },
+      "keyListenerBlocked": {
+        "title": "Listener de teclas bloqueado"
       },
       "hotkeyUnavailable": {
         "title": "Atalho indisponível",

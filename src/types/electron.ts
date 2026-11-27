@@ -2978,7 +2978,7 @@ declare global {
       ) => () => void;
       onDictationKeyActive?: (callback: (key: string) => void) => () => void;
       onWindowsPushToTalkUnavailable?: (
-        callback: (data: { reason: string; message: string }) => void
+        callback: (data: { reason: string; message: string; hotkey?: string | null }) => void
       ) => () => void;
       onLinuxPttPermissionDenied?: (callback: () => void) => () => void;
 

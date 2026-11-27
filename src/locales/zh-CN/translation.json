@@ -164,7 +164,8 @@
     "close": "关闭"
   },
   "windows": {
-    "pttUnavailable": "OpenWhispr 按键监听器不可用。"
+    "pttUnavailable": "OpenWhispr 按键监听器不可用。",
+    "listenerBlocked": "Windows 阻止了 OpenWhispr 按键监听器，杀毒软件可能会这样做。在重启 OpenWhispr 之前，听写将以点按模式使用 \"{{hotkey}}\"，按住模式和仅含修饰键的快捷键均已停用。"
   },
   "common": {
     "continue": "继续",
@@ -4988,6 +4989,9 @@
       "hotkeyChanged": {
         "title": "快捷键已更改",
         "description": "\"{{original}}\" 不可用，已改用 \"{{fallback}}\"。您可以在设置中更改。"
+      },
+      "keyListenerBlocked": {
+        "title": "按键监听器已被阻止"
       },
       "hotkeyUnavailable": {
         "title": "快捷键不可用",
