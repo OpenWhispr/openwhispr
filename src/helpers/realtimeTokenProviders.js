@@ -123,6 +123,15 @@ const REALTIME_TOKEN_PROVIDERS = {
     return duplicate(streams, apiKey);
   },
 
+  "custom-realtime": async ({ environmentManager }, _options, streams) => {
+    // The user's own endpoint, so the raw custom key is the WS credential — no
+    // minting, mirroring the batch custom route's keyRef "custom". Keyless
+    // endpoints are allowed on the batch path; the WS handshake still needs a
+    // Bearer value, so a placeholder goes out that permissive servers ignore.
+    const apiKey = environmentManager.getCustomTranscriptionKey();
+    return duplicate(streams, apiKey || "none");
+  },
+
   "openai-realtime": async ({ environmentManager, postServerToken }, options, streams) => {
     if (options.mode === "byok") {
       const apiKey = environmentManager.getOpenAIKey();

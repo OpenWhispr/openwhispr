@@ -219,6 +219,7 @@ const {
 } = require("./geminiLiveStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
+const { customRealtimeSocketUrl } = require("./customRealtimeEndpoint");
 const { getCortiToken } = require("./cortiAuth");
 const { ONBOARDING_DEMO_KINDS, ONBOARDING_DEMO_STATUSES } = require("./onboardingInputPolicy");
 const { focusWindowsHotkeyCaptureWindow } = require("./hotkeyCaptureFocus");
@@ -12301,6 +12302,15 @@ class IPCHandlers {
               // The capture worklet emits 16kHz PCM; declare the true rate.
               inputRate: 16000,
               createSocket: (signal) => createTinfoilRealtimeSocket({ model, apiKey, signal }),
+            });
+          } else if (provider === "custom-realtime") {
+            await streaming.connect({
+              apiKey,
+              model: options.model || "whisper-1",
+              language: options.language,
+              // Same 16kHz capture upsampled for OpenAI-compatible servers.
+              captureRate: 16000,
+              url: customRealtimeSocketUrl(options.baseUrl),
             });
           } else {
             await streaming.connect({

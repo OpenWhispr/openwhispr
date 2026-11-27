@@ -960,6 +960,8 @@
     "getKey": "Obtenir la clé ->",
     "endpointUrl": "URL du endpoint",
     "azureHint": "Azure AI Foundry : saisissez l'endpoint de votre ressource (p. ex. https://your-resource.cognitiveservices.azure.com) et définissez Modèle sur le nom exact de votre déploiement.",
+    "customRealtimeToggle": "Temps réel (WebSocket)",
+    "customRealtimeToggleDescription": "Dictez via WebSocket vers ce endpoint (protocole OpenAI Realtime) et affichez les mots provisoires en direct. Désactivé : envois HTTP par lots.",
     "browsedProviderHint": "{{current}} est toujours utilisé. Choisissez un modèle pour passer à {{provider}}.",
     "browsedCustomHint": "{{current}} est toujours utilisé. Saisissez un nom de modèle pour passer à votre endpoint personnalisé.",
     "customInUseHint": "Votre endpoint personnalisé est toujours utilisé. Choisissez un modèle pour passer à {{provider}}.",

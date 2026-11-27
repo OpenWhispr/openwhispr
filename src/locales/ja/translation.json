@@ -960,6 +960,8 @@
     "getKey": "キーを取得 ->",
     "endpointUrl": "エンドポイント URL",
     "azureHint": "Azure AI Foundry: リソースのエンドポイント（例: https://your-resource.cognitiveservices.azure.com）を入力し、モデルにデプロイの正確な名前を設定してください。",
+    "customRealtimeToggle": "リアルタイム（WebSocket）",
+    "customRealtimeToggleDescription": "このエンドポイントへWebSocket（OpenAI Realtimeプロトコル）で音声認識を送信し、中間結果をリアルタイム表示します。オフの場合は従来のHTTP一括送信を使用します。",
     "browsedProviderHint": "引き続き {{current}} が使用されています。{{provider}} に切り替えるにはモデルを選択してください。",
     "browsedCustomHint": "引き続き {{current}} が使用されています。カスタムエンドポイントに切り替えるにはモデル名を入力してください。",
     "customInUseHint": "引き続きカスタムエンドポイントが使用されています。{{provider}} に切り替えるにはモデルを選択してください。",

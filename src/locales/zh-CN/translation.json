@@ -960,6 +960,8 @@
     "getKey": "获取密钥 ->",
     "endpointUrl": "端点 URL",
     "azureHint": "Azure AI Foundry：输入你的资源终结点（例如 https://your-resource.cognitiveservices.azure.com），并将“模型”设置为你的确切部署名称。",
+    "customRealtimeToggle": "实时（WebSocket）",
+    "customRealtimeToggleDescription": "通过 WebSocket 向此端点流式传输语音（OpenAI Realtime 协议）并实时显示中间词语。关闭则使用批量 HTTP 上传。",
     "browsedProviderHint": "当前仍在使用 {{current}}。选择一个模型即可切换到 {{provider}}。",
     "browsedCustomHint": "当前仍在使用 {{current}}。输入模型名称即可切换到你的自定义端点。",
     "customInUseHint": "当前仍在使用你的自定义端点。选择一个模型即可切换到 {{provider}}。",

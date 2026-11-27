@@ -6709,6 +6709,8 @@
     "getKey": "الحصول على مفتاح ←",
     "endpointUrl": "عنوان URL لنقطة النهاية",
     "azureHint": "Azure AI Foundry: أدخل نقطة نهاية موردك (مثال: https://your-resource.cognitiveservices.azure.com) وقم بتعيين النموذج إلى اسم النشر الدقيق الخاص بك.",
+    "customRealtimeToggle": "الوقت الحقيقي (WebSocket)",
+    "customRealtimeToggleDescription": "أرسل الإملاء عبر WebSocket إلى نقطة النهاية هذه (بروتوكول OpenAI Realtime) مع عرض الكلمات الوسيطة مباشرة. عند الإيقاف تُستخدم التحميلات الدفعية عبر HTTP.",
     "browsedProviderHint": "لا يزال {{current}} قيد الاستخدام. اختر نموذجًا للتبديل إلى {{provider}}.",
     "browsedCustomHint": "لا يزال {{current}} قيد الاستخدام. أدخل اسم نموذج للتبديل إلى نقطة النهاية المخصصة الخاصة بك.",
     "customInUseHint": "لا تزال نقطة النهاية المخصصة الخاصة بك قيد الاستخدام. اختر نموذجًا للتبديل إلى {{provider}}.",

@@ -960,6 +960,8 @@
     "getKey": "Get key ->",
     "endpointUrl": "Endpoint URL",
     "azureHint": "Azure AI Foundry: enter your resource endpoint (e.g. https://your-resource.cognitiveservices.azure.com) and set Model to your exact deployment name.",
+    "customRealtimeToggle": "Realtime (WebSocket)",
+    "customRealtimeToggleDescription": "Stream dictation over WebSocket to this endpoint (OpenAI Realtime protocol) and show interim words live. Off keeps batch HTTP uploads.",
     "browsedProviderHint": "{{current}} is still in use. Choose a model to switch to {{provider}}.",
     "browsedCustomHint": "{{current}} is still in use. Enter a model name to switch to your custom endpoint.",
     "customInUseHint": "Your custom endpoint is still in use. Choose a model to switch to {{provider}}.",

@@ -195,6 +195,7 @@ import ProfileSection from "./settings/ProfileSection";
 import ToneStyleSection from "./settings/ToneStyleSection";
 import { formatAmount } from "../utils/formatAmount";
 import { enterpriseProviderName, getTranscriptionProvider } from "../models/ModelRegistry";
+import { isCustomRealtimeSelection } from "../helpers/dictationStreamingRouting";
 import { useManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import { supportsLiveTranscriptionPreview } from "../utils/transcriptionPreview";
 
@@ -512,6 +513,7 @@ interface TranscriptionSectionProps {
   cohereModel: string;
   setCohereModel: (model: string) => void;
   cloudTranscriptionBaseUrl?: string;
+  cloudTranscriptionCustomRealtime?: boolean;
   setCloudTranscriptionBaseUrl: (url: string) => void;
   transcriptionMode: InferenceMode;
   setTranscriptionMode: (mode: InferenceMode) => void;
@@ -549,6 +551,7 @@ function TranscriptionSection({
   cohereModel,
   setCohereModel,
   cloudTranscriptionBaseUrl,
+  cloudTranscriptionCustomRealtime,
   setCloudTranscriptionBaseUrl,
   transcriptionMode,
   setTranscriptionMode,
@@ -674,7 +677,13 @@ function TranscriptionSection({
   const selectedCloudModelStreams = Boolean(
     getTranscriptionProvider(cloudTranscriptionProvider)?.models.some(
       (model) => model.id === cloudTranscriptionModel && model.streaming
-    )
+    ) ||
+      isCustomRealtimeSelection({
+        cloudTranscriptionProvider,
+        cloudTranscriptionBaseUrl,
+        cloudTranscriptionModel,
+        cloudTranscriptionCustomRealtime,
+      })
   );
   const previewAvailable = supportsLiveTranscriptionPreview(
     effectiveTranscriptionMode,
@@ -1200,6 +1209,7 @@ export default function SettingsPage({
     cloudTranscriptionProvider,
     cloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
+    cloudTranscriptionCustomRealtime,
     useCleanupModel,
     dictationKey,
     activationMode,
@@ -4668,6 +4678,7 @@ EOF`,
                   cohereModel={cohereModel}
                   setCohereModel={setCohereModel}
                   cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
+                  cloudTranscriptionCustomRealtime={cloudTranscriptionCustomRealtime}
                   setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
                   transcriptionMode={transcriptionMode}
                   setTranscriptionMode={setTranscriptionMode}
