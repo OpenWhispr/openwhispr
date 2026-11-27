@@ -16137,6 +16137,13 @@ class IPCHandlers {
         if (typeof prefs.meetingProcessDetection === "boolean") {
           this.meetingProcessDetection = prefs.meetingProcessDetection;
         }
+        if (Array.isArray(prefs.meetingDetectionIgnoredApps)) {
+          this.meetingDetectionEngine?.setIgnoredApps(
+            prefs.meetingDetectionIgnoredApps
+              .map((app) => app?.id)
+              .filter((id) => typeof id === "string")
+          );
+        }
         this._syncMeetingDetectorPolicy();
         return { success: true };
       } catch (error) {
@@ -16226,7 +16233,8 @@ class IPCHandlers {
         return { success: false, code: "STALE_NOTIFICATION" };
       const respond = () =>
         this.meetingDetectionEngine.handleNotificationResponse(detectionId, action, options, owner);
-      if (action === "dismiss" || action === "open") return respond();
+      // None of these record, so the recording policy has no say in them.
+      if (action === "dismiss" || action === "open" || action === "ignore") return respond();
       // Join opens the meeting even when the org refuses to let it be recorded;
       // only the recording is subject to the policy.
       if (action === "join") this.meetingDetectionEngine.openNotificationJoinUrl(owner);

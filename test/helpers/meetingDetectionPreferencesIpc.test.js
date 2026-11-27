@@ -129,6 +129,15 @@ test("a non-object payload is rejected without touching the detectors", async ()
   assert.deepEqual(applied, []);
 });
 
+test("the ignored-app list reaches the engine as app ids", async () => {
+  const ignored = [];
+  target.meetingDetectionEngine.setIgnoredApps = (appIds) => ignored.push(appIds);
+  await sync({
+    meetingDetectionIgnoredApps: [{ id: "orca.exe", name: "Orca" }, { name: "no id" }],
+  });
+  assert.deepEqual(ignored, [["orca.exe"]]);
+});
+
 test("disabled audio features refuse direct IPC calls before native, network or file work", async () => {
   const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
   target._audioFeaturePolicy = createAudioFeaturePolicy({
@@ -202,6 +211,11 @@ test("a refused notification Join still opens the meeting and refuses only the r
   calls.length = 0;
   assert.equal((await respond("open")).success, true);
   assert.deepEqual(calls, [["open"]]);
+
+  // Ignoring the app that raised the prompt records nothing either.
+  calls.length = 0;
+  assert.equal((await respond("ignore")).success, true);
+  assert.deepEqual(calls, [["ignore"]]);
 });
 
 test("a refused calendar Join reports the refusal to the panel that asked", async () => {

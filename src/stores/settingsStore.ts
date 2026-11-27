@@ -18,6 +18,7 @@ import type {
   LocalTranscriptionProvider,
   InferenceMode,
   LocalServerPrefs,
+  MeetingDetectionApp,
   SelfHostedType,
 } from "../types/electron";
 import type { CalendarAccount, MicrosoftCalendarAccount } from "../types/calendar";
@@ -486,6 +487,21 @@ function readStringArray(key: string, fallback: string[]): string[] {
     return Array.isArray(parsed) ? parsed : fallback;
   } catch {
     return fallback;
+  }
+}
+
+// Keeps only well-formed entries, so a hand-edited or corrupt value can't break
+// the Settings rows or the card's ignore action.
+function parseIgnoredApps(stored: string | null): MeetingDetectionApp[] {
+  try {
+    const parsed: unknown = JSON.parse(stored ?? "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (app): app is MeetingDetectionApp =>
+        typeof app?.id === "string" && typeof app?.name === "string"
+    );
+  } catch {
+    return [];
   }
 }
 
@@ -1179,6 +1195,7 @@ export interface SettingsState
   notificationsEnabled: boolean;
   notifyMeetingDetection: boolean;
   notifyCalendarReminders: boolean;
+  meetingDetectionIgnoredApps: MeetingDetectionApp[];
   autoUpdatesEnabled: boolean;
   gcalPrimaryOnly: boolean;
   mcalPrimaryOnly: boolean;
@@ -1518,6 +1535,7 @@ export interface SettingsState
   setNotificationsEnabled: (value: boolean) => void;
   setNotifyMeetingDetection: (value: boolean) => void;
   setNotifyCalendarReminders: (value: boolean) => void;
+  setMeetingDetectionIgnoredApps: (apps: MeetingDetectionApp[]) => void;
   setAutoUpdatesEnabled: (enabled: boolean) => void;
   setGcalPrimaryOnly: (value: boolean) => void;
   setMcalPrimaryOnly: (value: boolean) => void;
@@ -1944,6 +1962,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   notificationsEnabled: readBoolean("notificationsEnabled", true),
   notifyMeetingDetection: readBoolean("notifyMeetingDetection", true),
   notifyCalendarReminders: readBoolean("notifyCalendarReminders", true),
+  meetingDetectionIgnoredApps: parseIgnoredApps(readString("meetingDetectionIgnoredApps", "[]")),
   autoUpdatesEnabled: readBoolean("autoUpdatesEnabled", true),
   ...(() => {
     let accounts: CalendarAccount[] = [];
@@ -2837,6 +2856,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setNotificationsEnabled: createBooleanSetter("notificationsEnabled"),
   setNotifyMeetingDetection: createBooleanSetter("notifyMeetingDetection"),
   setNotifyCalendarReminders: createBooleanSetter("notifyCalendarReminders"),
+  setMeetingDetectionIgnoredApps: (apps: MeetingDetectionApp[]) => {
+    if (isBrowser) localStorage.setItem("meetingDetectionIgnoredApps", JSON.stringify(apps));
+    set({ meetingDetectionIgnoredApps: apps });
+    if (isBrowser) {
+      void window.electronAPI?.syncNotificationPreferences?.({ meetingDetectionIgnoredApps: apps });
+    }
+  },
   setAutoUpdatesEnabled: (enabled: boolean) => {
     if (isBrowser) localStorage.setItem("autoUpdatesEnabled", String(enabled));
     set({ autoUpdatesEnabled: enabled });
@@ -4146,6 +4172,7 @@ export async function initializeSettings(): Promise<void> {
         notifyMeetingDetection: state.notifyMeetingDetection,
         notifyCalendarReminders: state.notifyCalendarReminders,
         meetingProcessDetection: state.meetingProcessDetection,
+        meetingDetectionIgnoredApps: state.meetingDetectionIgnoredApps,
       });
     } catch (err) {
       logger.warn(
@@ -4632,6 +4659,8 @@ export async function initializeSettings(): Promise<void> {
     let value: unknown;
     if (BOOLEAN_SETTINGS.has(key)) {
       value = newValue === "true";
+    } else if (key === "meetingDetectionIgnoredApps") {
+      value = parseIgnoredApps(newValue);
     } else if (ARRAY_SETTINGS.has(key)) {
       try {
         const parsed = JSON.parse(newValue);

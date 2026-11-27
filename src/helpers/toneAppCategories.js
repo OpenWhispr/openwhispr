@@ -203,6 +203,7 @@ const APP_PATTERNS = Object.fromEntries(
 // and on Windows the frame host every UWP app (WhatsApp, Phone Link) runs in,
 // whose title is the app's name.
 const TITLE_JUDGED_PATTERNS = [...BROWSER_SIGNATURES, "applicationframehost"].map(tokenPattern);
+const BROWSER_PATTERNS = BROWSER_SIGNATURES.map(tokenPattern);
 
 // Every Chromium and Electron window on Windows has this class, so "chrome"
 // inside it says nothing about the app.
@@ -293,4 +294,9 @@ function classifyToneAppCategory(context) {
   );
 }
 
-module.exports = { classifyToneAppCategory };
+function isBrowserSignature(appSignature) {
+  const signature = normalizeSignature(appSignature);
+  return BROWSER_PATTERNS.some((pattern) => pattern.test(signature));
+}
+
+module.exports = { classifyToneAppCategory, isBrowserSignature };

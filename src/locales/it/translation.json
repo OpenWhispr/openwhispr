@@ -2037,6 +2037,9 @@
         "disableAllDescription": "Silenzia tutto tranne i messaggi di errore",
         "meetingDetection": "Rilevamento riunioni",
         "meetingDetectionDescription": "Avvisa quando viene rilevata una riunione per avviare la registrazione",
+        "ignoredApps": "App ignorate",
+        "ignoredAppsDescription": "Il rilevamento delle riunioni non avvisa quando queste app usano il microfono",
+        "stopIgnoringApp": "Non ignorare più",
         "calendarReminders": "Promemoria calendario",
         "calendarRemindersDescription": "Avvisa quando una riunione programmata sta per iniziare"
       },
@@ -6856,6 +6859,7 @@
     "start": "Prendi appunti",
     "join": "Partecipa e trascrivi",
     "joinOnly": "Partecipa alla riunione",
+    "ignoreApp": "Non è una riunione? Non chiedere per {{app}}",
     "folders": {
       "choose": "Scegli cartella della riunione",
       "search": "Cerca cartelle",

@@ -13,6 +13,7 @@ const { tagEventAttendeesJson } = require("./eventAttendees");
 const createMeetingAutoEndController = require("./meetingAutoEndController");
 const { createMeetingAudioActivityMonitor } = require("./meetingAudioActivityMonitor");
 const { broadcastToWindows } = require("./windowBroadcast");
+const { isIgnorableCaptureApp } = require("./meetingCaptureApps");
 
 const IMMINENT_THRESHOLD_MS = 5 * 60 * 1000;
 const AUTO_END_TICK_MS = 1000;
@@ -512,6 +513,13 @@ class MeetingDetectionEngine {
       detection.event = event;
     }
 
+    // The apps the card may offer to ignore: none when a calendar event says
+    // this is a meeting, or when any of them is a browser or calling app.
+    const ignorableApps =
+      variant === "detected" && data?.apps?.length && data.apps.every(isIgnorableCaptureApp)
+        ? data.apps
+        : null;
+
     this.windowManager.showMeetingNotification({
       detectionId,
       source,
@@ -520,18 +528,21 @@ class MeetingDetectionEngine {
       variant,
       joinUrl,
       ...(recordingRefusal ? { recordingRefusal } : {}),
+      ...(ignorableApps ? { apps: ignorableApps } : {}),
     });
   }
 
   handleNotificationResponse(detectionId, action, options = {}, owner) {
-    if (!["start", "join", "open", "dismiss"].includes(action))
+    if (!["start", "join", "open", "dismiss", "ignore"].includes(action))
       return Promise.resolve({ success: false, code: "INVALID_REQUEST" });
     if (owner.responsePromise) return owner.responsePromise;
-    if (action === "dismiss" || action === "open") {
+    if (action === "dismiss" || action === "open" || action === "ignore") {
       // Opening the meeting without recording it is not a decline, so it starts
-      // no mic cooldown.
+      // no mic cooldown. Neither does ignoring the app that raised the prompt:
+      // its captures stop counting, and a real meeting must still prompt.
       if (action === "open") this.openNotificationJoinUrl(owner);
-      else this._dismiss();
+      else if (action === "dismiss") this._dismiss();
+      else this.audioActivityDetector.releasePrompt();
       this.activeDetections.delete(detectionId);
       this.windowManager.dismissMeetingNotification({ notifyEngine: false });
       return Promise.resolve({ success: true, value: null });
@@ -949,6 +960,10 @@ class MeetingDetectionEngine {
 
     this._syncMeetingProcessDetector();
     this._syncAudioActivityDetector();
+  }
+
+  setIgnoredApps(appIds) {
+    this.audioActivityDetector.setIgnoredApps(appIds);
   }
 
   start() {

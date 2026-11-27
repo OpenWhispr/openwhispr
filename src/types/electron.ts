@@ -201,6 +201,12 @@ export type TranscriptionErrorCode =
 
 export type MeetingPromptVariant = "detected" | "starting" | "underway";
 
+/** An app holding the microphone, as meeting detection names it. */
+export interface MeetingDetectionApp {
+  id: string;
+  name: string;
+}
+
 export interface MeetingNotificationData {
   detectionId: string;
   source: string;
@@ -216,6 +222,8 @@ export interface MeetingNotificationData {
     | "POLICY_EXTERNAL_ATTENDEES"
     | "POLICY_ATTENDEES_UNVERIFIABLE"
   >;
+  /** Apps behind an uncorroborated audio prompt that the card may offer to ignore. */
+  apps?: MeetingDetectionApp[];
 }
 
 export interface MeetingFolderRef {
@@ -4274,12 +4282,15 @@ declare global {
       ) => () => void;
       onAcalEventsSynced?: (callback: (data: any) => void) => () => void;
 
-      syncNotificationPreferences?: (prefs: {
-        notificationsEnabled: boolean;
-        notifyMeetingDetection: boolean;
-        notifyCalendarReminders: boolean;
-        meetingProcessDetection: boolean;
-      }) => Promise<{ success: boolean }>;
+      syncNotificationPreferences?: (
+        prefs: Partial<{
+          notificationsEnabled: boolean;
+          notifyMeetingDetection: boolean;
+          notifyCalendarReminders: boolean;
+          meetingProcessDetection: boolean;
+          meetingDetectionIgnoredApps: MeetingDetectionApp[];
+        }>
+      ) => Promise<{ success: boolean }>;
       setSpeakerDiarizationEnabled?: (
         enabled: boolean
       ) => Promise<{ success: boolean; error?: string }>;

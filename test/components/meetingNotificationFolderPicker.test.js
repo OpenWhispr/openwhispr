@@ -122,7 +122,7 @@ async function mount(t, overrides = {}, setupDom = () => {}) {
     cachePrefix: "meeting-folder-picker-",
     noExternal: ["react-i18next"],
     mockModules: {
-      "react-i18next": `import en from '/locales/en/translation.json';const t=(key,values={})=>{let s=key.split('.').reduce((v,k)=>v?.[k],en)??key;return String(s).replace(/{{(\\w+)}}/g,(_,k)=>values[k]??'');};export const useTranslation=()=>({t,i18n:{language:'en'}});`,
+      "react-i18next": `import en from '/locales/en/translation.json';const t=(key,values={})=>{let s=key.split('.').reduce((v,k)=>v?.[k],en)??key;return String(s).replace(/{{(\\w+)}}/g,(_,k)=>values[k]??'');};export const useTranslation=()=>({t,i18n:{language:'en'}});export const initReactI18next={type:'3rdParty',init(){}};`,
     },
   });
   const { default: Overlay } = await vite.ssrLoadModule(
@@ -445,6 +445,42 @@ test("captured card swipe keeps pointer interactivity until release", async (t) 
   await React.act(async () => t.mock.timers.tick(200));
   t.mock.timers.reset();
   assert.equal(dismissals(), 1);
+});
+
+test("ignoring the prompt's app saves and syncs it once, then slides out before answering", async (t) => {
+  const orca = { id: "orca.exe", name: "Orca" };
+  const teams = { id: "ms-teams.exe", name: "ms-teams" };
+  const synced = [];
+  const c = await mount(
+    t,
+    {
+      getMeetingNotificationData: async () => ({
+        detectionId: "audio:sustained-audio",
+        source: "audio",
+        key: "sustained-audio",
+        event: null,
+        variant: "detected",
+        joinUrl: null,
+        apps: [orca],
+      }),
+      syncNotificationPreferences: async (prefs) => synced.push(prefs),
+    },
+    (dom) =>
+      dom.localStorage.setItem(
+        "meetingDetectionIgnoredApps",
+        JSON.stringify([{ ...orca, name: "Orca (old)" }, teams])
+      )
+  );
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  await c.click(c.button("Not a meeting? Don't ask for Orca"));
+  const ignores = () => c.calls.filter((x) => x[0] === "start" && x[2] === "ignore");
+
+  assert.deepEqual(JSON.parse(localStorage.getItem("meetingDetectionIgnoredApps")), [teams, orca]);
+  assert.deepEqual(synced, [{ meetingDetectionIgnoredApps: [teams, orca] }]);
+  assert.equal(ignores().length, 0, "the card slides out before main closes the window");
+  await React.act(async () => t.mock.timers.tick(200));
+  t.mock.timers.reset();
+  assert.deepEqual(ignores(), [["start", "audio:sustained-audio", "ignore", {}]]);
 });
 
 test("selection feedback uses 200/600/400 milliseconds and repeats from a fresh start", async (t) => {

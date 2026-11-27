@@ -12,6 +12,8 @@ interface MeetingNotificationCardProps {
   busy?: boolean;
   dismissLabel?: string;
   onDismiss?: () => void;
+  ignoreLabel?: string;
+  onIgnore?: () => void;
   /** Controls the close button's hover fade. Ignored when `onDismiss` is absent. */
   closeVisible?: boolean;
   className?: string;
@@ -34,6 +36,8 @@ export function MeetingNotificationCard({
   busy = false,
   dismissLabel,
   onDismiss,
+  ignoreLabel,
+  onIgnore,
   closeVisible = true,
   className = "",
   onMouseEnter,
@@ -89,6 +93,16 @@ export function MeetingNotificationCard({
           <p className="text-[11px] text-muted-foreground leading-tight mt-0.5 break-words">
             {body}
           </p>
+          {onIgnore && (
+            <button
+              type="button"
+              onClick={onIgnore}
+              disabled={busy}
+              className="mt-1 text-start text-[11px] leading-tight break-words text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-60"
+            >
+              {ignoreLabel}
+            </button>
+          )}
         </div>
 
         <div
