@@ -85,6 +85,7 @@ test.before(() => {
       getNote: () => note,
     },
     _buildSpeakerMappings: () => ({}),
+    _formatTranscript: IPCHandlers.prototype._formatTranscript,
   };
   IPCHandlers.prototype.setupHandlers.call(
     withDevicePolicy(

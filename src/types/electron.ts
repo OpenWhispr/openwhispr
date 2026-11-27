@@ -2244,6 +2244,11 @@ declare global {
         /** recorderLabel names the original recorder when someone else exports the note. */
         options?: { recorderLabel?: string }
       ) => Promise<{ success: boolean; error?: string }>;
+      formatTranscript: (
+        noteId: number,
+        format: "txt" | "srt" | "json" | "md",
+        options?: { recorderLabel?: string }
+      ) => Promise<{ success: boolean; content?: string; error?: string }>;
       exportDictionary: (words: string[]) => Promise<{ success: boolean; error?: string }>;
       searchNotes: (
         query: string,
