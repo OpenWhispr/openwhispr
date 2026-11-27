@@ -40,6 +40,7 @@ test("the admin console's export normalizes as encoded", () => {
   assert.equal(snapshot.policy.updates.mode, "it_managed");
   assert.equal(snapshot.policy.transcription.allowedLocalModels, null);
   assert.equal(snapshot.policy.meetings.transcriptionStart, "automatic");
+  assert.equal(snapshot.policy.meetings.participantNotification, "required");
 });
 
 test("fields and device values a later build reads are ignored; known ones stay strict", () => {

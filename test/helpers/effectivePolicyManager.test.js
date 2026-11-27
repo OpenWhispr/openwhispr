@@ -556,6 +556,7 @@ test("effective attendee policy preserves both sources and reloads legacy cached
   assert.equal(mergePolicies([workspace]).meetings.externalAttendees, "allowed");
   assert.deepEqual(mergePolicies([workspace, device]).meetings, {
     transcriptionStart: "automatic",
+    participantNotification: "off",
     externalAttendees: "blocked",
     internalDomains: ["example.com", "sub.example.com"],
   });
@@ -571,4 +572,31 @@ test("effective attendee policy preserves both sources and reloads legacy cached
   const result = await manager.getPolicy({ held: true });
   assert.equal(result.policy.meetings.externalAttendees, "allowed");
   assert.deepEqual(result.policy.meetings.internalDomains, []);
+});
+
+test("notification defaults off and either policy can require it, including a future string", () => {
+  const legacy = defaultDevicePolicy();
+  delete legacy.meetings;
+  const off = { ...legacy, meetings: { participantNotification: "off" } };
+  assert.equal(mergePolicies([legacy, off]).meetings.participantNotification, "off");
+  for (const mode of ["required", "future"]) {
+    const strict = { ...legacy, meetings: { participantNotification: mode } };
+    for (const sources of [
+      [strict, off],
+      [off, strict],
+    ]) {
+      assert.equal(mergePolicies(sources).meetings.participantNotification, "required");
+    }
+  }
+});
+
+test("an MDM-required notice survives the device reader and a workspace that leaves it off", () => {
+  const device = normalizeDeviceValues(require("./fixtures/admin-mdm-device-values.json"));
+  const workspace = defaultDevicePolicy();
+  workspace.meetings = { participantNotification: "off" };
+  for (const result of [
+    resolveEffectivePolicy(device, null, guest),
+    resolveEffectivePolicy(device, { success: true, managed: true, policy: workspace }, member),
+  ])
+    assert.equal(result.policy.meetings.participantNotification, "required");
 });

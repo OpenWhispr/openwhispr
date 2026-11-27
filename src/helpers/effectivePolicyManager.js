@@ -1,5 +1,6 @@
 const { compareAppVersions } = require("./appVersion");
 const { isValidPolicyShape } = require("./policyValidation");
+const { requiresParticipantNotification } = require("./meetingRecordingPolicy");
 
 function mergePolicies(policies) {
   if (!policies.length) return null;
@@ -48,6 +49,11 @@ function mergePolicies(policies) {
     ),
     // Any start other than automatic, known to this build or not, is manual.
     meetings: {
+      participantNotification: policies.some((policy) =>
+        requiresParticipantNotification(policy.meetings)
+      )
+        ? "required"
+        : "off",
       externalAttendees: policies.some(
         (policy) => (policy.meetings?.externalAttendees ?? "allowed") !== "allowed"
       )

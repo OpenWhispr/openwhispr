@@ -3,9 +3,10 @@ const { isCanonicalAppVersion } = require("./appVersion");
 const POLICY_CAPABILITY_VERSION = "1";
 // Features this build can actually run. The server gates Orukeet on this token,
 // not on the version alone, so an older build that passes the version gate is
-// never handed a route it would silently reroute.
+// never handed a route it would silently reroute. Without participant-notice-v1,
+// a required notice turns meeting recording off.
 const CLIENT_CAPABILITIES =
-  "orukeet,orukeet-pipeline-v2,orukeet-language-routing,enterprise-audio-v1,private-workspace-placement";
+  "orukeet,orukeet-pipeline-v2,orukeet-language-routing,enterprise-audio-v1,private-workspace-placement,participant-notice-v1";
 
 function withPolicyRequestHeaders(headers, appVersion) {
   if (!isCanonicalAppVersion(appVersion)) {

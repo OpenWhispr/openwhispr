@@ -104,6 +104,27 @@ test("nothing is written while the device is unmanaged", async () => {
   assert.equal(fs.existsSync(path.join(userData, "audit")), false);
 });
 
+test("only a recognized announcement method is recorded on its own start", async () => {
+  const { log } = harness();
+  for (const method of ["told-by-member", "arbitrary content"]) {
+    log.recordingStarted({ sessionId: "s1", notificationMethod: method });
+    log.recordingStopped({ sessionId: "s1", reason: "user" });
+  }
+  await log.flush();
+  assert.deepEqual(
+    lines().map(({ participantsNotified, notificationMethod }) => [
+      participantsNotified,
+      notificationMethod,
+    ]),
+    [
+      [true, "told-by-member"],
+      [null, null],
+      [null, null],
+      [null, null],
+    ]
+  );
+});
+
 test("a refusal records its trigger and policy code", async () => {
   const { log } = harness();
   log.recordingRefused({
