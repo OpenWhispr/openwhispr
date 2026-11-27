@@ -6,6 +6,7 @@ const HyprlandShortcutManager = require("./hyprlandShortcut");
 const KDEShortcutManager = require("./kdeShortcut");
 const { i18nMain } = require("./i18nMain");
 const { parseHotkeyList } = require("./hotkeyList");
+const { getMacCompoundTerminalKey } = require("./globeKeyManager");
 const { createHotkeyRepeatGate } = require("./hotkeyRepeatGate");
 
 // Delay to ensure localStorage is accessible after window load
@@ -64,6 +65,56 @@ const MODIFIER_NAMES = new Set([
   "commandorcontrol",
   "cmdorctrl",
 ]);
+
+// The raw listener parsers silently discard unknown keys. Limit double-tap
+// to chords they can match exactly so an unknown key cannot become a bare
+// modifier or a different shortcut.
+const RAW_LISTENER_TERMINAL_KEYS = new Set([
+  "space",
+  "escape",
+  "esc",
+  "tab",
+  "pause",
+  "scrolllock",
+  "insert",
+  "home",
+  "end",
+  "pageup",
+  "pagedown",
+  "backquote",
+  "`",
+  "-",
+  "=",
+  "[",
+  "]",
+  "\\",
+  ";",
+  "'",
+  ",",
+  ".",
+  "/",
+]);
+
+const WINDOWS_RAW_LISTENER_TERMINAL_KEYS = new Set(["capslock", "numlock", "minus", "equal"]);
+const RAW_LISTENER_HOTKEY_BUFFER_SIZE = 256;
+
+function supportsRawListenerDoublePress(hotkey) {
+  if (hotkey.length >= RAW_LISTENER_HOTKEY_BUFFER_SIZE || /[^\x20-\x7e]/.test(hotkey)) {
+    return false;
+  }
+  const parts = hotkey
+    .toLowerCase()
+    .split("+")
+    .map((key) => key.replace(/^ +| +$/g, ""));
+  const terminal = parts.pop();
+
+  return (
+    parts.every((modifier) => MODIFIER_NAMES.has(modifier)) &&
+    (/^(?:[a-z0-9]|f(?:[1-9]|1[0-9]|2[0-4]))$/.test(terminal) ||
+      RAW_LISTENER_TERMINAL_KEYS.has(terminal) ||
+      (process.platform === "win32" && WINDOWS_RAW_LISTENER_TERMINAL_KEYS.has(terminal)))
+  );
+}
 
 function isModifierOnlyHotkey(hotkey) {
   if (!hotkey || !hotkey.includes("+")) return false;
@@ -601,6 +652,37 @@ class HotkeyManager extends EventEmitter {
       return i18nMain.t("hotkey.errors.holdNeedsRegularKey");
     }
     return this._pushToTalkListenerBlockReason() ?? i18nMain.t("windows.pttUnavailable");
+  }
+
+  getDictationDoublePressUnavailableReason(hotkeyInput) {
+    const hotkeys =
+      hotkeyInput == null ? this.getSlotHotkeys("dictation") : parseHotkeyList(hotkeyInput);
+    // Desktop-native Linux backends bind only the primary shortcut.
+    const usesDesktopShortcut = this.isUsingNativeShortcut();
+    const activeHotkeys = usesDesktopShortcut ? hotkeys.slice(0, 1) : hotkeys;
+    const isMac = process.platform === "darwin";
+    const usesRawListener =
+      process.platform === "win32" || (process.platform === "linux" && !usesDesktopShortcut);
+    for (const hotkey of activeHotkeys) {
+      if (
+        isMac &&
+        (lacksMacReleaseSignal(hotkey) ||
+          (hotkey.includes("+") && !getMacCompoundTerminalKey(hotkey)))
+      ) {
+        return i18nMain.t("hotkey.errors.doubleTapNeedsReleaseKey", { hotkey });
+      }
+      if (!this.supportsPushToTalk(hotkey)) return this.getPushToTalkUnavailableReason(hotkey);
+      if (usesRawListener && !supportsRawListenerDoublePress(hotkey)) {
+        return i18nMain.t("hotkey.errors.doubleTapNeedsNonModifierKey", { hotkey });
+      }
+    }
+    if (usesRawListener && !this.nativeListenerSupportsExactModifiers?.()) {
+      return i18nMain.t("hotkey.errors.doubleTapNeedsUpdatedKeyListener");
+    }
+    if (isMac && this.getMacKeyboardMonitorStatus?.() === "unavailable") {
+      return i18nMain.t("hotkey.errors.doubleTapKeyboardMonitorUnavailable");
+    }
+    return null;
   }
 
   async setActivationMode(mode) {

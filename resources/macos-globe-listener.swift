@@ -1,14 +1,21 @@
+import Carbon
 import Cocoa
 import Darwin
+import IOKit.hidsystem
 
 var fnIsDown = false
 var fnInterrupted = false
+var fnTapInterrupted = false
 var lastModifierFlags: NSEvent.ModifierFlags = []
 var suppressedMouseButtons: Set<String> = []
+var watchedCompoundKeys: Set<String> = []
+var compoundKeysDown: [UInt16: Set<String>] = [:]
+var uninterruptedRightModifiers: Set<String> = []
 
 struct ListenerConfig: Decodable {
     var mouseButtons: Set<String> = []
     var suppressGlobeAction: Bool = false
+    var compoundKeys: Set<String>?
 }
 
 func emit(_ message: String) {
@@ -32,6 +39,10 @@ func parseArguments() -> (config: ListenerConfig, statePath: String?, restoreLef
         switch argument {
         case "--suppress-system-globe-action":
             config.suppressGlobeAction = true
+        case "--compound-key":
+            if let key = arguments.next() {
+                config.compoundKeys = (config.compoundKeys ?? []).union([key])
+            }
         case "--globe-preference-state":
             statePath = arguments.next()
         case "--restore-leftover-globe-preference":
@@ -177,6 +188,11 @@ enum GlobeSystemAction {
 }
 
 func applyConfiguration(_ config: ListenerConfig) {
+    let nextCompoundKeys = config.compoundKeys ?? []
+    if watchedCompoundKeys != nextCompoundKeys {
+        watchedCompoundKeys = nextCompoundKeys
+        compoundKeysDown.removeAll()
+    }
     suppressedMouseButtons = config.mouseButtons
     updateMouseEventTap()
     if config.suppressGlobeAction {
@@ -194,14 +210,29 @@ if launchOptions.restoreLeftoverPreferenceOnly {
     exit(0)
 }
 
-let rightModifiers: [(UInt16, NSEvent.ModifierFlags, String)] = [
-    (61, .option, "RightOption"),
-    (54, .command, "RightCommand"),
-    (62, .control, "RightControl"),
-    (60, .shift, "RightShift"),
+let rightModifiers: [(keyCode: Int, flag: NSEvent.ModifierFlags, name: String, leftBit: UInt, rightBit: UInt)] = [
+    (kVK_RightOption, .option, "RightOption", UInt(NX_DEVICELALTKEYMASK), UInt(NX_DEVICERALTKEYMASK)),
+    (kVK_RightCommand, .command, "RightCommand", UInt(NX_DEVICELCMDKEYMASK), UInt(NX_DEVICERCMDKEYMASK)),
+    (kVK_RightControl, .control, "RightControl", UInt(NX_DEVICELCTLKEYMASK), UInt(NX_DEVICERCTLKEYMASK)),
+    (kVK_RightShift, .shift, "RightShift", UInt(NX_DEVICELSHIFTKEYMASK), UInt(NX_DEVICERSHIFTKEYMASK)),
 ]
 
 let modifierMask: NSEvent.ModifierFlags = [.control, .command, .option, .shift]
+let standaloneModifierMask = modifierMask.union(.function)
+
+func interruptModifiedStandaloneKeys(_ flags: NSEvent.ModifierFlags) {
+    if !flags.intersection(modifierMask).isEmpty {
+        interruptFnTap()
+    }
+
+    for modifier in rightModifiers where uninterruptedRightModifiers.contains(modifier.name) {
+        let otherFlags = standaloneModifierMask.subtracting(modifier.flag)
+        if !flags.intersection(otherFlags).isEmpty || flags.rawValue & modifier.leftBit != 0 {
+            uninterruptedRightModifiers.remove(modifier.name)
+            emit("RIGHT_MOD_INTERRUPTED:\(modifier.name)")
+        }
+    }
+}
 
 let releases: [(NSEvent.ModifierFlags, String)] = [
     (.control, "control"),
@@ -227,8 +258,13 @@ func emitMouseEvent(_ type: CGEventType, _ event: CGEvent) -> Bool {
     let buttonNumber = Int(event.getIntegerValueField(.mouseEventButtonNumber))
     guard let buttonName = mouseButtonName(buttonNumber) else { return false }
 
+    let shouldSuppress = suppressedMouseButtons.contains(buttonName)
+    if type == .otherMouseDown && shouldSuppress {
+        // A suppressed side-button press never reaches the AppKit monitor.
+        interruptPointerModifiers()
+    }
     emit(type == .otherMouseDown ? "MOUSE_BUTTON_DOWN:\(buttonName)" : "MOUSE_BUTTON_UP:\(buttonName)")
-    return suppressedMouseButtons.contains(buttonName)
+    return shouldSuppress
 }
 
 let mouseEventMask =
@@ -288,26 +324,49 @@ func updateMouseEventTap() {
 guard let monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, handler: { event in
     let flags = event.modifierFlags
     let containsFn = flags.contains(.function)
+    let currentModifiers = flags.intersection(standaloneModifierMask)
+
+    // A flags event can add and remove modifiers together. Reject the changed chord
+    // before any release can complete a compound tap or stop gesture.
+    if !watchedCompoundKeys.isEmpty {
+        let pressed = currentModifiers.subtracting(lastModifierFlags)
+        for (flag, name) in releases where pressed.contains(flag) {
+            emit("MODIFIER_DOWN:\(name)")
+        }
+        if pressed.contains(.function) { emit("MODIFIER_DOWN:fn") }
+    }
 
     if containsFn && !fnIsDown {
         fnIsDown = true
         fnInterrupted = false
+        fnTapInterrupted = false
         emit("FN_DOWN")
-    } else if !containsFn && fnIsDown {
+    }
+
+    let rightModifier = rightModifiers.first { $0.keyCode == Int(event.keyCode) }
+    let rightModifierIsDown = rightModifier.map { modifier in
+        // The generic flag remains set when the other side is still held.
+        let sideBits = flags.rawValue & (modifier.leftBit | modifier.rightBit)
+        return sideBits == 0 ? flags.contains(modifier.flag) : sideBits & modifier.rightBit != 0
+    } ?? false
+    if let rightModifier, rightModifierIsDown {
+        uninterruptedRightModifiers.insert(rightModifier.name)
+        emit("RIGHT_MOD_DOWN:\(rightModifier.name)")
+    }
+
+    // Interrupt after a down so the candidate exists, and before an up can pair it.
+    interruptModifiedStandaloneKeys(flags)
+
+    if !containsFn && fnIsDown {
         fnIsDown = false
         fnInterrupted = false
         emit("FN_UP")
     }
-
-    let keyCode = event.keyCode
-    for (code, flag, name) in rightModifiers {
-        if keyCode == code {
-            emit(flags.contains(flag) ? "RIGHT_MOD_DOWN:\(name)" : "RIGHT_MOD_UP:\(name)")
-            break
-        }
+    if let rightModifier, !rightModifierIsDown {
+        uninterruptedRightModifiers.remove(rightModifier.name)
+        emit("RIGHT_MOD_UP:\(rightModifier.name)")
     }
 
-    let currentModifiers = flags.intersection(modifierMask)
     if currentModifiers != lastModifierFlags {
         let released = lastModifierFlags.subtracting(currentModifiers)
         for (flag, name) in releases {
@@ -323,20 +382,95 @@ guard let monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, h
     exit(1)
 }
 
-// Detect another key pressed while Fn is held (e.g. Fn+Arrow → Home) so the
-// JS side can cancel an in-progress bare-Fn push-to-talk instead of transcribing noise.
-let keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { _ in
+let namedCompoundKeys: [Int: String] = [
+    kVK_Space: "space", kVK_Return: "return", kVK_ANSI_KeypadEnter: "return",
+    kVK_Tab: "tab", kVK_Escape: "esc", kVK_Delete: "backspace", kVK_ForwardDelete: "delete",
+    kVK_Home: "home", kVK_End: "end", kVK_PageUp: "pageup", kVK_PageDown: "pagedown",
+    kVK_LeftArrow: "left", kVK_RightArrow: "right", kVK_UpArrow: "up", kVK_DownArrow: "down",
+    kVK_F1: "f1", kVK_F2: "f2", kVK_F3: "f3", kVK_F4: "f4", kVK_F5: "f5", kVK_F6: "f6",
+    kVK_F7: "f7", kVK_F8: "f8", kVK_F9: "f9", kVK_F10: "f10", kVK_F11: "f11", kVK_F12: "f12",
+    kVK_F13: "f13", kVK_F14: "f14", kVK_F15: "f15", kVK_F16: "f16", kVK_F17: "f17", kVK_F18: "f18",
+    kVK_F19: "f19", kVK_F20: "f20",
+    kVK_ANSI_Keypad0: "num0", kVK_ANSI_Keypad1: "num1", kVK_ANSI_Keypad2: "num2",
+    kVK_ANSI_Keypad3: "num3", kVK_ANSI_Keypad4: "num4", kVK_ANSI_Keypad5: "num5",
+    kVK_ANSI_Keypad6: "num6", kVK_ANSI_Keypad7: "num7", kVK_ANSI_Keypad8: "num8",
+    kVK_ANSI_Keypad9: "num9", kVK_ANSI_KeypadDecimal: "numdec", kVK_ANSI_KeypadPlus: "numadd",
+    kVK_ANSI_KeypadMinus: "numsub", kVK_ANSI_KeypadMultiply: "nummult", kVK_ANSI_KeypadDivide: "numdiv",
+]
+
+func matchingCompoundKeys(_ event: NSEvent) -> Set<String> {
+    if let namedKey = namedCompoundKeys[Int(event.keyCode)] {
+        return watchedCompoundKeys.contains(namedKey) ? [namedKey] : []
+    }
+    // Resolve printable terminals in the active layout without chord modifiers.
+    // Shift can also be part of the terminal itself, as for Plus.
+    let candidates = [
+        event.characters(byApplyingModifiers: []),
+        event.characters(byApplyingModifiers: event.modifierFlags.intersection(.shift)),
+    ].compactMap { $0?.lowercased() }
+    return watchedCompoundKeys.intersection(candidates)
+}
+
+func interruptStandaloneModifiers() {
     if fnIsDown && !fnInterrupted {
         fnInterrupted = true
         emit("FN_INTERRUPTED")
+    }
+    interruptRightModifiers()
+}
+
+func interruptFnTap() {
+    // An interruption ignored by Hold must not swallow its later keyboard interruption.
+    guard fnIsDown && !fnTapInterrupted else { return }
+    fnTapInterrupted = true
+    emit("FN_TAP_INTERRUPTED")
+}
+
+func interruptPointerModifiers() {
+    interruptFnTap()
+    interruptRightModifiers()
+}
+
+func interruptRightModifiers() {
+    for modifier in uninterruptedRightModifiers.sorted() {
+        emit("RIGHT_MOD_INTERRUPTED:\(modifier)")
+    }
+    uninterruptedRightModifiers.removeAll()
+}
+
+let inputMonitor = NSEvent.addGlobalMonitorForEvents(
+    matching: [.keyDown, .keyUp, .leftMouseDown, .rightMouseDown, .otherMouseDown]
+) { event in
+    switch event.type {
+    case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+        interruptPointerModifiers()
+    case .keyDown:
+        interruptStandaloneModifiers()
+        if !watchedCompoundKeys.isEmpty && !event.isARepeat {
+            let matched = matchingCompoundKeys(event)
+            if !matched.isEmpty {
+                compoundKeysDown[event.keyCode] = matched
+            }
+        }
+    case .keyUp:
+        guard !watchedCompoundKeys.isEmpty else { return }
+        // Keep the key-down identity when modifiers changed before release.
+        // A system accelerator can consume the down event before AppKit sees it.
+        let released = compoundKeysDown.removeValue(forKey: event.keyCode)
+            ?? matchingCompoundKeys(event)
+        for key in released.sorted() {
+            emit("COMPOUND_KEY_UP:\(key)")
+        }
+    default:
+        break
     }
 }
 
 func shutdownListener() -> Never {
     GlobeSystemAction.restore()
     NSEvent.removeMonitor(monitor)
-    if let keyMonitor {
-        NSEvent.removeMonitor(keyMonitor)
+    if let inputMonitor {
+        NSEvent.removeMonitor(inputMonitor)
     }
     if let mouseEventTapPort {
         CGEvent.tapEnable(tap: mouseEventTapPort, enable: false)
@@ -349,6 +483,12 @@ func shutdownListener() -> Never {
 
 // Only take over the system Globe action once the listener is known to work.
 applyConfiguration(launchOptions.config)
+if inputMonitor != nil {
+    emit("KEY_MONITOR_READY")
+} else {
+    emit("KEY_MONITOR_UNAVAILABLE")
+    emitWarning("Failed to create keyboard event monitor")
+}
 
 // Reconfiguration arrives as one JSON object per line so the hotkey can change
 // without restarting; EOF means the app is gone and the Globe key goes back.

@@ -1,3 +1,4 @@
+const { normalizeDictationActivationMode } = require("./dictationActivationMode.mjs");
 const path = require("path");
 const fs = require("fs");
 const fsPromises = require("fs/promises");
@@ -446,12 +447,11 @@ class EnvironmentManager {
   }
 
   getActivationMode() {
-    const mode = this._getKey("ACTIVATION_MODE");
-    return mode === "push" ? "push" : "tap";
+    return normalizeDictationActivationMode(this._getKey("ACTIVATION_MODE"));
   }
 
   saveActivationMode(mode) {
-    const validMode = mode === "push" ? "push" : "tap";
+    const validMode = normalizeDictationActivationMode(mode);
     const result = this._saveKey("ACTIVATION_MODE", validMode);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;

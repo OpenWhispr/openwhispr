@@ -351,3 +351,164 @@ test("the listener is not started off macOS", () => {
 
   assert.equal(spawnCalls.length, 0);
 });
+
+test("only observable compound terminals get native release tokens", () => {
+  const { GlobeKeyManager } = loadManager();
+
+  assert.equal(GlobeKeyManager.getMacCompoundTerminalKey("Control+Space"), "space");
+  assert.equal(GlobeKeyManager.getMacCompoundTerminalKey("Cmd+Shift+F8"), "f8");
+  assert.equal(GlobeKeyManager.getMacCompoundTerminalKey("Cmd+Escape"), "esc");
+  assert.equal(GlobeKeyManager.getMacCompoundTerminalKey("Ctrl+A"), "a");
+  assert.equal(GlobeKeyManager.getMacCompoundTerminalKey("Ctrl+Left"), "left");
+  assert.equal(GlobeKeyManager.getMacCompoundTerminalKey("F8"), null);
+  assert.equal(GlobeKeyManager.getMacCompoundTerminalKey("Ctrl+Shift"), null);
+  assert.equal(GlobeKeyManager.getMacCompoundTerminalKey("Ctrl+MediaNextTrack"), null);
+});
+
+test("only the configured compound terminals are sent to the native listener", (t) => {
+  const { GlobeKeyManager, spawnCalls } = loadManager();
+  const manager = new GlobeKeyManager();
+  t.after(() => manager.stop());
+
+  manager.setConfiguration({ compoundKeys: ["space", "f8", "space", "not-a-key"] });
+  manager.start();
+  assert.deepEqual(spawnCalls[0].args, ["--compound-key", "f8", "--compound-key", "space"]);
+
+  manager.setConfiguration({ compoundKeys: ["a"] });
+  manager.setConfiguration({});
+  manager.stop();
+
+  assert.deepEqual(
+    spawnCalls[0].child.stdin.writes.map((line) => JSON.parse(line)),
+    [
+      { mouseButtons: [], suppressGlobeAction: false, compoundKeys: ["a"] },
+      { mouseButtons: [], suppressGlobeAction: false },
+    ]
+  );
+});
+
+test("the listener forwards complete compound releases and right-modifier interruptions", (t) => {
+  const { GlobeKeyManager, spawnCalls } = loadManager();
+  const manager = new GlobeKeyManager();
+  t.after(() => manager.stop());
+  const events = [];
+  manager.setConfiguration({ compoundKeys: ["space"] });
+  manager.on("compound-key-up", (key) => events.push(["compound-key-up", key]));
+  manager.on("right-modifier-interrupted", (modifier) =>
+    events.push(["right-modifier-interrupted", modifier])
+  );
+  manager.start();
+  const { stdout } = spawnCalls[0].child;
+
+  stdout.emit("data", "RIGHT_MOD_INTER");
+  stdout.emit("data", "RUPTED:RightOption\nCOMPOUND_KEY_UP:spa");
+  assert.deepEqual(events, [["right-modifier-interrupted", "RightOption"]]);
+  stdout.emit("data", "ce\nCOMPOUND_KEY_UP:a\n");
+  manager.setConfiguration({});
+  stdout.emit("data", "COMPOUND_KEY_UP:space\n");
+  manager.stop();
+
+  assert.deepEqual(events, [
+    ["right-modifier-interrupted", "RightOption"],
+    ["compound-key-up", "space"],
+  ]);
+});
+
+test("the listener forwards each watched modifier press after a complete native line", (t) => {
+  const { GlobeKeyManager, spawnCalls } = loadManager();
+  const manager = new GlobeKeyManager();
+  t.after(() => manager.stop());
+  const presses = [];
+  manager.setConfiguration({ compoundKeys: ["space"] });
+  manager.on("modifier-down", (modifier) => presses.push(modifier));
+  manager.start();
+  const { stdout } = spawnCalls[0].child;
+
+  stdout.emit("data", "MODIFIER_DOWN:unknown\nMODIFIER_DOWN:shi");
+  assert.deepEqual(presses, []);
+  stdout.emit("data", "ft\nMODIFIER_DOWN:fn\n");
+  assert.deepEqual(presses, ["shift", "fn"]);
+});
+
+test("the listener distinguishes Globe tap interruptions from ordinary Hold interruptions", (t) => {
+  const { GlobeKeyManager, spawnCalls } = loadManager();
+  const manager = new GlobeKeyManager();
+  t.after(() => manager.stop());
+  const events = [];
+  manager.on("globe-tap-interrupted", () => events.push("tap"));
+  manager.on("globe-interrupted", () => events.push("keyboard"));
+  manager.start();
+  const { stdout } = spawnCalls[0].child;
+
+  stdout.emit("data", "FN_TAP_INTERRUPTED_extra\nFN_TAP_INTER");
+  assert.deepEqual(events, []);
+  stdout.emit("data", "RUPTED\nFN_INTERRUPTED\n");
+
+  assert.deepEqual(events, ["tap", "keyboard"]);
+});
+
+test("keyboard observation requires an exact ready event from the current listener", (t) => {
+  const { GlobeKeyManager, spawnCalls } = loadManager();
+  const manager = new GlobeKeyManager();
+  t.after(() => manager.stop());
+  const statuses = [];
+  manager.on("keyboard-monitor-status-changed", (status) => statuses.push(status));
+
+  manager.start();
+  const child = spawnCalls[0].child;
+  assert.equal(manager.hasKeyboardMonitor, false);
+  child.stdout.emit("data", "KEY_MONITOR_READY_extra\n");
+  assert.equal(manager.hasKeyboardMonitor, false);
+  child.stdout.emit("data", "KEY_MONITOR_READY\n");
+  assert.equal(manager.hasKeyboardMonitor, true);
+
+  child.emit("exit", null, "SIGTERM");
+  assert.equal(manager.hasKeyboardMonitor, false);
+  assert.deepEqual(statuses, ["ready", "unavailable"]);
+  manager.start();
+  child.stdout.emit("data", "KEY_MONITOR_READY\n");
+  assert.equal(manager.hasKeyboardMonitor, false);
+  spawnCalls[1].child.stdout.emit("data", "KEY_MONITOR_READY\n");
+  assert.equal(manager.hasKeyboardMonitor, true);
+  manager.stop();
+  manager.stop();
+  assert.equal(manager.hasKeyboardMonitor, false);
+  assert.deepEqual(statuses, ["ready", "unavailable", "pending", "ready", "unavailable"]);
+});
+
+test("keyboard monitoring reports startup, refusal and recovery separately", (t) => {
+  const { GlobeKeyManager, spawnCalls } = loadManager();
+  const manager = new GlobeKeyManager();
+  t.after(() => manager.stop());
+  const statuses = [];
+  manager.on("keyboard-monitor-status-changed", (status) => statuses.push(status));
+
+  manager.start();
+  assert.equal(manager.keyboardMonitorStatus, "pending");
+  const first = spawnCalls[0].child;
+  first.stdout.emit("data", "KEY_MONITOR_UNAVAILABLE_extra\nKEY_MONITOR_UNAVAIL");
+  assert.deepEqual(statuses, []);
+  first.stdout.emit("data", "ABLE\nKEY_MONITOR_UNAVAILABLE\n");
+
+  assert.equal(manager.keyboardMonitorStatus, "unavailable");
+  assert.equal(manager.hasKeyboardMonitor, false);
+  assert.equal(manager.process, first, "an unavailable keyboard monitor still serves Hold");
+  assert.deepEqual(statuses, ["unavailable"]);
+
+  first.emit("exit", null, "SIGTERM");
+  manager.start();
+  assert.equal(manager.keyboardMonitorStatus, "pending");
+  first.stdout.emit("data", "KEY_MONITOR_READY\n");
+  first.stderr.emit("data", "Failed to create event monitor");
+  first.emit("error", new Error("stale child failed"));
+  const second = spawnCalls[1].child;
+  assert.equal(manager.process, second);
+  assert.equal(manager.keyboardMonitorStatus, "pending");
+  second.stdout.emit("data", "KEY_MONITOR_READY\nKEY_MONITOR_READY\n");
+
+  assert.equal(manager.keyboardMonitorStatus, "ready");
+  assert.equal(manager.hasKeyboardMonitor, true);
+  second.emit("exit", null, "SIGTERM");
+  assert.equal(manager.keyboardMonitorStatus, "unavailable");
+  assert.deepEqual(statuses, ["unavailable", "pending", "ready", "unavailable"]);
+});

@@ -143,7 +143,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "meeting-start-refused",
     (callback) => (_event, code) => callback(code)
   ),
-  onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
+  onStartDictation: registerListener(
+    "start-dictation",
+    (callback) => (_event, options) => callback(options)
+  ),
+  rejectHandsFreeDictationStart: (requestId) =>
+    ipcRenderer.send("hands-free-dictation-start-rejected", requestId),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
   onPrepareDictation: registerListener("prepare-dictation", (callback) => () => callback()),
   onCancelDictationPreparation: registerListener(
@@ -665,6 +670,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   updateHotkey: (hotkey) => ipcRenderer.invoke("update-hotkey", hotkey),
   setHotkeyListeningMode: (enabled) => ipcRenderer.invoke("set-hotkey-listening-mode", enabled),
   getHotkeyModeInfo: (hotkey) => ipcRenderer.invoke("get-hotkey-mode-info", hotkey),
+  onHotkeyModeInfoChanged: registerListener("hotkey-mode-info-changed"),
   getHyprlandConfigStatus: () => ipcRenderer.invoke("get-hyprland-config-status"),
   startWindowDrag: () => ipcRenderer.invoke("start-window-drag"),
   stopWindowDrag: () => ipcRenderer.invoke("stop-window-drag"),

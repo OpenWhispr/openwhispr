@@ -220,7 +220,11 @@ export const useAudioRecording = (toast, options = {}) => {
   );
 
   const performStartRecording = useCallback(
-    async ({ voiceAgentRequested = false, translationRequested = false } = {}) => {
+    async ({
+      voiceAgentRequested = false,
+      translationRequested = false,
+      handsFree = false,
+    } = {}) => {
       if (startLockRef.current) return false;
       lastStartOptionsRef.current = { voiceAgentRequested, translationRequested };
       startLockRef.current = true;
@@ -261,6 +265,8 @@ export const useAudioRecording = (toast, options = {}) => {
         // microphone; AudioManager confirms the same value once recording.
         setIsAssistantVoice(voiceAgentRequested);
         if (!(await attempt.admission) || !current()) return false;
+        // A hands-free session has no physical release to cancel a slow mic opening.
+        if (handsFree) window.electronAPI?.registerCancelHotkey?.("Escape");
         const refresh = refreshEnterpriseIdentityForUse();
         if (refresh) {
           await refresh;
@@ -408,6 +414,7 @@ export const useAudioRecording = (toast, options = {}) => {
         if (stopRequestedDuringStartRef.current && !recordingStarted) setIsStopping(false);
         stopRequestedDuringStartRef.current = false;
         if (!recordingStarted) {
+          if (handsFree && attempt) window.electronAPI?.unregisterCancelHotkey?.();
           setIsPreparing(false);
           setIsAssistantVoice(false);
           manager?.cancelPreparedMicCapture?.();
@@ -1246,8 +1253,17 @@ export const useAudioRecording = (toast, options = {}) => {
       }
     };
 
-    const handleStart = async () => {
-      await performStartRecording();
+    const handleStart = async (options) => {
+      let started = false;
+      try {
+        started = await performStartRecording({
+          handsFree: options?.handsFreeRequestId !== undefined,
+        });
+      } finally {
+        if (!started && options?.handsFreeRequestId !== undefined) {
+          window.electronAPI.rejectHandsFreeDictationStart?.(options.handsFreeRequestId);
+        }
+      }
     };
 
     const handleStop = async () => {
@@ -1269,8 +1285,10 @@ export const useAudioRecording = (toast, options = {}) => {
       onToggle?.();
     });
 
-    const disposeStart = window.electronAPI.onStartDictation?.(() => {
-      handleStart();
+    const disposeStart = window.electronAPI.onStartDictation?.((options) => {
+      handleStart(options).catch((error) => {
+        logger.warn("Hotkey dictation start failed", { error: error?.message });
+      });
       onToggle?.();
     });
 

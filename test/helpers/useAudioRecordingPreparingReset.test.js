@@ -604,3 +604,32 @@ test("a cancelled start stays stale when a new press takes over its attempt", as
   });
   assert.equal(h.fixture.starts, 0);
 });
+
+test("a hands-free hotkey start enables Escape while the microphone is still opening", async (t) => {
+  const microphone = deferred();
+  const { api, fixture, listeners, main } = await mountRecording(t, {
+    open: () => microphone.promise,
+    startResult: true,
+  });
+  const registered = [];
+  const rejected = [];
+  globalThis.window.electronAPI.registerCancelHotkey = (key) => registered.push(key);
+  globalThis.window.electronAPI.rejectHandsFreeDictationStart = (requestId) =>
+    rejected.push(requestId);
+
+  await React.act(async () => {
+    listeners.StartDictation({ handsFreeRequestId: 23 });
+    await flush();
+  });
+  assert.deepEqual(registered, ["Escape"]);
+  assert.equal(fixture.manager.getState().isRecording, undefined);
+
+  await React.act(async () => {
+    await api().cancelRecording();
+    microphone.resolve();
+    await flush();
+  });
+  assert.equal(fixture.manager.getState().isRecording, false);
+  assert.equal(main.isDictationActive(), false);
+  assert.deepEqual(rejected, [23]);
+});

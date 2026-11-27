@@ -125,6 +125,10 @@
       "keyReservedByGnome": "GNOME utilise déjà « {{hotkey}} » pour l’un de ses propres raccourcis. Choisissez une autre touche.",
       "rightModifierNeedsListener": "« {{hotkey}} » ne peut pas être utilisé sur ce bureau, dont les raccourcis exigent une touche normale. Ajoutez une touche, par exemple Control+Alt+Space.",
       "holdNeedsReleaseKey": "Maintenir pour parler nécessite une touche dont macOS détecte le relâchement : Globe, une touche droite comme Option droite, ou un raccourci avec modificateur. Appuyer fonctionne avec n’importe quelle touche.",
+      "doubleTapNeedsReleaseKey": "La double pression est indisponible pour « {{hotkey}} », car macOS ne détecte pas le relâchement de l’une des touches.",
+      "doubleTapNeedsNonModifierKey": "Le double appui est indisponible pour « {{hotkey}} » sur ce système. Utilisez une touche prise en charge autre qu’une touche de modification, comme la barre d’espace.",
+      "doubleTapNeedsUpdatedKeyListener": "Le double appui nécessite une version à jour du module de détection des touches.",
+      "doubleTapKeyboardMonitorUnavailable": "Le double appui est indisponible parce que la surveillance du clavier de macOS ne fonctionne pas.",
       "holdNeedsRegularKey": "Pour utiliser le mode Maintenir, ajoutez une touche normale au raccourci, par exemple Control+Alt+Space. Votre bureau ne peut pas signaler le maintien de touches de modification seules.",
       "holdNeedsGnomePortal": "Pour utiliser le mode Maintenir, GNOME a besoin de son portail de raccourcis globaux, inclus à partir de GNOME 48. Le mode Appui fonctionne sans lui.",
       "registrationFailed": "Impossible d'enregistrer \"{{hotkey}}\". Il est peut-être utilisé par une autre application.",
@@ -2756,6 +2760,8 @@
         "title": "Icône flottante"
       },
       "hotkey": {
+        "holdWithDoubleTap": "Maintien + double appui",
+        "doubleTapHint": "Maintenez {{hotkey}} pour parler. Appuyez deux fois sur {{hotkey}} pour dicter en mode mains libres, puis une fois pour arrêter.",
         "activationMode": "Mode d'activation",
         "description": "La combinaison de touches qui démarre et arrête la dictée vocale",
         "resetToDefault": "Réinitialiser à {{hotkey}}",

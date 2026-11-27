@@ -1,3 +1,7 @@
+import {
+  normalizeDictationActivationMode,
+  type DictationActivationMode,
+} from "../helpers/dictationActivationMode.mjs";
 import "../models/registryBootstrap.js";
 import {
   parseSelfHostedSttHeaders,
@@ -1494,7 +1498,7 @@ export interface SettingsState
   setOnboardingUseCases: (useCases: string[]) => void;
   setOnboardingUseCaseNote: (note: string) => void;
   setSpokenLanguages: (languages: string[]) => void;
-  setActivationMode: (mode: "tap" | "push") => void;
+  setActivationMode: (mode: DictationActivationMode) => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
   setMicrophoneSelectionMode: (mode: MicrophoneSelectionMode) => void;
@@ -1911,8 +1915,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
     ? "side-panel"
     : "full-width") as "side-panel" | "full-width",
-  activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
-    "tap" | "push",
+  activationMode: normalizeDictationActivationMode(readString("activationMode", "tap")),
 
   microphoneSelectionMode: (() => {
     const mode = readString("microphoneSelectionMode", "system");
@@ -2737,7 +2740,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ spokenLanguages: languages });
   },
 
-  setActivationMode: (mode: "tap" | "push") => {
+  setActivationMode: (mode: DictationActivationMode) => {
     if (isBrowser) localStorage.setItem("activationMode", mode);
     set({ activationMode: mode });
     if (isBrowser) {

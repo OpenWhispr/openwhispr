@@ -11,6 +11,9 @@ const { createWin32WindowShape } = require("./win32WindowShape");
 // Aliased: this class has an openExternalUrl method wrapping the helper.
 const { openExternalUrl: openUrlInExternalBrowser } = require("./externalUrlOpener");
 const HotkeyManager = require("./hotkeyManager");
+const { getMacCompoundTerminalKey } = require("./globeKeyManager");
+const { normalizeDictationActivationMode } = require("./dictationActivationMode.mjs");
+const DictationDoublePress = require("./dictationDoublePress");
 const { isGlobeLikeHotkey } = HotkeyManager;
 const DragManager = require("./dragManager");
 const MainWindowPlacementCoordinator = require("./mainWindowPlacementCoordinator");
@@ -124,6 +127,8 @@ class WindowManager {
     this._activeHorizontalDirection = null;
     this._isDictatingToggle = false;
     this._dictationLifecycleState = DICTATION_LIFECYCLE.IDLE;
+    this._dictationDoublePress = new DictationDoublePress();
+    this._handsFreeRequestId = 0;
     this._dictationAttempt = null;
     this._pendingMeetingNoteNavigation = null;
     this._pendingNoteNavigation = null;
@@ -729,7 +734,7 @@ class WindowManager {
       const activationMode = this.getActivationMode();
       const currentHotkey = triggeredHotkey || this.hotkeyManager.getCurrentHotkey?.();
 
-      if (process.platform === "linux" && activationMode === "push") {
+      if (process.platform === "linux" && activationMode !== "tap") {
         if (phase === "down") {
           this.startWindowsPushToTalk(currentHotkey);
         } else if (phase === "up") {
@@ -741,7 +746,7 @@ class WindowManager {
 
       if (
         process.platform === "darwin" &&
-        activationMode === "push" &&
+        activationMode !== "tap" &&
         currentHotkey &&
         !isGlobeLikeHotkey(currentHotkey) &&
         currentHotkey.includes("+")
@@ -753,14 +758,69 @@ class WindowManager {
       // Push mode: defer to native listener (globalShortcut can't detect key-up)
       if (
         (process.platform === "win32" || process.platform === "linux") &&
-        activationMode === "push"
+        activationMode !== "tap"
       ) {
         return;
       }
 
+      // Other macOS dictation bindings in the combined mode use the native
+      // listener. A press-only registration must never turn into a toggle.
+      if (process.platform === "darwin" && this.isDictationDoublePressEnabled()) return;
       if (!isPress()) return;
       this.sendToggleDictation();
     };
+  }
+
+  isDictationDoublePressEnabled() {
+    return this.getActivationMode() === "push-double-tap";
+  }
+
+  canPairDictationTap(hotkey) {
+    return this.isDictationDoublePressEnabled() && this._dictationDoublePress.canPair(hotkey);
+  }
+
+  pressHandsFreeDictation(hotkey, modifiers) {
+    return this._dictationDoublePress.press(hotkey, modifiers);
+  }
+
+  releaseHandsFreeDictation(hotkey) {
+    if (!this._dictationDoublePress.release(hotkey)) return false;
+    this.sendStopDictation();
+    return true;
+  }
+
+  interruptDictationTap(hotkey) {
+    this._dictationDoublePress.interrupt(hotkey);
+  }
+
+  tryStartHandsFreeDictation(hotkey) {
+    if (
+      !this.isDictationDoublePressEnabled() ||
+      !hotkey ||
+      this.canObserveHandsFreeInput?.() === false ||
+      this.hotkeyManager.getDictationDoublePressUnavailableReason(hotkey) ||
+      this.isDictating() ||
+      this.hotkeyManager.isInListeningMode()
+    )
+      return false;
+    if (!this._dictationDoublePress.shortRelease(hotkey)) return false;
+    const requestId = ++this._handsFreeRequestId;
+    if (!this.sendStartDictation({ handsFreeRequestId: requestId })) return false;
+    this._dictationDoublePress.start(hotkey, requestId);
+    return true;
+  }
+
+  rejectHandsFreeDictationStart(requestId) {
+    this._dictationDoublePress.rejectStart(requestId);
+  }
+
+  resetDictationDoublePress() {
+    this._dictationDoublePress.clearTap();
+    if (this._dictationDoublePress.clearLatch()) {
+      this._notifyPushForceStopped("reset");
+      this.sendStopDictation();
+    }
+    if (this.macCompoundPushState?.terminalKey) this.forceStopMacCompoundPush("reset");
   }
 
   startMacCompoundPushToTalk(hotkey) {
@@ -774,43 +834,46 @@ class WindowManager {
       return;
     }
 
+    const combined = this.isDictationDoublePressEnabled();
+    const terminalKey = combined ? getMacCompoundTerminalKey(hotkey) : null;
+    if (combined && !terminalKey) return;
+    if (this.pressHandsFreeDictation(hotkey, requiredModifiers)) return;
+
     const MIN_HOLD_DURATION_MS = 150;
     const MAX_PUSH_DURATION_MS = 300000; // 5 minutes max recording
-    const downTime = Date.now();
 
     const targetPidPromise = this.textEditMonitor?.captureTargetPid?.();
     this.showDictationPanel({ reposition: true, targetPidPromise });
     this.sendPrepareDictation();
 
-    const safetyTimeoutId = setTimeout(() => {
-      if (this.macCompoundPushState?.active) {
-        debugLogger.warn("Compound PTT safety timeout", undefined, "ptt");
-        this.forceStopMacCompoundPush("timeout");
-      }
-    }, MAX_PUSH_DURATION_MS);
-
-    this.macCompoundPushState = {
+    const state = {
       active: true,
       hotkey,
-      downTime,
+      terminalKey,
       isRecording: false,
       requiredModifiers,
-      safetyTimeoutId,
+      safetyTimeoutId: setTimeout(() => {
+        if (this.macCompoundPushState === state) {
+          debugLogger.warn("Compound PTT safety timeout", undefined, "ptt");
+          this.forceStopMacCompoundPush("timeout");
+        }
+      }, MAX_PUSH_DURATION_MS),
     };
+    this.macCompoundPushState = state;
 
     setTimeout(() => {
-      if (!this.macCompoundPushState || this.macCompoundPushState.downTime !== downTime) {
-        return;
-      }
-
-      if (!this.macCompoundPushState.isRecording) {
-        this.macCompoundPushState.isRecording = true;
-        this.sendStartDictation();
-      }
+      if (this.macCompoundPushState !== state) return;
+      state.isRecording = true;
+      this._dictationDoublePress.clearTap();
+      this.sendStartDictation();
     }, MIN_HOLD_DURATION_MS);
   }
 
   handleMacPushModifierUp(modifier) {
+    if (this._dictationDoublePress.releaseModifier(modifier)) {
+      this.sendStopDictation();
+      return;
+    }
     if (!this.macCompoundPushState?.active) {
       return;
     }
@@ -819,19 +882,46 @@ class WindowManager {
       return;
     }
 
-    // The press came through globalShortcut, which can't see the release.
-    this.hotkeyManager.logHotkeyEvent("macos-native", "up", this.macCompoundPushState.hotkey);
+    this.finishMacCompoundPush();
+  }
 
-    if (this.macCompoundPushState.safetyTimeoutId) {
-      clearTimeout(this.macCompoundPushState.safetyTimeoutId);
+  handleMacCompoundModifierDown(modifier) {
+    const armedStop = this._dictationDoublePress.getArmedModifierStopHotkey();
+    if (armedStop && !this.getMacRequiredModifiers(armedStop).has(modifier)) {
+      this.interruptDictationTap(armedStop);
     }
 
-    const wasRecording = this.macCompoundPushState.isRecording;
-    this.macCompoundPushState = null;
+    const state = this.macCompoundPushState;
+    if (!state?.terminalKey || state.isRecording || state.requiredModifiers.has(modifier)) return;
 
-    if (wasRecording) {
+    this.interruptDictationTap(state.hotkey);
+    this.clearMacCompoundPushState();
+    this.sendCancelDictationPreparation();
+    this.hideDictationPanel();
+  }
+
+  handleMacCompoundKeyUp(terminalKey) {
+    const state = this.macCompoundPushState;
+    // Short taps can complete with the modifiers held. A recording still waits
+    // for modifier release so pasting does not inherit the held keys.
+    if (!state?.terminalKey || state.terminalKey !== terminalKey || state.isRecording) return;
+    this.finishMacCompoundPush();
+  }
+
+  clearMacCompoundPushState() {
+    const state = this.macCompoundPushState;
+    clearTimeout(state?.safetyTimeoutId);
+    this.macCompoundPushState = null;
+    return state;
+  }
+
+  finishMacCompoundPush() {
+    const { hotkey, isRecording } = this.clearMacCompoundPushState();
+    this.hotkeyManager.logHotkeyEvent("macos-native", "up", hotkey);
+
+    if (isRecording) {
       this.sendStopDictation();
-    } else {
+    } else if (!this.tryStartHandsFreeDictation(hotkey)) {
       this.sendCancelDictationPreparation();
       this.hideDictationPanel();
     }
@@ -848,20 +938,13 @@ class WindowManager {
   }
 
   forceStopMacCompoundPush(reason = "manual") {
-    if (!this.macCompoundPushState) {
-      return;
-    }
-
-    if (this.macCompoundPushState.safetyTimeoutId) {
-      clearTimeout(this.macCompoundPushState.safetyTimeoutId);
-    }
-
-    const wasRecording = this.macCompoundPushState.isRecording;
-    this.macCompoundPushState = null;
+    this._dictationDoublePress.clearTap();
+    const state = this.clearMacCompoundPushState();
+    if (!state) return;
 
     this._notifyPushForceStopped(reason);
 
-    if (wasRecording) {
+    if (state.isRecording) {
       this.sendStopDictation();
     } else {
       this.sendCancelDictationPreparation();
@@ -916,6 +999,7 @@ class WindowManager {
     if (this.winPushState?.active || this.isDictationProcessing()) {
       return;
     }
+    if (this.pressHandsFreeDictation(key)) return;
 
     const MIN_HOLD_DURATION_MS = 150;
     const MAX_PUSH_DURATION_MS = 300000;
@@ -945,6 +1029,7 @@ class WindowManager {
 
       if (!this.winPushState.isRecording) {
         this.winPushState.isRecording = true;
+        this._dictationDoublePress.clearTap();
         this.sendStartDictation();
       }
     }, MIN_HOLD_DURATION_MS);
@@ -955,6 +1040,7 @@ class WindowManager {
   // go; every other reason ends a push whose trigger keys are still physically
   // down, which the renderer must know before it pastes.
   handleWindowsPushKeyUp(key, { reason = "release" } = {}) {
+    if (reason === "release" && this.releaseHandsFreeDictation(key)) return;
     if (!this.winPushState?.active) {
       return;
     }
@@ -969,10 +1055,28 @@ class WindowManager {
     const wasRecording = this.winPushState.isRecording;
     this.winPushState = null;
 
-    if (reason !== "release") this._notifyPushForceStopped(reason);
+    if (reason !== "release") {
+      this._dictationDoublePress.clearTap();
+      this._notifyPushForceStopped(reason);
+    }
 
     if (wasRecording) {
       this.sendStopDictation();
+    } else if (reason !== "release" || !this.tryStartHandsFreeDictation(key)) {
+      this.sendCancelDictationPreparation();
+      this.hideDictationPanel();
+    }
+  }
+
+  interruptNativeDictationTap(key) {
+    this.interruptDictationTap(key);
+    const state = this.winPushState;
+    if (state?.key !== key) return;
+
+    clearTimeout(state.safetyTimeoutId);
+    this.winPushState = null;
+    if (state.isRecording) {
+      this.sendCancelDictation();
     } else {
       this.sendCancelDictationPreparation();
       this.hideDictationPanel();
@@ -1067,6 +1171,14 @@ class WindowManager {
       }
       if (this._dictationAttempt !== attempt) return false;
     }
+    if (this.isDictationDoublePressEnabled()) {
+      const retired =
+        nextState === DICTATION_LIFECYCLE.IDLE &&
+        (attempt === undefined || this._dictationLifecycleState === DICTATION_LIFECYCLE.RECORDING);
+      if (retired || nextState === DICTATION_LIFECYCLE.PROCESSING) {
+        this._dictationDoublePress.clearLatch();
+      }
+    }
     if (nextState === DICTATION_LIFECYCLE.IDLE) this._dictationAttempt = null;
     if (nextState === this._dictationLifecycleState) return true;
 
@@ -1130,7 +1242,7 @@ class WindowManager {
     this.agentWindow?.open({ layout: "typing" });
   }
 
-  sendStartDictation() {
+  sendStartDictation(options) {
     if (!this._isOnboardingInputAllowed("dictation")) return;
     if (this._shouldBlockDictationInput()) {
       return;
@@ -1145,8 +1257,14 @@ class WindowManager {
       const targetPidPromise = this.textEditMonitor?.captureTargetPid?.();
       void this.selectionManager?.captureTarget?.();
       this.showDictationPanel({ reposition: true, targetPidPromise });
-      this.mainWindow.webContents.send("start-dictation");
+      if (options) {
+        this.mainWindow.webContents.send("start-dictation", options);
+      } else {
+        this.mainWindow.webContents.send("start-dictation");
+      }
+      return true;
     }
+    return false;
   }
 
   sendStopDictation() {
@@ -1194,11 +1312,31 @@ class WindowManager {
     return this._cachedActivationMode;
   }
 
+  restoreActivationMode(mode) {
+    // Startup has only a provisional shortcut until registration; main validates after it loads.
+    return this._applyActivationMode(normalizeDictationActivationMode(mode));
+  }
+
   async setActivationModeCache(mode) {
-    const nextMode = mode === "push" ? "push" : "tap";
-    const success = await this.hotkeyManager.setActivationMode(nextMode);
+    const nextMode = normalizeDictationActivationMode(mode);
+    if (
+      nextMode === "push-double-tap" &&
+      this.hotkeyManager.getSlotHotkeys("dictation").length > 0 &&
+      this.hotkeyManager.getDictationDoublePressUnavailableReason()
+    ) {
+      return false;
+    }
+    return this._applyActivationMode(nextMode);
+  }
+
+  async _applyActivationMode(nextMode) {
+    const success = await this.hotkeyManager.setActivationMode(nextMode === "tap" ? "tap" : "push");
     if (!success) return false;
-    this._cachedActivationMode = nextMode;
+    if (this._cachedActivationMode !== nextMode) {
+      this.resetDictationDoublePress();
+      this._cachedActivationMode = nextMode;
+      this.onActivationModeChanged?.();
+    }
     return true;
   }
 
@@ -1219,20 +1357,25 @@ class WindowManager {
     if (this.isQuitting || !this._nativeKeyListenersReady) return;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     if (this.hotkeyManager.isInListeningMode()) return;
-    const activationMode = this.getActivationMode();
-    const nativeListenerKeys = this.hotkeyManager.getNativeListenerKeys(activationMode);
-    // Native desktop shortcuts replace the low-level listener in tap mode. In
-    // push mode, keep the dictation listener as a release-event fallback; the
-    // push state machine makes duplicate backend and low-level phases harmless.
-    const keys = this.hotkeyManager.isUsingNativeShortcut()
-      ? activationMode === "push"
+    const nativeMode = this.getActivationMode() === "tap" ? "tap" : "push";
+    const nativeListenerKeys = this.hotkeyManager.getNativeListenerKeys(nativeMode);
+    // Ordinary Hold can use the raw listener as a release fallback. In the
+    // combined mode a desktop shortcut must report both ends of its own tap.
+    const usesDesktopShortcut = this.hotkeyManager.isUsingNativeShortcut();
+    const combined = this.isDictationDoublePressEnabled();
+    const keys = usesDesktopShortcut
+      ? nativeMode === "push" && !combined
         ? nativeListenerKeys.filter((key) => this.hotkeyManager.slotHasHotkey("dictation", key))
         : []
       : nativeListenerKeys;
+    const exactKeys =
+      combined && !usesDesktopShortcut
+        ? keys.filter((key) => this.hotkeyManager.slotHasHotkey("dictation", key))
+        : [];
     if (process.platform === "win32" && this.windowsKeyManager) {
-      this.windowsKeyManager.setKeys(keys);
+      this.windowsKeyManager.setKeys(keys, { exactKeys });
     } else if (process.platform === "linux" && this.linuxKeyManager) {
-      this.linuxKeyManager.setKeys(keys);
+      this.linuxKeyManager.setKeys(keys, { exactKeys });
     }
   }
 
@@ -1277,6 +1420,7 @@ class WindowManager {
   }
 
   setHotkeyListeningMode(enabled) {
+    if (enabled) this.resetDictationDoublePress();
     this.hotkeyManager.setListeningMode(enabled);
   }
 
@@ -1285,6 +1429,11 @@ class WindowManager {
   }
 
   async updateHotkey(hotkey) {
+    if (this.isDictationDoublePressEnabled()) {
+      const message = this.hotkeyManager.getDictationDoublePressUnavailableReason(hotkey);
+      if (message) return { success: false, message };
+    }
+    this.resetDictationDoublePress();
     return await this.hotkeyManager.updateHotkey(hotkey, this.createHotkeyCallback());
   }
 

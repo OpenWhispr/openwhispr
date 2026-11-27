@@ -1,3 +1,4 @@
+import type { DictationActivationMode } from "../helpers/dictationActivationMode.mjs";
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -74,7 +75,7 @@ export interface HotkeySettings {
   meetingKey: string;
   voiceAgentKey: string;
   meetingHotkeyLayoutMode: "side-panel" | "full-width";
-  activationMode: "tap" | "push";
+  activationMode: DictationActivationMode;
 }
 
 export interface OnboardingSettings {

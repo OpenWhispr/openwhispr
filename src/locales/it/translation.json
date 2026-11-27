@@ -125,6 +125,10 @@
       "keyReservedByGnome": "GNOME usa già \"{{hotkey}}\" per una delle sue scorciatoie. Scegli un altro tasto.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" non può essere usato su questo desktop, le cui scorciatoie richiedono un tasto normale. Aggiungi un tasto, ad esempio Control+Alt+Space.",
       "holdNeedsReleaseKey": "Tieni premuto per parlare richiede un tasto di cui macOS rilevi il rilascio: Globo, un tasto destro come Opzione destra o una scorciatoia con modificatore. Tocca funziona con qualsiasi tasto.",
+      "doubleTapNeedsReleaseKey": "La doppia pressione non è disponibile per «{{hotkey}}» perché macOS non rileva il rilascio di uno dei tasti.",
+      "doubleTapNeedsNonModifierKey": "La doppia pressione non è disponibile per «{{hotkey}}» su questo sistema. Usa un tasto supportato che non sia un modificatore, come la barra spaziatrice.",
+      "doubleTapNeedsUpdatedKeyListener": "La doppia pressione richiede un componente di rilevamento dei tasti aggiornato.",
+      "doubleTapKeyboardMonitorUnavailable": "La doppia pressione non è disponibile perché il monitoraggio della tastiera di macOS non è attivo.",
       "holdNeedsRegularKey": "Per usare Tieni premuto, aggiungi un tasto normale alla scorciatoia, ad esempio Control+Alt+Space. Il desktop non può rilevare la pressione prolungata dei soli tasti modificatori.",
       "holdNeedsGnomePortal": "Per usare Tieni premuto, GNOME ha bisogno del portale delle scorciatoie globali, incluso da GNOME 48 in poi. Tocca funziona anche senza.",
       "registrationFailed": "Impossibile registrare \"{{hotkey}}\". Potrebbe essere in uso da un'altra applicazione.",
@@ -1995,6 +1999,8 @@
         "bottomLeft": "In basso a sinistra"
       },
       "hotkey": {
+        "holdWithDoubleTap": "Tieni premuto + doppia pressione",
+        "doubleTapHint": "Tieni premuto {{hotkey}} per parlare. Premi {{hotkey}} due volte per dettare a mani libere, poi premilo di nuovo per terminare.",
         "activationMode": "Modalità di attivazione",
         "description": "La combinazione di tasti che avvia e ferma la dettatura vocale",
         "resetToDefault": "Ripristina a {{hotkey}}",

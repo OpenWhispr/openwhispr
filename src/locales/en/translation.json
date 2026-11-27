@@ -125,6 +125,10 @@
       "keyReservedByGnome": "GNOME already uses \"{{hotkey}}\" for one of its own shortcuts. Choose another key.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" can't be used on this desktop, whose shortcuts need a regular key. Add a key, such as Control+Alt+Space.",
       "holdNeedsReleaseKey": "Hold-to-talk needs a key macOS can see you release: Globe, a right-side key like Right Option, or a shortcut with a modifier. Tap works with any key.",
+      "doubleTapNeedsReleaseKey": "Double-tap is unavailable for “{{hotkey}}” because macOS can’t detect one of its key releases.",
+      "doubleTapNeedsNonModifierKey": "Double-tap is unavailable for “{{hotkey}}” on this platform. Use a supported non-modifier key, such as Space.",
+      "doubleTapNeedsUpdatedKeyListener": "Double-tap needs an updated key listener.",
+      "doubleTapKeyboardMonitorUnavailable": "Double-tap is unavailable because the macOS keyboard monitor isn’t running.",
       "holdNeedsRegularKey": "To use Hold, add a regular key to the shortcut, such as Control+Alt+Space. Your desktop can't report holding modifier keys alone.",
       "holdNeedsGnomePortal": "To use Hold, GNOME needs its global shortcuts portal, which comes with GNOME 48 and newer. Tap works without it.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
@@ -2750,6 +2754,8 @@
         "title": "Floating Icon"
       },
       "hotkey": {
+        "holdWithDoubleTap": "Hold + double-tap",
+        "doubleTapHint": "Hold {{hotkey}} to talk. Double-tap {{hotkey}} for hands-free, then press it again to stop.",
         "activationMode": "Activation Mode",
         "description": "The key combination that starts and stops voice dictation",
         "resetToDefault": "Reset to {{hotkey}}",

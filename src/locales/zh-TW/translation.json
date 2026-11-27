@@ -125,6 +125,10 @@
       "keyReservedByGnome": "GNOME 已將 \"{{hotkey}}\" 用於自身的快捷鍵。請選擇其他按鍵。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" 無法在此桌面上使用，其快捷鍵需要包含一個一般按鍵。請加入一個按鍵，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住說話需要 macOS 能偵測到放開的按鍵：Globe、右側 Option 之類的右側按鍵，或帶修飾鍵的快速鍵。點按可用於任何按鍵。",
+      "doubleTapNeedsReleaseKey": "無法為「{{hotkey}}」使用雙擊，因為 macOS 無法偵測到其中一個按鍵何時放開。",
+      "doubleTapNeedsNonModifierKey": "此平台不支援使用「{{hotkey}}」連按兩下。請使用支援的非修飾鍵，例如空白鍵。",
+      "doubleTapNeedsUpdatedKeyListener": "連按兩下需要更新按鍵監聽元件。",
+      "doubleTapKeyboardMonitorUnavailable": "macOS 鍵盤監聽未執行，無法使用連按兩下。",
       "holdNeedsRegularKey": "要使用按住模式，請在快捷鍵中加入一個一般按鍵，例如 Control+Alt+Space。桌面環境無法偵測僅按住修飾鍵的操作。",
       "holdNeedsGnomePortal": "要使用按住模式，GNOME 需要全域快捷鍵入口（GNOME 48 及更新版本內建）。點按不需要它。",
       "registrationFailed": "無法註冊「{{hotkey}}」。可能已被其他應用程式使用。",
@@ -1995,6 +1999,8 @@
         "bottomLeft": "左下角"
       },
       "hotkey": {
+        "holdWithDoubleTap": "按住 + 連按兩下",
+        "doubleTapHint": "按住 {{hotkey}} 說話。連按兩下 {{hotkey}} 即可免按住聽寫，再按一下即可停止。",
         "activationMode": "啟用模式",
         "description": "用來開始和停止語音輸入的組合鍵",
         "resetToDefault": "重置為 {{hotkey}}",

@@ -282,15 +282,15 @@ export default function App() {
     return () => unsubscribe?.();
   }, []);
 
-  const isRecordingRef = useRef(isRecording);
+  const canCancelRecordingRef = useRef(isRecording || isPreparing);
 
   useLayoutEffect(() => {
-    isRecordingRef.current = isRecording;
-  }, [isRecording]);
+    canCancelRecordingRef.current = isRecording || isPreparing;
+  }, [isRecording, isPreparing]);
 
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onCancelHotkeyPressed?.(() => {
-      if (isRecordingRef.current) cancelRecording();
+      if (canCancelRecordingRef.current) cancelRecording();
     });
     return () => unsubscribe?.();
   }, [cancelRecording]);

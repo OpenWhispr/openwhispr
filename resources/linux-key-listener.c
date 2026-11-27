@@ -27,6 +27,7 @@
 
 static volatile sig_atomic_t running = 1;
 static int hotkey_active = 0;
+static int exact_modifiers = 0;
 
 static int require_ctrl = 0;
 static int require_alt = 0;
@@ -35,9 +36,13 @@ static int require_super = 0;
 static int use_modifiers_only = 0;
 static int target_key = 0;
 
-static unsigned char held_keys[KEY_BITS_SIZE];
+struct keyboard_device {
+    int fd;
+    unsigned char held_keys[KEY_BITS_SIZE];
+    int needs_key_sync;
+};
 
-static int device_fds[MAX_DEVICES];
+static struct keyboard_device devices[MAX_DEVICES];
 static int device_count = 0;
 static int permission_denied_count = 0;
 static int epoll_fd = -1;
@@ -47,15 +52,26 @@ static void signal_handler(int sig) {
     running = 0;
 }
 
-static int is_key_held(int code) {
-    return (held_keys[code / 8] >> (code % 8)) & 1;
+static void read_device_keys(struct keyboard_device *device) {
+    unsigned char keys[KEY_BITS_SIZE] = {0};
+    device->needs_key_sync = ioctl(device->fd, EVIOCGKEY(sizeof(keys)), keys) < 0;
+    if (!device->needs_key_sync)
+        memcpy(device->held_keys, keys, sizeof(keys));
 }
 
-static void set_key(int code, int pressed) {
+static int is_key_held(int code) {
+    for (int i = 0; i < device_count; i++) {
+        if ((devices[i].held_keys[code / 8] >> (code % 8)) & 1)
+            return 1;
+    }
+    return 0;
+}
+
+static void set_key(struct keyboard_device *device, int code, int pressed) {
     if (pressed)
-        held_keys[code / 8] |= (1 << (code % 8));
+        device->held_keys[code / 8] |= (1 << (code % 8));
     else
-        held_keys[code / 8] &= ~(1 << (code % 8));
+        device->held_keys[code / 8] &= ~(1 << (code % 8));
 }
 
 static int is_ctrl_held(void) {
@@ -75,6 +91,10 @@ static int is_super_held(void) {
 }
 
 static int modifiers_satisfied(void) {
+    if (exact_modifiers) {
+        return require_ctrl == is_ctrl_held() && require_alt == is_alt_held() &&
+               require_shift == is_shift_held() && require_super == is_super_held();
+    }
     if (require_ctrl && !is_ctrl_held()) return 0;
     if (require_alt && !is_alt_held()) return 0;
     if (require_shift && !is_shift_held()) return 0;
@@ -111,6 +131,12 @@ static void emit_key_up(void) {
         printf("KEY_UP\n");
         fflush(stdout);
     }
+}
+
+static void interrupt_hotkey(void) {
+    hotkey_active = 0;
+    puts("KEY_INTERRUPTED");
+    fflush(stdout);
 }
 
 static int map_key_name(const char *name) {
@@ -274,7 +300,10 @@ static int add_device(const char *path) {
         return -1;
     }
 
-    device_fds[device_count++] = fd;
+    struct keyboard_device *device = &devices[device_count++];
+    *device = (struct keyboard_device){ .fd = fd };
+    if (exact_modifiers)
+        read_device_keys(device);
 
     char name[256] = "Unknown";
     ioctl(fd, EVIOCGNAME(sizeof(name)), name);
@@ -282,16 +311,23 @@ static int add_device(const char *path) {
     return fd;
 }
 
-static void remove_device(int fd) {
-    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL);
-    close(fd);
-
+static struct keyboard_device *find_device(int fd) {
     for (int i = 0; i < device_count; i++) {
-        if (device_fds[i] == fd) {
-            device_fds[i] = device_fds[--device_count];
-            break;
-        }
+        if (devices[i].fd == fd)
+            return &devices[i];
     }
+    return NULL;
+}
+
+static void remove_device(struct keyboard_device *device) {
+    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, device->fd, NULL);
+    close(device->fd);
+    *device = devices[--device_count];
+
+    if (exact_modifiers)
+        interrupt_hotkey();
+    else if (hotkey_active && !modifiers_satisfied())
+        emit_key_up();
 }
 
 static void scan_devices(void) {
@@ -309,7 +345,7 @@ static void scan_devices(void) {
         int already_open = 0;
         for (int i = 0; i < device_count; i++) {
             char fd_path[64], real_path[512];
-            snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", device_fds[i]);
+            snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", devices[i].fd);
             ssize_t len = readlink(fd_path, real_path, sizeof(real_path) - 1);
             if (len > 0) {
                 real_path[len] = '\0';
@@ -325,25 +361,29 @@ static void scan_devices(void) {
     closedir(dir);
 }
 
-static void reset_held_keys(void) {
-    memset(held_keys, 0, sizeof(held_keys));
-
+static int all_devices_synchronized(void) {
     for (int i = 0; i < device_count; i++) {
-        unsigned char keys[KEY_BITS_SIZE];
-        memset(keys, 0, sizeof(keys));
-        if (ioctl(device_fds[i], EVIOCGKEY(sizeof(keys)), keys) == 0) {
-            for (int b = 0; b < KEY_BITS_SIZE; b++)
-                held_keys[b] |= keys[b];
-        }
+        if (devices[i].needs_key_sync)
+            return 0;
     }
+    return 1;
 }
 
-static void handle_key_event(int code, int value) {
-    if (value == 2)
+static void handle_key_event(struct keyboard_device *device, int code, int value) {
+    if (value == 2 || code > KEY_MAX)
         return;
 
     int pressed = (value == 1);
-    set_key(code, pressed);
+    set_key(device, code, pressed);
+
+    if (exact_modifiers && !all_devices_synchronized())
+        return;
+
+    if (exact_modifiers && hotkey_active && pressed && is_modifier_code(code) &&
+        !modifiers_satisfied()) {
+        interrupt_hotkey();
+        return;
+    }
 
     if (hotkey_active && !pressed && is_required_modifier(code) && !modifiers_satisfied()) {
         emit_key_up();
@@ -359,14 +399,46 @@ static void handle_key_event(int code, int value) {
     }
 
     if (code == target_key) {
-        if (pressed && !hotkey_active && modifiers_satisfied())
-            emit_key_down();
-        else if (!pressed && hotkey_active)
+        if (pressed && !hotkey_active) {
+            if (modifiers_satisfied())
+                emit_key_down();
+            else if (exact_modifiers)
+                interrupt_hotkey();
+        } else if (!pressed && hotkey_active) {
             emit_key_up();
+        }
     }
 }
 
+static void handle_device_event(struct keyboard_device *device,
+                                const struct input_event *event) {
+    if (event->type == EV_SYN && event->code == SYN_DROPPED) {
+        device->needs_key_sync = 1;
+        if (exact_modifiers)
+            interrupt_hotkey();
+        return;
+    }
+
+    // evdev requires discarding queued events through the following SYN_REPORT.
+    if (device->needs_key_sync) {
+        if (event->type == EV_SYN && event->code == SYN_REPORT) {
+            read_device_keys(device);
+            if (!device->needs_key_sync && !exact_modifiers && hotkey_active &&
+                !modifiers_satisfied())
+                emit_key_up();
+        }
+        return;
+    }
+
+    if (event->type == EV_KEY)
+        handle_key_event(device, event->code, event->value);
+}
+
 int main(int argc, char *argv[]) {
+    if (argc == 2 && strcmp(argv[1], "--supports-exact-modifiers") == 0) {
+        puts("EXACT_MODIFIERS_READY");
+        return 0;
+    }
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <key>\n", argv[0]);
         fprintf(stderr, "Examples:\n");
@@ -378,10 +450,16 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    exact_modifiers = argc == 3 && strcmp(argv[2], "--exact-modifiers") == 0;
     parse_hotkey(argv[1]);
 
     if (target_key == 0 && !use_modifiers_only) {
         fprintf(stderr, "Error: unrecognized key in '%s'\n", argv[1]);
+        return 1;
+    }
+
+    if (exact_modifiers && (use_modifiers_only || is_modifier_code(target_key))) {
+        fprintf(stderr, "Error: Exact modifier matching needs a non-modifier key\n");
         return 1;
     }
 
@@ -418,7 +496,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Warning: no keyboard devices found, waiting for hotplug\n");
     }
 
-    printf("READY\n");
+    puts(exact_modifiers ? "EXACT_MODIFIERS_READY" : "READY");
     fflush(stdout);
 
     struct epoll_event events[MAX_EVENTS];
@@ -436,10 +514,18 @@ int main(int argc, char *argv[]) {
             if (fd == inotify_fd) {
                 char inbuf[4096] __attribute__((aligned(__alignof__(struct inotify_event))));
                 ssize_t len = read(inotify_fd, inbuf, sizeof(inbuf));
-                if (len > 0)
+                if (len > 0) {
+                    int previous_count = device_count;
                     scan_devices();
+                    if (exact_modifiers && device_count != previous_count)
+                        interrupt_hotkey();
+                }
                 continue;
             }
+
+            struct keyboard_device *device = find_device(fd);
+            if (!device)
+                continue;
 
             struct input_event ev;
             while (1) {
@@ -447,34 +533,25 @@ int main(int argc, char *argv[]) {
                 if (n < 0) {
                     if (errno == EAGAIN)
                         break;
-                    if (errno == ENODEV) {
-                        remove_device(fd);
-                        reset_held_keys();
-                        if (!modifiers_satisfied())
-                            emit_key_up();
-                    }
+                    if (errno == ENODEV)
+                        remove_device(device);
                     break;
                 }
                 if (n < (ssize_t)sizeof(ev))
                     break;
 
-                if (ev.type == EV_SYN && ev.code == SYN_DROPPED) {
-                    reset_held_keys();
-                    if (hotkey_active && !modifiers_satisfied())
-                        emit_key_up();
-                    continue;
-                }
-
-                if (ev.type == EV_KEY)
-                    handle_key_event(ev.code, ev.value);
+                handle_device_event(device, &ev);
             }
         }
     }
 
-    emit_key_up();
+    if (exact_modifiers && hotkey_active)
+        interrupt_hotkey();
+    else
+        emit_key_up();
 
     for (int i = 0; i < device_count; i++)
-        close(device_fds[i]);
+        close(devices[i].fd);
     if (inotify_fd >= 0)
         close(inotify_fd);
     close(epoll_fd);
