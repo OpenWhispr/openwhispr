@@ -32,16 +32,16 @@
       }
     },
     "android-billing-test": {
-      "extends": "android-play-test",
+      "extends": "android-production",
       "channel": "android-billing-test",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://openwhispr-jorido7jq-openwhispr.vercel.app"
       }
     },
-    "android-play-test": {
+    "android-production": {
       "distribution": "store",
       "environment": "preview",
-      "channel": "android-play-test",
+      "channel": "android-production",
       "credentialsSource": "remote",
       "autoIncrement": true,
       "node": "24.20.0",
