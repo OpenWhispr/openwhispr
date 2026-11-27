@@ -112,6 +112,7 @@ import {
 } from "../helpers/translationChain";
 import {
   applyChineseScript,
+  applyChineseScriptAfterCleanup,
   getCleanupLanguageContext,
   resolveChineseScriptTarget,
 } from "../utils/chineseScript";
@@ -1021,8 +1022,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             }
           }
 
-          // Preserve the accepted cleanup reply. Other text uses the same source or target
-          // fallback as live dictation, including a raw row retained after a failed write.
+          // An accepted cleanup reply keeps its script unless characters of the other
+          // script remain. Other text uses the same source or target fallback as live
+          // dictation, including a raw row retained after a failed write.
           // Same rule as audioManager.getEffectiveOutputLanguage: only a completed
           // translate step moves the text into the target language, so anything else
           // still has to be scripted as the language that was dictated.
@@ -1033,17 +1035,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     ? s.translationTargetLanguage
                     : s.translationSourceLanguage) || "auto"
                 : s.preferredLanguage;
+            const target = resolveChineseScriptTarget(
+              outputLanguage,
+              s.chineseScriptPreference,
+              finalTranscription.text
+            );
             const scripted =
               finalTranscription.text === scriptHandledText
-                ? finalTranscription.text
-                : await applyChineseScript(
-                    finalTranscription.text,
-                    resolveChineseScriptTarget(
-                      outputLanguage,
-                      s.chineseScriptPreference,
-                      finalTranscription.text
-                    )
-                  );
+                ? await applyChineseScriptAfterCleanup(finalTranscription.text, target)
+                : await applyChineseScript(finalTranscription.text, target);
             if (scripted !== finalTranscription.text) {
               const updated = await window.electronAPI.updateTranscriptionText(
                 id,

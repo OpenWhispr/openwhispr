@@ -3,7 +3,8 @@
  *
  * Whisper accepts "zh" for both explicit Chinese languages. Only those languages
  * bias the STT prompt, since a script hint would skew automatic language detection.
- * Cleanup chooses the script in context. Raw dictation and other outputs without
+ * Cleanup chooses the script in context, and OpenCC corrects its reply only when
+ * characters of the other script remain. Raw dictation and other outputs without
  * script-aware cleanup use OpenCC at delivery.
  *
  * Scope: dictation (audioManager) and history retry (ControlPanel). Meeting
@@ -44,6 +45,11 @@ function getConverters() {
       // twp includes Taiwan phrase variants (軟體) that plain tw misses.
       toSimplified: OpenCC.Converter({ from: "twp", to: "cn" }),
       toTraditional: OpenCC.Converter({ from: "cn", to: "twp" }),
+      // Character tables only. Unlike twp, they leave text already in the target
+      // script unchanged (twp → cn turns 么 into 幺), so a difference means some
+      // character is still in the other script.
+      toSimplifiedCharacters: OpenCC.Converter({ from: "t", to: "cn" }),
+      toTraditionalCharacters: OpenCC.Converter({ from: "cn", to: "t" }),
     }));
   }
   return convertersPromise;
@@ -117,6 +123,8 @@ export function resolveCleanupLanguage(preferredLanguage) {
 /**
  * Cleanup can distinguish Chinese passages in context even when the raw-text
  * detector cannot. Explicit Chinese languages already carry a script instruction.
+ * A returned `cleanupScript` means an accepted reply is finalized with
+ * applyChineseScriptAfterCleanup instead of a full conversion.
  * @param {string | null | undefined} preferredLanguage
  * @param {string | null | undefined} preference
  * @returns {{language: string, cleanupScript?: ChineseScriptTarget}}
@@ -159,6 +167,26 @@ export async function applyChineseScript(text, target) {
 
   const { toSimplified, toTraditional } = await getConverters();
   return target === "simplified" ? toSimplified(text) : toTraditional(text);
+}
+
+/**
+ * Script-instructed cleanup chooses characters and regional wording in context, so
+ * its reply keeps them. A reply that still has characters of the other script (a
+ * verbatim echo of the transcript, a model that ignored the instruction) is
+ * converted like a raw transcript.
+ *
+ * @param {string | null | undefined} text
+ * @param {ChineseScriptTarget | null} target
+ * @returns {Promise<string>}
+ */
+export async function applyChineseScriptAfterCleanup(text, target) {
+  if (!text || !target) return text || "";
+  if (!HAN_RE.test(text)) return text;
+
+  const { toSimplifiedCharacters, toTraditionalCharacters } = await getConverters();
+  const inTarget =
+    target === "simplified" ? toSimplifiedCharacters(text) : toTraditionalCharacters(text);
+  return inTarget === text ? text : applyChineseScript(text, target);
 }
 
 /**

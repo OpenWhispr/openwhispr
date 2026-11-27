@@ -12,7 +12,6 @@ import { withRetry, createApiRetryStrategy, httpError } from "../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, ensureV1Suffix } from "../config/constants";
 import { resolveRetiredCloudModel } from "../config/retiredCloudModelPolicy.js";
 import logger from "../utils/logger";
-import { getCleanupLanguageContext } from "../utils/chineseScript";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
 import { CLAIM_CHECK_NOTE, STEP_LIMIT_NOTE, wrapCleanupTranscript } from "../config/prompts";
@@ -631,17 +630,6 @@ class ReasoningService extends BaseReasoningService {
     ({ model, config } = managed);
     const trimmedModel = model?.trim?.() || "";
     const settings = getSettings();
-    if (
-      config.inferenceScope === "dictationCleanup" &&
-      !config.systemPrompt &&
-      !config.requiresAgent &&
-      !config.language
-    ) {
-      config = {
-        ...config,
-        ...getCleanupLanguageContext(settings.preferredLanguage, settings.chineseScriptPreference),
-      };
-    }
     const validateCleanup =
       config.inferenceScope === "dictationCleanup" &&
       !config.systemPrompt &&

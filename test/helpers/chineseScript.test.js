@@ -101,6 +101,29 @@ test("cleanup script context uses the requested source and does not need Han det
   });
 });
 
+test("applyChineseScriptAfterCleanup keeps a reply in the target script", async () => {
+  const { applyChineseScriptAfterCleanup } = await load();
+  // A full twp → cn pass would turn 么 into 幺 (#3105).
+  assert.equal(await applyChineseScriptAfterCleanup("这是为什么？", "simplified"), "这是为什么？");
+  // Regional wording the model chose stays; a full cn → twp pass would rewrite it.
+  assert.equal(await applyChineseScriptAfterCleanup("這個軟件", "traditional"), "這個軟件");
+  assert.equal(await applyChineseScriptAfterCleanup("Meet at 3pm", "simplified"), "Meet at 3pm");
+  assert.equal(await applyChineseScriptAfterCleanup("这是为什么？", null), "这是为什么？");
+});
+
+test("applyChineseScriptAfterCleanup converts a reply that kept the other script", async () => {
+  const { applyChineseScriptAfterCleanup } = await load();
+  assert.equal(
+    await applyChineseScriptAfterCleanup("這是繁體中文軟體", "simplified"),
+    "这是繁体中文软件"
+  );
+  assert.equal(await applyChineseScriptAfterCleanup("為什麼", "simplified"), "为什么");
+  assert.equal(
+    await applyChineseScriptAfterCleanup("這是简体字和软件", "traditional"),
+    "這是簡體字和軟體"
+  );
+});
+
 test("applyChineseScript converts traditional to simplified", async () => {
   const { applyChineseScript } = await load();
   assert.equal(await applyChineseScript("這是繁體中文軟體", "simplified"), "这是繁体中文软件");

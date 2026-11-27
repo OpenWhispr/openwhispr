@@ -2098,7 +2098,7 @@ test("combined cleanup is reused once, while changed options or failed cleanup u
       language: "auto",
       cleanupScript: "simplified",
     };
-    let conversions = 0;
+    const finalizations = [];
     const { reasonCalls, usage, published } = await stopManagedDictation(AudioManager, {
       cleanupApplied,
       final: {
@@ -2124,14 +2124,15 @@ test("combined cleanup is reused once, while changed options or failed cleanup u
       },
       overrides: {
         _activePipelineOptions: changed ? { ...options, language: "fr" } : options,
-        finalizeChineseScript: async (text) => {
-          conversions++;
+        finalizeChineseScript: async (text, _settings, options) => {
+          finalizations.push(options?.afterCleanup);
           return text;
         },
       },
     });
     assert.equal(reasonCalls.length, calls);
-    assert.equal(conversions, calls && !cleanupApplied ? 1 : 0);
+    // Only an accepted cleanup reply is finalized as one; anything else is raw text.
+    assert.deepEqual(finalizations, [!calls || cleanupApplied === true]);
     assert.equal(published[0].rawText, "please send invoice 128");
     assert.equal(
       published[0].text,

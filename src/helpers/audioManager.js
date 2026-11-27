@@ -14,6 +14,7 @@ import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport"
 import { convertToWav, needsWavConversion } from "../utils/audioContainer";
 import {
   applyChineseScript,
+  applyChineseScriptAfterCleanup,
   mergeWhisperPrompt,
   resolveChineseScriptTarget,
   getCleanupLanguageContext,
@@ -1044,18 +1045,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     );
   }
 
-  finalizeChineseScript(text, settings = getSettings()) {
+  finalizeChineseScript(text, settings = getSettings(), { afterCleanup = false } = {}) {
     // A selection edit has already applied its explicit language instruction.
     // A dictation-wide script preference must not rewrite that document again.
     if (this.pendingSelectionEdit) return text;
-    return applyChineseScript(
-      text,
-      resolveChineseScriptTarget(
-        this.getEffectiveOutputLanguage(settings),
-        settings.chineseScriptPreference,
-        text
-      )
+    const target = resolveChineseScriptTarget(
+      this.getEffectiveOutputLanguage(settings),
+      settings.chineseScriptPreference,
+      text
     );
+    return afterCleanup
+      ? applyChineseScriptAfterCleanup(text, target)
+      : applyChineseScript(text, target);
   }
 
   // Check the dictionary on its own as well as the full prompt: the echo filter needs
@@ -3619,8 +3620,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           scriptHandled = true;
         },
       });
-      if (wasCancelled() || scriptHandled) return result;
-      return this.finalizeChineseScript(result);
+      if (wasCancelled()) return result;
+      return this.finalizeChineseScript(result, getSettings(), { afterCleanup: scriptHandled });
     } catch (error) {
       attachTranscript(error, text);
       throw error;
@@ -4208,9 +4209,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     return {
       success: true,
-      text: scriptHandled
-        ? processedText
-        : await this.finalizeChineseScript(processedText, settings),
+      text: await this.finalizeChineseScript(processedText, settings, {
+        afterCleanup: scriptHandled,
+      }),
       rawText,
       source: "openwhispr",
       timings,
@@ -6814,8 +6815,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     if (finalText) {
       // A batch fallback has already finalized its text before returning here.
-      if (!usedBatchFallback && !scriptHandled) {
-        finalText = await this.finalizeChineseScript(finalText, stSettings);
+      if (!usedBatchFallback) {
+        finalText = await this.finalizeChineseScript(finalText, stSettings, {
+          afterCleanup: scriptHandled,
+        });
         if (wasCancelled()) return true;
       }
       const tBeforePaste = performance.now();

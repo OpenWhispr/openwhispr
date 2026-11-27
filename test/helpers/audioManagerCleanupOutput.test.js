@@ -23,6 +23,7 @@ test("invalid completed cleanup keeps raw text across dictation routes", async (
   t.after(() => service.destroy());
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { getCleanupLanguageContext } = await vite.ssrLoadModule("/utils/chineseScript.js");
   usePolicyStore.setState({ status: "unmanaged", policy: null });
   useSettingsStore.setState({
     isSignedIn: true,
@@ -141,16 +142,17 @@ test("invalid completed cleanup keeps raw text across dictation routes", async (
   }
 
   await t.test(
-    "script-instructed cleanup owns the pasted text, including a verbatim reply",
+    "script-instructed cleanup keeps its script unless the other script remains",
     async () => {
       const manager = createManager();
       delete manager.getEffectiveSttLanguage;
       delete manager.finalizeChineseScript;
+      // Counts full conversions, the ones raw text gets.
       let conversions = 0;
       const finalize = manager.finalizeChineseScript.bind(manager);
-      manager.finalizeChineseScript = (...args) => {
-        conversions++;
-        return finalize(...args);
+      manager.finalizeChineseScript = (text, settings, options) => {
+        if (!options?.afterCleanup) conversions++;
+        return finalize(text, settings, options);
       };
       const raw = "這是繁體中文軟體";
       const clean = "这是为什么？";
@@ -172,6 +174,25 @@ test("invalid completed cleanup keeps raw text across dictation routes", async (
       assert.match(prompt, /Simplified characters/);
       assert.doesNotMatch(prompt, /Maintain consistent language/);
 
+      // A model that echoes the Traditional transcript is converted like raw text.
+      window.electronAPI.processLocalReasoning = async () => ({ success: true, text: raw });
+      assert.equal(await manager.processTranscription(raw, "local"), "这是繁体中文软件");
+
+      // Explicit zh-TW: a reply that leaks Simplified characters is corrected.
+      useSettingsStore.setState({ preferredLanguage: "zh-TW" });
+      window.electronAPI.processLocalReasoning = async () => ({
+        success: true,
+        text: "這是简体字和软件",
+      });
+      assert.equal(
+        await manager.processTranscription("這是简体字和软件", "local"),
+        "這是簡體字和軟體"
+      );
+      window.electronAPI.processLocalReasoning = async () => ({ success: true, text: "軟件" });
+      assert.equal(await manager.processTranscription("軟件", "local"), "軟件");
+      useSettingsStore.setState({ preferredLanguage: "auto" });
+      assert.equal(conversions, 0);
+
       const mixed = "沒有問題。Meet at 東京駅。軟件";
       useSettingsStore.setState({
         cleanupMode: "providers",
@@ -186,9 +207,12 @@ test("invalid completed cleanup keeps raw text across dictation routes", async (
       };
       for (const editedPrompt of ["", "Fix punctuation only."]) {
         useSettingsStore.setState({ customPrompts: { cleanup: editedPrompt } });
-        // Prompt Studio runs the selected model with the edited cleanup prompt.
+        // Prompt Studio runs the selected model with the edited cleanup prompt and
+        // the same language context as dictation.
+        const { preferredLanguage, chineseScriptPreference } = useSettingsStore.getState();
         const preview = await service.processText(mixed, "claude-opus-5-5", "OpenWhispr", {
           inferenceScope: "dictationCleanup",
+          ...getCleanupLanguageContext(preferredLanguage, chineseScriptPreference),
         });
         assert.equal(await manager.processTranscription(mixed, "openai"), preview);
         assert.equal(preview, mixed);
@@ -219,6 +243,15 @@ test("invalid completed cleanup keeps raw text across dictation routes", async (
         assert.equal(await manager.processTranscription(raw, "openai"), expected);
       }
       assert.equal(conversions, 4);
+      window.electronAPI.cloudReason = async () => ({
+        success: true,
+        text: raw,
+        cleanupApplied: true,
+      });
+      assert.equal(
+        (await manager.processWithOpenWhisprCloud(new Blob(["audio"]))).text,
+        "这是繁体中文软件"
+      );
       window.electronAPI.cloudReason = async () => ({
         success: true,
         text: " ",
