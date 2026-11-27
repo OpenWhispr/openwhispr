@@ -113,7 +113,7 @@ const mergeSpeakerFields = (
     ...(existing.recorderName ? { recorderName: existing.recorderName } : {}),
   } as TranscriptSegment;
 
-  // Naming a live speaker locks the name onto every line it labelled. When that
+  // Naming a live speaker locks the name onto the lines it was heard in. When that
   // speaker turns out to be several voices, the lock stays with the voice the
   // name went to, and the others take diarization's result.
   const split = existing.speaker ? splitLiveSpeakers?.[existing.speaker] : undefined;
@@ -285,7 +285,7 @@ export const isSelfSideSegment = (
   if (name) {
     // On a call the user is the mic, so a remote voice that recording matched to
     // their voice profile is a misidentification; only a name the user set, which
-    // locks its rows, moves it across. Mappings also hold automatic matches.
+    // locks the rows that speaker was heard in, moves it across. Mappings also hold automatic matches.
     const autoNamedRemote = segment.source === "system" && !isTranscriptSpeakerLocked(segment);
     return !autoNamedRemote && isYouSpeakerName(name, youLabel);
   }

@@ -397,6 +397,22 @@ test.describe("automatic speaker mode", () => {
     );
   });
 
+  // One attendee tagged by mistake must not leave the call capped for good.
+  test("removing the attendees that ended automatic mode resumes it", () => {
+    confirmed = 3;
+    call("_refreshMeetingSpeakerConfigFromNote", NOTE_ID, noteWithTwoOthers);
+    assert.equal(self.activeMeetingSpeakerConfig.auto, false);
+
+    call("_refreshMeetingSpeakerConfigFromNote", NOTE_ID, { participants: "[]" });
+    assert.deepEqual(self.activeMeetingSpeakerConfig, {
+      enabled: true,
+      expectedCount: 4,
+      auto: true,
+    });
+    assert.deepEqual(limits.at(-1), { maxSpeakers: 7, gated: true });
+    assert.deepEqual(broadcasts.at(-1).payload, { enabled: true, expectedCount: 4, auto: true });
+  });
+
   test("attendees ending automatic mode take the note's count when it is higher", () => {
     self.activeMeetingSpeakerConfig = { enabled: true, expectedCount: 2, auto: true };
     confirmed = 1;

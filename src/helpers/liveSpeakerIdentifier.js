@@ -861,6 +861,7 @@ class LiveSpeakerIdentifier {
       !this.currentSegmentForced &&
       this._findTransientMatch(embedding) !== this.currentSegmentSpeakerId
     ) {
+      this._logGate("rejudged", { liveWindowSpeaker: this.currentSegmentSpeakerId });
       this.currentSegmentSpeakerId = null;
       this.currentSegmentSpeakerName = null;
     }
@@ -947,6 +948,7 @@ class LiveSpeakerIdentifier {
     const candidate = this._findCandidateMatch(embedding);
     if (!candidate) return [];
     this._removeCandidate(candidate);
+    this._logGate("folded at the cap", { lines: candidate.windows.length });
     return candidate.windows;
   }
 
@@ -955,6 +957,7 @@ class LiveSpeakerIdentifier {
     for (const candidate of this._candidates) {
       if (this._findTransientMatch(candidate.centroid) !== speakerId) continue;
       this._removeCandidate(candidate);
+      this._logGate("absorbed", { speakerId, lines: candidate.windows.length });
       windows.push(...candidate.windows);
     }
     return windows;
@@ -976,6 +979,7 @@ class LiveSpeakerIdentifier {
     if (absorbedInto) {
       this._updateCentroid(absorbedInto, candidate.centroid);
       this._removeCandidate(candidate);
+      this._logGate("absorbed", { speakerId: absorbedInto, lines: candidate.windows.length });
       return {
         speakerId: absorbedInto,
         displayName: this.transientDisplayNames.get(absorbedInto) || null,
@@ -985,13 +989,25 @@ class LiveSpeakerIdentifier {
     }
 
     if (this._candidateHasEnoughEvidence(candidate, segment.seconds)) {
-      const speakerId = this._assignSpeakerId(candidate.centroid);
+      // The centroid is the mean of every segment heard, and is weighted as such.
+      const speakerId = this._assignSpeakerId(candidate.centroid, candidate.count);
       this._removeCandidate(candidate);
+      this._logGate("promoted", {
+        speakerId,
+        segments: candidate.count,
+        seconds: candidate.seconds.toFixed(1),
+        lines: candidate.windows.length,
+      });
       return { speakerId, displayName: null, forced: false, backfill: candidate.windows };
     }
 
     const { seconds: _seconds, ...window } = segment;
     candidate.windows.push(window);
+    this._logGate("held", {
+      segments: candidate.count,
+      seconds: candidate.seconds.toFixed(1),
+      nearest: this._nearestTransientSimilarity(embedding),
+    });
     return { speakerId: null, displayName: null, forced: false, backfill: [] };
   }
 
@@ -1022,6 +1038,25 @@ class LiveSpeakerIdentifier {
       if (candidate.seconds < weakest.seconds) weakest = candidate;
     }
     this._removeCandidate(weakest);
+    this._logGate("dropped", { segments: weakest.count, lines: weakest.windows.length });
+  }
+
+  // The gate decides who a line belongs to and says nothing on screen while it
+  // holds a voice, so its decisions are the only trace of a wrong label.
+  _logGate(decision, details) {
+    debugLogger.debug("Live speaker gate", {
+      decision,
+      ...details,
+      candidates: this._candidates.length,
+      speakers: this.transientEmbeddings.size,
+    });
+  }
+
+  _nearestTransientSimilarity(embedding) {
+    const nearest = this._findNearestTransient(embedding);
+    if (!nearest) return null;
+    const centroid = this.transientEmbeddings.get(nearest);
+    return `${nearest} ${speakerEmbeddings.cosineSimilarity(embedding, centroid).toFixed(3)}`;
   }
 
   _removeCandidate(candidate) {
@@ -1069,11 +1104,11 @@ class LiveSpeakerIdentifier {
   // recluster merge are never reused: durable state (note speaker mappings,
   // the renderer's name map) may still reference them, and a recycled id would
   // let a new voice inherit the previous person's identity.
-  _assignSpeakerId(embedding) {
+  _assignSpeakerId(embedding, count = 1) {
     const speakerId = `speaker_${this.nextLiveIndex}`;
     this.nextLiveIndex += 1;
     this.transientEmbeddings.set(speakerId, cloneFloat32Array(embedding));
-    this.transientCounts.set(speakerId, 1);
+    this.transientCounts.set(speakerId, count);
     return speakerId;
   }
 

@@ -1518,7 +1518,8 @@ class IPCHandlers {
   // yields ends automatic mode. The stepper then never shows fewer than the
   // speakers already on screen (new placeholder ids are minted from it), and the
   // live cap never drops below the speakers already confirmed
-  // (resolveLiveSpeakerLimit). The after-call cap still reads the note.
+  // (resolveLiveSpeakerLimit). The after-call cap still reads the note. When the
+  // attendees that ended automatic mode are all removed again, it resumes.
   //
   // A stepper press never lands here: it writes only the note's count, and this
   // runs for participants writes alone. Its debounced push makes the config
@@ -1529,14 +1530,22 @@ class IPCHandlers {
     if (noteId == null || this._activeMeetingNoteId !== noteId) return;
 
     const noteCount = this._noteExpectedSpeakerCountOrNull(note);
-    if (noteCount == null) return;
+    if (noteCount == null) {
+      if (config.autoEnded) this._resumeAutoSpeakerMode(config);
+      return;
+    }
     if (!config.auto && noteCount <= config.expectedCount) return;
 
     const expectedCount = config.auto
       ? Math.max(noteCount, autoDisplayCount(liveSpeakerIdentifier.getConfirmedSpeakerCount()))
       : noteCount;
 
-    this.activeMeetingSpeakerConfig = { ...config, expectedCount, auto: false };
+    this.activeMeetingSpeakerConfig = {
+      ...config,
+      expectedCount,
+      auto: false,
+      ...(config.auto && { autoEnded: true }),
+    };
     this._applyLiveSpeakerLimit();
     broadcastToWindows("meeting-session-speaker-config-updated", {
       enabled: config.enabled,
@@ -1547,6 +1556,17 @@ class IPCHandlers {
       { noteId, expectedCount },
       "speaker"
     );
+  }
+
+  _resumeAutoSpeakerMode({ autoEnded: _autoEnded, ...config }) {
+    const expectedCount = autoDisplayCount(liveSpeakerIdentifier.getConfirmedSpeakerCount());
+    this.activeMeetingSpeakerConfig = { ...config, expectedCount, auto: true };
+    this._applyLiveSpeakerLimit();
+    broadcastToWindows("meeting-session-speaker-config-updated", {
+      enabled: config.enabled,
+      expectedCount,
+      auto: true,
+    });
   }
 
   _rebuildMirror(basePath) {
@@ -14921,8 +14941,8 @@ class IPCHandlers {
       return noteMappings.get(noteId);
     };
 
-    // Closest pairs first: with no count, one live speaker stands for every
-    // remote voice, and its name belongs to the voice it sounds most like, not
+    // Closest pairs first: one live speaker can stand for several remote voices
+    // (alike ones, or one never confirmed), and its name belongs to the voice it sounds most like, not
     // to the first one that clears the bar.
     const pairs = [];
     for (const [mappedId, embeddingArray] of Object.entries(speakerEmbeddingsMap)) {
@@ -15247,8 +15267,8 @@ class IPCHandlers {
         }
 
         // Live identification names its speaker on every line it labels (here
-        // and in the renderer), and with no count its one speaker covers every
-        // remote voice. When the call holds more than one voice and more voices
+        // and in the renderer), and one live speaker can cover several remote
+        // voices. When the call holds more than one voice and more voices
         // than live speakers, every line's name is cleared, and reconciliation
         // and profile matching below name each voice. Without voices to match,
         // the names stay. null, not undefined: the renderer keeps a line's old
@@ -15270,9 +15290,10 @@ class IPCHandlers {
           enrichedSegments
         );
         // A name the user gave a live speaker is locked, in the renderer, onto
-        // every line that speaker labelled. After a split the renderer keeps
-        // that lock only on the voice the name went to; a name that matched no
-        // voice isn't listed, and stays on all of its lines.
+        // the lines that speaker was heard in (not ones only carried onto them,
+        // or local-model lines). After a split the renderer keeps that lock only
+        // on the voice the name went to; a name that matched no voice isn't
+        // listed, and stays on its locked lines.
         const splitLiveSpeakers = liveSpeakersSplit ? Object.fromEntries(namedVoices) : undefined;
 
         if (speakerEmbeddingsMap) {

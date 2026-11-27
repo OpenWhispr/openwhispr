@@ -1697,13 +1697,14 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       });
       if (systemAudioSilentCleanup) ipcCleanups.push(systemAudioSilentCleanup);
 
-      // Main re-derives the expected count when participants are added mid-meeting
-      // (never for a count set explicitly via the stepper — main skips those), and
-      // with no count set it follows the confirmed speakers (`auto`) until a press.
+      // Main re-derives the expected count when participants are added mid-meeting,
+      // and with no count set it follows the confirmed speakers. A press ends both:
+      // main skips an explicit count, but its push is debounced, so an update can
+      // still arrive in between.
       const speakerConfigCleanup = window.electronAPI?.onMeetingSessionSpeakerConfigUpdated?.(
         (config) => {
           if (activeRecordingSessionId !== sessionId) return;
-          if (config.auto && useMeetingRecordingStore.getState().userTouchedStepper) return;
+          if (useMeetingRecordingStore.getState().userTouchedStepper) return;
           const clamped = Math.max(1, Math.min(MAX_SPEAKER_COUNT, config.expectedCount));
           useMeetingRecordingStore.setState({ sessionExpectedCount: clamped });
         }

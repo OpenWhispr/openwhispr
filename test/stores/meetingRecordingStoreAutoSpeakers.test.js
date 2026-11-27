@@ -256,10 +256,13 @@ test("an automatic count update moves an untouched stepper up and down", async (
   assert.equal(store().sessionExpectedCount, 3);
 });
 
-test("an automatic count update is ignored once the stepper was pressed", async (t) => {
+// The press reaches main 150 ms later, so an update from before it can still land.
+test("a count update is ignored once the stepper was pressed", async (t) => {
   const { configUpdated, setSessionExpectedCount, store } = await startMeeting(t);
   setSessionExpectedCount(5);
   configUpdated({ enabled: true, expectedCount: 3, auto: true });
+  assert.equal(store().sessionExpectedCount, 5);
+  configUpdated({ enabled: true, expectedCount: 6 });
   assert.equal(store().sessionExpectedCount, 5);
 });
 

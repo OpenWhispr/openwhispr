@@ -789,6 +789,15 @@ test("a voice held before the cap was reached takes its earlier lines along when
   assert.equal(id._candidates.length, 0);
 });
 
+test("a promoted speaker is weighted by the segments it was heard in", () => {
+  const { id } = gatedIdentifier();
+  hear(id, oneHot(0), 0, 2);
+  hear(id, oneHot(1), 10, 3);
+  hear(id, oneHot(1), 20, 3);
+  assert.equal(hear(id, oneHot(1), 30, 3).speakerId, "speaker_1");
+  assert.equal(id.transientCounts.get("speaker_1"), 3);
+});
+
 // A live window matches at the gated threshold on about 1.6 s of audio.
 test("gated: a finished segment that doesn't match its live window's speaker is judged again", () => {
   const { id } = gatedIdentifier();
