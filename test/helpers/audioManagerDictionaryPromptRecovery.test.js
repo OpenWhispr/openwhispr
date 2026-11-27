@@ -597,4 +597,53 @@ test("local Whisper recovers dictionary prompt echoes and fragments", async (t) 
       assert.deepEqual(processedTexts, [dictated]);
     }
   );
+
+  await t.test("with dictation VAD on, a sparse long dictation is decoded once", async (t) => {
+    setSettings({ ...baseSettings, dictationSileroEnabled: true });
+    t.after(() => setSettings(baseSettings));
+    const sparseText = "First part of the discussion before the pause";
+    const calls = queueTranscriptions(window, [
+      { success: true, text: sparseText },
+      {
+        success: true,
+        text: `${sparseText} and everything said after it, all the way to the end.`,
+      },
+    ]);
+    const { manager } = createRecoveryManager();
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+      durationSeconds: 92.3,
+    });
+
+    assert.equal(result.rawText, sparseText);
+    assert.equal(calls.length, 1);
+  });
+
+  await t.test(
+    "a long dictation at a normal pace, or a slow one under 10 s, is decoded once",
+    async () => {
+      for (const { text, durationSeconds } of [
+        // 0.53 words/s, just above the truncation limit.
+        {
+          text: "We should meet again next week to review the budget and plan the launch for spring.",
+          durationSeconds: 30,
+        },
+        // Sparse, but shorter than a truncation retry needs.
+        { text: "Call me back tomorrow.", durationSeconds: 9 },
+      ]) {
+        const calls = queueTranscriptions(window, [
+          { success: true, text },
+          { success: true, text: `${text} And everything else I said after a long pause.` },
+        ]);
+        const { manager } = createRecoveryManager();
+
+        const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+          durationSeconds,
+        });
+
+        assert.equal(calls.length, 1, `${durationSeconds} s`);
+        assert.equal(result.rawText, text);
+      }
+    }
+  );
 });

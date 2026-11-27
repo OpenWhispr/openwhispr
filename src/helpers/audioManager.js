@@ -2656,6 +2656,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const dictionaryPromptFragment = !strictDictionaryEcho && initialFragment.isPromptFragment;
         const initialWordCount = countSpokenWords(result.text);
         const isSparsePromptTranscription =
+          !getSettings().dictationSileroEnabled &&
           Boolean(dictionaryPrompt) &&
           !strictDictionaryEcho &&
           Number.isFinite(metadata.durationSeconds) &&
