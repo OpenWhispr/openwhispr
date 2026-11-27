@@ -29,12 +29,22 @@ async function load(t, { providerName = "orukeet", stopAbortsStart = true } = {}
   useSettingsStore.setState(settings);
   globalThis.AudioWorkletNode = class {
     constructor() {
-      this.port = {};
+      this.port = {
+        postMessage: (message) => {
+          if (message === "stop") {
+            queueMicrotask(() => {
+              if (this.port.tail) this.port.onmessage?.({ data: this.port.tail });
+              this.port.onmessage?.({ data: "flushed" });
+            });
+          }
+        },
+      };
     }
+    disconnect() {}
   };
   t.after(() => delete globalThis.AudioWorkletNode);
 
-  const audioNode = { connect() {} };
+  const audioNode = { connect() {}, disconnect() {} };
   const connect = deferred();
   const calls = { starts: 0, stops: 0, limitPrompts: 0, errors: 0, states: [], sent: [] };
   window.electronAPI.notifyLimitReached = () => calls.limitPrompts++;
@@ -301,4 +311,168 @@ test("another provider's audio still goes to main as it is captured", async (t) 
   connect.resolve({ success: true });
   assert.equal(await starting, true);
   assert.equal(calls.sent.length, 1);
+});
+
+test("AssemblyAI paces startup PCM before forwarding live audio in order", async (t) => {
+  const { manager, connect, calls, vite } = await load(t, { providerName: "assemblyai" });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  useSettingsStore.setState({ cloudTranscriptionMode: "byok" });
+  const starting = manager.startStreamingRecording();
+  await tick();
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+
+  const [first, second, live] = [1, 2, 3].map((value) => new Int16Array(800).fill(value).buffer);
+  speak(manager, first, second);
+  assert.deepEqual(calls.sent, []);
+
+  connect.resolve({ success: true });
+  assert.equal(await starting, true);
+  speak(manager, live);
+  assert.deepEqual(calls.sent, [first], "start must not burst the buffered frames");
+  t.mock.timers.tick(49);
+  assert.deepEqual(calls.sent, [first]);
+  t.mock.timers.tick(1);
+  assert.deepEqual(calls.sent, [first, second]);
+  t.mock.timers.tick(50);
+  assert.deepEqual(calls.sent, [first, second, live]);
+  t.mock.timers.tick(50);
+});
+
+test("stopping AssemblyAI during connection closes capture before sending opening audio", async (t) => {
+  const { manager, connect, calls, vite } = await load(t, { providerName: "assemblyai" });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  useSettingsStore.setState({ cloudTranscriptionMode: "byok" });
+  let trackStopped = false;
+  manager._acquireCaptureStream = async () => ({
+    getAudioTracks: () => [],
+    getTracks: () => [{ stop: () => (trackStopped = true) }],
+  });
+  manager._markCaptureStreamReleased = () => {};
+  manager.shouldUseStreaming = () => false;
+  manager.awaitStreamingTextSettled = async () => {};
+  const provider = manager.getStreamingProvider();
+  const finalized = deferred();
+  manager.getStreamingProvider = () => ({
+    ...provider,
+    awaitsFinalTranscript: true,
+    finalize: () => finalized.resolve([...calls.sent]),
+  });
+
+  const starting = manager.startStreamingRecording();
+  await tick();
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const port = manager.streamingProcessor.port;
+  const receiveFrame = port.onmessage;
+  const opening = new Int16Array(800).fill(53).buffer;
+  port.tail = Int16Array.of(67).buffer;
+  speak(manager, opening);
+  assert.equal(await manager.stopStreamingRecording(), true);
+  assert.equal(trackStopped, true);
+  receiveFrame({ data: new Int16Array(800).fill(111).buffer });
+  connect.resolve({ success: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(calls.sent, [opening]);
+
+  t.mock.timers.tick(50);
+  const paddedTail = new Int16Array(800);
+  paddedTail[0] = 67;
+  assert.deepEqual(calls.sent, [opening, paddedTail.buffer]);
+  t.mock.timers.tick(50);
+  assert.deepEqual(await finalized.promise, [opening, paddedTail.buffer]);
+  assert.equal(await starting, true);
+});
+
+test("AssemblyAI falls back using the stopped capture without reopening the microphone", async (t) => {
+  const { manager, connect, calls, vite } = await load(t, { providerName: "assemblyai" });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  useSettingsStore.setState({ cloudTranscriptionMode: "byok" });
+  const recording = new Blob([new Uint8Array(4096)], { type: "audio/webm" });
+  const batchCaptures = [];
+  manager.startStreamingFallbackRecorder = () => {
+    manager.streamingFallbackChunks = [recording];
+    manager.streamingFallbackRecorder = {
+      mimeType: "audio/webm",
+      state: "recording",
+      stop() {
+        this.state = "inactive";
+        queueMicrotask(() => this.onstop());
+      },
+    };
+  };
+  manager._acquireCaptureStream = async () => ({
+    getAudioTracks: () => [],
+    getTracks: () => [{ stop() {} }],
+  });
+  manager._markCaptureStreamReleased = () => {};
+  manager.startRecording = () => assert.fail("the microphone must stay stopped");
+  manager.processAudio = async (blob) => batchCaptures.push(blob.size);
+  manager.streamingCleanupFns = [];
+
+  const starting = manager.startStreamingRecording();
+  await tick();
+  speak(manager, new Int16Array(800).fill(53).buffer);
+  await manager.stopStreamingRecording();
+  connect.resolve({ success: false, code: "NO_API" });
+  assert.equal(await starting, true);
+  assert.deepEqual(batchCaptures, [4096]);
+  assert.deepEqual(calls.sent, []);
+  assert.equal(manager.isProcessing, false);
+});
+
+test("releasing AssemblyAI during worklet setup immediately stops the microphone", async (t) => {
+  const { manager, connect, calls, vite } = await load(t, { providerName: "assemblyai" });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  useSettingsStore.setState({ cloudTranscriptionMode: "byok" });
+  const loading = deferred();
+  const setupStarted = deferred();
+  let trackStopped = false;
+  manager._acquireCaptureStream = async () => ({
+    getAudioTracks: () => [],
+    getTracks: () => [{ stop: () => (trackStopped = true) }],
+  });
+  manager._markCaptureStreamReleased = () => {};
+  delete manager.cleanupStreamingAudio;
+  manager.shouldUseStreaming = () => false;
+  manager.getOrCreateAudioContext = async () => {
+    setupStarted.resolve();
+    await loading.promise;
+    return { createMediaStreamSource: () => ({ connect() {} }), createAnalyser: () => ({}) };
+  };
+
+  const starting = manager.startStreamingRecording();
+  await setupStarted.promise;
+  await manager.stopStreamingRecording();
+  const releasedBeforeSetup = trackStopped;
+  loading.resolve();
+  connect.resolve({ success: true });
+
+  assert.equal(await starting, false);
+  assert.equal(releasedBeforeSetup, true);
+  assert.equal(calls.starts, 0);
+});
+
+test("stopping a connected AssemblyAI take releases the mic before the worklet acknowledges", async (t) => {
+  const { manager, connect, vite } = await load(t, { providerName: "assemblyai" });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  useSettingsStore.setState({ cloudTranscriptionMode: "byok" });
+  let trackStopped = false;
+  manager._acquireCaptureStream = async () => ({
+    getAudioTracks: () => [],
+    getTracks: () => [{ stop: () => (trackStopped = true) }],
+  });
+  manager._markCaptureStreamReleased = () => {};
+  manager.shouldUseStreaming = () => false;
+
+  const starting = manager.startStreamingRecording();
+  await tick();
+  connect.resolve({ success: true });
+  assert.equal(await starting, true);
+
+  const port = manager.streamingProcessor.port;
+  port.postMessage = () => {};
+  const stopping = manager.stopStreamingRecording();
+  const releasedBeforeFlush = trackStopped;
+  port.onmessage({ data: "flushed" });
+  assert.equal(await stopping, true);
+  assert.equal(releasedBeforeFlush, true);
 });

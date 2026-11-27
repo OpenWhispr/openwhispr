@@ -342,14 +342,13 @@ export const useAudioRecording = (toast, options = {}) => {
         if (!current()) return false;
 
         const usesStreaming = manager.shouldUseStreaming();
-        const managedOrukeet =
-          usesStreaming &&
-          isManagedOrukeetStream({
-            providerName: manager.getStreamingProviderName?.(),
-            cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
-          });
-        startEffectsOnReportRef.current = managedOrukeet;
-        startCuePendingRef.current = managedOrukeet;
+        const providerName = usesStreaming ? manager.getStreamingProviderName?.() : null;
+        const { cloudTranscriptionMode } = getSettings();
+        const managedOrukeet = isManagedOrukeetStream({ providerName, cloudTranscriptionMode });
+        const startEffectsOnReport =
+          managedOrukeet || (providerName === "assemblyai" && cloudTranscriptionMode === "byok");
+        startEffectsOnReportRef.current = startEffectsOnReport;
+        startCuePendingRef.current = startEffectsOnReport;
         const didStart = usesStreaming
           ? await manager.startStreamingRecording()
           : await manager.startRecording();
@@ -370,7 +369,7 @@ export const useAudioRecording = (toast, options = {}) => {
         // A stop that landed while the start was still awaiting the mic open was
         // dropped (isRecording was still false), leaving a runaway recording
         // until the next hotkey press. Honor it now that we started.
-        if (didStart && stopRequestedDuringStartRef.current) {
+        if (didStart && stopRequestedDuringStartRef.current && manager.getState().isRecording) {
           window.electronAPI?.unregisterCancelHotkey?.();
           // Cue semantics mirror performStopRecording: unconditional for
           // streaming, gated on the stop landing for batch.
@@ -420,9 +419,14 @@ export const useAudioRecording = (toast, options = {}) => {
 
   const performStopRecording = useCallback(async () => {
     if (startLockRef.current) {
+      if (stopRequestedDuringStartRef.current) return true;
       stopRequestedDuringStartRef.current = true;
       setIsPreparing(false);
       setIsStopping(true);
+      const wasRecording = wasRecordingRef.current;
+      if (audioManagerRef.current?.stopStreamingCaptureDuringStart?.() && wasRecording) {
+        void playStopCue();
+      }
       return true;
     }
     if (stopLockRef.current) return false;
@@ -634,6 +638,13 @@ export const useAudioRecording = (toast, options = {}) => {
       }) => {
         // A cancelled start may finish opening the mic just before its caller disposes it.
         if (isRecording && recordingAttemptRef.current?.abandoned) return;
+        if (
+          isRecording &&
+          stopRequestedDuringStartRef.current &&
+          audioManagerRef.current?.stopStreamingCaptureDuringStart?.()
+        ) {
+          return;
+        }
         reportLifecycle(
           isRecording
             ? "recording"
@@ -643,10 +654,8 @@ export const useAudioRecording = (toast, options = {}) => {
                 ? "preparing"
                 : "idle"
         );
-        // Managed Orukeet acts with the pill, not when the start resolves: its start
-        // stays pending on a cold connect for seconds while audio already buffers.
-        // A fallback to batch reports recording again after its not-recording report
-        // released these, so only the cue is once per start.
+        // These routes act at capture start. A fallback can report recording again
+        // after releasing media and Escape, but the cue still plays once per start.
         if (
           isRecording &&
           !wasRecordingRef.current &&
