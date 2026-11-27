@@ -178,8 +178,7 @@ test("cleanup validates completed provider output using the request's prompt set
       useCleanupModel: true,
       getAgentName: () => "OpenWhispr",
       hasTextContent: (text) => typeof text === "string" && text.trim().length > 0,
-      applyChineseScript: async (text) => text,
-      resolveChineseScriptTarget: () => null,
+      ...(await vite.ssrLoadModule("/utils/chineseScript.js")),
       updateInStore: (value) => {
         displayedRow = value;
       },
@@ -274,5 +273,37 @@ test("cleanup validates completed provider output using the request's prompt set
         JSON.stringify(options)
       );
     }
+
+    const chineseRaw = "這是繁體中文軟體";
+    const chineseClean = "这是为什么？";
+    useSettingsStore.setState({ preferredLanguage: "auto", chineseScriptPreference: "simplified" });
+    window.electronAPI.retryTranscription = async () => ({
+      success: true,
+      transcription: { ...row, text: chineseRaw, raw_text: chineseRaw },
+    });
+    window.electronAPI.processLocalReasoning = async () => ({ success: true, text: chineseClean });
+    const writes = [];
+    window.electronAPI.updateTranscriptionText = async (_id, text, rawText) => {
+      writes.push([text, rawText]);
+      return { success: true, transcription: { ...row, text, raw_text: rawText } };
+    };
+    await retry(row.id);
+    assert.deepEqual(writes, [[chineseClean, chineseRaw]]);
+    assert.equal(displayedRow.text, chineseClean);
+
+    // A failed write leaves the raw row eligible for its normal script conversion.
+    writes.length = 0;
+    window.electronAPI.updateTranscriptionText = async (_id, text, rawText) => {
+      writes.push([text, rawText]);
+      return text === chineseClean
+        ? { success: false }
+        : { success: true, transcription: { ...row, text, raw_text: rawText } };
+    };
+    await retry(row.id);
+    assert.deepEqual(writes, [
+      [chineseClean, chineseRaw],
+      ["这是繁体中文软件", chineseRaw],
+    ]);
+    assert.equal(displayedRow.text, "这是繁体中文软件");
   });
 });

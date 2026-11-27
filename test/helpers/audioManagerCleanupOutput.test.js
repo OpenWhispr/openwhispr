@@ -140,6 +140,104 @@ test("invalid completed cleanup keeps raw text across dictation routes", async (
     );
   }
 
+  await t.test(
+    "script-instructed cleanup owns the pasted text, including a verbatim reply",
+    async () => {
+      const manager = createManager();
+      delete manager.getEffectiveSttLanguage;
+      delete manager.finalizeChineseScript;
+      let conversions = 0;
+      const finalize = manager.finalizeChineseScript.bind(manager);
+      manager.finalizeChineseScript = (...args) => {
+        conversions++;
+        return finalize(...args);
+      };
+      const raw = "這是繁體中文軟體";
+      const clean = "这是为什么？";
+      useSettingsStore.setState({
+        cleanupMode: "local",
+        cleanupProvider: "local",
+        cleanupModel: "test-model",
+        preferredLanguage: "auto",
+        chineseScriptPreference: "simplified",
+        customPrompts: { cleanup: "" },
+      });
+      let prompt;
+      window.electronAPI.processLocalReasoning = async (_input, _model, _name, config) => {
+        prompt = config.systemPrompt;
+        return { success: true, text: clean };
+      };
+      assert.equal(await manager.processTranscription(clean, "local"), clean);
+      assert.equal(conversions, 0);
+      assert.match(prompt, /Simplified characters/);
+      assert.doesNotMatch(prompt, /Maintain consistent language/);
+
+      const mixed = "沒有問題。Meet at 東京駅。軟件";
+      useSettingsStore.setState({
+        cleanupMode: "providers",
+        cleanupProvider: "anthropic",
+        cleanupModel: "claude-opus-5-5",
+        chineseScriptPreference: "traditional",
+      });
+      const requests = [];
+      window.electronAPI.processAnthropicReasoning = async (input, _model, _agentName, config) => {
+        requests.push({ input, prompt: config.systemPrompt });
+        return { success: true, text: mixed };
+      };
+      for (const editedPrompt of ["", "Fix punctuation only."]) {
+        useSettingsStore.setState({ customPrompts: { cleanup: editedPrompt } });
+        // Prompt Studio runs the selected model with the edited cleanup prompt.
+        const preview = await service.processText(mixed, "claude-opus-5-5", "OpenWhispr", {
+          inferenceScope: "dictationCleanup",
+        });
+        assert.equal(await manager.processTranscription(mixed, "openai"), preview);
+        assert.equal(preview, mixed);
+        const [previewRequest, dictationRequest] = requests.splice(0);
+        assert.deepEqual(dictationRequest, previewRequest);
+        assert.equal(previewRequest.prompt.split("Traditional characters").length, 2);
+        assert.ok(previewRequest.input.includes(mixed));
+        if (editedPrompt) assert.ok(previewRequest.prompt.includes(editedPrompt));
+      }
+      useSettingsStore.setState({
+        chineseScriptPreference: "simplified",
+        customPrompts: { cleanup: "" },
+      });
+      useSettingsStore.setState({ cleanupMode: "openwhispr", cleanupCloudMode: "openwhispr" });
+      window.electronAPI.cloudTranscribe = async () => ({ success: true, text: raw });
+      for (const accepted of [true, false, undefined]) {
+        let options;
+        window.electronAPI.cloudReason = async (_text, config) => {
+          options = config;
+          return { success: true, text: accepted ? clean : raw, cleanupApplied: accepted };
+        };
+        const expected = accepted ? clean : "这是繁体中文软件";
+        const result = await manager.processWithOpenWhisprCloud(new Blob(["audio"]));
+        assert.equal(result.text, expected);
+        assert.equal(result.rawText, raw);
+        assert.equal(options.cleanupScript, "simplified");
+        assert.equal(options.language, "auto");
+        assert.equal(await manager.processTranscription(raw, "openai"), expected);
+      }
+      assert.equal(conversions, 4);
+      window.electronAPI.cloudReason = async () => ({
+        success: true,
+        text: " ",
+        cleanupApplied: true,
+      });
+      assert.equal(
+        (await manager.processWithOpenWhisprCloud(new Blob(["audio"]))).text,
+        "这是繁体中文软件"
+      );
+      useSettingsStore.setState({ useCleanupModel: false });
+      assert.equal(await manager.processTranscription(raw, "openai"), "这是繁体中文软件");
+      useSettingsStore.setState({ useCleanupModel: true });
+      useSettingsStore.setState({
+        preferredLanguage: "en",
+        chineseScriptPreference: "as-transcribed",
+      });
+    }
+  );
+
   await t.test("local cleanup failure flows through raw fallback and persistence", async () => {
     useSettingsStore.setState({
       cleanupMode: "local",

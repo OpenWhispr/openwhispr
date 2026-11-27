@@ -79,6 +79,28 @@ test("resolveCleanupLanguage keeps auto until the transcription language is know
   assert.equal(resolveCleanupLanguage("ja"), "ja");
 });
 
+test("cleanup script context uses the requested source and does not need Han detection", async () => {
+  const { getCleanupLanguageContext } = await load();
+  for (const preference of ["simplified", "traditional"]) {
+    assert.deepEqual(getCleanupLanguageContext("auto", preference), {
+      language: "auto",
+      cleanupScript: preference,
+    });
+    assert.deepEqual(getCleanupLanguageContext("ja", preference), { language: "ja" });
+  }
+  for (const preference of [undefined, "as-transcribed", "unknown"]) {
+    assert.deepEqual(getCleanupLanguageContext("", preference), { language: "auto" });
+  }
+  assert.deepEqual(getCleanupLanguageContext("zh-TW", "simplified"), {
+    language: "zh-TW",
+    cleanupScript: "traditional",
+  });
+  assert.deepEqual(getCleanupLanguageContext("zh-CN", "traditional"), {
+    language: "zh-CN",
+    cleanupScript: "simplified",
+  });
+});
+
 test("applyChineseScript converts traditional to simplified", async () => {
   const { applyChineseScript } = await load();
   assert.equal(await applyChineseScript("這是繁體中文軟體", "simplified"), "这是繁体中文软件");

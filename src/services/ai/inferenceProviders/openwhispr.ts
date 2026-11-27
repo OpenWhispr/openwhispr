@@ -8,7 +8,7 @@ import { toCloudDictionaryFields } from "../../../utils/snippets";
 export const openwhisprProvider: InferenceProvider = {
   id: "openwhispr",
   supportsImages: true,
-  async call({ text, model, agentName, config, ctx }) {
+  async call({ text, model, agentName, config, ctx, onManagedCleanupApplied }) {
     logger.logReasoning("OPENWHISPR_START", {
       model,
       agentName,
@@ -44,6 +44,7 @@ export const openwhisprProvider: InferenceProvider = {
         screenContext: config.screenContext,
         ...config.toneStyle,
         language: config.language || ctx.getPreferredLanguage(),
+        cleanupScript: config.cleanupScript,
         locale: ctx.getUiLanguage(),
       });
 
@@ -67,6 +68,7 @@ export const openwhisprProvider: InferenceProvider = {
       screenContextApplied: result.screenContextApplied,
     });
 
+    if (result.cleanupApplied === true) onManagedCleanupApplied?.();
     return result.text;
   },
 };

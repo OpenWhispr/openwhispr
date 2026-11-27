@@ -26,6 +26,7 @@ export interface ReasoningConfig {
   /** Suffix-free prompt used when a screenshot-carrying request is retried text-only. */
   textOnlySystemPrompt?: string;
   language?: string;
+  cleanupScript?: "simplified" | "traditional";
   requireCompleteOutput?: boolean;
   /** Bundled local server only; callers must validate the decoded response. */
   responseFormat?: { type: "json_object"; schema: Record<string, unknown> };
@@ -53,8 +54,7 @@ export abstract class BaseReasoningService {
   }
 
   // Auto must remain auto here: zh-CN/zh-TW instructions make cleanup write its
-  // entire response in Chinese before the transcription language is known. The
-  // final deterministic script pass handles likely-Chinese output instead. See #975.
+  // entire response in Chinese before the transcription language is known. See #975.
   protected getPreferredLanguage(): string {
     return resolveCleanupLanguage(getSettings().preferredLanguage);
   }
@@ -63,16 +63,14 @@ export abstract class BaseReasoningService {
     return getSettings().uiLanguage || "en";
   }
 
-  protected getSystemPrompt(
-    agentName: string | null,
-    toneStyle?: DictationToneStyle | null
-  ): string {
+  protected getSystemPrompt(agentName: string | null, config: ReasoningConfig): string {
     return getCleanupSystemPrompt(
       agentName,
       this.getCustomDictionary(),
-      this.getPreferredLanguage(),
+      config.language ?? this.getPreferredLanguage(),
       this.getUiLanguage(),
-      toneStyle
+      config.toneStyle,
+      config.cleanupScript
     );
   }
 
@@ -91,6 +89,7 @@ export abstract class BaseReasoningService {
     text: string,
     modelId: string,
     agentName?: string | null,
-    config?: ReasoningConfig
+    config?: ReasoningConfig,
+    onScriptHandled?: () => void
   ): Promise<string>;
 }

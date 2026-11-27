@@ -38,6 +38,7 @@ test("cleanup ok then translate ok: both applied in order", async () => {
   );
 
   assert.equal(result.text, "translated");
+  assert.equal(result.cleanupRetained, false);
   assert.deepEqual(calls, [
     ["cleanup", "raw"],
     ["translate", "cleaned"],
@@ -110,6 +111,7 @@ test("translate returns whitespace-only: onEmptyTranslate fires, cleaned text ke
 
   assert.equal(emptyCalled, true);
   assert.equal(result.text, "cleaned");
+  assert.equal(result.cleanupRetained, true);
 });
 
 test("shouldTranslate false: whitespace-only cleanup keeps the original text", async () => {

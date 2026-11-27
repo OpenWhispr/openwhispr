@@ -1,0 +1,35 @@
+# Chinese script in dictation cleanup
+
+**Goal.** Let accepted dictation cleanup choose Simplified or Traditional characters in context. Retain the existing OpenCC fallback for raw transcripts. [Issue #3105](https://github.com/OpenWhispr/openwhispr/issues/3105)
+
+## Reproduction and cause
+
+At desktop commit `f0c0f51fd`, I ran the renderer test harness with Auto-detect, Simplified, and a stubbed cleanup model. I passed `這是為什麼` to `AudioManager.processTranscription`. Cleanup returned `这是为什么？`. The method returned `这是为什幺？`. This isolates the failure after inference, without a microphone or provider credentials.
+
+The OpenAI transcription path calls `processTranscription` in `src/helpers/audioManager.js`. Its core returns a string for both accepted cleanup and raw fallback. The outer method runs `finalizeChineseScript` on either result. The managed batch and streaming paths repeat that decision, and History retry applies the same conversion before updating its row. Prompt Studio displays the reasoning service's reply directly.
+
+In `src/utils/chineseScript.js`, Auto-detect with Simplified selects OpenCC's `twp → cn` converter only when the text contains a Chinese-specific signal. With the locked `opencc-js@1.4.1`, the `这` in the reproduction activates conversion for the whole sentence. Isolated `为什么`, `沒有問題`, and `謝謝` all bypass it. Meanwhile the cleanup request carries `auto` without the script preference. The existing Auto instruction asks for one consistent language, and the explicit Chinese language instructions ask for the entire output in Chinese. Neither expresses a script preference for only the Chinese portions of mixed speech.
+
+The proposed fix gives the model the original wording and skips OpenCC on its accepted reply. This also preserves regional wording such as `軟件` when the model returns it. A smaller model may still miss the requested script. [PR #3045](https://github.com/OpenWhispr/openwhispr/pull/3045) separately improves the deterministic fallback.
+
+## Implementation
+
+### 1. Supply the script as cleanup context
+
+- [ ] In `src/config/prompts/index.ts` and `src/utils/chineseScript.js`, resolve the cleanup instruction from the effective source language and normalized script preference captured for the request. For Auto + Simplified or Traditional, replace the stock single-language instruction with “Use [Simplified/Traditional] characters for Chinese passages. Preserve the speaker's wording and regional vocabulary. Keep every passage in its original language, including English and Japanese.” Use this instruction even for ambiguous short text. Use the existing language context for Keep as transcribed and explicit languages. Preserve the Whisper language hint and prompt.
+- [ ] Thread that context through the desktop cleanup builder, local/BYOK/self-hosted reasoning, Prompt Studio's cleanup test, and History retry. Use the translation source for the cleanup leg of a translation recording. Apply it once with both built-in and custom cleanup templates. Preserve dictionary, tone, output validation, and existing agent and translation prompts.
+- [ ] For managed cleanup, add an optional script target to the Electron request types, `cloud-reason` IPC payload, OpenWhispr inference provider, direct batch/streaming requests, and combined Orukeet session options. In companion `openwhispr-api`, extend `lib/schemas.ts`, `lib/prompts.ts`, `api/reason.ts`, and `routes/stt/orukeet/pipeline-session.ts`. Both endpoints build their own prompts, and the pipeline schema rejects unknown fields. Release server support first. Test that old clients retain their current behavior and that default-prompt validation still runs.
+
+### 2. Finalize according to what produced the text
+
+- [ ] In `src/helpers/audioManager.js`, carry a per-invocation outcome to each finalizer. Bypass OpenCC only when the text being delivered is an accepted, script-instructed cleanup reply. A valid reply identical to the input counts. A thrown error, rejected output, empty reply, disabled or skipped cleanup uses the existing fallback. Keep cancellation and selection-edit handling intact. Keep `rawText` as received from transcription. Preserve the streaming guard that prevents a second pass on a completed batch fallback.
+- [ ] Have the managed API convey whether its response contains accepted model output. Today it can return a successful response containing the original transcript after a blank model reply. Propagate that distinction through IPC and managed reasoning. Treat an absent acknowledgement as the legacy fallback. For combined cleanup, require a completed result for the matching script-aware session. AssemblyAI's built-in rewrite currently receives no cleanup prompt. Keep its existing finalization when it stands in for application cleanup, without invoking another model.
+- [ ] Carry the same outcome through `src/helpers/translationChain.js` and `src/components/ControlPanel.tsx`. Finalize a completed translation using its target. If the chain retains an accepted cleanup reply after a skipped, blank or echoed translation, preserve that reply. If it delivers raw source, apply the existing source-language fallback. On retry, base the decision on the text actually retained by the row, including failed writes and successful verbatim cleanup.
+
+### 3. Prove the behavior at the output boundary
+
+- [ ] Add the reproduction to `test/helpers/audioManagerCleanupOutput.test.js` using the real finalizer. Assert exact model output and the untouched raw transcript. Cover generic batch, managed batch, streaming, combined cleanup, and streaming-to-batch fallback. Include a valid verbatim reply, a rejected reply, and a second recording after a successful one. Use converter call counts as well as output so the test still catches ordering regressions after #3045.
+- [ ] Extend `test/helpers/chineseScript.test.js` and the cleanup prompt tests for both targets, absent/unknown preferences, explicit Chinese, explicit Japanese, and mixed Chinese/English/Japanese text. Exercise default and edited Prompt Studio prompts. Check that the request keeps `auto` and the script instruction appears exactly once. Verify raw fallback with an unambiguous fixture such as `這是繁體中文軟體` → `这是繁体中文软件`.
+- [ ] Extend `test/helpers/translationChain.test.js`, `test/services/cleanupOutputValidation.test.js`, the pipeline options tests, and API reason/pipeline handler tests. Cover retained cleanup, actual translation, raw fallback, absent server acknowledgement, and unchanged raw History data. Run the focused tests first, then desktop `npm run typecheck`, `npm test`, and the companion API's affected suites. For the provider smoke test, compare Prompt Studio and dictation with the reported OpenAI/Anthropic configuration, including `沒有問題`, regional Traditional vocabulary, and a mixed-language sentence.
+
+**Investigation baseline.** The deterministic renderer reproduction exposed the corrupt output. All 54 existing tests across the Chinese script, translation-chain, cleanup-output, and service validation suites passed on the inspected source. The provider smoke test is part of implementation verification.

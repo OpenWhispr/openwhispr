@@ -144,6 +144,7 @@ export interface DictationRealtimeSessionOptions {
     appCategory?: ToneAppCategory;
     language?: string;
     locale?: string;
+    cleanupScript?: "simplified" | "traditional";
   };
   provider: string;
   baseUrl?: string;
@@ -3356,6 +3357,7 @@ declare global {
           appCategory?: ToneAppCategory;
           language?: string;
           locale?: string;
+          cleanupScript?: "simplified" | "traditional";
           streamingFallbackReason?: string;
         } & SttDetectedLanguageFields &
           OrukeetTelemetry
@@ -3367,6 +3369,8 @@ declare global {
         promptMode?: string;
         matchType?: string;
         screenContextApplied?: boolean;
+        /** Managed cleanup can return the raw transcript after an empty model reply. */
+        cleanupApplied?: boolean;
         error?: string;
         code?: string;
       }>;

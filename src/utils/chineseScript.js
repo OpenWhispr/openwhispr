@@ -1,11 +1,10 @@
 /**
  * Chinese script preference helpers for Whisper-family STT.
  *
- * Whisper language codes only expose "zh", so zh-CN / zh-TW / auto all share the
- * same STT language hint. Script choice is applied after transcription so
- * Simplified vs Traditional is deterministic. An explicit zh-CN / zh-TW also
- * biases the Whisper prompt; auto never does, because the bias would skew the
- * language detection it depends on.
+ * Whisper accepts "zh" for both explicit Chinese languages. Only those languages
+ * bias the STT prompt, since a script hint would skew automatic language detection.
+ * Cleanup chooses the script in context. Raw dictation and other outputs without
+ * script-aware cleanup use OpenCC at delivery.
  *
  * Scope: dictation (audioManager) and history retry (ControlPanel). Meeting
  * transcription and uploaded audio strip zh-CN / zh-TW to "zh" and store the
@@ -105,8 +104,7 @@ export function resolveChineseScriptTarget(preferredLanguage, chineseScriptPrefe
 /**
  * Language code passed to cleanup/reasoning prompts. Auto stays auto: specifying
  * zh-CN / zh-TW tells cleanup to write its entire response in Chinese, which is
- * unsafe before the transcription language is known. The deterministic final
- * conversion still applies the selected script to likely-Chinese output.
+ * unsafe before the transcription language is known.
  *
  * @param {string | null | undefined} preferredLanguage
  * @returns {string}
@@ -114,6 +112,24 @@ export function resolveChineseScriptTarget(preferredLanguage, chineseScriptPrefe
 export function resolveCleanupLanguage(preferredLanguage) {
   if (preferredLanguage && preferredLanguage !== "auto") return preferredLanguage;
   return "auto";
+}
+
+/**
+ * Cleanup can distinguish Chinese passages in context even when the raw-text
+ * detector cannot. Explicit Chinese languages already carry a script instruction.
+ * @param {string | null | undefined} preferredLanguage
+ * @param {string | null | undefined} preference
+ * @returns {{language: string, cleanupScript?: ChineseScriptTarget}}
+ */
+export function getCleanupLanguageContext(preferredLanguage, preference) {
+  const language = resolveCleanupLanguage(preferredLanguage);
+  const target =
+    language === "auto"
+      ? normalizeChineseScriptPreference(preference)
+      : resolveChineseScriptTarget(language, preference);
+  return target === "simplified" || target === "traditional"
+    ? { language, cleanupScript: target }
+    : { language };
 }
 
 /**

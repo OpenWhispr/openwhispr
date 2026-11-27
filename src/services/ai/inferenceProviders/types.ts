@@ -1,9 +1,8 @@
 import type { ReasoningConfig } from "../../BaseReasoningService";
-import type { DictationToneStyle } from "../../../config/toneStyle";
 
 export interface ProviderContext {
   getApiKey(provider: string): Promise<string>;
-  getSystemPrompt(agentName: string | null, toneStyle?: DictationToneStyle | null): string;
+  getSystemPrompt(agentName: string | null, config: ReasoningConfig): string;
   getCustomDictionary(): string[];
   getPreferredLanguage(): string;
   getUiLanguage(): string;
@@ -30,6 +29,7 @@ export interface ProviderCallParams {
   agentName: string | null;
   config: ReasoningConfig;
   ctx: ProviderContext;
+  onManagedCleanupApplied?: () => void;
 }
 
 export interface InferenceProvider {

@@ -376,6 +376,26 @@ test("cloud cleanup forwards fallback telemetry to its combined log request", as
   assert.equal(Object.hasOwn(requests[1], "streamingFallbackReason"), false);
 });
 
+test("cloud reason carries a cleanup script and distinguishes raw fallback from accepted output", async () => {
+  for (const cleanupApplied of [true, false, undefined]) {
+    let body;
+    backendResponse = async (_url, options) => {
+      body = JSON.parse(options.body);
+      return Response.json({ text: "这是为什么？", cleanupApplied });
+    };
+    const result = await handlers.get("cloud-reason")(event, "这是为什么？", {
+      purpose: "cleanup",
+      promptMode: "cleanup",
+      language: "auto",
+      cleanupScript: "simplified",
+    });
+    assert.equal(body.language, "auto");
+    assert.equal(body.cleanupScript, "simplified");
+    assert.equal(result.cleanupApplied, cleanupApplied);
+    assert.equal(result.text, "这是为什么？");
+  }
+});
+
 test("cloud reason sends shared words in sharedDictionary, and omits it when there are none", async () => {
   const bodies = [];
   backendResponse = async (_url, options) => {

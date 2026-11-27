@@ -16,7 +16,7 @@ import {
   applyChineseScript,
   mergeWhisperPrompt,
   resolveChineseScriptTarget,
-  resolveCleanupLanguage,
+  getCleanupLanguageContext,
 } from "../utils/chineseScript";
 import {
   createLocalSpeechGateState,
@@ -385,6 +385,10 @@ function resolveReasoningRoute(
   // the cleanup route pastes the raw transcript and the chain translates it, and both
   // raise the cleanup-failed toast (#2091).
   const cleanupConfig = {
+    ...getCleanupLanguageContext(
+      translationRequested ? settings.translationSourceLanguage : settings.preferredLanguage,
+      settings.chineseScriptPreference
+    ),
     inferenceScope: /** @type {const} */ ("dictationCleanup"),
     disableThinking: settings.cleanupDisableThinking,
     reasoningEffort: settings.cleanupReasoningEffort,
@@ -1033,8 +1037,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   // Cleanup runs before the translate step, so it still works in the STT language.
-  getCleanupLanguage(settings) {
-    return resolveCleanupLanguage(this.getEffectiveSttLanguage(settings));
+  getCleanupLanguageContext(settings) {
+    return getCleanupLanguageContext(
+      this.getEffectiveSttLanguage(settings),
+      settings.chineseScriptPreference
+    );
   }
 
   finalizeChineseScript(text, settings = getSettings()) {
@@ -3100,7 +3107,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return apiKey;
   }
 
-  async processWithReasoningModel(text, model, agentName, config) {
+  async processWithReasoningModel(text, model, agentName, config, onScriptHandled) {
     if (config?.requiresAgent) this.assertAgentAllowedByPolicy();
     logger.logReasoning("CALLING_REASONING_SERVICE", {
       model,
@@ -3112,10 +3119,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const startTime = Date.now();
 
     try {
-      const result = await ReasoningService.processText(text, model, agentName, {
-        ...config,
-        busyWaitMs: DICTATION_MODEL_BUSY_WAIT_MS,
-      });
+      const result = await ReasoningService.processText(
+        text,
+        model,
+        agentName,
+        {
+          ...config,
+          busyWaitMs: DICTATION_MODEL_BUSY_WAIT_MS,
+        },
+        onScriptHandled
+      );
 
       const processingTime = Date.now() - startTime;
 
@@ -3469,8 +3482,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // Cleanup-then-translate chain shared by batch, cloud, and streaming paths: Step 1
   // (optional cleanup) soft-fails to input; Step 2 translates unless source === target.
   async runTranslationChain({ text, settings, agentName, route, cleanup }) {
+    let scriptHandled = false;
+    const markScriptHandled = () => {
+      scriptHandled = true;
+    };
     const runCleanup = async (currentText) => {
       if (cleanup.mode === "cloudReason") {
+        const context = this.getCleanupLanguageContext(settings);
         const customPrompt = this.getCustomPrompt();
         const reasonResult = await withSessionRefresh(async () => {
           const res = await window.electronAPI.cloudReason(currentText, {
@@ -3479,7 +3497,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             purpose: "cleanup",
             ...getCloudLlmDictionaryFields(settings),
             customPrompt,
-            language: this.getCleanupLanguage(settings),
+            ...context,
             locale: settings.uiLanguage || "en",
             ...(cleanup.meta || {}),
           });
@@ -3493,6 +3511,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (!customPrompt && hasTextContent(reasonResult.text)) {
           assertValidCleanupOutput(currentText, reasonResult.text);
         }
+        if (context.cleanupScript && reasonResult.cleanupApplied === true) markScriptHandled();
         return reasonResult.success && reasonResult.text ? reasonResult.text : null;
       }
       const cleanupModel = cleanup.model;
@@ -3501,7 +3520,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           currentText,
           cleanupModel,
           agentName,
-          route.cleanupConfig
+          route.cleanupConfig,
+          markScriptHandled
         );
       }
       return null;
@@ -3546,7 +3566,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         },
       });
       this.translationApplied = chainResult.translated;
-      return chainResult;
+      return { ...chainResult, scriptHandled: scriptHandled && chainResult.cleanupRetained };
     } catch (translateError) {
       // Translate step threw: raw text is still pasted by the caller. Surface the failure.
       this.notifyTranslationFallback("failed");
@@ -3592,8 +3612,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   async processTranscription(text, source, wasCancelled = neverCancelled, options = {}) {
     try {
-      const result = await this.processTranscriptionCore(text, source, wasCancelled, options);
-      if (wasCancelled()) return result;
+      let scriptHandled = false;
+      const result = await this.processTranscriptionCore(text, source, wasCancelled, {
+        ...options,
+        onScriptHandled: () => {
+          scriptHandled = true;
+        },
+      });
+      if (wasCancelled() || scriptHandled) return result;
       return this.finalizeChineseScript(result);
     } catch (error) {
       attachTranscript(error, text);
@@ -3605,7 +3631,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     text,
     source,
     wasCancelled = neverCancelled,
-    { cleanedText } = {}
+    { cleanedText, onScriptHandled } = {}
   ) {
     const normalizedText = typeof text === "string" ? text.trim() : "";
 
@@ -3722,7 +3748,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (route.kind === "skip") return normalizedText;
 
         if (route.kind === "translation") {
-          const { text: translatedText } = await this.runTranslationChain({
+          const { text: translatedText, scriptHandled } = await this.runTranslationChain({
             text: normalizedText,
             settings,
             agentName,
@@ -3741,6 +3767,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             processingTime: new Date().toISOString(),
           });
 
+          if (scriptHandled) onScriptHandled?.();
           return translatedText;
         }
 
@@ -3774,7 +3801,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                 normalizedText,
                 targetModel,
                 agentName,
-                reasoningConfig
+                reasoningConfig,
+                onScriptHandled
               );
 
         logger.logReasoning("REASONING_SUCCESS", {
@@ -4032,6 +4060,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
     const rawText = this.stripTrailingDictionaryEcho(result.text, dictionaryPrompt);
     let processedText = rawText;
+    let scriptHandled = false;
     if (processedText) {
       const reasoningStart = performance.now();
       const agentName = getAgentName();
@@ -4069,6 +4098,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           if (hasTextContent(reasoned)) processedText = reasoned;
         } else if (route.kind === "cleanup" && isCloudCleanup) {
           const customPrompt = this.getCustomPrompt();
+          const context = this.getCleanupLanguageContext(settings);
           const reasonResult = await withSessionRefresh(async () => {
             const res = await window.electronAPI.cloudReason(processedText, {
               agentName,
@@ -4077,7 +4107,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               ...getCloudLlmDictionaryFields(settings),
               customPrompt,
               ...toneStyle,
-              language: this.getCleanupLanguage(settings),
+              ...context,
               locale: settings.uiLanguage || "en",
               streamingFallbackReason,
               orukeetLanguageRouting: metadata.orukeetLanguageRouting,
@@ -4104,6 +4134,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           if (reasonResult.success && hasTextContent(reasonResult.text)) {
             if (!customPrompt) assertValidCleanupOutput(processedText, reasonResult.text);
             processedText = reasonResult.text;
+            scriptHandled = !!context.cleanupScript && reasonResult.cleanupApplied === true;
           }
         } else if (route.kind === "cleanup") {
           const effectiveModel = getEffectiveCleanupModel();
@@ -4112,7 +4143,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               processedText,
               effectiveModel,
               agentName,
-              { ...route.config, toneStyle }
+              { ...route.config, toneStyle },
+              () => {
+                scriptHandled = true;
+              }
             );
             if (hasTextContent(reasoned)) processedText = reasoned;
           }
@@ -4148,6 +4182,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                 },
           });
           processedText = resolveTranslatedText(processedText, chainResult);
+          scriptHandled = chainResult.scriptHandled;
         }
       } catch (reasonError) {
         if (reasonError.selectionEditFatal) {
@@ -4173,7 +4208,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     return {
       success: true,
-      text: await this.finalizeChineseScript(processedText, settings),
+      text: scriptHandled
+        ? processedText
+        : await this.finalizeChineseScript(processedText, settings),
       rawText,
       source: "openwhispr",
       timings,
@@ -5331,7 +5368,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       ...(this.cleanupTakesTone(settings)
         ? resolveDictationToneStyle(settings.toneStyles, appCategory)
         : {}),
-      language: this.getCleanupLanguage(settings) || undefined,
+      ...this.getCleanupLanguageContext(settings),
       locale: settings.uiLanguage || "en",
     };
   }
@@ -6500,6 +6537,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     let usedCloudReasoning = false;
     let combinedCleanup = false;
+    let scriptHandled = false;
     // The Cloud batch path already ran its own cleanup, agent or translation.
     if (finalText && !usedBatchFallback) {
       const reasoningStart = performance.now();
@@ -6542,6 +6580,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
         } else if (route.kind === "cleanup" && isCloudCleanup) {
           const customPrompt = this.getCustomPrompt();
+          const context = this.getCleanupLanguageContext(stSettings);
           // ASR finished but the combined cleanup didn't: paste the raw text, as
           // any other failed cleanup does.
           if (orukeetFinal?.cleanupError) {
@@ -6552,6 +6591,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           }
           combinedCleanup =
             orukeetFinal?.cleanupStatus === "complete" &&
+            orukeetFinal.cleanupOptions?.cleanupScript === context.cleanupScript &&
             JSON.stringify(orukeetFinal.cleanupOptions) ===
               JSON.stringify(this._activePipelineOptions) &&
             typeof orukeetFinal.cleanupText === "string" &&
@@ -6566,7 +6606,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   ...getCloudLlmDictionaryFields(stSettings),
                   customPrompt,
                   ...toneStyle,
-                  language: this.getCleanupLanguage(stSettings),
+                  ...context,
                   locale: stSettings.uiLanguage || "en",
                   sttProvider: providerName,
                   sttModel: streamingSttModel,
@@ -6591,6 +6631,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           if (reasonResult.success && hasTextContent(reasonResult.text)) {
             if (!customPrompt) assertValidCleanupOutput(finalText, reasonResult.text);
             finalText = reasonResult.text;
+            scriptHandled =
+              !!context.cleanupScript && (combinedCleanup || reasonResult.cleanupApplied === true);
           }
 
           logger.info(
@@ -6608,7 +6650,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               finalText,
               effectiveModel,
               agentName,
-              { ...route.config, toneStyle }
+              { ...route.config, toneStyle },
+              () => {
+                scriptHandled = true;
+              }
             );
             if (hasTextContent(reasoned)) finalText = reasoned;
             logger.info(
@@ -6649,6 +6694,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                 },
           });
           finalText = resolveTranslatedText(finalText, chainResult);
+          scriptHandled = chainResult.scriptHandled;
           usedCloudReasoning = chainResult.usedCloudReasoning || usedCloudReasoning;
         }
       } catch (reasonError) {
@@ -6767,9 +6813,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     if (finalText) {
-      // The batch fallback routes through processTranscription, which already
-      // applied the script; only streamed text still needs it.
-      if (!usedBatchFallback) {
+      // A batch fallback has already finalized its text before returning here.
+      if (!usedBatchFallback && !scriptHandled) {
         finalText = await this.finalizeChineseScript(finalText, stSettings);
         if (wasCancelled()) return true;
       }

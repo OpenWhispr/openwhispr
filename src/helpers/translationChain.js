@@ -37,11 +37,15 @@ export async function executeTranslationChain({
   let out = text;
   let usedCloudReasoning = false;
   let translated = false;
+  let cleanupApplied = false;
 
   if (cleanupReachable) {
     try {
       const cleaned = await runCleanup(out);
-      if (hasTextContent(cleaned)) out = cleaned;
+      if (hasTextContent(cleaned)) {
+        out = cleaned;
+        cleanupApplied = true;
+      }
       // Cloud cleanup counts as cloud reasoning once its call succeeds, even if it
       // returned empty text.
       if (cleanupIsCloud) usedCloudReasoning = true;
@@ -69,7 +73,12 @@ export async function executeTranslationChain({
     if (translateIsCloud) usedCloudReasoning = true;
   }
 
-  return { text: out, usedCloudReasoning, translated };
+  return {
+    text: out,
+    usedCloudReasoning,
+    translated,
+    cleanupRetained: cleanupApplied && !translated,
+  };
 }
 
 // Keep the chain result only when it produced text; an empty/missing result

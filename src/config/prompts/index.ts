@@ -16,6 +16,7 @@ export interface ResolvePromptOptions {
   agentName: string | null;
   uiLanguage?: string;
   language?: string;
+  cleanupScript?: "simplified" | "traditional";
   customDictionary?: string[];
   targetLanguageLabel?: string;
 }
@@ -101,7 +102,10 @@ function applySubstitutions(template: string, opts: ResolvePromptOptions): strin
     prompt = prompt.replace(/\{\{targetLanguage\}\}/g, opts.targetLanguageLabel);
   }
 
-  const langInstruction = getLanguageInstruction(opts.language);
+  const langInstruction =
+    opts.language === "auto" && opts.cleanupScript
+      ? `Use ${opts.cleanupScript === "simplified" ? "Simplified" : "Traditional"} characters for Chinese passages. Preserve the speaker's wording and regional vocabulary. Keep each passage in its original language, including English and Japanese.`
+      : getLanguageInstruction(opts.language);
   if (langInstruction) prompt += "\n\n" + langInstruction;
 
   return appendDictionarySuffix(prompt, opts.customDictionary, opts.uiLanguage);

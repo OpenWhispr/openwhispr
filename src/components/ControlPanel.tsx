@@ -110,7 +110,11 @@ import {
   hasTextContent,
   shouldRunTranslateStep,
 } from "../helpers/translationChain";
-import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chineseScript";
+import {
+  applyChineseScript,
+  getCleanupLanguageContext,
+  resolveChineseScriptTarget,
+} from "../utils/chineseScript";
 import { getAgentName } from "../utils/agentName";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
@@ -864,6 +868,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           // A translation dictation must re-run cleanup-then-translate on retry, not plain cleanup.
           let handledTranslation = false;
           let translationApplied = false;
+          let scriptHandledText: string | undefined;
+          let cleanupHandledScript = false;
+          const markScriptHandled = (): void => {
+            cleanupHandledScript = true;
+          };
           if (result.transcription.route_kind === "translation") {
             handledTranslation = true;
             try {
@@ -880,7 +889,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               const agentName = getAgentName();
               const route = resolveReasoningRoute(rawText, settings, agentName, false, true);
               if (route.kind === "translation") {
-                const { text, translated } = await executeTranslationChain({
+                const { text, translated, cleanupRetained } = await executeTranslationChain({
                   text: rawText,
                   cleanupReachable: route.cleanupReachable,
                   runCleanup: (currentText: string) =>
@@ -888,7 +897,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       currentText,
                       getEffectiveCleanupModel(),
                       agentName,
-                      route.cleanupConfig
+                      route.cleanupConfig,
+                      markScriptHandled
                     ),
                   runTranslate: (currentText: string) =>
                     ReasoningService.processText(currentText, route.model, agentName, route.config),
@@ -923,7 +933,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       "transcription"
                     ),
                 });
-                translationApplied = translated;
+                // The row can still contain the source if saving the translation fails.
+                translationApplied = translated && text === rawText;
+                if (cleanupRetained && cleanupHandledScript) scriptHandledText = text;
                 if (text !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,
@@ -932,6 +944,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   );
                   if (updated.success && updated.transcription) {
                     finalTranscription = updated.transcription;
+                    translationApplied = translated && finalTranscription.text === text;
                   }
                 }
               } else {
@@ -968,11 +981,24 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               if (providerCleanedText || model || isCloud) {
                 const reasonedText =
                   providerCleanedText ||
-                  (await ReasoningService.processText(rawText, model, getAgentName(), {
-                    disableThinking: getSettings().cleanupDisableThinking,
-                    reasoningEffort: getSettings().cleanupReasoningEffort,
-                    requireCompleteOutput: true,
-                  }));
+                  (await ReasoningService.processText(
+                    rawText,
+                    model,
+                    getAgentName(),
+                    {
+                      ...getCleanupLanguageContext(
+                        result.transcription.route_kind === "translation"
+                          ? s.translationSourceLanguage
+                          : s.preferredLanguage,
+                        s.chineseScriptPreference
+                      ),
+                      disableThinking: getSettings().cleanupDisableThinking,
+                      reasoningEffort: getSettings().cleanupReasoningEffort,
+                      requireCompleteOutput: true,
+                    },
+                    markScriptHandled
+                  ));
+                if (cleanupHandledScript) scriptHandledText = reasonedText;
                 if (hasTextContent(reasonedText) && reasonedText !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,
@@ -995,8 +1021,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             }
           }
 
-          // Deterministic Chinese script pass, mirroring dictation (#975). Runs last so
-          // it covers the cleaned/translated text, or the raw transcript when neither ran.
+          // Preserve the accepted cleanup reply. Other text uses the same source or target
+          // fallback as live dictation, including a raw row retained after a failed write.
           // Same rule as audioManager.getEffectiveOutputLanguage: only a completed
           // translate step moves the text into the target language, so anything else
           // still has to be scripted as the language that was dictated.
@@ -1007,14 +1033,17 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     ? s.translationTargetLanguage
                     : s.translationSourceLanguage) || "auto"
                 : s.preferredLanguage;
-            const scripted = await applyChineseScript(
-              finalTranscription.text,
-              resolveChineseScriptTarget(
-                outputLanguage,
-                s.chineseScriptPreference,
-                finalTranscription.text
-              )
-            );
+            const scripted =
+              finalTranscription.text === scriptHandledText
+                ? finalTranscription.text
+                : await applyChineseScript(
+                    finalTranscription.text,
+                    resolveChineseScriptTarget(
+                      outputLanguage,
+                      s.chineseScriptPreference,
+                      finalTranscription.text
+                    )
+                  );
             if (scripted !== finalTranscription.text) {
               const updated = await window.electronAPI.updateTranscriptionText(
                 id,
