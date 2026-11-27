@@ -18,9 +18,10 @@ describe('localModelLanguages', () => {
   });
 
   it('lists every language the app offers for Whisper base, without Auto-detect', () => {
+    expect(labels('whisper-base')).toContain('Basque');
     expect(labels('whisper-base')).toContain('Hebrew');
     expect(labels('whisper-base')).not.toContain('Auto-detect');
-    expect(localModelLanguages('whisper-base')).toHaveLength(59);
+    expect(localModelLanguages('whisper-base')).toHaveLength(60);
   });
 
   it('sorts languages by name', () => {
