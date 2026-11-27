@@ -1036,7 +1036,7 @@
         "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
         "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。",
         "cleanupTruncated": "AI 模型的輸出長度達到上限，未能完成聽寫清理。",
-        "cleanupAddedText": "裝置端清理模型加入了你沒有說過的內容，因此已保留原始文字。請嘗試其他模型以獲得更好的效果。",
+        "cleanupAddedText": "清理模型加入了你沒有說過的內容，因此已保留原始文字。請嘗試其他模型以獲得更好的效果。",
         "cleanupDuplicated": "AI 清理重複了轉錄內容。已保留原始文字。",
         "cleanupEmptyReply": "AI 模型傳回空白回應，沒有產生清理後的文字。"
       },
