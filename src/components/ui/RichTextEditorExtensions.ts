@@ -77,8 +77,9 @@ export function createRichTextExtensions(
 ): Extensions {
   return [
     StarterKit.configure({
-      // The editor-block extensions replace these three with Markdown-aware versions
-      // (alignment, syntax colours); see createEditorBlockExtensions.
+      // The editor-block extensions replace these four with Markdown-aware versions
+      // (escaped "$", alignment, syntax colours); see createEditorBlockExtensions.
+      text: false,
       paragraph: false,
       heading: false,
       codeBlock: false,

@@ -37,8 +37,11 @@ const CALLOUT_RAW_RE = /^\\?\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\?\][ \t]*/i
 const CALLOUT_TEXT_RE = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*/i;
 const ALIGN_RE = /[ \t]\{align:(left|center|right|justify)\}[ \t]*$/;
 
-const SPAN_OPEN = /^\{(sub|sup|color|font|ruby)(?::((?:\\.|[^{}\\\n]){1,120}))?\}/;
-const SPAN_CLOSE = /^\{\/(sub|sup|color|font|ruby)\}/;
+// Sticky: matched at a position, so no rule copies the rest of the paragraph.
+const SPAN_OPEN = /\{(sub|sup|color|font|ruby)(?::((?:\\.|[^{}\\\n]){1,120}))?\}/y;
+const SPAN_CLOSE = /\{\/(sub|sup|color|font|ruby)\}/y;
+// Deeper nesting stays text, which keeps a run of unclosed spans linear to parse.
+const MAX_OPEN_SPANS = 32;
 const SAFE_COLOR = /^(#[0-9a-fA-F]{3,8}|[a-zA-Z]{3,24}|(rgb|hsl)a?\([\d\s.,%deg/]+\))$/;
 const SAFE_FONT = /^[\w\s\-'",.]{1,80}$/;
 
@@ -85,11 +88,12 @@ export function markdownSyntax(md: any) {
 
   // 2) {key:value}…{/key} spans (sub, sup, colour, font, ruby).
   md.inline.ruler.before("emphasis", "attribute_span", (state: any, silent: boolean) => {
-    if (state.src.charCodeAt(state.pos) !== 0x7b /* { */) return false;
-    const rest = state.src.slice(state.pos);
+    const { src, pos } = state;
+    if (src.charCodeAt(pos) !== 0x7b /* { */) return false;
     const stack: SpanFrame[] = (state.attributeSpans ||= []); // per paragraph, never leaks
 
-    const close = SPAN_CLOSE.exec(rest);
+    SPAN_CLOSE.lastIndex = pos;
+    const close = SPAN_CLOSE.exec(src);
     if (close) {
       const at = stack.map((f) => f.key).lastIndexOf(close[1]);
       if (at < 0) return false;
@@ -101,11 +105,12 @@ export function markdownSyntax(md: any) {
       return true;
     }
 
-    const open = SPAN_OPEN.exec(rest);
-    if (!open) return false;
+    SPAN_OPEN.lastIndex = pos;
+    const open = SPAN_OPEN.exec(src);
+    if (!open || stack.length >= MAX_OPEN_SPANS) return false;
     // Not when the only close is inside a code span.
-    const end = rest.indexOf(`{/${open[1]}}`, open[0].length);
-    if (end < 0 || rest.slice(0, end).replace(/\\./g, "").includes("`")) return false;
+    const end = spanCloseAfter(state, open[1], pos + open[0].length);
+    if (end < 0 || tickBetween(state, pos, end)) return false;
     const value = unescapeMd(open[2] ?? "").trim();
     const html = spanOpenHtml(open[1], value);
     if (!html) return false;
@@ -179,7 +184,8 @@ export function markdownSyntax(md: any) {
   md.inline.ruler.before("escape", "math_inline", (state: any, silent: boolean) => {
     const { src, pos } = state;
     if (src.charCodeAt(pos) !== 0x24 || src.charCodeAt(pos + 1) === 0x24) return false;
-    if (pos > 0 && src.charCodeAt(pos - 1) === 0x24) return false;
+    // Straight after a "$" (but not an escaped "\$", which is text).
+    if (pos > 0 && src.charCodeAt(pos - 1) === 0x24 && !escapedAt(src, pos - 1)) return false;
     const m = /^\$((?:\\.|[^$\\\n])+?)\$(?![\d$])/.exec(src.slice(pos));
     if (!m || /^\s|\s$/.test(m[1]) || m[1].replace(/\\./g, "").includes("`")) return false;
     if (!silent) {
@@ -290,6 +296,48 @@ export function markdownSyntax(md: any) {
     };
   md.renderer.rules.blockquote_open = renderQuote("open");
   md.renderer.rules.blockquote_close = renderQuote("close");
+}
+
+// Where the first {/key} at or after `from` starts, or -1. Each paragraph keeps
+// the last answer per key: it holds for every later `from` up to that close, so a
+// run of openers scans the paragraph once instead of once per opener.
+function spanCloseAfter(state: any, key: string, from: number): number {
+  const known: Record<string, { from: number; at: number }> = (state.spanCloses ||= {});
+  const last = known[key];
+  if (last && from >= last.from && (last.at < 0 || from <= last.at)) return last.at;
+  const at = state.src.indexOf(`{/${key}}`, from);
+  known[key] = { from, at };
+  return at;
+}
+
+// Whether an unescaped backtick lies in [from, to). The paragraph's backticks are
+// listed once.
+function tickBetween(state: any, from: number, to: number): boolean {
+  let ticks: number[] = state.spanTicks;
+  if (!ticks) {
+    ticks = state.spanTicks = [];
+    const src: string = state.src;
+    for (let i = 0; i < src.length; i++) {
+      const c = src.charCodeAt(i);
+      if (c === 0x5c) i++;
+      else if (c === 0x60) ticks.push(i);
+    }
+  }
+  let lo = 0,
+    hi = ticks.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (ticks[mid] < from) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo < ticks.length && ticks[lo] < to;
+}
+
+// Whether the character at `at` follows an odd run of backslashes.
+function escapedAt(src: string, at: number) {
+  let n = 0;
+  while (at - n - 1 >= 0 && src.charCodeAt(at - n - 1) === 0x5c) n++;
+  return n % 2 === 1;
 }
 
 function replaceParagraph(state: any, inlineIndex: number, html: string) {
