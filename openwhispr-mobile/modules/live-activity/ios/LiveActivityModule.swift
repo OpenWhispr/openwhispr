@@ -37,6 +37,11 @@ public class LiveActivityModule: Module {
         title: title, startedAt: Date(timeIntervalSince1970: startedAtMs / 1000))
     }
 
+    Function("setMeetingCapture") { (capturing: Bool, recordedSeconds: Int) in
+      LiveActivityController.shared.setMeetingCapture(
+        capturing: capturing, recordedSeconds: recordedSeconds)
+    }
+
     Function("setMeetingProcessing") { (recordedSeconds: Int) in
       LiveActivityController.shared.setMeetingProcessing(recordedSeconds: recordedSeconds)
     }

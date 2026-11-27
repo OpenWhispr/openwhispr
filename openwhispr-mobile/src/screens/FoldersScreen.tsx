@@ -18,7 +18,8 @@ import { PrivateWorkspaceSwitcher } from '@/components/notes/PrivateWorkspaceSwi
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { groupNotesByDate } from '@/lib/groupNotesByDate';
 import { safeHaptics } from '@/lib/utils';
-import { confirmDestructive } from '@/lib/alerts';
+import { alertMeetingNoteNotDeletable, confirmDestructive } from '@/lib/alerts';
+import { useLiveMeetingNoteId } from '@/components/notes/liveMeetingNote';
 import { SyncStatusLabel } from '@/components/notes/SyncStatusLabel';
 import { useManualSyncRefresh } from '@/hooks/useManualSyncRefresh';
 import { Fab, FAB_BOTTOM_PADDING, type FabAction } from '@/components/ui/Fab';
@@ -115,8 +116,15 @@ export default function FoldersScreen(): ReactElement {
     [setActiveNoteId],
   );
 
+  const liveMeetingNoteId = useLiveMeetingNoteId();
   const handleDeleteNote = useCallback(
     (id: number, restoreRow: RestoreRow) => {
+      // The store refuses it too; answering here keeps the swiped row from staying hidden.
+      if (id === liveMeetingNoteId) {
+        restoreRow();
+        alertMeetingNoteNotDeletable();
+        return;
+      }
       confirmDestructive(
         'Delete Note',
         'This note will be deleted permanently.',
@@ -127,7 +135,7 @@ export default function FoldersScreen(): ReactElement {
         { onCancel: restoreRow },
       );
     },
-    [deleteNote],
+    [deleteNote, liveMeetingNoteId],
   );
 
   const handleNewFolder = useCallback(() => {

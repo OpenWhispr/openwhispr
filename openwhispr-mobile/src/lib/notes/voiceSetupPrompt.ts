@@ -11,25 +11,25 @@ export interface VoiceSetupCandidate {
 }
 
 /**
- * The meeting-note banner. It only shows when That's me can work: the meeting was diarized
- * on this device and a speaker's sample is still held from it (samples don't survive a
- * restart), so it never opens onto an empty sheet.
+ * The meeting-note banner. It only shows when That's me can work: the meeting's speakers were
+ * labelled on this device and a speaker's sample is still held in memory from it (samples don't
+ * survive a restart), so it never opens onto an empty sheet. It never needs the recording.
  */
 export function shouldOfferVoiceSetup({
-  isOnDeviceMeeting,
+  hasSpeakerLabels,
   transcriptStatus,
   hasOwnerProfile,
   dismissed,
   candidateCount,
 }: {
-  isOnDeviceMeeting: boolean;
+  hasSpeakerLabels: boolean;
   transcriptStatus: string;
   hasOwnerProfile: boolean;
   dismissed: boolean;
   candidateCount: number;
 }): boolean {
   return (
-    isOnDeviceMeeting &&
+    hasSpeakerLabels &&
     transcriptStatus === 'done' &&
     !hasOwnerProfile &&
     !dismissed &&

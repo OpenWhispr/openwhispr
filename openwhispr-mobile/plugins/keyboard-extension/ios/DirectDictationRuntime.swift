@@ -82,11 +82,18 @@ final class DirectDictationRuntime {
       readCookie: { userId in KeyboardCredentialStore.readCookie(accessGroup: appGroupId, userId: userId) },
       readTone: { defaults?.string(forKey: "keyboard_dictation_tone") ?? "default" },
       readTranslation: { directDictationTranslation() },
+      readRoutePortTypes: {
+        let route = AVAudioSession.sharedInstance().currentRoute
+        return (route.inputs + route.outputs).map { $0.portType.rawValue }
+      },
       encode: { pcm, m4a, gain in try DirectAudioEncoder.encodeAAC(pcmURL: pcm, m4aURL: m4a, gain: gain) },
       // The job id format the keyboard already uses: <ms>-<UUID>.
       makeJobId: { "\(Int64(Date().timeIntervalSince1970 * 1000))-\(UUID().uuidString)" },
       makeBoundary: { "OpenWhispr-\(UUID().uuidString)" },
-      localTranscriber: localTranscriber
+      localTranscriber: localTranscriber,
+      isMeetingRecording: {
+        MeetingCaptureLease.isMeetingRecording(defaults: defaults, nowMs: Int64(Date().timeIntervalSince1970 * 1000))
+      }
     ))
     #if canImport(FluidAudio)
     parakeet.log = { [weak self] line in
@@ -97,15 +104,15 @@ final class DirectDictationRuntime {
   }
 
   /// The path is usable right now: the snapshot and the session allow it, OpenWhispr has the
-  /// microphone, and recording here wouldn't interrupt the user's audio.
+  /// microphone, and recording here wouldn't interrupt the user's audio. `isEligible` is false
+  /// while the app records a meeting (its capture-lease heartbeat), so the keyboard never takes
+  /// the microphone from one.
   var canRecordHere: Bool {
     guard hasContainer, readDocumentID?() != nil, dictation.isEligible, AVAudioApplication.shared.recordPermission == .granted else {
       return false
     }
-    let session = AVAudioSession.sharedInstance()
     return !DirectAudioRoute.blocksDirectCapture(
-      otherAudioPlaying: session.isOtherAudioPlaying,
-      outputPortTypes: session.currentRoute.outputs.map { $0.portType.rawValue }
+      otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying
     )
   }
 

@@ -60,12 +60,17 @@ struct DirectDependencies {
   var readTone: () -> String
   /// The keyboard's effective translation target and its English label; nil when Off.
   var readTranslation: () -> (code: String, label: String)?
+  /// The audio route's port types (`AVAudioSession.Port` raw values), read as a take starts.
+  var readRoutePortTypes: () -> [String]
   /// `DirectAudioEncoder.encodeAAC` in production; a file copy in tests.
   var encode: (_ pcmURL: URL, _ m4aURL: URL, _ gain: Float) throws -> Void
   var makeJobId: () -> String
   var makeBoundary: () -> String
   /// Parakeet in the keyboard; nil where it can't run, which leaves Local snapshots ineligible.
   var localTranscriber: DirectLocalTranscriber?
+  /// The app is recording a meeting (`MeetingCaptureLease`): a new take would take the
+  /// microphone from it, so none starts. A take already running is left alone.
+  var isMeetingRecording: () -> Bool = { false }
 }
 
 /// A dictation the keyboard records and transcribes itself when the app isn't running: uploaded
@@ -73,7 +78,6 @@ struct DirectDependencies {
 /// One per keyboard process: the view controller can be recreated mid-take, so it attaches to
 /// this object rather than owning it. Every call happens on the main thread.
 final class DirectDictation {
-  static let startTimeout: TimeInterval = 3
   static let takeCap: TimeInterval = 300
 
   private(set) var state: DirectDictationState = .idle {
@@ -198,8 +202,9 @@ final class DirectDictation {
   /// snapshot last changed, either a cookie exists (Cloud) or the snapshot's Parakeet model is
   /// loaded (Local), and a language picked in the keyboard is one this take can translate into,
   /// or exactly the dictation language. Reading it with a Local snapshot whose model isn't ready
-  /// asks the transcriber to load it.
-  var isEligible: Bool { newTakeContext() != nil }
+  /// asks the transcriber to load it. Never while the app records a meeting; the context is read
+  /// first so a warm-up still loads the model for the take after the meeting.
+  var isEligible: Bool { newTakeContext() != nil && !deps.isMeetingRecording() }
 
   /// As `isEligible` without the translation check, for preparing capture: picking Off later in
   /// the same keyboard session must find the microphone ready.
@@ -211,7 +216,8 @@ final class DirectDictation {
     default: return
     }
     // The target is the one the gate checked: one picked mid-take applies to the next dictation.
-    guard job == nil, let documentID = readDocumentID?(), let (config, eligible, translation) = newTakeContext()
+    // Re-checked here, not only by the pill: a meeting may have started since it was drawn.
+    guard job == nil, !deps.isMeetingRecording(), let documentID = readDocumentID?(), let (config, eligible, translation) = newTakeContext()
     else { return }
     let jobId = deps.makeJobId()
     let tone = deps.readTone()
@@ -251,7 +257,8 @@ final class DirectDictation {
     }
     state = .starting
     let token = nextToken
-    startTimer = deps.scheduler.after(Self.startTimeout) { [weak self] in
+    let startTimeout = DirectAudioRoute.startTimeout(portTypes: deps.readRoutePortTypes())
+    startTimer = deps.scheduler.after(startTimeout) { [weak self] in
       guard self?.job?.token == token else { return }
       self?.captureUnavailable()
     }

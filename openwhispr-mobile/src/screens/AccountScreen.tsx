@@ -437,6 +437,19 @@ export default function AccountScreen() {
           />
         </SettingsSection>
 
+        {__DEV__ ? (
+          <SettingsSection title="Developer">
+            <SettingsRow
+              icon="hammer"
+              mdIcon="Hammer"
+              iconBg={MUTED_ICON_BG}
+              title="Meeting debug"
+              description="Short session rotation and speaker pass timing"
+              onPress={() => router.push('/(account)/meeting-debug')}
+            />
+          </SettingsSection>
+        ) : null}
+
         <SettingsSection title="About">
           <SettingsRow
             iconStyle="line"

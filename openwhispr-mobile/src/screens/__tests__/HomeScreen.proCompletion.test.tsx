@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import type { Transcript } from '@/types';
 
 let mockRouteParams: { proCompletion?: string } = {};
@@ -130,7 +130,13 @@ jest.mock('@/lib/permissions', () => ({
   isNoSpeechError: jest.fn(() => false),
   showMicPermissionAlert: jest.fn(),
 }));
-jest.mock('@/lib/utils', () => ({ formatRelativeTime: jest.fn(), safeHaptics: jest.fn() }));
+const mockSafeHaptics = jest.fn();
+jest.mock('@/lib/utils', () => ({
+  formatRelativeTime: jest.fn(),
+  safeHaptics: (...args: unknown[]) => mockSafeHaptics(...args),
+}));
+let mockLeaseHeld = false;
+jest.mock('@/lib/captureLease', () => ({ isCaptureLeaseHeld: () => mockLeaseHeld }));
 jest.mock('@/config/colors', () => ({ BRAND: '#000000', iosColor: jest.fn(() => '#000000') }));
 jest.mock('../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: { getItem: jest.fn(), setItem: jest.fn() },
@@ -216,6 +222,29 @@ describe('HomeScreen Pro completion', () => {
 
     expect(mockRouterSetParams).not.toHaveBeenCalled();
     expect(Alert.alert).not.toHaveBeenCalled();
+  });
+});
+
+describe('HomeScreen dictation during a meeting', () => {
+  afterEach(() => {
+    mockLeaseHeld = false;
+  });
+
+  it('refuses the record button before the haptic or the paywall', async () => {
+    mockLeaseHeld = true;
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    render(<HomeScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('home-record-button'));
+    });
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Error',
+      'A meeting is being recorded. End it to dictate.',
+    );
+    expect(mockSafeHaptics).not.toHaveBeenCalled();
+    expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
   });
 });
 

@@ -35,6 +35,7 @@ const EXTENSION_FILES = [
   { name: 'DirectDictationAudio.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
   { name: 'DirectDictationConfig.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
   { name: 'DirectLocalTranscription.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'MeetingCaptureLease.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
   { name: 'KeyboardParakeetTranscriber.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
   { name: 'KeyGeometry.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
   { name: 'TypingLexicon.swift', fileType: 'sourcecode.swift', phase: 'Sources' },

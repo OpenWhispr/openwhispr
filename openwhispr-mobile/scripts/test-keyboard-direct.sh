@@ -17,6 +17,7 @@ swiftc -swift-version 5 -parse-as-library \
   "$IOS/DirectDictation.swift" \
   "$IOS/DirectAudioRoute.swift" \
   "$IOS/KeyboardCredentialStore.swift" \
+  "$IOS/MeetingCaptureLease.swift" \
   "$TESTS"/direct/*.swift \
   -o "$OUT"
 "$OUT" "$TESTS/fixtures"

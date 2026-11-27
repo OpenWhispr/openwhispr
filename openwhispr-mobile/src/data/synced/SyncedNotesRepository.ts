@@ -300,6 +300,10 @@ export class SyncedNotesRepository implements NotesRepository {
     requestSync('after-write');
   }
 
+  appendSegments(noteId: number, segments: NewSegment[]): void {
+    this.local.appendSegments(noteId, segments);
+  }
+
   // Cross-device transcript sync — pass through
   applyRemoteTranscript(noteId: number, raw: string): void {
     this.local.applyRemoteTranscript(noteId, raw);

@@ -1172,7 +1172,6 @@ test("Sarvam setup distinguishes an exhausted seat budget from a temporary rate 
   assert.ok(!spent.unverified);
   assert.equal((await check("rate_limit_exceeded_error")).unverified, true);
 });
-
 // What ElevenLabs answers a request that carries no audio, once it has accepted the key.
 const ELEVENLABS_NO_AUDIO = {
   detail: {

@@ -588,7 +588,7 @@ for (const when of ["before reconnect", "during token lookup", "during handshake
         },
       }
     );
-    target._stopMeetingForPolicy = (reason, _sessionId, auditReason) => {
+    target._stopMeetingForPolicy = (reason, _expectedSessionId, auditReason) => {
       policyStops.push([reason, auditReason]);
     };
     const recovery = reconnect();
@@ -634,7 +634,7 @@ test("a late token refusal from a stopped reconnect cannot end the next meeting"
 
 // Runs the real reconnect with its replay closures. The clients it connects record
 // what they are sent, under the source the meeting attached them for.
-function replayHarness({ mic, system }) {
+function reconnectReplayHarness({ mic, system }) {
   const start = source.indexOf("const resetMeetingReconnectAudio =");
   const end = source.indexOf("const assertMeetingAllowed =", start);
   const replayed = { mic: [], system: [] };
@@ -661,6 +661,8 @@ function replayHarness({ mic, system }) {
       Buffer,
       cancelMeetingReconnect: null,
       drainingMeetingStreams: new Map(),
+      meetingReplayIncomplete: false,
+      withMeetingSourceConnectOpts: (options) => options,
       meetingReconnectPromise: null,
       meetingLocalMode: false,
       meetingConnectionOptions: { provider: "elevenlabs-realtime", mode: "byok" },
@@ -701,7 +703,7 @@ test("a reconnect replays what its dropped clients never sent ahead of the outag
     disconnect: async () => {},
     takeUnsentAudio: () => unsent.splice(0),
   });
-  const run = replayHarness({
+  const run = reconnectReplayHarness({
     mic: dropped({ buffer: Buffer.from([1]), capturedAt: 1000 }),
     system: dropped({ buffer: Buffer.from([2]), capturedAt: 2000 }),
   });
@@ -723,7 +725,7 @@ test("a reconnect replays what its dropped clients never sent ahead of the outag
 
 test("a reconnect leaves the queue of a client that is still connected alone", async () => {
   let asked = false;
-  const run = replayHarness({
+  const run = reconnectReplayHarness({
     mic: { isConnected: false, disconnect: async () => {} },
     system: {
       isConnected: true,
@@ -740,7 +742,7 @@ test("a reconnect leaves the queue of a client that is still connected alone", a
 
 test("a reconnect takes nothing from a dropped client that queues nothing", async () => {
   // The other providers' clients send what they take, and have no queue to hand over.
-  const run = replayHarness({
+  const run = reconnectReplayHarness({
     mic: { isConnected: false, disconnect: async () => {} },
     system: null,
   });

@@ -2393,6 +2393,7 @@ export async function stopRecording(
       try {
         if (recordingNoteDeleted && !recordingNoteDeletedByUser) {
           await persistToRecordingCopy(recordingNoteId, transcript);
+          stopWriteFailed = false;
           return;
         }
         const result = await window.electronAPI?.updateNote?.(recordingNoteId, { transcript });
@@ -2401,10 +2402,10 @@ export async function stopRecording(
             await keepTranscriptOfDeletedNote(recordingNoteId, transcript);
           } else {
             await persistToRecordingCopy(recordingNoteId, null);
+            if (useMeetingRecordingStore.getState().recordingNoteId === recordingNoteId) {
+              throw new Error(result.error || "Failed to save transcript");
+            }
           }
-          // The note didn't take these rows, so a later merge can't count on them.
-          stopWriteFailed = true;
-          return;
         }
         stopWriteFailed = false;
       } catch (err) {
@@ -2429,10 +2430,10 @@ export async function stopRecording(
           : serializeTranscriptSegments(useMeetingRecordingStore.getState().segments)),
       stop: async () => {
         const seed = {
-          noteId: recordingNoteId,
+          noteId: useMeetingRecordingStore.getState().recordingNoteId,
           sequence: recordingSequence,
           seedLength: sessionSeedLength,
-          savedRowCount: finalSegments.length - sessionSeedLength,
+          savedRowCount: useMeetingRecordingStore.getState().segments.length - sessionSeedLength,
           fallbackTranscript: "",
           recorderName: sessionRecorderName,
         };
@@ -2484,9 +2485,19 @@ export async function stopRecording(
       },
     });
 
-    if (diarizationSessionId && stopWriteFailed) {
-      const seed = seedByDiarizationSession.get(diarizationSessionId);
-      if (seed) seed.savedRowCount = null;
+    const seed = diarizationSessionId
+      ? seedByDiarizationSession.get(diarizationSessionId)
+      : undefined;
+    if (seed) {
+      const current = useMeetingRecordingStore.getState();
+      // The stop write can create a recording copy while main drains the session.
+      // Its transcript starts with this session's speech, without the old note's seed.
+      if (seed.noteId !== current.recordingNoteId) {
+        seed.noteId = current.recordingNoteId;
+        seed.seedLength = sessionSeedLength;
+        seed.savedRowCount = current.segments.length - sessionSeedLength;
+      }
+      if (stopWriteFailed) seed.savedRowCount = null;
     }
 
     useMeetingRecordingStore.setState({
@@ -2565,7 +2576,8 @@ if (typeof window !== "undefined") {
   // result merges on top of the earlier one's persisted transcript.
   window.electronAPI?.onMeetingDiarizationComplete?.((data) => {
     enqueueDiarizationCompletion(async () => {
-      let targetNoteId = data?.noteId;
+      const payloadNoteId = data?.noteId;
+      let targetNoteId = payloadNoteId;
       if (targetNoteId == null) {
         await meetingRecordingStopBarrier.waitForPendingStop();
         if (data?.sessionId) seedByDiarizationSession.delete(data.sessionId);
@@ -2605,6 +2617,7 @@ if (typeof window !== "undefined") {
       }
 
       let persisted: NoteItem | null | undefined;
+      let seed: DiarizationSeed | undefined;
       try {
         // A newer stop can post its final write while getNote's IPC reply is in
         // flight. Reread after that stop before writing over its transcript.
@@ -2612,6 +2625,11 @@ if (typeof window !== "undefined") {
         do {
           stopAtRead = lastStoppingSequence;
           await meetingRecordingStopBarrier.waitForPendingStop();
+          seed = data.sessionId ? seedByDiarizationSession.get(data.sessionId) : undefined;
+          // Main names the note where the recording started. Only follow its
+          // copy when this session stopped there.
+          const copyId = recordingNoteCopies.get(payloadNoteId);
+          targetNoteId = copyId != null && seed?.noteId === copyId ? copyId : payloadNoteId;
           persisted = await window.electronAPI?.getNote?.(targetNoteId);
         } while (stopAtRead !== lastStoppingSequence);
       } catch (error) {
@@ -2621,17 +2639,7 @@ if (typeof window !== "undefined") {
           "meeting"
         );
       }
-      // Read after the getNote await: a skipped diarization is sent before the
-      // stop call that records this session's seed length returns.
-      const seed = data.sessionId ? seedByDiarizationSession.get(data.sessionId) : undefined;
       const seedLength = seed?.seedLength ?? 0;
-      // A session that went on in a copy of its vanished note stopped there: main still
-      // names the note it started on.
-      const copyId = recordingNoteCopies.get(targetNoteId);
-      if (copyId != null && seed?.noteId === copyId) {
-        targetNoteId = copyId;
-        persisted = await window.electronAPI?.getNote?.(copyId).catch(() => null);
-      }
       // No note means no safe base to merge into, and writing to a deleted one
       // would resurrect its tombstone in the sidebar, cloud mirror, and vector
       // index.

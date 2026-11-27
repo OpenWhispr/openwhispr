@@ -25,6 +25,27 @@ export function isLinkFromAnonymous(lastUserId: string): boolean {
   return notesRepository.getSyncState(ANONYMOUS_USER_KEY) === lastUserId;
 }
 
+// Links made during this run of the app, from the anonymous id to the account it became. The
+// token above is consumed by the sync run that links, so anything that started before the sign-up
+// and asks afterwards (a meeting still being processed) needs the answer kept here.
+const linkedAccounts = new Map<string, string>();
+
+/** Called by the sync run that treated `fromUserId` → `toUserId` as a link (isLinkFromAnonymous). */
+export function recordAccountLink(fromUserId: string, toUserId: string): void {
+  linkedAccounts.set(fromUserId, toUserId);
+}
+
+/**
+ * Whether the signed-in id changing from `previousUserId` to `nextUserId` is the same person
+ * linking their anonymous session to an account, by the rule sync uses to keep their local rows
+ * (isLinkFromAnonymous): either the run that linked already recorded it, or no run has yet and
+ * the token still names the previous id, so the next run will link.
+ */
+export function isAccountLink(previousUserId: string, nextUserId: string): boolean {
+  if (linkedAccounts.get(previousUserId) === nextUserId) return true;
+  return !linkedAccounts.has(previousUserId) && isLinkFromAnonymous(previousUserId);
+}
+
 export function clearAnonymousLink(): void {
   notesRepository.clearSyncState(ANONYMOUS_USER_KEY);
 }

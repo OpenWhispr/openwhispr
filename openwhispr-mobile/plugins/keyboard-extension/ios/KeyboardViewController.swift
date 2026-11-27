@@ -1479,6 +1479,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// The resting pill hands the dictation to the app (it reads "Tap to speak" either way).
   private var pillOpensApp = false
 
+  /// Whether the pill and the agent button were last drawn for a meeting the app is recording.
+  /// The poll redraws them when this goes out of date, so the handoff links never stay live over
+  /// a meeting that started (or stay off after one ended) while the keyboard sat open.
+  private var micDrawnForMeeting = false
+  private var agentDrawnForMeeting = false
+
   // Between viewWillAppear and viewWillDisappear: the only time the field may be read from a
   // deferred block.
   private var isKeyboardOnScreen = false
@@ -3351,6 +3357,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// Link overlay is enabled only for the handoff path — an in-place tap goes
   /// through requestStart() in the press handler instead.
   private func refreshAgentButton() {
+    let meetingRecording = KeyboardHandoffProvider.shared.isMeetingRecording()
+    agentDrawnForMeeting = meetingRecording
     // isAgentEnabled() already fails closed on a dead App Group; stating it
     // makes the intent greppable rather than incidental.
     guard hasFullAccess else {
@@ -3373,8 +3381,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       || hostIsOwnApp
       || provider.isContainingAppForeground()
     // The Link fires only for a usable, applicable, hand-off tap. When it isn't
-    // applicable the press handler shows the upgrade pill and swallows the tap.
-    agentLinkHosting?.view.isUserInteractionEnabled = applicable && !recordsInPlace
+    // applicable the press handler shows the upgrade pill and swallows the tap;
+    // during a meeting it shows the meeting hint, since the woken app would record.
+    agentLinkHosting?.view.isUserInteractionEnabled = applicable && !recordsInPlace && !meetingRecording
   }
 
 
@@ -4980,6 +4989,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     recordButton.removeTarget(self, action: #selector(handleStopRecordingTapped), for: .touchUpInside)
     recordButton.removeTarget(self, action: #selector(handleDirectRecordTapped), for: .touchUpInside)
     recordButton.removeTarget(self, action: #selector(handleInsertHeldTapped), for: .touchUpInside)
+    recordButton.removeTarget(self, action: #selector(handleMeetingRecordingTapped), for: .touchUpInside)
     recordButton.removeTarget(
       self, action: #selector(handleFullAccessPillTapped), for: .touchUpInside
     )
@@ -5059,27 +5069,87 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // With the app gone, the keyboard can still record and transcribe itself for Cloud users.
     // An alive app keeps its own path, which runs the full pipeline.
     let recordsDirect = !recordsInPlace && (directDictation?.canRecordHere ?? false)
-    dictationLinkHosting?.view.isUserInteractionEnabled = !(recordsInPlace || recordsDirect)
+    // A meeting the app is recording holds the microphone: every route below would take it (the
+    // warm mic's start, a take of the keyboard's own, the app opened to record), so the tap
+    // starts nothing and says why. The link stays off, since it opens the app with no callback.
+    let meetingRecording = KeyboardHandoffProvider.shared.isMeetingRecording()
+    micDrawnForMeeting = meetingRecording
+    let route = MeetingCaptureLease.micTapRoute(
+      meetingRecording: meetingRecording, recordsInPlace: recordsInPlace, recordsDirect: recordsDirect
+    )
+    dictationLinkHosting?.view.isUserInteractionEnabled = route == .handoff
 
-    if recordsInPlace {
+    switch route {
+    case .meetingRecording:
+      recordButton.addTarget(self, action: #selector(handleMeetingRecordingTapped), for: .touchUpInside)
+    case .inPlace:
       recordButton.addTarget(self, action: #selector(handleDarwinRecordTapped), for: .touchUpInside)
-    } else if recordsDirect {
+    case .direct:
       recordButton.addTarget(self, action: #selector(handleDirectRecordTapped), for: .touchUpInside)
+    case .handoff:
+      break
     }
 
     // The pill reads the same either way: when the keyboard can't record here (the on-device
     // model is still loading, music is playing, a model or route only the app runs), the tap
     // opens OpenWhispr through the link over the pill and the app takes the dictation.
     applyRecordButtonStyle(
-      title: "Tap to speak", image: CachedImages.brandLogoMark, opensApp: !(recordsInPlace || recordsDirect)
+      title: "Tap to speak", image: CachedImages.brandLogoMark, opensApp: route == .handoff
     )
     resetVoiceMeterBars()
     refreshAgentButton()
     logRecordMarker(
       "refreshRecordButton",
       extra:
-        "backgroundReady=\(backgroundReady) hostIsOwnApp=\(hostIsOwnApp) containingAppForeground=\(containingAppForeground) selfHosted=\(selfHosted) direct=\(recordsDirect)"
+        "backgroundReady=\(backgroundReady) hostIsOwnApp=\(hostIsOwnApp) containingAppForeground=\(containingAppForeground) selfHosted=\(selfHosted) direct=\(recordsDirect) meeting=\(meetingRecording)"
     )
+  }
+
+  /// The resting pill's tap while the app records a meeting. The meeting may have ended since
+  /// the pill was drawn; then the pill is redrawn for the route that is open again.
+  @objc private func handleMeetingRecordingTapped() {
+    logRecordMarker("handleMeetingRecordingTapped")
+    guard KeyboardHandoffProvider.shared.isMeetingRecording() else {
+      refreshRecordButton()
+      return
+    }
+    playKeyClick()
+    showMeetingRecordingHint()
+  }
+
+  /// True, after showing the hint, when a meeting the app is recording holds the microphone.
+  /// Every tap that would start audio asks this first, so none posts the start notification,
+  /// starts a take of its own or leaves a pending start behind.
+  private func micBlockedByMeeting() -> Bool {
+    guard KeyboardHandoffProvider.shared.isMeetingRecording() else { return false }
+    playKeyClick()
+    showMeetingRecordingHint()
+    return true
+  }
+
+  /// Redraws the pill for the meeting first, so the tap target and the link are the meeting's
+  /// while the hint shows (showTransientRecordState keeps whatever target the pill had).
+  private func showMeetingRecordingHint() {
+    refreshRecordButton()
+    showTransientRecordState(
+      title: MeetingCaptureLease.unavailableHint,
+      systemImage: "mic.slash.fill",
+      background: Palette.issue,
+      duration: 2.0
+    )
+  }
+
+  /// Called by the poll: a meeting started or ended while the keyboard sat open. Only a resting
+  /// pill is redrawn; a take, a pending start or a timed state redraws when it ends.
+  private func syncMicWithMeetingLease() {
+    let meetingRecording = KeyboardHandoffProvider.shared.isMeetingRecording()
+    if meetingRecording != micDrawnForMeeting, isRecordButtonAtRest {
+      refreshRecordButton()
+    } else if meetingRecording != agentDrawnForMeeting {
+      refreshAgentButton()
+      // The review card's follow-up wake link opens the app to record, so it follows too.
+      if isAgentReviewShown { refreshAgentReviewControls() }
+    }
   }
 
   private func showTransientRecordState(
@@ -5226,6 +5296,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     switch gesture.state {
     case .began:
       setRecordButtonPressed(true)
+      // At touch-down, before the link over the pill can open the app on touch-up: a meeting
+      // that started since the pill was drawn turns the link off now rather than at the next poll.
+      if isRecordButtonAtRest, KeyboardHandoffProvider.shared.isMeetingRecording() != micDrawnForMeeting {
+        refreshRecordButton()
+      }
     case .ended:
       setRecordButtonPressed(false)
       // When the pill opens the app, the tap itself is handled by the SwiftUI link
@@ -5262,6 +5337,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       UIView.animate(withDuration: 0.09, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
         self.agentButton.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
       }
+      // As the record pill: turn the handoff link off before touch-up if a meeting just started.
+      if KeyboardHandoffProvider.shared.isMeetingRecording() != agentDrawnForMeeting {
+        refreshAgentButton()
+      }
     case .ended:
       UIView.animate(withDuration: 0.09, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
         self.agentButton.transform = .identity
@@ -5296,6 +5375,16 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         background: Palette.issue,
         duration: 1.6
       )
+      return
+    }
+
+    // Before the compose request is written: either path would record over the meeting. The
+    // hint goes on the pill only at rest; a pill showing a take's progress ("Transcribing",
+    // "Insert dictation") keeps it, and the tap only clicks.
+    if provider.isMeetingRecording() {
+      playKeyClick()
+      logRecordMarker("handleAgentButtonTapped.meetingRecording", extra: "pillAtRest=\(isRecordButtonAtRest)")
+      if isRecordButtonAtRest { showMeetingRecordingHint() }
       return
     }
 
@@ -5437,6 +5526,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func pollRecordingState() {
+    syncMicWithMeetingLease()
     if isAgentReviewShown { return }
     let provider = KeyboardHandoffProvider.shared
 
@@ -5521,6 +5611,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     recordButton.removeTarget(self, action: #selector(handleDarwinRecordTapped), for: .touchUpInside)
     recordButton.removeTarget(self, action: #selector(handleStopRecordingTapped), for: .touchUpInside)
     recordButton.removeTarget(self, action: #selector(handleDirectRecordTapped), for: .touchUpInside)
+    recordButton.removeTarget(self, action: #selector(handleMeetingRecordingTapped), for: .touchUpInside)
 
     showRecordingCanvas()
     logRecordMarker("enterRecordingMode")
@@ -5842,8 +5933,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   @objc private func handleDirectRecordTapped() {
     recordButton.removeTarget(self, action: #selector(handleDirectRecordTapped), for: .touchUpInside)
     logRecordMarker("handleDirectRecordTapped")
-    // Music or Bluetooth audio may have started since the pill was drawn; recording here would
-    // stop it for good, so the audio is checked at the tap.
+    // A meeting may have started since the pill was drawn.
+    if micBlockedByMeeting() { return }
+    // Music may have started since the pill was drawn; recording here would stop it for good,
+    // so the audio is checked at the tap.
     guard let direct = directDictation, direct.canRecordHere else {
       refreshRecordButton()
       return
@@ -5860,6 +5953,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   @objc private func handleDarwinRecordTapped() {
     guard !isDarwinStartPending, !isRemoteRecordingActive else { return }
+    // A meeting may have started since the pill was drawn: no start notification, no pending start.
+    if micBlockedByMeeting() {
+      logRecordMarker("handleDarwinRecordTapped.meetingRecording")
+      return
+    }
 
     recordButton.removeTarget(self, action: #selector(handleDarwinRecordTapped), for: .touchUpInside)
     recordButton.removeTarget(self, action: #selector(handleStopRecordingTapped), for: .touchUpInside)
@@ -6227,7 +6325,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // tap opens OpenWhispr instead of writing an action the dead app can't serve.
     let appAlive = KeyboardHandoffProvider.shared.isAppHeartbeatFresh()
     agentReviewRegenerateWakeLink?.view.isUserInteractionEnabled = !appAlive
-    agentReviewFollowUpWakeLink?.view.isUserInteractionEnabled = !appAlive
+    // The follow-up wake opens the app to record; never over a meeting (the regenerate wake
+    // records nothing). The app's heartbeat reads stale for the whole meeting (holding the
+    // capture lease stops it), so without this the wake link would take the tap; with it off,
+    // the button's own handler shows the meeting hint.
+    agentReviewFollowUpWakeLink?.view.isUserInteractionEnabled =
+      !appAlive && !KeyboardHandoffProvider.shared.isMeetingRecording()
   }
 
   /// Fades the card out. Fully dismisses (clearState: true) after insert/dismiss;
@@ -6320,6 +6423,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   @objc private func handleAgentReviewFollowUpTapped() {
     guard isAgentReviewShown, !isAgentGenerating, !isDarwinStartPending, !isRemoteRecordingActive else { return }
     let provider = KeyboardHandoffProvider.shared
+    // The follow-up records; the card stays up and says why instead. Checked before the app's
+    // liveness: holding the capture lease stops the app's keep-alive heartbeat, so the app reads
+    // as stale for the whole meeting and that guard would swallow the tap with no word.
+    if provider.isMeetingRecording() {
+      playKeyClick()
+      logRecordMarker("handleAgentReviewFollowUpTapped.meetingRecording")
+      flashAgentReviewNote(MeetingCaptureLease.unavailableHint)
+      return
+    }
     guard provider.isAppHeartbeatFresh() else {
       refreshAgentReviewControls()
       return
@@ -6573,6 +6685,14 @@ private struct KeyboardHandoffProvider {
 
   /// The App Group's defaults; nil without Full Access.
   func sharedDefaults() -> UserDefaults? { UserDefaults(suiteName: appGroupId) }
+
+  /// The app is recording a meeting: its capture-lease heartbeat is fresh. Nothing in the
+  /// keyboard may start audio then (see MeetingCaptureLease).
+  func isMeetingRecording() -> Bool {
+    MeetingCaptureLease.isMeetingRecording(
+      defaults: sharedDefaults(), nowMs: Int64(Date().timeIntervalSince1970 * 1000)
+    )
+  }
 
   /// The App Group container, where learned words and emoji recents are kept.
   func containerURL() -> URL? {

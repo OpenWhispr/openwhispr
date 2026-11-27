@@ -79,6 +79,18 @@ const normalizedText = (text: string): string => text.trim().replace(/\s+/g, ' '
 const joinText = (left: string, right: string): string =>
   [left, right].map(normalizedText).filter(Boolean).join(' ');
 
+// Cloud meetings carry no speaker labels, so without these limits the whole recording would
+// merge into one block under a single timestamp.
+export const UNLABELED_BLOCK_GAP_MS = 2000;
+export const UNLABELED_BLOCK_MAX_MS = 60000;
+
+// A start before the block's own start is a timeline that jumped backwards (e.g. timings
+// from before a fix stamped a reconnected leg from 0); merging it would swallow everything after.
+const continuesUnlabeledBlock = (previous: TranscriptBlock, segment: Segment): boolean =>
+  segment.startMs >= previous.startMs &&
+  segment.startMs - previous.endMs < UNLABELED_BLOCK_GAP_MS &&
+  segment.startMs - previous.startMs < UNLABELED_BLOCK_MAX_MS;
+
 export const groupTranscriptSegments = (
   segments: Segment[],
   speakers: Speaker[],
@@ -99,7 +111,10 @@ export const groupTranscriptSegments = (
     if (!text) return blocks;
 
     const previous = blocks[blocks.length - 1];
-    if (previous?.speakerName === speakerName) {
+    const joinsPrevious = entry
+      ? previous?.speakerName === speakerName
+      : previous?.speakerId === null && continuesUnlabeledBlock(previous, segment);
+    if (previous && joinsPrevious) {
       previous.text = joinText(previous.text, text);
       previous.endMs = Math.max(previous.endMs, segment.endMs);
       previous.segmentIds.push(segment.id);

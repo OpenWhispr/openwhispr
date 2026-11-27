@@ -370,8 +370,7 @@ test("ElevenLabs times resumed speech from the native capture clock after idle k
   // The client paces what it sends, and holds it behind the gap's unanswered commit.
   advance(3000);
   finalizeSpeech(1);
-  // The resumed chunk arrived at 7000 holding 100 ms, so its first sample is 6900.
-  assert.deepEqual(timestamps, [6900]);
+  assert.deepEqual(timestamps, [6900], "100 ms of audio starts before its delivery at 7000");
 });
 
 for (const provider of ["deepgram", "corti", "elevenLabs"]) {

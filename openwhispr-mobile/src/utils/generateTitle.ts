@@ -21,6 +21,24 @@ export function deriveLocalTitle(text: string): string {
     .trim();
 }
 
+const WRAPPING_QUOTES = /^["'“”‘’]+|["'“”‘’]+$/g;
+const HEADING_MARKS = /^#{1,6}\s+/;
+const PAIRED_EMPHASIS = /(\*\*|__)(.+?)\1/g;
+const WRAPPING_MARKS = /^([*_`])(.+)\1$/;
+
+/**
+ * Models, the on-device one especially, often answer in Markdown despite the prompt, and the
+ * title is shown as plain text, so `**Title**` would keep its asterisks.
+ */
+export function cleanGeneratedTitle(raw: string): string {
+  let title = raw.trim().replace(WRAPPING_QUOTES, '').trim();
+  title = title.replace(HEADING_MARKS, '').replace(PAIRED_EMPHASIS, '$2').trim();
+  const wrapped = WRAPPING_MARKS.exec(title);
+  if (wrapped) title = wrapped[2].trim();
+  title = title.replace(WRAPPING_QUOTES, '').trim();
+  return /^[*_`#\s]*$/.test(title) ? '' : title;
+}
+
 export async function generateNoteTitle(
   text: string,
   routing?: ReasoningRoutingOptions,
@@ -37,7 +55,7 @@ export async function generateNoteTitle(
       temperature: 0.3,
       routing,
     });
-    const cleaned = result.text.trim().replace(/^["']|["']$/g, '');
+    const cleaned = cleanGeneratedTitle(result.text);
     return cleaned.length > 0 && cleaned.length < MAX_TITLE_CHARS ? cleaned : '';
   } catch {
     return '';
