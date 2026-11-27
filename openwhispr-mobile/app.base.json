@@ -9,7 +9,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "backgroundColor": "#007AFF"
+      "backgroundColor": "#2F5BEA"
     },
     "ios": {
       "supportsTablet": true,
@@ -95,7 +95,7 @@
       [
         "expo-notifications",
         {
-          "color": "#007AFF"
+          "color": "#2F5BEA"
         }
       ],
       [

@@ -1,6 +1,6 @@
 import { PlatformColor } from 'react-native';
 
-export const BRAND = '#007AFF';
+export const BRAND = '#2F5BEA';
 
 // OpenWhispr brand gradient for primary surfaces (buttons, avatar). Mirrors
 // the logo gradient: #5B81E4 → #154BD4 → #163992. Mirrors the keyboard extension's dictation
@@ -12,7 +12,7 @@ export const BRAND_GRADIENT = ['#5B81E4', '#154BD4', '#163992'] as const;
 
 // App-wide page background. Overrides iOS `systemBackground` so the warm tone
 // appears uniformly across screens and components that read this token.
-export const APP_BACKGROUND = '#F8F6F5';
+export const APP_BACKGROUND = '#F7F7F9';
 
 const ANDROID_FALLBACKS: Record<string, string> = {
   label: '#000000',
