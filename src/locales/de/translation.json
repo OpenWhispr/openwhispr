@@ -164,7 +164,8 @@
     "close": "Schließen"
   },
   "windows": {
-    "pttUnavailable": "Der OpenWhispr-Tasten-Listener ist nicht verfügbar."
+    "pttUnavailable": "Der OpenWhispr-Tasten-Listener ist nicht verfügbar.",
+    "listenerBlocked": "Windows hat den OpenWhispr-Tasten-Listener blockiert, was Antivirensoftware tun kann. Bis du OpenWhispr neu startest, nutzt das Diktieren \"{{hotkey}}\" im Modus Tippen; Halten und Tastenkombinationen nur aus Modifikatortasten sind deaktiviert."
   },
   "common": {
     "continue": "Weiter",
@@ -5351,6 +5352,9 @@
       "hotkeyChanged": {
         "title": "Tastenkombination geändert",
         "description": "\"{{original}}\" war nicht verfügbar. Stattdessen wird \"{{fallback}}\" verwendet. Du kannst dies in den Einstellungen ändern."
+      },
+      "keyListenerBlocked": {
+        "title": "Tasten-Listener blockiert"
       },
       "hotkeyUnavailable": {
         "title": "Tastenkombination nicht verfügbar",

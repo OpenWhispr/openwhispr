@@ -164,7 +164,8 @@
     "close": "Close"
   },
   "windows": {
-    "pttUnavailable": "OpenWhispr's key listener isn't available."
+    "pttUnavailable": "OpenWhispr's key listener isn't available.",
+    "listenerBlocked": "Windows blocked OpenWhispr's key listener, which antivirus software can do. Until you restart OpenWhispr, dictation uses \"{{hotkey}}\" in Tap mode, and Hold and modifier-only shortcuts are off."
   },
   "common": {
     "continue": "Continue",
@@ -5351,6 +5352,9 @@
       "hotkeyChanged": {
         "title": "Hotkey changed",
         "description": "\"{{original}}\" was unavailable. Using \"{{fallback}}\" instead. You can change this in Settings."
+      },
+      "keyListenerBlocked": {
+        "title": "Key listener blocked"
       },
       "hotkeyUnavailable": {
         "title": "Hotkey unavailable",

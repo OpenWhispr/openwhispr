@@ -164,7 +164,8 @@
     "close": "閉じる"
   },
   "windows": {
-    "pttUnavailable": "OpenWhispr のキーリスナーを利用できません。"
+    "pttUnavailable": "OpenWhispr のキーリスナーを利用できません。",
+    "listenerBlocked": "Windows が OpenWhispr のキーリスナーをブロックしました。ウイルス対策ソフトが原因の場合があります。OpenWhispr を再起動するまで、音声入力は \"{{hotkey}}\" をタップモードで使用し、ホールドと修飾キーのみのショートカットは無効になります。"
   },
   "common": {
     "continue": "続ける",
@@ -4991,6 +4992,9 @@
       "hotkeyChanged": {
         "title": "ホットキーが変更されました",
         "description": "\"{{original}}\" が使用できませんでした。代わりに \"{{fallback}}\" を使用します。設定で変更できます。"
+      },
+      "keyListenerBlocked": {
+        "title": "キーリスナーがブロックされました"
       },
       "hotkeyUnavailable": {
         "title": "ホットキーが使用できません",

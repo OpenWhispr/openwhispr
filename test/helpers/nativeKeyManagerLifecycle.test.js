@@ -5,17 +5,29 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-function fixture(platform) {
+function fixture(platform, { spawnError, keys } = {}) {
   const children = [];
+  const timers = [];
+  let spawnCalls = 0;
   const context = {
     module: { exports: {} },
     __dirname,
     process: { platform, arch: "x64" },
+    setTimeout(callback, ms) {
+      const timer = { callback, ms, cleared: false };
+      timers.push(timer);
+      return timer;
+    },
+    clearTimeout(timer) {
+      if (timer) timer.cleared = true;
+    },
     require(name) {
       if (name === "./debugLogger") return { debug() {}, warn() {}, error() {} };
       if (name === "child_process") {
         return {
           spawn() {
+            spawnCalls++;
+            if (spawnError) throw spawnError;
             const child = new EventEmitter();
             child.stdout = Object.assign(new EventEmitter(), { setEncoding() {} });
             child.stderr = Object.assign(new EventEmitter(), { setEncoding() {} });
@@ -41,9 +53,27 @@ function fixture(platform) {
   for (const event of ["key-down", "key-up", "ready", "permission-denied", "error"]) {
     manager.on(event, () => events.push(event));
   }
+  const startupFailures = [];
+  manager.on("startup-failed", () => startupFailures.push(manager.checkAvailability().reason));
   const key = "Control+Space";
-  manager.setKeys([key]);
-  return { manager, children, events, key };
+  manager.setKeys(keys ?? [key]);
+  // Fires every pending timer of exactly `ms`, as if that much time had passed.
+  const elapse = (ms) => {
+    for (const timer of timers.splice(0)) {
+      if (timer.cleared) continue;
+      if (timer.ms === ms) timer.callback();
+      else timers.push(timer);
+    }
+  };
+  return {
+    manager,
+    children,
+    events,
+    key,
+    elapse,
+    startupFailures,
+    spawnCalls: () => spawnCalls,
+  };
 }
 
 for (const platform of ["linux", "win32"]) {
@@ -90,12 +120,12 @@ for (const platform of ["linux", "win32"]) {
 
   test(`${platform} delivers a final release split across process exit`, () => {
     const { manager, children, events } = fixture(platform);
-    children[0].stdout.emit("data", "KEY_DOWN\nKEY_");
+    children[0].stdout.emit("data", "READY\nKEY_DOWN\nKEY_");
     children[0].emit("exit", 0, null);
     children[0].stdout.emit("data", "UP\n");
     children[0].emit("close", 0, null);
 
-    assert.deepEqual(events, ["key-down", "key-up"]);
+    assert.deepEqual(events, ["ready", "key-down", "key-up"]);
     assert.equal(manager.listeners.size, 0);
   });
 
@@ -126,3 +156,115 @@ for (const platform of ["linux", "win32"]) {
     assert.equal(manager.listeners.size, 0);
   });
 }
+
+for (const failure of ["launch denial", "exit before READY"]) {
+  test(`win32 reports ${failure} as unavailable and stops retrying for the session`, () => {
+    const { manager, children, key } = fixture("win32");
+    const failures = [];
+    manager.on("startup-failed", () => failures.push(manager.checkAvailability().available));
+
+    const child = children[0];
+    if (failure === "launch denial") {
+      child.emit("error", Object.assign(new Error("Access is denied"), { code: "EACCES" }));
+      child.emit("close", -1, null);
+    } else {
+      child.emit("exit", 0, null);
+      child.emit("close", 0, null);
+    }
+
+    assert.equal(manager.checkAvailability().available, false);
+    assert.deepEqual(failures, [false], "recovery runs once, after the probe reflects failure");
+    manager.setKeys([key]);
+    assert.equal(children.length, 1);
+  });
+}
+
+test("win32 can restart a listener that exits after it has started", () => {
+  const { manager, children, key, events, elapse } = fixture("win32");
+  children[0].stdout.emit("data", "READY\n");
+  elapse(5000);
+  children[0].emit("exit", 1, null);
+  children[0].emit("close", 1, null);
+
+  assert.equal(manager.checkAvailability().available, true);
+  assert.deepEqual(events, ["ready", "error"]);
+  manager.setKeys([key]);
+  assert.equal(children.length, 2);
+});
+
+test("win32 keeps other listeners when one hotkey exits before READY", () => {
+  const { manager, children, key, events } = fixture("win32");
+  manager.setKeys([key, "UnsupportedKey"]);
+  children[1].emit("close", 1, null);
+  children[0].stdout.emit("data", "READY\nKEY_DOWN\nKEY_UP\n");
+
+  assert.equal(manager.checkAvailability().available, true);
+  assert.deepEqual(events, ["error", "ready", "key-down", "key-up"]);
+});
+
+test("win32 falls back when every listener exits before READY", () => {
+  const { manager, children, key } = fixture("win32");
+  manager.setKeys([key, "F9"]);
+  children[0].emit("close", 1, null);
+  assert.equal(manager.checkAvailability().available, true);
+  children[1].emit("close", 1, null);
+  assert.equal(manager.checkAvailability().available, false);
+});
+
+test("win32 treats a listener ended soon after READY as blocked", () => {
+  const { manager, children, key, events, startupFailures } = fixture("win32");
+  children[0].stdout.emit("data", "READY\n");
+  children[0].emit("close", 1, null);
+
+  assert.deepEqual(events, ["ready", "error"]);
+  assert.deepEqual(startupFailures, ["startup_failed"]);
+  assert.equal(manager.checkAvailability().reason, "startup_failed");
+  manager.setKeys([key]);
+  assert.equal(children.length, 1);
+});
+
+test("win32 stops and falls back when a listener never reports READY", () => {
+  const { manager, children, elapse, startupFailures } = fixture("win32");
+  elapse(10000);
+
+  assert.equal(children[0].killed, true);
+  assert.deepEqual(startupFailures, ["startup_failed"]);
+  assert.equal(manager.listeners.size, 0);
+  children[0].emit("close", null, "SIGTERM");
+  assert.deepEqual(
+    startupFailures,
+    ["startup_failed"],
+    "the killed helper's close is not reported again"
+  );
+});
+
+test("win32 READY clears the launch timeout", () => {
+  const { manager, children, elapse } = fixture("win32");
+  children[0].stdout.emit("data", "READY\n");
+  elapse(10000);
+  assert.equal(children[0].killed, undefined);
+  assert.equal(manager.checkAvailability().available, true);
+});
+
+test("win32 keeps working listeners when another key's launch errors", () => {
+  const { manager, children, key, events } = fixture("win32");
+  children[0].stdout.emit("data", "READY\n");
+  manager.setKeys([key, "F9"]);
+  children[1].emit("error", Object.assign(new Error("Too many open files"), { code: "EMFILE" }));
+
+  assert.equal(manager.checkAvailability().available, true);
+  assert.equal(manager.listeners.get(key), children[0]);
+  assert.deepEqual(events, ["ready", "error"]);
+});
+
+test("win32 falls back when spawn throws and starts no further listeners", () => {
+  const { manager, events, startupFailures, spawnCalls } = fixture("win32", {
+    spawnError: Object.assign(new Error("Access is denied"), { code: "EACCES" }),
+    keys: ["Control+Space", "F9"],
+  });
+
+  assert.equal(spawnCalls(), 1);
+  assert.deepEqual(events, ["error"]);
+  assert.deepEqual(startupFailures, ["startup_failed"]);
+  assert.equal(manager.listeners.size, 0);
+});

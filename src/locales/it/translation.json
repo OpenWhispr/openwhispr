@@ -164,7 +164,8 @@
     "close": "Chiudi"
   },
   "windows": {
-    "pttUnavailable": "Il listener di tasti di OpenWhispr non è disponibile."
+    "pttUnavailable": "Il listener di tasti di OpenWhispr non è disponibile.",
+    "listenerBlocked": "Windows ha bloccato il listener di tasti di OpenWhispr, cosa che può fare un antivirus. Finché non riavvii OpenWhispr, la dettatura usa \"{{hotkey}}\" in modalità Tocca, e Tieni premuto e le scorciatoie di soli tasti modificatori sono disattivati."
   },
   "common": {
     "continue": "Continua",
@@ -5013,6 +5014,9 @@
       "hotkeyChanged": {
         "title": "Scorciatoia modificata",
         "description": "\"{{original}}\" non era disponibile. Verrà usato \"{{fallback}}\" al suo posto. Puoi modificarlo nelle Impostazioni."
+      },
+      "keyListenerBlocked": {
+        "title": "Listener di tasti bloccato"
       },
       "hotkeyUnavailable": {
         "title": "Scorciatoia non disponibile",

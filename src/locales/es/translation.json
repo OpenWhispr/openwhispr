@@ -164,7 +164,8 @@
     "close": "Cerrar"
   },
   "windows": {
-    "pttUnavailable": "El detector de teclas de OpenWhispr no está disponible."
+    "pttUnavailable": "El detector de teclas de OpenWhispr no está disponible.",
+    "listenerBlocked": "Windows bloqueó el detector de teclas de OpenWhispr, algo que puede hacer el software antivirus. Hasta que reinicies OpenWhispr, el dictado usa \"{{hotkey}}\" en modo Pulsar, y Mantener y los atajos de solo modificadores están desactivados."
   },
   "common": {
     "continue": "Continuar",
@@ -5065,6 +5066,9 @@
       "hotkeyChanged": {
         "title": "Atajo cambiado",
         "description": "\"{{original}}\" no estaba disponible. Se usará \"{{fallback}}\" en su lugar. Puedes cambiarlo en Configuración."
+      },
+      "keyListenerBlocked": {
+        "title": "Detector de teclas bloqueado"
       },
       "hotkeyUnavailable": {
         "title": "Atajo no disponible",

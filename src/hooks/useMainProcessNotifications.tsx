@@ -3,8 +3,9 @@ import type { TFunction } from "i18next";
 import type { ToastContextType } from "../components/ui/useToast";
 
 /**
- * Surfaces main-process notifications (hotkey fallback/failure, GPU fallback,
- * learned dictionary corrections) as toasts in the dictation window.
+ * Surfaces main-process notifications (hotkey fallback/failure, a blocked
+ * Windows key listener, GPU fallback, learned dictionary corrections) as toasts
+ * in the dictation window.
  */
 export function useMainProcessNotifications({
   toast,
@@ -36,6 +37,19 @@ export function useMainProcessNotifications({
         duration: 10000,
       });
     });
+
+    // Sent when the helper was blocked and dictation switched to a Tap shortcut.
+    // Without a shortcut, the hotkey failure toast above already explains it.
+    const unsubscribeListenerBlocked = window.electronAPI?.onWindowsPushToTalkUnavailable?.(
+      (data) => {
+        if (data.reason !== "startup_failed" || !data.hotkey) return;
+        toast({
+          title: t("app.toasts.keyListenerBlocked.title"),
+          description: data.message,
+          duration: 12000,
+        });
+      }
+    );
 
     const showGpuFallbackToast = () => {
       let toastId: string;
@@ -94,6 +108,7 @@ export function useMainProcessNotifications({
     return () => {
       unsubscribeFallback?.();
       unsubscribeFailed?.();
+      unsubscribeListenerBlocked?.();
       unsubscribeCudaFallback?.();
       unsubscribeGpuFallback?.();
       unsubscribeCorrections?.();
