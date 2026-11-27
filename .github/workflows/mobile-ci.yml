@@ -174,16 +174,14 @@ jobs:
           node_modules/.bin/patch-package --error-on-fail
           node_modules/.bin/expo export --platform ios --no-bytecode --source-maps --max-workers 2 --output-dir "$RUNNER_TEMP/ios-fork"
           node "$GITHUB_WORKSPACE/openwhispr-mobile/scripts/check-android-ui-isolation.mjs" fingerprint --project . --export-dir "$RUNNER_TEMP/ios-fork" --out "$RUNNER_TEMP/ios-fork.json"
-      # Every difference from main's iOS app must be listed in scripts/android-ios-known-ios-diffs.json,
-      # and listed ones that are gone must be removed. The list only shrinks.
+      # Any difference from main's iOS app fails.
       - name: Keep the iOS app as main has it
         if: github.event.pull_request.base.ref != 'main'
         run: node scripts/check-android-ui-isolation.mjs compare-ios --head "$RUNNER_TEMP/ios-head.json" --fork "$RUNNER_TEMP/ios-fork.json"
       - name: Bundle Android with source maps
         if: github.event.pull_request.base.ref != 'main'
         run: node_modules/.bin/expo export --platform android --source-maps --max-workers 2 --output-dir "$RUNNER_TEMP/android-head"
-      # Android must end up loading no file iOS loads. scripts/android-ios-shared-baseline.txt lists
-      # the ones it still does; the list only shrinks.
+      # Android loads no file iOS loads; any shared file fails.
       - name: Keep Android off files iOS loads
         if: github.event.pull_request.base.ref != 'main'
         run: node scripts/check-android-ui-isolation.mjs shared --ios-export "$RUNNER_TEMP/ios-head" --android-export "$RUNNER_TEMP/android-head"

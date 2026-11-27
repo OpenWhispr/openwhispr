@@ -1,3 +1,0 @@
-# App files both the iOS and the Android bundle contain. Android must end up loading none of them:
-# this list only shrinks. Regenerate with `node scripts/check-android-ui-isolation.mjs shared ... --write`.
-

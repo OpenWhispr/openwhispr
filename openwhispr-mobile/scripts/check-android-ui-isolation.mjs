@@ -9,12 +9,10 @@
 //   fingerprint Writes what the iOS app is made of: its config and Info.plist, the generated Xcode
 //               project, native autolinking, every module the iOS bundle contains (by content) with
 //               its package version, and the NativeWind style data.
-//   compare-ios Diffs two fingerprints (the PR's and the fork point's). Every difference must be
-//               listed in scripts/android-ios-known-ios-diffs.json; listed entries that no longer
-//               differ must be removed. The list only shrinks, to empty.
-//   shared      Lists app files both bundles contain and checks them against
-//               scripts/android-ios-shared-baseline.txt the same way. Android must end up loading
-//               no file iOS loads.
+//   compare-ios Diffs two fingerprints (the PR's and the fork point's). Any difference fails:
+//               Android work never changes what the iOS app is built from.
+//   shared      Lists app files both bundles contain. Any one fails: Android loads no file iOS
+//               loads.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -474,72 +472,26 @@ export function diffFingerprints(head, fork) {
   return [...keys].filter((key) => head[key] !== fork[key]).sort();
 }
 
-// Both lists only shrink: a new entry fails, and so does a listed entry that is gone.
-export function ratchet(current, known) {
-  const knownSet = new Set(known);
-  const currentSet = new Set(current);
-  return {
-    added: current.filter((entry) => !knownSet.has(entry)),
-    stale: known.filter((entry) => !currentSet.has(entry)),
-  };
-}
-
-function report({ added, stale }, { what, file, fix }) {
-  if (added.length === 0 && stale.length === 0) {
-    console.log(`${what}: nothing beyond the ${file} list.`);
+function report(found, { what, fix }) {
+  if (found.length === 0) {
+    console.log(`${what}: none.`);
     return 0;
   }
-  if (added.length)
-    console.error(
-      `${what}: new, not allowed:\n${added.map((entry) => `  + ${entry}`).join('\n')}\n\n${fix}`,
-    );
-  if (stale.length)
-    console.error(
-      `${what}: these no longer apply; remove them from ${MOBILE}${file} (run with --write):\n` +
-        stale.map((entry) => `  - ${entry}`).join('\n'),
-    );
+  console.error(`${what}:\n${found.map((entry) => `  + ${entry}`).join('\n')}\n\n${fix}`);
   return 1;
 }
 
-function readList(file) {
-  const full = path.join(mobileRoot, file);
-  if (!existsSync(full)) return [];
-  return file.endsWith('.json')
-    ? JSON.parse(readFileSync(full, 'utf8'))
-    : readFileSync(full, 'utf8')
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line && !line.startsWith('#'));
-}
-
-function writeList(file, entries, header) {
-  const full = path.join(mobileRoot, file);
-  writeFileSync(
-    full,
-    file.endsWith('.json')
-      ? `${JSON.stringify(entries, null, 2)}\n`
-      : `${header}\n${entries.join('\n')}\n`,
+function runCompareIos({ head, fork }) {
+  return report(
+    diffFingerprints(
+      JSON.parse(readFileSync(path.resolve(head), 'utf8')),
+      JSON.parse(readFileSync(path.resolve(fork), 'utf8')),
+    ),
+    {
+      what: 'iOS differs from main at the fork point',
+      fix: 'Android work must not change what the iOS app is built from. Move the change to an Android-only file.',
+    },
   );
-}
-
-const KNOWN_IOS = 'scripts/android-ios-known-ios-diffs.json';
-const SHARED_BASELINE = 'scripts/android-ios-shared-baseline.txt';
-
-function runCompareIos({ head, fork, write }) {
-  const current = diffFingerprints(
-    JSON.parse(readFileSync(path.resolve(head), 'utf8')),
-    JSON.parse(readFileSync(path.resolve(fork), 'utf8')),
-  );
-  if (write) {
-    writeList(KNOWN_IOS, current);
-    console.log(`Wrote ${current.length} known iOS differences to ${KNOWN_IOS}`);
-    return 0;
-  }
-  return report(ratchet(current, readList(KNOWN_IOS)), {
-    what: 'iOS differs from main at the fork point',
-    file: KNOWN_IOS,
-    fix: 'Android work must not change what the iOS app is built from. Move the change to an Android-only file.',
-  });
 }
 
 export function sharedFiles(ios, android) {
@@ -547,27 +499,14 @@ export function sharedFiles(ios, android) {
   return appFiles(android).filter((file) => iosSet.has(file));
 }
 
-function runShared({ iosExport, androidExport, write }) {
-  const current = sharedFiles(
-    readSources(path.resolve(iosExport)),
-    readSources(path.resolve(androidExport)),
+function runShared({ iosExport, androidExport }) {
+  return report(
+    sharedFiles(readSources(path.resolve(iosExport)), readSources(path.resolve(androidExport))),
+    {
+      what: 'Android loads files iOS loads',
+      fix: 'Give Android its own copy (src/android/ or a .android.ts sibling) instead of importing the iOS file.',
+    },
   );
-  if (write) {
-    writeList(
-      SHARED_BASELINE,
-      current,
-      '# App files both the iOS and the Android bundle contain. Android must end up loading none of them:\n' +
-        '# this list only shrinks. Regenerate with `node scripts/check-android-ui-isolation.mjs shared ... --write`.',
-    );
-    console.log(`Wrote ${current.length} shared files to ${SHARED_BASELINE}`);
-    return 0;
-  }
-  console.log(`Android loads ${current.length} files the iOS bundle also loads.`);
-  return report(ratchet(current, readList(SHARED_BASELINE)), {
-    what: 'Android loads files iOS loads',
-    file: SHARED_BASELINE,
-    fix: 'Give Android its own copy (src/android/ or a .android.ts sibling) instead of importing the iOS file.',
-  });
 }
 
 // --- cli -------------------------------------------------------------------------------------
@@ -578,7 +517,6 @@ function main() {
     const index = args.indexOf(name);
     return index === -1 ? undefined : args[index + 1];
   };
-  const write = args.includes('--write');
   const need = (...names) => {
     const missing = names.filter((name) => !value(name));
     if (missing.length) {
@@ -603,13 +541,12 @@ function main() {
       });
     case 'compare-ios':
       need('--head', '--fork');
-      return runCompareIos({ head: value('--head'), fork: value('--fork'), write });
+      return runCompareIos({ head: value('--head'), fork: value('--fork') });
     case 'shared':
       need('--ios-export', '--android-export');
       return runShared({
         iosExport: value('--ios-export'),
         androidExport: value('--android-export'),
-        write,
       });
     default:
       console.error('usage: check-android-ui-isolation.mjs files|fingerprint|compare-ios|shared …');
