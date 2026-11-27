@@ -6,6 +6,25 @@ var fnInterrupted = false
 var lastModifierFlags: NSEvent.ModifierFlags = []
 var suppressedMouseButtons: Set<String> = []
 
+let minimumSupportedMouseButton = 3
+let maximumSupportedMouseButton = 32
+
+func canonicalMouseButtonName(_ value: String) -> String? {
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    let prefix = "MouseButton"
+    guard trimmed.count > prefix.count,
+          trimmed.lowercased().hasPrefix(prefix.lowercased())
+    else { return nil }
+
+    let suffix = String(trimmed.dropFirst(prefix.count))
+    guard let number = Int(suffix),
+          String(number) == suffix,
+          (minimumSupportedMouseButton...maximumSupportedMouseButton).contains(number)
+    else { return nil }
+
+    return "MouseButton\(number)"
+}
+
 struct ListenerConfig: Decodable {
     var mouseButtons: Set<String> = []
     var suppressGlobeAction: Bool = false
@@ -177,7 +196,7 @@ enum GlobeSystemAction {
 }
 
 func applyConfiguration(_ config: ListenerConfig) {
-    suppressedMouseButtons = config.mouseButtons
+    suppressedMouseButtons = Set(config.mouseButtons.compactMap(canonicalMouseButtonName))
     updateMouseEventTap()
     if config.suppressGlobeAction {
         GlobeSystemAction.apply()
@@ -211,14 +230,9 @@ let releases: [(NSEvent.ModifierFlags, String)] = [
 ]
 
 func mouseButtonName(_ buttonNumber: Int) -> String? {
-    switch buttonNumber {
-    case 3:
-        return "MouseButton4"
-    case 4:
-        return "MouseButton5"
-    default:
-        return nil
-    }
+    guard (minimumSupportedMouseButton - 1...maximumSupportedMouseButton - 1).contains(buttonNumber)
+    else { return nil }
+    return "MouseButton\(buttonNumber + 1)"
 }
 
 func emitMouseEvent(_ type: CGEventType, _ event: CGEvent) -> Bool {

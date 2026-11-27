@@ -74,8 +74,37 @@ function isGlobeLikeHotkey(hotkey) {
   return hotkey === "GLOBE" || hotkey === "Fn";
 }
 
+const MOUSE_BUTTON_NAME_PATTERN = /^MouseButton([3-9]|[12]\d|3[0-2])$/i;
+
+function canonicalizeMouseButtonHotkey(hotkey) {
+  if (typeof hotkey !== "string") return null;
+  const match = MOUSE_BUTTON_NAME_PATTERN.exec(hotkey.trim());
+  return match ? `MouseButton${Number(match[1])}` : null;
+}
+
 function isMouseButtonHotkey(hotkey) {
-  return /^MouseButton[45]$/i.test(hotkey || "");
+  return canonicalizeMouseButtonHotkey(hotkey) !== null;
+}
+
+// The Windows listener hooks only the middle and side buttons (3-5).
+function isMouseButtonSupportedOn(mouseButton, platform) {
+  if (platform === "darwin") return true;
+  return platform === "win32" && Number(mouseButton.slice("MouseButton".length)) <= 5;
+}
+
+function normalizeHotkeyList(value) {
+  return [
+    ...new Set(
+      parseHotkeyList(value).map((hotkey) => canonicalizeMouseButtonHotkey(hotkey) || hotkey)
+    ),
+  ];
+}
+
+function equivalentHotkey(left, right) {
+  return (
+    (canonicalizeMouseButtonHotkey(left) || left) ===
+    (canonicalizeMouseButtonHotkey(right) || right)
+  );
 }
 
 // macOS only reports a release for keys the native listener watches (Globe,
@@ -157,7 +186,8 @@ class HotkeyManager extends EventEmitter {
 
   set currentHotkey(value) {
     const slot = this._ensureSlot("dictation");
-    slot.hotkeys = value ? [value] : [];
+    const canonicalMouseButton = canonicalizeMouseButtonHotkey(value);
+    slot.hotkeys = value ? [canonicalMouseButton || value] : [];
     this.slots.set("dictation", slot);
   }
 
@@ -234,7 +264,7 @@ class HotkeyManager extends EventEmitter {
   }
 
   async registerSlot(slotName, hotkeyInput, callback, options) {
-    const hotkeys = parseHotkeyList(hotkeyInput);
+    const hotkeys = normalizeHotkeyList(hotkeyInput);
     if (hotkeys.length === 0) {
       return {
         success: false,
@@ -454,7 +484,9 @@ class HotkeyManager extends EventEmitter {
   // True if `key` is one of the hotkeys bound to `slotName`.
   slotHasHotkey(slotName, key) {
     if (!key) return false;
-    return (this.slots.get(slotName)?.hotkeys ?? []).includes(key);
+    return (this.slots.get(slotName)?.hotkeys ?? []).some((hotkey) =>
+      equivalentHotkey(hotkey, key)
+    );
   }
 
   // Debug-log line for a press or release of a bound hotkey: where it came from,
@@ -503,7 +535,7 @@ class HotkeyManager extends EventEmitter {
   findSlotByHotkey(key) {
     if (!key) return null;
     for (const [slotName, slot] of this.slots) {
-      if ((slot.hotkeys ?? []).includes(key)) return slotName;
+      if ((slot.hotkeys ?? []).some((hotkey) => equivalentHotkey(hotkey, key))) return slotName;
     }
     return null;
   }
@@ -513,14 +545,21 @@ class HotkeyManager extends EventEmitter {
    * instead of globalShortcut. Modifier-only and right-side-modifier combos never
    * register through globalShortcut, and in push-to-talk mode dictation also needs
    * raw key-down/key-up events. Only the dictation slot supports push-to-talk;
-   * every other slot is tap-to-toggle. Globe/mouse hotkeys are macOS-only.
+   * every other slot is tap-to-toggle. Globe hotkeys are macOS-only; mouse buttons also use the Windows listener.
    * Each slot may bind several hotkeys, so we evaluate every one.
    */
   getNativeListenerKeys(activationMode) {
     const keys = [];
     for (const [slotName, slot] of this.slots) {
       for (const hotkey of slot.hotkeys ?? []) {
-        if (!hotkey || isGlobeLikeHotkey(hotkey) || isMouseButtonHotkey(hotkey)) continue;
+        if (!hotkey || isGlobeLikeHotkey(hotkey)) continue;
+        const mouseButton = canonicalizeMouseButtonHotkey(hotkey);
+        if (mouseButton) {
+          if (process.platform === "win32" && isMouseButtonSupportedOn(mouseButton, "win32")) {
+            keys.push(mouseButton);
+          }
+          continue;
+        }
         const pushToTalk = slotName === "dictation" && activationMode === "push";
         if (pushToTalk || isModifierOnlyHotkey(hotkey) || isRightSideModifier(hotkey)) {
           keys.push(hotkey);
@@ -686,8 +725,9 @@ class HotkeyManager extends EventEmitter {
 
     for (const slotName of slotNames) {
       for (const hotkey of this.getSlotHotkeys(slotName)) {
-        if (isMouseButtonHotkey(hotkey)) {
-          mouseButtons.add(hotkey);
+        const mouseButton = canonicalizeMouseButtonHotkey(hotkey);
+        if (mouseButton) {
+          mouseButtons.add(mouseButton);
         } else if (isGlobeLikeHotkey(hotkey)) {
           suppressGlobeAction = true;
         }
@@ -731,14 +771,17 @@ class HotkeyManager extends EventEmitter {
   // hotkeys handled by native listeners.
   _registerSingleHotkey(hotkey, callback) {
     try {
-      if (isMouseButtonHotkey(hotkey)) {
-        if (process.platform !== "darwin") {
+      const mouseButton = canonicalizeMouseButtonHotkey(hotkey);
+      if (mouseButton) {
+        if (!isMouseButtonSupportedOn(mouseButton, process.platform)) {
           return { success: false, hotkey, error: i18nMain.t("hotkey.errors.mouseButtonOnlyMac") };
         }
+        const unavailable = this._nativeListenerUnavailable(hotkey);
+        if (unavailable) return unavailable;
         debugLogger.log(
-          `[HotkeyManager] Mouse button "${hotkey}" set - using macOS native listener`
+          `[HotkeyManager] Mouse button "${mouseButton}" set - using native mouse listener`
         );
-        return { success: true, hotkey, accelerator: null };
+        return { success: true, hotkey: mouseButton, accelerator: null };
       }
 
       if (isGlobeLikeHotkey(hotkey)) {
@@ -833,7 +876,7 @@ class HotkeyManager extends EventEmitter {
     }
 
     const slot = this._ensureSlot(slotName);
-    const desired = parseHotkeyList(hotkeyInput);
+    const desired = normalizeHotkeyList(hotkeyInput);
 
     debugLogger.log(
       `[HotkeyManager] Setting up hotkeys: "${desired.join(", ")}" for slot "${slotName}"`
@@ -950,7 +993,7 @@ class HotkeyManager extends EventEmitter {
             HyprlandShortcutManager.getCanonicalBinding(otherHotkey) === hyprlandBinding
         );
       const match =
-        otherHotkeys.includes(hotkey) ||
+        otherHotkeys.some((otherHotkey) => equivalentHotkey(otherHotkey, hotkey)) ||
         (accelerator && otherAccelerators.includes(accelerator)) ||
         hasEquivalentHyprlandBinding;
       if (match) {

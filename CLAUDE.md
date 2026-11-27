@@ -636,6 +636,7 @@ Native Windows support for true push-to-talk functionality using low-level keybo
 - Parses hotkey strings like `CommandOrControl+Shift+F11`
 - Maps modifiers: `CommandOrControl`/`Ctrl` → VK_CONTROL, `Alt`/`Option` → VK_MENU, `Shift` → VK_SHIFT
 - Verifies all required modifiers are held before emitting key events
+- Mouse buttons: `MouseButton3`–`MouseButton5` (middle, side) install a `WH_MOUSE_LL` hook instead and report through the same `KEY_DOWN`/`KEY_UP`, ignoring injected events and swallowing only the bound button. macOS takes buttons 3–32 through `macos-globe-listener`; left and right click are never bindable
 
 **Binary Distribution**:
 
