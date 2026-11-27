@@ -219,7 +219,7 @@ class HotkeyManager extends EventEmitter {
       suggestions = ["Control+Super", "Control+Shift+K", "Super+Shift+R"];
     }
 
-    const listenerMissing = this._isWindowsKeyListenerMissing();
+    const listenerUnavailable = this._isWindowsKeyListenerUnavailable();
     // A key another slot holds would only be refused as a conflict. Slots without
     // a callback are placeholders, not registered hotkeys.
     const boundHotkeys = new Set(
@@ -228,7 +228,7 @@ class HotkeyManager extends EventEmitter {
     const isUsable = (hotkey) =>
       hotkey !== failedHotkey &&
       !boundHotkeys.has(hotkey) &&
-      !(listenerMissing && isModifierOnlyHotkey(hotkey));
+      !(listenerUnavailable && isModifierOnlyHotkey(hotkey));
     const usable = suggestions.filter(isUsable);
     return (usable.length > 0 ? usable : FALLBACK_HOTKEYS.filter(isUsable)).slice(0, 3);
   }
@@ -538,16 +538,14 @@ class HotkeyManager extends EventEmitter {
         "settingsPage.general.hotkey.linuxPttPermissionDescription"
       )}`;
     }
-    if (process.platform === "win32" && hotkey) {
+    if (process.platform === "win32" && reason === "binary_missing" && hotkey) {
       return i18nMain.t("hotkey.errors.windowsKeyListenerMissing", { hotkey });
     }
     return i18nMain.t("windows.pttUnavailable");
   }
 
-  // Windows builds can ship without windows-key-listener.exe (#2005). Only it sees
-  // modifier-only and right-side-modifier hotkeys, so without it the defaults and
-  // suggestions must be regular keys.
-  _isWindowsKeyListenerMissing() {
+  // Only the Windows listener can see modifier-only and right-side hotkeys.
+  _isWindowsKeyListenerUnavailable() {
     return process.platform === "win32" && this.nativeListenerProbe?.().available === false;
   }
 
@@ -601,6 +599,31 @@ class HotkeyManager extends EventEmitter {
       return i18nMain.t("hotkey.errors.holdNeedsRegularKey");
     }
     return this._pushToTalkListenerBlockReason() ?? i18nMain.t("windows.pttUnavailable");
+  }
+
+  useWindowsDictationTapFallback() {
+    const slot = this._ensureSlot("dictation");
+    if (!slot.callback) return;
+
+    const unavailableHotkeys = slot.hotkeys.filter((_hotkey, index) => !slot.accelerators[index]);
+    if (unavailableHotkeys.length === 0) return;
+
+    const original = unavailableHotkeys.join(",");
+    const workingHotkeys = slot.hotkeys.filter((_hotkey, index) => slot.accelerators[index]);
+    if (workingHotkeys.length > 0) {
+      // Keep the accelerators that are already registered with Electron.
+      slot.hotkeys = workingHotkeys;
+      slot.accelerators = slot.accelerators.filter(Boolean);
+    } else if (
+      !FALLBACK_HOTKEYS.some((hotkey) => this.setupShortcuts(hotkey, slot.callback).success)
+    ) {
+      this.notifyHotkeyFailure(original, { error: i18nMain.t("windows.pttUnavailable") });
+      return;
+    }
+
+    const active = slot.hotkeys.join(",");
+    this.notifyActiveHotkey(active);
+    this.notifyHotkeyFallback(original, active);
   }
 
   async setActivationMode(mode) {
@@ -1372,10 +1395,10 @@ class HotkeyManager extends EventEmitter {
         const fallbackResult = this.setupShortcuts(fallback, callback);
         if (fallbackResult.success) {
           debugLogger.log(`[HotkeyManager] Fallback hotkey "${fallback}" registered successfully`);
-          // Only persist to .env (for loadSavedHotkeyOrDefault fallback path).
-          // Do NOT update localStorage — it holds the user's preferred hotkey so the
-          // app retries it on next startup once the conflict is resolved.
-          await this._persistHotkeyToEnvFile(fallback);
+          // A Windows listener failure only changes bindings for this session.
+          if (!this._isWindowsKeyListenerUnavailable()) {
+            await this._persistHotkeyToEnvFile(fallback);
+          }
           this.notifyActiveHotkey(fallback);
           this.notifyHotkeyFallback(replacedHotkey, fallback);
           return;
@@ -1476,7 +1499,7 @@ class HotkeyManager extends EventEmitter {
    */
   getEffectiveDefaultHotkey() {
     if (process.platform === "darwin") return "GLOBE";
-    if (this._isWindowsKeyListenerMissing()) return FALLBACK_HOTKEYS[0];
+    if (this._isWindowsKeyListenerUnavailable()) return FALLBACK_HOTKEYS[0];
     if (process.platform !== "linux") return DEFAULT_HOTKEY;
 
     const isX11 = !GnomeShortcutManager.isWayland();

@@ -35,6 +35,11 @@ jobs:
           cl /O2 /nologo resources/windows-key-listener.c /Fe:windows-key-listener.exe user32.lib
         shell: cmd
 
+      - name: Test Windows hotkey parsing
+        run: |
+          cl /O2 /nologo test/native/windowsKeyListenerHotkey.c /Fe:windows-key-listener-hotkey-test.exe user32.lib && windows-key-listener-hotkey-test.exe
+        shell: cmd
+
       - name: Verify binary
         run: |
           if (Test-Path "windows-key-listener.exe") {

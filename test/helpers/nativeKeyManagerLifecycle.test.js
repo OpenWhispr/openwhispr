@@ -90,12 +90,12 @@ for (const platform of ["linux", "win32"]) {
 
   test(`${platform} delivers a final release split across process exit`, () => {
     const { manager, children, events } = fixture(platform);
-    children[0].stdout.emit("data", "KEY_DOWN\nKEY_");
+    children[0].stdout.emit("data", "READY\nKEY_DOWN\nKEY_");
     children[0].emit("exit", 0, null);
     children[0].stdout.emit("data", "UP\n");
     children[0].emit("close", 0, null);
 
-    assert.deepEqual(events, ["key-down", "key-up"]);
+    assert.deepEqual(events, ["ready", "key-down", "key-up"]);
     assert.equal(manager.listeners.size, 0);
   });
 
@@ -126,3 +126,56 @@ for (const platform of ["linux", "win32"]) {
     assert.equal(manager.listeners.size, 0);
   });
 }
+
+for (const failure of ["launch denial", "exit before READY"]) {
+  test(`win32 reports ${failure} as unavailable and stops retrying for the session`, () => {
+    const { manager, children, key } = fixture("win32");
+    const failures = [];
+    manager.on("startup-failed", () => failures.push(manager.checkAvailability().available));
+
+    const child = children[0];
+    if (failure === "launch denial") {
+      child.emit("error", Object.assign(new Error("Access is denied"), { code: "EACCES" }));
+      child.emit("close", -1, null);
+    } else {
+      child.emit("exit", 0, null);
+      child.emit("close", 0, null);
+    }
+
+    assert.equal(manager.checkAvailability().available, false);
+    assert.deepEqual(failures, [false], "recovery runs once, after the probe reflects failure");
+    manager.setKeys([key]);
+    assert.equal(children.length, 1);
+  });
+}
+
+test("win32 can restart a listener that exits after READY", () => {
+  const { manager, children, key, events } = fixture("win32");
+  children[0].stdout.emit("data", "READY\n");
+  children[0].emit("exit", 1, null);
+  children[0].emit("close", 1, null);
+
+  assert.equal(manager.checkAvailability().available, true);
+  assert.deepEqual(events, ["ready", "error"]);
+  manager.setKeys([key]);
+  assert.equal(children.length, 2);
+});
+
+test("win32 keeps other listeners when one hotkey exits before READY", () => {
+  const { manager, children, key, events } = fixture("win32");
+  manager.setKeys([key, "UnsupportedKey"]);
+  children[1].emit("close", 1, null);
+  children[0].stdout.emit("data", "READY\nKEY_DOWN\nKEY_UP\n");
+
+  assert.equal(manager.checkAvailability().available, true);
+  assert.deepEqual(events, ["error", "ready", "key-down", "key-up"]);
+});
+
+test("win32 falls back when every listener exits before READY", () => {
+  const { manager, children, key } = fixture("win32");
+  manager.setKeys([key, "F9"]);
+  children[0].emit("close", 1, null);
+  assert.equal(manager.checkAvailability().available, true);
+  children[1].emit("close", 1, null);
+  assert.equal(manager.checkAvailability().available, false);
+});

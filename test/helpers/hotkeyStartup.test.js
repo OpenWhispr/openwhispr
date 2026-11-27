@@ -3,7 +3,15 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const { EventEmitter } = require("node:events");
+const React = require("react");
+const { createRoot } = require("react-dom/client");
 const GnomeShortcutManager = require("../../src/helpers/gnomeShortcut");
+const {
+  createRendererServer,
+  installBrowserGlobals,
+  installHookDom,
+} = require("../lib/rendererTestHarness");
 
 const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/hotkeyManager.js"), "utf8");
 const tick = () => new Promise((resolve) => setImmediate(resolve));
@@ -16,6 +24,15 @@ function fixture(
 ) {
   const timers = [];
   const registrations = [];
+  const globalShortcuts = new Map();
+  const notifications = [];
+  const window = {
+    isDestroyed: () => false,
+    webContents: {
+      executeJavaScript: async () => savedHotkey,
+      send: (...args) => notifications.push(args),
+    },
+  };
   const register = async (hotkey, push) => {
     registrations.push({ hotkey, push });
     return registrationResult;
@@ -42,8 +59,20 @@ function fixture(
   }
   const mocks = {
     events: require("node:events"),
-    electron: { globalShortcut: { unregisterAll() {} }, BrowserWindow: {} },
-    "./debugLogger": { log() {}, warn() {}, error() {} },
+    electron: {
+      globalShortcut: {
+        register(accelerator, callback) {
+          if (globalShortcuts.has(accelerator)) return false;
+          globalShortcuts.set(accelerator, callback);
+          return true;
+        },
+        isRegistered: (accelerator) => globalShortcuts.has(accelerator),
+        unregister: (accelerator) => globalShortcuts.delete(accelerator),
+        unregisterAll: () => globalShortcuts.clear(),
+      },
+      BrowserWindow: { getAllWindows: () => [window] },
+    },
+    "./debugLogger": { debug() {}, log() {}, warn() {}, error() {} },
     "./gnomeShortcut": class extends GnomeShortcutManager {
       static isGnome() {
         return backend === "GNOME";
@@ -66,10 +95,6 @@ function fixture(
   };
   vm.runInNewContext(source, context);
   const manager = new context.module.exports();
-  manager.notifyActiveHotkey =
-    manager.notifyHotkeyFailure =
-    manager.notifyHotkeyFallback =
-      () => {};
   manager._persistHotkeyToEnvFile = async () => {};
   // Only the portal and gsettings are faked: gsettings refuses what GNOME refuses.
   const gnome = {
@@ -100,7 +125,6 @@ function fixture(
       return true;
     },
   };
-  const webContents = { executeJavaScript: async () => savedHotkey };
   return {
     manager,
     cache,
@@ -108,7 +132,9 @@ function fixture(
     registrations,
     gnome,
     env: context.process.env,
-    window: { isDestroyed: () => false, webContents },
+    window,
+    globalShortcuts,
+    notifications,
   };
 }
 
@@ -438,4 +464,230 @@ test("startup checks Hold before the control panel opens and the hotkey register
   assert.notEqual(created, -1);
   const next = created + "  await windowManager.createMainWindow();\n".length;
   assert.ok(main.startsWith("  await checkStartupHold();\n", next));
+});
+
+async function triggerWindowsListenerStartupFailure(fixtureState, writes) {
+  const { cache, manager, window } = fixtureState;
+  const main = fs.readFileSync(path.join(__dirname, "../../main.js"), "utf8");
+  const helpers = main.slice(
+    main.indexOf("async function dropUnsupportedStartupHold() {"),
+    main.indexOf("// Main application startup")
+  );
+  const start = main.indexOf(
+    "  // Windows and Linux share the same native low-level key listener model"
+  );
+  const listenerSetup = main.slice(start, main.indexOf("\n}\n", start));
+  const windowsKeyManager = new EventEmitter();
+  vm.runInNewContext(`${helpers}\n${listenerSetup}`, {
+    process: { platform: "win32" },
+    hotkeyManager: manager,
+    windowsKeyManager,
+    windowManager: {
+      hotkeyManager: manager,
+      mainWindow: window,
+      getActivationMode: () => cache._cachedActivationMode,
+      setActivationModeCache: (mode) => cache.setActivationModeCache(mode),
+      resetWindowsPushState() {},
+      initializeNativeKeyListeners: async () => {},
+    },
+    isLiveWindow: (candidate) => candidate && !candidate.isDestroyed(),
+    environmentManager: { saveActivationMode: (mode) => writes.push(mode) },
+    debugLogger: { debug() {}, warn() {} },
+    i18nMain: { t: (key) => key },
+    BrowserWindow: { getAllWindows: () => [window] },
+    ipcMain: { on() {} },
+  });
+  manager.nativeListenerProbe = () => ({ available: false, reason: "startup_failed" });
+  windowsKeyManager.emit("startup-failed");
+  await tick();
+}
+
+for (const { savedHotkey, activeHotkeys } of [
+  { savedHotkey: "Control+Super", activeHotkeys: ["F9"] },
+  { savedHotkey: "Control+Super,F7,F10", activeHotkeys: ["F7", "F10"] },
+  { savedHotkey: "Control+Shift+Space", activeHotkeys: ["Control+Shift+Space"] },
+]) {
+  test(`Windows startup failure keeps ${savedHotkey} saved and enables ${activeHotkeys.join(",")} in Tap`, async () => {
+    const f = fixture(null, savedHotkey, true, "win32");
+    const triggered = [];
+    const writes = [];
+    f.env.DICTATION_KEY = savedHotkey;
+    f.env.ACTIVATION_MODE = "push";
+    f.manager._persistHotkeyToEnvFile = (hotkey) => writes.push(hotkey);
+    const meetingCallback = () => {};
+    await f.manager.registerSlot("meeting", "F8", meetingCallback);
+    const meetingBinding = f.globalShortcuts.get("F8");
+    await f.cache.setActivationModeCache("push");
+    await f.manager.initializeHotkey(f.window, (hotkey) => {
+      if (f.cache._cachedActivationMode === "tap") triggered.push(hotkey);
+    });
+    f.notifications.length = 0;
+    await triggerWindowsListenerStartupFailure(f, writes);
+
+    assert.equal(f.cache._cachedActivationMode, "tap");
+    assert.ok(f.notifications.some(([event]) => event === "windows-ptt-unavailable"));
+    assert.ok(
+      f.notifications.some(
+        ([event, data]) =>
+          event === "setting-updated" &&
+          data.key === "activationMode" &&
+          data.value === "tap" &&
+          data.persist === false
+      )
+    );
+    assert.deepEqual(Array.from(f.manager.getSlotHotkeys("dictation")), activeHotkeys);
+    for (const hotkey of activeHotkeys) f.globalShortcuts.get(hotkey)();
+    assert.deepEqual(triggered, activeHotkeys);
+    assert.equal(f.globalShortcuts.get("F8"), meetingBinding, "leave the other slot bound");
+    if (savedHotkey.startsWith("Control+Super")) {
+      assert.ok(
+        f.notifications.some(
+          ([event, data]) =>
+            event === "hotkey-fallback-used" && data.fallback === activeHotkeys.join(",")
+        )
+      );
+    }
+    assert.equal(f.env.DICTATION_KEY, savedHotkey);
+    assert.equal(f.env.ACTIVATION_MODE, "push");
+    assert.deepEqual(writes, []);
+  });
+}
+
+test("recreating the Windows dictation window after startup failure keeps the saved shortcut", async () => {
+  const f = fixture(null, "Control+Super", true, "win32");
+  const writes = [];
+  f.env.DICTATION_KEY = "Control+Super";
+  f.manager._persistHotkeyToEnvFile = async (hotkey) => writes.push(hotkey);
+  const callback = () => {};
+  await f.manager.registerSlot("meeting", "F8", callback);
+  await f.manager.initializeHotkey(f.window, callback);
+  await triggerWindowsListenerStartupFailure(f, writes);
+
+  await f.manager.initializeHotkey(f.window, callback);
+  await f.manager.registrationReady;
+
+  assert.equal(f.manager.getCurrentHotkey(), "F9");
+  assert.equal(f.env.DICTATION_KEY, "Control+Super");
+  assert.deepEqual(writes, []);
+});
+
+for (const fallbackTiming of ["before hydration", "during hydration", "after hydration"]) {
+  test(`the renderer shows the Tap fallback and keeps preferences when recovery happens ${fallbackTiming}`, async (t) => {
+    let settingUpdated;
+    let dictationKeyActive;
+    let recovered = fallbackTiming === "before hydration";
+    const recover = () => {
+      recovered = true;
+      settingUpdated?.({ key: "activationMode", value: "tap", persist: false });
+      dictationKeyActive?.("F9");
+    };
+    const { storage } = installBrowserGlobals(t, {
+      initialStorage: { activationMode: "push", dictationKey: "Control+Super" },
+      window: {
+        electronAPI: {
+          getActivationMode: async () => (recovered ? "tap" : "push"),
+          getActiveDictationKey: async () => (recovered ? "F9" : "Control+Super"),
+          async getTranslationKey() {
+            if (fallbackTiming === "during hydration") recover();
+            return "";
+          },
+          setDictionary: async () => ({ success: true }),
+          onSettingUpdated(callback) {
+            settingUpdated = callback;
+          },
+          onDictationKeyActive(callback) {
+            dictationKeyActive = callback;
+          },
+        },
+      },
+    });
+    const vite = await createRendererServer(t, { cachePrefix: "openwhispr-hotkey-startup-" });
+    const { initializeSettings, useSettingsStore } = await vite.ssrLoadModule(
+      "/stores/settingsStore.ts"
+    );
+    await initializeSettings();
+    if (fallbackTiming === "after hydration") recover();
+
+    assert.equal(useSettingsStore.getState().activationMode, "tap");
+    assert.equal(useSettingsStore.getState().activeDictationKey, "F9");
+    assert.equal(storage.getItem("activationMode"), "push");
+    assert.equal(storage.getItem("dictationKey"), "Control+Super");
+  });
+}
+
+test("Windows Settings stops offering Hold when the listener fails to start", async (t) => {
+  let root;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  let available = true;
+  let listenerUnavailable;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getHotkeyModeInfo: async () => ({
+          isUsingNativeShortcut: false,
+          isUsingHyprland: false,
+          supportsPushToTalk: available,
+          pushToTalkUnavailableReason: available ? null : "Windows key listener unavailable",
+        }),
+        onWindowsPushToTalkUnavailable(callback) {
+          listenerUnavailable = callback;
+          return () => {
+            listenerUnavailable = undefined;
+          };
+        },
+      },
+    },
+  });
+  const container = installHookDom(t);
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-hotkey-settings-" });
+  const { useHotkeyModeInfo } = await vite.ssrLoadModule("/hooks/useHotkeyModeInfo.ts");
+  let modeInfo;
+  function Settings() {
+    modeInfo = useHotkeyModeInfo("settings", "F9");
+    return null;
+  }
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Settings)));
+  assert.equal(modeInfo.supportsPushToTalk, true);
+
+  available = false;
+  await React.act(async () => listenerUnavailable?.({ reason: "startup_failed" }));
+  assert.equal(modeInfo.supportsPushToTalk, false);
+});
+
+test("a rejected Windows Hold retry does not save the session's Tap mode", async () => {
+  const main = fs.readFileSync(path.join(__dirname, "../../main.js"), "utf8");
+  const handler = main.slice(
+    main.indexOf("  let activationModeChangeQueue"),
+    main.indexOf('  ipcMain.on("floating-icon-auto-hide-changed"')
+  );
+  let onModeChanged;
+  const notifications = [];
+  const window = {
+    isDestroyed: () => false,
+    webContents: { send: (...args) => notifications.push(args) },
+  };
+  vm.runInNewContext(handler, {
+    process: { platform: "win32" },
+    windowsKeyManager: {
+      checkAvailability: () => ({ available: false, reason: "startup_failed" }),
+    },
+    windowManager: {
+      setActivationModeCache: async () => false,
+      getActivationMode: () => "tap",
+      resetWindowsPushState() {},
+      reconcileNativeKeyListeners() {},
+    },
+    BrowserWindow: { getAllWindows: () => [window] },
+    ipcMain: {
+      on: (_event, callback) => {
+        onModeChanged = callback;
+      },
+    },
+  });
+  onModeChanged(null, "push");
+  await tick();
+  assert.equal(notifications[0]?.[1].persist, false);
 });

@@ -1274,6 +1274,7 @@ async function dropUnsupportedStartupHold() {
           browserWindow.webContents.send("setting-updated", {
             key: "activationMode",
             value: "tap",
+            persist: false,
           });
         }
       }
@@ -1381,11 +1382,15 @@ async function startApp() {
         if (success) {
           environmentManager.saveActivationMode(effectiveMode);
         } else {
+          const listenerStartupFailed =
+            process.platform === "win32" &&
+            windowsKeyManager?.checkAvailability().reason === "startup_failed";
           for (const browserWindow of BrowserWindow.getAllWindows()) {
             if (!browserWindow.isDestroyed()) {
               browserWindow.webContents.send("setting-updated", {
                 key: "activationMode",
                 value: effectiveMode,
+                persist: !listenerStartupFailed,
               });
             }
           }
@@ -2112,7 +2117,28 @@ async function startApp() {
       debugLogger.debug("[Push-to-Talk] Native key listener ready and listening");
     });
 
-    if (!isWindows) {
+    if (isWindows) {
+      nativeKeyManager.once("startup-failed", async () => {
+        if (windowManager.isQuitting || !isLiveWindow(windowManager.mainWindow)) return;
+        try {
+          windowManager.resetWindowsPushState();
+          await dropUnsupportedStartupHold();
+          hotkeyManager.useWindowsDictationTapFallback();
+          for (const browserWindow of BrowserWindow.getAllWindows()) {
+            if (isLiveWindow(browserWindow)) {
+              browserWindow.webContents.send("windows-ptt-unavailable", {
+                reason: "startup_failed",
+                message: i18nMain.t("windows.pttUnavailable"),
+              });
+            }
+          }
+        } catch (error) {
+          debugLogger.warn("[Push-to-Talk] Windows hotkey fallback failed", {
+            error: error.message,
+          });
+        }
+      });
+    } else {
       nativeKeyManager.on("permission-denied", () => {
         debugLogger.warn(
           "[Push-to-Talk] Linux key listener has no permission to access input devices"

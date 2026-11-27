@@ -148,12 +148,19 @@ DWORD ParseKeyCode(const char* keyName) {
 
     // Special keys
     if (_stricmp(keyName, "Pause") == 0) return VK_PAUSE;
+    if (_stricmp(keyName, "PrintScreen") == 0) return VK_SNAPSHOT;
     if (_stricmp(keyName, "ScrollLock") == 0) return VK_SCROLL;
     if (_stricmp(keyName, "Insert") == 0) return VK_INSERT;
+    if (_stricmp(keyName, "Delete") == 0 || _stricmp(keyName, "Del") == 0) return VK_DELETE;
+    if (_stricmp(keyName, "Backspace") == 0) return VK_BACK;
     if (_stricmp(keyName, "Home") == 0) return VK_HOME;
     if (_stricmp(keyName, "End") == 0) return VK_END;
     if (_stricmp(keyName, "PageUp") == 0) return VK_PRIOR;
     if (_stricmp(keyName, "PageDown") == 0) return VK_NEXT;
+    if (_stricmp(keyName, "Left") == 0) return VK_LEFT;
+    if (_stricmp(keyName, "Up") == 0) return VK_UP;
+    if (_stricmp(keyName, "Right") == 0) return VK_RIGHT;
+    if (_stricmp(keyName, "Down") == 0) return VK_DOWN;
     if (_stricmp(keyName, "Space") == 0) return VK_SPACE;
     if (_stricmp(keyName, "Escape") == 0 || _stricmp(keyName, "Esc") == 0) return VK_ESCAPE;
     if (_stricmp(keyName, "Tab") == 0) return VK_TAB;
@@ -361,7 +368,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Log what we're listening for
-    fprintf(stderr, "Listening for: %s (VK=0x%02X, Ctrl=%d, Alt=%d, Shift=%d, Win=%d, ModOnly=%d)\n",
+    fprintf(stderr, "Listening for: %s (VK=0x%02lX, Ctrl=%d, Alt=%d, Shift=%d, Win=%d, ModOnly=%d)\n",
             argv[1], g_targetVk, g_requireCtrl, g_requireAlt, g_requireShift, g_requireWin, g_useModifiersOnly);
 
     // Set up console handler for clean shutdown

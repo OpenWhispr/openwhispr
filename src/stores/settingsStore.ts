@@ -4329,22 +4329,6 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
-    // Track what is actually registered, separately from the editable
-    // dictationKey preference so partial registrations never get persisted.
-    // May return constructor default during early startup; corrected by dictation-key-active event later.
-    try {
-      const activeKey = await window.electronAPI?.getActiveDictationKey?.();
-      if (activeKey) {
-        useSettingsStore.setState({ activeDictationKey: activeKey });
-      }
-    } catch (err) {
-      logger.warn(
-        "Failed to sync active dictation key on startup",
-        { error: (err as Error).message },
-        "settings"
-      );
-    }
-
     // Sync voice agent hotkey from main process
     try {
       const envKey = await window.electronAPI.getVoiceAgentKey?.();
@@ -4368,20 +4352,6 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync translation hotkey on startup",
-        { error: (err as Error).message },
-        "settings"
-      );
-    }
-
-    try {
-      let envMode = await window.electronAPI.getActivationMode?.();
-      if (envMode && envMode !== state.activationMode) {
-        if (isBrowser) localStorage.setItem("activationMode", envMode);
-        useSettingsStore.setState({ activationMode: envMode });
-      }
-    } catch (err) {
-      logger.warn(
-        "Failed to sync activation mode on startup",
         { error: (err as Error).message },
         "settings"
       );
@@ -4706,17 +4676,43 @@ export async function initializeSettings(): Promise<void> {
   });
 
   // Sync settings pushed from main process (e.g., hotkey changed in control panel)
-  window.electronAPI?.onSettingUpdated?.((data: { key: string; value: unknown }) => {
+  window.electronAPI?.onSettingUpdated?.((data) => {
     const state = useSettingsStore.getState();
     if (
       data.key in state &&
       typeof (state as unknown as Record<string, unknown>)[data.key] !== "function"
     ) {
-      localStorage.setItem(
-        data.key,
-        typeof data.value === "string" ? data.value : JSON.stringify(data.value)
-      );
+      if (data.persist !== false) {
+        localStorage.setItem(
+          data.key,
+          typeof data.value === "string" ? data.value : JSON.stringify(data.value)
+        );
+      }
       useSettingsStore.setState({ [data.key]: data.value });
     }
   });
+
+  // Read the active shortcut and mode after subscribing so a fallback during
+  // hydration reaches this window without persisting the temporary values.
+  try {
+    const activeKey = await window.electronAPI?.getActiveDictationKey?.();
+    if (activeKey) useSettingsStore.setState({ activeDictationKey: activeKey });
+  } catch (err) {
+    logger.warn(
+      "Failed to sync active dictation key on startup",
+      { error: (err as Error).message },
+      "settings"
+    );
+  }
+
+  try {
+    const mode = await window.electronAPI?.getActivationMode?.();
+    if (mode) useSettingsStore.setState({ activationMode: mode });
+  } catch (err) {
+    logger.warn(
+      "Failed to sync activation mode on startup",
+      { error: (err as Error).message },
+      "settings"
+    );
+  }
 }

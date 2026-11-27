@@ -20,6 +20,7 @@ class WindowsKeyManager extends EventEmitter {
     this.isSupported = process.platform === "win32";
     this.hasReportedError = false;
     this.hasReportedUnavailable = false;
+    this.startupFailed = false;
     this.listeners = new Map(); // key string -> child process
   }
 
@@ -28,7 +29,7 @@ class WindowsKeyManager extends EventEmitter {
    * key, stop listeners no longer wanted. Idempotent — safe to call repeatedly.
    */
   setKeys(keys) {
-    if (!this.isSupported) return;
+    if (!this.isSupported || this.startupFailed) return;
     const desired = new Set(keys.filter(Boolean));
 
     for (const key of [...this.listeners.keys()]) {
@@ -48,6 +49,7 @@ class WindowsKeyManager extends EventEmitter {
     }
 
     for (const key of desired) {
+      if (this.startupFailed) break;
       if (!this.listeners.has(key)) this._startKey(key, listenerPath);
     }
   }
@@ -61,7 +63,7 @@ class WindowsKeyManager extends EventEmitter {
       });
     } catch (error) {
       debugLogger.error("[WindowsKeyManager] Failed to spawn process", { error: error.message });
-      this.reportError(error);
+      this._reportStartupFailure(error);
       return;
     }
 
@@ -72,6 +74,11 @@ class WindowsKeyManager extends EventEmitter {
       binaryPath: listenerPath,
     });
 
+    let ready = false;
+    const handleLine = (line) => {
+      if (line === "READY") ready = true;
+      this.handleOutputLine(line, key);
+    };
     let lineBuffer = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
@@ -82,7 +89,7 @@ class WindowsKeyManager extends EventEmitter {
       for (const raw of lines) {
         if (this.listeners.get(key) !== child) return;
         const line = raw.trim();
-        if (line) this.handleOutputLine(line, key);
+        if (line) handleLine(line);
       }
     });
 
@@ -98,27 +105,28 @@ class WindowsKeyManager extends EventEmitter {
     child.on("error", (error) => {
       if (this.listeners.get(key) !== child) return;
       this.listeners.delete(key);
-      this.reportError(error);
+      if (ready) this.reportError(error);
+      else this._reportStartupFailure(error);
     });
 
     // exit can precede the final KEY_UP on stdout; close waits for the pipe to drain.
     child.on("close", (code, signal) => {
       const trailingLine = lineBuffer.trim();
       if (trailingLine && this.listeners.get(key) === child) {
-        this.handleOutputLine(trailingLine, key);
+        handleLine(trailingLine);
       }
 
-      // wasTracked is false for intentional stops (_stopKey deletes first), so this
-      // reports only unexpected exits — including signal crashes, where code is null.
-      const wasTracked = this.listeners.get(key) === child;
-      if (wasTracked) this.listeners.delete(key);
-      if (wasTracked && (code || signal)) {
-        this.reportError(
-          new Error(
-            `Windows key listener exited with code ${code ?? "null"} signal ${signal ?? "null"}`
-          )
-        );
-      }
+      // Intentional stops and spawn errors already retired the child.
+      if (this.listeners.get(key) !== child) return;
+      this.listeners.delete(key);
+      if (ready && !code && !signal) return;
+
+      const error = new Error(
+        `Windows key listener exited${ready ? "" : " before READY"} with code ${code ?? "null"} signal ${signal ?? "null"}`
+      );
+      // A helper can reject one key while other listeners still work.
+      if (ready || this.listeners.size > 0) this.reportError(error);
+      else this._reportStartupFailure(error);
     });
   }
 
@@ -165,14 +173,24 @@ class WindowsKeyManager extends EventEmitter {
    * Check if the listener binary is available
    */
   isAvailable() {
-    return this.resolveListenerBinary() !== null;
+    return !this.startupFailed && this.resolveListenerBinary() !== null;
   }
 
   // Same shape as LinuxKeyManager.checkAvailability, for HotkeyManager's probe.
   checkAvailability() {
+    if (this.startupFailed) return { available: false, reason: "startup_failed" };
     return this.isAvailable()
       ? { available: true }
       : { available: false, reason: "binary_missing" };
+  }
+
+  _reportStartupFailure(error) {
+    // Every watched key uses the same executable. A session in Tap can work
+    // without it and avoids relaunching a helper Windows may still be blocking.
+    this.startupFailed = true;
+    this.stop();
+    this.reportError(error);
+    this.emit("startup-failed");
   }
 
   /**

@@ -38,14 +38,16 @@ export function useHotkeyModeInfo(scope: string, hotkey?: string): HotkeyModeInf
 
   useEffect(() => {
     let cancelled = false;
-    const checkHotkeyMode = async () => {
+    let latestRequest = 0;
+    const checkHotkeyMode = async (): Promise<void> => {
+      const request = ++latestRequest;
       try {
         const info = await window.electronAPI?.getHotkeyModeInfo?.(hotkey);
-        if (!info || cancelled) return;
+        if (!info || cancelled || request !== latestRequest) return;
         const hyprlandConfigStatus = info.isUsingHyprland
           ? ((await window.electronAPI?.getHyprlandConfigStatus?.()) ?? null)
           : null;
-        if (cancelled) return;
+        if (cancelled || request !== latestRequest) return;
         setModeInfo({
           isUsingNativeShortcut: info.isUsingNativeShortcut,
           isUsingHyprland: info.isUsingHyprland,
@@ -59,9 +61,13 @@ export function useHotkeyModeInfo(scope: string, hotkey?: string): HotkeyModeInf
         logger.error("Failed to check hotkey mode", { error }, scope);
       }
     };
-    checkHotkeyMode();
+    const unsubscribe = window.electronAPI?.onWindowsPushToTalkUnavailable?.(({ reason }) => {
+      if (reason === "startup_failed") void checkHotkeyMode();
+    });
+    void checkHotkeyMode();
     return () => {
       cancelled = true;
+      unsubscribe?.();
     };
   }, [scope, hotkey]);
 
