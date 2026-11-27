@@ -302,3 +302,23 @@ test("another provider's audio still goes to main as it is captured", async (t) 
   assert.equal(await starting, true);
   assert.equal(calls.sent.length, 1);
 });
+
+test("AssemblyAI retains startup PCM until the streaming session accepts it", async (t) => {
+  const { manager, connect, calls, vite } = await load(t, { providerName: "assemblyai" });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  useSettingsStore.setState({ cloudTranscriptionMode: "byok" });
+  const starting = manager.startStreamingRecording();
+  await tick();
+
+  const first = Int16Array.of(1).buffer;
+  const second = Int16Array.of(2).buffer;
+  speak(manager, first, second);
+  const framesBeforeConnect = [...calls.sent];
+
+  connect.resolve({ success: true });
+  assert.equal(await starting, true);
+  const live = Int16Array.of(3).buffer;
+  speak(manager, live);
+  assert.deepEqual(framesBeforeConnect, []);
+  assert.deepEqual(calls.sent, [first, second, live]);
+});

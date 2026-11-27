@@ -192,6 +192,31 @@ test("cue, media pause and Escape act when recording begins, not when the connec
   assert.deepEqual(globalThis.__startEvents, STARTED, "must act once");
 });
 
+test("AssemblyAI cues once when capture begins while the provider is connecting", async (t) => {
+  const hook = await mountHook(t, { streaming: true, provider: "assemblyai", mode: "byok" });
+  let activeManager;
+  globalThis.__startOnStart = (manager) => {
+    activeManager = manager;
+    manager.report(RECORDING);
+    manager.report({ ...RECORDING, micCaptureStatus: "active" });
+  };
+
+  let started;
+  await React.act(async () => {
+    started = hook.api.startRecording();
+    await new Promise((resolve) => setImmediate(resolve));
+  });
+  await settle();
+  const eventsBeforeConnect = [...globalThis.__startEvents];
+
+  await React.act(async () => {
+    activeManager.finishStart(true);
+    await started;
+  });
+  assert.deepEqual(eventsBeforeConnect, ["start"]);
+  assert.deepEqual(globalThis.__startEvents, ["start", "pause", "register"]);
+});
+
 test("a streaming start that falls back to batch cues once and stays paused with Escape held", async (t) => {
   const hook = await mountHook(t);
   globalThis.__startOnStart = (manager) => {

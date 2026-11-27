@@ -5677,9 +5677,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this._recordingSpool = this._startRecordingSpool();
       this.startStreamingFallbackRecorder(stream);
 
-      // 2. Set up audio pipeline so frames flow the instant WebSocket is ready.
-      //    Frames sent before the connection is open are buffered (bounded) by
-      //    sendAudio(), not dropped. Managed Orukeet's wait in heldFrames instead.
+      // 2. Set up the audio pipeline to capture while the provider connects.
       const audioContext = await this.getOrCreateAudioContext();
       this.streamingAudioContext = audioContext;
       this.streamingSource = audioContext.createMediaStreamSource(stream);
@@ -5702,15 +5700,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // cannot change how this session's stream errors are handled. Only a
       // session whose fallback recorder started has a capture to fail over
       // to; stop finishes that recorder before a refused commit can arrive.
-      const managedOrukeet = isManagedOrukeetStream({
-        providerName,
-        cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
-      });
+      const { cloudTranscriptionMode } = getSettings();
+      const managedOrukeet = isManagedOrukeetStream({ providerName, cloudTranscriptionMode });
       const failsOver = Boolean(this.streamingFallbackRecorder) && managedOrukeet;
-      // Managed Orukeet cues the user before its session exists, and main can drop
-      // what reaches a connection it replaces (a warmup for another route, a failed
-      // one, a session retry). So its audio waits here until the session has started.
-      let heldFrames = managedOrukeet ? [] : null;
+      // These routes cue before the session exists. Keep their opening audio
+      // across token fetches and retries, outside the transport's bounded buffer.
+      let heldFrames =
+        managedOrukeet || (providerName === "assemblyai" && cloudTranscriptionMode === "byok")
+          ? []
+          : null;
 
       this.streamingProcessor.port.onmessage = (event) => {
         // The worklet posts its remaining PCM followed by a "flushed" sentinel

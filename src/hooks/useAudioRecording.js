@@ -342,14 +342,13 @@ export const useAudioRecording = (toast, options = {}) => {
         if (!current()) return false;
 
         const usesStreaming = manager.shouldUseStreaming();
-        const managedOrukeet =
-          usesStreaming &&
-          isManagedOrukeetStream({
-            providerName: manager.getStreamingProviderName?.(),
-            cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
-          });
+        const providerName = usesStreaming ? manager.getStreamingProviderName?.() : null;
+        const { cloudTranscriptionMode } = getSettings();
+        const managedOrukeet = isManagedOrukeetStream({ providerName, cloudTranscriptionMode });
+        const cueOnRecordingReport =
+          managedOrukeet || (providerName === "assemblyai" && cloudTranscriptionMode === "byok");
         startEffectsOnReportRef.current = managedOrukeet;
-        startCuePendingRef.current = managedOrukeet;
+        startCuePendingRef.current = cueOnRecordingReport;
         const didStart = usesStreaming
           ? await manager.startStreamingRecording()
           : await manager.startRecording();
@@ -394,7 +393,7 @@ export const useAudioRecording = (toast, options = {}) => {
             window.electronAPI?.pauseMediaPlayback?.();
           }
           window.electronAPI?.registerCancelHotkey?.("Escape");
-          void playStartCue();
+          if (!cueOnRecordingReport || startCuePendingRef.current) void playStartCue();
         }
 
         return didStart;
@@ -643,20 +642,16 @@ export const useAudioRecording = (toast, options = {}) => {
                 ? "preparing"
                 : "idle"
         );
-        // Managed Orukeet acts with the pill, not when the start resolves: its start
-        // stays pending on a cold connect for seconds while audio already buffers.
-        // A fallback to batch reports recording again after its not-recording report
-        // released these, so only the cue is once per start.
-        if (
-          isRecording &&
-          !wasRecordingRef.current &&
-          startEffectsOnReportRef.current &&
-          !stopRequestedDuringStartRef.current
-        ) {
-          if (getSettings().pauseMediaOnDictation) {
-            window.electronAPI?.pauseMediaPlayback?.();
+        // The cue can play when capture starts on routes that hold startup audio.
+        // Managed Orukeet also pauses media and arms Escape during the connect,
+        // reapplying them if a fallback reports recording again.
+        if (isRecording && !wasRecordingRef.current && !stopRequestedDuringStartRef.current) {
+          if (startEffectsOnReportRef.current) {
+            if (getSettings().pauseMediaOnDictation) {
+              window.electronAPI?.pauseMediaPlayback?.();
+            }
+            window.electronAPI?.registerCancelHotkey?.("Escape");
           }
-          window.electronAPI?.registerCancelHotkey?.("Escape");
           if (startCuePendingRef.current) {
             startCuePendingRef.current = false;
             void playStartCue();
