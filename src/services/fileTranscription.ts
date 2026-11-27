@@ -1,3 +1,5 @@
+import { getSettings } from "../stores/settingsStore";
+import { getEffectiveDictionaryWords } from "../utils/snippets";
 import { refreshEnterpriseIdentityForUse } from "../stores/enterpriseIdentityStore";
 import { withSessionRefresh } from "../lib/auth";
 import {
@@ -11,6 +13,7 @@ import {
 } from "./managedTranscription";
 import { getTranscriptionProviders } from "../models/ModelRegistry";
 import type { LocalTranscriptionProvider } from "../types/electron";
+import type { SarvamMode } from "../utils/sarvam.js";
 
 export interface FileTranscriptionResult {
   success: boolean;
@@ -53,6 +56,9 @@ export interface FileTranscriptionConfig {
   cloudTranscriptionBaseUrl: string;
   cloudTranscriptionModel: string;
   language: string;
+  sarvamMode?: SarvamMode;
+  // A queue started under managed STT has no personal credential to fall back to.
+  sarvamKeyGeneration?: number | null;
   cortiEnvironment?: string;
   cortiTenant?: string;
   transcriptionMode?: string;
@@ -65,6 +71,7 @@ export interface TranscriptionApiKeys {
   groqApiKey: string;
   xaiApiKey: string;
   mistralApiKey: string;
+  sarvamApiKey: string;
   geminiApiKey: string;
   tinfoilApiKey: string;
   deepgramApiKey: string;
@@ -82,6 +89,8 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
       return keys.groqApiKey;
     case "xai":
       return keys.xaiApiKey;
+    case "sarvam":
+      return keys.sarvamApiKey;
     case "mistral":
       return keys.mistralApiKey;
     case "gemini":
@@ -202,8 +211,8 @@ export async function transcribeFile(
     };
   }
 
-  // Self-hosted fields make the handler route to the configured server
-  // (fail-closed on misconfiguration) instead of stale BYOK settings.
+  const sarvamSettings =
+    route.transport === "proxied" && route.provider === "sarvam" ? getSettings() : null;
   return window.electronAPI.transcribeAudioFileByok!({
     filePath,
     requestId: opts.requestId,
@@ -212,13 +221,22 @@ export async function transcribeFile(
     ...(route.transport === "proxied" && route.provider === "assemblyai"
       ? { durationSeconds }
       : {}),
-    apiKey: cfg.getApiKey(),
+    apiKey: sarvamSettings ? "" : cfg.getApiKey(),
     baseUrl: cfg.cloudTranscriptionBaseUrl,
     model: cfg.cloudTranscriptionModel,
     diarize: diarize || undefined,
     timestamps: opts.timestamps || undefined,
     provider: cfg.cloudTranscriptionProvider,
     language: cfg.language,
+    ...(sarvamSettings && {
+      sarvamKeyGeneration: cfg.sarvamKeyGeneration,
+      sarvamMode:
+        cfg.sarvamMode ??
+        (opts.purpose === "dictation"
+          ? sarvamSettings.sarvamMode
+          : sarvamSettings.uploadSarvamMode),
+      keyterms: getEffectiveDictionaryWords(sarvamSettings),
+    }),
     environment: cfg.cortiEnvironment,
     tenant: cfg.cortiTenant,
     transcriptionMode: cfg.transcriptionMode,

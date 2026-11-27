@@ -34,7 +34,7 @@ function createElectronAPI() {
       calls.refusals.push(details);
     },
     meetingTranscriptionSend: () => {},
-    getNote: async () => null,
+    getNote: async (id) => (id === NOTE_ID ? note : null),
     updateNote: async () => ({ success: true }),
     onMeetingTranscriptionSegment: noopListener,
     onNoteDeleted: noopListener,

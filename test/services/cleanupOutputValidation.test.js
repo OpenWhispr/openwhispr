@@ -152,7 +152,7 @@ test("cleanup validates completed provider output using the request's prompt set
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
     }).outputText;
     const settingsModule = await vite.ssrLoadModule("/stores/settingsStore.ts");
-    const { getKeytermDictionaryWords, limitBatchKeyterms } =
+    const { getEffectiveDictionaryWords, getKeytermDictionaryWords, limitBatchKeyterms } =
       await vite.ssrLoadModule("/utils/snippets.ts");
     // Supply the real imports the callback closes over in the renderer.
     const { providerCleanupStandsIn } = await vite.ssrLoadModule("/helpers/dictationRouting.js");
@@ -169,8 +169,11 @@ test("cleanup validates completed provider output using the request's prompt set
         throw new Error(`Unexpected history retry import: ${id}`);
       },
       window,
+      getEffectiveDictionaryWords,
       getKeytermDictionaryWords,
       limitBatchKeyterms,
+      sarvamTranscriptLanguage: (await vite.ssrLoadModule("/utils/sarvam.js"))
+        .sarvamTranscriptLanguage,
       getSettings: settingsModule.getSettings,
       getManagedTranscriptionResolution: () => null,
       isTranscriptionContextAllowed: () => true,
@@ -192,6 +195,10 @@ test("cleanup validates completed provider output using the request's prompt set
       assertValidCleanupOutput: (await vite.ssrLoadModule("/utils/cleanupOutput.ts"))
         .assertValidCleanupOutput,
     });
+    useSettingsStore.setState({ cloudTranscriptionProvider: "sarvam" });
+    await retry(row.id);
+    assert.deepEqual(Array.from(retrySettings.keyterms), ["Amaya", "a".repeat(60), "Puebla"]);
+    useSettingsStore.setState({ cloudTranscriptionProvider: "assemblyai" });
     await retry(row.id);
     assert.equal(retrySettings.translationSourceLanguage, "es");
     assert.equal(retrySettings.preferredLanguage, "en");

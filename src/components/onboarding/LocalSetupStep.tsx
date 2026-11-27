@@ -73,8 +73,17 @@ const DESCRIPTION_KEYS: Record<LocalSetupRowId, string> = {
 
 const formatGb = (bytes: number): string => (bytes / 1e9).toFixed(1);
 
-function lineText(line: LocalSetupLine, onMac: boolean, t: Translate): string {
+function lineText(
+  line: LocalSetupLine,
+  onMac: boolean,
+  t: Translate,
+  i18nLanguage: string
+): string {
   switch (line.key) {
+    case "languageNotLocal":
+      return t("onboarding.rehaul.localSetup.line.languageNotLocal", {
+        languages: localSetupLanguageLabel(line.languages, i18nLanguage),
+      });
     case "requiredByOrganization":
       return t("onboarding.rehaul.localSetup.line.requiredByOrganization");
     case "organizationModelsUnrunnable":
@@ -372,7 +381,7 @@ export function LocalSetupStep({
   /** handOff is taken once onboarding can finish, so a failed finish leaves the downloads here. */
   onProceed: (handOff: () => LocalSetupHandOff) => void;
 }): ReactElement {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { space, settled: spaceSettled } = useLocalSetupSpace();
   // Switches the user set. Empty until the first flip, so the space fit may turn
   // rows off; after a flip it holds both, so the fit never overrides the user.
@@ -497,7 +506,7 @@ export function LocalSetupStep({
     if (row.label !== "unavailable" && !on && offToFit.includes(row.id)) {
       return t("onboarding.rehaul.localSetup.line.offToFit");
     }
-    if (row.line) return lineText(row.line, onMac, t);
+    if (row.line) return lineText(row.line, onMac, t, i18n.language);
     if (row.reason === "catalog") return null;
     if (row.label === "unavailable")
       return t("onboarding.rehaul.localSetup.unavailable.exceedsMemory");

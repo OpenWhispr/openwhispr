@@ -104,7 +104,14 @@ function electronApi(navigation, calls) {
   });
 }
 
-async function mount(t, navigation, transcriptionStart, features = {}, apiOverrides = {}) {
+async function mount(
+  t,
+  navigation,
+  transcriptionStart,
+  features = {},
+  apiOverrides = {},
+  mockModules = {}
+) {
   let root;
   const unmount = async () => {
     const mounted = root;
@@ -130,7 +137,7 @@ async function mount(t, navigation, transcriptionStart, features = {}, apiOverri
   const container = installHostDom(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "control-panel-meeting-navigation-",
-    mockModules: MOCKS,
+    mockModules: { ...MOCKS, ...mockModules },
   });
   calls.vite = vite;
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
@@ -316,4 +323,121 @@ test("New chat from the menu opens a new chat, not the conversation Chat had ope
   selectChat({ kind: "conversation", conversationId: 7 });
   await React.act(async () => globalThis.__newNoteMenu.onNewChat());
   assert.deepEqual(useChatTurnStore.getState().selection, { kind: "new-chat" });
+});
+
+test("History retry cleans Sarvam's English output and translates it back to a Hindi target", async (t) => {
+  let provider = "sarvam";
+  let routeKind = null;
+  let duringRetry = () => {};
+  const calls = [];
+  const updates = [];
+  let rawText = "Good morning.";
+  globalThis.__retryReason = async (text, model, _agent, config) => {
+    calls.push([model, config.language]);
+    if (model !== "translation-model") return text;
+    return config.language === "ja" ? "会議の資料です。" : "सुप्रभात।";
+  };
+  t.after(() => {
+    delete globalThis.__historyRetry;
+    delete globalThis.__retryReason;
+  });
+  const { vite } = await mount(
+    t,
+    null,
+    "automatic",
+    {},
+    {
+      getDatabaseAccountScope: async () => ({ visibleAccountId: null }),
+      retryTranscription: async (_id, settings) => {
+        duringRetry(settings);
+        return {
+          success: true,
+          transcription: { id: 1, text: rawText, provider, route_kind: routeKind },
+        };
+      },
+      updateTranscriptionText: async (id, text) => {
+        updates.push(text);
+        return { success: true, transcription: { id, text, provider, route_kind: routeKind } };
+      },
+    },
+    {
+      "./HistoryView":
+        "export default (props) => { globalThis.__historyRetry = props.onRetryTranscription; return null; };",
+      "/hooks/useSettings": "export const useSettings = () => ({ useCleanupModel: true });",
+      "/services/ReasoningService":
+        "export default { processText: (...args) => globalThis.__retryReason(...args) };",
+    }
+  );
+  globalThis.window.location = { search: "" };
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  await React.act(async () => {
+    usePolicyStore.setState({ status: "unmanaged", policy: null });
+    useSettingsStore.setState({
+      transcriptionMode: "providers",
+      cloudTranscriptionMode: "byok",
+      useLocalWhisper: false,
+      cloudTranscriptionProvider: "sarvam",
+      sarvamMode: "translate",
+      preferredLanguage: "ja",
+      useCleanupModel: true,
+      cleanupMode: "providers",
+      cleanupProvider: "openai",
+      cleanupModel: "cleanup-model",
+      useDictationTranslation: true,
+      translationMode: "providers",
+      translationProvider: "openai",
+      translationModel: "translation-model",
+      translationTargetLanguage: "hi",
+      translationSourceLanguage: "hi",
+    });
+  });
+  await React.act(async () => globalThis.__historyRetry(1));
+  assert.deepEqual(calls.splice(0), [["cleanup-model", "en"]]);
+  routeKind = "translation";
+  await React.act(async () => globalThis.__historyRetry(1));
+  assert.deepEqual(calls.splice(0), [
+    ["cleanup-model", "en"],
+    ["translation-model", "hi"],
+  ]);
+  provider = "local";
+  await React.act(async () => globalThis.__historyRetry(1));
+  assert.deepEqual(calls.splice(0), [["cleanup-model", "hi"]]);
+  await React.act(async () => {
+    useSettingsStore.setState({
+      useDictationTranslation: false,
+      translationSourceLanguage: "auto",
+    });
+  });
+  await React.act(async () => globalThis.__historyRetry(1));
+  assert.deepEqual(calls.splice(0), [["cleanup-model", "auto"]]);
+  routeKind = null;
+  duringRetry = (settings) => {
+    assert.equal(settings.preferredLanguage, "ja");
+    useSettingsStore.setState({ preferredLanguage: "fr" });
+  };
+  await React.act(async () => globalThis.__historyRetry(1));
+  assert.deepEqual(calls.splice(0), [["cleanup-model", "ja"]]);
+  duringRetry = () => {};
+  provider = "sarvam";
+  rawText = "मेरा नाम राज है।";
+  routeKind = "translation";
+  await React.act(async () => {
+    useSettingsStore.setState({
+      sarvamMode: "transcribe",
+      useDictationTranslation: true,
+      translationSourceLanguage: "ja",
+      translationTargetLanguage: "ja",
+    });
+  });
+  await React.act(async () => globalThis.__historyRetry(1));
+  assert.deepEqual(calls.splice(0), [
+    ["cleanup-model", "auto"],
+    ["translation-model", "ja"],
+  ]);
+  await React.act(async () => useSettingsStore.setState({ translationTargetLanguage: "zh-CN" }));
+  duringRetry = () => useSettingsStore.setState({ translationTargetLanguage: "ja" });
+  updates.length = 0;
+  await React.act(async () => globalThis.__historyRetry(1));
+  assert.deepEqual(updates, ["会議の資料です。"]);
 });

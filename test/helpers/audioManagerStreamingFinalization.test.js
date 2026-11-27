@@ -802,6 +802,122 @@ test("a no-final stream whose upload transcribed but failed its selection edit k
   );
 });
 
+test("account retirement cancels Sarvam capture without delivering or saving the old audio", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  Object.assign(globalThis.__streamingFinalizationSettings, {
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionModel: "saaras:v4",
+  });
+  installCapture(t);
+  let errorListener, captureId;
+  globalThis.window.electronAPI.onDictationRealtimeError = (fn) => {
+    errorListener = fn;
+    return () => {};
+  };
+  const provider = startingOrukeetProvider({
+    start: async (options) => {
+      captureId = options.sarvamCaptureId;
+      return { success: true };
+    },
+  });
+  const { manager, completions } = createStartingManager(AudioManager, {
+    providerName: "sarvam",
+    provider,
+  });
+  manager.saveFailedTranscription = () => assert.fail("retired audio reached History");
+  manager.processWithOpenAIAPI = () => assert.fail("retired audio reached batch");
+  assert.equal(await manager.startStreamingRecording(), true);
+  assert.ok(captureId);
+  manager.streamingProcessor.port.onmessage({ data: speechPcm() });
+  errorListener({ code: "AUTH_CONTEXT_CHANGED", sarvamCaptureId: "previous" });
+  assert.equal(manager.isRecording, true);
+  errorListener({ code: "AUTH_CONTEXT_CHANGED", sarvamCaptureId: captureId });
+  await manager._streamingStopPromise;
+  assert.equal(manager.isRecording, false);
+  assert.equal(manager.isStreaming, false);
+  assert.deepEqual(completions, []);
+});
+
+test("retirement while the Sarvam microphone opens discards the take before its socket starts", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  installCapture(t);
+  const reserved = Promise.withResolvers();
+  const mic = Promise.withResolvers();
+  let retire, released;
+  Object.assign(globalThis.window.electronAPI, {
+    reserveSarvamDictation: reserved.resolve,
+    releaseSarvamDictation: (id) => {
+      released = id;
+    },
+    onDictationRealtimeError: (listener) => {
+      retire = listener;
+      return () => {};
+    },
+  });
+  const provider = startingOrukeetProvider({
+    start: () => assert.fail("retired capture attempted to connect"),
+  });
+  const { manager, errors } = createStartingManager(AudioManager, {
+    providerName: "sarvam",
+    provider,
+  });
+  manager._acquireCaptureStream = () => mic.promise;
+  manager.saveFailedTranscription = () => assert.fail("retired recording reached History");
+  const starting = manager.startStreamingRecording();
+  const id = await reserved.promise;
+  retire({ code: "AUTH_CONTEXT_CHANGED", error: "Account changed", sarvamCaptureId: id });
+  mic.resolve({ getAudioTracks: () => [], getTracks: () => [] });
+  await Promise.all([starting, manager._streamingStopPromise]);
+  assert.equal(released, id);
+  assert.equal(manager.isRecording, false);
+  assert.equal(errors[0].code, "AUTH_CONTEXT_CHANGED");
+});
+
+for (const selectedProvider of ["sarvam", "openai"]) {
+  test(`an interrupted Sarvam recording with ${selectedProvider} selected at stop only retries its original route`, async (t) => {
+    const AudioManager = await loadManagerClass(t);
+    Object.assign(globalThis.__streamingFinalizationSettings, {
+      cloudTranscriptionProvider: selectedProvider,
+      cloudTranscriptionModel: "saaras:v4",
+      sarvamMode: "codemix",
+    });
+    const { manager } = createFinalizingManager(AudioManager);
+    const results = [],
+      errors = [];
+    let uploads = 0;
+    Object.assign(manager, {
+      _activeStreamingProviderName: "sarvam",
+      _activeStreamingConfig: {
+        sarvamModel: "saaras:v4",
+        sarvamMode: "translate",
+        sarvamCaptureId: "first",
+      },
+      streamingFinalText: "first utterance",
+      streamingPartialText: "incomplete tail",
+      getStreamingProvider: () => ({
+        finalizeAcknowledged: true,
+        finalize: async () => ({ success: false, error: "Connection lost" }),
+        stop: async () => ({ success: true, text: "first utterance" }),
+      }),
+      mergeRecordedSegments: async () => new Blob(["whole recording"]),
+      processWithOpenAIAPI: async (blob, metadata) => {
+        assert.equal(metadata.sarvamMode, "translate");
+        assert.equal(metadata.sarvamCaptureId, "first");
+        assert.equal(await blob.text(), "whole recording");
+        uploads++;
+        return { text: "complete transcript", source: "sarvam" };
+      },
+      saveFailedTranscription: () => {},
+      onError: (error) => errors.push(error),
+      onTranscriptionComplete: (result) => results.push(result.text),
+    });
+    await manager.stopStreamingRecording();
+    assert.equal(uploads, selectedProvider === "sarvam" ? 1 : 0);
+    assert.deepEqual(results, selectedProvider === "sarvam" ? ["complete transcript"] : []);
+    assert.equal(errors.length, selectedProvider === "sarvam" ? 0 : 1);
+  });
+}
+
 test("Orukeet uses the acknowledged final even if the transcript event is delayed", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { manager } = createFinalizingManager(AudioManager);
@@ -973,6 +1089,260 @@ function startingOrukeetProvider(overrides = {}) {
 const speechPcm = () => new Int16Array(800).fill(8000).buffer;
 const silentPcm = () => new Int16Array(800).buffer;
 
+for (const connected of [true, false]) {
+  test(`releasing Sarvam cuts off both captures before its handshake ${connected ? "succeeds" : "fails"}`, async (t) => {
+    const AudioManager = await loadManagerClass(t);
+    Object.assign(globalThis.__streamingFinalizationSettings, {
+      cloudTranscriptionProvider: "sarvam",
+      cloudTranscriptionModel: "saaras:v4",
+    });
+    installCapture(t);
+    const connecting = Promise.withResolvers();
+    const began = Promise.withResolvers();
+    const provider = startingOrukeetProvider({
+      start: () => {
+        began.resolve();
+        return connecting.promise;
+      },
+      finalize: async () => ({ success: true, text: "" }),
+    });
+    const { manager } = createStartingManager(AudioManager, { providerName: "sarvam", provider });
+    const uploads = [];
+    manager.processWithOpenAIAPI = async (blob) => {
+      uploads.push(await blob.text());
+      return { text: "opening words", source: "sarvam" };
+    };
+    let trackStopped = false;
+    manager._acquireCaptureStream = async () => ({
+      getAudioTracks: () => [],
+      getTracks: () => [{ stop: () => (trackStopped = true) }],
+    });
+    const starting = manager.startStreamingRecording();
+    await began.promise;
+    const first = speechPcm();
+    manager.streamingProcessor.port.onmessage({ data: first });
+    const port = manager.streamingProcessor.port;
+    const tail = new Int16Array([100, 200]).buffer;
+    const postMessage = port.postMessage;
+    port.postMessage = (message) => {
+      if (message === "stop") queueMicrotask(() => port.onmessage({ data: tail }));
+      postMessage(message);
+    };
+    const recorder = manager.streamingFallbackRecorder;
+    await manager.stopStreamingRecording();
+    port.onmessage({ data: speechPcm() });
+    assert.equal(trackStopped, true);
+    assert.equal(recorder.state, "inactive");
+    assert.equal(manager.isRecording, false);
+    connecting.resolve({
+      success: connected,
+      error: connected ? undefined : "Handshake timed out",
+    });
+    await starting;
+    await manager.stopStreamingRecording();
+    assert.deepEqual(provider.sent, connected ? [first, tail] : []);
+    assert.deepEqual(uploads, connected ? [] : ["opening words"]);
+  });
+}
+
+test("Sarvam retries the capture's original input language after the setting changes", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const settings = globalThis.__streamingFinalizationSettings;
+  Object.assign(settings, {
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionModel: "saaras:v4",
+  });
+  installCapture(t);
+  const uploads = [];
+  globalThis.window.electronAPI.proxySarvamTranscription = async ({ language }) => {
+    uploads.push(language);
+    return { text: "opening words" };
+  };
+  for (const language of ["hi", "auto", "ja"]) {
+    settings.preferredLanguage = language;
+    const began = Promise.withResolvers();
+    const connecting = Promise.withResolvers();
+    const provider = startingOrukeetProvider({
+      start: (options) => {
+        began.resolve(options.language);
+        return connecting.promise;
+      },
+    });
+    const { manager } = createStartingManager(AudioManager, { providerName: "sarvam", provider });
+    manager.getEffectiveSttLanguage = AudioManager.prototype.getEffectiveSttLanguage;
+    manager.isReasoningAvailable = async () => false;
+    const starting = manager.startStreamingRecording();
+    assert.equal(await began.promise, language === "hi" ? language : undefined);
+    settings.preferredLanguage = "bn";
+    manager.streamingProcessor.port.onmessage({ data: speechPcm() });
+    await manager.stopStreamingRecording();
+    connecting.resolve({ success: false, error: "Handshake timed out" });
+    await starting;
+    await manager.stopStreamingRecording();
+  }
+  assert.deepEqual(uploads, ["hi", undefined, undefined]);
+});
+
+for (const code of ["PROVIDER_AUTH_FAILED", "PROVIDER_CREDENTIAL_CHANGED"]) {
+  test(`a Sarvam start refusal (${code}) keeps already captured speech for History retry`, async (t) => {
+    const AudioManager = await loadManagerClass(t);
+    installCapture(t);
+    const refusal = {
+      success: false,
+      error: "Invalid key",
+      code,
+      messageKey: "providerErrors.authFailed",
+      messageParams: { provider: "Sarvam AI" },
+      settingsTarget: "transcription",
+    };
+    const provider = startingOrukeetProvider({ start: async () => refusal });
+    const { manager, errors } = createStartingManager(AudioManager, {
+      providerName: "sarvam",
+      provider,
+    });
+    const saved = [];
+    manager.saveFailedTranscription = async (message, code) => {
+      saved.push([message, code, await manager.lastAudioBlob.text()]);
+    };
+    assert.equal(await manager.startStreamingRecording(), false);
+    assert.deepEqual(saved, [["Invalid key", code, "opening words"]]);
+    assert.deepEqual(errors[0].messageParams, refusal.messageParams);
+    assert.equal(errors[0].settingsTarget, refusal.settingsTarget);
+  });
+}
+
+for (const refusalAt of ["recording", "finalization", "fallback"]) {
+  test(`an actionable Sarvam refusal during ${refusalAt} keeps the audio for a manual retry`, async (t) => {
+    const AudioManager = await loadManagerClass(t);
+    installCapture(t);
+    Object.assign(globalThis.__streamingFinalizationSettings, {
+      cloudTranscriptionProvider: "sarvam",
+      cloudTranscriptionModel: "saaras:v4",
+      dataRetentionEnabled: true,
+    });
+    const code =
+      refusalAt === "fallback" ? "PROVIDER_CREDENTIAL_CHANGED" : "PROVIDER_QUOTA_EXHAUSTED";
+    const refusal = {
+      error: "Provider refused the recording",
+      code,
+      messageParams: { provider: "Sarvam AI" },
+    };
+    let onError, captureId;
+    const provider = startingOrukeetProvider({
+      start: async (options) => {
+        captureId = options.sarvamCaptureId;
+        return { success: true };
+      },
+      onError: (callback) => {
+        onError = callback;
+        return () => {};
+      },
+      finalize: async () =>
+        refusalAt === "finalization"
+          ? { success: false, ...refusal }
+          : { success: false, error: "Socket closed" },
+    });
+    const { manager, errors } = createStartingManager(AudioManager, {
+      providerName: "sarvam",
+      provider,
+    });
+    const saved = [];
+    manager.saveFailedTranscription = async (message, errorCode) =>
+      saved.push({ message, errorCode, audio: manager.lastAudioBlob });
+    let fallbacks = 0;
+    manager.processWithOpenAIAPI = async () => {
+      fallbacks++;
+      throw Object.assign(new Error(refusal.error), refusal);
+    };
+    assert.equal(await manager.startStreamingRecording(), true);
+    manager.streamingProcessor.port.onmessage({ data: speechPcm() });
+    if (refusalAt === "recording") {
+      onError({ ...refusal, sarvamCaptureId: "older" });
+      assert.equal(manager._activeStreamingConfig.sarvamFailure, undefined);
+      onError({ ...refusal, sarvamCaptureId: captureId });
+      // The recording's own final IPC can fail to reach the provider.
+      manager.flushStreamingProcessor = async () => ({
+        success: false,
+        error: "Worklet unavailable",
+      });
+    }
+    await manager.stopStreamingRecording();
+    assert.equal(fallbacks, refusalAt === "fallback" ? 1 : 0);
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0].message, refusal.error);
+    assert.equal(saved[0].errorCode, code);
+    assert.equal(await saved[0].audio.text(), "opening words");
+    assert.deepEqual(
+      errors.map((error) => error.code),
+      [code]
+    );
+  });
+}
+
+test("cancelling a released Sarvam capture discards the fallback recorder's late stop event", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  installCapture(t);
+  const connecting = Promise.withResolvers();
+  const began = Promise.withResolvers();
+  const stopped = Promise.withResolvers();
+  const provider = startingOrukeetProvider({
+    start: () => {
+      began.resolve();
+      return connecting.promise;
+    },
+    stop: async () => {
+      connecting.resolve({ success: false, error: "cancelled" });
+      stopped.resolve();
+      return { success: true };
+    },
+  });
+  const { manager } = createStartingManager(AudioManager, { providerName: "sarvam", provider });
+  const starting = manager.startStreamingRecording();
+  await began.promise;
+  const recorder = manager.streamingFallbackRecorder;
+  recorder.stop = () => {
+    recorder.state = "inactive";
+  };
+  await manager.stopStreamingRecording();
+  assert.equal(manager.cancelProcessing(), true);
+  const cancellation = manager._streamingStopPromise;
+  await stopped.promise;
+  await starting;
+  await new Promise((resolve) => setImmediate(resolve));
+  recorder.onstop();
+  await cancellation;
+  assert.deepEqual(manager._streamingFallbackSegments, []);
+  assert.deepEqual(provider.sent, []);
+});
+
+test("cancel processing interrupts a pending Sarvam final and releases the next hotkey", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager } = createFinalizingManager(AudioManager);
+  const final = Promise.withResolvers();
+  const waiting = Promise.withResolvers();
+  let stops = 0;
+  manager._activeStreamingProviderName = "sarvam";
+  manager.getStreamingProvider = () => ({
+    finalizeAcknowledged: true,
+    finalize() {
+      waiting.resolve();
+      return final.promise;
+    },
+    async stop() {
+      stops++;
+      final.resolve({ success: false, error: "cancelled" });
+      return { success: true };
+    },
+  });
+  const stopping = manager.stopStreamingRecording();
+  await waiting.promise;
+  assert.equal(manager.cancelProcessing(), true);
+  assert.equal(stops, 1);
+  await stopping;
+  assert.equal(manager.getState().isFinalizingStreaming, false);
+  assert.equal(manager.getState().isProcessing, false);
+});
+
 function refusedStartProvider() {
   return startingOrukeetProvider({
     start: async () => ({ success: false, error: "Orukeet connection closed" }),
@@ -1139,10 +1509,42 @@ test("a stop pressed while a refused managed Orukeet start settles uploads once"
   await manager.stopStreamingRecording();
   refuse();
   await starting;
+  await manager.stopStreamingRecording();
 
   assert.equal(manager.isRecording, false, "the deferred stop ends the recording");
   assert.deepEqual(uploads, [{ audio: "opening words", reason: "session_unavailable" }]);
   assert.deepEqual(errors, []);
+});
+
+test("a deferred stop reports its failure after the start has resolved", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  useManagedOrukeetSettings();
+  installCapture(t);
+  let refuse;
+  const provider = startingOrukeetProvider({
+    start: () =>
+      new Promise((resolve) => {
+        refuse = () => resolve({ success: false, error: "Orukeet connection closed" });
+      }),
+  });
+  const { manager } = createStartingManager(AudioManager, { providerName: "orukeet", provider });
+  const events = [];
+  manager.processWithOpenWhisprCloud = async () => {
+    throw Object.assign(new Error("Upload failed"), { code: "NETWORK_ERROR" });
+  };
+  manager.onError = () => events.push("error");
+
+  const starting = manager.startStreamingRecording();
+  while (!refuse) await new Promise((resolve) => setImmediate(resolve));
+  await manager.stopStreamingRecording();
+  refuse();
+  assert.equal(await starting, true);
+  events.push("started");
+  await manager.stopStreamingRecording();
+
+  // The dictation hook clears earlier error pills when a start resolves, so the
+  // stop's own pill must arrive after it.
+  assert.deepEqual(events, ["started", "error"]);
 });
 
 test("the recording after a failed-over one streams to its socket again", async (t) => {
@@ -1619,6 +2021,67 @@ test("a confident unsupported estimate re-transcribes the kept recording through
   assert.equal(published[0].rawText, "明日の会議");
   // /api/transcribe metered the re-transcription; the stream is not metered too.
   assert.equal(usage.length, 0);
+});
+
+test("Sarvam's English translation reaches Cloud cleanup with its output language", async (t) => {
+  const AudioManager = await loadManagerClass(t, {
+    "/config/prompts": "export const resolvePrompt = () => 'translate';",
+    "/stores/settingsStore": `
+      export const getSettings = () => globalThis.__streamingFinalizationSettings;
+      export const getEffectiveCleanupModel = () => null;
+      export const selectResolvedLLMConfig = () => ({ model: null, provider: null });
+      export const isCloudCleanupMode = () => true;
+      export const isCloudDictationAgentMode = () => false;
+      export const isCloudTranslationMode = () => false;
+    `,
+  });
+  const { reasonCalls } = await stopManagedDictation(AudioManager, {
+    final: { success: true, text: "Good morning.", model: "saaras:v4" },
+    language: "hi",
+    providerName: "sarvam",
+    settings: { cloudTranscriptionMode: "byok", useCleanupModel: true, customPrompts: {} },
+    overrides: { _activeStreamingConfig: { sarvamMode: "translate" } },
+  });
+  assert.equal(reasonCalls[0][0], "Good morning.");
+  assert.equal(reasonCalls[0][1].sttLanguage, "hi");
+  assert.equal(reasonCalls[0][1].language, "en");
+  const english = "I work at 字节跳动.";
+  const { published } = await stopManagedDictation(AudioManager, {
+    final: { success: true, text: english, model: "saaras:v4" },
+    language: "zh-TW",
+    providerName: "sarvam",
+    settings: { cloudTranscriptionMode: "byok", useCleanupModel: false },
+    overrides: { _activeStreamingConfig: { sarvamMode: "translate" } },
+  });
+  assert.equal(published[0].text, english);
+  const translated = [];
+  const hindi = "मेरा नाम राज है।";
+  const japanese = "私の名前はラージです。";
+  const autoDetected = await stopManagedDictation(AudioManager, {
+    final: { success: true, text: hindi, model: "saaras:v4" },
+    language: "ja",
+    providerName: "sarvam",
+    settings: {
+      cloudTranscriptionMode: "byok",
+      useCleanupModel: true,
+      useDictationTranslation: true,
+      translationSourceLanguage: "ja",
+      translationTargetLanguage: "ja",
+      translationMode: "local",
+      translationModel: "translation-model",
+    },
+    overrides: {
+      _activeStreamingConfig: { sarvamMode: "transcribe", sarvamInputLanguage: "ja" },
+      translationRequested: true,
+      processWithReasoningModel: async (text, _model, _agent, config) => {
+        translated.push([text, config.language]);
+        return japanese;
+      },
+    },
+  });
+  assert.equal(autoDetected.reasonCalls[0][1].language, "auto");
+  assert.deepEqual(translated, [[hindi + "。", "ja"]]);
+  assert.equal(autoDetected.published[0].text, japanese);
 });
 
 test("language re-transcription skips streaming cleanup", async (t) => {

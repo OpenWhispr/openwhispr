@@ -65,12 +65,12 @@ export abstract class BaseReasoningService {
 
   protected getSystemPrompt(
     agentName: string | null,
-    toneStyle?: DictationToneStyle | null
+    { language, toneStyle }: Pick<ReasoningConfig, "language" | "toneStyle"> = {}
   ): string {
     return getCleanupSystemPrompt(
       agentName,
       this.getCustomDictionary(),
-      this.getPreferredLanguage(),
+      language ?? this.getPreferredLanguage(),
       this.getUiLanguage(),
       toneStyle
     );

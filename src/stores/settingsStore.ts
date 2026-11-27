@@ -5,6 +5,7 @@ import {
 } from "../helpers/selfHostedSttHeaders.js";
 import { RETIRED_TINFOIL_MODEL_NAMES } from "../config/retiredCloudModelPolicy.js";
 import { create } from "zustand";
+import { resolveSarvamMode, type SarvamMode } from "../utils/sarvam.js";
 import { GENERATE_NOTES_KEY } from "../helpers/builtinActions";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
@@ -267,6 +268,25 @@ function defaultLlmModel(mode: InferenceMode, providerId: string, bedrockRegion:
 function readString(key: string, fallback: string): string {
   if (!isBrowser) return fallback;
   return localStorage.getItem(key) ?? fallback;
+}
+
+export const SARVAM_MODE_KEYS = {
+  dictation: "sarvamMode",
+  meeting: "meetingSarvamMode",
+  upload: "uploadSarvamMode",
+} as const satisfies Record<TranscriptionPolicyContext, string>;
+
+// A mode chosen before meetings and uploads had their own keeps applying to them.
+// Seeded once, so a later dictation change leaves them alone. Someone who never
+// chose a mode stores nothing and follows the default.
+if (isBrowser) {
+  const previousMode = localStorage.getItem(SARVAM_MODE_KEYS.dictation);
+  if (previousMode !== null) {
+    for (const key of [SARVAM_MODE_KEYS.meeting, SARVAM_MODE_KEYS.upload]) {
+      if (localStorage.getItem(key) === null)
+        localStorage.setItem(key, resolveSarvamMode(previousMode));
+    }
+  }
 }
 
 // Literal rather than an import from ModelRegistry: ModelRegistry imports this
@@ -1434,6 +1454,7 @@ export interface SettingsState
   setGroqApiKey: (key: string) => void;
   setXaiApiKey: (key: string) => void;
   setMistralApiKey: (key: string) => void;
+  setSarvamApiKey: (key: string) => void;
   setOpenrouterApiKey: (key: string) => void;
   setCortiClientId: (key: string) => void;
   setCortiClientSecret: (key: string) => void;
@@ -1444,6 +1465,11 @@ export interface SettingsState
   setElevenlabsApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
+
+  sarvamMode: SarvamMode;
+  meetingSarvamMode: SarvamMode;
+  uploadSarvamMode: SarvamMode;
+  setSarvamMode: (mode: string, context?: TranscriptionPolicyContext) => void;
 
   // Corti (BYOK)
   cortiEnvironment: string;
@@ -1687,6 +1713,7 @@ const SECRET_IPC_SAVERS = {
   groq: "saveGroqKey",
   xai: "saveXaiKey",
   mistral: "saveMistralKey",
+  sarvam: "saveSarvamKey",
   openrouter: "saveOpenrouterKey",
   cortiClientId: "saveCortiClientId",
   cortiClientSecret: "saveCortiClientSecret",
@@ -1739,6 +1766,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "groqApiKey",
   "xaiApiKey",
   "mistralApiKey",
+  "sarvamApiKey",
   "openrouterApiKey",
   "cortiClientId",
   "cortiClientSecret",
@@ -1836,6 +1864,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cloudTranscriptionMode: readString("cloudTranscriptionMode", "openwhispr"),
   cleanupCloudMode: readString("cleanupCloudMode", "openwhispr"),
   cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
+  sarvamMode: resolveSarvamMode(readString("sarvamMode", "")),
+  meetingSarvamMode: resolveSarvamMode(readString("meetingSarvamMode", "")),
+  uploadSarvamMode: resolveSarvamMode(readString("uploadSarvamMode", "")),
   cortiEnvironment: readString("cortiEnvironment", "us"),
   cortiTenant: readString("cortiTenant", "base"),
   customDictionary: readStringArray("customDictionary", []),
@@ -1863,6 +1894,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   groqApiKey: "",
   xaiApiKey: "",
   mistralApiKey: "",
+  sarvamApiKey: "",
   openrouterApiKey: "",
   cortiClientId: "",
   cortiClientSecret: "",
@@ -2588,6 +2620,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setGeminiApiKey: createSecretSetter("geminiApiKey", "gemini", "gemini"),
   setGroqApiKey: createSecretSetter("groqApiKey", "groq", "groq"),
   setXaiApiKey: createSecretSetter("xaiApiKey", "xai"),
+  setSarvamMode: (mode, context = "dictation") =>
+    setStringSetting(SARVAM_MODE_KEYS[context], resolveSarvamMode(mode)),
+  setSarvamApiKey: createSecretSetter("sarvamApiKey", "sarvam"),
   setMistralApiKey: createSecretSetter("mistralApiKey", "mistral", "mistral"),
   setOpenrouterApiKey: createSecretSetter("openrouterApiKey", "openrouter", "openrouter"),
   setCortiClientId: (key: string) => {
@@ -3114,6 +3149,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.groqApiKey !== undefined) s.setGroqApiKey(keys.groqApiKey);
     if (keys.xaiApiKey !== undefined) s.setXaiApiKey(keys.xaiApiKey);
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
+    if (keys.sarvamApiKey !== undefined) s.setSarvamApiKey(keys.sarvamApiKey);
     if (keys.openrouterApiKey !== undefined) s.setOpenrouterApiKey(keys.openrouterApiKey);
     if (keys.cortiClientId !== undefined) s.setCortiClientId(keys.cortiClientId);
     if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
@@ -4166,6 +4202,7 @@ export async function initializeSettings(): Promise<void> {
         groq,
         xai,
         mistral,
+        sarvam,
         openrouter,
         cortiClientId,
         cortiClientSecret,
@@ -4194,6 +4231,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getGroqKey?.(),
         window.electronAPI.getXaiKey?.(),
         window.electronAPI.getMistralKey?.(),
+        window.electronAPI.getSarvamKey?.(),
         window.electronAPI.getOpenrouterKey?.(),
         window.electronAPI.getCortiClientId?.(),
         window.electronAPI.getCortiClientSecret?.(),
@@ -4224,6 +4262,7 @@ export async function initializeSettings(): Promise<void> {
         groqApiKey: groq || "",
         xaiApiKey: xai || "",
         mistralApiKey: mistral || "",
+        sarvamApiKey: sarvam || "",
         openrouterApiKey: openrouter || "",
         cortiClientId: cortiClientId || "",
         cortiClientSecret: cortiClientSecret || "",
@@ -4655,6 +4694,8 @@ export async function initializeSettings(): Promise<void> {
       } else {
         value = parsed;
       }
+    } else if (key === "sarvamMode" || key === "meetingSarvamMode" || key === "uploadSarvamMode") {
+      value = resolveSarvamMode(newValue);
     } else if (key === "emailDraftTarget") {
       value = normalizeEmailDraftTarget(newValue);
     } else if (key === "toneStyles") {

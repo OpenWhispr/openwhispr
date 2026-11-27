@@ -414,6 +414,7 @@
           "endpointNotFound": "Der Endpoint stellt keine OpenAI-kompatible Modellliste bereit.",
           "transcriptionEndpointNotFound": "Unter dieser Adresse werden keine Transkriptionen angenommen.",
           "modelNotFound": "Das ausgewählte Modell ist bei diesem Anbieter nicht verfügbar.",
+          "sarvamSeatBudgetExhausted": "Das Ausgabenlimit für deinen Sarvam-AI-Zugang ist erreicht. Erhöhe das Limit, um fortzufahren.",
           "providerStatus": "Der Anbieter hat den Status {{status}} zurückgegeben.",
           "timeout": "Der Verbindungstest hat das Zeitlimit überschritten.",
           "network": "Der Anbieter ist nicht erreichbar.",
@@ -464,6 +465,7 @@
         "line": {
           "requiredByOrganization": "Von Ihrer Organisation vorgeschrieben",
           "organizationModelsUnrunnable": "Keines der von Ihrer Organisation freigegebenen Modelle läuft auf diesem Computer",
+          "languageNotLocal": "Whisper transkribiert {{languages}} nicht und erkennt die Sprache daher selbst. Ein Cloud-Anbieter wie Sarvam AI unterstützt sie.",
           "offToFit": "Aus, damit es in den freien Speicherplatz dieses Computers passt",
           "failed": "Download fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut"
         },
@@ -980,6 +982,14 @@
     "tinfoil": {
       "transportNote": "Tinfoil streamt mit Voxtral Mini 4B und verarbeitet Batches mit Voxtral Small 24B.",
       "docsLink": "Zur Dokumentation"
+    },
+    "sarvam": {
+      "outputMode": "Ausgabemodus",
+      "codemix": "Gemischte Sprachen (englische Wörter in lateinischer Schrift)",
+      "transcribe": "In der gesprochenen Sprache transkribieren",
+      "verbatim": "Wortgetreu transkribieren",
+      "translate": "Ins Englische übersetzen",
+      "translit": "In lateinische Schrift übertragen"
     },
     "elevenlabs": {
       "keytermsNote": "OpenWhispr sendet geeignete Wörter aus deinem Wörterbuch an ElevenLabs. Wenn solche Wörter mitgesendet werden, berechnet ElevenLabs 20 % mehr."
@@ -3572,6 +3582,8 @@
         "openai_whisper_1": "Originales Whisper-Modell",
         "groq_whisper_large_v3": "Hochpräzise Spracherkennung",
         "groq_whisper_large_v3_turbo": "216x Echtzeitgeschwindigkeit",
+        "sarvam_v4": "22 indische Sprachen, weltweites Englisch und Wörterbuchhinweise",
+        "sarvam_v3": "22 indische Sprachen und indisches Englisch",
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
         "gemini_3_5_transcribe": "Googles Gemini-Spracherkennung",
         "elevenlabs_scribe_v3": "Präziseste mehrsprachige Transkription",
@@ -4775,6 +4787,8 @@
       "internalAttendeesQuestion": "Gehören alle Personen in diesem Meeting zu Ihrer Organisation?",
       "internalAttendeesConfirm": "Ja, starten",
       "recordingDisabledByOrg": "Die Aufzeichnung von Besprechungen wurde von Ihrer Organisation deaktiviert.",
+      "stoppedSarvamKeyChanged": "Die Aufnahme wurde beendet, weil sich der Sarvam-API-Schlüssel geändert hat.",
+      "noteUnavailable": "Diese Notiz ist nicht mehr verfügbar, daher wurde die Aufnahme nicht gestartet.",
       "stoppedAccountChanged": "Die Aufnahme wurde beendet, weil Sie sich abgemeldet oder das Konto gewechselt haben.",
       "stoppedPolicyUnresolved": "Die Aufnahme wurde beendet, weil die Einstellungen Ihrer Organisation nicht geprüft werden konnten.",
       "stoppedWorkspaceChanged": "Die Aufnahme wurde beendet, weil Sie den Workspace gewechselt haben.",
@@ -6888,6 +6902,8 @@
     "noResponse": "Keine Antwort von {{provider}} erhalten. Überprüfen Sie Ihren API-Schlüssel und Ihre Verbindung.",
     "unknown": "{{provider}} hat einen unerwarteten Fehler zurückgegeben.",
     "keyMissing": "Für {{provider}} ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprachmodell hinzu.",
+    "credentialChanged": "Dein {{provider}}-API-Schlüssel hat sich geändert, bevor die Transkription abgeschlossen war. Versuche es erneut, um den neuen Schlüssel zu verwenden.",
+    "settingsChanged": "Deine Transkriptionseinstellungen haben sich geändert, bevor die Transkription abgeschlossen war. Versuche es erneut.",
     "selfHosted": {
       "authFailed": "Ihr Server hat den API-Schlüssel abgelehnt.",
       "accessDenied": "Ihr Server hat den Zugriff verweigert. Der Schlüssel deckt dieses Modell möglicherweise nicht ab.",

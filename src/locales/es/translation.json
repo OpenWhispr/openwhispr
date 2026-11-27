@@ -414,6 +414,7 @@
           "endpointNotFound": "El endpoint no expone una lista de modelos compatible con OpenAI.",
           "transcriptionEndpointNotFound": "Esta dirección no acepta transcripciones.",
           "modelNotFound": "El modelo seleccionado no está disponible en este proveedor.",
+          "sarvamSeatBudgetExhausted": "Has alcanzado el límite de gasto de tu puesto en Sarvam AI. Auméntalo para continuar.",
           "providerStatus": "El proveedor devolvió el estado {{status}}.",
           "timeout": "La prueba de conexión agotó el tiempo de espera.",
           "network": "No se pudo contactar con el proveedor.",
@@ -464,6 +465,7 @@
         "line": {
           "requiredByOrganization": "Exigido por tu organización",
           "organizationModelsUnrunnable": "Ninguno de los modelos aprobados por tu organización funciona en este equipo",
+          "languageNotLocal": "Whisper no transcribe {{languages}}, así que detecta el idioma por sí mismo. Un proveedor en la nube como Sarvam AI lo admite.",
           "offToFit": "Desactivado para que quepa en el espacio libre de este equipo",
           "failed": "No se pudo descargar. Comprueba tu conexión y reinténtalo"
         },
@@ -980,6 +982,14 @@
     "tinfoil": {
       "transportNote": "Tinfoil transmite con Voxtral Mini 4B y procesa por lotes con Voxtral Small 24B.",
       "docsLink": "Ver la documentación"
+    },
+    "sarvam": {
+      "outputMode": "Modo de salida",
+      "codemix": "Idiomas mezclados (conservar las palabras en inglés en alfabeto latino)",
+      "transcribe": "Transcribir en el idioma hablado",
+      "verbatim": "Transcribir literalmente",
+      "translate": "Traducir al inglés",
+      "translit": "Transliterar al alfabeto latino"
     },
     "elevenlabs": {
       "keytermsNote": "OpenWhispr envía a ElevenLabs las palabras compatibles de tu diccionario. ElevenLabs cobra un 20 % más cuando se incluyen estas palabras."
@@ -3527,6 +3537,8 @@
         "openai_whisper_1": "Modelo Whisper original",
         "groq_whisper_large_v3": "Reconocimiento de voz de alta precisión",
         "groq_whisper_large_v3_turbo": "Velocidad 216x en tiempo real",
+        "sarvam_v4": "22 idiomas de la India, inglés global y términos del diccionario",
+        "sarvam_v3": "22 idiomas de la India e inglés de la India",
         "mistral_voxtral_mini_latest": "Transcripción multilingüe rápida",
         "gemini_3_5_transcribe": "Voz a texto con Gemini de Google",
         "elevenlabs_scribe_v3": "La transcripción multilingüe más precisa",
@@ -4269,6 +4281,8 @@
       "internalAttendeesQuestion": "¿Todas las personas de esta reunión pertenecen a tu organización?",
       "internalAttendeesConfirm": "Sí, empezar",
       "recordingDisabledByOrg": "Tu organización ha desactivado la grabación de reuniones.",
+      "stoppedSarvamKeyChanged": "La grabación se detuvo porque cambió la clave de API de Sarvam.",
+      "noteUnavailable": "Esta nota ya no está disponible, así que la grabación no se inició.",
       "stoppedAccountChanged": "La grabación se detuvo porque cerraste sesión o cambiaste de cuenta.",
       "stoppedPolicyUnresolved": "La grabación se detuvo porque no se pudieron comprobar los ajustes de tu organización.",
       "stoppedWorkspaceChanged": "La grabación se detuvo porque cambiaste de espacio de trabajo.",
@@ -6910,6 +6924,8 @@
     "noResponse": "No se recibió respuesta de {{provider}}. Comprueba tu clave de API y tu conexión.",
     "unknown": "{{provider}} devolvió un error inesperado.",
     "keyMissing": "No hay ninguna clave de API configurada para {{provider}}. Añádela en Ajustes → Modelo de lenguaje.",
+    "credentialChanged": "Tu clave de API de {{provider}} cambió antes de que terminara la transcripción. Vuelve a intentarlo para usar la nueva clave.",
+    "settingsChanged": "Tu configuración de transcripción cambió antes de que terminara la transcripción. Vuelve a intentarlo.",
     "selfHosted": {
       "authFailed": "Tu servidor rechazó la clave de API.",
       "accessDenied": "Tu servidor denegó el acceso. Es posible que la clave no incluya este modelo.",

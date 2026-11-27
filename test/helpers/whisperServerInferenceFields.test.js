@@ -139,3 +139,19 @@ test("transcribeLocalWhisper plumbs skipDecoderThresholds to the server request 
   await manager.transcribeLocalWhisper(Buffer.from("audio"), { model: "base" });
   assert.equal(captured[1].skipDecoderThresholds, false);
 });
+
+test("local Whisper auto-detects cloud-only preferences and keeps its own language hints", async () => {
+  const manager = new WhisperManager();
+  manager.getModelPath = () => __filename;
+  manager.serverManager.isAvailable = () => true;
+  manager.serverManager.start = async () => {};
+  const languages = [];
+  manager.serverManager.transcribe = async (_audio, { language }) => {
+    languages.push(language);
+    return { text: "ok" };
+  };
+  for (const language of ["brx", "or", "bn", "mt", "haw"]) {
+    await manager.transcribeLocalWhisper(Buffer.from("audio"), { language });
+  }
+  assert.deepEqual(languages, [null, null, "bn", "mt", "haw"]);
+});

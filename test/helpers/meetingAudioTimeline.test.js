@@ -45,6 +45,8 @@ function harness({ native = true, local = false } = {}) {
     app: { getVersion: () => "1.11.1" },
     productOperationAllowed: require("../../src/helpers/productPolicy").productOperationAllowed,
     meetingConnectionOptions: null,
+    meetingClockByPcm: new WeakMap(),
+    ...require("../../src/helpers/meetingCaptureClock"),
     require: (specifier) => {
       const imported = createRequire(ipcPath)(specifier);
       return specifier === "./meetingAudioTimeline"
@@ -132,8 +134,8 @@ function harness({ native = true, local = false } = {}) {
     start: context.startCapture,
     rendererSend: (buffer, source, capturedAt) =>
       ipc["meeting-transcription-send"]({}, buffer, source, capturedAt),
-    chunk: (durationMs = 100, silent = false) =>
-      onChunk(Buffer.alloc(durationMs * 48, silent ? 0 : 1)),
+    chunk: (durationMs = 100, silent = false, nativeClock) =>
+      onChunk(Buffer.alloc(durationMs * 48, silent ? 0 : 1), nativeClock),
     restart: async () => {
       watchdog.reportDeviceInvalidated();
       await new Promise(setImmediate);
@@ -141,6 +143,111 @@ function harness({ native = true, local = false } = {}) {
   };
 }
 const bytes = (buffers) => buffers.reduce((total, buffer) => total + buffer.length, 0);
+
+test("a backlog of separate PCM reads preserves the sample timeline and an actual preceding gap", () => {
+  const {
+    createMeetingCaptureClock,
+    captureStartFromDelivery,
+  } = require("../../src/helpers/meetingCaptureClock");
+  for (const silenceMs of [0, 60000]) {
+    const clock = createMeetingCaptureClock();
+    const buffer = Buffer.alloc(4800);
+    clock.append(buffer, 0);
+    // The first block after any real silence arrives on time. A later event-loop
+    // stall delivers 34 separate native reads in one turn.
+    clock.append(buffer, 100 + silenceMs);
+    for (let frame = 2; frame < 51; frame++) {
+      const delivery = silenceMs + Math.max(3500, (frame + 1) * 100);
+      clock.append(buffer, captureStartFromDelivery(buffer, delivery));
+    }
+    assert.equal(clock.elapsedMs(100, true), 100);
+    assert.equal(clock.elapsedMs(100), 100 + silenceMs);
+    assert.equal(clock.elapsedMs(200), 200 + silenceMs);
+    assert.equal(clock.elapsedMs(5000), 5000 + silenceMs);
+  }
+});
+
+test("Sarvam keeps native, buffered renderer and replay audio on the local speaker clock", async () => {
+  const run = harness({ native: false });
+  await run.start();
+  run.context.meetingConnectionOptions = { provider: "sarvam-realtime" };
+  run.context.meetingReconnectReplaySources.add("system");
+  run.at(1100);
+  run.chunk(100);
+  // A coalesced native read covers the next two seconds without an idle gap.
+  run.at(3100);
+  run.chunk(2000);
+  // The renderer delivers a saved 100 ms worklet block during recovery.
+  run.at(90000);
+  run.rendererSend(Buffer.alloc(4800, 1), "system", 61100);
+  const captures = [];
+  run.context.replaySystemAudio({
+    isConnected: true,
+    sendAudio: (_, capturedAt) => captures.push(capturedAt),
+  });
+  assert.deepEqual(captures, [1000, 1100, 61000]);
+  const clock = run.context.meetingClockByPcm.get(run.context.meetingDiarizationStream);
+  assert.equal(clock.elapsedMs(2100, true), 2100);
+  assert.equal(clock.elapsedMs(2100), 60000);
+  assert.equal(bytes(run.pcm), 2200 * 48);
+  assert.equal(bytes(run.live), 2200 * 48);
+});
+
+test("macOS dates the first Sarvam system sample alongside renderer audio, including after a restart", async () => {
+  const { SarvamMeetingStreaming } = require("../../src/helpers/sarvamRealtimeStreaming");
+  const run = harness();
+  await run.start();
+  run.context.meetingConnectionOptions = { provider: "sarvam-realtime" };
+  const system = new SarvamMeetingStreaming();
+  const mic = new SarvamMeetingStreaming();
+  const timestamps = [];
+  for (const stream of [mic, system]) {
+    stream.isConnected = true;
+    stream.ws = { bufferedAmount: 0, send() {} };
+    stream.onFinalTranscript = (_text, at) => timestamps.push(at);
+  }
+  run.context._meetingMicStreaming = mic;
+  run.context._meetingSystemStreaming = system;
+  run.context.processMeetingMicWithAec = (buffer, capturedAt) => {
+    run.context.dispatchMicAudio(buffer, capturedAt);
+    return true;
+  };
+  run.watchdog.start({ systemAudioStrategy: "native", watchesDelivery: true });
+  run.at(101000);
+  run.chunk(1000);
+  run.rendererSend(Buffer.alloc(48000, 1), "mic", 101000);
+  system.emitFinal("remote first", 0.1);
+  mic.emitFinal("then the microphone", 0.4);
+  assert.equal(run.context.meetingDiarizationStartedAt, 100000);
+  assert.equal(run.context.meetingLiveSpeakerStartedAt, 100000);
+  assert.deepEqual(timestamps, [100100, 100400]);
+  await run.restart();
+  run.at(103100);
+  run.chunk(100);
+  system.emitFinal("remote resumed", (bytes(run.pcm) - 4800) / 48000);
+  assert.deepEqual(timestamps, [100100, 100400, 103000]);
+  run.watchdog.stop();
+});
+
+test("native capture time survives multiple pipe reads delivered together after a restart", async () => {
+  const run = harness();
+  await run.start();
+  run.context.meetingConnectionOptions = { provider: "sarvam-realtime" };
+  run.watchdog.start({ systemAudioStrategy: "native", watchesDelivery: true });
+  const times = [];
+  run.context._meetingSystemStreaming = { sendAudio: (_buffer, at) => times.push(at) };
+  run.at(1100);
+  run.chunk(100, false, { hostMs: 1000, epochMs: 1000 });
+  await run.restart();
+  run.at(4000);
+  run.chunk(1000, false, { hostMs: 2000, epochMs: 2000 });
+  run.chunk(1000, false, { hostMs: 3000, epochMs: 3000 });
+  run.at(4100);
+  run.chunk(100, false, { hostMs: 4000, epochMs: 4000 });
+  assert.deepEqual(times.slice(-3), [2000, 3000, 4000]);
+  assert.equal(bytes(run.pcm) / 48, 3100);
+  run.watchdog.stop();
+});
 
 function createTimestampedStream(provider, connectedAt) {
   const StreamingClient = require(`../../src/helpers/${provider}Streaming`);
@@ -263,7 +370,7 @@ test("ElevenLabs times resumed speech from the native capture clock after idle k
   // The client paces what it sends, and holds it behind the gap's unanswered commit.
   advance(3000);
   finalizeSpeech(1);
-  assert.deepEqual(timestamps, [7000]);
+  assert.deepEqual(timestamps, [6900], "100 ms of audio starts before its delivery at 7000");
 });
 
 for (const provider of ["deepgram", "corti", "elevenLabs"]) {
@@ -273,12 +380,12 @@ for (const provider of ["deepgram", "corti", "elevenLabs"]) {
     run.watchdog.start({ systemAudioStrategy: "native", watchesDelivery: true });
     const existing = createTimestampedStream(provider, 0);
     run.context._meetingSystemStreaming = existing.streaming;
-    run.at(1000);
+    run.at(2000);
     run.chunk(1000);
     const previousFrameCount = existing.frames.length;
     run.at(8000);
     await run.restart();
-    run.at(10000);
+    run.at(10100);
     run.chunk();
     existing.finalizeSpeech(previousFrameCount);
     assert.deepEqual(existing.timestamps, [10000]);
@@ -290,12 +397,13 @@ for (const provider of ["deepgram", "corti", "elevenLabs"]) {
     const run = harness();
     await run.start();
     run.watchdog.start({ systemAudioStrategy: "native", watchesDelivery: true });
+    run.at(1000);
     run.chunk(1000);
     run.at(8000);
     await run.restart();
     const recovered = createTimestampedStream(provider, 8000);
     run.context._meetingSystemStreaming = recovered.streaming;
-    run.at(10000);
+    run.at(10100);
     run.chunk();
     recovered.finalizeSpeech();
     assert.deepEqual(recovered.timestamps, [10000]);
@@ -308,12 +416,13 @@ for (const provider of ["deepgram", "corti", "elevenLabs"]) {
     const run = harness();
     await run.start();
     run.watchdog.start({ systemAudioStrategy: "native", watchesDelivery: true });
+    run.at(1000);
     run.chunk(1000);
     run.at(8000);
     await run.restart();
     run.context.meetingReconnectReplaySources.add("system");
     run.context._meetingSystemStreaming = { sendAudio: () => false };
-    run.at(10000);
+    run.at(10100);
     run.chunk();
     const recovered = createTimestampedStream(provider, 12000);
     assert.equal(run.context.replaySystemAudio(recovered.streaming), true);
@@ -326,13 +435,14 @@ for (const provider of ["deepgram", "corti", "elevenLabs"]) {
     const run = harness();
     await run.start();
     run.watchdog.start({ systemAudioStrategy: "native", watchesDelivery: true });
+    run.at(1000);
     run.chunk(1000);
     run.at(8000);
     await run.restart();
     run.context.meetingReconnectReplaySources.add("system");
     run.context.MEETING_RECONNECT_BUFFER_MAX_BYTES = 48000;
     run.context._meetingSystemStreaming = { sendAudio: () => false };
-    run.at(10000);
+    run.at(10100);
     run.chunk();
     const recovered = createTimestampedStream(provider, 12000);
     assert.equal(run.context.replaySystemAudio(recovered.streaming), true);
@@ -367,6 +477,21 @@ test("a stream that drops while a reconnect is under way joins its replay", () =
   const replacement = { isConnected: true, sendAudio: (buffer) => replayed.push(buffer[0]) > 0 };
   assert.equal(run.context.replaySystemAudio(replacement), true);
   assert.deepEqual(replayed, [2, 3]);
+});
+
+test("a socket that fails inside send retains that PCM for reconnect", async () => {
+  const run = harness();
+  await run.start();
+  run.context._meetingSystemStreaming = {
+    isConnected: true,
+    sendAudio() {
+      this.isConnected = false;
+      run.context.meetingReconnectPromise = Promise.resolve();
+      return false;
+    },
+  };
+  run.chunk(100);
+  assert.equal(run.context.meetingReconnectAudioBytes.system, 4800);
 });
 
 test("an ElevenLabs stream that drops while a reconnect is under way leads its replay with the audio it never sent", () => {
@@ -451,7 +576,7 @@ test("real watchdog recovery preserves the missing seconds for diarization, live
   await new Promise(setImmediate);
   run.at(8250);
   run.chunk();
-  // Chunk starts at 8.25s: 0.1s recorded + 8.15s missing + 0.1s recovered.
+  // The first samples are 8.25s apart, leaving 8.15s between the two 100ms reads.
   for (const buffers of [run.pcm, run.live, run.streamed]) {
     assert.equal(bytes(buffers), 400800);
     assert.ok(buffers.slice(1, -1).every((buffer) => buffer.every((value) => value === 0)));
@@ -506,7 +631,7 @@ test("a restart before the first packet does not move the first-packet anchor", 
   run.at(3000);
   run.chunk();
   assert.equal(bytes(run.pcm), 4800);
-  assert.equal(run.context.meetingDiarizationStartedAt, 3000);
+  assert.equal(run.context.meetingDiarizationStartedAt, 2900);
 });
 
 test("other native platform helpers keep their existing idle-gap behavior", async () => {
@@ -563,6 +688,28 @@ test("a long recovery uses bounded reusable silence rather than a gap-sized allo
   assert.equal(new Set(silence.map((buffer) => buffer.buffer)).size, 1);
 });
 
+test("the macOS tap keeps its arrival anchor for providers that time the mic at arrival", () => {
+  const createTimeline = require("../../src/helpers/meetingAudioTimeline");
+  const firstChunkAt = (anchorsFirstSample) => {
+    const stamps = [];
+    const timeline = createTimeline({
+      now: () => 0,
+      wallNow: () => 10_000,
+      anchorsFirstSample: () => anchorsFirstSample,
+    });
+    // 100 ms of 24 kHz audio, with the helper's capture clock.
+    timeline.write(Buffer.alloc(4800), (_buffer, _synthetic, at) => stamps.push(at), {
+      hostMs: 0,
+      epochMs: 9_850,
+    });
+    return stamps[0];
+  };
+  // Sarvam converts the mic to first-sample times too, so it gets the capture clock.
+  assert.equal(firstChunkAt(true), 9_850);
+  // Any other provider's mic is placed at arrival, so the system track stays with it.
+  assert.equal(firstChunkAt(false), 10_000);
+});
+
 test("recovery silence plus AssemblyAI's pending partial packet stays within its frame limit", () => {
   const AssemblyAiStreaming = require("../../src/helpers/assemblyAiStreaming");
   const createTimeline = require("../../src/helpers/meetingAudioTimeline");
@@ -575,7 +722,7 @@ test("recovery silence plus AssemblyAI's pending partial packet stays within its
   timeline.write(Buffer.alloc(960, 1), send); // 20ms, below the provider's flush threshold.
   assert.equal(frames.length, 0);
   timeline.markRestart();
-  now = 2020;
+  now = 2100;
   timeline.write(Buffer.alloc(4800, 2), send);
   assert.ok(
     frames.every((frame) => frame.length <= 48000),

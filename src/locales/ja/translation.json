@@ -414,6 +414,7 @@
           "endpointNotFound": "このエンドポイントは OpenAI 互換のモデル一覧を公開していません。",
           "transcriptionEndpointNotFound": "このアドレスでは文字起こしを受け付けていません。",
           "modelNotFound": "選択したモデルはこのプロバイダーでは利用できません。",
+          "sarvamSeatBudgetExhausted": "Sarvam AI のシートに設定された利用上限に達しました。続行するには上限を引き上げてください。",
           "providerStatus": "プロバイダーがステータス {{status}} を返しました。",
           "timeout": "接続テストがタイムアウトしました。",
           "network": "プロバイダーに接続できませんでした。",
@@ -464,6 +465,7 @@
         "line": {
           "requiredByOrganization": "組織によって必須に設定されています",
           "organizationModelsUnrunnable": "組織が承認したモデルはどれもこのコンピュータでは動作しません",
+          "languageNotLocal": "Whisper は{{languages}}を文字起こしできないため、言語を自動で判別します。Sarvam AI などのクラウドプロバイダーは対応しています。",
           "offToFit": "このコンピュータの空き容量に収めるためオフにしています",
           "failed": "ダウンロードできませんでした。接続を確認して再試行してください"
         },
@@ -980,6 +982,14 @@
     "tinfoil": {
       "transportNote": "Tinfoil はストリーミングに Voxtral Mini 4B を、バッチ処理に Voxtral Small 24B を使用します。",
       "docsLink": "ドキュメントを見る"
+    },
+    "sarvam": {
+      "outputMode": "出力モード",
+      "codemix": "言語混在（英単語はラテン文字のまま）",
+      "transcribe": "話された言語で文字起こし",
+      "verbatim": "逐語的に文字起こし",
+      "translate": "英語に翻訳",
+      "translit": "ラテン文字に翻字"
     },
     "elevenlabs": {
       "keytermsNote": "OpenWhispr は辞書の用語のうち条件を満たすものを ElevenLabs に送信します。用語が含まれる場合、ElevenLabs の料金が 20% 高くなります。"
@@ -3474,6 +3484,8 @@
         "openai_whisper_1": "オリジナル Whisper モデル",
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
+        "sarvam_v4": "インドの22言語、各地の英語、辞書の用語に対応",
+        "sarvam_v3": "インドの22言語とインド英語に対応",
         "mistral_voxtral_mini_latest": "高速多言語文字起こし",
         "gemini_3_5_transcribe": "GoogleのGemini音声文字起こし",
         "elevenlabs_scribe_v3": "最も高精度な多言語文字起こし",
@@ -4300,6 +4312,8 @@
       "internalAttendeesQuestion": "この会議の参加者は全員、あなたの組織に所属していますか？",
       "internalAttendeesConfirm": "はい、開始します",
       "recordingDisabledByOrg": "組織によって会議の録音が無効にされています。",
+      "stoppedSarvamKeyChanged": "Sarvam の API キーが変更されたため、録音を停止しました。",
+      "noteUnavailable": "このノートは利用できなくなったため、録音を開始しませんでした。",
       "stoppedAccountChanged": "サインアウトまたはアカウントの切り替えにより、録音を停止しました。",
       "stoppedPolicyUnresolved": "組織の設定を確認できなかったため、録音を停止しました。",
       "stoppedWorkspaceChanged": "ワークスペースを切り替えたため、録音を停止しました。",
@@ -6888,6 +6902,8 @@
     "noResponse": "{{provider}} から応答がありませんでした。APIキーと接続を確認してください。",
     "unknown": "{{provider}} から予期しないエラーが返されました。",
     "keyMissing": "{{provider}} のAPIキーが設定されていません。設定 → 言語モデル から追加してください。",
+    "credentialChanged": "文字起こしが完了する前に {{provider}} の API キーが変更されました。新しいキーで再試行してください。",
+    "settingsChanged": "文字起こしが完了する前に文字起こしの設定が変更されました。もう一度お試しください。",
     "selfHosted": {
       "authFailed": "サーバーがAPIキーを拒否しました。",
       "accessDenied": "サーバーがアクセスを拒否しました。キーがこのモデルに対応していない可能性があります。",

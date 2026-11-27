@@ -42,7 +42,8 @@ export type LocalSetupLine =
   | { key: "requiredByOrganization" }
   | { key: "organizationModelsUnrunnable" }
   | { key: "notEnoughMemory"; model: string; neededGb: number; haveGb: number }
-  | { key: "memoryUnread"; model: string; neededGb: number };
+  | { key: "memoryUnread"; model: string; neededGb: number }
+  | { key: "languageNotLocal"; languages: string[] };
 export interface LocalSetupRow {
   id: LocalSetupRowId;
   modelId: string;
@@ -214,13 +215,14 @@ const europeanLanguages = new Set(
   parakeetModels[table.models.dictation.european]?.supportedLanguages ?? []
 );
 
+const transcribedLocally = (code: string): boolean =>
+  europeanLanguages.has(code) || code === "hi" || whisperLanguages.has(code);
+
 function languageGroup(languages: string[]): LanguageGroup {
-  const known = (code: string): boolean =>
-    europeanLanguages.has(code) || code === "hi" || whisperLanguages.has(code);
   // No language at all reads as English. One no local model knows goes to Whisper,
   // which detects the language rather than forcing another model's onto it, even
   // beside languages a narrower model covers (a guest on en-IN and bn-IN).
-  if (!languages.every(known)) return "other";
+  if (!languages.every(transcribedLocally)) return "other";
   if (languages.every((code) => code === "en")) return "english";
   if (languages.includes("hi") && languages.every((code) => code === "hi" || code === "en")) {
     return "hindi";
@@ -285,7 +287,13 @@ function dictationRow(
   }
   const { modelId, group } = pickDictationModel(languages, profile);
   const entry = group === "olderMac" ? table.olderMacDictation : machine.dictation[group];
-  return { ...speechRowBase(modelId), label: entry.label, line: null };
+  // Only cloud providers such as Sarvam transcribe these, so the row says so.
+  const notLocal = normalizeLanguages(languages).filter((code) => !transcribedLocally(code));
+  return {
+    ...speechRowBase(modelId),
+    label: entry.label,
+    line: notLocal.length > 0 ? { key: "languageNotLocal", languages: notLocal } : null,
+  };
 }
 
 /** The first model an allow-list approves that this computer can run, for these languages if one fits. */

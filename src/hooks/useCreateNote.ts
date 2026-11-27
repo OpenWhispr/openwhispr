@@ -13,7 +13,6 @@ import {
   type StartRecordingResult,
 } from "../stores/meetingRecordingStore";
 import { useTranscriptionContextAllowed } from "./usePolicy";
-import { parseSeedSegments } from "../utils/parseTranscriptSegments";
 import { isExplicitSpeakerCount, resolveExpectedSpeakerCount } from "../utils/participants";
 import { isMeetingAutoEndEligible } from "../helpers/meetingRecordingSession";
 
@@ -28,7 +27,7 @@ export function startRecordingForNote(
     noteId: note?.id ?? null,
     noteTitle: note?.title ?? null,
     folderId: note?.folder_id ?? null,
-    seedSegments: parseSeedSegments(note?.transcript),
+    noteTranscript: note?.transcript ?? null,
     recorderName,
     diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
     expectedCount: resolveExpectedSpeakerCount(note),

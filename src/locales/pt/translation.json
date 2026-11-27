@@ -393,6 +393,7 @@
           "endpointNotFound": "O endpoint não expõe uma lista de modelos compatível com OpenAI.",
           "transcriptionEndpointNotFound": "Este endereço não aceita transcrições.",
           "modelNotFound": "O modelo selecionado não está disponível neste provedor.",
+          "sarvamSeatBudgetExhausted": "Sua licença do Sarvam AI atingiu o limite de gastos. Aumente o limite para continuar.",
           "providerStatus": "O provedor retornou o status {{status}}.",
           "timeout": "O teste de conexão expirou.",
           "network": "Não foi possível contatar o provedor.",
@@ -443,6 +444,7 @@
         "line": {
           "requiredByOrganization": "Exigido pela sua organização",
           "organizationModelsUnrunnable": "Nenhum dos modelos aprovados pela sua organização funciona neste computador",
+          "languageNotLocal": "O Whisper não transcreve {{languages}}, então detecta o idioma sozinho. Um provedor em nuvem como a Sarvam AI oferece suporte.",
           "offToFit": "Desativado para caber no espaço livre deste computador",
           "failed": "Não foi possível baixar. Verifique sua conexão e tente novamente"
         },
@@ -959,6 +961,14 @@
     "tinfoil": {
       "transportNote": "O Tinfoil transmite com o Voxtral Mini 4B e processa em lote com o Voxtral Small 24B.",
       "docsLink": "Ver a documentação"
+    },
+    "sarvam": {
+      "outputMode": "Modo de saída",
+      "codemix": "Idiomas mistos (manter as palavras em inglês no alfabeto latino)",
+      "transcribe": "Transcrever no idioma falado",
+      "verbatim": "Transcrever palavra por palavra",
+      "translate": "Traduzir para inglês",
+      "translit": "Transliterar para o alfabeto latino"
     },
     "elevenlabs": {
       "keytermsNote": "O OpenWhispr envia à ElevenLabs os termos compatíveis do seu dicionário. A ElevenLabs cobra 20% a mais quando esses termos são incluídos."
@@ -3460,6 +3470,8 @@
         "openai_whisper_1": "Modelo Whisper original",
         "groq_whisper_large_v3_turbo": "Velocidade 216x em tempo real",
         "groq_whisper_large_v3": "Modelo Large v3, rápido e preciso",
+        "sarvam_v4": "22 idiomas indianos, inglês global e termos do dicionário",
+        "sarvam_v3": "22 idiomas indianos e inglês indiano",
         "mistral_voxtral_mini_latest": "Transcrição multilíngue rápida",
         "gemini_3_5_transcribe": "Fala para texto Gemini do Google",
         "elevenlabs_scribe_v3": "A transcrição multilíngue mais precisa",
@@ -4223,6 +4235,8 @@
       "internalAttendeesQuestion": "Todas as pessoas nesta reunião fazem parte da sua organização?",
       "internalAttendeesConfirm": "Sim, iniciar",
       "recordingDisabledByOrg": "A gravação de reuniões foi desativada pela sua organização.",
+      "stoppedSarvamKeyChanged": "A gravação foi interrompida porque a chave da API da Sarvam mudou.",
+      "noteUnavailable": "Esta nota não está mais disponível, então a gravação não foi iniciada.",
       "stoppedAccountChanged": "A gravação parou porque você saiu da conta ou trocou de conta.",
       "stoppedPolicyUnresolved": "A gravação parou porque não foi possível verificar as configurações da sua organização.",
       "stoppedWorkspaceChanged": "A gravação parou porque você trocou de espaço de trabalho.",
@@ -6916,6 +6930,8 @@
     "noResponse": "Não foi possível obter uma resposta de {{provider}}. Verifique sua chave de API e sua conexão.",
     "unknown": "{{provider}} retornou um erro inesperado.",
     "keyMissing": "Nenhuma chave de API definida para {{provider}}. Adicione-a em Configurações → Modelo de linguagem.",
+    "credentialChanged": "Sua chave da API da {{provider}} mudou antes de a transcrição terminar. Tente novamente para usar a nova chave.",
+    "settingsChanged": "Suas configurações de transcrição mudaram antes de a transcrição terminar. Tente novamente.",
     "selfHosted": {
       "authFailed": "Seu servidor rejeitou a chave de API.",
       "accessDenied": "Seu servidor negou o acesso. A chave pode não incluir este modelo.",

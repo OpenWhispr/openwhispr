@@ -1114,6 +1114,16 @@ test("gemini: microphone frames during a model switch reach only the requested m
   await invoke("gemini-streaming-stop");
 });
 
+test("Sarvam mic-only warmup preserves the existing socket's policy owner", async (t) => {
+  t.after(() => invoke("dictation-realtime-stop"));
+  invoke("save-openai-key", "A");
+  await invoke("dictation-realtime-warmup", { mode: "byok", provider: "openai-realtime" });
+  const owner = target._remoteStreamPolicies.get("_dictationStreaming");
+  assert.equal(owner.streaming, target._dictationStreaming);
+  await invoke("dictation-realtime-warmup", { mode: "byok", provider: "sarvam" });
+  assert.equal(target._remoteStreamPolicies.get("_dictationStreaming"), owner);
+});
+
 // Tinfoil reads the saved key whatever the transcription mode says.
 for (const [provider, saveChannel, mode] of [
   ["openai-realtime", "save-openai-key", "byok"],

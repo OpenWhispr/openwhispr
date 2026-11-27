@@ -73,6 +73,10 @@ test("the meeting language wins, and spoken languages stand in for auto", () => 
   assert.deepEqual(fragmentFilterLanguages({ spokenLanguages: ["en", "ru"] }), ["en", "ru"]);
   assert.deepEqual(fragmentFilterLanguages({ language: "auto", spokenLanguages: ["de"] }), ["de"]);
   assert.deepEqual(fragmentFilterLanguages({}), []);
+  // Sarvam on auto keeps a short Indian-language reply even for an English speaker.
+  const sarvam = { provider: "sarvam-realtime", language: "auto", spokenLanguages: ["en"] };
+  assert.equal(isWrongScriptFragment("हाँ", fragmentFilterLanguages(sarvam)), false);
+  assert.deepEqual(fragmentFilterLanguages({ ...sarvam, language: "hi" }), ["hi"]);
   assert.deepEqual(fragmentFilterLanguages(null), []);
 });
 
@@ -115,6 +119,10 @@ function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
     hasRiskyMicDuplicateProfile: () => false,
     removePendingMicFinalsFor: () => [],
     removeRacingMicEntriesFor: () => [],
+    cancelMeetingReconnect: null,
+    meetingReconnectPromise: null,
+    meetingReplayIncomplete: false,
+    drainingMeetingStreams: new Map(),
     clearMeetingSystemAudioSilenceTimer() {},
     stopMeetingSystemAudioWatchdog() {},
     flushPendingMeetingMicChunks() {},
@@ -135,6 +143,7 @@ function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
       "const attachMeetingStreamingHandlers = ",
       "const resetMeetingReconnectAudio = "
     )}
+    ${sliceBetween("const stopMeetingReconnect = ", "const resetMeetingStreamingState = ")}
     ${sliceBetween("const disconnectMeetingStreaming = ", "const clearMeetingSystemAudioSilenceTimer = ")}
     ${sliceBetween("const stopMeetingTranscription = ", "const meetingTranscriptionLifecycle = ")}
     this.attach = attachMeetingStreamingHandlers;

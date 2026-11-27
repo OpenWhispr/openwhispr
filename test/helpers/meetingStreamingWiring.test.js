@@ -64,7 +64,7 @@ test("a silent Windows capture hands the live session to renderer loopback", () 
   );
   assert.match(
     source,
-    /onChunk: \(chunk\) => \{\s*if \(!meetingSystemAudioHandover\.acceptNativeChunk\(chunk\)\) return;/
+    /onChunk: \(chunk, nativeClock\) => \{\s*if \(!meetingSystemAudioHandover\.acceptNativeChunk\(chunk\)\) return;/
   );
 
   // Leaking the latch across sessions would pin the fallback off for the rest
@@ -179,6 +179,11 @@ test("a mid-meeting renewal refused for the session reports the sign-in sentinel
   );
 });
 
+const meetingDrainHelpers = source.slice(
+  source.indexOf("const stopMeetingReconnect ="),
+  source.indexOf("const resetMeetingStreamingState =")
+);
+
 test("enterprise renewal cannot restore sockets after policy or configuration refusal", async () => {
   const start = source.indexOf("const reconnectMeetingStreams =");
   const end = source.indexOf("const assertMeetingAllowed =", start);
@@ -194,12 +199,15 @@ test("enterprise renewal cannot restore sockets after policy or configuration re
       isConnected: true,
       disconnect: async () => disconnected++,
     };
-    const target = { _meetingMicStreaming: streaming, _meetingSystemStreaming: streaming };
+    const system = { ...streaming };
+    const target = { _meetingMicStreaming: streaming, _meetingSystemStreaming: system };
     const reconnect = vm.runInNewContext(
-      `(function () { ${source.slice(start, end)} return reconnectMeetingStreams; }).call(target)`,
+      `(function () { ${meetingDrainHelpers} ${source.slice(start, end)} return reconnectMeetingStreams; }).call(target)`,
       {
         target,
         meetingReconnectPromise: null,
+        cancelMeetingReconnect: null,
+        drainingMeetingStreams: new Map(),
         meetingLocalMode: false,
         meetingConnectionOptions: { provider: "enterprise-realtime" },
         meetingConnectionWin: { isDestroyed: () => false, webContents: { send() {} } },
@@ -213,6 +221,7 @@ test("enterprise renewal cannot restore sockets after policy or configuration re
         debugLogger: { error() {} },
         requeueUnsentMeetingAudio() {},
         resetMeetingReconnectAudio() {},
+        meetingReconnectAudioBytes: { mic: 0, system: 0 },
         isSignInRefusal: () => false,
         isAudioPolicyRefusal: () => false,
       }
@@ -221,13 +230,78 @@ test("enterprise renewal cannot restore sockets after policy or configuration re
     assert.equal(await reconnect({ restoreOldOnFailure: true }), recoverable, code);
     assert.equal(disconnected, recoverable ? 0 : 2, code);
     assert.equal(target._meetingMicStreaming, recoverable ? streaming : null, code);
-    assert.equal(target._meetingSystemStreaming, recoverable ? streaming : null, code);
+    assert.equal(target._meetingSystemStreaming, recoverable ? system : null, code);
   }
 });
 
-test("reconnects that keep failing right after they succeed run out; ones that hold start over", async () => {
+function reconnectHarness(Streaming, options, overrides = {}) {
   const start = source.indexOf("const reconnectMeetingStreams =");
   const end = source.indexOf("const assertMeetingAllowed =", start);
+  const disconnect = source.slice(
+    source.indexOf("const disconnectMeetingStreaming ="),
+    source.indexOf("const clearMeetingSystemAudioSilenceTimer =")
+  );
+  const target = {
+    _meetingMicStreaming: new Streaming(),
+    _meetingSystemStreaming: new Streaming(),
+  };
+  const context = {
+    target,
+    cancelMeetingReconnect: null,
+    drainingMeetingStreams: new Map(),
+    resetMeetingStreamingState() {
+      target._meetingMicStreaming = null;
+      target._meetingSystemStreaming = null;
+    },
+    meetingReconnectPromise: null,
+    meetingLocalMode: false,
+    meetingConnectionOptions: options,
+    meetingConnectionWin: { isDestroyed: () => false, webContents: { send() {} } },
+    meetingConnectionKey: "key",
+    meetingReconnectAudioBytes: { mic: 0, system: 0 },
+    meetingReplayIncomplete: false,
+    MEETING_STOP_REPLAY_TIMEOUT_MS: 100,
+    setTimeout,
+    clearTimeout,
+    meetingReconnectCount: 0,
+    meetingReconnectedAt: 0,
+    meetingReconnectReplaySources: new Set(),
+    MAX_MEETING_RECONNECTS: 3,
+    MEETING_RECONNECT_STABLE_MS: 10000,
+    MEETING_STREAM_SAMPLE_RATE: 24000,
+    credentialGeneration: 0,
+    resolveEnterpriseMeetingOptions: async (_event, current) => current,
+    enterpriseMeetingConnectOptions: async () => ({}),
+    getMeetingConnectionKey: () => "key",
+    getMeetingStreamingClient: () => Streaming,
+    attachMeetingStreamingHandlers() {},
+    fetchRealtimeToken: async (_event, _options, streams) => (streams ? ["k", "k"] : "k"),
+    withMeetingSourceConnectOpts: (connectOpts) => connectOpts,
+    assertMeetingAllowed() {},
+    requeueUnsentMeetingAudio() {},
+    replayMeetingReconnectAudio: () => true,
+    // A replay empties the queue, as the handler's reset does.
+    resetMeetingReconnectAudio() {
+      context.meetingReconnectAudioBytes = { mic: 0, system: 0 };
+    },
+    debugLogger: { error() {}, info() {} },
+    isSignInRefusal: () => false,
+    isAudioPolicyRefusal: () => false,
+    ...overrides,
+  };
+  const actions = vm.runInNewContext(
+    `(function () {
+      ${meetingDrainHelpers}
+      ${source.slice(start, end)}
+      ${disconnect}
+      return {reconnect: reconnectMeetingStreams, disconnect: disconnectMeetingStreaming};
+    }).call(target)`,
+    context
+  );
+  return { ...actions, target, context };
+}
+
+test("reconnects that keep failing right after they succeed run out; ones that hold start over", async () => {
   let now = 100000;
   class Streaming {
     isConnected = false;
@@ -236,42 +310,11 @@ test("reconnects that keep failing right after they succeed run out; ones that h
     }
     async disconnect() {}
   }
-  const options = { provider: "elevenlabs-realtime", mode: "byok" };
-  const target = {
-    _meetingMicStreaming: new Streaming(),
-    _meetingSystemStreaming: new Streaming(),
-  };
-  const reconnect = vm.runInNewContext(
-    `(function () { ${source.slice(start, end)} return reconnectMeetingStreams; }).call(target)`,
+  const { target, reconnect } = reconnectHarness(
+    Streaming,
+    { provider: "elevenlabs-realtime", mode: "byok" },
     {
-      target,
       Date: { now: () => now },
-      meetingReconnectPromise: null,
-      meetingLocalMode: false,
-      meetingConnectionOptions: options,
-      meetingConnectionWin: { isDestroyed: () => false, webContents: { send() {} } },
-      meetingConnectionKey: null,
-      meetingReconnectCount: 0,
-      meetingReconnectedAt: 0,
-      meetingReconnectReplaySources: new Set(),
-      MAX_MEETING_RECONNECTS: 3,
-      MEETING_RECONNECT_STABLE_MS: 10000,
-      MEETING_STREAM_SAMPLE_RATE: 24000,
-      credentialGeneration: 0,
-      resolveEnterpriseMeetingOptions: async (_event, current) => current,
-      enterpriseMeetingConnectOptions: async () => ({}),
-      getMeetingConnectionKey: () => "key",
-      getMeetingStreamingClient: () => Streaming,
-      attachMeetingStreamingHandlers() {},
-      fetchRealtimeToken: async (_event, _options, streams) => (streams ? ["k", "k"] : "k"),
-      withMeetingSourceConnectOpts: (connectOpts) => connectOpts,
-      assertMeetingAllowed() {},
-      requeueUnsentMeetingAudio() {},
-      replayMeetingReconnectAudio: () => true,
-      resetMeetingReconnectAudio() {},
-      debugLogger: { error() {}, info() {} },
-      isSignInRefusal: () => false,
-      isAudioPolicyRefusal: () => false,
     }
   );
   // The provider accepts each handshake, then drops the new sockets a second later.
@@ -292,9 +335,306 @@ test("reconnects that keep failing right after they succeed run out; ones that h
   assert.equal(await dropAndReconnect(), true);
 });
 
+for (const timing of ["before", "after"]) {
+  test(`meeting stop ${timing} the Sarvam replacement handshake closes every socket and drains the original final`, async () => {
+    const { EventEmitter } = require("node:events");
+    const { SarvamMeetingStreaming } = require("../../src/helpers/sarvamRealtimeStreaming");
+    const clients = [];
+    class Socket extends EventEmitter {
+      send() {}
+      close() {
+        this.closed = true;
+      }
+      receive(event) {
+        this.emit("message", JSON.stringify(event));
+      }
+    }
+    class Client extends SarvamMeetingStreaming {
+      constructor() {
+        super(Socket);
+        clients.push(this);
+      }
+    }
+    const options = { provider: "sarvam-realtime", model: "saaras:v4", mode: "byok" };
+    const { reconnect, disconnect, target } = reconnectHarness(Client, options);
+    const original = target._meetingSystemStreaming;
+    const ready = original.connect({ ...options, apiKey: "saved" });
+    original.ws.receive({ event: "session.begin" });
+    await ready;
+    original.sendAudio(Buffer.alloc(4800), 1000);
+    const finals = [];
+    original.onFinalTranscript = (text) => finals.push(text);
+    const recovered = reconnect();
+    await new Promise(setImmediate);
+    const replacements = clients.slice(2);
+    assert.equal(replacements.length, 2);
+    const finishHandshakes = () => {
+      for (const stream of replacements) stream.ws.receive({ event: "session.begin" });
+    };
+    if (timing === "after") {
+      finishHandshakes();
+      await recovered;
+      assert.equal(target._meetingSystemStreaming, replacements[1]);
+    }
+    let stopped = false;
+    const stopping = disconnect().then(() => {
+      stopped = true;
+    });
+    if (timing === "before") finishHandshakes();
+    await recovered;
+    await new Promise(setImmediate);
+    assert.equal(stopped, false, "the healthy original socket still owes its final");
+    assert.ok(replacements.every((stream) => stream.ws.closed && !stream.isConnected));
+    original.ws.receive({ event: "transcript.final", utterance_idx: 0, text: "last words" });
+    original.ws.receive({ event: "session.end" });
+    await stopping;
+    assert.deepEqual(finals, ["last words"]);
+    assert.equal(original.ws.closed, true);
+    assert.equal(target._meetingMicStreaming, null);
+    assert.equal(target._meetingSystemStreaming, null);
+  });
+}
+
+for (const timing of ["ready", "stalled"]) {
+  test(`user stop with queued audio gives a ${timing} reconnect a bounded chance to replay`, async () => {
+    const gate = Promise.withResolvers();
+    const clients = [];
+    const sent = [];
+    class Client {
+      constructor() {
+        clients.push(this);
+      }
+      async connect() {
+        await gate.promise;
+        this.isConnected = true;
+      }
+      async disconnect({ commit = true } = {}) {
+        this.closed = true;
+        this.committed = commit;
+      }
+    }
+    let expire;
+    const { reconnect, disconnect } = reconnectHarness(
+      Client,
+      { provider: "sarvam-realtime" },
+      {
+        setTimeout: (callback) => {
+          expire = callback;
+        },
+        clearTimeout() {},
+        meetingReconnectAudioBytes: { mic: 48000, system: 0 },
+        replayMeetingReconnectAudio: (source, client) => {
+          if (source === "mic") sent.push(client);
+          return true;
+        },
+      }
+    );
+    const recovery = reconnect();
+    await new Promise(setImmediate);
+    const stopping = disconnect({ replayQueued: true });
+    await new Promise(setImmediate);
+    assert.ok(!clients[2].closed);
+    if (timing === "ready") gate.resolve();
+    else expire();
+    const incomplete = await stopping;
+    assert.equal(incomplete, timing === "stalled");
+    gate.resolve();
+    await recovery;
+    assert.deepEqual(sent, timing === "ready" ? [clients[2]] : []);
+    assert.ok(clients.every((client) => client.closed));
+    assert.equal(clients[2].committed, timing === "ready");
+  });
+}
+
+test("a user stop whose reconnect was overtaken reports the audio it never replayed", async () => {
+  const gate = Promise.withResolvers();
+  class Client {
+    async connect() {
+      await gate.promise;
+      this.isConnected = true;
+    }
+    async disconnect() {
+      this.closed = true;
+    }
+  }
+  const replayed = [];
+  const { reconnect, disconnect, context } = reconnectHarness(
+    Client,
+    { provider: "sarvam-realtime" },
+    {
+      meetingReconnectAudioBytes: { mic: 48000, system: 0 },
+      replayMeetingReconnectAudio: (source) => {
+        replayed.push(source);
+        return true;
+      },
+    }
+  );
+  const recovery = reconnect();
+  await new Promise(setImmediate);
+  const stopping = disconnect({ replayQueued: true });
+  await new Promise(setImmediate);
+  // The owning window changed, so this reconnect gives up without replaying.
+  context.meetingConnectionWin = { isDestroyed: () => false, webContents: { send() {} } };
+  gate.resolve();
+  assert.equal(await recovery, true);
+  assert.equal(await stopping, true, "the queued audio was never transcribed");
+  assert.deepEqual(replayed, []);
+});
+
+for (const when of ["before token lookup", "during token lookup", "during handshake"]) {
+  test(`Sarvam prepare/start refuses a credential replacement ${when}`, async () => {
+    let key = "original";
+    const gate = Promise.withResolvers();
+    const clients = [];
+    let reads = 0;
+    class Client {
+      constructor() {
+        clients.push(this);
+      }
+      async connect() {
+        if (when === "during handshake") await gate.promise;
+        this.isConnected = true;
+      }
+      async disconnect() {
+        this.closed = true;
+      }
+    }
+    const target = {};
+    const start = source.indexOf("const connectRealtimeStreaming =");
+    const guard = source.slice(
+      source.indexOf("const assertMeetingCredential ="),
+      source.indexOf("const resolveEnterpriseMeetingOptions =")
+    );
+    const code =
+      guard + source.slice(start, source.indexOf("// System audio captured in main", start));
+    const connect = vm.runInNewContext(
+      `(function(){ ${code} return connectRealtimeStreaming; }).call(target)`,
+      {
+        target,
+        changedSarvamCredential: () =>
+          Object.assign(new Error("key changed"), { code: "PROVIDER_CREDENTIAL_CHANGED" }),
+        getMeetingConnectionKey: () => key,
+        getMeetingStreamingClient: () => Client,
+        meetingConnectionOptions: null,
+        meetingConnectionKey: null,
+        BrowserWindow: { fromWebContents: () => ({}) },
+        MEETING_STREAM_SAMPLE_RATE: 24000,
+        enterpriseMeetingConnectOptions: async () => ({}),
+        getMeetingSystemAudioPlan: async () => {
+          if (when === "before token lookup") await gate.promise;
+          return { mode: "native" };
+        },
+        fetchRealtimeToken: async () => {
+          reads++;
+          if (when === "during token lookup") await gate.promise;
+          return [key, key];
+        },
+        attachMeetingStreamingHandlers() {},
+        withMeetingSourceConnectOpts: (options) => options,
+        assertMeetingAllowed() {},
+      }
+    );
+    const ready = connect(
+      { sender: {} },
+      { provider: "sarvam-realtime", mode: "byok" },
+      undefined,
+      key
+    );
+    await new Promise(setImmediate);
+    key = "changed";
+    gate.resolve();
+    await assert.rejects(ready, { code: "PROVIDER_CREDENTIAL_CHANGED" });
+    assert.equal(reads, when === "before token lookup" ? 0 : 1);
+    assert.equal(clients.length, when === "during handshake" ? 2 : 0);
+    assert.ok(clients.every((client) => client.closed));
+  });
+}
+
+for (const when of ["before reconnect", "during token lookup", "during handshake"]) {
+  test(`Sarvam meeting key changed ${when} cannot authenticate or replay the capture under a replacement key`, async () => {
+    const gate = Promise.withResolvers();
+    const clients = [];
+    const replayed = [];
+    const policyStops = [];
+    let key = when === "before reconnect" ? "changed" : "original";
+    let reads = 0;
+    class Client {
+      constructor() {
+        clients.push(this);
+      }
+      async connect() {
+        this.connected = true;
+        if (when === "during handshake") await gate.promise;
+        this.isConnected = true;
+      }
+      async disconnect() {
+        this.closed = true;
+      }
+    }
+    const { reconnect, target } = reconnectHarness(
+      Client,
+      { provider: "sarvam-realtime", mode: "byok" },
+      {
+        meetingConnectionKey: "original",
+        getMeetingConnectionKey: () => key,
+        fetchRealtimeToken: async () => {
+          reads++;
+          if (when === "during token lookup") await gate.promise;
+          return [key, key];
+        },
+        replayMeetingReconnectAudio: (source) => {
+          replayed.push(source);
+          return true;
+        },
+      }
+    );
+    target._stopMeetingForPolicy = (reason, _expectedSessionId, auditReason) => {
+      policyStops.push([reason, auditReason]);
+    };
+    const recovery = reconnect();
+    await new Promise(setImmediate);
+    key = "changed";
+    gate.resolve();
+    await recovery;
+    assert.deepEqual(policyStops, [["sarvamCredentialChanged", "error"]]);
+    assert.deepEqual(replayed, []);
+    assert.equal(reads, when === "before reconnect" ? 0 : 1);
+    assert.ok(clients.slice(2).every((client) => client.closed || !client.connected));
+    if (when !== "during handshake") assert.ok(clients.every((client) => !client.connected));
+  });
+}
+
+test("a late token refusal from a stopped reconnect cannot end the next meeting", async () => {
+  const token = Promise.withResolvers();
+  class Client {
+    async disconnect() {}
+  }
+  const { target, reconnect, disconnect } = reconnectHarness(
+    Client,
+    { provider: "enterprise-realtime" },
+    {
+      fetchRealtimeToken: () => token.promise,
+      isAudioPolicyRefusal: () => true,
+    }
+  );
+  const policyStops = [];
+  target._stopMeetingForPolicy = (reason) => policyStops.push(reason);
+  const recovery = reconnect();
+  await new Promise(setImmediate);
+  await disconnect();
+  const replacement = new Client();
+  target._meetingMicStreaming = replacement;
+  token.reject(
+    Object.assign(new Error("old meeting no longer allowed"), { code: "POLICY_UNRESOLVABLE" })
+  );
+  await recovery;
+  assert.deepEqual(policyStops, []);
+  assert.equal(target._meetingMicStreaming, replacement);
+});
+
 // Runs the real reconnect with its replay closures. The clients it connects record
 // what they are sent, under the source the meeting attached them for.
-function reconnectHarness({ mic, system }) {
+function reconnectReplayHarness({ mic, system }) {
   const start = source.indexOf("const resetMeetingReconnectAudio =");
   const end = source.indexOf("const assertMeetingAllowed =", start);
   const replayed = { mic: [], system: [] };
@@ -312,12 +652,17 @@ function reconnectHarness({ mic, system }) {
   const target = { _meetingMicStreaming: mic, _meetingSystemStreaming: system };
   const closures = vm.runInNewContext(
     `(function () {
+      ${meetingDrainHelpers}
       ${source.slice(start, end)}
       return { reconnectMeetingStreams, queueMeetingReconnectAudio };
     }).call(target)`,
     {
       target,
       Buffer,
+      cancelMeetingReconnect: null,
+      drainingMeetingStreams: new Map(),
+      meetingReplayIncomplete: false,
+      withMeetingSourceConnectOpts: (options) => options,
       meetingReconnectPromise: null,
       meetingLocalMode: false,
       meetingConnectionOptions: { provider: "elevenlabs-realtime", mode: "byok" },
@@ -358,7 +703,7 @@ test("a reconnect replays what its dropped clients never sent ahead of the outag
     disconnect: async () => {},
     takeUnsentAudio: () => unsent.splice(0),
   });
-  const run = reconnectHarness({
+  const run = reconnectReplayHarness({
     mic: dropped({ buffer: Buffer.from([1]), capturedAt: 1000 }),
     system: dropped({ buffer: Buffer.from([2]), capturedAt: 2000 }),
   });
@@ -380,7 +725,7 @@ test("a reconnect replays what its dropped clients never sent ahead of the outag
 
 test("a reconnect leaves the queue of a client that is still connected alone", async () => {
   let asked = false;
-  const run = reconnectHarness({
+  const run = reconnectReplayHarness({
     mic: { isConnected: false, disconnect: async () => {} },
     system: {
       isConnected: true,
@@ -397,7 +742,7 @@ test("a reconnect leaves the queue of a client that is still connected alone", a
 
 test("a reconnect takes nothing from a dropped client that queues nothing", async () => {
   // The other providers' clients send what they take, and have no queue to hand over.
-  const run = reconnectHarness({
+  const run = reconnectReplayHarness({
     mic: { isConnected: false, disconnect: async () => {} },
     system: null,
   });
@@ -412,14 +757,12 @@ test("a reconnect refused under org policy ends the meeting instead of restoring
     source.indexOf('debugLogger.error("Meeting stream reconnect failed"'),
     source.indexOf("return canRestoreOld;")
   );
-  // The policy stop clears meetingConnectionOptions, so the stale-options branch
-  // right after it returns before the old sockets can be kept or a fatal error sent.
   assert.match(
     reconnectCatch,
-    /if \(isAudioPolicyRefusal\(error\)\) this\._stopMeetingForPolicy\(error\.code\);\s*if \(meetingConnectionOptions !== options\) \{/
+    /if \(isAudioPolicyRefusal\(error\)\) \{\s*this\._stopMeetingForPolicy\(error\.code\);\s*return true;/
   );
   assert.match(
     source,
-    /this\._stopMeetingForPolicy = \(reason = "policyRestricted", expectedSessionId\) => \{[\s\S]{0,900}?meetingConnectionOptions = null;[\s\S]{0,900}?broadcastToWindows\("meeting-transcription-error", reason\)/
+    /this\._stopMeetingForPolicy = \(reason = "policyRestricted", expectedSessionId, auditReason\) => \{[\s\S]{0,900}?meetingConnectionOptions = null;[\s\S]{0,900}?broadcastToWindows\("meeting-transcription-error", reason\)/
   );
 });

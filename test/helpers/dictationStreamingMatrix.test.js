@@ -21,6 +21,7 @@ const RENDERER_STREAMING_PROVIDERS = [
   "assemblyai",
   "openai-realtime",
   "gemini",
+  "sarvam",
   "corti",
   "tinfoil-realtime",
 ];
@@ -41,6 +42,17 @@ const settingsWith = (overrides) => ({ ...SETTINGS_DEFAULTS, ...overrides });
 
 // [description, { settings, context, sttConfig }, expected provider name]
 const RESOLUTION_MATRIX = [
+  ...["saaras:v4", "saaras:v3"].map((model) => [
+    `Sarvam BYOK dictation with ${model}`,
+    {
+      settings: settingsWith({
+        cloudTranscriptionMode: "byok",
+        cloudTranscriptionProvider: "sarvam",
+        cloudTranscriptionModel: model,
+      }),
+    },
+    "sarvam",
+  ]),
   ["default config (the #1624 repro) resolves to openai-realtime", {}, "openai-realtime"],
   [
     "gpt-4o-transcribe also resolves to openai-realtime",
@@ -281,6 +293,18 @@ test("options: openai-realtime sends provider explicitly and no preview (#1624)"
   });
 });
 
+test("options: a language only Sarvam transcribes reaches only Sarvam's socket", async () => {
+  const { buildStreamingSessionOptions } = await loadRouting();
+  for (const providerName of ["deepgram", "assemblyai", "openai-realtime", "gemini", "sarvam"]) {
+    const options = buildStreamingSessionOptions({
+      providerName,
+      settings: settingsWith({}),
+      language: "brx",
+    });
+    assert.equal(options.language, providerName === "sarvam" ? "brx" : undefined, providerName);
+  }
+});
+
 test("options: tinfoil-realtime keeps its always-on preview (#1120)", async () => {
   const { buildStreamingSessionOptions } = await loadRouting();
   const options = buildStreamingSessionOptions({
@@ -407,4 +431,27 @@ test("Orukeet options mark only a configured Self-Hosted route for custom header
     language: "auto",
   });
   assert.equal(options.transcriptionMode, "self-hosted");
+});
+
+test("options: sarvam resolves a model left by another provider before connecting", async () => {
+  const { buildStreamingSessionOptions } = await loadRouting();
+  const build = (cloudTranscriptionModel) =>
+    buildStreamingSessionOptions({
+      providerName: "sarvam",
+      settings: settingsWith({
+        cloudTranscriptionProvider: "sarvam",
+        cloudTranscriptionMode: "byok",
+        cloudTranscriptionModel,
+        sarvamMode: "translate",
+        customDictionary: ["OpenWhispr"],
+      }),
+      language: "hi",
+    });
+  const stale = build("gpt-4o-mini-transcribe");
+  assert.equal(stale.sarvamMode, "translate");
+  assert.equal(stale.model, "saaras:v4");
+  assert.deepEqual(stale.keyterms, ["OpenWhispr"]);
+  const v3 = build("saaras:v3");
+  assert.equal(v3.model, "saaras:v3");
+  assert.equal(v3.keyterms, undefined);
 });

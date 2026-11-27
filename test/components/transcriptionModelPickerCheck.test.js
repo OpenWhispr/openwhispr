@@ -1060,3 +1060,43 @@ test("the dictation picker explains the current cleanup setting only for selecte
   await panel.setProps({ transcriptionContext: "upload" });
   assert.equal(hint(), undefined);
 });
+
+test("Sarvam defaults to code-mixed output and saves the selected mode", async (t) => {
+  const panel = await mount(t, {
+    overrides: { selectedCloudProvider: "sarvam", selectedCloudModel: "saaras:v4" },
+  });
+  assert.equal(panel.state().sarvamMode, "codemix");
+  for (const mode of ["transcribe", "translate", "verbatim", "translit", "codemix"]) {
+    await panel.choose(mode);
+    assert.equal(panel.state().sarvamMode, mode);
+  }
+});
+
+test("a user who never chose a Sarvam mode stores none, so a new default reaches them", async (t) => {
+  const panel = await mount(t, {
+    overrides: { selectedCloudProvider: "sarvam", selectedCloudModel: "saaras:v4" },
+  });
+  await panel.setProps({ transcriptionContext: "upload" });
+  assert.equal(panel.state().uploadSarvamMode, "codemix");
+  assert.equal(localStorage.getItem("meetingSarvamMode"), null);
+  assert.equal(localStorage.getItem("uploadSarvamMode"), null);
+});
+
+test("each Sarvam picker preserves its own output mode after upgrading a shared preference", async (t) => {
+  const panel = await mount(t, {
+    overrides: { selectedCloudProvider: "sarvam", selectedCloudModel: "saaras:v4" },
+    settings: { sarvamMode: "translate", meetingSarvamMode: "translit" },
+  });
+  const selectedMode = () =>
+    panel.find((node) => typeof node.props?.onValueChange === "function")[0].props.value;
+  await panel.setProps({ transcriptionContext: "upload" });
+  assert.equal(selectedMode(), "translate");
+  await panel.choose("verbatim");
+  await panel.setProps({ transcriptionContext: "meeting" });
+  assert.equal(selectedMode(), "translit");
+  await panel.choose("codemix");
+  await panel.setProps({ transcriptionContext: "dictation" });
+  assert.equal(selectedMode(), "translate");
+  assert.equal(localStorage.getItem("meetingSarvamMode"), "codemix");
+  assert.equal(localStorage.getItem("uploadSarvamMode"), "verbatim");
+});

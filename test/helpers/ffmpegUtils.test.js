@@ -7,8 +7,11 @@ const {
   isPcm16Mono16kWav,
   wavToFloat32Samples,
   splitAudioFile,
+  convertToPcm16,
+  convertToWav,
   getFFmpegPath,
 } = require("../../src/helpers/ffmpegUtils");
+const { UPLOAD_AUDIO_EXTENSIONS } = require("../../src/constants/uploadAudioFormats.json");
 const { wavHeader, pcm16Mono16kWav, insertWavChunk } = require("./harness/wavFixtures");
 
 test("parseFfmpegDuration reads the input duration from ffmpeg output", () => {
@@ -72,6 +75,49 @@ const { execFileSync } = require("node:child_process");
 
 const ffmpegPath = getFFmpegPath();
 
+test(
+  "Sarvam and speaker detection use the same default audio track",
+  { skip: !ffmpegPath },
+  async (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ow-default-track-"));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const source = path.join(dir, "meeting.mkv");
+    execFileSync(ffmpegPath, [
+      "-loglevel",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "anullsrc=r=16000:cl=mono",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=900:sample_rate=16000",
+      "-t",
+      "1",
+      "-map",
+      "0:a",
+      "-map",
+      "1:a",
+      "-c:a",
+      "pcm_s16le",
+      "-disposition:a:0",
+      "0",
+      "-disposition:a:1",
+      "default",
+      source,
+    ]);
+    const pcm = path.join(dir, "transcription.pcm");
+    const wav = path.join(dir, "diarization.wav");
+    await convertToPcm16(source, pcm);
+    await convertToWav(source, wav);
+    const samples = fs.readFileSync(pcm);
+    const diarizationSamples = fs.readFileSync(wav).subarray(-32000);
+    assert.ok(diarizationSamples.some((sample) => sample !== 0));
+    assert.ok(samples.equals(diarizationSamples), "transcription must decode the default track");
+  }
+);
+
 // ffmpeg -i with no output exits non-zero; the stream listing is on stderr.
 function streamsOf(file) {
   try {
@@ -134,5 +180,27 @@ test(
       assert.doesNotMatch(info, /Video:/, `${name} carries a video frame`);
       assert.doesNotMatch(info, /Board meeting/, `${name} carries the file's tags`);
     }
+  }
+);
+
+test(
+  "every upload format this ffmpeg can write passes the self-contained-media allow-list",
+  { skip: !ffmpegPath && "no ffmpeg binary available" },
+  async (t) => {
+    const { spawnSync } = require("node:child_process");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ow-ffmpeg-formats-"));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const written = [];
+    for (const extension of UPLOAD_AUDIO_EXTENSIONS) {
+      const source = path.join(dir, `tone.${extension}`);
+      const tone = ["-f", "lavfi", "-i", "sine=frequency=440:duration=1"];
+      if (spawnSync(ffmpegPath, ["-y", ...tone, source]).status !== 0) continue;
+      written.push(extension);
+      await assert.doesNotReject(
+        convertToPcm16(source, path.join(dir, `${extension}.pcm`)),
+        `.${extension} is rejected`
+      );
+    }
+    for (const extension of ["ac3", "au", "wv"]) assert.ok(written.includes(extension));
   }
 );

@@ -237,6 +237,7 @@ function anything() {
 }
 
 function buildFakeThis() {
+  let sarvamKey = "saved-sarvam-key";
   const dbRows = new Map([
     [7, { id: 7, audio_duration_ms: 1200 }],
     [8, { id: 8, audio_duration_ms: 1200 }],
@@ -281,6 +282,10 @@ function buildFakeThis() {
       getOpenAIKey: () => "sk-openai",
       getGroqKey: () => "gk-groq",
       getMistralKey: () => "mk-mistral",
+      getSarvamKey: () => sarvamKey,
+      saveSarvamKey: (key) => {
+        sarvamKey = key;
+      },
       getXaiKey: () => "xk-xai",
       getTinfoilKey: () => "tk-tinfoil",
       getAssemblyAIKey: () => "aai-assemblyai",
@@ -1157,6 +1162,142 @@ const invokeUpload = (payload, bytes = Buffer.from([1, 2, 3, 4])) => {
   );
 };
 
+test("a queued Sarvam upload refuses a replaced key even after the original key is restored", async (t) => {
+  const generation = handlers.get("get-sarvam-key-generation");
+  const save = handlers.get("save-sarvam-key");
+  const original = fakeThis.environmentManager.getSarvamKey();
+  t.after(() => save({ sender: {} }, original));
+  const options = { provider: "sarvam", sarvamKeyGeneration: generation() };
+  const priorRequests = fetches.length;
+  const unbound = await invokeUpload({ ...options, sarvamKeyGeneration: null });
+  assert.equal(unbound.code, "PROVIDER_CREDENTIAL_CHANGED");
+  // A run that began on another route saw its settings change, not its key.
+  assert.equal(unbound.messageKey, "providerErrors.settingsChanged");
+  for (const key of ["replacement", original]) {
+    save({ sender: {} }, key);
+    const result = await invokeUpload(options);
+    assert.equal(result.code, "PROVIDER_CREDENTIAL_CHANGED");
+    assert.equal(result.messageKey, "providerErrors.credentialChanged");
+    assert.deepEqual(result.messageParams, { provider: "Sarvam AI" });
+    assert.equal(result.success, false);
+    assert.equal(fetches.length, priorRequests);
+  }
+});
+
+test("Sarvam uploads and history retries use the selected output mode for each operation", async (t) => {
+  if (!require("../../src/helpers/ffmpegUtils").getFFmpegPath())
+    return t.skip("ffmpeg unavailable");
+  const { pcm16ToWav } = require("../../src/utils/audioUtils");
+  const wav = pcm16ToWav(Buffer.alloc(32000));
+  t.mock.method(fakeThis.audioStorageManager, "getAudioBuffer", () => wav);
+  const previousResponse = fetchResponse;
+  t.after(() => {
+    fetchResponse = previousResponse;
+  });
+  fetchResponse = () => Response.json({ transcript: "कल meeting है" });
+  fetches.length = 0;
+
+  const settings = {
+    provider: "sarvam",
+    model: "saaras:v4",
+    sarvamMode: "codemix",
+    keyterms: ["OpenWhispr"],
+    language: "hi",
+    transcriptionMode: "providers",
+  };
+  const upload = await invokeUpload(settings, wav);
+  const { path: filePath } = await handlers.get("save-temp-audio")({}, wav);
+  t.after(() => handlers.get("delete-temp-audio")({}, filePath));
+  const draft = await handlers.get("transcribe-audio-file-byok")(
+    { sender: { send() {} } },
+    { ...settings, filePath, purpose: "dictation" }
+  );
+  const retry = await invoke({
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionModel: "saaras:v3",
+    cloudTranscriptionMode: "byok",
+    transcriptionMode: "providers",
+    sarvamMode: "verbatim",
+    preferredLanguage: "ta",
+    keyterms: ["OpenWhispr"],
+  });
+  assert.equal(upload.text, "कल meeting है");
+  assert.equal(draft.success, true);
+  assert.equal(retry.success, true);
+  assert.equal(fetches.length, 3);
+  for (const { url, init } of fetches) {
+    assert.equal(url, "https://api.sarvam.ai/speech-to-text");
+    assert.equal(init.headers["api-subscription-key"], "saved-sarvam-key");
+  }
+  const fields = ({ init: { body } }) =>
+    ["model", "mode", "language_code", "keyterms"].map((field) => body.get(field));
+  assert.deepEqual(fetches.map(fields), [
+    ["saaras:v4", "codemix", null, '["OpenWhispr"]'],
+    ["saaras:v4", "codemix", "hi-IN", '["OpenWhispr"]'],
+    ["saaras:v3", "verbatim", "ta-IN", null],
+  ]);
+});
+
+test("Sarvam file uploads preserve phrase times across audio cuts and silent pieces", async (t) => {
+  if (!require("../../src/helpers/ffmpegUtils").getFFmpegPath())
+    return t.skip("ffmpeg unavailable");
+  const { pcm16ToWav } = require("../../src/utils/audioUtils");
+  const wav = pcm16ToWav(Buffer.alloc(61 * 32000));
+  const original = fetchResponse;
+  t.after(() => {
+    fetchResponse = original;
+  });
+  const replies = [
+    {
+      transcript: "Good morning.",
+      timestamps: {
+        words: ["Good", "morning."],
+        start_time_seconds: [1, 2],
+        end_time_seconds: [1.5, 3],
+      },
+    },
+    { transcript: "" },
+    {
+      transcript: "Welcome.",
+      timestamps: { words: ["Welcome."], start_time_seconds: [0.5], end_time_seconds: [2] },
+    },
+  ];
+  fetchResponse = () => Response.json(replies.shift());
+  fetches.length = 0;
+  const result = await invokeUpload({ provider: "sarvam", timestamps: true }, wav);
+  assert.equal(result.text, "Good morning. Welcome.");
+  assert.deepEqual(result.segments, [
+    { text: "Good", start: 1, end: 1.5 },
+    { text: "morning.", start: 2, end: 3 },
+    { text: "Welcome.", start: 58.5, end: 60 },
+  ]);
+  assert.ok(fetches.every(({ init }) => init.body.get("with_timestamps") === "true"));
+});
+
+test("a silent Sarvam upload returns empty text as other providers do; a retry still reports no speech", async (t) => {
+  if (!require("../../src/helpers/ffmpegUtils").getFFmpegPath())
+    return t.skip("ffmpeg unavailable");
+  const { pcm16ToWav } = require("../../src/utils/audioUtils");
+  const wav = pcm16ToWav(Buffer.alloc(32000));
+  t.mock.method(fakeThis.audioStorageManager, "getAudioBuffer", () => wav);
+  const previousResponse = fetchResponse;
+  t.after(() => {
+    fetchResponse = previousResponse;
+  });
+  fetchResponse = () => Response.json({ transcript: " " });
+
+  const upload = await invokeUpload({ provider: "sarvam", transcriptionMode: "providers" }, wav);
+  assert.equal(upload.success, true);
+  assert.equal(upload.text, "");
+  const retry = await invoke({
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionMode: "byok",
+    transcriptionMode: "providers",
+  });
+  assert.equal(retry.success, false);
+  assert.equal(retry.code, "NO_SPEECH_DETECTED");
+});
+
 const whisperResponse = {
   text: "Send the report today. Thanks!",
   segments: [
@@ -1182,9 +1323,11 @@ test("retry: Groq writes only the retained dictation to both history fields", as
     cloudTranscriptionProvider: "groq",
     cloudTranscriptionModel: "whisper-large-v3",
     transcriptionMode: "providers",
+    preferredLanguage: "brx",
   });
   assert.equal(result.success, true);
   assert.equal(fetches.at(-1).init.body.get("response_format"), "verbose_json");
+  assert.equal(fetches.at(-1).init.body.get("language"), null);
   assert.deepEqual(update.mock.calls[0].arguments, [
     7,
     "Send the report today.",
@@ -1405,31 +1548,45 @@ test("canceling a live AssemblyAI request during authorization prevents its uplo
   assert.equal(fetches.length, 0);
 });
 
-test("live AssemblyAI cancellation affects only the sending window and rejects a late provider result", async (t) => {
-  const { deferred } = require("./harness/deferred");
-  const started = deferred();
-  const finish = deferred();
-  const sender = { id: 42 };
-  t.after(() => {
-    fetchResponse = defaultFetchResponse;
+for (const [provider, name] of [
+  ["assemblyai", "AssemblyAI"],
+  ["sarvam", "Sarvam"],
+]) {
+  test(`live ${name} cancellation affects only the sending window and rejects a late provider result`, async (t) => {
+    if (provider === "sarvam" && !require("../../src/helpers/ffmpegUtils").getFFmpegPath())
+      return t.skip("ffmpeg unavailable");
+    const { deferred } = require("./harness/deferred");
+    const started = deferred();
+    const finish = deferred();
+    const sender = { id: 42 };
+    t.after(() => {
+      fetchResponse = defaultFetchResponse;
+    });
+    fetchResponse = async (_url, init) => {
+      started.resolve(init.signal);
+      await finish.promise;
+      return provider === "sarvam"
+        ? Response.json({ transcript: "late transcript" })
+        : dictationResponse({ text: "late transcript" })();
+    };
+    const pending = handlers.get(`proxy-${provider}-transcription`)(
+      { sender },
+      {
+        audioBuffer:
+          provider === "sarvam"
+            ? require("../../src/utils/audioUtils").pcm16ToWav(Buffer.alloc(32000))
+            : new Uint8Array([1]),
+      }
+    );
+    const signal = await started.promise;
+    eventHandlers.get("cloud-transcribe-cancel")({ sender: { id: 43 } });
+    assert.equal(signal.aborted, false);
+    eventHandlers.get("cloud-transcribe-cancel")({ sender: { id: sender.id } });
+    finish.resolve();
+    assert.equal(signal.aborted, true);
+    assert.equal((await pending).code, "TRANSCRIPTION_CANCELLED");
   });
-  fetchResponse = async (_url, init) => {
-    started.resolve(init.signal);
-    await finish.promise;
-    return dictationResponse({ text: "late transcript" })();
-  };
-  const pending = handlers.get("proxy-assemblyai-transcription")(
-    { sender },
-    { audioBuffer: new Uint8Array([1]) }
-  );
-  const signal = await started.promise;
-  eventHandlers.get("cloud-transcribe-cancel")({ sender: { id: 43 } });
-  assert.equal(signal.aborted, false);
-  eventHandlers.get("cloud-transcribe-cancel")({ sender: { id: sender.id } });
-  finish.resolve();
-  assert.equal(signal.aborted, true);
-  assert.equal((await pending).code, "TRANSCRIPTION_CANCELLED");
-});
+}
 
 test("switching personal workspaces aborts an AssemblyAI upload and discards a late body", async (t) => {
   const { deferred } = require("./harness/deferred");

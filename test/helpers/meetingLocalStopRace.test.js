@@ -116,6 +116,7 @@ function harness({
     let meetingSystemChunkReceivedAt = null;
     let meetingAecEnabled = false;
     let meetingReconnectPromise = null;
+    let cancelMeetingReconnect = null;
 
     const noop = () => {};
     const asyncNoop = async () => {};
@@ -163,7 +164,7 @@ function harness({
       }
     };
 
-    ${sliceBetween("const resetMeetingStreamingState =", "const disconnectMeetingStreaming =")}
+    ${sliceBetween("const stopMeetingReconnect =", "const disconnectMeetingStreaming =")}
 
     const disconnectMeetingStreaming = async () => {
       events.push("disconnect");

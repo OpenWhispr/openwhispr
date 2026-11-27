@@ -281,6 +281,8 @@
         "openai_whisper_1": "نموذج Whisper الأصلي",
         "groq_whisper_large_v3": "تعرف على الكلام بدقة عالية",
         "groq_whisper_large_v3_turbo": "أسرع من الوقت الفعلي بـ216 ضعفًا",
+        "sarvam_v4": "22 لغة هندية والإنجليزية العالمية وتلميحات القاموس",
+        "sarvam_v3": "22 لغة هندية والإنجليزية الهندية",
         "mistral_voxtral_mini_latest": "تفريغ سريع متعدد اللغات",
         "gemini_3_5_transcribe": "تحويل الكلام إلى نص من Google Gemini",
         "elevenlabs_scribe_v3": "أدق تفريغ متعدد اللغات",
@@ -3727,6 +3729,8 @@
       "internalAttendeesQuestion": "هل ينتمي جميع المشاركين في هذا الاجتماع إلى مؤسستك؟",
       "internalAttendeesConfirm": "نعم، ابدأ",
       "recordingDisabledByOrg": "تم تعطيل تسجيل الاجتماعات بواسطة مؤسستك.",
+      "stoppedSarvamKeyChanged": "توقف التسجيل لأن مفتاح واجهة برمجة التطبيقات لخدمة Sarvam قد تغيّر.",
+      "noteUnavailable": "لم تعد هذه الملاحظة متاحة، لذا لم يبدأ التسجيل.",
       "stoppedAccountChanged": "توقف التسجيل لأنك سجّلت الخروج أو بدّلت الحساب.",
       "stoppedPolicyUnresolved": "توقف التسجيل لأنه تعذّر التحقق من إعدادات مؤسستك.",
       "stoppedWorkspaceChanged": "توقف التسجيل لأنك بدّلت مساحة العمل.",
@@ -4231,6 +4235,7 @@
           "endpointNotFound": "لا توفر نقطة النهاية قائمة نماذج متوافقة مع OpenAI.",
           "transcriptionEndpointNotFound": "لا يستقبل هذا العنوان طلبات التفريغ الصوتي.",
           "modelNotFound": "النموذج المحدد غير متوفر من هذا المزود.",
+          "sarvamSeatBudgetExhausted": "بلغ حساب المستخدم الخاص بك في Sarvam AI حد الإنفاق المخصص له. ارفع الحد للمتابعة.",
           "providerStatus": "أعاد المزود رمز الحالة {{status}}.",
           "timeout": "انتهت مهلة اختبار الاتصال.",
           "network": "تعذر الوصول إلى المزود.",
@@ -4281,6 +4286,7 @@
         "line": {
           "requiredByOrganization": "مطلوب من مؤسستك",
           "organizationModelsUnrunnable": "لا يعمل أي من النماذج التي وافقت عليها مؤسستك على هذا الكمبيوتر",
+          "languageNotLocal": "لا يدعم Whisper نسخ {{languages}}، لذا يكتشف اللغة بنفسه. يدعمها موفّر سحابي مثل Sarvam AI.",
           "offToFit": "متوقف ليتسع في المساحة الحرة على هذا الحاسوب",
           "failed": "تعذّر التنزيل. تحقّق من اتصالك وأعد المحاولة"
         },
@@ -6730,6 +6736,14 @@
       "transportNote": "يستخدم Tinfoil نموذج Voxtral Mini 4B للتفريغ المباشر (البث)، ونموذج Voxtral Small 24B للمعالجة الدفعية.",
       "docsLink": "قراءة الوثائق"
     },
+    "sarvam": {
+      "outputMode": "وضع الإخراج",
+      "codemix": "لغات مختلطة (إبقاء الكلمات الإنجليزية بالحروف اللاتينية)",
+      "transcribe": "نسخ باللغة المنطوقة",
+      "verbatim": "نسخ حرفي",
+      "translate": "ترجمة إلى الإنجليزية",
+      "translit": "كتابة النطق بالحروف اللاتينية"
+    },
     "elevenlabs": {
       "keytermsNote": "يُرسل OpenWhispr الكلمات المؤهلة من قاموسك إلى ElevenLabs. وتزيد رسوم ElevenLabs بنسبة 20٪ عند تضمين هذه الكلمات."
     }
@@ -7414,6 +7428,8 @@
     "noResponse": "تعذّر الحصول على رد من {{provider}}. تحقق من مفتاح API واتصالك.",
     "unknown": "أعاد {{provider}} خطأ غير متوقع.",
     "keyMissing": "لا يوجد مفتاح API مضبوط لـ {{provider}}. أضفه في الإعدادات ← النموذج اللغوي.",
+    "credentialChanged": "تغيّر مفتاح واجهة برمجة التطبيقات لخدمة {{provider}} قبل انتهاء النسخ. أعد المحاولة لاستخدام المفتاح الجديد.",
+    "settingsChanged": "تغيّرت إعدادات النسخ قبل انتهاء النسخ. أعد المحاولة.",
     "selfHosted": {
       "authFailed": "رفض خادمك مفتاح API.",
       "accessDenied": "رفض خادمك الوصول. قد لا يشمل المفتاح هذا النموذج.",

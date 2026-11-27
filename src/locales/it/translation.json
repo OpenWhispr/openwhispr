@@ -414,6 +414,7 @@
           "endpointNotFound": "L’endpoint non espone un elenco di modelli compatibile con OpenAI.",
           "transcriptionEndpointNotFound": "Questo indirizzo non accetta trascrizioni.",
           "modelNotFound": "Il modello selezionato non è disponibile presso questo provider.",
+          "sarvamSeatBudgetExhausted": "La tua licenza Sarvam AI ha raggiunto il limite di spesa. Aumenta il limite per continuare.",
           "providerStatus": "Il provider ha restituito lo stato {{status}}.",
           "timeout": "Il test di connessione è scaduto.",
           "network": "Impossibile raggiungere il provider.",
@@ -464,6 +465,7 @@
         "line": {
           "requiredByOrganization": "Richiesto dalla tua organizzazione",
           "organizationModelsUnrunnable": "Nessuno dei modelli approvati dalla tua organizzazione funziona su questo computer",
+          "languageNotLocal": "Whisper non trascrive {{languages}}, quindi rileva la lingua da solo. Un provider cloud come Sarvam AI la supporta.",
           "offToFit": "Disattivato per rientrare nello spazio libero di questo computer",
           "failed": "Download non riuscito. Controlla la connessione e riprova"
         },
@@ -980,6 +982,14 @@
     "tinfoil": {
       "transportNote": "Tinfoil trasmette con Voxtral Mini 4B ed elabora i batch con Voxtral Small 24B.",
       "docsLink": "Leggi la documentazione"
+    },
+    "sarvam": {
+      "outputMode": "Modalità di trascrizione",
+      "codemix": "Lingue miste (mantieni le parole inglesi in caratteri latini)",
+      "transcribe": "Trascrivi nella lingua parlata",
+      "verbatim": "Trascrivi parola per parola",
+      "translate": "Traduci in inglese",
+      "translit": "Traslittera in caratteri latini"
     },
     "elevenlabs": {
       "keytermsNote": "OpenWhispr invia a ElevenLabs i termini compatibili del tuo dizionario. ElevenLabs applica un sovrapprezzo del 20% quando vengono inclusi."
@@ -3475,6 +3485,8 @@
         "openai_whisper_1": "Modello Whisper originale",
         "groq_whisper_large_v3_turbo": "Velocità 216x in tempo reale",
         "groq_whisper_large_v3": "Modello Large v3, veloce e preciso",
+        "sarvam_v4": "22 lingue indiane, inglese internazionale e termini del dizionario",
+        "sarvam_v3": "22 lingue indiane e inglese indiano",
         "mistral_voxtral_mini_latest": "Trascrizione multilingue veloce",
         "gemini_3_5_transcribe": "Riconoscimento vocale Gemini di Google",
         "elevenlabs_scribe_v3": "La trascrizione multilingue più accurata",
@@ -4217,6 +4229,8 @@
       "internalAttendeesQuestion": "Tutte le persone presenti alla riunione fanno parte della tua organizzazione?",
       "internalAttendeesConfirm": "Sì, avvia",
       "recordingDisabledByOrg": "La registrazione delle riunioni è disattivata dalla tua organizzazione.",
+      "stoppedSarvamKeyChanged": "La registrazione è stata interrotta perché la chiave API di Sarvam è cambiata.",
+      "noteUnavailable": "Questa nota non è più disponibile, quindi la registrazione non è stata avviata.",
       "stoppedAccountChanged": "La registrazione si è interrotta perché sei uscito dall'account o hai cambiato account.",
       "stoppedPolicyUnresolved": "La registrazione si è interrotta perché non è stato possibile verificare le impostazioni della tua organizzazione.",
       "stoppedWorkspaceChanged": "La registrazione si è interrotta perché hai cambiato workspace.",
@@ -6910,6 +6924,8 @@
     "noResponse": "Nessuna risposta da {{provider}}. Controlla la tua chiave API e la connessione.",
     "unknown": "{{provider}} ha restituito un errore imprevisto.",
     "keyMissing": "Nessuna chiave API impostata per {{provider}}. Aggiungila in Impostazioni → Modello linguistico.",
+    "credentialChanged": "La tua chiave API di {{provider}} è cambiata prima che la trascrizione finisse. Riprova per usare la nuova chiave.",
+    "settingsChanged": "Le impostazioni di trascrizione sono cambiate prima che la trascrizione finisse. Riprova.",
     "selfHosted": {
       "authFailed": "Il tuo server ha rifiutato la chiave API.",
       "accessDenied": "Il tuo server ha negato l’accesso. La chiave potrebbe non includere questo modello.",

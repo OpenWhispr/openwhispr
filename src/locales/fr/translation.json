@@ -414,6 +414,7 @@
           "endpointNotFound": "L’endpoint n’expose pas de liste de modèles compatible OpenAI.",
           "transcriptionEndpointNotFound": "Cette adresse n’accepte pas de transcriptions.",
           "modelNotFound": "Le modèle sélectionné n’est pas disponible auprès de ce fournisseur.",
+          "sarvamSeatBudgetExhausted": "Votre licence Sarvam AI a atteint son plafond de dépenses. Augmentez ce plafond pour continuer.",
           "providerStatus": "Le fournisseur a renvoyé le statut {{status}}.",
           "timeout": "Le test de connexion a expiré.",
           "network": "Le fournisseur est injoignable.",
@@ -464,6 +465,7 @@
         "line": {
           "requiredByOrganization": "Imposé par votre organisation",
           "organizationModelsUnrunnable": "Aucun des modèles approuvés par votre organisation ne fonctionne sur cet ordinateur",
+          "languageNotLocal": "Whisper ne transcrit pas {{languages}} : il détecte donc la langue lui-même. Un fournisseur cloud comme Sarvam AI la prend en charge.",
           "offToFit": "Désactivé pour tenir dans l’espace libre de cet ordinateur",
           "failed": "Téléchargement impossible. Vérifiez votre connexion et réessayez"
         },
@@ -980,6 +982,14 @@
     "tinfoil": {
       "transportNote": "Tinfoil diffuse avec Voxtral Mini 4B et traite les lots avec Voxtral Small 24B.",
       "docsLink": "Voir la documentation"
+    },
+    "sarvam": {
+      "outputMode": "Mode de sortie",
+      "codemix": "Langues mélangées (conserver les mots anglais en alphabet latin)",
+      "transcribe": "Transcrire dans la langue parlée",
+      "verbatim": "Transcrire mot à mot",
+      "translate": "Traduire en anglais",
+      "translit": "Translittérer en alphabet latin"
     },
     "elevenlabs": {
       "keytermsNote": "OpenWhispr envoie à ElevenLabs les termes de votre dictionnaire qui respectent ses critères. ElevenLabs facture 20 % de plus lorsque ces termes sont inclus."
@@ -3579,6 +3589,8 @@
         "openai_whisper_1": "Modèle Whisper original",
         "groq_whisper_large_v3": "Reconnaissance vocale haute précision",
         "groq_whisper_large_v3_turbo": "Vitesse 216x en temps réel",
+        "sarvam_v4": "22 langues indiennes, anglais international et termes du dictionnaire",
+        "sarvam_v3": "22 langues indiennes et anglais indien",
         "mistral_voxtral_mini_latest": "Transcription multilingue rapide",
         "gemini_3_5_transcribe": "Reconnaissance vocale Gemini de Google",
         "elevenlabs_scribe_v3": "La transcription multilingue la plus précise",
@@ -4782,6 +4794,8 @@
       "internalAttendeesQuestion": "Toutes les personnes présentes à cette réunion font-elles partie de votre organisation ?",
       "internalAttendeesConfirm": "Oui, commencer",
       "recordingDisabledByOrg": "L’enregistrement des réunions est désactivé par votre organisation.",
+      "stoppedSarvamKeyChanged": "L’enregistrement s’est arrêté car la clé API Sarvam a changé.",
+      "noteUnavailable": "Cette note n’est plus disponible, l’enregistrement n’a donc pas démarré.",
       "stoppedAccountChanged": "L’enregistrement s’est arrêté, car vous vous êtes déconnecté ou avez changé de compte.",
       "stoppedPolicyUnresolved": "L’enregistrement s’est arrêté, car les paramètres de votre organisation n’ont pas pu être vérifiés.",
       "stoppedWorkspaceChanged": "L’enregistrement s’est arrêté, car vous avez changé d’espace de travail.",
@@ -6916,6 +6930,8 @@
     "noResponse": "Aucune réponse de {{provider}}. Vérifiez votre clé API et votre connexion.",
     "unknown": "{{provider}} a renvoyé une erreur inattendue.",
     "keyMissing": "Aucune clé API n’est définie pour {{provider}}. Ajoutez-la dans Réglages → Modèle de langage.",
+    "credentialChanged": "Votre clé API {{provider}} a changé avant la fin de la transcription. Réessayez pour utiliser la nouvelle clé.",
+    "settingsChanged": "Vos paramètres de transcription ont changé avant la fin de la transcription. Réessayez.",
     "selfHosted": {
       "authFailed": "Votre serveur a rejeté la clé API.",
       "accessDenied": "Votre serveur a refusé l’accès. La clé ne couvre peut-être pas ce modèle.",

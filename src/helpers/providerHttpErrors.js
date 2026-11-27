@@ -125,8 +125,9 @@ const INVALID_KEY_SIGNAL =
 // Only signals that mean the account is out of credit. Rate-limit 429s use the
 // broader words: Gemini's starts "You exceeded your current quota, please check
 // your plan and billing details" and Groq's links to its /settings/billing page.
+// Sarvam answers a seat's spent budget with a 429 that waiting does not clear.
 const QUOTA_SIGNAL =
-  /insufficient_quota|credit balance|insufficient (credits|balance|funds)|out of credits|payment required/i;
+  /insufficient_quota|credit balance|insufficient (credits|balance|funds)|out of credits|payment required|seat_budget_exhausted/i;
 // ElevenLabs' older answer to an exhausted character quota is a 401, which its
 // error reference grouped under 400/401, so it is read before the status alone
 // can call it a refused key or a bad request.

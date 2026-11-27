@@ -11,6 +11,7 @@ const BYOK_KEY_BRIDGES = [
   { base: "groq", get: "getGroqKey", save: "saveGroqKey" },
   { base: "xai", get: "getXaiKey", save: "saveXaiKey" },
   { base: "mistral", get: "getMistralKey", save: "saveMistralKey" },
+  { base: "sarvam", get: "getSarvamKey", save: "saveSarvamKey" },
   { base: "openrouter", get: "getOpenrouterKey", save: "saveOpenrouterKey" },
   { base: "tinfoil", get: "getTinfoilKey", save: "saveTinfoilKey" },
   { base: "corti", get: "getCortiKey", save: "saveCortiKey" },
@@ -751,6 +752,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   proxyAssemblyAiTranscription: (data) =>
     ipcRenderer.invoke("proxy-assemblyai-transcription", data),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
+  proxySarvamTranscription: (data) => ipcRenderer.invoke("proxy-sarvam-transcription", data),
   proxyGeminiTranscription: (data) => ipcRenderer.invoke("proxy-gemini-transcription", data),
   proxyElevenlabsTranscription: (data) =>
     ipcRenderer.invoke("proxy-elevenlabs-transcription", data),
@@ -973,6 +975,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("transcribe-audio-file-cloud", filePath, options),
   cancelUploadTranscription: (requestId) =>
     ipcRenderer.invoke("cancel-upload-transcription", requestId),
+  getSarvamKeyGeneration: () => ipcRenderer.invoke("get-sarvam-key-generation"),
   transcribeAudioFileByok: (options) => ipcRenderer.invoke("transcribe-audio-file-byok", options),
   onUploadTranscriptionProgress: registerListener(
     "upload-transcription-progress",
@@ -1144,9 +1147,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Dictation realtime streaming
   dictationRealtimeWarmup: (options) => ipcRenderer.invoke("dictation-realtime-warmup", options),
   dictationRealtimeStart: (options) => ipcRenderer.invoke("dictation-realtime-start", options),
-  dictationRealtimeSend: (buffer) => ipcRenderer.send("dictation-realtime-send", buffer),
-  dictationRealtimeFinalize: () => ipcRenderer.invoke("dictation-realtime-finalize"),
-  dictationRealtimeStop: () => ipcRenderer.invoke("dictation-realtime-stop"),
+  dictationRealtimeSend: (buffer, captureId) =>
+    ipcRenderer.send("dictation-realtime-send", buffer, captureId),
+  reserveSarvamDictation: (captureId) => ipcRenderer.send("dictation-realtime-reserve", captureId),
+  releaseSarvamDictation: (captureId) => ipcRenderer.send("dictation-realtime-release", captureId),
+  dictationRealtimeFinalize: (captureId) =>
+    ipcRenderer.invoke("dictation-realtime-finalize", captureId),
+  dictationRealtimeStop: (captureId) => ipcRenderer.invoke("dictation-realtime-stop", captureId),
   onDictationRealtimePartial: registerListener(
     "dictation-realtime-partial",
     (callback) => (_event, data) => callback(data)

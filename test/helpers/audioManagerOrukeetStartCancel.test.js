@@ -107,23 +107,25 @@ test("a streaming start reports recording before its provider connect finishes",
   assert.equal(await starting, true);
 });
 
-test("cancelling managed Orukeet's pending connect aborts it instead of waiting it out", async (t) => {
-  const { manager, calls } = await load(t);
-  const starting = manager.startStreamingRecording();
-  await tick();
+for (const providerName of ["orukeet", "sarvam"]) {
+  test(`cancelling ${providerName}'s pending connect aborts it instead of waiting it out`, async (t) => {
+    const { manager, calls } = await load(t, { providerName });
+    const starting = manager.startStreamingRecording();
+    await tick();
 
-  // Nothing but the stop settles the connect, so a cancel that waits for it hangs.
-  const cancelling = manager.cancelStreamingRecording();
-  assert.deepEqual(await Promise.all([starting, cancelling]), [false, true]);
-  assert.ok(calls.stops >= 1);
-  assert.equal(calls.errors, 0);
-  assert.equal(manager.streamingStartInProgress, false);
-  assert.deepEqual(calls.states.at(-1), {
-    isRecording: false,
-    isProcessing: false,
-    isStreaming: false,
+    // Nothing but the stop settles the connect, so a cancel that waits for it hangs.
+    const cancelling = manager.cancelStreamingRecording();
+    assert.deepEqual(await Promise.all([starting, cancelling]), [false, true]);
+    assert.ok(calls.stops >= 1);
+    assert.equal(calls.errors, 0);
+    assert.equal(manager.streamingStartInProgress, false);
+    assert.deepEqual(calls.states.at(-1), {
+      isRecording: false,
+      isProcessing: false,
+      isStreaming: false,
+    });
   });
-});
+}
 
 test("cancelling another provider's pending connect still waits for it to settle", async (t) => {
   const { manager, connect, calls } = await load(t, {

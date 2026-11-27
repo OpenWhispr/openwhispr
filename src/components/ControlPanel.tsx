@@ -49,7 +49,12 @@ import { startWorkspaceScopeBridge } from "../stores/workspaceScopeBridge";
 import { useEnsureDefaultWorkspace } from "../hooks/useWorkspace";
 import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
 import { usePolicySnapshot, useMeetingAutoTranscriptionCheck } from "../hooks/usePolicy";
-import { getKeytermDictionaryWords, limitBatchKeyterms } from "../utils/snippets";
+import {
+  getEffectiveDictionaryWords,
+  getKeytermDictionaryWords,
+  limitBatchKeyterms,
+} from "../utils/snippets";
+import { sarvamTranscriptLanguage } from "../utils/sarvam";
 import { providerCleanupStandsIn } from "../helpers/dictationRouting";
 import { handleMeetingRecordingRequest } from "../helpers/meetingRecordingRequest";
 import { useMeetingNoteSession } from "../hooks/useMeetingNoteSession";
@@ -844,6 +849,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           cloudTranscriptionProvider: s.cloudTranscriptionProvider,
           cloudTranscriptionModel: s.cloudTranscriptionModel,
           cloudTranscriptionBaseUrl: s.cloudTranscriptionBaseUrl,
+          sarvamMode: s.sarvamMode,
           cortiEnvironment: s.cortiEnvironment,
           cortiTenant: s.cortiTenant,
           parakeetModel: s.parakeetModel,
@@ -851,7 +857,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           whisperModel: s.whisperModel,
           preferredLanguage: s.preferredLanguage,
           translationSourceLanguage: s.translationSourceLanguage,
-          keyterms: limitBatchKeyterms(getKeytermDictionaryWords(s)),
+          keyterms:
+            s.cloudTranscriptionProvider === "sarvam"
+              ? getEffectiveDictionaryWords(s)
+              : limitBatchKeyterms(getKeytermDictionaryWords(s)),
           transcriptionMode: s.transcriptionMode,
           remoteTranscriptionType: s.remoteTranscriptionType,
           remoteTranscriptionUrl: s.remoteTranscriptionUrl,
@@ -859,12 +868,21 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         });
         if (result.success && result.transcription) {
           const rawText = result.transcription.text;
+          const translationRequested = result.transcription.route_kind === "translation";
+          const requestedLanguage =
+            (translationRequested ? s.translationSourceLanguage : s.preferredLanguage) || "auto";
+          const transcriptLanguage =
+            sarvamTranscriptLanguage(
+              result.transcription.provider,
+              s.sarvamMode,
+              requestedLanguage
+            ) ?? requestedLanguage;
           let finalTranscription = result.transcription;
 
           // A translation dictation must re-run cleanup-then-translate on retry, not plain cleanup.
           let handledTranslation = false;
-          let translationApplied = false;
-          if (result.transcription.route_kind === "translation") {
+          let outputLanguage = transcriptLanguage;
+          if (translationRequested) {
             handledTranslation = true;
             try {
               const [
@@ -888,12 +906,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       currentText,
                       getEffectiveCleanupModel(),
                       agentName,
-                      route.cleanupConfig
+                      { ...route.cleanupConfig, language: transcriptLanguage }
                     ),
                   runTranslate: (currentText: string) =>
                     ReasoningService.processText(currentText, route.model, agentName, route.config),
                   shouldTranslate: shouldRunTranslateStep(
-                    settings.translationSourceLanguage,
+                    transcriptLanguage,
                     settings.translationTargetLanguage
                   ),
                   onCleanupError: (cleanupError: unknown) => {
@@ -923,7 +941,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       "transcription"
                     ),
                 });
-                translationApplied = translated;
                 if (text !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,
@@ -933,6 +950,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   if (updated.success && updated.transcription) {
                     finalTranscription = updated.transcription;
                   }
+                }
+                if (translated && finalTranscription.text === text) {
+                  outputLanguage = settings.translationTargetLanguage || "auto";
                 }
               } else {
                 // Translation disabled/unreachable since recording — fall through to cleanup.
@@ -969,6 +989,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 const reasonedText =
                   providerCleanedText ||
                   (await ReasoningService.processText(rawText, model, getAgentName(), {
+                    language: transcriptLanguage,
                     disableThinking: getSettings().cleanupDisableThinking,
                     reasoningEffort: getSettings().cleanupReasoningEffort,
                     requireCompleteOutput: true,
@@ -1001,12 +1022,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           // translate step moves the text into the target language, so anything else
           // still has to be scripted as the language that was dictated.
           try {
-            const outputLanguage =
-              result.transcription.route_kind === "translation"
-                ? (translationApplied
-                    ? s.translationTargetLanguage
-                    : s.translationSourceLanguage) || "auto"
-                : s.preferredLanguage;
             const scripted = await applyChineseScript(
               finalTranscription.text,
               resolveChineseScriptTarget(

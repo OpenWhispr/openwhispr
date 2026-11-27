@@ -56,6 +56,31 @@ test("a stop requested during startup waits for startup and tears down that sess
   assert.deepEqual(events, ["start:meeting-1:begin", "start:meeting-1:end", "stop:meeting-1"]);
 });
 
+test("owner loss cancels reconnect during a user stop and preserves its audit reason", async () => {
+  const owner = createOwnerWebContents();
+  const wait = createDeferred();
+  const events = [];
+  const lifecycle = createMeetingTranscriptionLifecycle({
+    start: async () => ({ success: true }),
+    stop: async (id, reason) => {
+      events.push([id, reason]);
+      await wait.promise;
+      return { success: true };
+    },
+    onOwnerLost: (id) => events.push([id, "cancel reconnect"]),
+  });
+  await lifecycle.startSession({ sessionId: "take", ownerWebContents: owner });
+  const stopped = lifecycle.stopSession("take", "user");
+  await Promise.resolve();
+  owner.emit("render-process-gone");
+  wait.resolve();
+  await stopped;
+  assert.deepEqual(events, [
+    ["take", "user"],
+    ["take", "cancel reconnect"],
+  ]);
+});
+
 test("owner loss during startup tears down after the deferred start settles", async () => {
   const startDeferred = createDeferred();
   const stopCompleted = createDeferred();

@@ -38,8 +38,8 @@ export interface QueueItem {
   diarizationWarning?: boolean;
   noteId?: number;
   tempPath?: string;
-  // Stopped by org policy, showing why in `error`; the next run retries it.
-  stoppedByPolicy?: boolean;
+  // The current run stopped here. An explicit retry starts with fresh policy and credentials.
+  retryOnNextRun?: boolean;
 }
 
 export interface TranscribeOptions {
@@ -145,25 +145,32 @@ export function processBatchQueue(
   diarization: DiarizationSettings
 ): void {
   if (useBatchQueueStore.getState().isProcessing) return;
-  if (
-    !isAudioFeatureAllowed(usePolicyStore.getState(), "upload") ||
-    (!isManagedTranscriptionActive() &&
-      !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload"))
-  )
+  const policy = usePolicyStore.getState();
+  if (!isAudioFeatureAllowed(policy, "upload")) return;
+  const personalSettings = isManagedTranscriptionActive() ? null : getSettings();
+  if (personalSettings && !isTranscriptionContextAllowed(policy, personalSettings, "upload"))
     return;
   const run = ++runId;
   useBatchQueueStore.setState((s) => ({
     isProcessing: true,
     queue: s.queue.map((item) =>
-      item.stoppedByPolicy
-        ? { ...item, status: "queued", progress: 0, error: undefined, stoppedByPolicy: undefined }
+      item.retryOnNextRun
+        ? { ...item, status: "queued", progress: 0, error: undefined, retryOnNextRun: undefined }
         : item
     ),
   }));
 
-  const snapshotApiKey = transcribeOpts.transcription.getApiKey();
+  const config = transcribeOpts.transcription;
+  const usesSarvamKey =
+    config.cloudTranscriptionProvider === "sarvam" &&
+    !config.useLocalWhisper &&
+    !config.isOpenWhisprCloud &&
+    config.transcriptionMode !== "self-hosted";
+  const snapshotApiKey = usesSarvamKey ? "" : config.getApiKey();
   const transcription: FileTranscriptionConfig = {
-    ...transcribeOpts.transcription,
+    ...config,
+    sarvamKeyGeneration: usesSarvamKey ? null : undefined,
+    sarvamMode: config.sarvamMode ?? personalSettings?.uploadSarvamMode,
     getApiKey: () => snapshotApiKey,
   };
 
@@ -173,13 +180,15 @@ export function processBatchQueue(
     updateQueue((prev) => prev.map((item) => (item.id === id ? { ...item, ...updates } : item)));
   };
 
-  // A policy refusal would meet every later item too, so it ends the run and
-  // leaves the rest queued for when policy allows uploads again.
-  let refusedByPolicy = false;
-  const failItem = (id: string, error: string, failure: unknown) => {
-    const byPolicy = isUploadPolicyRefusal(failure);
-    if (byPolicy) refusedByPolicy = true;
-    updateItem(id, { status: "error", error, ...(byPolicy ? { stoppedByPolicy: true } : {}) });
+  // Queue-wide failures leave later files pending until the user starts a fresh run.
+  let retryRequired = false;
+  const failItem = (id: string, error: string, failure: unknown, runWide = false) => {
+    const retryOnNextRun =
+      runWide ||
+      isUploadPolicyRefusal(failure) ||
+      (failure as { code?: string } | null)?.code === "PROVIDER_CREDENTIAL_CHANGED";
+    if (retryOnNextRun) retryRequired = true;
+    updateItem(id, { status: "error", error, ...(retryOnNextRun ? { retryOnNextRun } : {}) });
   };
 
   const processItem = async (item: QueueItem) => {
@@ -241,7 +250,8 @@ export function processBatchQueue(
       const requestId = crypto.randomUUID();
       activeUploadRequestId = requestId;
       let cleanupTranscriptionProgress: (() => void) | undefined;
-      if (isManagedTranscriptionActive()) {
+      // Both send a file in pieces and report each one as it finishes.
+      if (isManagedTranscriptionActive() || usesSarvamKey) {
         cleanupTranscriptionProgress = window.electronAPI.onUploadTranscriptionProgress?.(
           ({ chunksCompleted, chunksTotal }) => {
             if (chunksTotal > 0)
@@ -333,11 +343,21 @@ export function processBatchQueue(
   };
 
   (async () => {
+    if (usesSarvamKey && personalSettings) {
+      // Pin the entire run before downloading the first file. Main owns the secret.
+      try {
+        transcription.sarvamKeyGeneration = await window.electronAPI.getSarvamKeyGeneration();
+      } catch (error) {
+        const first = useBatchQueueStore.getState().queue.find((item) => item.status === "queued");
+        if (first)
+          failItem(first.id, describeProviderError(error, i18n.t).description, error, true);
+      }
+    }
     const processed = new Set<string>();
     let next: QueueItem | undefined;
     while (
       run === runId &&
-      !refusedByPolicy &&
+      !retryRequired &&
       (next = useBatchQueueStore
         .getState()
         .queue.find((i) => i.status === "queued" && !processed.has(i.id)))
@@ -370,7 +390,7 @@ usePolicyStore.subscribe((policy) => {
     isProcessing: false,
     queue: s.queue.map((item) =>
       item.status === "downloading" || item.status === "transcribing"
-        ? { ...item, status: "error" as const, error, stoppedByPolicy: true }
+        ? { ...item, status: "error" as const, error, retryOnNextRun: true }
         : item
     ),
   }));
@@ -387,8 +407,8 @@ export function useBatchQueue() {
     completedCount: queue.filter((i) => i.status === "done").length,
     failedCount: queue.filter((i) => i.status === "error").length,
     totalCount: queue.length,
-    // Queued items, or ones a policy stopped, that Transcribe would run.
-    hasPending: queue.some((i) => i.status === "queued" || i.stoppedByPolicy),
+    // Include the item that stopped the previous run.
+    hasPending: queue.some((i) => i.status === "queued" || i.retryOnNextRun),
     addFiles,
     addUrls,
     removeItem: removeQueueItem,

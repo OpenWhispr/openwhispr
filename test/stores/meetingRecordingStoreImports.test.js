@@ -95,4 +95,16 @@ test("personal meeting options preserve manual enterprise preference while requi
     workspaceId: "workspace-a",
     authGeneration: 1,
   });
+
+  const sharedTerm = "a".repeat(64);
+  useSettingsStore.setState({
+    meetingCloudTranscriptionProvider: "sarvam",
+    meetingCloudTranscriptionModel: "saaras:v4",
+    sarvamMode: "verbatim",
+    meetingSarvamMode: "translit",
+    sharedDictionaryHints: { space: [sharedTerm], workspace: [] },
+  });
+  await prepareTranscription();
+  assert.equal(calls.at(-1).sarvamMode, "translit");
+  assert.deepEqual(calls.at(-1).keyterms, ["Personal", sharedTerm]);
 });

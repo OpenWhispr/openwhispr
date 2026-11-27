@@ -75,6 +75,7 @@ const runMainDiarization = (
     retracted = [],
     outcome = "diarized",
     diarizedSource = "system",
+    captureClock = null,
     diarizationSegments = [{ start: 0, end: 120, speaker: "speaker_00" }],
   } = {}
 ) =>
@@ -116,7 +117,8 @@ const runMainDiarization = (
       1,
       diarizedSource,
       0,
-      retracted
+      retracted,
+      captureClock
     );
   });
 
@@ -135,6 +137,33 @@ const runRendererCompletion = (live, payload, seed = []) => {
 
 const stripIds = (segments) => segments.map(({ id: _id, ...segment }) => segment);
 const rows = (segments) => segments.map((segment) => [segment.source, segment.text]);
+
+test("speaker matching uses wall time across gaps while stored audio stays compact", async () => {
+  const { createMeetingCaptureClock } = require("../../src/helpers/meetingCaptureClock");
+  const clock = createMeetingCaptureClock();
+  clock.append(Buffer.alloc(48000), START_MS);
+  clock.append(Buffer.alloc(48000 * 6), START_MS + 60000);
+  const payload = await runMainDiarization(
+    [
+      { text: "After the pause.", source: "system", timestamp: START_MS + 60000 },
+      { text: "Another voice.", source: "system", timestamp: START_MS + 64000 },
+    ],
+    {
+      captureClock: clock,
+      diarizationSegments: [
+        { start: 1, end: 4, speaker: "speaker_00" },
+        { start: 4, end: 7, speaker: "speaker_01" },
+      ],
+    }
+  );
+  assert.deepEqual(
+    payload.segments.map(({ timestamp, speaker }) => [timestamp, speaker]),
+    [
+      [60, "speaker_0"],
+      [64, "speaker_1"],
+    ]
+  );
+});
 
 const assertNoEpochTimestamps = (segments) => {
   for (const segment of segments) {

@@ -1,6 +1,10 @@
 const WebSocket = require("ws");
 const debugLogger = require("./debugLogger");
 const { i18nMain } = require("./i18nMain");
+const {
+  DEFAULT_OPENAI_REALTIME_MODEL,
+  getHostedTranscriptionLanguageHint,
+} = require("../utils/languageSupport.ts");
 
 const WEBSOCKET_TIMEOUT_MS = 15000;
 const DISCONNECT_TIMEOUT_MS = 3000;
@@ -56,11 +60,11 @@ async function createSocketWithTimeout(createSocket, timeoutMs, controller) {
 
 // Realtime transcription takes ISO-639-1 like the batch endpoint, so a
 // registry code such as "zh-TW" is reduced to its base; "auto" means no pin.
-function normalizeLanguage(language) {
+function normalizeLanguage(language, model = DEFAULT_OPENAI_REALTIME_MODEL) {
   if (typeof language !== "string") return null;
   const trimmed = language.trim().toLowerCase();
   if (!trimmed || trimmed === "auto") return null;
-  return trimmed.split("-")[0];
+  return getHostedTranscriptionLanguageHint(model, trimmed.split("-")[0]) ?? null;
 }
 
 class OpenAIRealtimeStreaming {
@@ -95,7 +99,7 @@ class OpenAIRealtimeStreaming {
     this.vadThreshold = DEFAULT_VAD_THRESHOLD;
     this.speechStartedCount = 0;
     this._vadEventCount = 0;
-    this.model = "gpt-4o-mini-transcribe";
+    this.model = DEFAULT_OPENAI_REALTIME_MODEL;
     this.language = null;
     this.inputRate = SAMPLE_RATE;
     this.captureRate = SAMPLE_RATE;
@@ -144,8 +148,8 @@ class OpenAIRealtimeStreaming {
     if (!this.bufferingAudio) this.beginConnecting();
 
     this.isConnecting = true;
-    this.model = model || "gpt-4o-mini-transcribe";
-    this.language = normalizeLanguage(language);
+    this.model = model || DEFAULT_OPENAI_REALTIME_MODEL;
+    this.language = normalizeLanguage(language, this.model);
     this.preconfigured = !!preconfigured;
     this.managed = options.mode === "enterprise";
     this.protocol = options.protocol ?? "openai-transcription-ga";

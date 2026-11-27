@@ -728,6 +728,7 @@ test("BYOK session.update sends the base ISO-639-1 code and omits language for a
   const cases = [
     ["zh-TW", "zh"],
     [" PT ", "pt"],
+    ["brx-IN", undefined],
     ["auto", undefined],
     ["", undefined],
     [undefined, undefined],

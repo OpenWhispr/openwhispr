@@ -36,6 +36,14 @@
       "assemblyai": false
     },
     {
+      "code": "as",
+      "label": "Assamese",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": true,
+      "parakeet": false,
+      "assemblyai": false
+    },
+    {
       "code": "az",
       "label": "Azerbaijani",
       "flag": "\uD83C\uDDE6\uD83C\uDDFF",
@@ -50,6 +58,23 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false
+    },
+    {
+      "code": "bn",
+      "label": "Bengali",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": true,
+      "parakeet": false,
+      "assemblyai": false
+    },
+    {
+      "code": "brx",
+      "label": "Bodo",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": false,
+      "parakeet": false,
+      "assemblyai": false,
+      "sttProviders": ["sarvam"]
     },
     {
       "code": "bs",
@@ -121,6 +146,15 @@
       "parakeet": true,
       "assemblyai": false,
       "instruction": "LANGUAGE CONTEXT: The user's preferred language is Danish. The transcribed text will be in Danish. You MUST write your entire output in Danish while maintaining proper Danish grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+    },
+    {
+      "code": "doi",
+      "label": "Dogri",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": false,
+      "parakeet": false,
+      "assemblyai": false,
+      "sttProviders": ["sarvam"]
     },
     {
       "code": "nl",
@@ -203,6 +237,14 @@
       "instruction": "LANGUAGE CONTEXT: The user's preferred language is Greek. The transcribed text will be in Greek. You MUST write your entire output in Greek while maintaining proper Greek grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
+      "code": "gu",
+      "label": "Gujarati",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": true,
+      "parakeet": false,
+      "assemblyai": false
+    },
+    {
       "code": "he",
       "label": "Hebrew",
       "flag": "\uD83C\uDDEE\uD83C\uDDF1",
@@ -273,12 +315,30 @@
       "assemblyai": false
     },
     {
+      "code": "ks",
+      "label": "Kashmiri",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": false,
+      "parakeet": false,
+      "assemblyai": false,
+      "sttProviders": ["sarvam"]
+    },
+    {
       "code": "kk",
       "label": "Kazakh",
       "flag": "\uD83C\uDDF0\uD83C\uDDFF",
       "whisper": true,
       "parakeet": false,
       "assemblyai": false
+    },
+    {
+      "code": "kok",
+      "label": "Konkani",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": false,
+      "parakeet": false,
+      "assemblyai": false,
+      "sttProviders": ["sarvam"]
     },
     {
       "code": "ko",
@@ -316,6 +376,15 @@
       "assemblyai": false
     },
     {
+      "code": "mai",
+      "label": "Maithili",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": false,
+      "parakeet": false,
+      "assemblyai": false,
+      "sttProviders": ["sarvam"]
+    },
+    {
       "code": "ms",
       "label": "Malay",
       "flag": "\uD83C\uDDF2\uD83C\uDDFE",
@@ -324,12 +393,29 @@
       "assemblyai": false
     },
     {
+      "code": "ml",
+      "label": "Malayalam",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": true,
+      "parakeet": false,
+      "assemblyai": false
+    },
+    {
       "code": "mt",
       "label": "Maltese",
       "flag": "\uD83C\uDDF2\uD83C\uDDF9",
-      "whisper": false,
+      "whisper": true,
       "parakeet": true,
       "assemblyai": false
+    },
+    {
+      "code": "mni",
+      "label": "Manipuri",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": false,
+      "parakeet": false,
+      "assemblyai": false,
+      "sttProviders": ["sarvam"]
     },
     {
       "code": "mr",
@@ -365,6 +451,15 @@
       "instruction": "LANGUAGE CONTEXT: The user's preferred language is Norwegian. The transcribed text will be in Norwegian. You MUST write your entire output in Norwegian while maintaining proper Norwegian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
+      "code": "or",
+      "label": "Odia",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": false,
+      "parakeet": false,
+      "assemblyai": false,
+      "sttProviders": ["sarvam"]
+    },
+    {
       "code": "fa",
       "label": "Persian",
       "flag": "\uD83C\uDDEE\uD83C\uDDF7",
@@ -392,6 +487,14 @@
       "instruction": "LANGUAGE CONTEXT: The user's preferred language is Portuguese. The transcribed text will be in Portuguese. You MUST write your entire output in Portuguese while maintaining proper Portuguese grammar, spelling, and punctuation. If the user naturally uses English words or technical terms within their Portuguese speech, preserve those as-is."
     },
     {
+      "code": "pa",
+      "label": "Punjabi",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": true,
+      "parakeet": false,
+      "assemblyai": false
+    },
+    {
       "code": "ro",
       "label": "Romanian",
       "flag": "\uD83C\uDDF7\uD83C\uDDF4",
@@ -410,6 +513,23 @@
       "instruction": "LANGUAGE CONTEXT: The user's preferred language is Russian. The transcribed text will be in Russian. You MUST write your entire output in Russian while maintaining proper Russian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms within their Russian speech, preserve those as-is."
     },
     {
+      "code": "sa",
+      "label": "Sanskrit",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": true,
+      "parakeet": false,
+      "assemblyai": false
+    },
+    {
+      "code": "sat",
+      "label": "Santali",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": false,
+      "parakeet": false,
+      "assemblyai": false,
+      "sttProviders": ["sarvam"]
+    },
+    {
       "code": "sr",
       "label": "Serbian",
       "flag": "\uD83C\uDDF7\uD83C\uDDF8",
@@ -417,6 +537,14 @@
       "parakeet": false,
       "assemblyai": false,
       "instruction": "LANGUAGE CONTEXT: The user's preferred language is Serbian. The transcribed text will be in Serbian. You MUST write your entire output in Serbian while maintaining proper Serbian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+    },
+    {
+      "code": "sd",
+      "label": "Sindhi",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": true,
+      "parakeet": false,
+      "assemblyai": false
     },
     {
       "code": "sk",
@@ -473,6 +601,14 @@
     {
       "code": "ta",
       "label": "Tamil",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": true,
+      "parakeet": false,
+      "assemblyai": false
+    },
+    {
+      "code": "te",
+      "label": "Telugu",
       "flag": "\uD83C\uDDEE\uD83C\uDDF3",
       "whisper": true,
       "parakeet": false,

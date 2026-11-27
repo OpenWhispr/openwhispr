@@ -9,6 +9,11 @@
 // resolves itself.
 import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constants.ts";
 import {
+  getBaseLanguageCode,
+  getHostedTranscriptionLanguageHint,
+  getProviderLanguageHint,
+} from "../utils/languageSupport.ts";
+import {
   isSecureHttpEndpoint,
   isAzureOpenAIEndpoint,
   buildAzureTranscriptionUrl,
@@ -175,10 +180,11 @@ export type TranscriptionRoute =
   | { transport: "local" }
   | {
       transport: "proxied";
-      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini" | "assemblyai" | "elevenlabs";
+      provider:
+        "tinfoil" | "mistral" | "sarvam" | "xai" | "corti" | "gemini" | "assemblyai" | "elevenlabs";
       model: string | null;
       language?: string;
-      sizeCapBytes: number;
+      sizeCapBytes: number | null;
       cortiEnvironment?: string;
       cortiTenant?: string;
     }
@@ -314,6 +320,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   }
   if (provider === "groq") return "whisper-large-v3-turbo";
   if (provider === "xai") return "grok-stt";
+  if (provider === "sarvam") return "saaras:v4";
   if (provider === "mistral") return "voxtral-mini-latest";
   if (provider === "corti") return "corti-transcribe";
   if (provider === "gemini") return "gemini-3.5-transcribe";
@@ -364,11 +371,10 @@ export function resolveTranscriptionRoute({
 }: TranscriptionRouteInput): TranscriptionRoute {
   const s = settings || {};
   const managed = policy?.status === "managed";
-  const language =
-    request?.effectiveLanguage ??
-    (!s.preferredLanguage || s.preferredLanguage === "auto"
+  const requestedLanguage =
+    request?.effectiveLanguage === "auto"
       ? undefined
-      : s.preferredLanguage.split("-")[0]);
+      : (request?.effectiveLanguage ?? getBaseLanguageCode(s.preferredLanguage));
 
   // Managed enterprise STT outranks every personal setting; the resolution is
   // already policy-checked where it was computed (enterpriseIdentityStore /
@@ -383,7 +389,7 @@ export function resolveTranscriptionRoute({
       deployment: managedResolution.deployment,
       context: managedResolution.context,
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
-      language,
+      language: getProviderLanguageHint(managedResolution.provider, requestedLanguage),
     };
   }
 
@@ -440,7 +446,7 @@ export function resolveTranscriptionRoute({
           ? { scheme: "bearer", keyRef: "custom" }
           : { scheme: "none", keyRef: null },
         sizeCapBytes: null,
-        language,
+        language: getProviderLanguageHint("self-hosted", requestedLanguage),
       };
     }
     if (s.cloudTranscriptionProvider !== "custom") {
@@ -455,6 +461,7 @@ export function resolveTranscriptionRoute({
 
   const provider = s.cloudTranscriptionProvider || "openai";
   const model = resolveByokModel(provider, request?.model ?? s.cloudTranscriptionModel);
+  const language = getProviderLanguageHint(provider, requestedLanguage);
 
   if (provider === "tinfoil" || provider === "mistral" || provider === "xai") {
     return {
@@ -467,6 +474,9 @@ export function resolveTranscriptionRoute({
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
     };
   }
+  // Sarvam audio is converted locally and sent in 30-second pieces, so no file cap applies.
+  if (provider === "sarvam")
+    return { transport: "proxied", provider, model, language, sizeCapBytes: null };
   if (provider === "gemini" || provider === "elevenlabs") {
     return {
       transport: "proxied",
@@ -563,6 +573,6 @@ export function resolveTranscriptionRoute({
     model,
     auth: { scheme: "bearer", keyRef: resolvedProvider },
     sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
-    language,
+    language: getHostedTranscriptionLanguageHint(model, language),
   };
 }

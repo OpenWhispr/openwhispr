@@ -150,6 +150,14 @@ test("proxied providers carry their quirks as route data", async () => {
   assert.equal(elevenlabs.model, "scribe_v3");
   assert.equal(elevenlabs.sizeCapBytes, 25 * 1024 * 1024);
   assert.equal("endpoint" in elevenlabs, false, "the key never reaches an OpenAI-shaped endpoint");
+
+  const sarvam = await resolve({
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionModel: "whisper-1",
+  });
+  assert.equal(sarvam.transport, "proxied");
+  assert.equal(sarvam.model, "saaras:v4", "a model left by another provider resets");
+  assert.equal(sarvam.sizeCapBytes, null, "Sarvam audio goes out in 30-second pieces");
 });
 
 test("byokFileSizeLimit matches the per-provider route caps", async () => {
@@ -510,6 +518,92 @@ test("request overrides win: explicit model and effective language", async () =>
   );
   assert.equal(route.model, "whisper-large-v3");
   assert.equal(route.language, "ja");
+});
+
+test("hosted Whisper drops unsupported picker languages and preserves valid language hints", async () => {
+  for (const [provider, model] of [
+    ["openai", "whisper-1"],
+    ["groq", "whisper-large-v3-turbo"],
+    ["openrouter", "openai/whisper-1"],
+  ]) {
+    for (const [preferredLanguage, expected] of [
+      ["brx", undefined],
+      ["or", undefined],
+      ["hi-IN", "hi"],
+      ["haw", "haw"],
+    ]) {
+      const route = await resolve({
+        cloudTranscriptionProvider: provider,
+        cloudTranscriptionModel: model,
+        preferredLanguage,
+      });
+      assert.equal(route.model, model);
+      assert.equal(route.language, expected, `${provider} / ${preferredLanguage}`);
+    }
+  }
+  const sarvam = await resolve({ cloudTranscriptionProvider: "sarvam", preferredLanguage: "brx" });
+  assert.equal(sarvam.language, "brx");
+});
+
+test("GPT-4o transcription omits hints without a two-letter base code", async () => {
+  for (const cloudTranscriptionModel of [
+    "gpt-4o-transcribe",
+    "gpt-4o-mini-transcribe",
+    "gpt-4o-mini-transcribe-2025-12-15",
+  ]) {
+    for (const [preferredLanguage, expected] of [
+      ["brx", undefined],
+      ["hi-IN", "hi"],
+    ]) {
+      const route = await resolve({
+        cloudTranscriptionProvider: "openai",
+        cloudTranscriptionModel,
+        preferredLanguage,
+      });
+      assert.equal(route.language, expected, cloudTranscriptionModel);
+    }
+  }
+  const current = await resolve({
+    cloudTranscriptionProvider: "openai",
+    cloudTranscriptionModel: "gpt-transcribe",
+    preferredLanguage: "yue",
+  });
+  assert.equal(current.language, "yue");
+});
+
+test("every other provider leaves out a language only Sarvam transcribes", async () => {
+  for (const provider of ["mistral", "elevenlabs", "gemini", "tinfoil", "xai", "groq", "sarvam"]) {
+    const route = await resolve({ cloudTranscriptionProvider: provider, preferredLanguage: "or" });
+    assert.equal(route.language, provider === "sarvam" ? "or" : undefined, provider);
+    const hindi = await resolve({ cloudTranscriptionProvider: provider, preferredLanguage: "hi" });
+    if (provider !== "xai") assert.equal(hindi.language, "hi", provider);
+  }
+  // Corti needs a language, so it keeps its English default.
+  const corti = await resolve({ cloudTranscriptionProvider: "corti", preferredLanguage: "or" });
+  assert.equal(corti.language, "en");
+});
+
+test("gpt-transcribe and OpenWhispr Cloud leave out languages only Sarvam transcribes", async () => {
+  const { getCloudTranscriptionLanguageHint } = await import("../../src/utils/languageSupport.ts");
+  for (const [preferredLanguage, expected] of [
+    ["brx", undefined],
+    ["or", undefined],
+    ["hi-IN", "hi-IN"],
+    ["yue", "yue"],
+  ]) {
+    const route = await resolve({
+      cloudTranscriptionProvider: "openai",
+      cloudTranscriptionModel: "gpt-transcribe",
+      preferredLanguage,
+    });
+    assert.equal(route.language, expected && expected.split("-")[0], preferredLanguage);
+    assert.equal(
+      getCloudTranscriptionLanguageHint(preferredLanguage),
+      expected && expected.split("-")[0],
+      `cloud / ${preferredLanguage}`
+    );
+  }
+  assert.equal(getCloudTranscriptionLanguageHint("auto"), undefined);
 });
 
 const MANAGED_STT = {

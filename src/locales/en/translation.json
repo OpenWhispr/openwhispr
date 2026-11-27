@@ -414,6 +414,7 @@
           "endpointNotFound": "The endpoint does not expose an OpenAI-compatible model list.",
           "transcriptionEndpointNotFound": "Nothing takes transcriptions at this address.",
           "modelNotFound": "The selected model is not available from this provider.",
+          "sarvamSeatBudgetExhausted": "Your Sarvam AI seat has reached its spending limit. Raise the limit to continue.",
           "providerStatus": "The provider returned status {{status}}.",
           "timeout": "The connection test timed out.",
           "network": "The provider could not be reached.",
@@ -464,6 +465,7 @@
         "line": {
           "requiredByOrganization": "Required by your organization",
           "organizationModelsUnrunnable": "None of the models your organization approved runs on this computer",
+          "languageNotLocal": "Whisper doesn't transcribe {{languages}}, so it detects the language itself. A cloud provider such as Sarvam AI supports it.",
           "offToFit": "Off to fit the free space on this computer",
           "failed": "Couldn't download. Check your connection and retry"
         },
@@ -980,6 +982,14 @@
     "tinfoil": {
       "transportNote": "Tinfoil streams using Voxtral Mini 4B, and batches with Voxtral Small 24B.",
       "docsLink": "Read the docs"
+    },
+    "sarvam": {
+      "outputMode": "Output mode",
+      "codemix": "Mixed languages (keep English words in Latin script)",
+      "transcribe": "Transcribe in the spoken language",
+      "verbatim": "Transcribe verbatim",
+      "translate": "Translate to English",
+      "translit": "Transliterate into Latin script"
     },
     "elevenlabs": {
       "keytermsNote": "OpenWhispr sends eligible words from your dictionary to ElevenLabs. ElevenLabs charges 20% more when those words are included."
@@ -3572,6 +3582,8 @@
         "openai_whisper_1": "Original Whisper model",
         "groq_whisper_large_v3": "High accuracy speech recognition",
         "groq_whisper_large_v3_turbo": "216x real-time speed",
+        "sarvam_v4": "22 Indian languages, global English and dictionary hints",
+        "sarvam_v3": "22 Indian languages and Indian English",
         "mistral_voxtral_mini_latest": "Fast multilingual transcription",
         "gemini_3_5_transcribe": "Google's Gemini speech-to-text",
         "elevenlabs_scribe_v3": "Most accurate multilingual transcription",
@@ -4775,6 +4787,8 @@
       "internalAttendeesQuestion": "Is everyone in this meeting from your organization?",
       "internalAttendeesConfirm": "Yes, start",
       "recordingDisabledByOrg": "Meeting recording is disabled by your organization.",
+      "stoppedSarvamKeyChanged": "Recording stopped because the Sarvam API key changed.",
+      "noteUnavailable": "This note isn't available any more, so recording didn't start.",
       "stoppedAccountChanged": "Recording stopped because you signed out or switched accounts.",
       "stoppedPolicyUnresolved": "Recording stopped because your organization's settings couldn't be checked.",
       "stoppedWorkspaceChanged": "Recording stopped because you switched workspaces.",
@@ -6888,6 +6902,8 @@
     "noResponse": "Couldn't get a response from {{provider}}. Check your API key and connection.",
     "unknown": "{{provider}} returned an unexpected error.",
     "keyMissing": "No API key is set for {{provider}}. Add it in Settings → Language Model.",
+    "credentialChanged": "Your {{provider}} API key changed before transcription finished. Try again to use the new key.",
+    "settingsChanged": "Your transcription settings changed before transcription finished. Try again.",
     "selfHosted": {
       "authFailed": "Your server rejected the API key.",
       "accessDenied": "Your server denied access. The key may not include this model.",

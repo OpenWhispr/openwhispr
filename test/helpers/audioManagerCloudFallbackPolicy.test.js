@@ -55,6 +55,27 @@ const rejectFetch = (message) => () => {
   throw new Error(message);
 };
 
+test("hosted Whisper dictation sends only a supported effective source language", async (t) => {
+  const { setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-hosted-whisper-language-",
+    settingsKey: "__hostedWhisperLanguageSettings",
+  });
+  setSettings({ cloudTranscriptionProvider: "groq", preferredLanguage: "hi" });
+  const sent = [];
+  captureFetch(t, (_endpoint, init) => {
+    sent.push(init.body.get("language"));
+    return okJson({ text: "dictated" })();
+  });
+  for (const language of ["brx", "auto", "ta-IN", "haw"]) {
+    const manager = createManager({
+      getTranscriptionModel: () => "whisper-large-v3",
+      getEffectiveSttLanguage: () => language,
+    });
+    await manager.processWithOpenAIAPI(new Blob(["audio"], { type: "audio/webm" }));
+  }
+  assert.deepEqual(sent, [null, null, "ta", "haw"]);
+});
+
 function buildManagedPolicy(allowedTranscriptionModes) {
   return {
     version: 1,
@@ -482,6 +503,17 @@ test("proxied providers dispatch through the registry", async (t) => {
     assert.equal(payloads.corti.environment, "eu");
     assert.equal(payloads.corti.tenant, "acme");
     assert.equal(fetched.length, 0);
+  });
+
+  await t.test("a language only Sarvam transcribes is not sent to another provider", async () => {
+    const odia = createManager({
+      getTranscriptionModel: () => "voxtral-mini-latest",
+      getAPIKey: async () => "key",
+      getEffectiveSttLanguage: () => "or",
+    });
+    setSettings(settingsFor("mistral"));
+    await odia.processWithOpenAIAPI(audioBlob);
+    assert.equal(payloads.mistral.language, undefined);
   });
 
   await t.test("structured proxy errors are rebuilt with every classified field", async () => {
@@ -1009,4 +1041,98 @@ test("a local preview refusal never stops a dictation going to the enterprise ro
 
   assert.equal(reported, undefined);
   assert.equal(completed.text, "enterprise transcript");
+});
+
+test("Sarvam dictation uses the selected model and output mode", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "ow-sarvam-route-",
+    settingsKey: "__sarvamSettings",
+  });
+  for (const model of ["saaras:v4", "saaras:v3"]) {
+    setSettings({
+      useLocalWhisper: false,
+      allowLocalFallback: false,
+      cloudTranscriptionProvider: "sarvam",
+      cloudTranscriptionModel: model,
+      transcriptionMode: "providers",
+      sarvamMode: "translit",
+      customDictionary: ["New Delhi"],
+    });
+    window.electronAPI.proxySarvamTranscription = async (payload) => {
+      assert.equal(payload.model, model);
+      assert.equal(payload.sarvamMode, "translit");
+      assert.deepEqual(payload.keyterms, model === "saaras:v4" ? ["New Delhi"] : undefined);
+      return { text: "meeting है" };
+    };
+    const manager = createManager({
+      getTranscriptionModel: () => model,
+      getAPIKey: () => assert.fail("main owns the Sarvam key"),
+    });
+    const result = await manager.processWithOpenAIAPI(
+      new Blob([Uint8Array.of(1)], { type: "audio/webm" })
+    );
+    assert.equal(result.source, "sarvam");
+  }
+});
+
+test("cancelling before a Sarvam recording is read prevents the upload", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "ow-sarvam-cancel-",
+    settingsKey: "__sarvamCancel",
+  });
+  setSettings({
+    allowLocalFallback: false,
+    useLocalWhisper: false,
+    transcriptionMode: "providers",
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionModel: "saaras:v4",
+  });
+  let uploaded = false;
+  window.electronAPI.proxySarvamTranscription = async () => {
+    uploaded = true;
+    return { text: "unexpected" };
+  };
+  const manager = createManager({ getTranscriptionModel: () => "saaras:v4" });
+  let cancelled = false;
+  await assert.rejects(
+    manager.processWithOpenAIAPI(
+      {
+        type: "audio/webm",
+        arrayBuffer: async () => {
+          cancelled = true;
+          return new ArrayBuffer(4);
+        },
+      },
+      {},
+      () => cancelled
+    )
+  );
+  assert.equal(uploaded, false);
+});
+
+test("account and credential changes during Sarvam batch fallback cannot start a local retry", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "ow-sarvam-owner-",
+    settingsKey: "__sarvamOwner",
+  });
+  setSettings({
+    allowLocalFallback: true,
+    useLocalWhisper: false,
+    transcriptionMode: "providers",
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionModel: "saaras:v4",
+  });
+  window.electronAPI.transcribeLocalWhisper = () =>
+    assert.fail("retired recording reached local inference");
+  const manager = createManager({ getTranscriptionModel: () => "saaras:v4" });
+  for (const code of ["AUTH_CONTEXT_CHANGED", "PROVIDER_CREDENTIAL_CHANGED"]) {
+    window.electronAPI.proxySarvamTranscription = async (payload) => {
+      assert.equal(payload.sarvamCaptureId, "original");
+      return { error: "Recording owner changed", code };
+    };
+    await assert.rejects(
+      manager.processWithOpenAIAPI(new Blob(["test"]), { sarvamCaptureId: "original" }),
+      { code }
+    );
+  }
 });

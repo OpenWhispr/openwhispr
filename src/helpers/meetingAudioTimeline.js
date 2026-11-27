@@ -1,3 +1,5 @@
+const { captureStartFromDelivery } = require("./meetingCaptureClock");
+
 // PCM16 mono at the native tap's 24kHz. Reuse bounded silence blocks even if
 // recovery takes a long time; never allocate the entire missing interval.
 const SAMPLE_RATE = 24000;
@@ -6,7 +8,11 @@ const SAMPLE_RATE = 24000;
 const SILENCE_SAMPLES = SAMPLE_RATE / 10;
 const SILENCE = Buffer.alloc(SILENCE_SAMPLES * 2);
 
-const createMeetingAudioTimeline = ({ now = () => performance.now(), wallNow = Date.now } = {}) => {
+const createMeetingAudioTimeline = ({
+  now = () => performance.now(),
+  wallNow = Date.now,
+  anchorsFirstSample = () => true,
+} = {}) => {
   let startedAt = null;
   let wallStartedAt = null;
   let samples = 0;
@@ -16,14 +22,19 @@ const createMeetingAudioTimeline = ({ now = () => performance.now(), wallNow = D
     markRestart() {
       recovering = true;
     },
-    write(buffer, emit) {
-      const receivedAt = now();
-      startedAt ??= receivedAt;
-      wallStartedAt ??= wallNow();
+    write(buffer, emit, nativeClock) {
+      const firstSampleAt = nativeClock?.hostMs ?? captureStartFromDelivery(buffer, now());
+      startedAt ??= firstSampleAt;
+      // A provider that also times the microphone from its first sample gets the
+      // capture time. The others time the microphone at arrival, so the system
+      // track keeps its arrival too and the two stay aligned.
+      wallStartedAt ??= anchorsFirstSample()
+        ? (nativeClock?.epochMs ?? captureStartFromDelivery(buffer, wallNow()))
+        : wallNow();
       if (recovering) {
         // Repair only explicit capture restarts. Arrival jitter and buffered
         // delivery during normal capture must not manufacture gaps.
-        const elapsedSamples = Math.round(((receivedAt - startedAt) * SAMPLE_RATE) / 1000);
+        const elapsedSamples = Math.round(((firstSampleAt - startedAt) * SAMPLE_RATE) / 1000);
         let missingSamples = Math.max(0, elapsedSamples - samples);
         while (missingSamples > 0) {
           const count = Math.min(missingSamples, SILENCE_SAMPLES);

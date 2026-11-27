@@ -159,11 +159,39 @@ class AudioTapManager {
         callback(value);
       };
 
+      // stderr and PCM arrive on independent pipes. Hold early samples until
+      // the new helper supplies their clock or an older helper acknowledges start.
+      let clockReady = false;
+      let captureClock;
+      let pcmBytes = 0;
+      let trailingByte = null;
+      const earlyPcm = [];
+      const deliver = (read) => {
+        // The pipe can split inside a PCM16 sample.
+        const pcm = trailingByte ? Buffer.concat([trailingByte, read]) : read;
+        const alignedLength = pcm.length - (pcm.length % 2);
+        trailingByte = alignedLength === pcm.length ? null : pcm.subarray(alignedLength);
+        if (!alignedLength) return;
+        const chunk = trailingByte ? pcm.subarray(0, alignedLength) : pcm;
+        const offsetMs = (pcmBytes * 1000) / (DEFAULT_SAMPLE_RATE * 2);
+        pcmBytes += chunk.length;
+        this.onChunk?.(
+          chunk,
+          captureClock && {
+            hostMs: captureClock.hostMs + offsetMs,
+            epochMs: captureClock.epochMs + offsetMs,
+          }
+        );
+      };
+      const releasePcm = () => {
+        clockReady = true;
+        for (const chunk of earlyPcm) deliver(chunk);
+        earlyPcm.length = 0;
+      };
       child.stdout.on("data", (chunk) => {
-        if (this.process !== child) {
-          return;
-        }
-        this.onChunk?.(chunk);
+        if (this.process !== child) return;
+        if (clockReady) deliver(chunk);
+        else earlyPcm.push(chunk);
       });
 
       child.stderr.on("data", (chunk) => {
@@ -171,7 +199,13 @@ class AudioTapManager {
           return;
         }
         this._consumeStderr(chunk, (message) => {
+          if (message.type === "capture-clock") {
+            captureClock = message;
+            releasePcm();
+            return;
+          }
           if (message.type === "start") {
+            if (!message.captureClock) releasePcm();
             this._persistPermissionStatus("granted");
             finish(resolve);
             return;

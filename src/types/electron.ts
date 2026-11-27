@@ -1,3 +1,4 @@
+import type { SarvamMode } from "../utils/sarvam.js";
 import type { ModelDefinition } from "../models/ModelRegistry";
 import type { ReasoningConfig } from "../services/BaseReasoningService";
 import type { PermissionGuideState, PermissionGuideAction } from "./permissionGuide";
@@ -152,6 +153,8 @@ export interface DictationRealtimeSessionOptions {
   transcriptionMode?: string;
   language?: string;
   sampleRate?: number;
+  sarvamMode?: SarvamMode;
+  sarvamCaptureId?: string;
   keyterms?: string[];
   environment?: string;
   tenant?: string;
@@ -2072,6 +2075,7 @@ declare global {
           whisperModel: string;
           preferredLanguage?: string;
           translationSourceLanguage?: string;
+          sarvamMode?: SarvamMode;
           keyterms?: string[];
           transcriptionMode?: InferenceMode;
           remoteTranscriptionType?: SelfHostedType;
@@ -3011,6 +3015,16 @@ declare global {
         keyterms?: string[];
       }) => Promise<ProxyTranscriptionResult>;
 
+      getSarvamKey: () => Promise<string | null>;
+      saveSarvamKey: (key: string) => Promise<void>;
+      proxySarvamTranscription: (data: {
+        audioBuffer: ArrayBuffer;
+        model: string;
+        language?: string;
+        sarvamMode?: SarvamMode;
+        sarvamCaptureId?: string;
+        keyterms?: string[];
+      }) => Promise<ProxyTranscriptionResult>;
       // Mistral API key management
       getMistralKey: () => Promise<string | null>;
       saveMistralKey: (key: string) => Promise<void>;
@@ -3507,7 +3521,11 @@ declare global {
       ) => () => void;
 
       // BYOK audio file transcription
+      getSarvamKeyGeneration: () => Promise<number>;
       transcribeAudioFileByok?: (options: {
+        sarvamMode?: SarvamMode;
+        sarvamKeyGeneration?: number | null;
+        keyterms?: string[];
         filePath: string;
         durationSeconds?: number;
         requestId?: string;
@@ -4001,6 +4019,7 @@ declare global {
         >;
         provider?: string;
         model?: string;
+        sarvamMode?: SarvamMode;
         language?: string;
       }) => Promise<{ success: boolean; alreadyPrepared?: boolean } & PolicyFailureMetadata>;
       meetingTranscriptionStart?: (options: {
@@ -4011,6 +4030,7 @@ declare global {
         >;
         provider?: string;
         model?: string;
+        sarvamMode?: SarvamMode;
         language?: string;
         noteId?: number | null;
         sessionId: string;
@@ -4068,6 +4088,7 @@ declare global {
       ) => Promise<{
         success: boolean;
         transcript?: string;
+        partialTranscript?: boolean;
         diarizationSessionId?: string;
         error?: string;
         reason?: "stale-session";
@@ -4225,21 +4246,24 @@ declare global {
       dictationRealtimeStart?: (
         options: DictationRealtimeSessionOptions
       ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
-      dictationRealtimeSend?: (buffer: ArrayBuffer) => void;
-      dictationRealtimeFinalize?: () => Promise<
+      dictationRealtimeSend?: (buffer: ArrayBuffer, captureId?: string) => void;
+      reserveSarvamDictation?: (captureId: string) => void;
+      releaseSarvamDictation?: (captureId: string) => void;
+      dictationRealtimeFinalize?: (captureId?: string) => Promise<
         {
           success: boolean;
           text?: string;
-          error?: string;
-        } & Partial<DictationLanguageMetadata>
+        } & Partial<DictationLanguageMetadata & IpcErrorFields>
       >;
-      dictationRealtimeStop?: () => Promise<{ success: boolean; text: string }>;
+      dictationRealtimeStop?: (captureId?: string) => Promise<{ success: boolean; text: string }>;
       onDictationRealtimePartial?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeFinal?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeLanguage?: (
         callback: (metadata: DictationLanguageMetadata) => void
       ) => () => void;
-      onDictationRealtimeError?: (callback: (error: string) => void) => () => void;
+      onDictationRealtimeError?: (
+        callback: (error: string | (IpcErrorFields & { sarvamCaptureId: string })) => void
+      ) => () => void;
       onDictationRealtimeSessionEnd?: (callback: (data: { text: string }) => void) => () => void;
 
       // Google Calendar event listeners

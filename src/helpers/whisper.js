@@ -20,6 +20,7 @@ const {
   checkDiskSpace,
 } = require("./downloadUtils");
 const WhisperServerManager = require("./whisperServer");
+const { getWhisperLanguageHint } = require("../utils/languageSupport.ts");
 const { createAbortError } = require("./abortError");
 const {
   getCacheRoot,
@@ -673,7 +674,7 @@ class WhisperManager extends EventEmitter {
     }
 
     const model = options.model || "base";
-    const language = options.language || null;
+    const language = getWhisperLanguageHint(options.language) || null;
     const initialPrompt = options.initialPrompt || null;
     const vadEnabled = options.vadEnabled === true;
     const vadConfig = options.vadConfig || null;

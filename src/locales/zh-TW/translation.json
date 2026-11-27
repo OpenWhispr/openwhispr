@@ -414,6 +414,7 @@
           "endpointNotFound": "這個端點未提供相容 OpenAI 的模型清單。",
           "transcriptionEndpointNotFound": "此位址不接受轉錄請求。",
           "modelNotFound": "所選模型無法從此服務商取得。",
+          "sarvamSeatBudgetExhausted": "你的 Sarvam AI 席位已達支出上限。請提高上限後再繼續。",
           "providerStatus": "服務商回傳了狀態碼 {{status}}。",
           "timeout": "連線測試逾時。",
           "network": "無法連上服務商。",
@@ -464,6 +465,7 @@
         "line": {
           "requiredByOrganization": "你的組織要求使用",
           "organizationModelsUnrunnable": "你的組織核准的模型都無法在此電腦上執行",
+          "languageNotLocal": "Whisper 無法轉寫{{languages}}，因此會自行偵測語言。Sarvam AI 等雲端服務供應商支援該語言。",
           "offToFit": "已關閉，以符合這台電腦的可用空間",
           "failed": "無法下載。請檢查網路連線後重試"
         },
@@ -980,6 +982,14 @@
     "tinfoil": {
       "transportNote": "Tinfoil 串流轉錄使用 Voxtral Mini 4B，批次轉錄使用 Voxtral Small 24B。",
       "docsLink": "查看文件"
+    },
+    "sarvam": {
+      "outputMode": "輸出模式",
+      "codemix": "混合語言（英文單字保留拉丁字母）",
+      "transcribe": "以原語言轉錄",
+      "verbatim": "逐字轉錄",
+      "translate": "翻譯成英文",
+      "translit": "轉寫為拉丁字母"
     },
     "elevenlabs": {
       "keytermsNote": "OpenWhispr 會將詞典中符合條件的詞條傳送給 ElevenLabs。包含這些詞條時，ElevenLabs 會加收 20% 的費用。"
@@ -3474,6 +3484,8 @@
         "openai_whisper_1": "原始 Whisper 模型",
         "groq_whisper_large_v3_turbo": "216 倍即時速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精準",
+        "sarvam_v4": "支援 22 種印度語言、全球英語口音和詞典提示",
+        "sarvam_v3": "支援 22 種印度語言和印度英語",
         "mistral_voxtral_mini_latest": "快速多語言轉錄",
         "gemini_3_5_transcribe": "Google Gemini 語音轉文字",
         "elevenlabs_scribe_v3": "最精準的多語言轉錄",
@@ -4216,6 +4228,8 @@
       "internalAttendeesQuestion": "這場會議的所有參與者都屬於你的組織嗎？",
       "internalAttendeesConfirm": "是，開始",
       "recordingDisabledByOrg": "您的組織已停用會議錄音。",
+      "stoppedSarvamKeyChanged": "Sarvam API 金鑰已變更，錄製已停止。",
+      "noteUnavailable": "此筆記已無法使用，因此未開始錄製。",
       "stoppedAccountChanged": "由於您已登出或切換了帳號，錄音已停止。",
       "stoppedPolicyUnresolved": "由於無法檢查您的組織設定，錄音已停止。",
       "stoppedWorkspaceChanged": "由於您切換了工作區，錄音已停止。",
@@ -6888,6 +6902,8 @@
     "noResponse": "未能收到 {{provider}} 的回應。請檢查你的 API 金鑰和網路連線。",
     "unknown": "{{provider}} 回傳了意外的錯誤。",
     "keyMissing": "尚未為 {{provider}} 設定 API 金鑰。請在「設定 → 語言模型」中新增。",
+    "credentialChanged": "轉寫完成前，{{provider}} API 金鑰已變更。請重試以使用新金鑰。",
+    "settingsChanged": "轉寫完成前，轉寫設定已變更。請重試。",
     "selfHosted": {
       "authFailed": "你的伺服器拒絕了 API 金鑰。",
       "accessDenied": "你的伺服器拒絕存取。該金鑰可能不包含此模型。",

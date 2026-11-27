@@ -414,6 +414,7 @@
           "endpointNotFound": "该端点未提供兼容 OpenAI 的模型列表。",
           "transcriptionEndpointNotFound": "此地址不接受转录请求。",
           "modelNotFound": "所选模型无法从此服务商获得。",
+          "sarvamSeatBudgetExhausted": "你的 Sarvam AI 席位已达到支出上限。请提高上限后继续。",
           "providerStatus": "服务商返回了状态码 {{status}}。",
           "timeout": "连接测试超时。",
           "network": "无法连接到服务商。",
@@ -464,6 +465,7 @@
         "line": {
           "requiredByOrganization": "你的组织要求使用",
           "organizationModelsUnrunnable": "你的组织批准的模型都无法在此电脑上运行",
+          "languageNotLocal": "Whisper 无法转写{{languages}}，因此会自行检测语言。Sarvam AI 等云服务提供商支持该语言。",
           "offToFit": "已关闭，以适应这台电脑的可用空间",
           "failed": "无法下载。请检查网络连接后重试"
         },
@@ -980,6 +982,14 @@
     "tinfoil": {
       "transportNote": "Tinfoil 流式转录使用 Voxtral Mini 4B，批量转录使用 Voxtral Small 24B。",
       "docsLink": "查看文档"
+    },
+    "sarvam": {
+      "outputMode": "输出模式",
+      "codemix": "混合语言（英文单词保留拉丁字母）",
+      "transcribe": "按原语言转写",
+      "verbatim": "逐字转写",
+      "translate": "翻译成英语",
+      "translit": "转写为拉丁字母"
     },
     "elevenlabs": {
       "keytermsNote": "OpenWhispr 会将词典中符合条件的词条发送给 ElevenLabs。包含这些词条时，ElevenLabs 会加收 20% 的费用。"
@@ -3474,6 +3484,8 @@
         "openai_whisper_1": "原始 Whisper 模型",
         "groq_whisper_large_v3_turbo": "216 倍实时速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精准",
+        "sarvam_v4": "支持 22 种印度语言、全球英语口音和词典提示",
+        "sarvam_v3": "支持 22 种印度语言和印度英语",
         "mistral_voxtral_mini_latest": "快速多语言转录",
         "gemini_3_5_transcribe": "Google Gemini 语音转文字",
         "elevenlabs_scribe_v3": "最精准的多语言转录",
@@ -4216,6 +4228,8 @@
       "internalAttendeesQuestion": "本次会议的所有参与者都属于你的组织吗？",
       "internalAttendeesConfirm": "是，开始",
       "recordingDisabledByOrg": "您的组织已禁用会议录音。",
+      "stoppedSarvamKeyChanged": "Sarvam API 密钥已更改，录制已停止。",
+      "noteUnavailable": "此笔记已不可用，因此未开始录制。",
       "stoppedAccountChanged": "由于您已退出登录或切换了账号，录音已停止。",
       "stoppedPolicyUnresolved": "由于无法检查您的组织设置，录音已停止。",
       "stoppedWorkspaceChanged": "由于您切换了工作区，录音已停止。",
@@ -6888,6 +6902,8 @@
     "noResponse": "未能收到 {{provider}} 的响应。请检查你的 API 密钥和网络连接。",
     "unknown": "{{provider}} 返回了一个意外错误。",
     "keyMissing": "尚未为 {{provider}} 设置 API 密钥。请在“设置 → 语言模型”中添加。",
+    "credentialChanged": "转写完成前，{{provider}} API 密钥已更改。请重试以使用新密钥。",
+    "settingsChanged": "转写完成前，转写设置已更改。请重试。",
     "selfHosted": {
       "authFailed": "你的服务器拒绝了 API 密钥。",
       "accessDenied": "你的服务器拒绝了访问。该密钥可能不包含此模型。",

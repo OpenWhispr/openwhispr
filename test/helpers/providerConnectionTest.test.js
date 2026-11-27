@@ -1139,6 +1139,39 @@ test("a model list whose body never arrives is no verdict, not a missing model",
   assert.equal(unreadable.errorCode, "modelNotFound", "a list that can't be read offers nothing");
 });
 
+test("Sarvam checks a subscription key with a file-less transcription request", async () => {
+  for (const [status, error, success] of [
+    [400, { code: "invalid_request_error", message: "body.file : Field required" }, true],
+    [422, { detail: [{ loc: ["body", "file"], msg: "Field required" }] }, true],
+    [402, { code: "insufficient_quota_error" }, false],
+    [403, { code: "invalid_api_key_error" }, false],
+  ]) {
+    const result = await testProviderConnection(
+      { provider: "sarvam", apiKey: "supplied", model: "saaras:v3" },
+      async (url, request) => {
+        assert.equal(url, "https://api.sarvam.ai/speech-to-text");
+        assert.equal(request.headers["api-subscription-key"], "supplied");
+        assert.equal(request.redirect, "error");
+        assert.deepEqual([...request.body], [["model", "saaras:v3"]]);
+        return Response.json({ error }, { status });
+      }
+    );
+    assert.equal(result.success, success);
+    if (status === 403) assert.equal(result.errorCode, "credentialsRejected");
+  }
+});
+
+test("Sarvam setup distinguishes an exhausted seat budget from a temporary rate limit", async () => {
+  const check = (code) =>
+    testProviderConnection({ provider: "sarvam", apiKey: "supplied" }, async () =>
+      Response.json({ error: { code } }, { status: 429 })
+    );
+  const spent = await check("seat_budget_exhausted_error");
+  assert.equal(spent.success, false);
+  assert.equal(spent.errorCode, "sarvamSeatBudgetExhausted");
+  assert.ok(!spent.unverified);
+  assert.equal((await check("rate_limit_exceeded_error")).unverified, true);
+});
 // What ElevenLabs answers a request that carries no audio, once it has accepted the key.
 const ELEVENLABS_NO_AUDIO = {
   detail: {
