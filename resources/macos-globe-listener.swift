@@ -211,34 +211,34 @@ let releases: [(NSEvent.ModifierFlags, String)] = [
 ]
 
 func mouseButtonName(_ buttonNumber: Int) -> String? {
-    switch buttonNumber {
-    case 3:
-        return "MouseButton4"
-    case 4:
-        return "MouseButton5"
-    default:
-        return nil
-    }
+    guard (0...4).contains(buttonNumber) else { return nil }
+    return "MouseButton\(buttonNumber + 1)"
 }
 
 func emitMouseEvent(_ type: CGEventType, _ event: CGEvent) -> Bool {
-    guard type == .otherMouseDown || type == .otherMouseUp else { return false }
+    let isDown = type == .leftMouseDown || type == .rightMouseDown || type == .otherMouseDown
+    let isUp = type == .leftMouseUp || type == .rightMouseUp || type == .otherMouseUp
+    guard isDown || isUp else { return false }
 
     let buttonNumber = Int(event.getIntegerValueField(.mouseEventButtonNumber))
     guard let buttonName = mouseButtonName(buttonNumber) else { return false }
 
-    emit(type == .otherMouseDown ? "MOUSE_BUTTON_DOWN:\(buttonName)" : "MOUSE_BUTTON_UP:\(buttonName)")
+    emit(isDown ? "MOUSE_BUTTON_DOWN:\(buttonName)" : "MOUSE_BUTTON_UP:\(buttonName)")
     return suppressedMouseButtons.contains(buttonName)
 }
 
 let mouseEventMask =
+    (1 << CGEventType.leftMouseDown.rawValue) |
+    (1 << CGEventType.leftMouseUp.rawValue) |
+    (1 << CGEventType.rightMouseDown.rawValue) |
+    (1 << CGEventType.rightMouseUp.rawValue) |
     (1 << CGEventType.otherMouseDown.rawValue) |
     (1 << CGEventType.otherMouseUp.rawValue)
 
 var mouseEventTapPort: CFMachPort?
 var mouseRunLoopSource: CFRunLoopSource?
 
-// The active tap can suppress configured side buttons and is Accessibility-
+// The active tap can suppress configured mouse buttons and is Accessibility-
 // protected, so keep it absent until a mouse-button hotkey actually needs it.
 func updateMouseEventTap() {
     if suppressedMouseButtons.isEmpty {
