@@ -1,14 +1,9 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { Editor } from "@tiptap/core";
-import { NodeSelection, type EditorState, type Transaction } from "@tiptap/pm/state";
+import { NodeSelection, type EditorState } from "@tiptap/pm/state";
 import { isInTable } from "@tiptap/pm/tables";
 import { useEditorState } from "@tiptap/react";
-import {
-  BubbleMenu,
-  FloatingMenu,
-  type BubbleMenuProps,
-  type FloatingMenuProps,
-} from "@tiptap/react/menus";
+import { BubbleMenu, type BubbleMenuProps } from "@tiptap/react/menus";
 import { useTranslation } from "react-i18next";
 import {
   Bold,
@@ -42,7 +37,8 @@ import {
   useMenuDropdown,
   type ChainCommand,
 } from "./RichTextEditorMenus";
-import { insertEmptyTable, isOnEmptyLine } from "./RichTextEditorTable";
+import { insertEmptyTable } from "./RichTextEditorTable";
+import { FormatStyleControls } from "./editorBlocks/FormatStyleControls";
 
 interface FormatAction {
   key: string;
@@ -102,8 +98,7 @@ const TEXT_STYLES: { key: string; level: number; run: ChainCommand }[] = [
 ];
 
 const SELECTION_MENU = "formatSelectionMenu";
-const LINE_MENU = "formatLineMenu";
-const MENU_KEYS = [SELECTION_MENU, LINE_MENU];
+const MENU_KEYS = [SELECTION_MENU];
 
 // Tables have their own menu, and none of these actions belong in a code block:
 // the marks don't apply there and a list would take the fence apart.
@@ -118,17 +113,8 @@ const canFormat = (editor: Editor, state: EditorState): boolean =>
 const shouldShowOnSelection: BubbleMenuProps["shouldShow"] = ({ editor, state }) =>
   canFormat(editor, state) && !state.selection.empty && !(state.selection instanceof NodeSelection);
 
-// On an empty top-level line, where a list, heading or table can start.
-const shouldShowOnEmptyLine: FloatingMenuProps["shouldShow"] = ({ editor, state }) =>
-  canFormat(editor, state) && isOnEmptyLine(state.selection);
-
-// Below the caret, so it covers neither the line being typed on (Tiptap's
-// default puts it beside the caret) nor the text written above it. It flips
-// above only when there's no room below.
-const LINE_MENU_OPTIONS: FloatingMenuProps["options"] = { placement: "bottom-start" };
-
 /** A toggle when `active` is set, a plain button otherwise. */
-function ToolbarButton({
+export function ToolbarButton({
   label,
   title = label,
   active,
@@ -208,7 +194,13 @@ function FormatToolbar({
     >
       {MARKS.map(actionButton)}
       <Separator />
-      <DropdownMenu open={dropdown.open} onOpenChange={dropdown.setOpen}>
+      {/* highlight, sub/superscript, colour, font, alignment, ruby. */}
+      <FormatStyleControls editor={editor} dropdown={dropdown} />
+      <Separator />
+      <DropdownMenu
+        open={dropdown.open === "block"}
+        onOpenChange={(open) => dropdown.setOpen(open ? "block" : null)}
+      >
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
@@ -257,69 +249,19 @@ function FormatToolbar({
   );
 }
 
-/**
- * Marks, text style, lists and tables for selected text or an empty line.
- * `lineMenuPadding` is space at the editor's edges that leaves the empty-line
- * toolbar no room, such as the note's bottom bar: it flips above the caret instead.
- */
-export function RichTextEditorFormatMenu({
-  editor,
-  lineMenuPadding,
-}: {
-  editor: Editor;
-  lineMenuPadding: Record<"top" | "right" | "bottom" | "left", number>;
-}) {
+/** Marks, text style, lists and tables for selected text. */
+export function RichTextEditorFormatMenu({ editor }: { editor: Editor }) {
   const onSelection = useMenuDropdown();
-  const lineMenuOptions = useMemo(
-    () => ({ ...LINE_MENU_OPTIONS, flip: { padding: lineMenuPadding } }),
-    [lineMenuPadding]
-  );
-  const onEmptyLine = useMenuDropdown(lineMenuOptions);
   useHideOnFocusLeave(editor, MENU_KEYS);
-  // ProseMirror scrolls the caret into view after the menus measured it, so a line
-  // menu placed by a transaction that scrolled the note sits off by the scroll.
-  // Tiptap's `scrollTarget` option would re-place it only 60 ms after the scroll,
-  // so place it again in the next frame, before it is painted. The selection menu
-  // waits for the selection to settle before it measures.
-  useEffect(() => {
-    let frame = 0;
-    // Tiptap hides a menu by detaching its element.
-    const isShown = (): boolean => !!onEmptyLine.menuRef.current?.isConnected;
-    const onTransaction = ({ transaction }: { transaction: Transaction }): void => {
-      if (!transaction.scrolledIntoView || !isShown()) return;
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        if (editor.isDestroyed || !isShown()) return;
-        editor.view.dispatch(editor.state.tr.setMeta(LINE_MENU, "updatePosition"));
-      });
-    };
-    editor.on("transaction", onTransaction);
-    return () => {
-      cancelAnimationFrame(frame);
-      editor.off("transaction", onTransaction);
-    };
-  }, [editor, onEmptyLine.menuRef]);
   return (
-    <>
-      <BubbleMenu
-        ref={onSelection.menuRef}
-        editor={editor}
-        pluginKey={SELECTION_MENU}
-        shouldShow={shouldShowOnSelection}
-        options={onSelection.options}
-      >
-        <FormatToolbar editor={editor} dropdown={onSelection} />
-      </BubbleMenu>
-      <FloatingMenu
-        ref={onEmptyLine.menuRef}
-        className="rich-text-editor-line-menu"
-        editor={editor}
-        pluginKey={LINE_MENU}
-        shouldShow={shouldShowOnEmptyLine}
-        options={onEmptyLine.options}
-      >
-        <FormatToolbar editor={editor} dropdown={onEmptyLine} />
-      </FloatingMenu>
-    </>
+    <BubbleMenu
+      ref={onSelection.menuRef}
+      editor={editor}
+      pluginKey={SELECTION_MENU}
+      shouldShow={shouldShowOnSelection}
+      options={onSelection.options}
+    >
+      <FormatToolbar editor={editor} dropdown={onSelection} />
+    </BubbleMenu>
   );
 }

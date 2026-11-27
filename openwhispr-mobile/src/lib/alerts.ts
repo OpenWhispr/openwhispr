@@ -30,6 +30,24 @@ export function confirmDestructive(
   else Alert.alert(title, message, buttons);
 }
 
+// Capture keeps writing into the note and Stop links its recording to it, so a deleted note would
+// end up with audio uploaded for a row nobody can see.
+export function alertMeetingNoteNotDeletable(): void {
+  Alert.alert('Meeting in progress', 'End the meeting before deleting its note.');
+}
+
+// The meeting ended as soon as its recording was refused, so this is the only place the user
+// learns why the screen went back to the start.
+export function alertMeetingStartFailed(message: string): void {
+  Alert.alert("Recording didn't start", message);
+}
+
+// Retry found no connection: nothing was uploaded, and the note now says it is waiting, so the
+// user isn't left watching an upload that could only time out.
+export function alertMeetingWaitingForConnection(): void {
+  Alert.alert("You're offline", "This meeting will be transcribed when you're back online.");
+}
+
 // The store keeps renewing a subscription after the account behind it is gone,
 // and the server cannot cancel it, so the user has to before deleting.
 function storeSubscriptionWarning(): string {

@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronDown, Folder, Plus, Search, Users, X } from "./icons";
-import { defaultFolderDisplayName, folderMatchesQuery } from "./notes/shared";
+import { folderMatchesQuery, folderPathLabel, orderFoldersAsTree } from "./notes/shared";
 import type { MeetingDestinationContext, MeetingError, MeetingFolderRef } from "../types/electron";
-
-const key = (name: string) => `meetingNotification.folders.${name}`;
+import { meetingAttendeeRefusalKey } from "../helpers/meetingAttendeePolicy.js";
 import { meetingFolderLabel, meetingLocationLabel } from "./meetingFolderLabel";
 import {
   DropdownMenu,
@@ -12,6 +11,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "./ui/dropdown-menu";
+
+const key = (name: string) => `meetingNotification.folders.${name}`;
 
 interface Props {
   context: MeetingDestinationContext | null;
@@ -49,7 +50,7 @@ export function MeetingNotificationFolderPicker({
   const commitKey = useRef(false);
   const createRequest = useRef<{ key: string; id: string } | null>(null);
   const priorMode = useRef(mode);
-  const folders = useMemo(() => context?.folders ?? [], [context]);
+  const folders = useMemo(() => orderFoldersAsTree(context?.folders ?? []), [context]);
   const selected = context?.selectedDestination ?? context?.defaultDestination;
   const matchingFolders = useMemo(
     () =>
@@ -91,7 +92,7 @@ export function MeetingNotificationFolderPicker({
   useEffect(() => {
     if (mode === "form" && priorMode.current !== "form") {
       setDraft(matchingFolders.length ? "" : query.trim());
-      setSpaceId(context?.spaces.find((s) => s.kind === "private")?.id ?? null);
+      setSpaceId(context?.privateSpaceId ?? null);
       setLocationOpen(false);
       createRequest.current = null;
     }
@@ -99,7 +100,15 @@ export function MeetingNotificationFolderPicker({
     if (focusReady && !busy) {
       (context?.existingNote ? dialogRef : mode === "form" ? nameRef : searchRef).current?.focus();
     }
-  }, [mode, focusReady, busy, context?.spaces, context?.existingNote, matchingFolders, query]);
+  }, [
+    mode,
+    focusReady,
+    busy,
+    context?.privateSpaceId,
+    context?.existingNote,
+    matchingFolders,
+    query,
+  ]);
   useEffect(() => {
     document
       .getElementById(`meeting-folder-option-${active}`)
@@ -159,13 +168,13 @@ export function MeetingNotificationFolderPicker({
         linked.shared,
         linked.spaceName,
         linked.folderName &&
-          (linkedFolder ? defaultFolderDisplayName(linkedFolder, t) : linked.folderName),
+          (linkedFolder ? folderPathLabel(linkedFolder, folders, t) : linked.folderName),
         t
       )
     : "";
   const errorView = error && (
     <p role="alert" className="meeting-folder-error">
-      {t(key(`errors.${error}`))}
+      {t(meetingAttendeeRefusalKey(error) ?? key(`errors.${error}`))}
     </p>
   );
   return (
@@ -345,7 +354,7 @@ export function MeetingNotificationFolderPicker({
                           <Folder className="size-3.5 shrink-0" />
                           <span className="min-w-0 flex-1">
                             <span className="meeting-folder-name">
-                              {defaultFolderDisplayName(folder, t)}
+                              {folderPathLabel(folder, folders, t)}
                             </span>
                             <span className="meeting-folder-space">
                               {meetingLocationLabel(

@@ -3,7 +3,7 @@ import type { ChainedCommands, Editor } from "@tiptap/core";
 import type { EditorView } from "@tiptap/pm/view";
 import type { BubbleMenuProps } from "@tiptap/react/menus";
 
-// Shared by the note editor's floating menus (Tiptap BubbleMenu and FloatingMenu).
+// Shared by the note editor's floating menus (Tiptap BubbleMenu).
 
 export type ChainCommand = (chain: ChainedCommands) => ChainedCommands;
 
@@ -62,10 +62,11 @@ export function useHideOnFocusLeave(editor: Editor, pluginKeys: readonly string[
 export function useMenuDropdown(menuOptions?: BubbleMenuProps["options"]) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
-  const [open, setOpen] = useState(false);
+  // The id of the open dropdown, if any: a menu can hold several.
+  const [open, setOpen] = useState<string | null>(null);
   useEffect(() => setContainer(menuRef.current), []);
   // Stable: a menu dispatches a transaction whenever its props change.
-  const options = useMemo(() => ({ ...menuOptions, onHide: () => setOpen(false) }), [menuOptions]);
+  const options = useMemo(() => ({ ...menuOptions, onHide: () => setOpen(null) }), [menuOptions]);
   return { menuRef, container, open, setOpen, options };
 }
 

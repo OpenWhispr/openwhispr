@@ -73,7 +73,14 @@ function rig(t) {
     if (loseAnswer) throw new Error("timeout");
     return {
       success: true,
-      data: { status: total >= 200 ? "pending" : "collecting", acceptedThrough: seq },
+      data: {
+        status:
+          total >= 200 &&
+          [...contributions.values()].every((event) => Date.parse(event.occurredAt) <= wall)
+            ? "pending"
+            : "collecting",
+        acceptedThrough: seq,
+      },
     };
   };
   const logger = { warn: (message) => warnings.push(message), debug: () => {} };
@@ -281,6 +288,78 @@ test("a 403 quiets the timer only for an unregistered stream", async (t) => {
     r.calls.slice(3).map((c) => c.path),
     ["/api/activation/batch", "/api/activation/batch"]
   );
+});
+// A started, registered stream and a tick that moves the timer and both clocks 30 s.
+async function idleRig(t) {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const r = rig(t);
+  r.manager.start();
+  await r.manager.flush();
+  const tick = async (times = 1) => {
+    for (let i = 0; i < times; i++) {
+      r.tick(30_000);
+      t.mock.timers.tick(30_000);
+      await r.manager.running;
+    }
+  };
+  return { r, tick };
+}
+test("an idle stream certifies its watermark every five minutes, not on every tick", async (t) => {
+  const { r, tick } = await idleRig(t);
+  await tick(9);
+  assert.equal(batches(r).length, 1);
+  await tick();
+  assert.equal(batches(r).length, 2);
+  assert.deepEqual(batches(r).at(-1).body.events, []);
+  assert.equal(registrations(r), 1);
+});
+test("a single device whose 200th word is ahead of server time settles on the next tick", async (t) => {
+  const { r, tick } = await idleRig(t);
+  r.drift(1000, 5000);
+  await capture(r, 200);
+  assert.equal(r.manager.current().state, "open");
+  assert.equal(r.db.prepare("SELECT count(*) AS n FROM captures").get().n, 0);
+  await tick();
+  assert.equal(r.manager.current().state, "done");
+});
+
+test("a heartbeat that fails is retried on the next tick", async (t) => {
+  const { r, tick } = await idleRig(t);
+  await tick(9);
+  r.offline(true);
+  await tick();
+  assert.equal(batches(r).length, 2);
+  r.offline(false);
+  await tick();
+  assert.equal(batches(r).length, 3);
+  await tick(9);
+  assert.equal(batches(r).length, 3);
+});
+test("words a failed send left queued go out on the next tick, then the stream idles", async (t) => {
+  const { r, tick } = await idleRig(t);
+  r.offline(true);
+  await capture(r, 5);
+  r.offline(false);
+  const failed = batches(r).length;
+  await tick();
+  assert.equal(batches(r).length, failed + 1);
+  assert.equal(batches(r).at(-1).body.events[0].words, 5);
+  await tick(9);
+  assert.equal(batches(r).length, failed + 1);
+});
+test("a gap, a close and a re-synced clock do not wait for the idle heartbeat", async (t) => {
+  const { r, tick } = await idleRig(t);
+  await tick();
+  assert.equal(batches(r).length, 1);
+  await r.manager.resync();
+  assert.equal(batches(r).length, 2);
+  r.db.prepare("UPDATE streams SET gap=1").run();
+  await tick();
+  assert.equal(batches(r).at(-1).body.gap, true);
+  r.db.prepare("UPDATE streams SET gap=0,state='closing'").run();
+  await tick();
+  assert.equal(batches(r).at(-1).body.close, true);
+  assert.equal(batches(r).length, 4);
 });
 test("storage failure cannot be erased by finalizer cancellation or clean shutdown", async (t) => {
   const r = rig(t);

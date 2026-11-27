@@ -48,11 +48,17 @@ interface ApiKeysSectionProps {
   /** Bumped by a "Create API key" elsewhere; opens the create dialog once keys load. */
   createRequest?: number;
   onCanCreateChange: (canCreate: boolean) => void;
+  /** False while the organization refuses new keys: existing ones can still be revoked. */
+  allowCreate?: boolean;
+  /** True while the policy refuses listing and revoking keys too. */
+  listBlocked?: boolean;
 }
 
 export default function ApiKeysSection({
   createRequest = 0,
   onCanCreateChange,
+  allowCreate = true,
+  listBlocked = false,
 }: ApiKeysSectionProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -74,21 +80,29 @@ export default function ApiKeysSection({
     }
   }, []);
 
+  // Restored access reloads the list, which a blocked policy may have refused.
   useEffect(() => {
-    fetchKeys();
-  }, [fetchKeys]);
+    if (!listBlocked) fetchKeys();
+  }, [listBlocked, fetchKeys]);
 
   useEffect(() => {
-    onCanCreateChange(!isLoading && keys.length < MAX_API_KEYS);
+    onCanCreateChange(allowCreate && !isLoading && keys.length < MAX_API_KEYS);
     return () => onCanCreateChange(false);
-  }, [isLoading, keys.length, onCanCreateChange]);
+  }, [allowCreate, isLoading, keys.length, onCanCreateChange]);
 
   // At the key limit there's nothing to create; the list says so instead.
   useEffect(() => {
+    // Requests made while creation is refused are settled, so allowing it
+    // again doesn't open a dialog nobody asked for.
+    if (!allowCreate) {
+      handledCreateRequest.current = createRequest;
+      setCreateOpen(false);
+      return;
+    }
     if (isLoading || createRequest === handledCreateRequest.current) return;
     handledCreateRequest.current = createRequest;
     if (keys.length < MAX_API_KEYS) setCreateOpen(true);
-  }, [createRequest, isLoading, keys.length]);
+  }, [allowCreate, createRequest, isLoading, keys.length]);
 
   const handleRevoke = async () => {
     if (!revokeTarget) return;
@@ -109,7 +123,7 @@ export default function ApiKeysSection({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" hidden={listBlocked}>
       {isLoading ? (
         <SettingsPanel>
           {[0, 1].map((i) => (
@@ -171,6 +185,7 @@ export default function ApiKeysSection({
                   variant="ghost"
                   size="icon"
                   className="h-8 w-10 text-muted-foreground hover:text-destructive"
+                  aria-label={t("apiKeysSection.revoke.button")}
                   onClick={() => setRevokeTarget(apiKey)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -189,13 +204,15 @@ export default function ApiKeysSection({
         </SettingsPanel>
       )}
 
-      <CreateKeyDialog
-        open={createOpen}
-        onOpenChange={(open) => {
-          setCreateOpen(open);
-        }}
-        onCreated={fetchKeys}
-      />
+      {allowCreate && (
+        <CreateKeyDialog
+          open={createOpen}
+          onOpenChange={(open) => {
+            setCreateOpen(open);
+          }}
+          onCreated={fetchKeys}
+        />
+      )}
 
       <ConfirmDialog
         open={!!revokeTarget}

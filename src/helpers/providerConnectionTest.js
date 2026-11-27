@@ -1,3 +1,5 @@
+const { selfHostedSttRequest } = require("./selfHostedSttHeaders.js");
+const { isRefusedRedirect } = require("./providerHttpErrors.js");
 const ENDPOINTS = {
   openai: "https://api.openai.com/v1/models",
   groq: "https://api.groq.com/openai/v1/models",
@@ -17,6 +19,10 @@ const ENDPOINTS = {
   deepgram: "https://api.deepgram.com/v1/auth/token",
   // AssemblyAI exposes no model list; listing transcripts is its 200-vs-401 probe.
   assemblyai: "https://api.assemblyai.com/v2/transcript?limit=1",
+  // ElevenLabs keys can be scoped so /v1/user or /v1/models refuse a key that transcribes.
+  // The transcription route checks the key before the body, so a request without audio is
+  // refused as unauthorised or as invalid, and transcribes nothing.
+  elevenlabs: "https://api.elevenlabs.io/v1/speech-to-text",
 };
 // Listing the key's projects proves the key too: used only if Deepgram retires the route above.
 const DEEPGRAM_PROJECTS_ENDPOINT = "https://api.deepgram.com/v1/projects";
@@ -172,8 +178,8 @@ function resolveProviderRequest(config) {
   const apiKey = typeof config?.apiKey === "string" ? config.apiKey.trim() : "";
   let endpoints = ENDPOINTS[provider] ? [ENDPOINTS[provider]] : [];
   // A hosted provider's fixed endpoint never redirects. Following one would carry
-  // x-api-key or x-goog-api-key to whichever host it names (fetch drops only
-  // Authorization across origins), so a redirect fails the check instead. Custom
+  // x-api-key, x-goog-api-key or xi-api-key to whichever host it names (fetch drops
+  // only Authorization across origins), so a redirect fails the check instead. Custom
   // servers may redirect within themselves, such as adding a trailing slash.
   let redirect = "error";
   let transcriptionEndpoint;
@@ -250,6 +256,8 @@ function resolveProviderRequest(config) {
       headers.Authorization = `Token ${apiKey}`;
     } else if (provider === "assemblyai") {
       headers.Authorization = apiKey;
+    } else if (provider === "elevenlabs") {
+      headers["xi-api-key"] = apiKey;
     } else {
       headers.Authorization = `Bearer ${apiKey}`;
     }
@@ -258,8 +266,11 @@ function resolveProviderRequest(config) {
   return {
     endpoint: endpoints[0],
     endpoints,
-    headers,
-    redirect,
+    // A speech server's address is the user's to correct, so its refused redirect is named;
+    // a hosted provider's stays no verdict.
+    ...(provider === "custom" && scope === "transcription"
+      ? { ...selfHostedSttRequest(config.headers, headers), namesRedirect: true }
+      : { headers, redirect }),
     transcriptionEndpoint,
     checksOpenRouterKey,
   };
@@ -270,9 +281,10 @@ function resolveProviderRequest(config) {
 // key or a missing model. No answer outranks a candidate without a model list, which may only
 // be an address the server doesn't use.
 const FAILURE_PRIORITY = {
-  credentialsRejected: 6,
-  providerStatus: 5,
-  modelNotFound: 4,
+  credentialsRejected: 7,
+  providerStatus: 6,
+  modelNotFound: 5,
+  redirected: 4,
   endpointNotFound: 0,
 };
 const UNVERIFIED_PRIORITY = { providerStatus: 3, timeout: 2, network: 1 };
@@ -327,6 +339,11 @@ const NETWORK_FAILURE = {
   error: "The provider could not be reached.",
   unverified: true,
 };
+// A speech server that redirects a request carrying custom headers is set up wrong.
+const REDIRECT_FAILURE = {
+  errorCode: "redirected",
+  error: "The server redirected the request to another address.",
+};
 
 // An empty or non-JSON body reads as undefined. A body that never arrives (the 12 s cap
 // firing, a dropped connection) is not an answer, so its error goes on to probe's catch.
@@ -339,8 +356,8 @@ async function readJson(response) {
   }
 }
 
-// Gemini, xAI and Corti answer a made-up key with a 400, which on its own can also
-// mean a malformed request. Their error bodies say which it was.
+// Gemini, xAI and Corti answer a made-up key with a 400, which on its own
+// can also mean a malformed request. Their error bodies say which it was.
 const KEY_REJECTED_BY_BODY = {
   gemini: (_, body) =>
     Array.isArray(body?.error?.details) &&
@@ -415,7 +432,8 @@ async function probe(endpoint, request, fetchImpl, judge, init = { method: "GET"
     });
     return await judge(response);
   } catch (error) {
-    return error?.name === "AbortError" ? TIMEOUT_FAILURE : NETWORK_FAILURE;
+    if (error?.name === "AbortError") return TIMEOUT_FAILURE;
+    return request.namesRedirect && isRefusedRedirect(error) ? REDIRECT_FAILURE : NETWORK_FAILURE;
   } finally {
     clearTimeout(timeout);
   }
@@ -449,6 +467,7 @@ async function testProviderConnection(
 
   const provider = String(config?.provider || "").toLowerCase();
   if (provider === "deepgram") return testDeepgramKey(request, fetchImpl);
+  if (provider === "elevenlabs") return testElevenLabsKey(request, fetchImpl);
 
   const model = String(config?.model || "").trim();
   let failure = null;
@@ -531,6 +550,56 @@ async function testDeepgramKey(request, fetchImpl) {
     return Array.isArray((await readJson(response))?.projects) ? null : {};
   });
   return fallback ? { success: false, ...fallback } : { success: true };
+}
+
+function isElevenLabsMissingFile(detail) {
+  if (Array.isArray(detail)) {
+    const [error] = detail;
+    return (
+      detail.length === 1 &&
+      ["missing", "value_error.missing"].includes(error?.type) &&
+      Array.isArray(error.loc) &&
+      error.loc.length === 2 &&
+      error.loc[0] === "body" &&
+      error.loc[1] === "file"
+    );
+  }
+  return (
+    detail?.code === "invalid_parameters" &&
+    detail.param === "file" &&
+    detail.message === "Must provide either file or a URL parameter."
+  );
+}
+
+// ElevenLabs is checked by key alone: a transcription request with a model and no audio is
+// refused as invalid (400 or 422) once the key is accepted. A key out of quota is still
+// the user's key, so it passes; transcription then reports the quota.
+async function testElevenLabsKey(request, fetchImpl) {
+  const body = new FormData();
+  body.append("model_id", "scribe_v3");
+  const failure = await probe(
+    request.endpoint,
+    request,
+    fetchImpl,
+    async (response) => {
+      // 402 is how ElevenLabs now reports a key with no credit left; 401 quota_exceeded
+      // below is the older form of the same answer.
+      if (response.ok || response.status === 402) return null;
+      const status = response.status;
+      const failure = describeStatusFailure(status, "elevenlabs");
+      if (![400, 401, 422].includes(status)) return failure;
+      const detail = (await readJson(response))?.detail;
+      if (detail?.status === "quota_exceeded") return null;
+      if (status === 401) return failure;
+      if (detail?.code === "invalid_api_key" || detail?.status === "invalid_api_key") {
+        return { ...describeStatusFailure(401, "elevenlabs"), status };
+      }
+      // Only the expected missing-file response confirms the key was accepted.
+      return isElevenLabsMissingFile(detail) ? null : { ...failure, unverified: true };
+    },
+    { method: "POST", body }
+  );
+  return failure ? { success: false, ...failure } : { success: true };
 }
 
 // Runs once Tinfoil's public model list has vouched for the model. A valid key pays for one

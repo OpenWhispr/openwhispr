@@ -1,9 +1,14 @@
 import "../models/registryBootstrap.js";
+import {
+  parseSelfHostedSttHeaders,
+  serializeSelfHostedSttHeaders,
+} from "../helpers/selfHostedSttHeaders.js";
 import { RETIRED_TINFOIL_MODEL_NAMES } from "../config/retiredCloudModelPolicy.js";
 import { create } from "zustand";
 import { GENERATE_NOTES_KEY } from "../helpers/builtinActions";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
+import { readStoredAccountScopeUserId } from "../lib/authAccountScope";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
 import { chooseDictionaryStartupAction } from "../helpers/dictionaryStartup";
 import logger from "../utils/logger";
@@ -64,9 +69,13 @@ import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
 import { queueRetiredModelSwitch, recordRetiredModelSwitch } from "./retiredModelSwitchStore";
 import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
-import { isUploadOnlyTranscriptionModel } from "../models/appTranscriptionProviders.js";
+import {
+  isUploadOnlyTranscriptionModel,
+  transcriptionModelsForContext,
+} from "../models/appTranscriptionProviders.js";
 import {
   acceptsUnlistedTranscriptionModel,
+  getLocalTranscriptionModel,
   getTranscriptionSelection,
   isLocalModelAllowedByPolicy,
   isPolicyActionAllowed,
@@ -96,6 +105,7 @@ import {
 import {
   EMPTY_SHARED_HINTS,
   isTermLikeSharedWord,
+  type ScopedSharedHintWords,
   type SharedHintWords,
 } from "../utils/sharedDictionaryHints";
 import {
@@ -105,6 +115,7 @@ import {
 } from "../utils/dictionaryPromptCap";
 import type { EnterpriseSetupMode } from "../types/enterpriseIdentity";
 import { getManagedScopeResolution } from "./enterpriseIdentityStore";
+import { syncAfterLocalWrite } from "../services/syncAfterLocalWrite";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
@@ -172,10 +183,15 @@ function transcriptionProviderModels(
   const models: Array<{ id: string; streaming?: boolean }> =
     modelRegistryData.transcriptionProviders.find((provider) => provider.id === providerId)
       ?.models ?? [];
-  if (context === "meeting") return models.filter((model) => model.streaming);
-  if (context === "dictation")
-    return models.filter((model) => !isUploadOnlyTranscriptionModel(providerId, model.id));
-  return models;
+  return transcriptionModelsForContext(providerId, models, context);
+}
+
+// A provider can offer a separate Note Recording model that dictation never selects.
+function canInheritDictationProviderForMeeting(providerId: string): boolean {
+  return (
+    MEETING_TRANSCRIPTION_POLICY_CATALOG.byokProviders.includes(providerId) &&
+    transcriptionProviderModels(providerId, "dictation").some((model) => model.streaming)
+  );
 }
 
 function defaultTranscriptionModel(
@@ -307,33 +323,44 @@ function readStoredActiveWorkspaceId(): string | null {
 // workspace (or account) never apply, and a stale or hand-edited value never
 // breaks the dictionary prompt. Words are checked again, since a build with
 // looser rules may have written them.
-function parseSharedHints(raw: string | null, activeWorkspaceId: string | null): SharedHintWords {
-  if (raw === null) return EMPTY_SHARED_HINTS;
+function parseSharedHints(
+  raw: string | null,
+  activeWorkspaceId: string | null
+): ScopedSharedHintWords {
+  const currentAccountId = readStoredAccountScopeUserId();
+  const empty = currentAccountId
+    ? { ...EMPTY_SHARED_HINTS, accountId: currentAccountId }
+    : EMPTY_SHARED_HINTS;
+  if (raw === null) return empty;
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null) return EMPTY_SHARED_HINTS;
-    const { workspaceId, space, workspace, suppressedPersonal } = parsed as Record<string, unknown>;
-    if (workspaceId !== null && typeof workspaceId !== "string") return EMPTY_SHARED_HINTS;
-    if (workspaceId !== activeWorkspaceId) return EMPTY_SHARED_HINTS;
-    if (!Array.isArray(space) || !Array.isArray(workspace)) return EMPTY_SHARED_HINTS;
+    if (typeof parsed !== "object" || parsed === null) return empty;
+    const { accountId, workspaceId, space, workspace, suppressedPersonal } = parsed as Record<
+      string,
+      unknown
+    >;
+    if (workspaceId !== activeWorkspaceId) return empty;
+    if (!Array.isArray(space) || !Array.isArray(workspace)) return empty;
     const words = (value: unknown[]): string[] =>
       value.filter((w): w is string => typeof w === "string");
     const sharedWords = (value: unknown[]): string[] => words(value).filter(isTermLikeSharedWord);
     // Moved personal words, not teammates': they only ever remove words.
     const suppressed = Array.isArray(suppressedPersonal) ? words(suppressedPersonal) : [];
-    return suppressed.length > 0
-      ? {
-          space: sharedWords(space),
-          workspace: sharedWords(workspace),
-          suppressedPersonal: suppressed,
-        }
-      : { space: sharedWords(space), workspace: sharedWords(workspace) };
+    // Older caches predate the owner field and share the reconciled account's
+    // lifetime. Explicit null records that no owner was known when we wrote it.
+    const owner = accountId === undefined ? currentAccountId : accountId;
+    return {
+      space: sharedWords(space),
+      workspace: sharedWords(workspace),
+      ...(suppressed.length > 0 ? { suppressedPersonal: suppressed } : {}),
+      ...(typeof owner === "string" && owner ? { accountId: owner } : {}),
+    };
   } catch {
-    return EMPTY_SHARED_HINTS;
+    return empty;
   }
 }
 
-function readPersistedSharedHints(): SharedHintWords {
+function readPersistedSharedHints(): ScopedSharedHintWords {
   if (!isBrowser) return EMPTY_SHARED_HINTS;
   return parseSharedHints(localStorage.getItem(SHARED_HINTS_KEY), readStoredActiveWorkspaceId());
 }
@@ -341,7 +368,7 @@ function readPersistedSharedHints(): SharedHintWords {
 interface PromptDictionarySettings {
   customDictionary: string[];
   snippets: Snippet[];
-  sharedDictionaryHints: SharedHintWords;
+  sharedDictionaryHints: ScopedSharedHintWords;
   preferredLanguage: string;
   chineseScriptPreference: string;
 }
@@ -430,21 +457,24 @@ async function adoptStoredSnippets(): Promise<void> {
   useSettingsStore.setState({ snippets: stored });
 }
 
-// Main keeps the hints in memory only, for auto-learn; a failed send just
-// leaves its previous copy in place.
+// Auto-learn uses the prompt budget. Sherpa applies its own cap to the eligible
+// shared words and needs the hidden fallback keys to filter its SQLite words.
 function sendSharedHintsToMain(settings: PromptDictionarySettings): void {
-  const hints = sharedWordsReachingPrompt(settings);
-  const serialized = JSON.stringify(hints);
+  const promptHints = sharedWordsReachingPrompt(settings);
+  const hotwordHints = settings.sharedDictionaryHints;
+  const serialized = JSON.stringify([promptHints, hotwordHints]);
   if (serialized === lastSentSharedHints) return;
   lastSentSharedHints = serialized;
-  window.electronAPI?.setSharedDictionaryHints?.(hints)?.catch((err: unknown) => {
-    lastSentSharedHints = null;
-    logger.warn(
-      "Failed to send shared dictionary hints to main",
-      { error: (err as Error)?.message },
-      "settings"
-    );
-  });
+  window.electronAPI
+    ?.setSharedDictionaryHints?.(promptHints, hotwordHints)
+    ?.catch((err: unknown) => {
+      lastSentSharedHints = null;
+      logger.warn(
+        "Failed to send shared dictionary hints to main",
+        { error: (err as Error)?.message },
+        "settings"
+      );
+    });
 }
 
 function readStringArray(key: string, fallback: string[]): string[] {
@@ -1119,6 +1149,10 @@ function migrateRetiredCloudModels() {
 
 migrateRetiredCloudModels();
 
+export type SelfHostedSttHeader = { name: string; value: string };
+// Dictation and uploads post to different self-hosted servers (#2049).
+export type SelfHostedSttSurface = "dictation" | "upload";
+
 export interface SettingsState
   extends
     TranscriptionSettings,
@@ -1172,6 +1206,7 @@ export interface SettingsState
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
   remoteTranscriptionModel: string;
+  selfHostedSttHeaders: Record<SelfHostedSttSurface, SelfHostedSttHeader[]>;
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
   keepLocalModelLoaded: boolean;
@@ -1292,6 +1327,7 @@ export interface SettingsState
   setRemoteTranscriptionType: (type: SelfHostedType) => void;
   setRemoteTranscriptionUrl: (url: string) => void;
   setRemoteTranscriptionModel: (model: string) => void;
+  setSelfHostedSttHeaders: (surface: SelfHostedSttSurface, headers: SelfHostedSttHeader[]) => void;
   setCleanupMode: (mode: InferenceMode) => void;
   setCleanupRemoteUrl: (url: string) => void;
   setKeepLocalModelLoaded: (value: boolean) => void;
@@ -1405,6 +1441,7 @@ export interface SettingsState
   setTinfoilApiKey: (key: string) => void;
   setDeepgramApiKey: (key: string) => void;
   setAssemblyaiApiKey: (key: string) => void;
+  setElevenlabsApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
 
@@ -1530,6 +1567,16 @@ function createStringSetter(key: string) {
   };
 }
 
+// A blank Note Recording field inherits dictation. A batch-only dictation choice
+// must not replace the provider or model the recorder was already using.
+function preserveInheritedMeetingSelection(previous: SettingsState): void {
+  const current = useSettingsStore.getState();
+  if (!current.meetingCloudTranscriptionProvider)
+    current.setMeetingCloudTranscriptionProvider(previous.cloudTranscriptionProvider);
+  if (!current.meetingCloudTranscriptionModel)
+    current.setMeetingCloudTranscriptionModel(previous.cloudTranscriptionModel);
+}
+
 function persistTranscriptionModelMemory(memory: Record<string, string>) {
   if (isBrowser) localStorage.setItem("transcriptionModelByProvider", JSON.stringify(memory));
   useSettingsStore.setState({ transcriptionModelByProvider: memory });
@@ -1647,7 +1694,9 @@ const SECRET_IPC_SAVERS = {
   tinfoil: "saveTinfoilKey",
   deepgram: "saveDeepgramKey",
   assemblyai: "saveAssemblyAIKey",
+  elevenlabs: "saveElevenlabsKey",
   customTranscription: "saveCustomTranscriptionKey",
+  selfHostedSttHeaders: "saveSelfHostedSttHeaders",
   cleanupCustom: "saveCleanupCustomKey",
   noteFormattingCustom: "saveNoteFormattingCustomKey",
   translationCustom: "saveTranslationCustomKey",
@@ -1697,7 +1746,9 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "tinfoilApiKey",
   "deepgramApiKey",
   "assemblyaiApiKey",
+  "elevenlabsApiKey",
   "customTranscriptionApiKey",
+  "selfHostedSttHeaders",
   "customReasoningApiKey",
   "cleanupCustomApiKey",
   "noteFormattingCustomApiKey",
@@ -1752,13 +1803,6 @@ function createSecretSetter(
 }
 
 export const MAX_TRANSLATION_TARGETS = 5;
-
-// Kick the matching cloud push once a local write has landed in SQLite.
-function syncAfterLocalWrite(method: "syncDictionaryNow" | "syncSnippetsNow"): void {
-  void import("../services/SyncService.js").then(({ syncService }) => {
-    if (syncService.canSync()) void syncService[method]();
-  });
-}
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uiLanguage: normalizeUiLanguage(
@@ -1826,6 +1870,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   tinfoilApiKey: "",
   deepgramApiKey: "",
   assemblyaiApiKey: "",
+  elevenlabsApiKey: "",
   customTranscriptionApiKey: "",
   cleanupCustomApiKey: "",
 
@@ -1981,6 +2026,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   remoteTranscriptionUrl: readString("remoteTranscriptionUrl", ""),
   remoteTranscriptionModel: readString("remoteTranscriptionModel", ""),
+  selfHostedSttHeaders: { dictation: [], upload: [] },
   cleanupMode: (() => {
     const v = readString("cleanupMode", "openwhispr");
     if (
@@ -2089,6 +2135,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ) => void,
   setRemoteTranscriptionUrl: createStringSetter("remoteTranscriptionUrl"),
   setRemoteTranscriptionModel: createStringSetter("remoteTranscriptionModel"),
+  setSelfHostedSttHeaders: (surface, headers) => {
+    const next = { ...get().selfHostedSttHeaders, [surface]: headers };
+    set({ selfHostedSttHeaders: next });
+    debouncedSaveSecret("selfHostedSttHeaders", serializeSelfHostedSttHeaders(next));
+  },
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
   setKeepLocalModelLoaded: createBooleanSetter("keepLocalModelLoaded"),
@@ -2293,7 +2344,20 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setPreferredLanguage: createStringSetter("preferredLanguage"),
   setChineseScriptPreference: (value: ChineseScriptPreference) =>
     createStringSetter("chineseScriptPreference")(normalizeChineseScriptPreference(value)),
-  setCloudTranscriptionProvider: createStringSetter("cloudTranscriptionProvider"),
+  setCloudTranscriptionProvider: (providerId) => {
+    const s = get();
+    const meetingProviders = MEETING_TRANSCRIPTION_POLICY_CATALOG.byokProviders;
+    const meetingProvider = s.meetingCloudTranscriptionProvider || s.cloudTranscriptionProvider;
+    if (
+      providerId !== s.cloudTranscriptionProvider &&
+      providerId !== "openwhispr" &&
+      !canInheritDictationProviderForMeeting(providerId) &&
+      (s.meetingTranscriptionMode === "openwhispr" || meetingProviders.includes(meetingProvider))
+    ) {
+      preserveInheritedMeetingSelection(s);
+    }
+    setStringSetting("cloudTranscriptionProvider", providerId);
+  },
   setCloudTranscriptionModel: createStringSetter("cloudTranscriptionModel"),
   setCloudTranscriptionBaseUrl: createStringSetter("cloudTranscriptionBaseUrl"),
 
@@ -2319,7 +2383,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       persistTranscriptionModelMemory(memory);
     }
     const remembered = memory[`${context}:${providerId}`];
-    setStringSetting(keys.provider, providerId);
+    if (context === "dictation") s.setCloudTranscriptionProvider(providerId);
+    else setStringSetting(keys.provider, providerId);
+    // OpenWhispr Cloud is not a catalog provider: it has no model to restore or default to.
+    if (providerId === "openwhispr") return;
     setStringSetting(
       keys.model,
       remembered &&
@@ -2369,9 +2436,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCleanupProvider: createStringSetter("cleanupProvider"),
   setCleanupModel: createStringSetter("cleanupModel"),
 
-  // A derived cache of the shared dictionary for the prompt path; main owns the
-  // data, so nothing is written back. Main gets a copy (see the subscription
-  // below) so auto-learn never adds a word the workspace already applies.
+  // Derived from the active workspace's shared dictionary. The subscription
+  // sends main separate copies for auto-learn and local hotwords.
   // Cleared hints are EMPTY with no workspace.
   setSharedDictionaryHints: (hints: SharedHintWords, workspaceId: string | null) => {
     if (!isBrowser) {
@@ -2386,9 +2452,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       set({ sharedDictionaryHints: readPersistedSharedHints() });
       return;
     }
-    set({ sharedDictionaryHints: hints });
+    // Attach the source account once so a later prompt-only update cannot
+    // relabel these words after another account has reconciled.
+    const accountId = readStoredAccountScopeUserId();
+    const scopedHints = accountId ? { ...hints, accountId } : hints;
+    set({ sharedDictionaryHints: scopedHints });
     try {
-      localStorage.setItem(SHARED_HINTS_KEY, JSON.stringify({ workspaceId, ...hints }));
+      localStorage.setItem(SHARED_HINTS_KEY, JSON.stringify({ workspaceId, ...hints, accountId }));
     } catch (err) {
       // Quota: this window and main have the hints. Drop the stored copy so
       // other windows and the next launch don't apply outdated words.
@@ -2537,6 +2607,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   // STT-only, so there is no ReasoningService key cache to invalidate.
   setDeepgramApiKey: createSecretSetter("deepgramApiKey", "deepgram"),
   setAssemblyaiApiKey: createSecretSetter("assemblyaiApiKey", "assemblyai"),
+  setElevenlabsApiKey: createSecretSetter("elevenlabsApiKey", "elevenlabs"),
   setCustomTranscriptionApiKey: (key: string) => {
     set({ customTranscriptionApiKey: key });
     debouncedSaveSecret("customTranscription", key);
@@ -2932,7 +3003,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   // for everything (e.g. Corti for medical providers).
   setCloudTranscriptionForAllScopes: (settings: Partial<TranscriptionSettings>) => {
     const s = useSettingsStore.getState();
-    s.updateTranscriptionSettings(settings);
+    const { cloudTranscriptionProvider: selectedProvider, ...otherSettings } = settings;
+    if (selectedProvider !== undefined)
+      s.switchCloudTranscriptionProvider("dictation", selectedProvider);
+    s.updateTranscriptionSettings(otherSettings);
     const {
       useLocalWhisper,
       localTranscriptionProvider,
@@ -2949,13 +3023,22 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       cloudTranscriptionProvider
     );
     s.setTranscriptionMode(mode);
-    s.setMeetingTranscriptionMode(mode);
+    const applyToMeeting =
+      mode !== "providers" || canInheritDictationProviderForMeeting(cloudTranscriptionProvider);
+    if (applyToMeeting) {
+      s.setMeetingTranscriptionMode(mode);
+      s.setMeetingUseLocalWhisper(useLocalWhisper);
+      s.setMeetingLocalTranscriptionProvider(localTranscriptionProvider);
+      s.setMeetingCloudTranscriptionMode(cloudTranscriptionMode);
+      s.setMeetingCloudTranscriptionProvider(cloudTranscriptionProvider);
+      s.setMeetingCloudTranscriptionModel(cloudTranscriptionModel);
+    } else {
+      // Onboarding can change the mode and model even when the provider stays the same.
+      preserveInheritedMeetingSelection(s);
+      if (!s.meetingCloudTranscriptionMode)
+        s.setMeetingCloudTranscriptionMode(s.cloudTranscriptionMode);
+    }
     s.setUploadTranscriptionMode(mode);
-    s.setMeetingUseLocalWhisper(useLocalWhisper);
-    s.setMeetingLocalTranscriptionProvider(localTranscriptionProvider);
-    s.setMeetingCloudTranscriptionMode(cloudTranscriptionMode);
-    s.setMeetingCloudTranscriptionProvider(cloudTranscriptionProvider);
-    s.setMeetingCloudTranscriptionModel(cloudTranscriptionModel);
     s.setUploadUseLocalWhisper(useLocalWhisper);
     s.setUploadLocalTranscriptionProvider(localTranscriptionProvider);
     s.setUploadCloudTranscriptionMode(cloudTranscriptionMode);
@@ -2966,7 +3049,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (cloudTranscriptionProvider && cloudTranscriptionModel) {
       const memory = { ...useSettingsStore.getState().transcriptionModelByProvider };
       for (const { context } of TRANSCRIPTION_CONTEXT_KEYS) {
-        memory[`${context}:${cloudTranscriptionProvider}`] = cloudTranscriptionModel;
+        if (context !== "meeting" || applyToMeeting) {
+          memory[`${context}:${cloudTranscriptionProvider}`] = cloudTranscriptionModel;
+        }
       }
       persistTranscriptionModelMemory(memory);
     }
@@ -3036,6 +3121,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.tinfoilApiKey !== undefined) s.setTinfoilApiKey(keys.tinfoilApiKey);
     if (keys.deepgramApiKey !== undefined) s.setDeepgramApiKey(keys.deepgramApiKey);
     if (keys.assemblyaiApiKey !== undefined) s.setAssemblyaiApiKey(keys.assemblyaiApiKey);
+    if (keys.elevenlabsApiKey !== undefined) s.setElevenlabsApiKey(keys.elevenlabsApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
     if (keys.cleanupCustomApiKey !== undefined) s.setCleanupCustomApiKey(keys.cleanupCustomApiKey);
@@ -3518,7 +3604,11 @@ export function selectPolicyEffectiveSettings(
     // workspace turned Local off has already moved to an allowed mode.
     if (
       selection.mode === "local" &&
-      !isLocalModelAllowedByPolicy(policyState, "transcription", rawSelection.model ?? "")
+      !isLocalModelAllowedByPolicy(
+        policyState,
+        "transcription",
+        getLocalTranscriptionModel(state, keys.context)
+      )
     ) {
       blockedLocalScopes.push(keys.context);
       for (const field of LOCAL_TRANSCRIPTION_MODEL_FIELDS) {
@@ -4037,7 +4127,10 @@ export async function initializeSettings(): Promise<void> {
     try {
       const key = await getter();
       if (key !== null && typeof key !== "string") return;
-      useSettingsStore.setState({ [storeKey]: key || "" });
+      useSettingsStore.setState({
+        [storeKey]:
+          storeKey === "selfHostedSttHeaders" ? parseSelfHostedSttHeaders(key) : key || "",
+      });
       invalidateApiKeyCaches();
     } catch {
       logger.warn("Failed to refresh API key", { storeKey }, "settings");
@@ -4078,6 +4171,7 @@ export async function initializeSettings(): Promise<void> {
         cortiClientSecret,
         cortiApiKey,
         tinfoil,
+        selfHostedSttHeaders,
         customTx,
         customRx,
         noteFormattingCustom,
@@ -4092,6 +4186,7 @@ export async function initializeSettings(): Promise<void> {
         vertexApiKey,
         deepgram,
         assemblyai,
+        elevenlabs,
       ] = await Promise.all([
         window.electronAPI.getOpenAIKey?.(),
         window.electronAPI.getAnthropicKey?.(),
@@ -4104,6 +4199,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getCortiClientSecret?.(),
         window.electronAPI.getCortiKey?.(),
         window.electronAPI.getTinfoilKey?.(),
+        window.electronAPI.getSelfHostedSttHeaders?.(),
         window.electronAPI.getCustomTranscriptionKey?.(),
         window.electronAPI.getCleanupCustomKey?.(),
         window.electronAPI.getNoteFormattingCustomKey?.(),
@@ -4118,6 +4214,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getVertexApiKey?.(),
         window.electronAPI.getDeepgramKey?.(),
         window.electronAPI.getAssemblyAIKey?.(),
+        window.electronAPI.getElevenlabsKey?.(),
       ]);
 
       useSettingsStore.setState({
@@ -4132,6 +4229,7 @@ export async function initializeSettings(): Promise<void> {
         cortiClientSecret: cortiClientSecret || "",
         cortiApiKey: cortiApiKey || "",
         tinfoilApiKey: tinfoil || "",
+        selfHostedSttHeaders: parseSelfHostedSttHeaders(selfHostedSttHeaders),
         customTranscriptionApiKey: customTx || "",
         cleanupCustomApiKey: customRx || "",
         bedrockAccessKeyId: bedrockAccessKeyId || "",
@@ -4152,6 +4250,7 @@ export async function initializeSettings(): Promise<void> {
         vertexApiKey: vertexApiKey || "",
         deepgramApiKey: deepgram || "",
         assemblyaiApiKey: assemblyai || "",
+        elevenlabsApiKey: elevenlabs || "",
       });
 
       if (localStorage.getItem("_dictationAgentSeeded") === "key-pending") {

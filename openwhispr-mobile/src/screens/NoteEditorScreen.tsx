@@ -14,6 +14,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { isMicPermissionError, showMicPermissionAlert } from '@/lib/permissions';
 import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
+import { useLiveMeetingNoteId } from '@/components/notes/liveMeetingNote';
+import { isCaptureLeaseHeld } from '@/lib/captureLease';
+import { MEETING_RECORDING_REFUSAL } from '@/lib/meetingRecordingRefusal';
 import { useNotesStore } from '@/store/useNotesStore';
 import { useActionsStore } from '@/store/useActionsStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -51,6 +54,7 @@ import { NoteMetaRow } from '@/components/notes/NoteMetaRow';
 import { AttendeesSheet } from '@/components/notes/AttendeesSheet';
 import { MoveToFolderSheet } from '@/components/notes/MoveToFolderSheet';
 import { useMoveNote } from '@/hooks/useMoveNote';
+import { foldersInPrivateWorkspace, privateWorkspaceOf } from '@/lib/privateWorkspaces';
 import {
   formatAttendeeChipLabel,
   formatNoteMetaDate,
@@ -90,7 +94,11 @@ import {
 import { ChatEmptyAnswerError, toChatErrorMessage } from '@/lib/chat/chatErrorMessage';
 import { providerDisplayName } from '@/lib/mobileProviders';
 import { promptLocalReasoningFallback } from '@/lib/localReasoningFallback';
-import { confirmCloudOnce, confirmDestructive } from '@/lib/alerts';
+import {
+  alertMeetingWaitingForConnection,
+  confirmCloudOnce,
+  confirmDestructive,
+} from '@/lib/alerts';
 import { randomUUID } from '@/lib/uuid';
 import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
 import { isDefaultGenerateNotesAction } from '@/lib/notes/generateNotesPrompt';
@@ -117,6 +125,20 @@ const NOTE_EDITOR_KEYBOARD_BOTTOM_PADDING = 8;
 
 export const isAudioTranscriptNote = (note: Note | null | undefined): boolean =>
   note?.diarizationEnabled === 1 || note?.noteType === 'meeting' || note?.noteType === 'upload';
+
+function OpenMeetingButton({ onPress }: { onPress: () => void }): React.JSX.Element {
+  return (
+    <Pressable
+      testID="open-meeting-button"
+      accessibilityRole="button"
+      onPress={onPress}
+      hitSlop={8}
+      className="rounded-full bg-link/10 px-3 py-1.5"
+    >
+      <Text className="text-[13px] font-medium text-link">Open meeting</Text>
+    </Pressable>
+  );
+}
 
 const transcriptStatusText = (status: string): string => {
   switch (status) {
@@ -152,12 +174,14 @@ export default function NoteEditorScreen({
   const { id } = useLocalSearchParams<{ id: string }>();
   const noteId = parseInt(id ?? '', 10);
   const router = useRouter();
+  const liveMeetingNoteId = useLiveMeetingNoteId();
 
   const { notes, updateNote, deleteNote, getNoteById } = useNotesStore();
   const transcriptRevision = useNotesStore((s) => s.transcriptRevision);
   const getNoteSegments = useNotesStore((s) => s.getNoteSegments);
   const getNoteSpeakers = useNotesStore((s) => s.getNoteSpeakers);
   const retryMeetingTranscription = useNotesStore((s) => s.retryMeetingTranscription);
+  const isMeetingAwaitingConnection = useNotesStore((s) => s.isMeetingAwaitingConnection);
   const renameSpeaker = useNotesStore((s) => s.renameSpeaker);
   const mergeSpeakers = useNotesStore((s) => s.mergeSpeakers);
   const confirmSpeakerSuggestion = useNotesStore((s) => s.confirmSpeakerSuggestion);
@@ -166,6 +190,9 @@ export default function NoteEditorScreen({
   const resolveConflictKeepMine = useNotesStore((s) => s.resolveConflictKeepMine);
   const resolveConflictUseServer = useNotesStore((s) => s.resolveConflictUseServer);
   const privateFolders = useNotesStore((s) => s.folders);
+  const getAllPrivateFolders = useNotesStore((s) => s.getAllPrivateFolders);
+  const defaultPrivateWorkspaceId = useNotesStore((s) => s.defaultPrivateWorkspaceId);
+  const privateWorkspaces = useNotesStore((s) => s.privateWorkspaces);
   const spaceFolders = useNotesStore((s) => s.spaceFolders);
   const spaces = useNotesStore((s) => s.spaces);
   const getSpaceFolders = useNotesStore((s) => s.getSpaceFolders);
@@ -233,6 +260,12 @@ export default function NoteEditorScreen({
   const [chatLastQuestion, setChatLastQuestion] = useState('');
   const [isChatProcessing, setIsChatProcessing] = useState(false);
   const [isRetryingTranscript, setIsRetryingTranscript] = useState(false);
+  // What a failed meeting's mark said, for the read it answers.
+  const [awaitingConnectionRead, setAwaitingConnectionRead] = useState<{
+    key: string;
+    waiting: boolean;
+  } | null>(null);
+  const [awaitingConnectionCheck, setAwaitingConnectionCheck] = useState(0);
   const keyboardHeight = useKeyboardHeight();
   const insets = useSafeAreaInsets();
 
@@ -324,6 +357,12 @@ export default function NoteEditorScreen({
 
   const isAudioTranscript = isAudioTranscriptNote(note);
   const transcriptStatus = note?.transcriptionStatus ?? 'idle';
+  // Only the note the live session is recording has a meeting to go back to; a note stuck in
+  // "recording" after a crash is waiting for recovery and keeps the plain wording.
+  const isLiveMeetingNote = transcriptStatus === 'recording' && liveMeetingNoteId === noteId;
+  const openMeeting = useCallback((): void => {
+    router.push('/(tabs)/(notes)/meeting-record' as Href);
+  }, [router]);
   // transcriptRevision is an intentional cache-bust dep: it bumps on local speaker/segment writes
   // (which don't change note identity) to force these reads to re-run.
   const transcriptSegments = useMemo(
@@ -353,8 +392,7 @@ export default function NoteEditorScreen({
     [meetingSpeakerEmbeddings, note, speakers, transcriptSegments, voiceProfiles],
   );
   const showVoiceSetupBanner = shouldOfferVoiceSetup({
-    isOnDeviceMeeting:
-      note?.noteType === 'meeting' && isManagedMeetingAudioUri(note.id, note.sourceFile),
+    hasSpeakerLabels: note?.noteType === 'meeting' && note.diarizationEnabled === 1,
     transcriptStatus,
     hasOwnerProfile: voiceProfiles.some((profile) => profile.isOwner === 1),
     dismissed: voiceSetupDismissed,
@@ -385,18 +423,52 @@ export default function NoteEditorScreen({
   // and its notes must never be moved into private folders.
   const isSpaceUnknown = note?.spaceId != null && !noteSpace;
   const scopeSpaceId = noteSpace?.kind === 'team' ? noteSpace.id : null;
+  // A personal note opened from search may sit in another workspace's Private than the one on
+  // screen: it is offered its own Private's folders, and the others only as explicit moves.
+  const notePrivate = useMemo(() => {
+    if (scopeSpaceId != null || isSpaceUnknown) return null;
+    const all = getAllPrivateFolders();
+    const folder = all.find((f) => f.id === note?.folderId);
+    const placed = folder
+      ? privateWorkspaceOf(folder, defaultPrivateWorkspaceId)
+      : (note?.privateWorkspaceId ?? defaultPrivateWorkspaceId);
+    const listed = privateWorkspaces.map((w) => w.id);
+    // A workspace the account left shows under the default's Private, so its notes move from
+    // there too: a folder created in the lost workspace would be refused.
+    const workspaceId = placed && !listed.includes(placed) ? defaultPrivateWorkspaceId : placed;
+    return {
+      workspaceId,
+      folders: foldersInPrivateWorkspace(all, workspaceId, defaultPrivateWorkspaceId, listed),
+    };
+    // getAllPrivateFolders reads the repository; privateFolders stands in as the reload signal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    defaultPrivateWorkspaceId,
+    getAllPrivateFolders,
+    isSpaceUnknown,
+    note?.folderId,
+    note?.privateWorkspaceId,
+    privateFolders,
+    privateWorkspaces,
+    scopeSpaceId,
+  ]);
   const targetFolders = useMemo(
     () =>
-      isSpaceUnknown ? [] : scopeSpaceId != null ? getSpaceFolders(scopeSpaceId) : privateFolders,
+      isSpaceUnknown
+        ? []
+        : scopeSpaceId != null
+          ? getSpaceFolders(scopeSpaceId)
+          : (notePrivate?.folders ?? privateFolders),
     // getSpaceFolders reads the repository, so the store's folder lists stand in as the signal to
     // re-read: every folder reload (create, rename, move, sync) replaces them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [getSpaceFolders, isSpaceUnknown, privateFolders, scopeSpaceId, spaceFolders],
+    [getSpaceFolders, isSpaceUnknown, notePrivate, privateFolders, scopeSpaceId, spaceFolders],
   );
   const folderName = targetFolders.find((folder) => folder.id === note?.folderId)?.name ?? null;
   const move = useMoveNote({
     scopeSpaceId,
     targetFolders,
+    ...(notePrivate ? { privateWorkspaceId: notePrivate.workspaceId } : {}),
     excludeFolderId: note?.folderId ?? null,
   });
   const closeMove = move.close;
@@ -483,6 +555,32 @@ export default function NoteEditorScreen({
   const shouldRenderPlainEditorRef = useRef(shouldRenderPlainEditor);
   shouldRenderPlainEditorRef.current = shouldRenderPlainEditor;
   const transcriptPending = shouldShowTranscriptStatus || shouldShowTranscriptFailed;
+  // A failed meeting may only be waiting for the connection. Until its mark is read this is
+  // null, so neither Retry nor the wait flashes up first.
+  const awaitingConnectionKey = shouldShowTranscriptFailed
+    ? `${noteId}:${note?.sourceFile ?? ''}:${awaitingConnectionCheck}`
+    : null;
+  const awaitingConnection =
+    awaitingConnectionKey == null
+      ? false
+      : awaitingConnectionRead?.key === awaitingConnectionKey
+        ? awaitingConnectionRead.waiting
+        : null;
+  useEffect(() => {
+    // Read again each time the note fails: an upload tried meanwhile changes the answer.
+    if (awaitingConnectionKey == null) {
+      setAwaitingConnectionRead(null);
+      return;
+    }
+    let cancelled = false;
+    const settle = (waiting: boolean): void => {
+      if (!cancelled) setAwaitingConnectionRead({ key: awaitingConnectionKey, waiting });
+    };
+    isMeetingAwaitingConnection(noteId).then(settle, () => settle(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [awaitingConnectionKey, isMeetingAwaitingConnection, noteId]);
   const hasEnhanced = !!note?.enhancedContent;
   // An open editor keeps its tab, so clearing the notes to rewrite them doesn't close it.
   const hasEnhancedTab = hasEnhanced || enhancedEditing;
@@ -756,9 +854,15 @@ export default function NoteEditorScreen({
       // A declined cloud retry keeps the recording, which the failed history row holds for a retry.
       onLocalModelMissing: (retryWithCloud) => promptLocalModelFallback(retryWithCloud),
       onUsageLimitReached: handleUsageLimitReached,
+      recordsDictation: true,
     });
 
   const handleDictate = useCallback(async () => {
+    // First, so a refused press gives no haptic and never reaches the paywall.
+    if (!isRecording && isCaptureLeaseHeld()) {
+      Alert.alert('Dictation failed', MEETING_RECORDING_REFUSAL);
+      return;
+    }
     safeHaptics('medium');
     if (isRecording) {
       await stopRecording();
@@ -1128,7 +1232,11 @@ export default function NoteEditorScreen({
     safeHaptics('medium');
     setIsRetryingTranscript(true);
     try {
-      await retryMeetingTranscription(note.id);
+      const outcome = await retryMeetingTranscription(note.id);
+      if (outcome === 'waiting-for-connection') {
+        alertMeetingWaitingForConnection();
+        setAwaitingConnectionCheck((check) => check + 1);
+      }
     } catch (error) {
       Alert.alert(
         'Retry failed',
@@ -1305,7 +1413,7 @@ export default function NoteEditorScreen({
             onCopyGeneratedNote={note?.enhancedContent ? handleCopyGeneratedNote : undefined}
             onViewTranscript={usesSegmentTranscript ? handleViewTranscript : undefined}
             onShare={() => setShareVisible(true)}
-            onDelete={handleDelete}
+            onDelete={liveMeetingNoteId === noteId ? undefined : handleDelete}
           />
         }
       />
@@ -1423,7 +1531,14 @@ export default function NoteEditorScreen({
               />
             ) : bodyView === 'notes' ? (
               <>
-                {transcriptStatus === 'recording' ? (
+                {isLiveMeetingNote ? (
+                  <View className="mb-2 flex-row items-center justify-between gap-3">
+                    <Text className="flex-1 text-[13px] text-secondaryLabel">
+                      This meeting is still recording.
+                    </Text>
+                    <OpenMeetingButton onPress={openMeeting} />
+                  </View>
+                ) : transcriptStatus === 'recording' ? (
                   <Text className="mb-2 text-[13px] text-secondaryLabel">
                     You can edit these notes once the recording stops.
                   </Text>
@@ -1448,8 +1563,21 @@ export default function NoteEditorScreen({
               <View className="min-h-[180px] flex-row items-center gap-3">
                 <ActivityIndicator size="small" color={BRAND} />
                 <Text className="text-[15px] text-secondaryLabel">
-                  {transcriptStatusText(transcriptStatus)}
+                  {isLiveMeetingNote
+                    ? 'This meeting is still recording.'
+                    : transcriptStatusText(transcriptStatus)}
                 </Text>
+                {isLiveMeetingNote ? <OpenMeetingButton onPress={openMeeting} /> : null}
+              </View>
+            ) : shouldShowTranscriptFailed && awaitingConnection !== false ? (
+              <View className="min-h-[180px] justify-center">
+                {awaitingConnection ? (
+                  <Text className="text-[15px] leading-5 text-secondaryLabel">
+                    {
+                      "Waiting for a connection. This meeting will be transcribed when you're back online."
+                    }
+                  </Text>
+                ) : null}
               </View>
             ) : shouldShowTranscriptFailed ? (
               <View className="min-h-[180px] justify-center">
@@ -1488,6 +1616,7 @@ export default function NoteEditorScreen({
             ) : (
               <SpeakerTranscript
                 blocks={transcriptBlocks}
+                showSpeakerNames={speakers.length > 0}
                 selectedSpeakerId={activeSpeakerId}
                 selectable
                 onSpeakerPress={handleSpeakerPress}
@@ -1604,6 +1733,7 @@ export default function NoteEditorScreen({
       <TranscriptSheet
         visible={transcriptSheetVisible}
         blocks={transcriptBlocks}
+        showSpeakerNames={speakers.length > 0}
         selectedSpeakerId={activeSpeakerId}
         shareText={transcriptText}
         onSpeakerPress={handleSpeakerPress}

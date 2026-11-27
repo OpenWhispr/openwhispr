@@ -1,10 +1,15 @@
-import { useEffect, useRef, useCallback, useState, type MutableRefObject } from "react";
+import { useEffect, useRef, useCallback, useId, useState, type MutableRefObject } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { createMentionExtension } from "./RichTextEditorMention";
 import { createRichTextExtensions } from "./RichTextEditorExtensions";
 import { RichTextEditorFormatMenu } from "./RichTextEditorFormatMenu";
 import { RichTextEditorTableMenu } from "./RichTextEditorTableMenu";
+import { DragHandle } from "@tiptap/extension-drag-handle-react";
+import { FindReplacePanel } from "./editorBlocks/FindReplacePanel";
+import "katex/dist/katex.min.css";
+import "./editorBlocks/editorBlocks.css";
 import type { MentionPerson } from "../../utils/mentionMarkdown";
 
 /**
@@ -65,6 +70,9 @@ export function RichTextEditor({
   editorRef,
   mentionPeople,
 }: RichTextEditorProps) {
+  const { t } = useTranslation();
+  const keyboardHintId = useId();
+  const [showKeyboardHint, setShowKeyboardHint] = useState(false);
   const internalValueRef = useRef(value);
   const suppressUpdateRef = useRef(false);
 
@@ -85,7 +93,7 @@ export function RichTextEditor({
   const editor = useEditor({
     extensions: [
       ...(withMentions ? [createMentionExtension(() => mentionPeopleRef.current ?? [])] : []),
-      ...createRichTextExtensions(placeholder || ""),
+      ...createRichTextExtensions(placeholder || "", (): void => setShowKeyboardHint(true)),
     ],
     content: value,
     editable: !disabled,
@@ -94,15 +102,18 @@ export function RichTextEditor({
       // on the first click) is not an edit; saving it would also discard the
       // assistant's Undo for the note.
       if (suppressUpdateRef.current || !transaction.docChanged) return;
+      setShowKeyboardHint(false);
 
       const md = (ed.storage as any).markdown.getMarkdown() as string;
       internalValueRef.current = md;
       onChange?.(md);
     },
+    onBlur: (): void => setShowKeyboardHint(false),
     editorProps: {
       attributes: {
         class: "rich-text-editor-content",
         dir: "auto",
+        ...(!disabled && { "aria-describedby": keyboardHintId }),
       },
       ...scrollClearance,
     },
@@ -165,13 +176,22 @@ export function RichTextEditor({
           disabled && "pointer-events-none opacity-70"
         )}
       />
-      {editor && !disabled && (
-        <RichTextEditorFormatMenu
-          editor={editor}
-          lineMenuPadding={scrollClearance.scrollThreshold}
-        />
+      {!disabled && (
+        <p id={keyboardHintId} className={showKeyboardHint ? "rte-keyboard-hint" : "sr-only"}>
+          {t("notes.editor.tabToLeave")}
+        </p>
       )}
+      {editor && !disabled && <RichTextEditorFormatMenu editor={editor} />}
       {editor && !disabled && <RichTextEditorTableMenu editor={editor} />}
+      {/* find & replace, drag handle. */}
+      {editor && !disabled && <FindReplacePanel editor={editor} />}
+      {editor && !disabled && (
+        <DragHandle editor={editor}>
+          <div className="rte-drag-handle" aria-hidden="true">
+            ⠿
+          </div>
+        </DragHandle>
+      )}
     </div>
   );
 }

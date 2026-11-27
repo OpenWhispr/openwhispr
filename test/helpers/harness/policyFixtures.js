@@ -21,4 +21,68 @@ function managedPolicy({ transcription = {}, llm = {} } = {}) {
   };
 }
 
-module.exports = { managedPolicy };
+// The provider publishes this model through the live catalog.
+async function loadAssemblyAiDictationCatalog(vite) {
+  const registry = await vite.ssrLoadModule("/models/registryData.js");
+  const { data, manifestVersion } = registry.getRegistrySnapshot();
+  const { models } = data.transcriptionProviders.find((provider) => provider.id === "assemblyai");
+  if (!models.some((model) => model.id === "dictation")) {
+    models.push({ id: "dictation", name: "Dictation", description: "Dictation with rewrite" });
+    registry.replaceRegistryData({ data, manifestVersion: manifestVersion + 1 });
+  }
+}
+
+function assemblyAiPolicy(sttAllowed, llmAllowed) {
+  const permissions = (allowed) => ({
+    allowedModes: ["providers"],
+    allowedByokProviders: allowed ? ["assemblyai"] : [],
+  });
+  return {
+    status: "managed",
+    appVersion: "1.11.1",
+    policy: managedPolicy({ transcription: permissions(sttAllowed), llm: permissions(llmAllowed) }),
+  };
+}
+
+// The workspace owns cleanup while members still select their own transcription provider.
+async function setManagedBedrockCleanup(vite, mode = "managed_required") {
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { useEnterpriseIdentityStore } = await vite.ssrLoadModule(
+    "/stores/enterpriseIdentityStore.ts"
+  );
+  const { policy } = usePolicyStore.getState();
+  usePolicyStore.setState({
+    policy: {
+      ...policy,
+      llm: {
+        ...policy.llm,
+        allowedModes: ["providers", "enterprise"],
+        allowedEnterpriseProviders: ["bedrock"],
+      },
+    },
+  });
+  useEnterpriseIdentityStore.setState({
+    status: "ready",
+    accountId: "account",
+    workspaceId: "workspace",
+    authGeneration: 1,
+    config: {
+      generation: 1,
+      providers: [
+        {
+          provider: "bedrock",
+          mode,
+          allowManualSetup: mode === "managed_default",
+          config: { scopeDefaults: { dictationCleanup: "managed-model" } },
+        },
+      ],
+    },
+  });
+}
+
+module.exports = {
+  managedPolicy,
+  loadAssemblyAiDictationCatalog,
+  assemblyAiPolicy,
+  setManagedBedrockCleanup,
+};

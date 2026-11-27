@@ -33,6 +33,8 @@ import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
 import { accountRequiredForCloud, showAccountRequiredAlert } from '@/lib/accountAccess';
 import { isMicPermissionError, isNoSpeechError, showMicPermissionAlert } from '@/lib/permissions';
 import { formatRelativeTime, safeHaptics } from '@/lib/utils';
+import { isCaptureLeaseHeld } from '@/lib/captureLease';
+import { MEETING_RECORDING_REFUSAL } from '@/lib/meetingRecordingRefusal';
 import { BRAND, iosColor } from '@/config/colors';
 import { ProcessingWaveform } from '@/components/features/WaveformVisualizer';
 import { AppGroupStorage, APP_GROUP_KEYS } from '../../modules/app-group-storage/src';
@@ -194,6 +196,7 @@ export default function HomeScreen() {
     // A declined cloud retry keeps the recording, which the failed history row holds for a retry.
     onLocalModelMissing: (retryWithCloud) => promptLocalModelFallback(retryWithCloud),
     onUsageLimitReached: handleUsageLimitReached,
+    recordsDictation: true,
   });
 
   const { currentAmplitude, waveformData } = useAudioWaveform(audioRecorder, isRecording);
@@ -272,6 +275,11 @@ export default function HomeScreen() {
   };
 
   const handleRecordPress = async () => {
+    // First, so a refused press never reaches the account alert or the paywall.
+    if (!isRecording && isCaptureLeaseHeld()) {
+      Alert.alert('Error', MEETING_RECORDING_REFUSAL);
+      return;
+    }
     const recordingProvider = getTranscriptionProvider('dictation');
     if (!isRecording && recordingProvider === 'cloud' && accountRequiredForCloud(user)) {
       showAccountRequiredAlert('recording');
@@ -413,7 +421,7 @@ export default function HomeScreen() {
     }
   };
 
-  const recentTranscripts = [...transcripts].sort((a, b) => b.createdAt - a.createdAt).slice(0, 10);
+  const recentTranscripts = [...transcripts].sort((a, b) => b.createdAt - a.createdAt).slice(0, 30);
 
   if (isCheckingInitialUrl) {
     return <View className="flex-1 bg-systemBackground" />;
@@ -550,6 +558,7 @@ export default function HomeScreen() {
 
       <View className="items-center justify-center" style={{ flex: 0.52 }}>
         <Pressable
+          testID="home-record-button"
           onPress={handleRecordPress}
           disabled={!isSupported || (!isRecording && (isProcessing || isRecoveringUsageLimit))}
           className="w-28 h-28 rounded-full items-center justify-center active:opacity-85"

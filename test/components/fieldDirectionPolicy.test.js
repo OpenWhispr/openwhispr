@@ -58,8 +58,8 @@ function inventoryByFile(inventory) {
 const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/ApiKeysSection.tsx": ["auto"],
   "src/components/AuthenticationStep.tsx": ["ltr", "auto", "ltr", "ltr", "ltr"],
-  "src/components/CreateTeamDialog.tsx": ["auto"],
   "src/components/CreateWorkspaceDialog.tsx": ["auto"],
+  "src/components/CreatorLinkField.tsx": ["ltr"],
   "src/components/DictionaryView.tsx": ["auto"],
   "src/components/EnterpriseProviderConfig.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/ForgotPasswordView.tsx": ["ltr"],
@@ -67,16 +67,15 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/SettingsPage.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/SnippetsView.tsx": ["auto", "auto", "auto", "auto"],
   // A typed answer in any script; an API key, always LTR.
+  // A Salesforce sign-in host is always written left to right.
+  "src/components/connectors/ConnectorLoginRow.tsx": ["ltr"],
   "src/components/dictionary/DictionaryAddField.tsx": ["auto"],
   "src/components/dictionary/DictionaryToolbar.tsx": ["auto"],
   "src/components/dictionary/DictionaryWordList.tsx": ["auto"],
   "src/components/notes/ActionManagerDialog.tsx": ["auto", "auto", "auto"],
-  // A teamspace's description is prose in any script.
-  "src/components/notes/CreateSpaceDialog.tsx": ["auto"],
   "src/components/notes/DeleteSpaceDialog.tsx": ["auto"],
   "src/components/notes/FolderNotesPopover.tsx": ["auto"],
   // Names, emails and teams typed in one field: a name may be in any script.
-  "src/components/notes/SpacePeopleField.tsx": ["auto"],
   "src/components/notes/UploadAudioView.tsx": ["auto"],
   "src/components/settings/DictationAgentSettings.tsx": ["auto"],
   "src/components/settings/EnterpriseAudioSettings.tsx": ["ltr"],
@@ -86,8 +85,8 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/settings/TeamSpacesPanel.tsx": ["auto"],
   "src/components/settings/WorkspaceDeveloperTab.tsx": ["auto"],
   "src/components/settings/WorkspaceGeneralSection.tsx": ["auto"],
+  "src/components/settings/WorkspacePeopleSection.tsx": ["auto"],
   // Member search: names in any script.
-  "src/components/settings/WorkspaceMembersTab.tsx": ["auto"],
   // A skill's name and the skills search accept text in any script.
   "src/components/skills/CreateSkillScreen.tsx": ["auto"],
   "src/components/skills/SkillSearchInput.tsx": ["auto"],
@@ -99,6 +98,10 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
 };
 
 const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
+  "src/components/CreateTeamDialog.tsx": ["auto"],
+  // A teamspace's description is prose in any script.
+  "src/components/notes/CreateSpaceDialog.tsx": ["auto"],
+  "src/components/notes/SpacePeopleField.tsx": ["auto"],
   "src/components/ApiKeysSection.tsx": ["inherit"],
   "src/components/CommandSearch.tsx": ["auto"],
   // Folder names and search accept user text in any script.
@@ -117,6 +120,8 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   // An API key, always LTR; a typed answer in any script.
   "src/components/chat/interactions/ApiKeyCard.tsx": ["ltr"],
   "src/components/chat/interactions/QuestionsCard.tsx": ["auto"],
+  // Replacement text accepts any script; the include switch is the shared Checkbox button.
+  "src/components/chat/SalesforceApprovalFields.tsx": ["auto"],
   // A proposed skill's name and when it's used, and an update's description: prose.
   "src/components/chat/SkillApprovalCard.tsx": ["auto", "auto", "auto", "auto", "auto", "auto"],
   "src/components/notes/ActionManagerDialog.tsx": ["auto", "auto"],
@@ -135,9 +140,12 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/onboarding/DemoStep.tsx": ["auto"],
   "src/components/onboarding/LanguageSelectionStep.tsx": ["auto"],
   "src/components/onboarding/UseCaseStep.tsx": ["auto"],
+  "src/components/settings/billing/AddSeatsDialog.tsx": ["inherit"],
   "src/components/settings/ChatAgentSettings.tsx": ["auto"],
   "src/components/settings/ProfileSection.tsx": ["inherit"],
   "src/components/settings/TeamSettingsDialog.tsx": ["auto"],
+  // The workspace icon file picker is hidden.
+  "src/components/settings/WorkspaceGeneralSection.tsx": ["inherit"],
   // Email addresses are Latin-script identifiers.
   "src/components/workspace/InvitePeopleView.tsx": ["ltr"],
   // A skill's description is prose; the file pickers are hidden.
@@ -147,6 +155,8 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/ui/LanguageSelector.tsx": ["auto"],
   // A skill's instructions: Markdown prose in any script.
   "src/components/ui/LineNumberedTextarea.tsx": ["auto"],
+  // Find and replace terms are user text in any script.
+  "src/components/ui/editorBlocks/FindReplacePanel.tsx": ["auto", "auto"],
 };
 
 test("shared field primitives inherit unless a consumer declares its content direction", async (t) => {

@@ -4,8 +4,13 @@ import path from 'path';
 
 const xcode = require('xcode');
 const withKeyboardExtension = require('../withKeyboardExtension');
-const { EXTENSION_FILES, ensureExtensionFiles, ensureExtensionGroup, writeExtensionSupportFiles } =
-  withKeyboardExtension;
+const {
+  EXTENSION_FILES,
+  RESOURCE_FILES,
+  ensureExtensionFiles,
+  ensureExtensionGroup,
+  writeExtensionSupportFiles,
+} = withKeyboardExtension;
 
 const APP_TARGET = 'B40000000000000000000001';
 const KEYBOARD_TARGET = 'B40000000000000000000002';
@@ -334,18 +339,50 @@ function phaseCount(project: Project, targetUuid: string, isa: string) {
     [targetUuid].buildPhases.filter((ref: { value: string }) => phases[ref.value]).length;
 }
 
+// Sorted, as phaseFiles returns them.
+const KEYBOARD_SOURCES = [
+  'Autocorrector.swift',
+  'DirectAudioEncoder.swift',
+  'DirectAudioRoute.swift',
+  'DirectDictation.swift',
+  'DirectDictationAudio.swift',
+  'DirectDictationConfig.swift',
+  'DirectDictationRequests.swift',
+  'DirectDictationRuntime.swift',
+  'DirectDictationStore.swift',
+  'DirectLocalTranscription.swift',
+  'EmojiCatalog.swift',
+  'EmojiPanelView.swift',
+  'HitTargetModel.swift',
+  'KeyGeometry.swift',
+  'KeyboardCapitalization.swift',
+  'KeyboardCredentialStore.swift',
+  'KeyboardInteractions.swift',
+  'KeyboardOptionsMenu.swift',
+  'KeyboardParakeetTranscriber.swift',
+  'KeyboardViewController.swift',
+  'MeetingCaptureLease.swift',
+  'SnippetExpander.swift',
+  'SuggestionBarView.swift',
+  'SwipeDecoder.swift',
+  'TrackpadModel.swift',
+  'TypingEngine.swift',
+  'TypingLexicon.swift',
+  'TypingSession.swift',
+  'TypingSettings.swift',
+  'WebAudioCapture.swift',
+];
+const KEYBOARD_RESOURCES = ['emoji.bin', 'lexicon-de.bin', 'lexicon-en.bin'];
+
 function expectKeyboardWiring(project: Project, keyboardTarget = KEYBOARD_TARGET) {
-  expect(phaseFiles(project, keyboardTarget, 'PBXSourcesBuildPhase')).toEqual([
-    'KeyboardCapitalization.swift',
-    'KeyboardViewController.swift',
-  ]);
-  expect(phaseFiles(project, keyboardTarget, 'PBXResourcesBuildPhase')).toEqual([]);
+  expect(phaseFiles(project, keyboardTarget, 'PBXSourcesBuildPhase')).toEqual(KEYBOARD_SOURCES);
+  expect(phaseFiles(project, keyboardTarget, 'PBXResourcesBuildPhase')).toEqual(KEYBOARD_RESOURCES);
   expect(phaseFiles(project, APP_TARGET, 'PBXSourcesBuildPhase')).toEqual([]);
   expect(phaseFiles(project, APP_TARGET, 'PBXResourcesBuildPhase')).toEqual([]);
 }
 
 describe('withKeyboardExtension helpers', () => {
-  it('wires both sources into the keyboard target only', () => {
+  it('wires every source and resource into the keyboard target only', () => {
     const project = parseProject(FIXTURE);
     ensureExtensionFiles(project, KEYBOARD_TARGET, ensureExtensionGroup(project));
 
@@ -361,7 +398,14 @@ describe('withKeyboardExtension helpers', () => {
     for (const file of EXTENSION_FILES) {
       expect(written.split(`${file.name} in ${file.phase} */,`).length - 1).toBe(1);
     }
-    expectKeyboardWiring(parseProject(written));
+    const reparsed = parseProject(written);
+    expectKeyboardWiring(reparsed);
+    expect(phaseCount(reparsed, KEYBOARD_TARGET, 'PBXSourcesBuildPhase')).toBe(1);
+    expect(phaseCount(reparsed, KEYBOARD_TARGET, 'PBXResourcesBuildPhase')).toBe(1);
+
+    ensureExtensionFiles(reparsed, KEYBOARD_TARGET, ensureExtensionGroup(reparsed));
+
+    expect(reparsed.writeSync()).toBe(written);
   });
 
   it('moves a source that prebuild left in the app target', () => {
@@ -375,6 +419,35 @@ describe('withKeyboardExtension helpers', () => {
     ensureExtensionFiles(project, KEYBOARD_TARGET, ensureExtensionGroup(project));
 
     expectKeyboardWiring(project);
+  });
+
+  it('moves a resource that prebuild left in the app target', () => {
+    const project = parseProject(
+      FIXTURE.replace(
+        '/* End PBXFileReference section */',
+        '\t\tB20000000000000000000008 /* lexicon-en.bin */ = {isa = PBXFileReference; lastKnownFileType = file; path = "lexicon-en.bin"; sourceTree = "<group>"; };\n/* End PBXFileReference section */',
+      )
+        .replace(
+          '/* End PBXBuildFile section */',
+          '\t\tB10000000000000000000008 /* lexicon-en.bin in Resources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000008 /* lexicon-en.bin */; };\n/* End PBXBuildFile section */',
+        )
+        .replace(
+          '\t\t\t\tB20000000000000000000001 /* KeyboardViewController.swift */,\n\t\t\t);\n\t\t\tname = OpenWhisprKeyboard;',
+          '\t\t\t\tB20000000000000000000001 /* KeyboardViewController.swift */,\n\t\t\t\tB20000000000000000000008 /* lexicon-en.bin */,\n\t\t\t);\n\t\t\tname = OpenWhisprKeyboard;',
+        )
+        .replace(
+          'B50000000000000000000003 /* Resources */ = {\n\t\t\tisa = PBXResourcesBuildPhase;\n\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n',
+          'B50000000000000000000003 /* Resources */ = {\n\t\t\tisa = PBXResourcesBuildPhase;\n\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n\t\t\t\tB10000000000000000000008 /* lexicon-en.bin in Resources */,\n',
+        ),
+    );
+    expect(phaseFiles(project, APP_TARGET, 'PBXResourcesBuildPhase')).toEqual(['lexicon-en.bin']);
+
+    ensureExtensionFiles(project, KEYBOARD_TARGET, ensureExtensionGroup(project));
+
+    expectKeyboardWiring(project);
+    expect(Object.keys(project.hash.project.objects.PBXBuildFile)).toContain(
+      'B10000000000000000000008',
+    );
   });
 
   it('refuses to take over an app file with the same name', () => {
@@ -417,6 +490,11 @@ describe('withKeyboardExtension helpers', () => {
     for (const file of EXTENSION_FILES) {
       expect(fs.existsSync(path.join(root, 'OpenWhisprKeyboard', file.name))).toBe(true);
     }
+    for (const name of RESOURCE_FILES) {
+      expect(fs.statSync(path.join(root, 'OpenWhisprKeyboard', name)).size).toBe(
+        fs.statSync(path.join(__dirname, '..', 'ios', 'Resources', name)).size,
+      );
+    }
   });
 
   it('lists every Swift source the plugin ships', () => {
@@ -424,9 +502,24 @@ describe('withKeyboardExtension helpers', () => {
       .readdirSync(path.join(__dirname, '..', 'ios'))
       .filter((name) => name.endsWith('.swift'));
 
-    expect(EXTENSION_FILES.map((file: { name: string }) => file.name).sort()).toEqual(
-      swiftFiles.sort(),
-    );
+    expect(
+      EXTENSION_FILES.filter((file: { phase: string }) => file.phase === 'Sources')
+        .map((file: { name: string }) => file.name)
+        .sort(),
+    ).toEqual(swiftFiles.sort());
+  });
+
+  it('lists every data file the plugin ships', () => {
+    const dataFiles = fs
+      .readdirSync(path.join(__dirname, '..', 'ios', 'Resources'))
+      .filter((name) => !name.startsWith('.'));
+
+    expect([...RESOURCE_FILES].sort()).toEqual(dataFiles.sort());
+    expect(
+      EXTENSION_FILES.filter((file: { phase: string }) => file.phase === 'Resources')
+        .map((file: { name: string }) => file.name)
+        .sort(),
+    ).toEqual(dataFiles.sort());
   });
 });
 
@@ -452,7 +545,7 @@ describe('withKeyboardExtension mods', () => {
     expect(keyboardTarget).toBeDefined();
     expectKeyboardWiring(result.modResults, keyboardTarget);
     expect(phaseCount(result.modResults, keyboardTarget!, 'PBXSourcesBuildPhase')).toBe(1);
-    expect(phaseCount(result.modResults, keyboardTarget!, 'PBXResourcesBuildPhase')).toBe(0);
+    expect(phaseCount(result.modResults, keyboardTarget!, 'PBXResourcesBuildPhase')).toBe(1);
     expect(embeddedAppexCount(result.modResults)).toBe(1);
   });
 
@@ -497,7 +590,7 @@ describe('withKeyboardExtension mods', () => {
     const project = parseProject(fs.readFileSync(file, 'utf8'));
     expectKeyboardWiring(project);
     expect(phaseCount(project, KEYBOARD_TARGET, 'PBXSourcesBuildPhase')).toBe(1);
-    expect(phaseCount(project, KEYBOARD_TARGET, 'PBXResourcesBuildPhase')).toBe(0);
+    expect(phaseCount(project, KEYBOARD_TARGET, 'PBXResourcesBuildPhase')).toBe(1);
   });
 
   it('repairs a project whose keyboard group CocoaPods rewrote without a name', async () => {
@@ -525,11 +618,99 @@ describe('withKeyboardExtension mods', () => {
       'B30000000000000000000004',
       'B30000000000000000000002',
     ]);
-    expect(groupChildNames(project, 'B30000000000000000000002')).toEqual([
-      'KeyboardCapitalization.swift',
-      'KeyboardViewController.swift',
-    ]);
+    expect(groupChildNames(project, 'B30000000000000000000002')).toEqual(
+      [...KEYBOARD_SOURCES, ...KEYBOARD_RESOURCES].sort(),
+    );
     expect(groupChildNames(project, 'B30000000000000000000004')).toEqual([]);
+  });
+
+  async function runXcodeprojModRoundTrip(root: string, modResults: Project): Promise<Project> {
+    const config = withKeyboardExtension(structuredClone(PLUGIN_CONFIG));
+    const result = await config.mods.ios.xcodeproj({
+      ...config,
+      modResults,
+      modRequest: modRequest(root),
+    });
+    return parseProject(result.modResults.writeSync());
+  }
+
+  function entries(project: Project, isa: string): Record<string, unknown>[] {
+    const section = project.hash.project.objects[isa] || {};
+    return Object.keys(section)
+      .filter((key) => !key.endsWith('_comment'))
+      .map((key) => section[key]);
+  }
+
+  function unquote(value: unknown): string {
+    return String(value).replace(/"/g, '');
+  }
+
+  // The FluidAudio product dependencies the keyboard's Frameworks phase links.
+  function keyboardLinkedProducts(project: Project, targetUuid: string): string[] {
+    const objects = project.hash.project.objects;
+    const frameworks = objects.PBXFrameworksBuildPhase || {};
+    const products = objects.XCSwiftPackageProductDependency || {};
+    return project
+      .pbxNativeTargetSection()
+      [targetUuid].buildPhases.filter((ref: { value: string }) => frameworks[ref.value])
+      .flatMap((ref: { value: string }) => frameworks[ref.value].files)
+      .map((entry: { value: string }) => objects.PBXBuildFile[entry.value]?.productRef)
+      .filter(Boolean)
+      .map((productRef: string) => unquote(products[productRef]?.productName));
+  }
+
+  const FLUIDAUDIO_URL = 'https://github.com/FluidInference/FluidAudio.git';
+
+  it('links FluidAudio into the keyboard', async () => {
+    const project = await runXcodeprojModRoundTrip(
+      tempDir('kb-plugin-fluid-'),
+      parseProject(FIXTURE),
+    );
+
+    const packages = entries(project, 'XCRemoteSwiftPackageReference');
+    expect(packages).toHaveLength(1);
+    expect(unquote(packages[0].repositoryURL)).toBe(FLUIDAUDIO_URL);
+    expect(packages[0].requirement).toEqual({ kind: 'exactVersion', version: '0.15.4' });
+    expect(keyboardLinkedProducts(project, KEYBOARD_TARGET)).toEqual(['FluidAudio']);
+    expect(keyboardLinkedProducts(project, APP_TARGET)).toEqual([]);
+  });
+
+  it('builds the keyboard for iOS 17', async () => {
+    const project = await runXcodeprojModRoundTrip(
+      tempDir('kb-plugin-ios17-'),
+      parseProject(FIXTURE),
+    );
+    const checkouts = '${PROJECT_DERIVED_DATA_DIR}/SourcePackages/checkouts/FluidAudio/Sources';
+
+    for (const settings of buildSettingsOf(project, KEYBOARD_TARGET)) {
+      expect(unquote(settings.IPHONEOS_DEPLOYMENT_TARGET)).toBe('17.0');
+      // Defined by cocoapods-spm's Pods xcconfigs only, which the keyboard doesn't use.
+      expect(unquote(settings.PROJECT_DERIVED_DATA_DIR)).toBe(
+        '${BUILD_ROOT}/../..${BUILD_ROOT_TO_DERIVED_DATA_SUFFIX_${ACTION}}',
+      );
+      expect(unquote(settings.BUILD_ROOT_TO_DERIVED_DATA_SUFFIX_archive)).toBe('/../../..');
+      expect(unquote(settings.BUILD_ROOT_TO_DERIVED_DATA_SUFFIX_install)).toBe('/../../..');
+      expect(String(settings.OTHER_LDFLAGS)).toContain('-lc++');
+      expect(unquote(settings.SWIFT_ACTIVE_COMPILATION_CONDITIONS)).toBe(
+        '$(inherited) OPENWHISPR_KEYBOARD_EXTENSION',
+      );
+      expect(String(settings.OTHER_SWIFT_FLAGS)).toContain(
+        `-Xcc -fmodule-map-file=${checkouts}/FastClusterWrapper/include/module.modulemap`,
+      );
+      expect(String(settings.OTHER_SWIFT_FLAGS)).toContain(
+        `-Xcc -fmodule-map-file=${checkouts}/MachTaskSelfWrapper/include/module.modulemap`,
+      );
+    }
+  });
+
+  it('links FluidAudio once when run twice', async () => {
+    const root = tempDir('kb-plugin-fluid-twice-');
+    const once = await runXcodeprojModRoundTrip(root, appOnlyProject());
+    const twice = await runXcodeprojModRoundTrip(root, once);
+
+    expect(entries(twice, 'XCRemoteSwiftPackageReference')).toHaveLength(1);
+    expect(entries(twice, 'XCSwiftPackageProductDependency')).toHaveLength(1);
+    expect(keyboardLinkedProducts(twice, keyboardTargetUuid(twice)!)).toEqual(['FluidAudio']);
   });
 
   it('leaves a project without the keyboard target to the xcodeproj mod', async () => {
@@ -541,5 +722,22 @@ describe('withKeyboardExtension mods', () => {
     await config.mods.ios.dangerous({ ...config, modRequest: modRequest(root) });
 
     expect(fs.readFileSync(file, 'utf8')).toBe(appOnly);
+  });
+});
+
+describe('keyboard session credential', () => {
+  // The app writes the item and the keyboard reads it; a typo on either side would silently
+  // keep every keyboard on the handoff.
+  it('names the same Keychain item on both sides', () => {
+    const read = (relative: string) => fs.readFileSync(path.join(__dirname, relative), 'utf8');
+    const keyboard = read('../ios/KeyboardCredentialStore.swift');
+    const app = read('../../../modules/app-group-storage/ios/AppGroupStorageModule.swift');
+    const literal = (source: string, name: string) =>
+      source.match(new RegExp(`static let ${name} = "([^"]+)"`))?.[1];
+
+    expect(literal(keyboard, 'service')).toBe('com.openwhispr.keyboard-session');
+    expect(literal(app, 'keyboardSessionService')).toBe(literal(keyboard, 'service'));
+    expect(literal(keyboard, 'account')).toBe('cookie');
+    expect(literal(app, 'keyboardSessionAccount')).toBe(literal(keyboard, 'account'));
   });
 });

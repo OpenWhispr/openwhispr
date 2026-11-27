@@ -20,6 +20,7 @@ import { Sentry } from '@/lib/sentry';
 import { useUsageStore } from '@/store/useUsageStore';
 import { clearAllSessions as clearAgentSessions } from '@/services/agent/AgentComposerService';
 import { claimNoteShareTokens, clearNoteShareTokens } from '@/lib/notes/noteShareTokens';
+import { stopActiveMeeting } from '@/lib/notes/activeMeeting';
 import { withChatHistory } from '@/lib/chat/withChatHistory';
 
 const GUEST_SESSION_KEY = 'openwhispr_guest_session';
@@ -184,6 +185,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     // later sign-up to claim (see initSyncTriggers), so it keeps its chats too.
     const { user } = useAuthStore.getState();
     const realAccount = user !== null && !user.isAnonymous;
+    await settleMeetingBeforeCredentialsGo();
     await signOutApi();
     await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
     useUsageStore.getState().reset();
@@ -196,6 +198,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ isLoading: true, error: null });
     await anonymousSignInInFlight?.catch(() => undefined);
     try {
+      await settleMeetingBeforeCredentialsGo();
       await deleteAccountApi();
       const deletedUserId = useAuthStore.getState().user?.id;
       if (deletedUserId) await tolerateCacheFailure('clear', clearNoteShareTokens(deletedUserId));
@@ -221,6 +224,18 @@ export const useAuthStore = create<AuthStore>((set) => ({
 
   clearError: () => set({ error: null }),
 }));
+
+// A running meeting's cloud finalise needs the session, so it settles first. A failure to stop must
+// not trap the user in the account they are leaving.
+async function settleMeetingBeforeCredentialsGo(): Promise<void> {
+  try {
+    await stopActiveMeeting();
+  } catch (error) {
+    Sentry.captureException(error, {
+      tags: { feature: 'meeting-session', operation: 'stop_on_sign_out' },
+    });
+  }
+}
 
 type SetState = StoreApi<AuthStore>['setState'];
 

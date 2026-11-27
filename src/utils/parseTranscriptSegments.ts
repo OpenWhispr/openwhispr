@@ -8,6 +8,8 @@ export function parseTranscriptSegments(raw: string): TranscriptSegment[] {
       text: string;
       source: "mic" | "system";
       timestamp?: number;
+      recordingStartTimestamp?: number;
+      endTimestamp?: number;
       speaker?: string;
       speakerName?: string;
       recorderName?: string;
@@ -24,6 +26,10 @@ export function parseTranscriptSegments(raw: string): TranscriptSegment[] {
         text: s.text,
         source: s.source,
         timestamp: s.timestamp,
+        ...(Number.isFinite(s.recordingStartTimestamp)
+          ? { recordingStartTimestamp: s.recordingStartTimestamp }
+          : {}),
+        ...(Number.isFinite(s.endTimestamp) ? { endTimestamp: s.endTimestamp } : {}),
         speaker: s.speaker,
         speakerName: s.speakerName,
         recorderName: typeof s.recorderName === "string" ? s.recorderName : undefined,

@@ -1,5 +1,5 @@
 import { useRegistryVersion } from "../../hooks/useRegistryVersion";
-import { useCallback } from "react";
+import { useCallback, type RefObject } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from "../icons";
@@ -42,6 +42,8 @@ const AUTO_REASONING_EFFORT_VALUE = "__auto__";
 
 interface InferenceConfigEditorProps {
   scope: InferenceScope;
+  selectedLabel?: string;
+  localPickerRef?: RefObject<HTMLDivElement | null>;
   onModeChange?: (mode: InferenceMode) => void;
   /** Restrict the selectable modes (e.g. vision override offers cloud/BYOK only). */
   allowedModes?: InferenceMode[];
@@ -51,6 +53,8 @@ export default function InferenceConfigEditor({
   scope,
   onModeChange,
   allowedModes,
+  selectedLabel,
+  localPickerRef,
 }: InferenceConfigEditorProps) {
   useRegistryVersion();
   const { t } = useTranslation();
@@ -165,7 +169,13 @@ export default function InferenceConfigEditor({
     />
   );
 
-  const showThinkingToggle = offersThinkingToggle(effectiveMode, config.provider, config.model);
+  // Chat streams Anthropic through the AI SDK, which sends no `thinking`.
+  const chatSendsNoThinking =
+    scope === "chatIntelligence" &&
+    effectiveMode === "providers" &&
+    config.provider === "anthropic";
+  const showThinkingToggle =
+    !chatSendsNoThinking && offersThinkingToggle(effectiveMode, config.provider, config.model);
 
   const effortCapability =
     effectiveMode === "providers"
@@ -261,13 +271,26 @@ export default function InferenceConfigEditor({
       {modes.length > 1 && (
         <InferenceModeSelector
           modes={modes}
+          selectedLabel={selectedLabel}
           activeMode={effectiveMode}
           onSelect={handleModeSelect}
         />
       )}
 
       {effectiveMode === "providers" && renderModelSelector("cloud")}
-      {effectiveMode === "local" && renderModelSelector("local")}
+      {effectiveMode === "local" &&
+        (localPickerRef ? (
+          <div
+            ref={localPickerRef}
+            tabIndex={-1}
+            role="group"
+            aria-label={t("models.policy.chooseModel")}
+          >
+            {renderModelSelector("local")}
+          </div>
+        ) : (
+          renderModelSelector("local")
+        ))}
 
       {effectiveMode === "self-hosted" && (
         <OpenAICompatiblePanel

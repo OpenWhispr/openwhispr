@@ -1,6 +1,7 @@
 import { useRegistryVersion } from "../../hooks/useRegistryVersion";
 import { useState, useRef, useEffect, useId } from "react";
 import { useTranslation } from "react-i18next";
+import { useToast } from "../ui/useToast";
 import {
   FileAudio,
   X,
@@ -20,6 +21,7 @@ import { CARD_SURFACE_CLASS } from "../ui/surfaces";
 import { GRADIENT_CIRCLE } from "../ui/gradientCircle";
 import { Toggle } from "../ui/toggle";
 import EmptyStateCard from "../ui/EmptyStateCard";
+import CreatorLinkField from "../CreatorLinkField";
 import { DropZone } from "../ui/DropZone";
 import { cn } from "../lib/utils";
 import {
@@ -36,10 +38,13 @@ import type { FolderItem } from "../../types/electron";
 import {
   findDefaultFolder,
   findVideosFolder,
+  folderPathLabel,
+  orderFoldersAsTree,
   DOWNLOAD_ERROR_KEYS,
   transcriptionErrorKey,
   uploadRestrictionKey,
   MEETINGS_FOLDER_NAME,
+  folderMutationErrorDescription,
 } from "./shared";
 import { useAuth } from "../../hooks/useAuth";
 import { useUsage } from "../../hooks/useUsage";
@@ -86,6 +91,7 @@ import {
   transcriptionChoiceRefusal,
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
+import { onWorkspaceScopePublished } from "../../stores/workspaceStore";
 import {
   usePolicySnapshot,
   useTranscriptionChoiceRefusal,
@@ -160,6 +166,7 @@ interface UploadAudioViewProps {
 export default function UploadAudioView({ onNoteCreated, onOpenSettings }: UploadAudioViewProps) {
   useRegistryVersion();
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [state, setState] = useState<UploadState>("idle");
   const [file, setFile] = useState<{
     name: string;
@@ -175,6 +182,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   );
   const [diarizationWarning, setDiarizationWarning] = useState(false);
   const [noteId, setNoteId] = useState<number | null>(null);
+  // The saved note's space: from then on the folder picker files that note, so it lists that
+  // space's folders, never the Private of a workspace switched to since (M10).
+  const noteSpaceIdRef = useRef<number | null>(null);
+  const loadFoldersRef = useRef<() => Promise<void>>(async () => {});
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -274,6 +285,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   }, []);
 
   const [folders, setFolders] = useState<FolderItem[]>([]);
+  // The active workspace's Private, whose folders the list shows and new folders go to.
+  const [privateSpaceId, setPrivateSpaceId] = useState<number | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
   // Batch destination folder, deliberately separate from the single-flow one:
   // handleFolderChange moves the already-saved note when noteId is set.
@@ -299,6 +312,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     tinfoilApiKey,
     deepgramApiKey,
     assemblyaiApiKey,
+    elevenlabsApiKey,
     openrouterApiKey,
     customTranscriptionApiKey,
   } = apiKeys;
@@ -434,28 +448,41 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   useEffect(() => {
     // Uploads and URL downloads are a personal flow: scope the folder list
-    // (and the by-name "Videos" destination lookup) to the private space so a
-    // same-named team folder can never capture them.
-    let cancelled = false;
+    // (and the by-name "Videos" destination lookup) to the active workspace's
+    // Private so a same-named team folder can never capture them. Read again
+    // each time main takes a new workspace scope (a switch), keeping a picked
+    // folder while that Private still has it. Once a note is saved, the list
+    // stays on that note's space.
+    let unmounted = false;
+    let latestLoad = 0;
     const loadFolders = async () => {
+      const load = ++latestLoad;
       try {
-        const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
-        const privateSpace = spaces.find((space) => space.kind === "private");
-        const items = (await window.electronAPI.getFolders?.(privateSpace?.id ?? null)) ?? [];
-        if (cancelled) return;
+        const spaceId =
+          noteSpaceIdRef.current ?? (await window.electronAPI.getPrivateSpaceId?.()) ?? null;
+        const items = (await window.electronAPI.getFolders?.(spaceId)) ?? [];
+        if (unmounted || load !== latestLoad) return;
+        setPrivateSpaceId(spaceId);
         setFolders(items);
         const personal = findDefaultFolder(items);
-        if (personal) {
-          setSelectedFolderId(String(personal.id));
-          setBatchFolderId(String(personal.id));
-        }
+        const keepOrDefault = (current: string): string =>
+          items.some((folder) => String(folder.id) === current)
+            ? current
+            : personal
+              ? String(personal.id)
+              : "";
+        setSelectedFolderId(keepOrDefault);
+        setBatchFolderId(keepOrDefault);
       } catch (error) {
-        if (!cancelled) console.error("Failed to load upload folders:", error);
+        if (!unmounted) console.error("Failed to load upload folders:", error);
       }
     };
+    loadFoldersRef.current = loadFolders;
     void loadFolders();
+    const stopReloading = onWorkspaceScopePublished(() => void loadFolders());
     return () => {
-      cancelled = true;
+      unmounted = true;
+      stopReloading();
     };
   }, []);
 
@@ -493,6 +520,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 tinfoilApiKey,
                 deepgramApiKey,
                 assemblyaiApiKey,
+                elevenlabsApiKey,
                 openrouterApiKey,
                 customTranscriptionApiKey,
               })
@@ -543,6 +571,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     tinfoilApiKey,
     deepgramApiKey,
     assemblyaiApiKey,
+    elevenlabsApiKey,
     openrouterApiKey,
     customTranscriptionApiKey,
     cortiClientId,
@@ -597,6 +626,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     remoteTranscriptionUrl,
     remoteTranscriptionModel,
   });
+
+  // The speaker count caps the local diarizer, which a provider that labels speakers replaces.
+  const byokDiarize = shouldUseByokDiarize(buildTranscriptionConfig(), true);
 
   // Batch counterpart of the single-file size gating above; returns keys under notes.upload.*.
   const getBatchSizeErrorKey = (sizeBytes: number): string | null => {
@@ -702,6 +734,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setPartialWarning(null);
     setDiarizationWarning(false);
     setNoteId(null);
+    // The next upload files into the active workspace's Private again, which a switch made while
+    // the note was open may have changed.
+    if (noteSpaceIdRef.current != null) {
+      noteSpaceIdRef.current = null;
+      void loadFoldersRef.current();
+    }
     setError(null);
     setProgress(0);
     setChunkProgress(null);
@@ -808,7 +846,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         buildTranscriptionConfig(),
         diarization,
         currentFile.durationSeconds,
-        { requestId, timestamps: true }
+        { requestId, timestamps: true, isCancelled: () => runId !== runIdRef.current }
       );
 
       if (runId !== runIdRef.current) return;
@@ -846,7 +884,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           segments: res.segments,
         });
         if (runId !== runIdRef.current) return;
-        if (noteRes.success && noteRes.note) setNoteId(noteRes.note.id);
+        if (noteRes.success && noteRes.note) {
+          noteSpaceIdRef.current = noteRes.note.space_id ?? null;
+          setNoteId(noteRes.note.id);
+        }
         if (currentTempPath) {
           window.electronAPI.deleteTempFile(currentTempPath);
           setDownloadedTempPath(null);
@@ -1033,7 +1074,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const handleCreateFolder = async () => {
     const trimmed = newFolderName.trim();
     if (!trimmed) return;
-    const res = await window.electronAPI.createFolder(trimmed);
+    const res = await window.electronAPI.createFolder(trimmed, privateSpaceId);
     if (res.success && res.folder) {
       setFolders((prev) => [...prev, res.folder!]);
       const newId = String(res.folder.id);
@@ -1041,6 +1082,15 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       if (noteId != null) {
         window.electronAPI.updateNote(noteId, { folder_id: res.folder.id });
       }
+    } else {
+      toast({
+        title: t("notes.folders.couldNotCreate"),
+        description: folderMutationErrorDescription(res, folders, t, {
+          name: trimmed,
+          nested: false,
+        }),
+        variant: "destructive",
+      });
     }
     setNewFolderName("");
     setShowNewFolderDialog(false);
@@ -1435,7 +1485,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               />
             </div>
 
-            {diarizationEnabled && diarizationModelsReady && (
+            {diarizationEnabled && diarizationModelsReady && !byokDiarize && (
               <div className="flex items-center gap-4 px-5 py-4">
                 <div className="min-w-0 flex-1 ps-7">
                   <label
@@ -1739,6 +1789,12 @@ function SelectedView({
         </p>
       )}
 
+      {(requiresUpgrade || (byokTooLarge && !requiresAccount && !isProUser)) && (
+        <div className="w-full max-w-sm">
+          <CreatorLinkField />
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
         {/* BYOK too large — not signed in: Create Account */}
         {byokTooLarge && requiresAccount && (
@@ -1858,6 +1914,9 @@ function FolderSelect({
   includeCreateNew,
   className,
 }: FolderSelectProps) {
+  const meetingsFolderId = folders.find(
+    (f) => f.name === MEETINGS_FOLDER_NAME && !!f.is_default
+  )?.id;
   return (
     <div className={cn("flex items-center justify-center gap-2", className)}>
       <FolderOpen size={14} className="shrink-0 text-muted-foreground" />
@@ -1866,8 +1925,9 @@ function FolderSelect({
           <SelectValue placeholder={t("notes.upload.selectFolder")} />
         </SelectTrigger>
         <SelectContent>
-          {folders.map((f) => {
-            const isMeetings = f.name === MEETINGS_FOLDER_NAME && !!f.is_default;
+          {orderFoldersAsTree(folders).map((f) => {
+            // The default Meetings folder takes no uploads yet, and neither do its subfolders.
+            const isMeetings = f.id === meetingsFolderId || f.parent_folder_id === meetingsFolderId;
             return (
               <SelectItem
                 key={f.id}
@@ -1876,7 +1936,7 @@ function FolderSelect({
                 className="text-sm py-1.5 ps-2.5 pe-7 rounded-md"
               >
                 <span className="flex items-center gap-1.5">
-                  <span dir="auto">{f.name}</span>
+                  <span dir="auto">{folderPathLabel(f, folders, t)}</span>
                   {isMeetings && (
                     <span className="text-[9px] uppercase tracking-wider text-foreground/45 font-medium">
                       {t("notes.folders.soon")}

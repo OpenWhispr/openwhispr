@@ -1,4 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import type { AudioWindow } from '@/services/transcription/realtimeReconnect';
 
 // Retained under the cache dir, not documents: it's transient best-effort retry
 // material, so it must never ride along in the user's iCloud/device backup (the
@@ -31,10 +32,194 @@ export function isManagedTranscriptAudioUri(uri?: string | null): boolean {
   return !!uri && !!FileSystem.cacheDirectory && uri.startsWith(TRANSCRIPT_AUDIO_DIR);
 }
 
+/** The one path a meeting's recording lives at while the meeting records. */
+export function meetingRecordingUri(noteId: number): string {
+  return `${FileSystem.documentDirectory ?? ''}meeting-${noteId}.wav`;
+}
+
 /** source_file is synced metadata, not authority to read or delete a local path. */
 export function isManagedMeetingAudioUri(noteId: number, uri?: string | null): boolean {
+  return !!FileSystem.documentDirectory && uri === meetingRecordingUri(noteId);
+}
+
+/** Audio a meeting's recording still holds that no transcription reached yet; lives beside it. */
+export function meetingBackfillUri(noteId: number): string {
+  return `${FileSystem.documentDirectory ?? ''}meeting-${noteId}.backfill.json`;
+}
+
+const PENDING_BACKFILL_VERSION = 1;
+
+type LivePcmStreamingModule = typeof import('../../modules/live-pcm-streaming/src');
+
+/**
+ * A meeting's files sit in Documents so iOS never purges them mid-meeting, but like the retained
+ * audio above they are temporary and must never ride along in a backup. Best effort, never
+ * throws. The native module is loaded lazily: this file is imported where it isn't available.
+ */
+export async function excludeMeetingFileFromBackup(uri: string): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { LivePCMStreaming } =
+      require('../../modules/live-pcm-streaming/src') as LivePcmStreamingModule;
+    await LivePCMStreaming.excludeFromBackup(uri);
+  } catch {
+    // Nothing else to try; the file is still deleted once it has served.
+  }
+}
+
+/** How often a resume of a note's owed audio got nothing through, and when it last tried. */
+export interface BackfillRetry {
+  attempts: number;
+  /** Epoch ms. */
+  lastAttemptAt: number;
+}
+
+export interface PendingBackfillState extends BackfillRetry {
+  windows: AudioWindow[];
+  /**
+   * Set instead of windows for a cloud meeting stopped offline with nothing heard live: the whole
+   * recording waits for a connection, to go up only under the account that recorded it (null for
+   * a signed-out session).
+   */
+  awaitingConnection?: { accountId: string | null };
+}
+
+/** The wait after the first resume that got nothing through; it doubles per failed attempt. */
+export const BACKFILL_RETRY_BASE_MS = 5 * 60 * 1000;
+export const BACKFILL_RETRY_MAX_MS = 6 * 60 * 60 * 1000;
+
+/** How long to wait after `attempts` resumes in a row got nothing through; 0 when none has. */
+export function backfillRetryDelayMs(attempts: number): number {
+  if (!(attempts >= 1)) return 0;
+  // Past 7 doublings the cap is reached; the exponent is bounded so it never overflows.
+  return Math.min(BACKFILL_RETRY_BASE_MS * 2 ** Math.min(attempts - 1, 16), BACKFILL_RETRY_MAX_MS);
+}
+
+/**
+ * Whether a resume may upload now. A clock set back since the last attempt counts as due, or
+ * the owed audio could wait for days.
+ */
+export function isBackfillRetryDue(retry: BackfillRetry, nowMs: number): boolean {
+  if (nowMs < retry.lastAttemptAt) return true;
+  return nowMs - retry.lastAttemptAt >= backfillRetryDelayMs(retry.attempts);
+}
+
+const writePendingBackfill = async (
+  noteId: number,
+  windows: AudioWindow[],
+  retry: BackfillRetry | undefined,
+  extra: { awaitingConnection?: { accountId: string | null } },
+): Promise<void> => {
+  const uri = meetingBackfillUri(noteId);
+  await FileSystem.writeAsStringAsync(
+    uri,
+    JSON.stringify({
+      version: PENDING_BACKFILL_VERSION,
+      windows: windows.map(({ startMs, endMs }) => ({ startMs, endMs })),
+      ...extra,
+      ...(retry ? { attempts: retry.attempts, lastAttemptAt: retry.lastAttemptAt } : {}),
+    }),
+  );
+  // After every write: a file replaced on disk loses the mark.
+  await excludeMeetingFileFromBackup(uri);
+};
+
+/** Rejects when it cannot be written, so the caller knows nothing on disk names the owed audio. */
+export async function savePendingBackfill(
+  noteId: number,
+  windows: AudioWindow[],
+  /** Absent for audio no resume has tried yet. */
+  retry?: BackfillRetry,
+): Promise<void> {
+  await writePendingBackfill(noteId, windows, retry, {});
+}
+
+/**
+ * Marks the whole recording as waiting for a connection, beside it where launch recovery and the
+ * resumers already look. Rejects when it cannot be written.
+ */
+export async function saveRecordingAwaitingConnection(
+  noteId: number,
+  accountId: string | null,
+  /** Absent until an upload has been tried. */
+  retry?: BackfillRetry,
+): Promise<void> {
+  await writePendingBackfill(noteId, [], retry, { awaitingConnection: { accountId } });
+}
+
+const isWindow = (value: unknown): value is AudioWindow => {
+  const window = value as { startMs?: unknown; endMs?: unknown } | null;
   return (
-    !!FileSystem.documentDirectory && uri === `${FileSystem.documentDirectory}meeting-${noteId}.wav`
+    typeof window === 'object' &&
+    window !== null &&
+    typeof window.startMs === 'number' &&
+    typeof window.endMs === 'number' &&
+    Number.isFinite(window.startMs) &&
+    Number.isFinite(window.endMs)
+  );
+};
+
+// Written by this app, but a file from a damaged write must never block or crash a resume.
+const nonNegativeNumber = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+
+/** The saved windows and retry count, or null when there is no sidecar or it can't be trusted. */
+export async function readPendingBackfillState(
+  noteId: number,
+): Promise<PendingBackfillState | null> {
+  try {
+    const uri = meetingBackfillUri(noteId);
+    if (!(await FileSystem.getInfoAsync(uri)).exists) return null;
+    const parsed = JSON.parse(await FileSystem.readAsStringAsync(uri)) as {
+      version?: unknown;
+      windows?: unknown;
+      attempts?: unknown;
+      lastAttemptAt?: unknown;
+      awaitingConnection?: unknown;
+    } | null;
+    if (parsed?.version !== PENDING_BACKFILL_VERSION || !Array.isArray(parsed.windows)) return null;
+    if (!parsed.windows.every(isWindow)) return null;
+    const state: PendingBackfillState = {
+      windows: parsed.windows.map(({ startMs, endMs }) => ({ startMs, endMs })),
+      attempts: Math.floor(nonNegativeNumber(parsed.attempts)),
+      lastAttemptAt: nonNegativeNumber(parsed.lastAttemptAt),
+    };
+    if (parsed.awaitingConnection === undefined) return state;
+    // An owner that can't be read must never be taken for the account signed in now.
+    const accountId = (parsed.awaitingConnection as { accountId?: unknown } | null)?.accountId;
+    if (accountId !== null && typeof accountId !== 'string') return null;
+    return { ...state, awaitingConnection: { accountId } };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The saved windows, or null when there is no sidecar, it can't be trusted, or it marks the whole
+ * recording as waiting for the connection: its empty list must never read as nothing owed.
+ */
+export async function readPendingBackfill(noteId: number): Promise<AudioWindow[] | null> {
+  const state = await readPendingBackfillState(noteId);
+  return state && !state.awaitingConnection ? state.windows : null;
+}
+
+/**
+ * Whether a sidecar file is there, readable or not: one that can't be parsed still means the
+ * recording owes audio. True when the answer can't be read, so a recording is never deleted on
+ * a failed check.
+ */
+export async function hasPendingBackfillFile(noteId: number): Promise<boolean> {
+  try {
+    return (await FileSystem.getInfoAsync(meetingBackfillUri(noteId))).exists;
+  } catch {
+    return true;
+  }
+}
+
+/** Idempotent; never throws. */
+export async function clearPendingBackfill(noteId: number): Promise<void> {
+  await FileSystem.deleteAsync(meetingBackfillUri(noteId), { idempotent: true }).catch(
+    () => undefined,
   );
 }
 
@@ -70,9 +255,11 @@ export async function retainTranscriptAudio(
     transcriptId: string;
     audioFileName?: string | null;
     audioMimeType?: string | null;
+    keepSource?: boolean;
   },
 ): Promise<string> {
   if (!FileSystem.cacheDirectory) {
+    if (input.keepSource) throw new Error('Audio cache unavailable');
     return sourceUri;
   }
   if (isManagedTranscriptAudioUri(sourceUri)) {
@@ -94,10 +281,10 @@ export async function retainTranscriptAudio(
   const destinationUri = `${TRANSCRIPT_AUDIO_DIR}${fileName}`;
 
   await FileSystem.copyAsync({ from: sourceUri, to: destinationUri });
-  // The source is a transient capture/cache file that is no longer needed once
-  // the audio lives in managed storage. Drop it so a retained copy never leaves
-  // a duplicate behind (best-effort: a lost race just leaves a purgeable file).
-  await FileSystem.deleteAsync(sourceUri, { idempotent: true }).catch(() => undefined);
+  // The keyboard outbox owns its source until History has persisted the retry row.
+  if (!input.keepSource) {
+    await FileSystem.deleteAsync(sourceUri, { idempotent: true }).catch(() => undefined);
+  }
   return destinationUri;
 }
 

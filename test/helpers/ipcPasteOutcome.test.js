@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -72,9 +73,11 @@ test.before(() => {
     selectionManager: null,
   };
   Ctor.prototype.setupHandlers.call(
-    new Proxy(target, {
-      get: (value, property) => (property in value ? value[property] : anything()),
-    })
+    withDevicePolicy(
+      new Proxy(target, {
+        get: (value, property) => (property in value ? value[property] : anything()),
+      })
+    )
   );
   assert.ok(handlers.get("paste-text"), "paste-text must be registered");
 });
@@ -284,6 +287,39 @@ test("Accessibility settings opens the macOS system pane and reports launch fail
     success: false,
     error: "launch failed",
   });
+});
+
+test("macOS 27.3 opens Privacy & Security and requests input-posting access", async (t) => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  const version = process.getSystemVersion;
+  const clipboardManager = target.clipboardManager;
+  Object.defineProperty(process, "platform", { value: "darwin" });
+  process.getSystemVersion = () => "27.3";
+  t.after(() => {
+    Object.defineProperty(process, "platform", platform);
+    if (version) process.getSystemVersion = version;
+    else delete process.getSystemVersion;
+    target.clipboardManager = clipboardManager;
+    delete electronStub.shell.openExternal;
+  });
+  const actions = [];
+  electronStub.shell.openExternal = async (url) => actions.push(url);
+  target.clipboardManager = {
+    requestPostEventAccess: () => actions.push("request"),
+  };
+
+  assert.deepEqual(await handlers.get("open-accessibility-settings")(), { success: true });
+  assert.deepEqual(actions, [
+    "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension",
+    "request",
+  ]);
+
+  // Only the app-control grant moved to the picker; other panes keep their links.
+  actions.length = 0;
+  assert.deepEqual(await handlers.get("open-microphone-settings")(), { success: true });
+  assert.deepEqual(actions, [
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
+  ]);
 });
 
 test("paste-text identifies a missing-Accessibility fallback without turning it into an error", async () => {

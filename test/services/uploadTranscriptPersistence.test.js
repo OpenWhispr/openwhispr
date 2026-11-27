@@ -126,14 +126,19 @@ test("upload transcript crosses the actual preload and save IPC handler before b
     true
   );
   let callback;
+  let writeGuard;
   function visit(node) {
     if (ts.isCallExpression(node) && node.arguments[0]?.text === "db-save-note") {
       callback = node.arguments[1].getText(source);
+    }
+    if (ts.isVariableDeclaration(node) && node.name.getText(source) === "isStaleNoteWrite") {
+      writeGuard = node.initializer.getText(source);
     }
     ts.forEachChild(node, visit);
   }
   visit(source);
   assert.ok(callback);
+  assert.ok(writeGuard);
   const broadcasts = [];
   const mirrored = [];
   const owner = {
@@ -141,11 +146,18 @@ test("upload transcript crosses the actual preload and save IPC handler before b
     notifyVectorChanges() {},
     _asyncMirrorWrite: (note) => mirrored.push(note),
   };
-  const handler = vm.runInNewContext(`(function () { return (${callback}); }).call(owner)`, {
-    owner,
-    setImmediate: (fn) => fn(),
-    broadcastToWindows: (...args) => broadcasts.push(args),
-  });
+  const handler = vm.runInNewContext(
+    `(function () {
+    const isStaleNoteWrite = ${writeGuard};
+    return (${callback});
+  }).call(owner)`,
+    {
+      owner,
+      tokenStore: { getState: () => ({ generation: 3 }) },
+      setImmediate: (fn) => fn(),
+      broadcastToWindows: (...args) => broadcasts.push(args),
+    }
+  );
   const { window } = installBrowserGlobals(t);
   vm.runInNewContext(fs.readFileSync("preload.js", "utf8"), {
     process,
@@ -185,6 +197,29 @@ test("upload transcript crosses the actual preload and save IPC handler before b
   assert.equal(broadcasts[0][0], "note-added");
   assert.equal(broadcasts[0][1].transcript, stored.transcript);
   assert.equal(mirrored[0].transcript, stored.transcript);
+  // Uploads remain valid without a guard; guarded assistant writes cannot reuse a stale one.
+  const rowsBefore = db.db.prepare("SELECT COUNT(*) AS count FROM notes").get().count;
+  for (const guard of [
+    { accountId: "another-account", authGeneration: 3 },
+    { accountId: db.activeAccountId, authGeneration: 2 },
+    null,
+  ]) {
+    const rejected = await window.electronAPI.saveNote(
+      "Stale assistant write",
+      "Private words",
+      "personal",
+      null,
+      null,
+      null,
+      null,
+      null,
+      guard
+    );
+    assert.equal(rejected.success, false);
+  }
+  assert.equal(db.db.prepare("SELECT COUNT(*) AS count FROM notes").get().count, rowsBefore);
+  assert.equal(broadcasts.length, 1);
+  assert.equal(mirrored.length, 1);
 });
 
 test("a segment without a start keeps the complete uploaded text without invented times", async (t) => {
@@ -281,6 +316,7 @@ test("upload creation keeps its selected workspace and sends transcript in the r
   const { window } = installBrowserGlobals(t);
   Object.assign(window.electronAPI, {
     saveNote: async (...args) => db.saveNote(...args),
+    authGetTokenState: async () => ({ token: "synthetic-token", generation: 1 }),
     cloudApiRequest: async (request) => {
       assert.equal(request.path, "/api/notes/create");
       calls.push(JSON.parse(JSON.stringify(request)));
@@ -313,11 +349,26 @@ test("upload creation keeps its selected workspace and sends transcript in the r
   const note = db.getNote(saved.note.id);
   assert.equal(note.folder_id, folder.id);
   assert.equal(note.space_id, spaceId);
+  const auth = await vite.ssrLoadModule("/lib/authRequestContext.ts");
+  window.location = { origin: "https://desktop.openwhispr.test" };
+  await auth.handleAuthRequestSuccess({
+    data: { user: { id: "synthetic-account" } },
+    response: new Response("{}"),
+    request: {
+      url: "https://auth.test/get-session",
+      headers: { Authorization: "Bearer synthetic-token" },
+      openWhisprAuthGeneration: 1,
+    },
+  });
+  assert.equal(auth.commitValidatedAuthContext(1, "synthetic-account"), true);
   const { SyncService } = await vite.ssrLoadModule("/services/SyncService.ts");
   const service = new SyncService();
-  await service.createCloudNote(note, "synthetic-cloud-folder", {
-    space_id: "synthetic-cloud-space",
-  });
+  await service.createCloudNote(
+    note,
+    "synthetic-cloud-folder",
+    { space_id: "synthetic-cloud-space" },
+    1
+  );
   assert.equal(calls.length, 1);
   const { body } = calls[0];
   assert.equal(body.content, "");

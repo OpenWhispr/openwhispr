@@ -1,64 +1,35 @@
-// Speech-to-text providers the app ships before a model registry publication lists them.
-// The app keeps only the providers its bundled catalog has, so these join that catalog
-// here. Once the catalog is synced from a publication that lists one, remove it below.
+// Speech-to-text providers the app ships before model-registry/ lists them. The app keeps
+// only the providers its bundled catalog has, so these join that catalog here. Once
+// model-registry/ lists one, remove it below.
 const APP_TRANSCRIPTION_PROVIDERS = [
   {
-    id: "openrouter",
-    name: "OpenRouter",
-    baseUrl: "https://openrouter.ai/api/v1",
-    defaultModel: "mistralai/voxtral-mini-transcribe-3-0",
+    id: "elevenlabs",
+    name: "ElevenLabs",
+    baseUrl: "https://api.elevenlabs.io/v1",
+    defaultModel: "scribe_v3",
+    // Dictation sends this, and the Upload screen labels it, in place of a realtime or
+    // unlisted selection. Upload and Retry requests go through resolveByokModel instead,
+    // so its ElevenLabs fallback must change with this.
+    batchModel: "scribe_v3",
     models: [
       {
-        id: "mistralai/voxtral-mini-transcribe-3-0",
-        name: "Voxtral Mini Transcribe 3",
-        description: "Mistral's fast, accurate multilingual transcription",
-        descriptionKey:
-          "models.descriptions.transcription.openrouter_mistralai_voxtral_mini_transcribe_3_0",
+        id: "scribe_v3",
+        name: "Scribe v3",
+        description: "Most accurate multilingual transcription",
+        descriptionKey: "models.descriptions.transcription.elevenlabs_scribe_v3",
       },
       {
-        id: "nvidia/nemotron-3.5-transcribe",
-        name: "Nemotron 3.5 Transcribe",
-        description: "NVIDIA's low-cost transcription in 40 languages",
-        descriptionKey:
-          "models.descriptions.transcription.openrouter_nvidia_nemotron_3_5_transcribe",
-      },
-      {
-        id: "deepgram/nova-3",
-        name: "Nova-3",
-        description: "Deepgram's fast multilingual transcription",
-        descriptionKey: "models.descriptions.transcription.openrouter_deepgram_nova_3",
-      },
-      {
-        id: "assemblyai/universal-3-6-pro",
-        name: "Universal-3.6 Pro",
-        description: "AssemblyAI's most accurate transcription",
-        descriptionKey: "models.descriptions.transcription.openrouter_assemblyai_universal_3_6_pro",
-      },
-      {
-        id: "elevenlabs/scribe-v2",
+        id: "scribe_v2",
         name: "Scribe v2",
-        description: "ElevenLabs' accurate transcription in 90+ languages",
-        descriptionKey: "models.descriptions.transcription.openrouter_elevenlabs_scribe_v2",
+        description: "Accurate multilingual transcription",
+        descriptionKey: "models.descriptions.transcription.elevenlabs_scribe_v2",
       },
       {
-        id: "mistralai/voxtral-small-transcribe-3-0",
-        name: "Voxtral Small Transcribe 3",
-        description: "Mistral's larger multilingual transcription model",
-        descriptionKey:
-          "models.descriptions.transcription.openrouter_mistralai_voxtral_small_transcribe_3_0",
-      },
-      {
-        id: "nvidia/parakeet-tdt-0.6b-v3",
-        name: "Parakeet TDT 0.6B v3",
-        description: "NVIDIA's low-cost transcription for European languages",
-        descriptionKey: "models.descriptions.transcription.openrouter_nvidia_parakeet_tdt_0_6b_v3",
-      },
-      {
-        id: "nvidia/nemotron-3.5-asr-streaming-multilingual-0.6b",
-        name: "Nemotron 3.5 ASR 0.6B",
-        description: "NVIDIA's lowest-cost multilingual transcription",
-        descriptionKey:
-          "models.descriptions.transcription.openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b",
+        id: "scribe_v3_live",
+        name: "Scribe v3 Live",
+        description: "Live transcription for note recording",
+        descriptionKey: "models.descriptions.transcription.elevenlabs_scribe_v3_live",
+        streaming: true,
       },
     ],
   },
@@ -85,4 +56,32 @@ export function withAppTranscriptionProviders(catalog) {
 
 export function isUploadOnlyTranscriptionModel(providerId, modelId) {
   return UPLOAD_ONLY_MODELS.get(providerId)?.includes(modelId) ?? false;
+}
+
+// ElevenLabs realtime models stream only in Note Recording and have no batch endpoint:
+// dictation, onboarding and Audio Upload never offer them, and a batch request for one
+// takes the provider default. The catalog has no field for this, so the rule goes by the
+// id, which also holds for a model a publication lists.
+export function isNoteRecordingOnlyTranscriptionModel(providerId, modelId) {
+  return providerId === "elevenlabs" && /_(realtime|live)$/.test(modelId);
+}
+
+/**
+ * The models of one provider that a context lists. Shared by the pickers' lists and the
+ * settings store so neither keeps a model the other hides.
+ *
+ * @template {{ id: string, streaming?: boolean }} Model
+ * @param {string} providerId
+ * @param {readonly Model[]} models
+ * @param {import("../stores/policyRules").TranscriptionPolicyContext} context
+ * @returns {Model[]}
+ */
+export function transcriptionModelsForContext(providerId, models, context) {
+  if (context === "meeting") return models.filter((model) => model.streaming);
+  const batchModels = models.filter(
+    (model) => !isNoteRecordingOnlyTranscriptionModel(providerId, model.id)
+  );
+  if (context === "dictation")
+    return batchModels.filter((model) => !isUploadOnlyTranscriptionModel(providerId, model.id));
+  return batchModels;
 }

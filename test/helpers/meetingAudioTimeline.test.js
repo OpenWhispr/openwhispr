@@ -42,6 +42,10 @@ function harness({ native = true, local = false } = {}) {
     recordChunk(audible);
   };
   const context = {
+    effectivePolicyManager: { getCurrent: () => ({ success: true, managed: false }) },
+    app: { getVersion: () => "1.11.1" },
+    productOperationAllowed: require("../../src/helpers/productPolicy").productOperationAllowed,
+    meetingConnectionOptions: null,
     require: (specifier) => {
       const imported = createRequire(ipcPath)(specifier);
       return specifier === "./meetingAudioTimeline"
@@ -89,6 +93,7 @@ function harness({ native = true, local = false } = {}) {
     meetingReconnectAudioBuffers: { mic: [], system: [] },
     meetingReconnectAudioBytes: { mic: 0, system: 0 },
     meetingReconnectReplaySources: new Set(),
+    meetingReconnectPromise: null,
     MEETING_RECONNECT_BUFFER_MAX_BYTES: 24000 * 2 * 30,
     MEETING_MIC_BLEED_LOOKBACK_MS: 0,
     meetingMicStatsLogCount: 0,
@@ -108,6 +113,7 @@ function harness({ native = true, local = false } = {}) {
     globalThis.dispatchMicAudio = (buffer, capturedAt) =>
       dispatchMeetingAudioBuffer(buffer, "mic", false, capturedAt);
     globalThis.startCapture = () => startManagedMeetingSystemAudio({ sender: {} }, capture, "warning");
+    globalThis.replayMicAudio = (streaming) => replayMeetingReconnectAudio("mic", streaming);
     globalThis.replaySystemAudio = (streaming) => replayMeetingReconnectAudio("system", streaming);
   `,
     context
@@ -143,67 +149,126 @@ function createTimestampedStream(provider, connectedAt) {
   const streaming = new StreamingClient();
   const frames = [];
   const timestamps = [];
-  streaming.ws = { readyState: 1, send: (buffer) => frames.push(buffer) };
+  streaming.ws = {
+    readyState: 1,
+    // ElevenLabs sends its PCM as base64 inside JSON.
+    send: (data) =>
+      frames.push(
+        provider === "elevenLabs" ? Buffer.from(JSON.parse(data).audio_base_64, "base64") : data
+      ),
+  };
   streaming.isConnected = true;
   streaming.configAccepted = true;
   streaming.sessionStartedAt = connectedAt;
   streaming.onFinalTranscript = (_text, timestamp) => timestamps.push(timestamp);
+  // ElevenLabs sends one queued message a tick, on a timer only a session starts,
+  // so reading what the provider received first runs the ticks its queue needs.
+  const received = () => {
+    for (let queued = streaming.sendQueue?.length; queued > 0; queued--) streaming.sendQueued();
+    return frames;
+  };
   return {
     streaming,
-    frames,
+    get frames() {
+      return received();
+    },
     timestamps,
     finalizeSpeech(afterFrame = 0) {
-      const speechStart = frames.findIndex(
+      const speechStart = received().findIndex(
         (buffer, index) => index >= afterFrame && buffer.some((value) => value !== 0)
       );
       assert.ok(speechStart >= 0, "the provider must receive the recovered speech");
-      const start = bytes(frames.slice(0, speechStart)) / 48000;
-      const message =
-        provider === "deepgram"
-          ? {
-              type: "Results",
-              is_final: true,
-              start,
-              channel: { alternatives: [{ transcript: "I am back" }] },
-            }
-          : { type: "transcript", data: { isFinal: true, start, text: "I am back" } };
-      streaming.handleMessage(Buffer.from(JSON.stringify(message)));
+      // An ElevenLabs message holds up to a second, so speech can start inside one.
+      const speechOffset = frames[speechStart].findIndex((value) => value !== 0);
+      const start = (bytes(frames.slice(0, speechStart)) + speechOffset) / 48000;
+      const text = "I am back";
+      const finals = {
+        deepgram: {
+          type: "Results",
+          is_final: true,
+          start,
+          channel: { alternatives: [{ transcript: text }] },
+        },
+        corti: { type: "transcript", data: { isFinal: true, start, text } },
+        elevenLabs: {
+          message_type: "committed_transcript_with_timestamps",
+          text,
+          words: [{ type: "word", start }],
+        },
+      };
+      streaming.handleMessage(Buffer.from(JSON.stringify(finals[provider])));
     },
   };
 }
 
-test("Deepgram anchors native system and AEC mic transcripts to audio after slow setup", async (t) => {
-  const run = harness({ native: false });
+for (const provider of ["deepgram", "elevenLabs"]) {
+  test(`${provider} anchors native system and AEC mic transcripts to audio after slow setup`, async (t) => {
+    const run = harness({ native: false });
+    await run.start();
+    const mic = createTimestampedStream(provider, 1000);
+    const system = createTimestampedStream(provider, 1000);
+    run.context._meetingMicStreaming = mic.streaming;
+    run.context._meetingSystemStreaming = system.streaming;
+    let now = 14000;
+    run.at(now);
+    t.mock.method(Date, "now", () => now);
+
+    // Windows/Linux native capture and AEC mic output carry no capture-time override.
+    run.chunk();
+    run.context.dispatchMicAudio(Buffer.alloc(4800, 1));
+    mic.finalizeSpeech();
+    system.finalizeSpeech();
+    assert.deepEqual(mic.timestamps, [14000]);
+    assert.deepEqual(system.timestamps, [14000]);
+    assert.equal(run.context.meetingDiarizationStartedAt, 14000);
+    assert.equal(run.context.meetingLiveSpeakerStartedAt, 14000);
+
+    now = 15000;
+    run.at(now);
+    run.chunk();
+    run.context.dispatchMicAudio(Buffer.alloc(4800, 1));
+    mic.finalizeSpeech(1);
+    system.finalizeSpeech(1);
+    assert.deepEqual(mic.timestamps, [14000, 14100]);
+    assert.deepEqual(system.timestamps, [14000, 14100]);
+  });
+}
+
+test("ElevenLabs times resumed speech from the native capture clock after idle keep-alives", async (t) => {
+  const run = harness();
   await run.start();
-  const mic = createTimestampedStream("deepgram", 1000);
-  const system = createTimestampedStream("deepgram", 1000);
-  run.context._meetingMicStreaming = mic.streaming;
-  run.context._meetingSystemStreaming = system.streaming;
-  let now = 14000;
-  run.at(now);
-  t.mock.method(Date, "now", () => now);
-
-  // Windows/Linux native capture and AEC mic output carry no capture-time override.
-  run.chunk();
-  run.context.dispatchMicAudio(Buffer.alloc(4800, 1));
-  mic.finalizeSpeech();
-  system.finalizeSpeech();
-  assert.deepEqual(mic.timestamps, [14000]);
-  assert.deepEqual(system.timestamps, [14000]);
-  assert.equal(run.context.meetingDiarizationStartedAt, 14000);
-  assert.equal(run.context.meetingLiveSpeakerStartedAt, 14000);
-
-  now = 15000;
-  run.at(now);
-  run.chunk();
-  run.context.dispatchMicAudio(Buffer.alloc(4800, 1));
-  mic.finalizeSpeech(1);
-  system.finalizeSpeech(1);
-  assert.deepEqual(mic.timestamps, [14000, 14100]);
-  assert.deepEqual(system.timestamps, [14000, 14100]);
+  t.mock.timers.enable({ apis: ["setInterval", "Date"], now: 1000 });
+  const { streaming, frames, timestamps, finalizeSpeech } = createTimestampedStream(
+    "elevenLabs",
+    1000
+  );
+  run.context._meetingSystemStreaming = streaming;
+  run.watchdog.start({ systemAudioStrategy: "native", watchesDelivery: true });
+  t.after(() => {
+    run.watchdog.stop();
+    streaming.cleanup();
+  });
+  // Node runs every timer a tick covers with the clock already at the tick's end,
+  // so the clock moves one send interval at a time.
+  const advance = (ms) => {
+    for (let left = ms; left > 0; left -= 100) t.mock.timers.tick(100);
+  };
+  run.at(1000);
+  run.chunk(100);
+  streaming.startKeepAlive();
+  streaming.startSending();
+  advance(6000);
+  assert.ok(frames.length > 1, "socket received idle keep-alive silence");
+  run.at(7000);
+  await run.restart();
+  run.chunk(100);
+  // The client paces what it sends, and holds it behind the gap's unanswered commit.
+  advance(3000);
+  finalizeSpeech(1);
+  assert.deepEqual(timestamps, [7000]);
 });
 
-for (const provider of ["deepgram", "corti"]) {
+for (const provider of ["deepgram", "corti", "elevenLabs"]) {
   test(`${provider} preserves an established socket's origin across capture recovery`, async () => {
     const run = harness();
     await run.start();
@@ -280,7 +345,66 @@ for (const provider of ["deepgram", "corti"]) {
   });
 }
 
-for (const provider of ["deepgram", "corti"]) {
+test("a stream that drops while a reconnect is under way joins its replay", () => {
+  const run = harness({ native: false });
+  // The mic session expired first and started the reconnect; system was still up then.
+  run.context.meetingReconnectReplaySources.add("mic");
+  run.context.meetingReconnectPromise = Promise.resolve(true);
+  const system = { isConnected: true, sendAudio: () => true };
+  run.context._meetingSystemStreaming = system;
+
+  run.rendererSend(Buffer.alloc(4800, 1), "system", 1000);
+  assert.equal(
+    run.context.meetingReconnectAudioBuffers.system.length,
+    0,
+    "a live stream is not held"
+  );
+
+  system.isConnected = false;
+  system.sendAudio = () => false;
+  run.rendererSend(Buffer.alloc(4800, 2), "system", 1100);
+  run.rendererSend(Buffer.alloc(4800, 3), "system", 1200);
+
+  const replayed = [];
+  const replacement = { isConnected: true, sendAudio: (buffer) => replayed.push(buffer[0]) > 0 };
+  assert.equal(run.context.replaySystemAudio(replacement), true);
+  assert.deepEqual(replayed, [2, 3]);
+});
+
+test("an ElevenLabs stream that drops while a reconnect is under way leads its replay with the audio it never sent", () => {
+  const run = harness({ native: false });
+  // The mic session expired first and started the reconnect; system was still up then.
+  run.context.meetingReconnectReplaySources.add("mic");
+  run.context.meetingReconnectPromise = Promise.resolve(true);
+  const dropped = createTimestampedStream("elevenLabs", 1000);
+  run.context._meetingSystemStreaming = dropped.streaming;
+  run.at(1200);
+
+  // The client has taken this chunk, and no tick has sent it when the socket drops.
+  run.rendererSend(Buffer.alloc(4800, 1), "system", 1000);
+  dropped.streaming.cleanup();
+  run.rendererSend(Buffer.alloc(4800, 2), "system", 1100);
+  run.rendererSend(Buffer.alloc(4800, 3), "system", 1200);
+
+  const recovered = createTimestampedStream("elevenLabs", 12000);
+  assert.equal(run.context.replaySystemAudio(recovered.streaming), true);
+  const replayed = Buffer.concat(recovered.frames);
+  assert.ok(
+    replayed.equals(Buffer.concat([1, 2, 3].map((fill) => Buffer.alloc(4800, fill)))),
+    "once, and ahead of what the outage queued"
+  );
+  recovered.finalizeSpeech();
+  assert.deepEqual(recovered.timestamps, [1000]);
+});
+
+test("a dropped stream holds nothing when no reconnect is under way", () => {
+  const run = harness({ native: false });
+  run.context._meetingSystemStreaming = { isConnected: false, sendAudio: () => false };
+  run.rendererSend(Buffer.alloc(4800, 1), "system", 1000);
+  assert.equal(run.context.meetingReconnectAudioBuffers.system.length, 0);
+});
+
+for (const provider of ["deepgram", "corti", "elevenLabs"]) {
   test(`${provider} places renderer audio held through the connect at its capture time, mic and system alike`, () => {
     const run = harness({ native: false });
     const mic = createTimestampedStream(provider, 9000);
@@ -297,6 +421,22 @@ for (const provider of ["deepgram", "corti"]) {
     assert.deepEqual(system.timestamps, [6000]);
     assert.equal(run.context.meetingDiarizationStartedAt, 6000);
     assert.equal(run.context.meetingLiveSpeakerStartedAt, 6000);
+  });
+
+  test(`${provider} places a replayed microphone queue at the time its audio was captured`, () => {
+    const run = harness({ native: false });
+    run.context.meetingReconnectReplaySources.add("mic");
+    run.context._meetingMicStreaming = { sendAudio: () => false };
+    // The microphone hands its chunks over as it captures them, with no capture time.
+    run.at(10000);
+    run.context.dispatchMicAudio(Buffer.alloc(4800));
+    run.at(10100);
+    run.context.dispatchMicAudio(Buffer.alloc(4800, 1));
+    run.at(12000);
+    const recovered = createTimestampedStream(provider, 12000);
+    assert.equal(run.context.replayMicAudio(recovered.streaming), true);
+    recovered.finalizeSpeech();
+    assert.deepEqual(recovered.timestamps, [10100]);
   });
 }
 

@@ -17,7 +17,7 @@ const lastBody = (): Record<string, unknown> =>
 beforeEach(() => jest.clearAllMocks());
 
 // The API treats `customPrompt` as a template it substitutes {{agentName}}
-// into and still appends language, dictionary and tone; `promptMode: 'cleanup'`
+// into and still appends language and dictionary, but no tone; `promptMode: 'cleanup'`
 // pins cleanup semantics (transcript wrapper, temperature 0, cleanup model).
 // `systemPrompt` is a raw action-mode override and must win outright.
 describe('ReasoningService custom cleanup prompt on the wire', () => {
@@ -78,5 +78,24 @@ describe('ReasoningService custom cleanup prompt on the wire', () => {
     expect(body.systemPrompt).toBe('raw override');
     expect(body).not.toHaveProperty('customPrompt');
     expect(body).not.toHaveProperty('promptMode');
+  });
+
+  // The API runs a translation on its own path only when it is told the purpose; a systemPrompt
+  // alone is the generic action override.
+  it('sends purpose translation with the systemPrompt and no promptMode', async () => {
+    await ReasoningService.processText({
+      text: 'Hello',
+      systemPrompt: 'Translate to Spanish.',
+      purpose: 'translation',
+    });
+    const body = lastBody();
+    expect(body.purpose).toBe('translation');
+    expect(body.systemPrompt).toBe('Translate to Spanish.');
+    expect(body).not.toHaveProperty('promptMode');
+  });
+
+  it('sends no purpose when the caller names none', async () => {
+    await ReasoningService.processText({ text: 'hi', systemPrompt: 'raw override' });
+    expect(lastBody()).not.toHaveProperty('purpose');
   });
 });

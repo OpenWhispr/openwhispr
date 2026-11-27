@@ -20,16 +20,34 @@ const LISTENER_RESPAWN_BASE_MS = 5 * 1000;
 const LISTENER_RESPAWN_MAX_MS = 60 * 1000;
 const EXEC_OPTS = { timeout: 5000, encoding: "utf8" };
 
+// Peak-detect streams (e.g. PlasmaPA volume meters) carry levels, not audio,
+// and stay open as long as the meter's process lives. PipeWire marks them as
+// monitors even when they watch a microphone; PulseAudio gives them the peaks
+// resampler, which it uses for nothing else.
+function isLinuxPeakMeterSourceOutput(sourceOutput) {
+  return (
+    sourceOutput?.properties?.["stream.monitor"] === "true" ||
+    sourceOutput?.resample_method === "peaks"
+  );
+}
+
 function isLinuxMeetingPromptSourceOutput(sourceOutput) {
   const properties = sourceOutput?.properties ?? {};
-  return properties["media.role"] !== "production" && properties["stream.capture.sink"] !== "true";
+  return (
+    properties["media.role"] !== "production" &&
+    properties["stream.capture.sink"] !== "true" &&
+    !isLinuxPeakMeterSourceOutput(sourceOutput)
+  );
 }
 
 // Every pid holding a capture stream, and those whose streams are all
-// production or sink-monitor capture, which are not meeting evidence.
+// production or sink-monitor capture, which are not meeting evidence. Peak
+// meters are left out of both, so they neither prompt nor hold the mic for
+// auto-end. `attributed` says whether any stream carried a pid at all.
 function classifyLinuxCapturePids(sourceOutputs) {
   const capturePids = new Set();
   const meetingCapturePids = new Set();
+  let attributed = false;
   for (const sourceOutput of sourceOutputs) {
     // Audio-server plumbing (module-echo-cancel, loopbacks) legitimately
     // lacks application.process.id — client streams always carry it. Skip
@@ -37,13 +55,15 @@ function classifyLinuxCapturePids(sourceOutputs) {
     // with these modules loaded could never arm auto-end.
     const processId = Number(sourceOutput?.properties?.["application.process.id"]);
     if (!Number.isInteger(processId) || processId <= 0) continue;
+    attributed = true;
+    if (isLinuxPeakMeterSourceOutput(sourceOutput)) continue;
     capturePids.add(processId);
     if (isLinuxMeetingPromptSourceOutput(sourceOutput)) meetingCapturePids.add(processId);
   }
   const nonMeetingCapturePids = new Set(
     [...capturePids].filter((processId) => !meetingCapturePids.has(processId))
   );
-  return { capturePids, nonMeetingCapturePids };
+  return { capturePids, nonMeetingCapturePids, attributed };
 }
 
 class AudioActivityDetector extends EventEmitter {
@@ -723,7 +743,7 @@ class AudioActivityDetector extends EventEmitter {
       (processId) => !excludedProcessIds.has(processId)
     );
     // Only meeting evidence arms and re-arms the prompt; auto-end still counts
-    // every capture as holding the mic.
+    // every capture but a peak meter as holding the mic.
     this._externalCapturePids = new Set(
       externalPids.filter((processId) => !this._nonMeetingCapturePids.has(processId))
     );
@@ -988,12 +1008,13 @@ class AudioActivityDetector extends EventEmitter {
       const sourceOutputs = JSON.parse(stdout);
       if (!Array.isArray(sourceOutputs)) throw new Error("pactl returned a non-array response");
 
-      const { capturePids, nonMeetingCapturePids } = classifyLinuxCapturePids(sourceOutputs);
+      const { capturePids, nonMeetingCapturePids, attributed } =
+        classifyLinuxCapturePids(sourceOutputs);
       // A stream without application.process.id carries no ownership
       // information. When nothing in a non-empty listing is attributable, the
       // unfiltered listings below still answer "is anything capturing" — far
       // better than reporting silence and never detecting a meeting.
-      if (sourceOutputs.length > 0 && capturePids.size === 0) {
+      if (sourceOutputs.length > 0 && !attributed) {
         throw new Error("no source-output reported an application.process.id");
       }
 

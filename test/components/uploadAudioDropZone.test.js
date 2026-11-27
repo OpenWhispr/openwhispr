@@ -8,6 +8,7 @@ const { findElement, installInteractiveDom } = require("../lib/interactiveDom");
 // Upload audio, with the stores and services it reads at mount stood in for: a managed
 // transcription scope makes the provider ready, so the idle drop zone shows.
 const MOCKS = {
+  "/ui/useToast": "export const useToast = () => ({ toast: () => {} });",
   "react-i18next": `
     const t = (key, values) => (values ? key + JSON.stringify(values) : key);
     export const useTranslation = () => ({ t, i18n: { language: "en" } });
@@ -78,17 +79,22 @@ function dispatch(element, type, init = {}) {
 
 const settle = () => React.act(async () => new Promise((resolve) => setImmediate(resolve)));
 
-async function renderUploadAudio(t) {
+async function renderUploadAudio(
+  t,
+  { affiliate = false, batch = {}, electronAPI = {}, mocks = {} } = {}
+) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
-  const calls = { browses: [], added: [] };
+  const calls = { browses: [], added: [], checkouts: 0 };
+  let candidate = { link: "", clickId: "creator-click", saved: false };
   globalThis.__uploadBatch = {
     isProcessing: false,
     hasQueue: false,
     queue: [],
     addFiles: (items) => calls.added.push(items),
+    ...batch,
   };
   t.after(() => delete globalThis.__uploadBatch);
   installBrowserGlobals(t, {
@@ -102,6 +108,15 @@ async function renderUploadAudio(t) {
         getDiarizationModelStatus: async () => ({ modelsDownloaded: false }),
         cancelUrlDownload() {},
         deleteTempFile() {},
+        getAffiliateCandidate: async () => ({
+          config: { domain: "try.openwhispr.com" },
+          candidate,
+          generation: 7,
+        }),
+        saveAffiliateCandidate: async (input) => {
+          candidate = input;
+        },
+        ...electronAPI,
       },
     },
   });
@@ -110,8 +125,33 @@ async function renderUploadAudio(t) {
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-upload-audio-drop-zone-test-",
     noExternal: ["react-i18next"],
-    mockModules: MOCKS,
+    mockModules: {
+      ...MOCKS,
+      ...(affiliate
+        ? {
+            "/hooks/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: true, user: {id:'a'} });`,
+            "/hooks/useUsage": `export const useUsage = () => ({ hasPaidAccessOptimistic: false, openCheckout: () => globalThis.__uploadCheckout() });`,
+            "/services/managedTranscription": `export const isManagedTranscriptionActive = () => false;`,
+            "/stores/enterpriseIdentityStore": `export const useManagedScopeResolution = () => ({kind: "unmanaged"});`,
+            "/stores/settingsStore":
+              MOCKS["/stores/settingsStore"] +
+              `\nuseSettingsStore.getState = () => ({telemetryEnabled: false});`,
+            "/lib/authRequestContext": `export const getValidatedAuthGeneration=()=>7; export const getAuthRequestContextSnapshot=()=>({observedGeneration:7}); export const subscribeAuthRequestContext=()=>()=>{};`,
+            "/services/cloudApi": `export const cloudGetForAuthGeneration=async()=>({data:{persisted:false,status:null}}); export const cloudPostForAuthGeneration=async()=>{throw new Error('No tracking consent');};`,
+          }
+        : {}),
+      ...mocks,
+    },
   });
+  if (affiliate) {
+    const { prepareAffiliateCheckout } = await vite.ssrLoadModule("/stores/affiliateStore.ts");
+    globalThis.__uploadCheckout = async () => {
+      if (!(await prepareAffiliateCheckout())) return { success: false };
+      calls.checkouts++;
+      return { success: true };
+    };
+    t.after(() => delete globalThis.__uploadCheckout);
+  }
   const { default: UploadAudioView } = await vite.ssrLoadModule(
     "/components/notes/UploadAudioView.tsx"
   );
@@ -127,6 +167,26 @@ async function renderUploadAudio(t) {
     );
   return { container, calls, zone, usePolicyStore };
 }
+
+test("an upload upgrade exposes and clears a click-only referral before retrying checkout", async (t) => {
+  const { container, calls, zone } = await renderUploadAudio(t, { affiliate: true });
+  await React.act(async () =>
+    dispatch(zone(), "drop", {
+      dataTransfer: { files: [{ name: "meeting.mp3", size: 30 * 1024 * 1024 }] },
+    })
+  );
+  const button = (label) =>
+    findElement(container, (node) => node.tagName === "BUTTON" && node.textContent === label);
+  assert.ok(button("notes.upload.upgrade"));
+  await React.act(async () => dispatch(button("notes.upload.upgrade"), "click"));
+  assert.equal(calls.checkouts, 0);
+  assert.match(container.textContent, /affiliate\.privacy/);
+  assert.ok(button("affiliate.remove"));
+  await React.act(async () => dispatch(button("affiliate.remove"), "click"));
+  assert.doesNotMatch(container.textContent, /affiliate\.privacy/);
+  await React.act(async () => dispatch(button("notes.upload.upgrade"), "click"));
+  assert.equal(calls.checkouts, 1);
+});
 
 test("the upload drop zone is a keyboard button that browses on Enter and Space", async (t) => {
   const { calls, zone } = await renderUploadAudio(t);
@@ -231,4 +291,56 @@ test("the shared upload zone blocks restricted inputs and resumes when policy al
     })
   );
   assert.match(container.textContent, /allowed\.mp3/);
+});
+
+test("the default Meetings folder and its subfolders are listed but take no uploads", async (t) => {
+  const folder = (id, name, is_default = 0, parent_folder_id = null) => ({
+    id,
+    name,
+    is_default,
+    space_id: 1,
+    parent_folder_id,
+  });
+  const { container } = await renderUploadAudio(t, {
+    batch: { hasQueue: true, hasPending: true },
+    electronAPI: {
+      getSpaces: async () => [{ id: 1, kind: "private" }],
+      getFolders: async () => [
+        folder(3, "Client A", 0, 2),
+        folder(1, "Personal", 1),
+        folder(2, "Meetings", 1),
+        folder(4, "Work"),
+        folder(5, "Q1", 0, 4),
+      ],
+    },
+    mocks: {
+      "/ui/select": `
+        import { createElement } from "react";
+        const pass = ({ children }) => children;
+        export const Select = pass;
+        export const SelectTrigger = pass;
+        export const SelectValue = () => null;
+        export const SelectContent = pass;
+        export const SelectSeparator = () => null;
+        export const SelectItem = ({ value, disabled, children }) =>
+          createElement("div", { "data-folder": value, "aria-disabled": String(!!disabled) }, children);
+      `,
+    },
+  });
+  await settle();
+
+  const options = [];
+  findElement(container, (node) => {
+    if (node.getAttribute("data-folder")) {
+      options.push([node.getAttribute("data-folder"), node.getAttribute("aria-disabled")]);
+    }
+    return false;
+  });
+  assert.deepEqual(options, [
+    ["1", "false"],
+    ["2", "true"],
+    ["3", "true"],
+    ["4", "false"],
+    ["5", "false"],
+  ]);
 });

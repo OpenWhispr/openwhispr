@@ -70,6 +70,7 @@ export interface RemoteFolder {
   deleted_at: string | null;
   updated_at: string;
   // Scope fields declared for a later task; not yet populated by pull/apply.
+  private_workspace_id?: string | null;
   space_id?: string | null;
   workspace_id?: string | null;
   previous_space_id?: string | null;
@@ -103,6 +104,7 @@ export interface RemoteNote {
   created_at?: string;
   updated_at: string;
   // Scope fields declared for a later task; not yet populated by pull/apply.
+  private_workspace_id?: string | null;
   space_id?: string | null;
   workspace_id?: string | null;
   previous_space_id?: string | null;
@@ -170,6 +172,12 @@ export interface ChatCandidateOptions {
   window?: ChatNoteWindow;
 }
 
+export interface CreateFolderOptions {
+  privateWorkspaceId?: string | null;
+  isDefault?: boolean;
+  sortOrder?: number;
+}
+
 export interface NotesRepository {
   // Existing methods
   getFolders(): Folder[];
@@ -192,8 +200,12 @@ export interface NotesRepository {
   /** Folders belonging to one space — the private space's own list is getPrivateFolders(). */
   getFoldersBySpace(spaceId: number): Folder[];
   getFolderCounts(): Record<number, number>;
-  /** Defaults to the private space; pass `spaceId` to create the folder inside a team space. */
-  createFolder(name: string, spaceId?: number): Folder;
+  /**
+   * Defaults to the private space; pass `spaceId` to create the folder inside a team space.
+   * A private folder takes `options.privateWorkspaceId`, the workspace whose Private it is in
+   * (null: the default workspace's).
+   */
+  createFolder(name: string, spaceId?: number, options?: CreateFolderOptions): Folder;
   renameFolder(id: number, name: string): void;
   deleteFolder(id: number): void;
   getNotesByFolder(folderId: number): Note[];
@@ -282,6 +294,10 @@ export interface NotesRepository {
    * still holds unpushed local work.
    */
   forkNoteToPrivate(noteId: number): void;
+  /** Retry a refused folderless create in the default Private, if its identity/filing is unchanged. */
+  resetRejectedNotePrivateWorkspace(pushed: Note): void;
+  /** Retry a refused folder create in the default Private, if its identity/placement is unchanged. */
+  resetRejectedFolderPrivateWorkspace(pushed: Folder): void;
   markFolderPushed(
     localId: number,
     remoteId: string,
@@ -392,6 +408,8 @@ export interface NotesRepository {
   getSegments(noteId: number): Segment[];
   /** Atomically replaces ALL segments for a note (hard-deletes existing, then inserts). Use after a diarize/merge pass. */
   replaceSegments(noteId: number, segments: NewSegment[]): void;
+  /** Inserts local-only draft segments (pendingSync 0) without touching existing ones or the note's sync flag, so a half-recorded meeting is never pushed. replaceSegments, at Stop or in recovery, makes the transcript syncable. */
+  appendSegments(noteId: number, segments: NewSegment[]): void;
 
   // Cross-device transcript sync (desktop <-> mobile via notes.transcript)
   /** Rebuilds a note's segments + speakers from desktop-shape transcript JSON and stores the raw string. */

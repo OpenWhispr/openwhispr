@@ -229,6 +229,8 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[]) =>
       text: segment.text,
       source: segment.source,
       timestamp: segment.timestamp,
+      recordingStartTimestamp: segment.recordingStartTimestamp,
+      endTimestamp: segment.endTimestamp,
       speaker: segment.speaker,
       speakerName: segment.speakerName,
       recorderName: segment.recorderName,

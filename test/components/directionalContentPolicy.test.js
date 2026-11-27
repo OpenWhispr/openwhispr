@@ -45,7 +45,7 @@ test("dynamic prose and identity values keep their own direction", () => {
     ["src/components/SettingsPage.tsx", /<bdi dir="ltr">\{user\.email\}<\/bdi>/],
     [
       "src/components/settings/WorkspaceMembersTab.tsx",
-      /<p\s+dir="auto"[^>]*>\s*\{member\.name \|\| member\.email\}/,
+      /<p\s+dir="auto"[^>]*>\s*<HighlightMatch\s+text=\{member\.name \|\| member\.email\}/,
     ],
     [
       "src/components/settings/WorkspaceMembersTab.tsx",
@@ -55,7 +55,10 @@ test("dynamic prose and identity values keep their own direction", () => {
       "src/components/notes/UploadAudioView.tsx",
       /<p\s+dir="auto"[^>]*>\s*\{downloadProgress\.title\}/,
     ],
-    ["src/components/notes/UploadAudioView.tsx", /<span\s+dir="auto"[^>]*>\s*\{f\.name\}/],
+    [
+      "src/components/notes/UploadAudioView.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{folderPathLabel\(f, folders, t\)\}/,
+    ],
   ];
 
   for (const [file, pattern] of expectations) {
@@ -87,7 +90,10 @@ test("technical output values remain LTR inside an Arabic document", () => {
       "src/components/settings/WorkspaceBillingCard.tsx",
       /<span\s+dir="ltr"[^>]*>\s*\{seatsUsed\} \/ \{seatsTotal\}/,
     ],
-    ["src/components/settings/WorkspaceMembersTab.tsx", /<bdi dir="ltr">\{member\.email\}<\/bdi>/],
+    [
+      "src/components/settings/WorkspaceMembersTab.tsx",
+      /<bdi dir="ltr">\s*<HighlightMatch text=\{member\.email\}/,
+    ],
     [
       "src/components/settings/WorkspaceInvitationsTab.tsx",
       /<bdi dir="ltr">\{invitation\.email\}<\/bdi>/,
@@ -112,7 +118,7 @@ test("technical output values remain LTR inside an Arabic document", () => {
     ["src/components/ui/ModelCardList.tsx", /<span\s+dir="ltr"[\s\S]*?\{model\.label\}/],
     [
       "src/components/onboarding/ProviderSetupStep.tsx",
-      /<span\s+dir="ltr">\s*\{models\.find[\s\S]*?\?\? selectedModel\}/,
+      /<span\s+dir="ltr">\s*\{models\.find\([^{}]*?=== (\w+)\)\?\.name \?\? \1\}\s*<\/span>/,
     ],
     [
       "src/components/onboarding/RequiredModelDownloadStep.tsx",
@@ -221,7 +227,7 @@ test("user-authored names and previews detect direction at their display boundar
     ["src/components/notes/NoteEditor.tsx", /<span\s+dir="auto"[^>]*>\s*\{folderName\}/],
     [
       "src/components/notes/NoteEditor.tsx",
-      /<span\s+dir="auto"[^>]*>\s*\{defaultFolderDisplayName\(folder, t\)\}/,
+      /<span\s+dir="auto"[^>]*>\s*\{folderPathLabel\(folder, folders, t\)\}/,
     ],
     ["src/components/skills/SkillCards.tsx", /<p\s+dir="auto"[^>]*>\s*\{skill\.displayName\}/],
     ["src/components/skills/SkillCards.tsx", /<p\s+dir="auto"[^>]*>\s*\{skill\.description\}/],

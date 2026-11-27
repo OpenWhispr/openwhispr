@@ -116,6 +116,7 @@ test("each connector that isn't connected or needs a reconnect is named on its o
           // A build without GitHub's client hides it, so it's never named.
           github: { ...READY, connected: false, configured: false },
           gmail: { ...READY, connected: false },
+          salesforce: { ...READY, connected: false },
         },
       },
     })
@@ -126,6 +127,7 @@ test("each connector that isn't connected or needs a reconnect is named on its o
       ["Calendar", "notConnected", LOCATIONS.calendars],
       ["Slack", "notConnected", LOCATIONS.connectors],
       ["Linear", "needsReconnect", LOCATIONS.connectors],
+      ["Salesforce", "notConnected", LOCATIONS.connectors],
     ]
   );
 });
@@ -156,7 +158,7 @@ test("every connector entry is one that sends for the user, and nothing else is"
     signedOut.map((item) => [item.name, item.delivers === true]),
     [
       ["Web search", false],
-      ["Integrations (Email, Slack, Linear, GitHub)", true],
+      ["Integrations (Email, Slack, Linear, GitHub, Salesforce)", true],
     ]
   );
   const notConnected = resolveUnavailableCapabilities(
@@ -214,6 +216,93 @@ test("a connector that can't send still gets the text written, with a pitch at t
   assert.match(delivering, /^- Integrations: turned off by the user's organization/m);
 });
 
+test("the closing line offers connecting only when the user can connect", async () => {
+  const { describeUnavailable } = await load();
+  const notConnected = describeUnavailable([
+    { name: "Slack", reason: "notConnected", where: LOCATIONS.connectors, delivers: true },
+  ]);
+  assert.match(notConnected, /"Connect Slack and I can post this for you\."/);
+
+  const needsPlan = describeUnavailable([
+    { name: "Integrations", reason: "planRequired", where: LOCATIONS.plans, delivers: true },
+  ]);
+  assert.doesNotMatch(needsPlan, /Connect Slack and I can post this/);
+});
+
+test("an expired paid connector keeps the reconnect closing line", async () => {
+  const { resolveUnavailableCapabilities, describeUnavailable } = await load();
+  const text = describeUnavailable(
+    resolveUnavailableCapabilities(
+      input({
+        connectors: {
+          ...input().connectors,
+          statuses: { slack: { ...READY, needsReconnect: true } },
+        },
+      })
+    )
+  );
+
+  assert.match(text, /still write it in full in your reply/);
+  assert.match(text, /"Connect Slack and I can post this for you\."/);
+  assert.ok(
+    text.includes(
+      `- Slack: the connection has expired; the user can reconnect it in ${LOCATIONS.connectors}.`
+    )
+  );
+  assert.doesNotMatch(text, /never on connecting it|paid OpenWhispr plan/);
+});
+
+test("signed-out connector guidance asks for sign-in instead of connecting", async () => {
+  const { resolveUnavailableCapabilities, describeUnavailable } = await load();
+  const text = describeUnavailable(resolveUnavailableCapabilities(input({ isSignedIn: false })));
+
+  assert.match(text, /still write it in full in your reply/);
+  assert.match(text, /on what sending it needs, as its line below says, never on connecting it/);
+  assert.ok(
+    text.includes(
+      `- Integrations (Email, Slack, Linear, GitHub, Salesforce): needs the user to sign in to OpenWhispr in ${LOCATIONS.account}.`
+    )
+  );
+  assert.doesNotMatch(text, /Connect Slack and I can post this/);
+});
+
+test("a loading connector policy asks a paid user to retry instead of connecting", async () => {
+  const { resolveUnavailableCapabilities, describeUnavailable } = await load();
+  const text = describeUnavailable(
+    resolveUnavailableCapabilities(input({ connectors: { ...input().connectors, allowed: false } }))
+  );
+
+  assert.match(text, /still write it in full in your reply/);
+  assert.match(text, /on what sending it needs, as its line below says, never on connecting it/);
+  assert.match(
+    text,
+    /^- Integrations .*: not available right now; the user can try again in a moment\.$/m
+  );
+  assert.match(text, /on a free plan, for example:/);
+  assert.doesNotMatch(text, /Connect Slack and I can post this/);
+});
+
+test("an organization-blocked connector omits the closing pitch on either plan", async () => {
+  const { resolveUnavailableCapabilities, describeUnavailable } = await load();
+  for (const hasPlan of [false, true]) {
+    const text = describeUnavailable(
+      resolveUnavailableCapabilities(
+        input({
+          connectors: { ...input().connectors, hasPlan, allowed: false, blockedByOrg: true },
+        })
+      )
+    );
+
+    assert.match(text, /still write it in full in your reply/);
+    assert.match(text, /leave that sentence out when only their admin can turn it on/);
+    assert.match(
+      text,
+      /^- Integrations .*: turned off by the user's organization; only their admin can turn it back on\.$/m
+    );
+    assert.doesNotMatch(text, /Connect Slack and I can post this/);
+  }
+});
+
 test("a model too small for tools may still use the prompt's notes and write text", async () => {
   const { describeUnavailable } = await load();
   const text = describeUnavailable([
@@ -230,4 +319,22 @@ test("models without tools point to the existing documentation site", async () =
   ]);
   assert.match(text, /https:\/\/docs\.openwhispr\.com/);
   assert.doesNotMatch(text, /Support → OpenWhispr Help/);
+});
+
+test("Salesforce can offer main's connection card when its configured login is missing", async () => {
+  const { resolveUnavailableCapabilities, CONNECTION_TARGET_NAMES } = await load();
+  const unavailable = resolveUnavailableCapabilities(
+    input({
+      connectionTargets: ["salesforce"],
+      connectors: {
+        ...input().connectors,
+        statuses: { salesforce: { ...READY, connected: false } },
+      },
+    })
+  );
+  assert.equal(CONNECTION_TARGET_NAMES.salesforce, "Salesforce");
+  assert.deepEqual(
+    unavailable.map(({ name, connectTarget }) => ({ name, connectTarget })),
+    [{ name: "Salesforce", connectTarget: "salesforce" }]
+  );
 });

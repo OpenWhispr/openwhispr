@@ -9,6 +9,7 @@ import type { InferenceMode } from "./electron";
  * `allowedByokProviders`) so the server enum can grow ahead of this build.
  */
 
+export type UpdateMode = "user_choice" | "always_on" | "it_managed";
 export type LocalHistoryMode = "user_choice" | "always_on" | "always_off";
 export type ExternalSharingMode = "allowed" | "domain_only" | "disabled";
 
@@ -46,6 +47,8 @@ export interface OrgPolicy {
      * servers that predate the field; absent means allowed.
      */
     connectorsEnabled?: boolean;
+    /** Personal API keys and MCP access. Absent on older servers means allowed. */
+    apiAccessEnabled?: boolean;
     /**
      * Retired agent-memory gate: the API stopped using it when it removed
      * assistant memory (openwhispr-api#243), but older API versions may still
@@ -53,8 +56,13 @@ export interface OrgPolicy {
      */
     memoryEnabled?: boolean;
   };
-  /** Absent on older servers; absent means automatic. Unknown strings suppress auto-start. */
-  meetings?: { transcriptionStart?: string };
+  meetings?: {
+    /** Absent means automatic. Unknown values require a manual start. */
+    transcriptionStart?: string;
+    /** Absent means allowed. Unknown values require an internal invite. */
+    externalAttendees?: string;
+    internalDomains?: string[];
+  };
   sharing: {
     externalLinkSharing: ExternalSharingMode;
   };
@@ -70,8 +78,28 @@ export interface OrgPolicy {
    * policy — unknown ids are filtered at enforcement time.
    */
   requiredLocalModels?: string[];
+  /** Optional for older servers; unknown future strings behave as user_choice. */
+  updates?: { mode?: string };
   minAppVersion: string | null;
 }
 
 /** Which allowlist a mode/provider check applies to. */
 export type PolicyScope = "transcription" | "llm";
+
+export interface EffectivePolicySnapshot {
+  success: boolean;
+  status: "loading" | "managed" | "unmanaged" | "error";
+  revision: number;
+  accountId: string | null;
+  authGeneration: number;
+  managed: boolean;
+  policy: OrgPolicy | null;
+  deviceReady: boolean;
+  deviceManaged: boolean;
+  workspaceManaged: boolean;
+  workspaceRequired: boolean;
+  localOnly: boolean;
+  requireSignIn: boolean;
+  code?: string;
+  policyUpdatedAt?: string | null;
+}

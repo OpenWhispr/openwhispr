@@ -8,17 +8,23 @@ const os = require("os");
 const debugLogger = require("./debugLogger");
 const { getLinuxSessionInfo } = require("./linuxSession");
 const { getCosmicActiveAppId } = require("./cosmicToplevel");
+const { PRIVACY_SETTINGS_URL, usesAppControlPicker } = require("./macAppControl");
+const { queryPostEventAccess } = require("./settingsWindowState");
 
 const CACHE_TTL_MS = 30000;
 
-// isTrustedAccessibilityClient() is a cheap synchronous syscall, so the cache
-// only exists to debounce the dialog shown on denial.
+// isTrustedAccessibilityClient() is a cheap synchronous syscall (the macOS 27.3
+// input-posting check behind it spawns a short-lived helper), so the cache only
+// exists to debounce the dialog shown on denial.
 const ACCESSIBILITY_CHECK_TTL_MS = 5000;
+
+function pasteCancelledError() {
+  return Object.assign(new Error("Paste cancelled"), { code: "PASTE_CANCELLED" });
+}
 
 const PASTE_DELAYS = {
   darwin: 120,
   win32_fast: 10,
-  win32_nircmd: 30,
   win32_pwsh: 40,
   linux: 50,
 };
@@ -47,7 +53,6 @@ const RESTORE_DELAYS = {
   // transient marker) can't trigger a restore before the target pastes.
   darwin_after_read: 50,
   darwin: 450,
-  win32_nircmd: 500,
   win32_pwsh: 500,
   linux: 800,
   linux_kde_wayland: 1200,
@@ -146,9 +151,8 @@ function spawnWlCopy(flags, text) {
 class ClipboardManager {
   constructor() {
     this.accessibilityCache = { value: null, expiresAt: 0 };
+    this.postEventAccess = null;
     this.commandAvailabilityCache = new Map();
-    this.nircmdPath = null;
-    this.nircmdChecked = false;
     this.fastPastePath = null;
     this.fastPasteChecked = false;
     this.winFastPastePath = null;
@@ -369,48 +373,6 @@ class ClipboardManager {
     return [...new Set(texts.filter((text) => typeof text === "string"))];
   }
 
-  getNircmdPath() {
-    if (this.nircmdChecked) {
-      return this.nircmdPath;
-    }
-
-    this.nircmdChecked = true;
-
-    if (process.platform !== "win32") {
-      return null;
-    }
-
-    const possiblePaths = [
-      ...(process.resourcesPath ? [path.join(process.resourcesPath, "bin", "nircmd.exe")] : []),
-      path.join(__dirname, "..", "..", "resources", "bin", "nircmd.exe"),
-      path.join(process.cwd(), "resources", "bin", "nircmd.exe"),
-    ];
-
-    for (const nircmdPath of possiblePaths) {
-      try {
-        if (fs.existsSync(nircmdPath)) {
-          this.safeLog(`✅ Found nircmd.exe at: ${nircmdPath}`);
-          this.nircmdPath = nircmdPath;
-          return nircmdPath;
-        }
-      } catch {}
-    }
-
-    this.safeLog("⚠️ nircmd.exe not found, will use PowerShell fallback");
-    return null;
-  }
-
-  getNircmdStatus() {
-    if (process.platform !== "win32") {
-      return { available: false, reason: "Not Windows" };
-    }
-    const nircmdPath = this.getNircmdPath();
-    return {
-      available: !!nircmdPath,
-      path: nircmdPath,
-    };
-  }
-
   _resolveNativeBinary(binaryName, platform, cacheKeyChecked, cacheKeyPath) {
     if (this[cacheKeyChecked]) {
       return this[cacheKeyPath];
@@ -570,9 +532,26 @@ class ClipboardManager {
     }
   }
 
-  _runPortalPaste(fastPasteBinary, { shiftInsert = false, terminal = false, copy = false } = {}) {
+  async _runPortalPaste(fastPasteBinary, options = {}) {
+    const { shiftInsert = false, terminal = false, copy = false, signal, validateTarget } = options;
+    if (options.validateTarget) await this._validatePasteTarget(options);
+    if (options.isCancelled?.()) throw pasteCancelledError();
     return new Promise((resolve, reject) => {
       const args = ["--portal"];
+      if (signal || validateTarget) {
+        // An older helper must never receive a cancellation signal in the
+        // middle of its modifier chord. Only this protocol treats EOF safely.
+        const capabilities = spawnSync(fastPasteBinary, ["--capabilities"], { timeout: 700 });
+        if (
+          capabilities.status !== 0 ||
+          !/\bportal-cancel-v1\b/.test(capabilities.stdout?.toString() ?? "") ||
+          (validateTarget && !/\bportal-approval-v1\b/.test(capabilities.stdout?.toString() ?? ""))
+        ) {
+          return reject(new Error("portal-cancellation-unavailable"));
+        }
+        args.push("--cancel-on-stdin-close");
+        if (validateTarget) args.push("--await-paste-approval");
+      }
       if (copy) args.push("--copy");
       if (shiftInsert) args.push("--shift-insert");
       else if (terminal) args.push("--terminal");
@@ -591,9 +570,38 @@ class ClipboardManager {
       const proc = spawn(fastPasteBinary, args);
       let stdout = "";
       let stderr = "";
+      let validationError = null;
+      let awaitingValidation = false;
+      let closed = false;
+      const cancel = () => {
+        if (!closed) proc.stdin.end();
+      };
+      const cleanup = () => signal?.removeEventListener("abort", cancel);
+      if (signal || validateTarget) proc.stdin.on("error", () => {});
+      if (signal) {
+        signal.addEventListener("abort", cancel, { once: true });
+        if (signal.aborted) cancel();
+      }
 
       proc.stdout?.on("data", (data) => {
         stdout += data.toString();
+        if (validateTarget && !awaitingValidation && /^PASTE_READY$/m.test(stdout)) {
+          awaitingValidation = true;
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => {
+            timedOut = true;
+            cancel();
+          }, 5000);
+          this._validatePasteTarget(options).then(
+            () => {
+              if (!timedOut && !closed) proc.stdin.write("1");
+            },
+            (error) => {
+              validationError = error;
+              cancel();
+            }
+          );
+        }
       });
 
       proc.stderr?.on("data", (data) => {
@@ -605,15 +613,28 @@ class ClipboardManager {
       // time. With a saved token the session is pre-approved, so fail fast instead
       // of hanging on a stale RemoteDesktop session that no longer responds (#1614).
       const timeoutMs = restoreToken ? 2500 : 15000;
-      const timeoutId = setTimeout(() => {
+      let timeoutId = setTimeout(() => {
         timedOut = true;
-        killProcess(proc, "SIGKILL");
+        if (signal || validateTarget) cancel();
+        else killProcess(proc, "SIGKILL");
       }, timeoutMs);
 
       proc.on("close", (code) => {
-        if (timedOut) return reject(new Error("linux-fast-paste --portal timed out"));
+        closed = true;
+        cleanup();
         clearTimeout(timeoutId);
-        const newToken = stdout.trim();
+        if (validationError) return reject(validationError);
+        // A deadline also closes stdin; only a user abort suppresses fallback.
+        // A helper that already committed its input must still count as success.
+        if (timedOut && (!signal || (code !== 0 && !signal.aborted))) {
+          return reject(new Error("linux-fast-paste --portal timed out"));
+        }
+        if (code === 7) return reject(pasteCancelledError());
+        const newToken = stdout
+          .split(/\r?\n/)
+          .filter((line) => line && line !== "PASTE_READY")
+          .join("\n")
+          .trim();
         if (newToken) {
           this._savePortalToken(newToken);
         }
@@ -636,6 +657,8 @@ class ClipboardManager {
       });
 
       proc.on("error", (error) => {
+        closed = true;
+        cleanup();
         if (timedOut) return;
         clearTimeout(timeoutId);
         reject(error);
@@ -812,7 +835,10 @@ class ClipboardManager {
     });
   }
 
-  _runLinuxPasteCommand(command, args, label, { expectedOutput } = {}) {
+  async _runLinuxPasteCommand(command, args, label, options = {}) {
+    if (options.validateTarget) await this._validatePasteTarget(options);
+    if (options.isCancelled?.()) throw pasteCancelledError();
+    const { expectedOutput } = options;
     return new Promise((resolve, reject) => {
       debugLogger.debug("Attempting Linux paste command", { command, args, label }, "clipboard");
       const proc = spawn(command, args);
@@ -1036,18 +1062,29 @@ class ClipboardManager {
     }
   }
 
+  async _validatePasteTarget(options) {
+    if (options.isCancelled?.()) throw pasteCancelledError();
+    if (options.validateTarget && !(await options.validateTarget())) {
+      if (options.isCancelled?.()) throw pasteCancelledError();
+      throw Object.assign(new Error("Paste target changed"), { code: "PASTE_TARGET_CHANGED" });
+    }
+    if (options.isCancelled?.()) throw pasteCancelledError();
+  }
+
   async _pasteText(text, options = {}) {
     const startTime = Date.now();
     const platform = process.platform;
     let method = "unknown";
     const webContents = options.webContents;
     const allowClipboardFallback = options.allowClipboardFallback === true;
+    let originalClipboard = null;
+    let originalPrimary = null;
 
     try {
+      if (options.isCancelled?.()) throw pasteCancelledError();
       const shouldRestore = options.restoreClipboard !== false;
-      const originalClipboard = shouldRestore ? this._saveClipboard() : null;
-      const originalPrimary =
-        platform === "linux" && shouldRestore ? this._readPrimarySelection() : null;
+      originalClipboard = shouldRestore ? this._saveClipboard() : null;
+      originalPrimary = platform === "linux" && shouldRestore ? this._readPrimarySelection() : null;
       if (shouldRestore) {
         this.safeLog("💾 Saved original clipboard:", originalClipboard.type);
       }
@@ -1081,6 +1118,7 @@ class ClipboardManager {
         const hasPermissions = await this.checkAccessibilityPermissions(
           allowClipboardFallback || options.silentAccessibilityCheck === true
         );
+        if (options.isCancelled?.()) throw pasteCancelledError();
 
         if (!hasPermissions) {
           if (fastPasteHoldsTranscript) clipboard.writeText(text);
@@ -1109,6 +1147,10 @@ class ClipboardManager {
           });
           method = pasteResult?.method || method;
         } catch (firstError) {
+          if (firstError?.code === "PASTE_TARGET_CHANGED") throw firstError;
+          if (firstError?.code === "PASTE_CANCELLED" || options.isCancelled?.()) {
+            throw pasteCancelledError();
+          }
           if (firstError?.pasteMayHavePosted) throw firstError;
           this.safeLog("⚠️ First paste attempt failed, retrying...", firstError?.message);
           clipboard.writeText(text);
@@ -1120,14 +1162,9 @@ class ClipboardManager {
           method = pasteResult?.method || method;
         }
       } else if (platform === "win32") {
-        const winFastPaste = this.resolveWindowsFastPasteBinary();
-        if (winFastPaste) {
-          method = "sendinput";
-        } else {
-          const nircmdPath = this.getNircmdPath();
-          method = nircmdPath ? "nircmd" : "powershell";
-        }
+        method = this.resolveWindowsFastPasteBinary() ? "sendinput" : "powershell";
         pasteResult = await this.pasteWindows(originalClipboard, {
+          ...options,
           expectedClipboardText: text,
           targetWindow: options.targetWindow,
         });
@@ -1161,6 +1198,41 @@ class ClipboardManager {
       });
       return pasteResult || { restoreComplete: Promise.resolve() };
     } catch (error) {
+      if (
+        error?.code === "PASTE_TARGET_CHANGED" ||
+        error?.code === "PASTE_CANCELLED" ||
+        options.isCancelled?.()
+      ) {
+        const restoreComplete = (async () => {
+          await this._restoreClipboardAfterDelay(originalClipboard, {
+            delayMs: 0,
+            expectedText: text,
+            restore: () => {
+              if (
+                platform === "linux" &&
+                this._isWayland() &&
+                this._readWaylandClipboardText() !== text
+              )
+                return;
+              if (platform === "linux" && this._isWayland() && originalClipboard.type === "text") {
+                this._writeClipboardWayland(originalClipboard.data, webContents);
+              } else this._restoreClipboard(originalClipboard);
+            },
+          });
+          if (
+            platform === "linux" &&
+            originalPrimary != null &&
+            this._readPrimarySelection() === text
+          ) {
+            this._writePrimarySelection(originalPrimary);
+          }
+        })();
+        return {
+          pasted: false,
+          reason: error?.code === "PASTE_TARGET_CHANGED" ? "target-changed" : "cancelled",
+          restoreComplete,
+        };
+      }
       this.safeLog("❌ Paste operation failed", {
         platform,
         method,
@@ -1181,7 +1253,13 @@ class ClipboardManager {
       useFastPaste && originalClipboard != null && typeof text === "string" ? randomUUID() : null;
 
     return new Promise((resolve, reject) => {
-      setTimeout(() => {
+      setTimeout(async () => {
+        try {
+          if (options.validateTarget) await this._validatePasteTarget(options);
+          if (options.isCancelled?.()) throw pasteCancelledError();
+        } catch (error) {
+          return reject(error);
+        }
         const pasteProcess = useFastPaste
           ? spawn(
               fastPasteBinary,
@@ -1201,7 +1279,7 @@ class ClipboardManager {
         let settleRead = null;
         // Before that, a failed binary leaves the transcript for the fallback or the user.
         const keepTranscript = () => {
-          if (session) clipboard.writeText(text);
+          if (session && !options.isCancelled?.()) clipboard.writeText(text);
         };
 
         if (session) {
@@ -1251,6 +1329,8 @@ class ClipboardManager {
             return;
           }
 
+          if (code !== 0 && options.isCancelled?.()) return reject(pasteCancelledError());
+
           if (code === 0) {
             this.safeLog(`Text pasted successfully via ${useFastPaste ? "CGEvent" : "osascript"}`);
             if (originalClipboard != null) {
@@ -1273,10 +1353,10 @@ class ClipboardManager {
                 "Paste could not resolve the active keyboard layout. Text is copied to clipboard - please paste manually with Cmd+V."
               )
             );
-          } else if (useFastPaste) {
+          } else if (useFastPaste && this.canPasteWithOsascript()) {
             this.safeLog(
               code === 2
-                ? "CGEvent binary lacks accessibility trust, falling back to osascript"
+                ? "CGEvent binary lacks permission to post input, falling back to osascript"
                 : `CGEvent paste failed (code ${code}), falling back to osascript`,
               { stderr: errorOutput.trim() }
             );
@@ -1285,6 +1365,7 @@ class ClipboardManager {
             this.fastPastePath = null;
             this.pasteMacOSWithOsascript(originalClipboard, options).then(resolve).catch(reject);
           } else {
+            if (useFastPaste) keepTranscript();
             this.accessibilityCache = { value: null, expiresAt: 0 };
             const stderr = errorOutput.trim();
             const errorMsg = `Paste failed (code ${code}${stderr ? `: ${stderr}` : ""}). Text is copied to clipboard - please paste manually with Cmd+V.`;
@@ -1301,13 +1382,15 @@ class ClipboardManager {
             settleRead(null);
             return;
           }
-          if (useFastPaste) {
+          if (options.isCancelled?.()) return reject(pasteCancelledError());
+          if (useFastPaste && this.canPasteWithOsascript()) {
             keepTranscript();
             this.safeLog("CGEvent paste error, falling back to osascript");
             this.fastPasteChecked = true;
             this.fastPastePath = null;
             this.pasteMacOSWithOsascript(originalClipboard, options).then(resolve).catch(reject);
           } else {
+            if (useFastPaste) keepTranscript();
             const errorMsg = `Paste command failed: ${error.message}. Text is copied to clipboard - please paste manually with Cmd+V.`;
             reject(new Error(errorMsg));
           }
@@ -1355,6 +1438,8 @@ class ClipboardManager {
   }
 
   async pasteMacOSWithOsascript(originalClipboard, options = {}) {
+    if (options.validateTarget) await this._validatePasteTarget(options);
+    if (options.isCancelled?.()) throw pasteCancelledError();
     return new Promise((resolve, reject) => {
       const pasteProcess = spawn("osascript", [
         "-e",
@@ -1415,12 +1500,18 @@ class ClipboardManager {
       return this.pasteWithFastPaste(fastPastePath, originalClipboard, options);
     }
 
-    return this.pasteWithNircmdOrPowerShell(originalClipboard, options);
+    return this.pasteWithPowerShell(originalClipboard, options);
   }
 
   async pasteWithFastPaste(fastPastePath, originalClipboard, options = {}) {
     return new Promise((resolve, reject) => {
-      setTimeout(() => {
+      setTimeout(async () => {
+        try {
+          if (options.validateTarget) await this._validatePasteTarget(options);
+          if (options.isCancelled?.()) throw pasteCancelledError();
+        } catch (error) {
+          return reject(error);
+        }
         let hasTimedOut = false;
         const startTime = Date.now();
 
@@ -1465,7 +1556,7 @@ class ClipboardManager {
             if (originalClipboard != null) {
               resolve({
                 restoreComplete: this._restoreClipboardAfterDelay(originalClipboard, {
-                  delayMs: RESTORE_DELAYS.win32_nircmd,
+                  delayMs: RESTORE_DELAYS.win32_pwsh,
                   expectedText: options.expectedClipboardText,
                 }),
               });
@@ -1473,92 +1564,11 @@ class ClipboardManager {
               resolve({ restoreComplete: Promise.resolve() });
             }
           } else {
+            if (options.isCancelled?.()) return reject(pasteCancelledError());
             this.safeLog(
-              `❌ Windows fast-paste failed (code ${code}), falling back to nircmd/PowerShell`,
+              `❌ Windows fast-paste failed (code ${code}), falling back to PowerShell`,
               { elapsedMs: elapsed, stderr: stderrData.trim() }
             );
-            this.pasteWithNircmdOrPowerShell(originalClipboard, options)
-              .then(resolve)
-              .catch(reject);
-          }
-        });
-
-        pasteProcess.on("error", (error) => {
-          if (hasTimedOut) return;
-          clearTimeout(timeoutId);
-          this.safeLog("❌ Windows fast-paste error, falling back to nircmd/PowerShell", {
-            elapsedMs: Date.now() - startTime,
-            error: error.message,
-          });
-          this.pasteWithNircmdOrPowerShell(originalClipboard, options).then(resolve).catch(reject);
-        });
-
-        const timeoutId = setTimeout(() => {
-          hasTimedOut = true;
-          this.safeLog("⏱️ Windows fast-paste timeout, falling back to nircmd/PowerShell");
-          killProcess(pasteProcess, "SIGKILL");
-          pasteProcess.removeAllListeners();
-          this.pasteWithNircmdOrPowerShell(originalClipboard, options).then(resolve).catch(reject);
-        }, 2000);
-      }, PASTE_DELAYS.win32_fast);
-    });
-  }
-
-  async pasteWithNircmdOrPowerShell(originalClipboard, options = {}) {
-    const nircmdPath = this.getNircmdPath();
-    if (nircmdPath) {
-      return this.pasteWithNircmd(nircmdPath, originalClipboard, options);
-    }
-    return this.pasteWithPowerShell(originalClipboard, options);
-  }
-
-  async pasteWithNircmd(nircmdPath, originalClipboard, options = {}) {
-    return new Promise((resolve, reject) => {
-      const pasteDelay = PASTE_DELAYS.win32_nircmd;
-      const restoreDelay = RESTORE_DELAYS.win32_nircmd;
-
-      setTimeout(() => {
-        let hasTimedOut = false;
-        const startTime = Date.now();
-
-        this.safeLog(`⚡ nircmd paste starting (delay: ${pasteDelay}ms)`);
-
-        const pasteProcess = spawn(nircmdPath, ["sendkeypress", "ctrl+v"], {
-          windowsHide: true,
-        });
-
-        let errorOutput = "";
-
-        pasteProcess.stderr.on("data", (data) => {
-          errorOutput += data.toString();
-        });
-
-        pasteProcess.on("close", (code) => {
-          if (hasTimedOut) return;
-          clearTimeout(timeoutId);
-
-          const elapsed = Date.now() - startTime;
-
-          if (code === 0) {
-            this.safeLog(`✅ nircmd paste success`, {
-              elapsedMs: elapsed,
-              restoreDelayMs: restoreDelay,
-            });
-            if (originalClipboard != null) {
-              resolve({
-                restoreComplete: this._restoreClipboardAfterDelay(originalClipboard, {
-                  delayMs: restoreDelay,
-                  expectedText: options.expectedClipboardText,
-                }),
-              });
-            } else {
-              resolve({ restoreComplete: Promise.resolve() });
-            }
-          } else {
-            this.safeLog(`❌ nircmd failed (code ${code}), falling back to PowerShell`, {
-              elapsedMs: elapsed,
-              stderr: errorOutput,
-            });
             this.pasteWithPowerShell(originalClipboard, options).then(resolve).catch(reject);
           }
         });
@@ -1566,9 +1576,9 @@ class ClipboardManager {
         pasteProcess.on("error", (error) => {
           if (hasTimedOut) return;
           clearTimeout(timeoutId);
-          const elapsed = Date.now() - startTime;
-          this.safeLog(`❌ nircmd error, falling back to PowerShell`, {
-            elapsedMs: elapsed,
+          if (options.isCancelled?.()) return reject(pasteCancelledError());
+          this.safeLog("❌ Windows fast-paste error, falling back to PowerShell", {
+            elapsedMs: Date.now() - startTime,
             error: error.message,
           });
           this.pasteWithPowerShell(originalClipboard, options).then(resolve).catch(reject);
@@ -1576,13 +1586,13 @@ class ClipboardManager {
 
         const timeoutId = setTimeout(() => {
           hasTimedOut = true;
-          const elapsed = Date.now() - startTime;
-          this.safeLog(`⏱️ nircmd timeout, falling back to PowerShell`, { elapsedMs: elapsed });
+          this.safeLog("⏱️ Windows fast-paste timeout, falling back to PowerShell");
           killProcess(pasteProcess, "SIGKILL");
           pasteProcess.removeAllListeners();
+          if (options.isCancelled?.()) return reject(pasteCancelledError());
           this.pasteWithPowerShell(originalClipboard, options).then(resolve).catch(reject);
         }, 2000);
-      }, pasteDelay);
+      }, PASTE_DELAYS.win32_fast);
     });
   }
 
@@ -1591,7 +1601,13 @@ class ClipboardManager {
       const pasteDelay = PASTE_DELAYS.win32_pwsh;
       const restoreDelay = RESTORE_DELAYS.win32_pwsh;
 
-      setTimeout(() => {
+      setTimeout(async () => {
+        try {
+          if (options.validateTarget) await this._validatePasteTarget(options);
+          if (options.isCancelled?.()) throw pasteCancelledError();
+        } catch (error) {
+          return reject(error);
+        }
         let hasTimedOut = false;
         const startTime = Date.now();
 
@@ -1824,12 +1840,16 @@ class ClipboardManager {
     // keeps it there for a manual paste. The wait comes before target detection:
     // focus can move while a key is held, and the chord must suit the window the
     // paste will actually reach.
-    if ((await this._awaitModifierRelease()).state === "held") {
+    const modifiers = await this._awaitModifierRelease();
+    if (options.isCancelled?.()) throw pasteCancelledError();
+    if (modifiers.state === "held") {
       this.safeLog("⌨️ Modifier keys still held, leaving the text on the clipboard");
       return { pasted: false, reason: "modifiers-held", restoreComplete: Promise.resolve() };
     }
 
-    const targetWindowId = preDetectTargetWindow();
+    // A guarded paste must use the focus the final probe approved. Restoring
+    // a window detected before that probe could redirect it after focus moved.
+    const targetWindowId = options.validateTarget ? null : preDetectTargetWindow();
     let detectedWindowClass = preDetectWindowClass(targetWindowId);
 
     if (!detectedWindowClass && isKde) {
@@ -1848,6 +1868,7 @@ class ClipboardManager {
 
     if (!detectedWindowClass && isCosmic) {
       detectedWindowClass = await getCosmicActiveAppId();
+      if (options.isCancelled?.()) throw pasteCancelledError();
       if (detectedWindowClass) {
         debugLogger.debug("COSMIC window class detected", { detectedWindowClass }, "clipboard");
       }
@@ -1929,10 +1950,13 @@ class ClipboardManager {
     // terminal there its Ctrl+Shift+V: the uinput fallback below is always Shift+Insert.
     if (isWayland && wtypeExists && (isWlroots || (isCosmic && isTerminalTarget))) {
       try {
-        await this._runLinuxPasteCommand("wtype", wtypeArgs, "wtype");
+        await this._runLinuxPasteCommand("wtype", wtypeArgs, "wtype", options);
         this.safeLog("✅ Paste successful using wtype");
         return { method: "wtype", restoreComplete: restoreClipboard() };
       } catch (error) {
+        if (error?.code === "PASTE_TARGET_CHANGED") throw error;
+        if (error?.code === "PASTE_CANCELLED" || options.isCancelled?.())
+          throw pasteCancelledError();
         debugLogger.warn(
           "wtype paste failed, falling back",
           { error: error?.message },
@@ -1962,6 +1986,7 @@ class ClipboardManager {
       for (const dispatcher of dispatchers) {
         try {
           await this._runLinuxPasteCommand("hyprctl", dispatcher.args, dispatcher.label, {
+            ...options,
             expectedOutput: "ok",
           });
           this.safeLog("✅ Paste shortcut dispatched by Hyprland", {
@@ -1970,6 +1995,9 @@ class ClipboardManager {
           });
           return { method: "hyprland-sendshortcut", restoreComplete: restoreClipboard() };
         } catch (error) {
+          if (error?.code === "PASTE_TARGET_CHANGED") throw error;
+          if (error?.code === "PASTE_CANCELLED" || options.isCancelled?.())
+            throw pasteCancelledError();
           lastDispatcherError = error;
           debugLogger.debug(
             "Hyprland dispatcher failed",
@@ -1988,7 +2016,7 @@ class ClipboardManager {
 
     if (linuxFastPaste && !skipFastPasteForKonsole) {
       const spawnFastPaste = (args, label) =>
-        this._runLinuxPasteCommand(linuxFastPaste, args, `linux-fast-paste ${label}`);
+        this._runLinuxPasteCommand(linuxFastPaste, args, `linux-fast-paste ${label}`, options);
 
       if (isWayland) {
         const tryUinputPaste = async () => {
@@ -2003,6 +2031,9 @@ class ClipboardManager {
           try {
             await spawnFastPaste(args, "uinput");
           } catch (error) {
+            if (error?.code === "PASTE_TARGET_CHANGED") throw error;
+            if (error?.code === "PASTE_CANCELLED" || options.isCancelled?.())
+              throw pasteCancelledError();
             // A timeout means uinput hangs in this environment (unlike a fast
             // error, which can be transient) — don't re-pay 2s on every paste.
             if (error?.message?.endsWith(" timed out")) {
@@ -2022,6 +2053,9 @@ class ClipboardManager {
         const tryPortalPaste = async () => {
           try {
             await this._runPortalPaste(linuxFastPaste, {
+              isCancelled: options.isCancelled,
+              signal: options.signal,
+              validateTarget: options.validateTarget,
               // KWin resolves portal keysyms in the active layout only: on a
               // non-Latin layout there is no XK_v, so Ctrl+V arrives as Ctrl alone
               // while the helper still exits 0 (#2055). Insert is in every layout,
@@ -2032,6 +2066,10 @@ class ClipboardManager {
             this.safeLog("✅ Paste successful using linux-fast-paste --portal (RemoteDesktop)");
             return { restoreComplete: restoreClipboard() };
           } catch (portalError) {
+            if (portalError?.code === "PASTE_TARGET_CHANGED") throw portalError;
+            if (portalError?.code === "PASTE_CANCELLED" || options.isCancelled?.())
+              throw pasteCancelledError();
+            if (portalError?.message === "portal-cancellation-unavailable") return false;
             if (portalError?.message === "portal-denied") {
               this.portalDenied = true;
             } else if (
@@ -2085,11 +2123,14 @@ class ClipboardManager {
         if ((isGnome || isKde) && ydotoolDaemonRunning) {
           ydotoolAttempted = true;
           try {
-            await this._runLinuxPasteCommand("ydotool", buildYdotoolArgs(), "ydotool");
+            await this._runLinuxPasteCommand("ydotool", buildYdotoolArgs(), "ydotool", options);
             this.safeLog("✅ Paste successful using ydotool");
             debugLogger.info("Paste successful", { tool: "ydotool" }, "clipboard");
             return { method: "ydotool", restoreComplete: restoreClipboard() };
           } catch (error) {
+            if (error?.code === "PASTE_TARGET_CHANGED") throw error;
+            if (error?.code === "PASTE_CANCELLED" || options.isCancelled?.())
+              throw pasteCancelledError();
             debugLogger.warn(
               "ydotool paste failed, trying uinput",
               { error: error?.message },
@@ -2102,6 +2143,9 @@ class ClipboardManager {
           const uinputPaste = await tryUinputPaste();
           return { method: "uinput", ...uinputPaste };
         } catch (uinputError) {
+          if (uinputError?.code === "PASTE_TARGET_CHANGED") throw uinputError;
+          if (uinputError?.code === "PASTE_CANCELLED" || options.isCancelled?.())
+            throw pasteCancelledError();
           debugLogger.warn("uinput paste failed", { error: uinputError?.message }, "clipboard");
         }
 
@@ -2135,6 +2179,9 @@ class ClipboardManager {
               restoreComplete: restoreClipboard(),
             };
           } catch (xtestError) {
+            if (xtestError?.code === "PASTE_TARGET_CHANGED") throw xtestError;
+            if (xtestError?.code === "PASTE_CANCELLED" || options.isCancelled?.())
+              throw pasteCancelledError();
             if (xtestError?.message?.endsWith(" timed out")) {
               this.xtestTimedOut = true;
             }
@@ -2165,6 +2212,9 @@ class ClipboardManager {
             restoreComplete: restoreClipboard(),
           };
         } catch (error) {
+          if (error?.code === "PASTE_TARGET_CHANGED") throw error;
+          if (error?.code === "PASTE_CANCELLED" || options.isCancelled?.())
+            throw pasteCancelledError();
           this.safeLog(
             `⚠️ Native linux-fast-paste failed: ${error?.message || error}, falling back to system tools`
           );
@@ -2235,7 +2285,13 @@ class ClipboardManager {
       new Promise((resolve, reject) => {
         const delay = isWayland ? 0 : PASTE_DELAYS.linux;
 
-        setTimeout(() => {
+        setTimeout(async () => {
+          try {
+            if (options.validateTarget) await this._validatePasteTarget(options);
+            if (options.isCancelled?.()) throw pasteCancelledError();
+          } catch (error) {
+            return reject(error);
+          }
           debugLogger.debug(
             "Attempting paste",
             {
@@ -2325,6 +2381,9 @@ class ClipboardManager {
         debugLogger.info("Paste successful", { tool: tool.cmd }, "clipboard");
         return { method: tool.cmd, ...pasteResult };
       } catch (error) {
+        if (error?.code === "PASTE_TARGET_CHANGED") throw error;
+        if (error?.code === "PASTE_CANCELLED" || options.isCancelled?.())
+          throw pasteCancelledError();
         const failureInfo = {
           tool: tool.cmd,
           args: tool.args,
@@ -2360,6 +2419,9 @@ class ClipboardManager {
         debugLogger.info("Terminal paste successful via xdotool type", {}, "clipboard");
         return { method: "xdotool-type", ...pasteResult };
       } catch (error) {
+        if (error?.code === "PASTE_TARGET_CHANGED") throw error;
+        if (error?.code === "PASTE_CANCELLED" || options.isCancelled?.())
+          throw pasteCancelledError();
         const fallbackFailure = {
           tool: "xdotool type",
           args: typeArgs,
@@ -2429,6 +2491,29 @@ class ClipboardManager {
     throw err;
   }
 
+  requestPostEventAccess() {
+    return queryPostEventAccess(true);
+  }
+
+  async hasPostEventAccess() {
+    let access = await queryPostEventAccess(false);
+    // The first spawn after launch is the slow one and has no earlier verdict
+    // to fall back on, so it gets a second try before reading as "not granted".
+    if (access === null && this.postEventAccess === null) {
+      access = await queryPostEventAccess(false);
+    }
+    // A helper that could not answer keeps the last known verdict, so a slow
+    // spawn does not turn a granted paste into a clipboard-only one.
+    if (access !== null) this.postEventAccess = access;
+    return this.postEventAccess === true;
+  }
+
+  // System Events keystrokes need assistive access; on macOS 27.3 a grant made
+  // through the app picker covers input posting only.
+  canPasteWithOsascript() {
+    return !usesAppControlPicker() || systemPreferences.isTrustedAccessibilityClient(false);
+  }
+
   async checkAccessibilityPermissions(silent = false) {
     if (process.platform !== "darwin") return true;
 
@@ -2439,7 +2524,9 @@ class ClipboardManager {
       }
     }
 
-    const allowed = systemPreferences.isTrustedAccessibilityClient(false);
+    const allowed =
+      systemPreferences.isTrustedAccessibilityClient(false) ||
+      (usesAppControlPicker() && (await this.hasPostEventAccess()));
 
     if (!silent) {
       this.accessibilityCache = {
@@ -2462,7 +2549,11 @@ class ClipboardManager {
       testError.includes("(-25006)");
 
     let dialogMessage;
-    if (isStuckPermission) {
+    if (usesAppControlPicker()) {
+      dialogMessage = `To enable automatic pasting, select OpenWhispr in Privacy & Security → System & App Protection Override. Without permission, you can paste the copied text with Command-V.
+
+Would you like to open System Settings now?`;
+    } else if (isStuckPermission) {
       dialogMessage = `🔒 OpenWhispr needs Accessibility permissions, but it looks like you may have OLD PERMISSIONS from a previous version.
 
 ❗ COMMON ISSUE: If you've rebuilt/reinstalled OpenWhispr, the old permissions may be "stuck" and preventing new ones.
@@ -2514,8 +2605,16 @@ Would you like to open System Settings now?`;
   }
 
   openSystemSettings() {
+    const useAppPicker = usesAppControlPicker();
     const settingsCommands = [
-      ["open", ["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"]],
+      [
+        "open",
+        [
+          useAppPicker
+            ? PRIVACY_SETTINGS_URL
+            : "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+        ],
+      ],
       ["open", ["-b", "com.apple.systempreferences"]],
       ["open", ["/System/Library/PreferencePanes/Security.prefPane"]],
     ];
@@ -2535,6 +2634,8 @@ Would you like to open System Settings now?`;
           if (settingsCode !== 0) {
             commandIndex++;
             tryNextCommand();
+          } else if (useAppPicker) {
+            void this.requestPostEventAccess();
           }
         });
       } else {

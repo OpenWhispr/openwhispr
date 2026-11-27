@@ -22,9 +22,9 @@ const MOCKS = {
       globalThis.__createNoteCheck = canAutoStart;
       return { createNote() {}, createNoteIn() {} };
     };
-    export const startRecordingForNote = async (note, _recorderName, canAutoStart) => {
+    export const startRecordingForNote = async (note, _recorderName, startSource, canAutoStart) => {
       if (canAutoStart && !canAutoStart()) return false;
-      globalThis.__starts.push(note.id);
+      globalThis.__starts.push([note.id, startSource]);
       return true;
     };`,
   "/ui/useToast": `
@@ -95,6 +95,7 @@ function electronApi(navigation, calls) {
     getFolderNoteCounts: async () => [],
     getNotes: async () => [],
     getContainerNotes: async () => [],
+    getNote: async () => NOTE,
     getTranscriptions: async () => [],
   };
   return new Proxy(known, {
@@ -103,7 +104,7 @@ function electronApi(navigation, calls) {
   });
 }
 
-async function mount(t, navigation, transcriptionStart, features = {}) {
+async function mount(t, navigation, transcriptionStart, features = {}, apiOverrides = {}) {
   let root;
   const unmount = async () => {
     const mounted = root;
@@ -121,7 +122,7 @@ async function mount(t, navigation, transcriptionStart, features = {}) {
   globalThis.__starts = [];
   installBrowserGlobals(t, {
     window: {
-      electronAPI: electronApi(navigation, calls),
+      electronAPI: Object.assign(electronApi(navigation, calls), apiOverrides),
       setTimeout: (fn, ms) => setTimeout(fn, ms),
       clearTimeout: (id) => clearTimeout(id),
     },
@@ -176,7 +177,7 @@ const NOTIFICATION = {
 test("a meeting prompt records under automatic policy", async (t) => {
   const calls = await mount(t, NOTIFICATION, "automatic");
   await until(() => globalThis.__starts.length > 0);
-  assert.deepEqual(globalThis.__starts, [9]);
+  assert.deepEqual(globalThis.__starts, [[9, "prompt"]]);
   assert.equal(globalThis.__createNoteCheck(), true, "New note follows the policy too");
   assert.deepEqual(calls.noteOnly, []);
 });
@@ -190,15 +191,23 @@ test("a meeting prompt only opens the note under manual policy", async (t) => {
   assert.equal(globalThis.__createNoteCheck(), false, "New note follows the policy too");
 });
 
-test("a pending navigation hands its trigger and session to the notes view", async (t) => {
+test("a pending navigation hands its trigger, start source and session to the notes view", async (t) => {
   await mount(
     t,
-    { noteId: 9, folderId: null, event: null, trigger: "hotkey", noteSessionId: "session" },
+    {
+      noteId: 9,
+      folderId: null,
+      event: null,
+      trigger: "hotkey",
+      startSource: "tray",
+      noteSessionId: "session",
+    },
     "manual"
   );
   await until(() => globalThis.__notesProps?.meetingRecordingRequest);
   const request = globalThis.__notesProps.meetingRecordingRequest;
   assert.equal(request.trigger, "hotkey");
+  assert.equal(request.startSource, "tray");
   assert.equal(request.noteSessionId, "session");
   assert.equal(globalThis.__notesProps.canAutoStartMeeting, globalThis.__createNoteCheck);
 });
@@ -217,6 +226,89 @@ test("a navigation the panel unmounted before reading closes its session", async
   await new Promise(setImmediate);
   assert.deepEqual(calls.closed, ["session"], "main already gave this navigation away");
 });
+
+test("an older meeting's recording request waits for its saved note to load", async (t) => {
+  const saved = Promise.withResolvers();
+  const note = { ...NOTE, folder_id: 10, transcript: "Previously saved meeting words." };
+  t.after(() => saved.resolve(note));
+  let pageLoaded = false;
+  const { vite } = await mount(
+    t,
+    { noteId: 9, spaceId: 1, folderId: 10, trigger: "calendar-join", noteSessionId: "session" },
+    "automatic",
+    {},
+    {
+      getFolders: async () => [{ id: 10, space_id: 1, name: "Meetings", is_default: 1 }],
+      getNotes: async () => {
+        pageLoaded = true;
+        return Array.from({ length: 50 }, (_, index) => ({ ...note, id: 100 + index }));
+      },
+      getNote: async () => saved.promise,
+    }
+  );
+  await until(() => pageLoaded && globalThis.__notesProps);
+  assert.equal(globalThis.__notesProps.meetingRecordingRequest, null);
+
+  await React.act(async () => saved.resolve(note));
+  await until(() => globalThis.__notesProps.meetingRecordingRequest);
+
+  const store = await vite.ssrLoadModule("/stores/noteStore.ts");
+  assert.equal(globalThis.__notesProps.meetingRecordingRequest.noteId, 9);
+  assert.equal(store.getNoteFromStore(9)?.transcript, "Previously saved meeting words.");
+});
+
+for (const interruption of ["unmount", "account change", "note switch"]) {
+  test(`a delayed meeting load cannot request recording after ${interruption}`, async (t) => {
+    const saved = Promise.withResolvers();
+    t.after(() => saved.resolve(NOTE));
+    let requested = false;
+    const calls = await mount(
+      t,
+      { noteId: 9, spaceId: 1, folderId: null, trigger: "calendar-join", noteSessionId: "session" },
+      "automatic",
+      {},
+      {
+        getNote: async () => {
+          requested = true;
+          return saved.promise;
+        },
+      }
+    );
+    await until(() => requested && globalThis.__notesProps);
+    const store = await calls.vite.ssrLoadModule("/stores/noteStore.ts");
+    if (interruption === "unmount") await calls.unmount();
+    else {
+      await React.act(async () => {
+        if (interruption === "account change") store.resetForAccountChange();
+        else store.setActiveNoteId(123);
+      });
+    }
+
+    await React.act(async () => {
+      saved.resolve(NOTE);
+      await new Promise(setImmediate);
+    });
+
+    assert.equal(globalThis.__notesProps.meetingRecordingRequest, null);
+    assert.ok(calls.closed.includes("session"));
+    if (interruption === "account change") assert.equal(store.getNoteFromStore(9), null);
+  });
+}
+
+for (const unavailable of [null, { ...NOTE, deleted_at: "2026-11-17T10:00:00Z" }]) {
+  test(`an ${unavailable ? "already deleted" : "unavailable"} meeting never requests recording`, async (t) => {
+    const calls = await mount(
+      t,
+      { noteId: 9, spaceId: 1, folderId: null, trigger: "calendar-join", noteSessionId: "session" },
+      "automatic",
+      {},
+      { getNote: async () => unavailable }
+    );
+    await until(() => calls.closed.includes("session") && globalThis.__notesProps);
+    assert.equal(globalThis.__notesProps.meetingRecordingRequest, null);
+    assert.deepEqual(globalThis.__starts, []);
+  });
+}
 
 test("New chat from the menu opens a new chat, not the conversation Chat had open", async (t) => {
   const { vite } = await mount(t, null, "automatic", { agentEnabled: true });

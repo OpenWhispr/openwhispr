@@ -4,8 +4,8 @@
 // call sites is what broke default dictation in 1.8.2 (#1624: the
 // openai-realtime entry never sent `provider`, and the hardened main-process
 // allowlist rejected undefined). Pure module, mirrors meetingTranscriptionRouting.
-import { isOrukeetStreaming } from "./selfHostedTranscription.js";
-import { STREAMING_ONLY_PROVIDERS } from "./transcriptionRoute.ts";
+import { isOrukeetStreaming, isSelfHostedTranscription } from "./selfHostedTranscription.js";
+import { isStreamingOnlySelection } from "./transcriptionRoute.ts";
 import { registryData as modelRegistryData, subscribeRegistry } from "../models/registryData.js";
 import bundledRegistryData from "../models/modelRegistryData.json" with { type: "json" };
 
@@ -135,6 +135,8 @@ export function isRegistryStreamingModel(providerId, modelId) {
 const MANAGED_REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 export const REALTIME_MODELS = new Set();
 export function isOpenAiRealtimeSelection(settings) {
+  // Cloud onboarding keeps the previous model, but the server chooses its streaming provider.
+  if (settings.cloudTranscriptionProvider === "openwhispr") return false;
   return settings.cloudTranscriptionMode === "byok"
     ? (settings.cloudTranscriptionProvider || "openai") === "openai" &&
         REALTIME_MODELS.has(settings.cloudTranscriptionModel)
@@ -207,13 +209,14 @@ export function resolveStreamingProviderName({ settings, context, sttConfig, lan
   if (isGeminiLiveSelection(settings)) {
     return "gemini";
   }
-  // Realtime-only providers have no batch endpoint, so BYOK selection alone
-  // routes them, and their renderer channel name is the bare provider id. Ahead
+  // Realtime-only providers have no batch endpoint (AssemblyAI's Dictation model
+  // aside), so BYOK selection of a realtime model alone routes them, and their
+  // renderer channel name is the bare provider id. Ahead
   // of the REALTIME_MODELS check so a stale OpenAI model id in settings can't
   // hijack the provider, matching the tinfoil/corti precedent above.
   if (
     settings.cloudTranscriptionMode === "byok" &&
-    STREAMING_ONLY_PROVIDERS.has(settings.cloudTranscriptionProvider)
+    isStreamingOnlySelection(settings.cloudTranscriptionProvider, settings.cloudTranscriptionModel)
   ) {
     return settings.cloudTranscriptionProvider;
   }
@@ -260,6 +263,7 @@ export function buildStreamingSessionOptions({
     if (options.mode !== "byok" && pipelineOptions) options.pipelineOptions = pipelineOptions;
     if (options.mode === "byok") {
       options.baseUrl = settings.remoteTranscriptionUrl || settings.cloudTranscriptionBaseUrl;
+      options.transcriptionMode = isSelfHostedTranscription(settings) ? "self-hosted" : undefined;
     }
   }
   return options;

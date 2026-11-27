@@ -162,6 +162,22 @@ it('opens no mic for a screen left before the gate let the tap through', async (
   expect(mockStartRecording).not.toHaveBeenCalled();
 });
 
+it('titles a refused start neutrally rather than as a hearing problem', async () => {
+  const refusal = new Error('A meeting is being recorded. End it to dictate.');
+  mockStartRecording.mockImplementationOnce(async () => {
+    mockRecordingOptions.onError?.(refusal);
+    throw refusal;
+  });
+  const { result } = renderVoiceInput('conv-1');
+
+  await act(async () => {
+    await result.current.start(false);
+  });
+
+  expect(Alert.alert).toHaveBeenCalledWith('Error', refusal.message);
+  expect(Alert.alert).not.toHaveBeenCalledWith('Couldn’t hear that', expect.anything());
+});
+
 it('refuses a second tap the gate lets through after the first opened the mic', async () => {
   const { result } = renderVoiceInput('conv-1');
   // Both taps hold the render from before the mic opened.

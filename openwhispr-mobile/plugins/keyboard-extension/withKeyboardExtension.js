@@ -14,14 +14,82 @@ const {
 
 const EXTENSION_NAME = 'OpenWhisprKeyboard';
 const EXTENSION_BUNDLE_ID_SUFFIX = 'keyboard';
-// Copied from ios/ into the generated project and wired into the keyboard target.
+// Data files in ios/Resources, bundled flat into the keyboard's .appex so
+// `Bundle.main.resourceURL/<name>` resolves at runtime.
+const RESOURCE_FILES = ['lexicon-en.bin', 'lexicon-de.bin', 'emoji.bin'];
+// Copied from ios/ into the generated project and wired into the keyboard target. `source`
+// is the path inside ios/ when it differs from the name the file gets in the project.
 const EXTENSION_FILES = [
   { name: 'KeyboardViewController.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
   { name: 'KeyboardCapitalization.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'KeyboardOptionsMenu.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectAudioRoute.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'WebAudioCapture.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictationRuntime.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictation.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'KeyboardCredentialStore.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictationStore.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictationRequests.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'SnippetExpander.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectAudioEncoder.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictationAudio.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictationConfig.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectLocalTranscription.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'MeetingCaptureLease.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'KeyboardParakeetTranscriber.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'KeyGeometry.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'TypingLexicon.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'Autocorrector.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'TypingSession.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'TypingSettings.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'TypingEngine.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'SuggestionBarView.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'KeyboardInteractions.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'HitTargetModel.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'TrackpadModel.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'SwipeDecoder.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'EmojiCatalog.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'EmojiPanelView.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  ...RESOURCE_FILES.map((name) => ({
+    name,
+    source: path.join('Resources', name),
+    fileType: 'file',
+    phase: 'Resources',
+  })),
 ];
 const BUILD_PHASE_ISA = {
   Sources: 'PBXSourcesBuildPhase',
+  Resources: 'PBXResourcesBuildPhase',
+  Frameworks: 'PBXFrameworksBuildPhase',
 };
+
+// Local dictation runs Parakeet through FluidAudio inside the keyboard. The app already gets
+// the same package through cocoapods-spm (plugins/speaker-diarization), which declares it in
+// Pods.xcodeproj only, so this reference in the app project must name the identical URL and
+// exact version: Xcode resolves both to one checkout in the workspace.
+const FLUIDAUDIO = {
+  repositoryURL: 'https://github.com/FluidInference/FluidAudio.git',
+  version: '0.15.4',
+  product: 'FluidAudio',
+};
+// cocoapods-spm checks packages out here (SOURCE_PACKAGES_CHECKOUTS_DIR in the Pods xcconfigs).
+// PROJECT_DERIVED_DATA_DIR isn't an Xcode setting: cocoapods-spm defines it in those xcconfigs,
+// which the keyboard doesn't include, so the keyboard defines it the same way. The archive and
+// install suffixes step out of the deeper build root those actions use.
+const DERIVED_DATA_SETTINGS = {
+  PROJECT_DERIVED_DATA_DIR: '"${BUILD_ROOT}/../..${BUILD_ROOT_TO_DERIVED_DATA_SUFFIX_${ACTION}}"',
+  BUILD_ROOT_TO_DERIVED_DATA_SUFFIX_archive: '"/../../.."',
+  BUILD_ROOT_TO_DERIVED_DATA_SUFFIX_install: '"/../../.."',
+};
+const FLUIDAUDIO_SOURCES =
+  '${PROJECT_DERIVED_DATA_DIR}/SourcePackages/checkouts/FluidAudio/Sources';
+// FluidAudio's module built for the app sits in the same products folder, but its two C
+// helper modules aren't on the keyboard's search path without these maps.
+const FLUIDAUDIO_SWIFT_FLAGS = ['FastClusterWrapper', 'MachTaskSelfWrapper']
+  .map(
+    (module) => `-Xcc -fmodule-map-file=${FLUIDAUDIO_SOURCES}/${module}/include/module.modulemap`,
+  )
+  .join(' ');
 
 function firstScheme(value) {
   if (Array.isArray(value)) {
@@ -75,7 +143,10 @@ function writeExtensionSupportFiles(platformProjectRoot, environment) {
   }
 
   for (const file of EXTENSION_FILES) {
-    fs.copyFileSync(path.join(pluginSourceDir, file.name), path.join(extensionDir, file.name));
+    fs.copyFileSync(
+      path.join(pluginSourceDir, file.source ?? file.name),
+      path.join(extensionDir, file.name),
+    );
   }
 
   const infoPlist = readPlist(path.join(pluginSourceDir, 'Info.plist'));
@@ -251,16 +322,21 @@ function ensurePhaseMembershipForTarget(xcodeProject, targetUuid, buildFileUuid,
     targetPhase.files.push({ value: buildFileUuid, comment: `${fileName} in ${phase}` });
   }
 
-  for (const [phaseUuid, other] of Object.entries(allPhases)) {
-    if (phaseUuid.endsWith('_comment') || phaseUuid === targetPhaseUuid) {
-      continue;
-    }
+  // A build file belongs to one phase: take it out of every other one, the app target's
+  // and a phase of the wrong kind included.
+  for (const otherIsa of Object.values(BUILD_PHASE_ISA)) {
+    const phases = xcodeProject.hash.project.objects[otherIsa] || {};
+    for (const [phaseUuid, other] of Object.entries(phases)) {
+      if (phaseUuid.endsWith('_comment') || phaseUuid === targetPhaseUuid) {
+        continue;
+      }
 
-    if (!Array.isArray(other?.files)) {
-      continue;
-    }
+      if (!Array.isArray(other?.files)) {
+        continue;
+      }
 
-    other.files = other.files.filter((entry) => entry?.value !== buildFileUuid);
+      other.files = other.files.filter((entry) => entry?.value !== buildFileUuid);
+    }
   }
 }
 
@@ -334,8 +410,8 @@ function ensureExtensionGroup(xcodeProject) {
   return groupKey;
 }
 
-// Every source the keyboard needs, in its own target only. Throws rather
-// than letting prebuild ship a keyboard that doesn't compile.
+// Every source and data file the keyboard needs, in its own target only. Throws rather
+// than letting prebuild ship a keyboard that doesn't compile or misses its data.
 function ensureExtensionFiles(xcodeProject, targetUuid, groupKey) {
   for (const file of EXTENSION_FILES) {
     const fileRefUuid =
@@ -353,6 +429,97 @@ function ensureExtensionFiles(xcodeProject, targetUuid, groupKey) {
     const buildFileUuid = ensureBuildFile(xcodeProject, fileRefUuid, file.name, file.phase);
     ensurePhaseMembershipForTarget(xcodeProject, targetUuid, buildFileUuid, file.name, file.phase);
   }
+}
+
+function unquote(value) {
+  return typeof value === 'string' ? value.replace(/"/g, '') : value;
+}
+
+function findObjectUuid(xcodeProject, isa, matches) {
+  const section = xcodeProject.hash.project.objects[isa] || {};
+  return (
+    Object.keys(section).find((key) => !key.endsWith('_comment') && matches(section[key])) ?? null
+  );
+}
+
+function addObject(xcodeProject, isa, value, comment) {
+  const objects = xcodeProject.hash.project.objects;
+  const uuid = xcodeProject.generateUuid();
+  objects[isa] = objects[isa] || {};
+  objects[isa][uuid] = { isa, ...value };
+  objects[isa][`${uuid}_comment`] = comment;
+  return uuid;
+}
+
+function addReference(list, value, comment) {
+  if (!list.some((entry) => entry?.value === value)) {
+    list.push({ value, comment });
+  }
+}
+
+// One package reference on the project, one product dependency on the keyboard target and
+// one Frameworks build file for it, reused on every later prebuild.
+function linkFluidAudio(xcodeProject, targetUuid) {
+  const project = xcodeProject.getFirstProject().firstProject;
+  const packageUuid =
+    findObjectUuid(
+      xcodeProject,
+      'XCRemoteSwiftPackageReference',
+      (entry) => unquote(entry?.repositoryURL) === FLUIDAUDIO.repositoryURL,
+    ) ||
+    addObject(
+      xcodeProject,
+      'XCRemoteSwiftPackageReference',
+      {
+        repositoryURL: `"${FLUIDAUDIO.repositoryURL}"`,
+        requirement: { kind: 'exactVersion', version: FLUIDAUDIO.version },
+      },
+      `XCRemoteSwiftPackageReference "${FLUIDAUDIO.product}"`,
+    );
+  project.packageReferences = project.packageReferences || [];
+  addReference(
+    project.packageReferences,
+    packageUuid,
+    `XCRemoteSwiftPackageReference "${FLUIDAUDIO.product}"`,
+  );
+
+  const productUuid =
+    findObjectUuid(
+      xcodeProject,
+      'XCSwiftPackageProductDependency',
+      (entry) =>
+        entry?.package === packageUuid && unquote(entry?.productName) === FLUIDAUDIO.product,
+    ) ||
+    addObject(
+      xcodeProject,
+      'XCSwiftPackageProductDependency',
+      {
+        package: packageUuid,
+        package_comment: `XCRemoteSwiftPackageReference "${FLUIDAUDIO.product}"`,
+        productName: FLUIDAUDIO.product,
+      },
+      FLUIDAUDIO.product,
+    );
+  const target = xcodeProject.pbxNativeTargetSection()[targetUuid];
+  target.packageProductDependencies = target.packageProductDependencies || [];
+  addReference(target.packageProductDependencies, productUuid, FLUIDAUDIO.product);
+
+  const buildFileComment = `${FLUIDAUDIO.product} in Frameworks`;
+  const buildFileUuid =
+    findObjectUuid(xcodeProject, 'PBXBuildFile', (entry) => entry?.productRef === productUuid) ||
+    addObject(
+      xcodeProject,
+      'PBXBuildFile',
+      { productRef: productUuid, productRef_comment: FLUIDAUDIO.product },
+      buildFileComment,
+    );
+  ensurePhaseMembershipForTarget(
+    xcodeProject,
+    targetUuid,
+    buildFileUuid,
+    FLUIDAUDIO.product,
+    'Frameworks',
+  );
 }
 
 function withKeyboardExtension(config) {
@@ -394,7 +561,7 @@ function withKeyboardExtension(config) {
         sourceTree: '"<group>"',
       });
 
-      // Add the extension target; ensureExtensionFiles below gives it its Sources phase.
+      // Add the extension target; ensureExtensionFiles below gives it its build phases.
       const target = xcodeProject.addTarget(
         EXTENSION_NAME,
         'app_extension',
@@ -407,6 +574,7 @@ function withKeyboardExtension(config) {
 
     const productRefUuid = xcodeProject.pbxNativeTargetSection()?.[targetKey]?.productReference;
     ensureExtensionFiles(xcodeProject, targetKey, extensionGroupKey);
+    linkFluidAudio(xcodeProject, targetKey);
 
     // Set build settings for the extension target.
     const buildSettings = {
@@ -416,7 +584,15 @@ function withKeyboardExtension(config) {
       PRODUCT_NAME: EXTENSION_NAME,
       SWIFT_VERSION: '5.0',
       TARGETED_DEVICE_FAMILY: '"1,2"',
-      IPHONEOS_DEPLOYMENT_TARGET: '15.1',
+      // FluidAudio's minimum.
+      IPHONEOS_DEPLOYMENT_TARGET: '17.0',
+      // FastClusterWrapper is C++.
+      OTHER_LDFLAGS: '"$(inherited) -lc++"',
+      OTHER_SWIFT_FLAGS: `"$(inherited) ${FLUIDAUDIO_SWIFT_FLAGS}"`,
+      // Marks the real keyboard target, so KeyboardParakeetTranscriber.swift fails the build when
+      // FluidAudio isn't linked; the swiftc test harnesses compile the same sources without it.
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: '"$(inherited) OPENWHISPR_KEYBOARD_EXTENSION"',
+      ...DERIVED_DATA_SETTINGS,
       SKIP_INSTALL: 'YES',
       CODE_SIGN_STYLE: 'Manual',
       GENERATE_INFOPLIST_FILE: 'NO',
@@ -494,6 +670,7 @@ function withKeyboardExtension(config) {
 
 module.exports = withKeyboardExtension;
 module.exports.EXTENSION_FILES = EXTENSION_FILES;
+module.exports.RESOURCE_FILES = RESOURCE_FILES;
 module.exports.ensureExtensionFiles = ensureExtensionFiles;
 module.exports.ensureExtensionGroup = ensureExtensionGroup;
 module.exports.writeExtensionSupportFiles = writeExtensionSupportFiles;

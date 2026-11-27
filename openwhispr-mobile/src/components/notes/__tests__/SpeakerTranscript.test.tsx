@@ -44,9 +44,35 @@ const block = (overrides: Partial<TranscriptBlock>): TranscriptBlock => ({
 });
 
 describe('SpeakerTranscript', () => {
+  it('hides speaker names when the note has no speakers', () => {
+    const { queryByLabelText, getByText, queryByText } = render(
+      <SpeakerTranscript
+        showSpeakerNames={false}
+        blocks={[block({ speakerId: null, speakerLabel: null, speakerName: 'Unknown speaker' })]}
+      />,
+    );
+
+    expect(queryByLabelText('Edit Unknown speaker')).toBeNull();
+    expect(queryByText('Unknown speaker')).toBeNull();
+    expect(getByText('0:03')).toBeTruthy();
+    expect(getByText('Hello there.')).toBeTruthy();
+  });
+
+  it('shows speaker names when the note has speakers', () => {
+    const { getByLabelText } = render(
+      <SpeakerTranscript
+        showSpeakerNames
+        blocks={[block({ speakerId: null, speakerLabel: null, speakerName: 'Unknown speaker' })]}
+      />,
+    );
+
+    expect(getByLabelText('Edit Unknown speaker')).toBeTruthy();
+  });
+
   it('renders fixture transcript with display names and timestamps', () => {
     const { getByText } = render(
       <SpeakerTranscript
+        showSpeakerNames
         blocks={[
           block({}),
           block({ id: 'segment-2', speakerName: 'Bob', timestamp: '0:08', text: 'Hi.' }),
@@ -65,7 +91,11 @@ describe('SpeakerTranscript', () => {
     const onSpeakerPress = jest.fn();
     const transcriptBlock = block({});
     const { getByLabelText } = render(
-      <SpeakerTranscript blocks={[transcriptBlock]} onSpeakerPress={onSpeakerPress} />,
+      <SpeakerTranscript
+        showSpeakerNames
+        blocks={[transcriptBlock]}
+        onSpeakerPress={onSpeakerPress}
+      />,
     );
 
     fireEvent.press(getByLabelText('Edit Alice'));
@@ -75,7 +105,10 @@ describe('SpeakerTranscript', () => {
 
   it('renders suggested speakers with a tentative marker', () => {
     const { getByText } = render(
-      <SpeakerTranscript blocks={[block({ speakerName: 'Alice?', speakerStatus: 'suggested' })]} />,
+      <SpeakerTranscript
+        showSpeakerNames
+        blocks={[block({ speakerName: 'Alice?', speakerStatus: 'suggested' })]}
+      />,
     );
 
     expect(getByText('Alice?')).toBeTruthy();

@@ -107,6 +107,23 @@ export function classifyRowActionError(error: unknown): RowActionError {
   return message ? { kind: "refused", message } : { kind: "failed" };
 }
 
+export type WorkspaceIconError =
+  { kind: "signInChanged" } | { kind: "unavailable" } | RowActionError;
+
+/**
+ * Maps a failed workspace icon upload or removal. Main answers every 503 with the same text, so
+ * the server's `icons_unavailable` (no picture storage configured) is read from the status.
+ */
+export function classifyWorkspaceIconError(error: unknown): WorkspaceIconError {
+  if (error instanceof CloudApiError) {
+    if (error.code && INVITE_ERROR_CODES[error.code] === "sessionExpired") {
+      return { kind: "signInChanged" };
+    }
+    if (error.status === 503) return { kind: "unavailable" };
+  }
+  return classifyRowActionError(error);
+}
+
 export type TeamActionError =
   | { kind: "planRequired" }
   | { kind: "nameTaken" }

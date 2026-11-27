@@ -444,3 +444,10 @@ test("the note chat's lookup works without a Gmail login", async () => {
     { name: null, email: "dana@example.com" },
   ]);
 });
+
+test("the user's EventKit organizer address is excluded from a linked note's attendees", async () => {
+  const lookup = await noteLookup({
+    events: { "evt-1": { organizer_email: "personal@outside.test", organizer_self: 1 } },
+  });
+  assert.deepEqual(await lookup(request({ participants: [], calendarEventId: "evt-1" })), []);
+});

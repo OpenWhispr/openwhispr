@@ -12,6 +12,8 @@
 // break is removed without matching across paragraphs, tables or code.
 // Setext (underlined) headings remain out of scope.
 
+import { MENTION_HREF_PREFIX } from "../utils/mentionMarkdown.ts";
+
 const FENCE_LINE = /^\s*(`{3,}|~{3,})(.*)$/;
 const HORIZONTAL_RULE = /^\s*([-*_])(\s*\1){2,}\s*$/;
 const TABLE_ROW = /^\s*\|.*\|\s*$/;
@@ -71,11 +73,13 @@ function stripLinks(text: string, preserve: (content: string) => string): string
     const destination = text.slice(destinationStart, destinationEnd).replace(/\\([\\()])/g, "$1");
     const label = match[2];
     result += text.slice(previousEnd, match.index);
-    result += match[1]
-      ? label
-      : label === destination
-        ? preserve(destination)
-        : `${label} (${preserve(destination)})`;
+    // A mention's destination is an internal id; its `@Name` label is the text.
+    result +=
+      match[1] || destination.startsWith(MENTION_HREF_PREFIX)
+        ? label
+        : label === destination
+          ? preserve(destination)
+          : `${label} (${preserve(destination)})`;
     previousEnd = destinationEnd + closing[0].length;
   }
   return result + text.slice(previousEnd);

@@ -21,6 +21,9 @@ import {
 } from "./selfHostedTranscription.js";
 import {
   acceptsUnlistedTranscriptionModel,
+  ASSEMBLYAI_DICTATION_MODEL,
+  isAssemblyAiRewriteAllowedByPolicy,
+  isModeAllowedByPolicy,
   isTranscriptionSelectionAllowed,
   type PolicyDecisionSnapshot,
 } from "../stores/policyRules.ts";
@@ -31,6 +34,7 @@ import {
 } from "../services/transcriptionBaseUrl.ts";
 import type { ManagedEnterpriseRequestContext } from "../types/enterpriseIdentity.ts";
 import { getRegistryData } from "../models/registryData.js";
+import { isNoteRecordingOnlyTranscriptionModel } from "../models/appTranscriptionProviders.js";
 import { retiredReplacement } from "../models/modelLifecycle.js";
 
 const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
@@ -100,10 +104,20 @@ export function batchTranscriptionHttpError(
 // has to fail closed: the fall-through at the end of resolveTranscriptionRoute
 // would otherwise POST the user's audio to api.openai.com with their OpenAI key.
 // Hand-maintained rather than derived from the registry: Corti's only model is
-// realtime too, yet it batches through the proxy. Every other "realtime-only"
-// decision (dictationStreamingRouting, audioManager.shouldUseStreaming, the
-// upload picker and selector) derives from this set.
+// realtime too, yet it batches through the proxy. Audio Upload's list and selector
+// read this set; dictation and voice takes ask isStreamingOnlySelection, which
+// knows the one exception.
 export const STREAMING_ONLY_PROVIDERS = new Set(["deepgram", "assemblyai"]);
+
+// AssemblyAI's Dictation API is the one batch model on a realtime-only provider:
+// it transcribes and cleans up a finished recording in one request, through
+// main. The upload picker still leaves AssemblyAI out.
+export { ASSEMBLYAI_DICTATION_MODEL };
+
+export function isStreamingOnlySelection(provider: string, model?: string | null): boolean {
+  if (provider === "assemblyai" && model === ASSEMBLYAI_DICTATION_MODEL) return false;
+  return STREAMING_ONLY_PROVIDERS.has(provider);
+}
 
 export interface TranscriptionRouteSettings {
   transcriptionMode?: string;
@@ -161,7 +175,7 @@ export type TranscriptionRoute =
   | { transport: "local" }
   | {
       transport: "proxied";
-      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini";
+      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini" | "assemblyai" | "elevenlabs";
       model: string | null;
       language?: string;
       sizeCapBytes: number;
@@ -217,18 +231,66 @@ export const XAI_STT_LANGUAGES = new Set([
   "vi",
 ]);
 
-// The live catalog decides first: an offered model is sent as is, and a retired one
-// moves to its replacement. The prefix rules then keep a model the catalog does not know
-// yet (a remote addition before its catalog loads) instead of resetting it;
-// transcriptionRouteModelAgreement.test.js pins them to every shipping model.
+// Languages the Dictation API accepts in language_codes; it rejects any other code.
+export const ASSEMBLYAI_DICTATION_LANGUAGES = new Set([
+  "af",
+  "ar",
+  "ca",
+  "da",
+  "de",
+  "en",
+  "es",
+  "et",
+  "fa",
+  "fi",
+  "fr",
+  "gl",
+  "he",
+  "hi",
+  "it",
+  "ja",
+  "ko",
+  "mr",
+  "nl",
+  "nn",
+  "no",
+  "pt",
+  "ro",
+  "ru",
+  "sv",
+  "tr",
+  "ur",
+  "vi",
+  "xh",
+  "yue",
+  "zh",
+  "zu",
+]);
+
+// The live catalog decides first: resolve retirements before deciding whether the selected
+// model needs the provider's batch fallback.
+// The prefix rules then keep a model the catalog does not know yet (a remote addition before
+// its catalog loads) instead of resetting it; transcriptionRouteModelAgreement.test.js pins
+// them to every shipping model.
 export function resolveByokModel(provider: string, configuredModel?: string): string {
   const trimmed = (configuredModel || "").trim();
   if (provider === "custom") return trimmed || "whisper-1";
-  if (trimmed) {
+  // A Note Recording-only model has no batch endpoint, so it takes the provider's default.
+  if (trimmed && !isNoteRecordingOnlyTranscriptionModel(provider, trimmed)) {
     const catalogProvider = getRegistryData().transcriptionProviders.find((p) => p.id === provider);
-    if (catalogProvider?.models.some((model) => model.id === trimmed)) return trimmed;
     const replacement = retiredReplacement("transcriptionProviders", provider, trimmed);
-    if (replacement) return replacement;
+    const selectedId = replacement ?? trimmed;
+    const listed = catalogProvider?.models.find((model) => model.id === selectedId);
+    if (listed?.streaming && catalogProvider?.batchModel) {
+      const { batchModel, models } = catalogProvider;
+      // A catalog update can retire the bundled batch ID while leaving the alias intact.
+      return (
+        retiredReplacement("transcriptionProviders", provider, batchModel, [
+          { ...catalogProvider, models: models.filter((model) => !model.streaming) },
+        ]) ?? batchModel
+      );
+    }
+    if (replacement || listed) return selectedId;
     const matchesProvider =
       (provider === "groq" && trimmed.startsWith("whisper-large-v3")) ||
       (provider === "openai" &&
@@ -242,9 +304,12 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
       (provider === "mistral" && trimmed.startsWith("voxtral-")) ||
       (provider === "corti" && trimmed.startsWith("corti-")) ||
       (provider === "gemini" && trimmed.startsWith("gemini-")) ||
+      (provider === "elevenlabs" && trimmed.startsWith("scribe_")) ||
       (provider === "deepgram" && (trimmed.startsWith("nova-") || trimmed.startsWith("flux-"))) ||
       (provider === "assemblyai" &&
-        (trimmed.startsWith("universal-") || trimmed.startsWith("slam-")));
+        (trimmed.startsWith("universal-") ||
+          trimmed.startsWith("slam-") ||
+          trimmed === ASSEMBLYAI_DICTATION_MODEL));
     if (matchesProvider) return trimmed;
   }
   if (provider === "groq") return "whisper-large-v3-turbo";
@@ -252,6 +317,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (provider === "mistral") return "voxtral-mini-latest";
   if (provider === "corti") return "corti-transcribe";
   if (provider === "gemini") return "gemini-3.5-transcribe";
+  if (provider === "elevenlabs") return "scribe_v3";
   if (provider === "deepgram") return "nova-3";
   if (provider === "assemblyai") return "universal-3-6-pro";
   if (provider === "openrouter") return "mistralai/voxtral-mini-transcribe-3-0";
@@ -334,12 +400,16 @@ export function resolveTranscriptionRoute({
 
   // Fail-closed floor only: callers pass policy-effective settings, so a
   // disallowed selection here means the policy layer was bypassed upstream.
+  // A local selection names no model here; the local managers check it.
+  const mode = s.transcriptionMode || (s.useLocalWhisper ? "local" : "providers");
   if (
     managed &&
-    !isTranscriptionSelectionAllowed(policy!, {
-      mode: (s.transcriptionMode || (s.useLocalWhisper ? "local" : "providers")) as never,
-      provider: s.cloudTranscriptionProvider || "",
-    })
+    !(mode === "local"
+      ? isModeAllowedByPolicy(policy!, "transcription", "local")
+      : isTranscriptionSelectionAllowed(policy!, {
+          mode: mode as never,
+          provider: s.cloudTranscriptionProvider || "",
+        }))
   ) {
     return error(
       "Transcription is restricted by your organization.",
@@ -397,13 +467,13 @@ export function resolveTranscriptionRoute({
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
     };
   }
-  if (provider === "gemini") {
+  if (provider === "gemini" || provider === "elevenlabs") {
     return {
       transport: "proxied",
       provider,
       model,
       language,
-      sizeCapBytes: GEMINI_FILE_SIZE_LIMIT,
+      sizeCapBytes: byokFileSizeLimit(provider),
     };
   }
   if (provider === "corti") {
@@ -457,6 +527,22 @@ export function resolveTranscriptionRoute({
         "API_KEY_MISSING",
         PROVIDER_KEY_MISSING_MESSAGE_KEY
       );
+    }
+    if (!isStreamingOnlySelection(provider, model)) {
+      if (managed && !isAssemblyAiRewriteAllowedByPolicy(policy)) {
+        return error(
+          "Transcription is restricted by your organization.",
+          "POLICY_RESTRICTED",
+          "common.policyTranscriptionRestricted"
+        );
+      }
+      return {
+        transport: "proxied",
+        provider: "assemblyai",
+        model,
+        language: language && ASSEMBLYAI_DICTATION_LANGUAGES.has(language) ? language : undefined,
+        sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
+      };
     }
     return error(
       "This provider only supports live transcription. Choose another provider for file uploads and retries.",

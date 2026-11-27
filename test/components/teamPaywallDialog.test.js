@@ -79,6 +79,26 @@ test.before(async (t) => {
         };
         export const useTranslation = () => ({ t, i18n: { language: "en" } });
       `,
+      "/lib/authRequestContext": `
+        export const hasValidatedAuthContext = () => globalThis.__authValidated !== false;
+      `,
+      "/services/WorkspacesService": `
+        export const WorkspacesService = {
+          billingCheckout: async (...args) => {
+            globalThis.__checkouts.push(args);
+            if (globalThis.__checkoutError) throw new Error(globalThis.__checkoutError);
+            return "https://checkout.stripe.test/session";
+          },
+        };
+      `,
+      "/hooks/useBillingRefreshOnReturn": `
+        export const useBillingRefreshOnReturn = () => () => {
+          globalThis.__armed += 1;
+        };
+      `,
+      "/ui/useToast": `
+        export const useToast = () => ({ toast: (toast) => globalThis.__toasts.push(toast) });
+      `,
       "/stores/workspaceStore": `
         export const useWorkspaceStore = {
           getState: () => ({
@@ -117,8 +137,15 @@ async function mount(t, workspace) {
   const closes = [];
   const available = [];
   let setWorkspace = () => {};
+  const external = [];
   globalThis.__refreshes = [];
-  happyWindow.electronAPI = { openSettingsSection: (section) => opened.push(section) };
+  globalThis.__checkouts = [];
+  globalThis.__toasts = [];
+  globalThis.__armed = 0;
+  happyWindow.electronAPI = {
+    openSettingsSection: (section) => opened.push(section),
+    openExternal: async (url) => external.push(url),
+  };
   globalThis.window.electronAPI = happyWindow.electronAPI;
   const container = happyWindow.document.createElement("div");
   happyWindow.document.body.appendChild(container);
@@ -128,6 +155,10 @@ async function mount(t, workspace) {
     container.remove();
     delete happyWindow.electronAPI;
     delete globalThis.__refreshes;
+    delete globalThis.__checkouts;
+    delete globalThis.__toasts;
+    delete globalThis.__armed;
+    delete globalThis.__checkoutError;
   });
   function Host() {
     const [open, setOpen] = React.useState(true);
@@ -146,6 +177,10 @@ async function mount(t, workspace) {
   await React.act(async () => root.render(h(Host)));
   return {
     opened,
+    external,
+    checkouts: () => globalThis.__checkouts,
+    toasts: () => globalThis.__toasts,
+    armed: () => globalThis.__armed,
     closes,
     available,
     refreshes: () => globalThis.__refreshes,
@@ -169,7 +204,7 @@ test("the owner gets Upgrade, which opens Plans & Billing and closes", async (t)
 
   await click("Upgrade to Business");
   assert.deepEqual(closes, [false]);
-  assert.deepEqual(opened, ["plansBilling"]);
+  assert.deepEqual(opened, ["plansBilling:workspace:w1"]);
 });
 
 test("another admin is told who to ask, and has no Upgrade", async (t) => {
@@ -199,6 +234,13 @@ test("Not now closes and changes nothing", async (t) => {
   await click("Not now");
   assert.deepEqual(closes, [false]);
   assert.deepEqual(opened, []);
+});
+
+test("opening without a validated sign-in leaves the workspace list alone", async (t) => {
+  globalThis.__authValidated = false;
+  t.after(() => delete globalThis.__authValidated);
+  const { refreshes } = await mount(t, workspaceWith({ manage_billing: true }));
+  assert.deepEqual(refreshes(), []);
 });
 
 test("opening reads the workspace again, and a plan that turns out active hands over to the form", async (t) => {
@@ -237,7 +279,7 @@ test("a lapsed Business plan is told to fix billing, not to upgrade", async (t) 
   );
   assert.deepEqual(buttons(), ["Update billing", "Not now"]);
   await click("Update billing");
-  assert.deepEqual(opened, ["plansBilling"]);
+  assert.deepEqual(opened, ["plansBilling:workspace:w1"]);
 });
 
 test("someone without billing on a lapsed plan is told who to ask", async (t) => {
@@ -247,4 +289,17 @@ test("someone without billing on a lapsed plan is told who to ask", async (t) =>
     /Ask Olivia Owner to update billing to create teams\./
   );
   assert.deepEqual(buttons(), ["Close"]);
+});
+
+test("Upgrade opens that workspace's plan, for a solo default workspace too", async (t) => {
+  const { opened, external, checkouts } = await mount(t, {
+    ...workspaceWith({ manage_billing: true }),
+    plan: "free",
+    is_account_default: true,
+    seats_used: 1,
+  });
+  await click("Upgrade to Business");
+  assert.deepEqual(opened, ["plansBilling:workspace:w1"]);
+  assert.deepEqual(checkouts(), []);
+  assert.deepEqual(external, []);
 });

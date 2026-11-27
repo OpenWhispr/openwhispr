@@ -37,9 +37,18 @@ import {
   refreshAppsFlyerTrackingAuthorization,
 } from '@/lib/appsflyer';
 import { initSyncTriggers } from '@/sync/syncEngine';
+import { initProductEvents } from '@/lib/productEvents';
+import { getCachedSession, type CachedSession } from '@/lib/authClient';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
+import { MeetingInProgressBar } from '@/components/notes/MeetingInProgressBar';
+import { MeetingSessionProvider } from '@/components/notes/MeetingSessionProvider';
 import { startKeyboardToneSync } from '@/lib/keyboardToneSync';
+import { startKeyboardTranslationSync } from '@/lib/keyboardTranslationSync';
 import { startKeyboardAgentSync } from '@/lib/keyboardAgentSync';
+import { startKeyboardCredentialSync } from '@/lib/keyboardCredentialSync';
+import { startKeyboardDirectSync } from '@/lib/keyboardDirectSync';
+import { startKeyboardTypingSync } from '@/lib/keyboardTypingSync';
+import { startKeyboardDirectOutbox } from '@/lib/keyboardDirectOutbox';
 import { startKeyboardFullAccessProbe } from '@/lib/keyboardFullAccessProbe';
 import { OpenWhisprSuperwallProvider } from '@/components/superwall/OpenWhisprSuperwallProvider';
 import { eraseProviderCredentialsFromPreviousInstall } from '@/services/providers/ProviderCredentials';
@@ -51,7 +60,11 @@ runMigrations();
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootLayout() {
-  useKeyboardHandoff();
+  const [keyboardStartup, setKeyboardStartup] = useState<{
+    ready: boolean;
+    session: CachedSession | null;
+  }>({ ready: false, session: null });
+  useKeyboardHandoff(keyboardStartup.ready, keyboardStartup.session);
   useRevenueCatIdentity();
   useAnonymousOnboardingSession();
   useAffiliateAttribution();
@@ -91,18 +104,33 @@ function RootLayout() {
   };
 
   useEffect(() => {
+    let mounted = true;
+    const cachedSession = getCachedSession();
     initialize();
-    loadConfig();
-    hydrateOnboarding();
+    // Restore local capture state before starting, independently of auth's network request.
+    Promise.allSettled([loadConfig(), hydrateOnboarding(), cachedSession]).then((results) => {
+      if (!mounted) return;
+      const session = results[2];
+      setKeyboardStartup({
+        ready: true,
+        session: session.status === 'fulfilled' ? session.value : null,
+      });
+    });
     startRetiredPromptSweep();
     // A failure leaves the install unmarked, so the next key access retries the erase.
     eraseProviderCredentialsFromPreviousInstall().catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
   }, [initialize, loadConfig, hydrateOnboarding]);
 
   useEffect(() => {
     let started = false;
     let stopTone: (() => void) | undefined;
+    let stopTranslation: (() => void) | undefined;
     let stopAgent: (() => void) | undefined;
+    let stopDirect: (() => void) | undefined;
+    let stopTyping: (() => void) | undefined;
     let stopFullAccessProbe: (() => void) | undefined;
     // Waits for config to hydrate so the probe's Sentry events respect the
     // user's Usage Analytics preference rather than the pre-hydration default.
@@ -111,7 +139,10 @@ function RootLayout() {
       if (state.config !== null && !state.isLoading) {
         started = true;
         stopTone = startKeyboardToneSync();
+        stopTranslation = startKeyboardTranslationSync();
         stopAgent = startKeyboardAgentSync();
+        stopDirect = startKeyboardDirectSync();
+        stopTyping = startKeyboardTypingSync();
         stopFullAccessProbe = startKeyboardFullAccessProbe();
       }
     };
@@ -121,14 +152,24 @@ function RootLayout() {
     return () => {
       unsubscribe();
       stopTone?.();
+      stopTranslation?.();
       stopAgent?.();
+      stopDirect?.();
+      stopTyping?.();
       stopFullAccessProbe?.();
     };
   }, []);
 
   useEffect(() => {
     initSyncTriggers();
+    initProductEvents();
   }, []);
+
+  // Keeps the keyboard's copy of the session in step with sign-in, sign-out and account changes.
+  useEffect(() => startKeyboardCredentialSync(), []);
+
+  // Brings dictations the keyboard finished on its own into History.
+  useEffect(() => startKeyboardDirectOutbox(), []);
 
   // After an interactive sign-in (AuthScreen was shown, then auth completed),
   // land on home instead of restoring the route that was active before — e.g. the
@@ -241,7 +282,13 @@ function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <OpenWhisprSuperwallProvider>
-        <SafeAreaProvider>{renderInner()}</SafeAreaProvider>
+        <SafeAreaProvider>
+          {/* Above the auth and onboarding switch, so a sign-out never unmounts a meeting. */}
+          <MeetingSessionProvider>
+            {renderInner()}
+            <MeetingInProgressBar />
+          </MeetingSessionProvider>
+        </SafeAreaProvider>
         <PermissionAlertMount />
         {showSplash && <AnimatedSplash appReady={appReady} onFinish={() => setShowSplash(false)} />}
       </OpenWhisprSuperwallProvider>

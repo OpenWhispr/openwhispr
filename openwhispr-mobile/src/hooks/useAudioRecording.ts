@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { createTranscriptId, useTranscriptStore } from '../store/useTranscriptStore';
@@ -17,10 +17,21 @@ import {
   NO_SPEECH_ERROR_MESSAGE,
 } from '../lib/permissions';
 import { getPreferredTranscriptionLanguage } from '../lib/transcriptionLanguage';
+import {
+  isMeetingRecordingRefusal,
+  MEETING_RECORDING_REFUSAL,
+} from '../lib/meetingRecordingRefusal';
+import { acquireCaptureLease, isCaptureLeaseHeld, releaseCaptureLease } from '../lib/captureLease';
 import { toFriendlyTranscriptionErrorMessage } from '../lib/transcriptionErrors';
 import { deleteManagedTranscriptAudio, retainTranscriptAudio } from '../lib/transcriptAudio';
 import { isUsageLimitError, type UsageLimitError } from '../lib/usageLimitError';
 import { randomUUID } from '../lib/uuid';
+import {
+  captureDictationContext,
+  recordDictationCompleted,
+  type ProductEventsCaptureContext,
+} from '../lib/productEvents';
+import { countSpokenWords } from '../lib/wordCount';
 import type { TranscriptionProvider } from '../types';
 import {
   getExpoAudioModule,
@@ -55,6 +66,10 @@ export interface UseAudioRecordingOptions {
   // Polled from the moment the recording stops. Once it returns true, transcription retries and
   // cleanup stop and the recording is discarded without reaching history, onComplete or onError.
   shouldCancel?: () => boolean;
+  // Defaults to false. True for original dictation (the home screen, a note), which reports its
+  // word count, never its words, toward the dashboard's first 200 words. A question to the chat,
+  // a meeting or a voice sample is not dictation.
+  recordsDictation?: boolean;
 }
 
 type RetainedRecordingAudio = {
@@ -88,12 +103,17 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   const addTranscript = useTranscriptStore((state) => state.addTranscript);
   const addFailedTranscript = useTranscriptStore((state) => state.addFailedTranscript);
   const jobRouteRef = useRef<TranscriptionJobRoute>({ provider: 'cloud' });
+  const captureContextRef = useRef<ProductEventsCaptureContext | null>(null);
   // Held only across a native stop: whichever stop or cancel claims it owns the recording, so a
   // second one never stops it again or deletes the file the first is transcribing.
   const stoppingRef = useRef(false);
   // Whether the recording this hook started is still open. A call or Siri pauses the recorder,
   // which then reports not recording, so cancel can't read that from the recorder.
   const openRef = useRef(false);
+  // Meetings (background recording) park the keyboard's warm mic for as long as they capture.
+  const leaseHeldRef = useRef(false);
+  // An acquire can still be pending when the hook unmounts; it must not leave the lease held.
+  const mountedRef = useRef(true);
 
   const recorderOptions = getDefaultRecorderOptions();
   const audioRecorder = useAudioRecorder(recorderOptions);
@@ -102,6 +122,23 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   const saveToHistory = options.saveToHistory !== false;
   const cleanup = options.cleanup !== false;
   const isCancelled = (): boolean => options.shouldCancel?.() === true;
+
+  // Call only once the native recorder has stopped: releasing sooner lets the warm mic re-arm
+  // while this recorder's teardown is still deactivating the shared audio session.
+  const releaseLease = (): void => {
+    if (!leaseHeldRef.current) return;
+    leaseHeldRef.current = false;
+    releaseCaptureLease('meeting-local');
+  };
+
+  // The recorder belongs to this hook and goes down with it, so the lease must too.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      releaseLease();
+    };
+  }, []);
 
   const ensureAudioSupport = () => {
     if (!isSupported || !expoAudio || !audioRecorder) {
@@ -117,7 +154,15 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   };
 
   const startRecording = async () => {
+    // A second start while a capture is open reuses its lease, so only the call that acquired
+    // may release it when it fails.
+    let acquiredHere = false;
     try {
+      // Before any audio-session call. The meeting recorder holds this lease itself, so only
+      // hooks that are not the meeting recorder are refused.
+      if (!allowsBackgroundRecording && isCaptureLeaseHeld()) {
+        throw new Error(MEETING_RECORDING_REFUSAL);
+      }
       const { expoAudio: audioModule, audioRecorder: recorder } = ensureAudioSupport();
 
       // Check status before requesting: iOS shows its system dialog only on
@@ -146,6 +191,17 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         }
       }
 
+      if (allowsBackgroundRecording && !leaseHeldRef.current) {
+        await acquireCaptureLease('meeting-local');
+        leaseHeldRef.current = true;
+        acquiredHere = true;
+        if (!mountedRef.current) {
+          releaseLease();
+          // Reject so the caller doesn't create a meeting note for a recording that never began.
+          throw new Error('Recording was abandoned before it started');
+        }
+      }
+
       try {
         await audioModule.AudioModule.setAudioModeAsync({
           allowsRecording: true,
@@ -170,15 +226,17 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         ? snapshotTranscriptionJob('dictation')
         : { ...snapshotTranscriptionJob('dictation', []), cleanupUnavailable: CLEANUP_OFF };
       await recorder.prepareToRecordAsync(recorderOptions);
+      captureContextRef.current = options.recordsDictation ? captureDictationContext() : null;
       await recorder.record();
       openRef.current = true;
 
       setIsRecording(true);
       setCurrentText('');
     } catch (error) {
+      if (acquiredHere) releaseLease();
       // Permission denial is a normal user state — surfaced by onError as a
       // friendly alert. Skip console.error so dev LogBox doesn't show a red toast.
-      if (!isMicPermissionError(error)) {
+      if (!isMicPermissionError(error) && !isMeetingRecordingRefusal(error)) {
         console.error('[audio] Start recording error:', error);
       }
       if (error instanceof Error) {
@@ -197,12 +255,16 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         return;
       }
 
+      // Keep this capture's owner even if another session or recording starts while it processes.
+      const captureContext = captureContextRef.current;
       stoppingRef.current = true;
       try {
         await recorder.stop();
         openRef.current = false;
       } finally {
         stoppingRef.current = false;
+        // Also on a rejected stop: a failed stop must not leave the keyboard's mic parked.
+        releaseLease();
       }
 
       const uri = recorder.uri;
@@ -243,7 +305,13 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       sourceUriToDiscard = null;
       const transcriptionProvider = jobRouteRef.current.provider;
       try {
-        await finalizeRecording(retained, transcriptionProvider, clientTranscriptionId);
+        await finalizeRecording(
+          retained,
+          transcriptionProvider,
+          clientTranscriptionId,
+          false,
+          captureContext,
+        );
       } catch (transcribeError) {
         if (isCancelled()) {
           await discardRetainedAudio(retained);
@@ -266,7 +334,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
           }
           options.onLocalModelMissing(
             () => {
-              retryWithCloud(retained, clientTranscriptionId);
+              retryWithCloud(retained, clientTranscriptionId, captureContext);
             },
             () => (saveToHistory ? Promise.resolve() : discardRetainedAudio(retained)),
           );
@@ -279,7 +347,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
             await addFailedRecording(retained, transcriptionProvider, transcribeError);
           }
           await options.onUsageLimitReached(transcribeError, () =>
-            retryWithCloud(retained, clientTranscriptionId),
+            retryWithCloud(retained, clientTranscriptionId, captureContext),
           );
           // Recovery is over, retried or declined; a retry already removed it.
           if (!saveToHistory) await discardRetainedAudio(retained);
@@ -355,6 +423,8 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
     retained: RetainedRecordingAudio,
     provider: TranscriptionProvider,
     clientTranscriptionId: string,
+    retranscribe: boolean,
+    captureContext: ProductEventsCaptureContext | null,
   ) => {
     if (isCancelled()) {
       await discardRetainedAudio(retained);
@@ -391,6 +461,16 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
     const finalText = cleanup ? processedResult.text : processedResult.originalText;
     if (!finalText.trim()) {
       throw new Error(NO_SPEECH_ERROR_MESSAGE);
+    }
+    if (options.recordsDictation && captureContext) {
+      recordDictationCompleted({
+        context: captureContext,
+        captureId: clientTranscriptionId,
+        words: countSpokenWords(processedResult.originalText),
+        provider: processedResult.transcription.provider,
+        source: 'dictation',
+        retranscribe,
+      });
     }
 
     if (!saveToHistory) {
@@ -430,6 +510,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   const retryWithCloud = async (
     retained: RetainedRecordingAudio,
     clientTranscriptionId: string,
+    captureContext: ProductEventsCaptureContext | null,
   ) => {
     setIsProcessing(true);
     try {
@@ -438,7 +519,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       jobRouteRef.current = cleanup
         ? { provider: 'cloud', ...snapshotTextInference('cloud') }
         : { provider: 'cloud', cleanupUnavailable: CLEANUP_OFF };
-      await finalizeRecording(retained, 'cloud', clientTranscriptionId);
+      await finalizeRecording(retained, 'cloud', clientTranscriptionId, true, captureContext);
     } catch (error) {
       if (isCancelled()) {
         await discardRetainedAudio(retained);
@@ -446,7 +527,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       }
       if (isUsageLimitError(error) && options.onUsageLimitReached) {
         await options.onUsageLimitReached(error, () =>
-          retryWithCloud(retained, clientTranscriptionId),
+          retryWithCloud(retained, clientTranscriptionId, captureContext),
         );
         if (!saveToHistory) await discardRetainedAudio(retained);
         return;
@@ -483,6 +564,9 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         await audioRecorder.stop();
       } catch (stopError) {
         if (!paused) throw stopError;
+      } finally {
+        // Also on a rejected stop: a failed stop must not leave the keyboard's mic parked.
+        releaseLease();
       }
       openRef.current = false;
       if (uri) {
@@ -497,19 +581,35 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   };
 
   // Meeting-specific: stops recording and returns the raw URI without running the dictation finalize path.
+  // A call or Siri may have paused the recorder, so "open" comes from openRef, not from the recorder:
+  // the audio captured up to the pause must still reach the caller.
   const stopRecordingRaw = async (): Promise<string | null> => {
-    if (!audioRecorder.isRecording) return null;
+    if (!openRef.current) {
+      // Nothing to stop, but never leave the keyboard's mic parked.
+      releaseLease();
+      return null;
+    }
     stoppingRef.current = true;
+    const paused = !audioRecorder.isRecording;
     try {
+      // A paused recorder may refuse to stop even though its file is complete; keep the file.
       await audioRecorder.stop();
+      openRef.current = false;
+    } catch (stopError) {
+      if (!paused) throw stopError;
       openRef.current = false;
     } finally {
       stoppingRef.current = false;
+      releaseLease();
     }
     setIsRecording(false);
     setIsProcessing(false);
     return audioRecorder.uri ?? null;
   };
+
+  // Reads the refs at call time so a caller can hold one identity: asking a recorder to resume
+  // while a stop is awaiting it would restart the recording the user is ending.
+  const canResumeRecording = (): boolean => openRef.current && !stoppingRef.current;
 
   return {
     isRecording,
@@ -520,6 +620,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
     stopRecording,
     stopRecordingRaw,
     cancelRecording,
+    canResumeRecording,
     audioRecorder,
   };
 }

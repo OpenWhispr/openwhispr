@@ -106,18 +106,118 @@ export function findSnippetTriggerRanges(
     }));
 }
 
+/** Variable names a snippet replacement may hold as `{{name}}`. */
+export const SNIPPET_VARIABLE_NAMES = ["date", "time", "datetime", "locale"] as const;
+
+export interface SnippetVariableContext {
+  now?: Date;
+  /** BCP 47 locale the date and time are written in; see `snippetLocale`. */
+  locale?: string;
+}
+
+function runtimeLocale(): string | undefined {
+  return typeof navigator !== "undefined" ? navigator.language : undefined;
+}
+
 /**
- * Replace every spoken trigger with its saved text in a single pass.
+ * The locale snippet dates are written in. The app's UI language decides it;
+ * the runtime locale (Chromium's, from the OS) only adds its region when the
+ * UI language names none and both share a language, so an English UI on a
+ * British system writes 18/11/2026 rather than 11/18/2026.
  */
-export function expandSnippets(text: string, snippets?: Snippet[] | null): string {
+export function snippetLocale(
+  uiLanguage?: string | null,
+  runtime: string | undefined = runtimeLocale()
+): string {
+  const fallback = runtime || "en";
+  if (!uiLanguage) return fallback;
+  if (uiLanguage.includes("-")) return uiLanguage;
+  const runtimeLanguage = fallback.split("-")[0].toLowerCase();
+  return runtimeLanguage === uiLanguage.toLowerCase() ? fallback : uiLanguage;
+}
+
+function snippetVariableValues(now: Date, locale: string): Map<string, string> {
+  const format = (options: Intl.DateTimeFormatOptions): string =>
+    new Intl.DateTimeFormat(locale, options).format(now);
+  const shortTime = new Intl.DateTimeFormat(locale, { timeStyle: "short" });
+  // timeStyle knows whether a locale pads the hour (en-US 9:05 AM, de 09:05,
+  // ja 9:05) but can't be combined with date fields, so datetime copies it
+  // from how it writes 9 o'clock.
+  const hourPadded =
+    shortTime.formatToParts(new Date(2000, 0, 1, 9)).find((part) => part.type === "hour")?.value
+      .length === 2;
+  const dateParts = { year: "numeric", month: "2-digit", day: "2-digit" } as const;
+  return new Map([
+    ["date", format(dateParts)],
+    ["time", shortTime.format(now)],
+    [
+      "datetime",
+      format({ ...dateParts, hour: hourPadded ? "2-digit" : "numeric", minute: "2-digit" }),
+    ],
+    ["locale", locale],
+  ]);
+}
+
+/**
+ * Fill `{{date}}`, `{{time}}`, `{{datetime}}` and `{{locale}}` in a snippet's
+ * saved text. Any other `{{…}}` is left as typed. There is no escape: a saved
+ * snippet holding one of these exact names, from before they existed, now
+ * fills it too, which is what someone typing it almost always meant.
+ */
+export function resolveSnippetVariables(
+  text: string,
+  { now = new Date(), locale = snippetLocale() }: SnippetVariableContext = {}
+): string {
+  if (!text.includes("{{")) return text;
+  let values: Map<string, string> | undefined;
+  return text.replace(/\{\{([A-Za-z][A-Za-z0-9_]*)\}\}/g, (placeholder, name: string) => {
+    values ??= snippetVariableValues(now, locale);
+    return values.get(name) ?? placeholder;
+  });
+}
+
+/**
+ * Replace every spoken trigger with its saved text in a single pass, filling
+ * variables in that saved text only: a `{{date}}` the user dictated, or the
+ * cleanup model wrote, is not a snippet's and stays as it is.
+ */
+export function expandSnippets(
+  text: string,
+  snippets?: Snippet[] | null,
+  context: SnippetVariableContext = {}
+): string {
   if (!text) return text;
   const matcher = getMatcher(snippets);
   if (!matcher) return text;
   const { regex, replacements } = matcher;
+  // One clock for every replacement, so two stamps in one dictation agree.
+  const variables = { now: context.now ?? new Date(), locale: context.locale ?? snippetLocale() };
   // NFC so a decomposed "I" + U+0307 in the transcript recombines into İ.
-  return text
-    .normalize("NFC")
-    .replace(regex, (match) => resolveReplacement(match, replacements) ?? match);
+  return text.normalize("NFC").replace(regex, (match) => {
+    const replacement = resolveReplacement(match, replacements);
+    return replacement === undefined ? match : resolveSnippetVariables(replacement, variables);
+  });
+}
+
+// Cleanup can change the surrounding prose and casing, but it must preserve
+// the saved text each spoken trigger will insert, in order and with repeats.
+export function preservesSnippetExpansions(
+  spoken: string,
+  rewritten: string,
+  snippets?: Snippet[] | null
+): boolean {
+  const matcher = getMatcher(snippets);
+  if (!matcher) return true;
+  const replacementsIn = (text: string): string[] =>
+    Array.from(text.normalize("NFC").matchAll(matcher.regex), ([match]) =>
+      resolveReplacement(match, matcher.replacements)
+    ).filter((replacement) => replacement !== undefined);
+  const original = replacementsIn(spoken);
+  const candidate = replacementsIn(rewritten);
+  return (
+    original.length === candidate.length &&
+    original.every((replacement, index) => replacement === candidate[index])
+  );
 }
 
 interface DictionaryHintSettings {
@@ -146,7 +246,9 @@ function dedupeBelow(words: string[], seen: Set<string>): string[] {
 // The personal dictionary words that apply: all of them, except moved words
 // whose shared copies the member hid (see SharedHintWords.suppressedPersonal).
 // Without suppressed words this is the saved list itself.
-function personalDictionary(settings: DictionaryHintSettings | null | undefined): string[] {
+export function getPersonalDictionaryWords(
+  settings: DictionaryHintSettings | null | undefined
+): string[] {
   const dictionary = Array.isArray(settings?.customDictionary) ? settings.customDictionary : [];
   const suppressed = wordList(settings?.sharedDictionaryHints?.suppressedPersonal);
   if (suppressed.length === 0) return dictionary;
@@ -171,7 +273,7 @@ function sharedTiers(
  * dedupe) so a list without shared words is exactly what it always was.
  */
 export function getDictionaryHintTiers(settings?: DictionaryHintSettings | null): string[][] {
-  const dictionary = personalDictionary(settings);
+  const dictionary = getPersonalDictionaryWords(settings);
   const snippets = Array.isArray(settings?.snippets) ? settings.snippets : [];
   const triggers = snippets
     .map((s) => s?.trigger)
@@ -189,7 +291,7 @@ export function getDictionaryHintWords(settings?: DictionaryHintSettings | null)
 }
 
 function effectiveTiers(settings?: DictionaryHintSettings | null): string[][] {
-  const personal = personalDictionary(settings);
+  const personal = getPersonalDictionaryWords(settings);
   return [personal, ...sharedTiers(settings, personal)];
 }
 
@@ -272,6 +374,13 @@ export function getKeytermDictionaryWords(settings?: DictionaryHintSettings | nu
     totalChars: MAX_TOTAL_KEYTERM_CHARS,
     maxWordLength: MAX_KEYTERM_LENGTH,
   });
+}
+
+export function limitBatchKeyterms(words: string[]): string[] {
+  return words
+    .map((word) => word.trim().slice(0, MAX_KEYTERM_LENGTH))
+    .filter(Boolean)
+    .slice(0, MAX_TOTAL_KEYTERMS);
 }
 
 /**

@@ -11,6 +11,7 @@ interface LiveActivityNativeModule {
   setDictationMode(enabled: boolean): void;
   isDictationModeEnabled(): boolean;
   startMeeting(title: string | null, startedAtMs: number): void;
+  setMeetingCapture(capturing: boolean, recordedSeconds: number): void;
   setMeetingProcessing(recordedSeconds: number): void;
   endMeeting(): void;
 }
@@ -69,6 +70,17 @@ export const LiveActivity = {
    *  meeting screen), since iOS only starts Live Activities from the foreground. */
   startMeeting({ title, startedAt }: { title: string | null; startedAt: number }): void {
     NativeModule?.startMeeting(normalizeMeetingTitle(title), startedAt);
+  },
+  /** Show "Recording paused" while the mic isn't capturing; resuming restarts the card's
+   *  timer from the captured time. Ignored unless a meeting is recording or paused. */
+  setMeetingCapture({
+    capturing,
+    recordedSeconds,
+  }: {
+    capturing: boolean;
+    recordedSeconds: number;
+  }): void {
+    NativeModule?.setMeetingCapture(capturing, Math.max(0, Math.floor(recordedSeconds)));
   },
   /** Switch the meeting card to "Processing notes…". */
   setMeetingProcessing({ recordedSeconds }: { recordedSeconds: number }): void {

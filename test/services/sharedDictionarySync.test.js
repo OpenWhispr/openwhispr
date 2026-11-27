@@ -810,6 +810,7 @@ test("a failed clear after NOT_MEMBER publishes empty hints instead of reloading
   assert.deepEqual(ctx.hints(), { space: [], workspace: [] });
   assert.deepEqual(JSON.parse(harness.localStorage.getItem("sharedDictionaryHints")), {
     workspaceId: W1,
+    accountId: null,
     space: [],
     workspace: [],
   });
@@ -1363,7 +1364,7 @@ test("an external upgrade retries a failed billing refresh on the next shared pa
   assert.deepEqual(ctx.hints().workspace, ["Qdrant"]);
 });
 
-for (const outcome of ["success", "shared failure", "personal failure"]) {
+for (const outcome of ["success", "shared failure", "personal failure", "late personal failure"]) {
   test(`background dictionary sync timestamp reflects ${outcome}`, async (t) => {
     const ctx = await setupPersonal(t);
     t.mock.method(console, "error", () => {});
@@ -1375,9 +1376,15 @@ for (const outcome of ["success", "shared failure", "personal failure"]) {
       "syncConversations",
       "syncTranscriptions",
       "syncSnippets",
+      "syncSkills",
       "syncAnalytics",
     ]) {
-      t.mock.method(ctx.service, phase, async () => {});
+      t.mock.method(ctx.service, phase, async () => {
+        if (phase === "syncAnalytics" && outcome === "late personal failure") {
+          ctx.cloud.failNext("/api/dictionary/list", { status: 503, code: "UNAVAILABLE" });
+          await ctx.service.syncDictionaryNow();
+        }
+      });
     }
     const previousSync = "2000-01-01T00:00:00.000Z";
     ctx.useSharedDictionaryStore.setState({ lastSyncedAt: previousSync });
@@ -1392,7 +1399,10 @@ for (const outcome of ["success", "shared failure", "personal failure"]) {
     // The changed event can reload partial mirror writes after a failed background pass.
     await ctx.useSharedDictionaryStore.getState().reload();
     assert.equal(ctx.cloud.requestsTo(LIST).length, 1);
-    assert.equal(ctx.cloud.requestsTo("/api/dictionary/list").length, 1);
+    assert.equal(
+      ctx.cloud.requestsTo("/api/dictionary/list").length,
+      outcome === "late personal failure" ? 2 : 1
+    );
     const finishedAt = ctx.useSharedDictionaryStore.getState().lastSyncedAt;
     if (outcome === "success") {
       assert.ok(Date.parse(finishedAt) >= started, "a completed pass publishes its time");
@@ -1401,6 +1411,38 @@ for (const outcome of ["success", "shared failure", "personal failure"]) {
     }
   });
 }
+
+test("a backup revocation during a full pass leaves later work in team-only scope", async (t) => {
+  const ctx = await setupPersonal(t);
+  const { usePolicyStore } = require("../../src/stores/policyStore.ts");
+  const { defaultDevicePolicy } = require("../../src/helpers/managedDevicePolicy");
+  const previous = usePolicyStore.getState();
+  usePolicyStore.setState({ status: "unmanaged", policy: null });
+  t.after(() => usePolicyStore.setState(previous));
+  t.mock.method(ctx.service, "syncSpaces", async () => true);
+  t.mock.method(ctx.service, "backfillUnownedCursors", async () => {});
+  ctx.cloud.add(W1, ["Team word"]);
+  t.mock.method(ctx.service, "syncFolders", async () => {
+    const policy = defaultDevicePolicy();
+    policy.dataRetention.cloudBackupAllowed = false;
+    usePolicyStore.setState({ status: "managed", policy, appVersion: "1.11.2" });
+  });
+  const notes = t.mock.method(ctx.service, "syncNotes", async () => {});
+  const privatePhases = [
+    "syncConversations",
+    "syncTranscriptions",
+    "syncDictionary",
+    "syncSnippets",
+  ].map((name) => t.mock.method(ctx.service, name, async () => {}));
+  t.mock.method(ctx.service, "syncAnalytics", async () => {});
+  await ctx.service.syncAll(true);
+  assert.deepEqual(
+    notes.mock.calls.map((call) => call.arguments),
+    [[true]]
+  );
+  for (const phase of privatePhases) assert.equal(phase.mock.callCount(), 0);
+  assert.deepEqual(ctx.hints().workspace, ["Team word"]);
+});
 
 test("manual shared sync distinguishes success, failure, and skipped work", async (t) => {
   const ctx = await setup(t);
