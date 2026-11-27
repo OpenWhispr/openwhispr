@@ -22,6 +22,8 @@ model_cache=(whisper-models parakeet-models diarization-models models whisper-va
 temp_prefixes=(ow- openwhispr- whisper-input- whisper-output- parakeet- enterprise-buffer- enterprise-chunks- kwin-active-class-)
 # MACOS_PREFERENCES_DOMAIN in src/helpers/managedDevicePolicy.js.
 preferences_domain=com.gizmolabs.openwhispr
+# The app's data folder, named after package.json's "name", as Electron names it.
+data_folder="Library/Application Support/open-whispr"
 
 # A Jamf Pro policy passes the target volume, the computer name and the user
 # name first; its own parameters start at $4, and those left blank arrive empty.
@@ -40,7 +42,7 @@ for arg in "$@"; do
 done
 if [[ ${#homes[@]} -eq 0 ]]; then
   for home in /Users/*; do
-    [[ -d "$home/Library/Application Support/OpenWhispr" ]] && homes+=("$home")
+    [[ -d "$home/$data_folder" ]] && homes+=("$home")
   done
 fi
 
@@ -72,12 +74,23 @@ in_home_folder() {
 }
 
 remove() {
+  local link=""
+  # Chromium's own lock links (SingletonLock, SingletonSocket, SingletonCookie),
+  # which an app that didn't quit cleanly leaves, aren't a store the user moved.
+  [[ ! -L "$1" || "${1##*/}" == Singleton* ]] || link="$(readlink "$1")" || link="elsewhere"
   if as_root; then
     in_home_folder "${1%/*}" rm -rf -- "./${1##*/}"
   else
     printf '%s\0' "$1" | as_owner rm -rf
   fi 2>/dev/null || {
     echo "Could not remove $1" >&2
+    failed=1
+    return 0
+  }
+  # One the user moved elsewhere through a link: the link goes, but what it
+  # leads to isn't followed, so it is reported, as the app reports it.
+  [[ -z "$link" ]] || {
+    echo "Removed $1: it led to $link, which wasn't removed" >&2
     failed=1
   }
 }
@@ -157,16 +170,26 @@ remove_if_emptied() {
 # after the checks can't hold the run, nor can a sparse file that takes no room
 # but would take days to read. The app can't read a note over 512 MiB either.
 # A home's record is bounded too, in files and in what they hold together, so
-# one home can't hold up the homes after it for hours.
+# one home can't hold up the homes after it for hours. Perl, since zsh's
+# sysopen can't open a name with some non-ASCII characters in it (a dash, CJK).
 max_note_bytes=$((512 << 20))
 max_database_bytes=$((4 << 30))
 max_mirror_rows=50000
 max_mirror_bytes=$((4 << 30))
-read_regular_file='
-  zmodload zsh/system zsh/stat && IFS= read -r -d "" file &&
-  sysopen -r -o nofollow,nonblock -u fd -- "$file" && zstat -H st -f $fd &&
-  (( (st[mode] & 8#170000) == 8#100000 && st[size] <= $1 )) && head -c "$1" <&$fd'
-read_as_owner() { printf '%s\0' "$1" | as_owner_run /bin/zsh -fc "$read_regular_file" zsh "$2"; }
+read_regular_file='use Fcntl;
+  local $/ = "\0"; my $file = <STDIN>; defined $file or exit 1; chomp $file;
+  sysopen(my $fh, $file, O_RDONLY | O_NOFOLLOW | O_NONBLOCK) or exit 1;
+  my @st = stat($fh) or exit 1;
+  -f _ && $st[7] <= $ARGV[0] or exit 1;
+  binmode STDOUT;
+  for (my $left = $ARGV[0]; $left > 0;) {
+    my $read = sysread($fh, my $chunk, $left < 65536 ? $left : 65536);
+    defined $read or exit 1;
+    last unless $read;
+    print $chunk or exit 1;
+    $left -= $read;
+  }'
+read_as_owner() { printf '%s\0' "$1" | as_owner_run /usr/bin/perl -e "$read_regular_file" "$2"; }
 
 # In each folder of the home the notes mirror wrote to, the user's chosen ones
 # included, removes only the files the app's database records it writing there
@@ -342,12 +365,14 @@ configured_audit_dir() {
 # Appends $3 to the daily file $2 in folder $1 as the app does
 # (meetingAuditLog.js): never through a link, and only to a regular file the
 # writer owns that has no other name. A FIFO planted there can't hold the open.
-append_audit_line='
-  zmodload zsh/system zsh/stat && mkdir -p -- "$1" || exit 1
-  sysopen -a -o creat,nofollow,nonblock -m 644 -u fd -- "$1/$2" || exit 1
-  zstat -H st -f $fd || exit 1
-  (( st[nlink] == 1 && st[uid] == EUID && (st[mode] & 8#170000) == 8#100000 )) || exit 1
-  print -r -u $fd -- "$3"'
+append_audit_line='use Fcntl; use File::Path qw(make_path);
+  my ($dir, $name, $line) = @ARGV;
+  -d $dir or make_path($dir);
+  sysopen(my $fh, "$dir/$name", O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW | O_NONBLOCK, 0644) or exit 1;
+  my @st = stat($fh) or exit 1;
+  -f _ && $st[3] == 1 && $st[4] == $> or exit 1;
+  print $fh "$line\n" or exit 1;
+  close $fh or exit 1'
 
 # Records the home's wipe in its user's audit log as the app records its own:
 # one line in their daily file, in AuditLogPath or else the audit folder the
@@ -362,7 +387,7 @@ record_wipe() {
   line="$(printf '{"ts":"%s","event":"local-data.wiped","sessionId":null,"noteId":null,"trigger":"script","reason":%s,"durationSec":null,"participantsNotified":null,"notificationMethod":null,"externalAttendees":null,"appVersion":null,"deviceUser":"%s"}' \
     "$ts" "$reason" "$user")"
   for dir in ${configured:+"$configured"} "$user_data/audit"; do
-    as_owner_run /bin/zsh -fc "$append_audit_line" zsh "$dir" \
+    as_owner_run /usr/bin/perl -e "$append_audit_line" "$dir" \
       "meeting-audit-$user-${ts:0:10}.jsonl" "$line" 2>/dev/null && return 0
   done
   echo "Could not record the wipe in the audit log for $home" >&2
@@ -419,7 +444,7 @@ for home in "${homes[@]}"; do
   keep_database=0
   user="$(id -un "$owner_uid" 2>/dev/null)" || user=""
   quit_app "$owner_uid"
-  user_data="$home/Library/Application Support/OpenWhispr"
+  user_data="$home/$data_folder"
   # Marked before anything goes, so a run cut short leaves the app to finish
   # the wipe before it opens (SCRIPT_WIPE_MARKER in localDataWipe.js); a run
   # that finishes takes the mark. A home whose account is gone has no one to

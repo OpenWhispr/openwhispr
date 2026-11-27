@@ -723,6 +723,25 @@ test(
   }
 );
 
+// Linux's /tmp is every account's.
+test(
+  "a temp file another account owns is left alone",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async () => {
+    const other = path.join(roots.temp[0], "ow-other.wav");
+    seed(other);
+    const { getuid } = process;
+    const uid = getuid();
+    process.getuid = () => uid + 1;
+    try {
+      assert.deepEqual(await removeLocalData({ includeModels: false, roots }), []);
+      assert.equal(fs.existsSync(other), true);
+    } finally {
+      process.getuid = getuid;
+    }
+  }
+);
+
 // Windows has no owner to check, and the temp folder getSafeTempDir() falls back
 // to is every such account's. The user's own temp folder is theirs alone.
 test(
@@ -1038,6 +1057,10 @@ test("the launch wipe runs before the logger, catalog and core managers, then re
   // One read of the device policy serves the wipe and the device policy's first snapshot.
   at("readDevicePolicy: async () => normalizeDeviceValues(await launchDeviceRead)");
   assert.ok(main.includes("const read = launchDeviceRead ?? readDeviceValues();"));
+  // The dialog of a wipe that didn't finish speaks the user's language, read
+  // before the wipe took .env's values out of the environment.
+  assert.ok(at("const uiLanguage = process.env.UI_LANGUAGE || app.getLocale();") < wipe);
+  assert.ok(at("changeLanguage(uiLanguage);") < at("dialog.showErrorBox("));
 });
 
 // The scripts run without the app, so they carry their own copy of the lists.
@@ -1059,6 +1082,17 @@ test("the MDM scripts keep and treat as models exactly what the app does", () =>
     assert.deepEqual(bashList(bashName), expected, bashName);
     assert.deepEqual(powershellList(powershellName), expected, powershellName);
   }
+});
+
+// Electron names the data folder after package.json's productName, else its name.
+test("the MDM scripts clean the data folder the app writes", () => {
+  const { name, productName } = require("../../package.json");
+  const folder = productName ?? name;
+  const scripts = path.join(__dirname, "../../scripts/mdm");
+  const bash = fs.readFileSync(path.join(scripts, "wipe-local-data-macos.sh"), "utf8");
+  const powershell = fs.readFileSync(path.join(scripts, "wipe-local-data-windows.ps1"), "utf8");
+  assert.ok(bash.includes(`data_folder="Library/Application Support/${folder}"`));
+  assert.ok(powershell.includes(`"AppData\\Roaming\\${folder}"`));
 });
 
 // The macOS script with stand-ins for what it reaches outside the home: never
@@ -1093,7 +1127,7 @@ test(
   { skip: process.platform !== "darwin" },
   async (t) => {
     const home = path.join(root, "home");
-    const userData = path.join(home, "Library", "Application Support", "OpenWhispr");
+    const userData = path.join(home, "Library", "Application Support", "open-whispr");
     mirrorWrote(userData, path.join(home, "Vault"), "Personal/1-a.md", mirrored(1));
     if (!fs.existsSync(path.join(root, "HOME"))) return t.skip("case-sensitive volume");
     macosScript()(path.join(root, "HOME"));
@@ -1106,7 +1140,7 @@ test(
   "the macOS script marks a home before it removes anything there",
   { skip: process.platform === "win32" || process.getuid?.() === 0 },
   async () => {
-    const userData = path.join(root, "home", "Library", "Application Support", "OpenWhispr");
+    const userData = path.join(root, "home", "Library", "Application Support", "open-whispr");
     seed(path.join(userData, "audio", "1.webm"));
     const marker = path.join(userData, "local-data-wipe.pending");
     const seen = path.join(root, "marked-at-first-removal");
@@ -1127,7 +1161,7 @@ test(
     seed(path.join(real, "audio", "1.webm"));
     seed(path.join(home, ".cache", "openwhispr", "qdrant-data", "item"));
     fs.mkdirSync(path.join(home, "Library", "Application Support"), { recursive: true });
-    fs.symlinkSync(real, path.join(home, "Library", "Application Support", "OpenWhispr"));
+    fs.symlinkSync(real, path.join(home, "Library", "Application Support", "open-whispr"));
     assert.throws(
       () => macosScript()(home),
       (error) => error.status === 1 && error.stderr.includes("can't be marked")
@@ -1142,7 +1176,7 @@ test(
   { skip: process.platform === "win32" },
   async () => {
     const home = path.join(root, "home");
-    const userData = path.join(home, "Library", "Application Support", "OpenWhispr");
+    const userData = path.join(home, "Library", "Application Support", "open-whispr");
     const cache = path.join(home, ".cache", "openwhispr");
     for (const name of [
       ...USER_DATA_ENTRIES,
@@ -1173,12 +1207,18 @@ test(
     // the mirror's frontmatter.
     wrote(vault, "Personal/15-retro.md", mirrored(15));
     seed(path.join(vault, "Personal", "15-retro.md"), `${mirrored(15)}\n\nmy edit`);
+    // Titles keep their dashes and scripts.
+    wrote(vault, "Personal/16-standup-–-monday.md", mirrored(16));
+    wrote(vault, "Personal/17-会议.md", mirrored(17));
     seed(path.join(vault, "Zettel", "202311151230-idea.md"), mirrored(202311151230));
     // A record that leads out of the folder through ".." is not followed.
     const beside = path.join(home, "Documents", "Elsewhere");
     wrote(vault, "../Elsewhere/3-plan.md", mirrored(3));
     // A folder of notes with none in it yet: its name goes with it.
     wrote(vault, "Workspaces/Acme/Private/Board - layoffs", "", "dir");
+    // Chromium's lock links, left by an app that didn't quit cleanly, go unreported.
+    for (const name of ["SingletonLock", "SingletonSocket", "SingletonCookie"])
+      fs.symlinkSync(`host-${name}`, path.join(userData, name));
     const run = macosScript();
 
     // A home named by mistake fails the run rather than reporting it wiped.
@@ -1192,9 +1232,10 @@ test(
     assert.doesNotMatch(run(bare), /Removed/);
     assert.deepEqual(fs.readdirSync(bare), []);
     run(home);
-    // From a version before the mirror kept its record: nothing to name, no failure.
-    const older = path.join(root, "older-home");
-    const olderData = path.join(older, "Library", "Application Support", "OpenWhispr");
+    // From a version before the mirror kept its record: nothing to name, no
+    // failure, in a home whose name isn't ASCII.
+    const older = path.join(root, "older–home");
+    const olderData = path.join(older, "Library", "Application Support", "open-whispr");
     fs.mkdirSync(olderData, { recursive: true });
     new (require("better-sqlite3"))(path.join(olderData, "transcriptions.db"))
       .exec("CREATE TABLE notes (id INTEGER)")
@@ -1227,7 +1268,7 @@ test(
     );
     // A database it can't read stays, so a run again can still tell what to remove.
     const corrupt = path.join(root, "corrupt-home");
-    const corruptData = path.join(corrupt, "Library", "Application Support", "OpenWhispr");
+    const corruptData = path.join(corrupt, "Library", "Application Support", "open-whispr");
     seed(path.join(corruptData, "transcriptions.db"), "not a database");
     assert.throws(
       () => run(corrupt),
@@ -1241,7 +1282,7 @@ test(
     ]);
     assert.equal(recorded(corruptData)[0].reason, "incomplete");
     const journaled = path.join(root, "journaled-home");
-    const journaledData = path.join(journaled, "Library", "Application Support", "OpenWhispr");
+    const journaledData = path.join(journaled, "Library", "Application Support", "open-whispr");
     mirrorWrote(journaledData, path.join(journaled, "Vault"), "1-a.md", mirrored(1));
     seed(path.join(journaledData, "transcriptions.db-journal"), "journal");
     assert.throws(
@@ -1272,7 +1313,7 @@ test(
     // and the skip fails the device so the MDM tool doesn't show it as wiped.
     const linked = path.join(root, "linked-home");
     const elsewhere = path.join(root, "elsewhere");
-    seed(path.join(linked, "Library", "Application Support", "OpenWhispr", "audio", "1.webm"));
+    seed(path.join(linked, "Library", "Application Support", "open-whispr", "audio", "1.webm"));
     seed(path.join(elsewhere, "openwhispr", "qdrant-data", "item"));
     fs.symlinkSync(elsewhere, path.join(linked, ".cache"));
     assert.throws(
@@ -1283,14 +1324,30 @@ test(
         !error.stdout.includes("Removed OpenWhispr local data")
     );
     assert.equal(fs.existsSync(path.join(elsewhere, "openwhispr", "qdrant-data", "item")), true);
-    const linkedData = path.join(linked, "Library", "Application Support", "OpenWhispr");
+    const linkedData = path.join(linked, "Library", "Application Support", "open-whispr");
     assert.deepEqual(fs.readdirSync(linkedData).sort(), ["audit", "local-data-wipe.pending"]);
     assert.equal(recorded(linkedData)[0].reason, "incomplete");
+
+    // A store the user moved elsewhere and left a link in place of: the link
+    // goes, and what it led to is reported and kept, as the app does.
+    const storeLinked = path.join(root, "store-linked-home");
+    const storeLinkedData = path.join(storeLinked, "Library", "Application Support", "open-whispr");
+    const recordings = path.join(root, "Recordings");
+    seed(path.join(recordings, "1.webm"));
+    fs.mkdirSync(storeLinkedData, { recursive: true });
+    fs.symlinkSync(recordings, path.join(storeLinkedData, "audio"));
+    assert.throws(
+      () => run(storeLinked),
+      (error) =>
+        error.status === 1 && error.stderr.includes(`it led to ${recordings}, which wasn't removed`)
+    );
+    assert.equal(exists(recordings, "1.webm"), true);
+    assert.deepEqual(fs.readdirSync(storeLinkedData).sort(), ["audit", "local-data-wipe.pending"]);
 
     // Run as root, the script never leaves the user's home: a notes folder
     // outside it is reported once and fails the run, and the database still goes.
     const away = path.join(root, "away-home");
-    const awayData = path.join(away, "Library", "Application Support", "OpenWhispr");
+    const awayData = path.join(away, "Library", "Application Support", "open-whispr");
     const shared = path.join(root, "Shared");
     mirrorWrote(awayData, shared, "Team/3-plan.md", mirrored(3));
     mirrorWrote(awayData, shared, "Team/4-plan.md", mirrored(4));
@@ -1310,7 +1367,7 @@ test(
     // it fails the run, and the database still goes.
     for (const inside of [false, true]) {
       const moved = path.join(root, inside ? "moved-in-home" : "moved-out-home");
-      const movedData = path.join(moved, "Library", "Application Support", "OpenWhispr");
+      const movedData = path.join(moved, "Library", "Application Support", "open-whispr");
       const movedVault = path.join(moved, "Vault");
       for (const [relPath, id] of [
         ["Kept/1-a.md", 1],
@@ -1339,7 +1396,7 @@ test(
     // code tells the MDM tool the device failed. (Root ignores the mode.)
     if (process.getuid() !== 0) {
       const stuck = path.join(root, "stuck-home");
-      const stuckData = path.join(stuck, "Library", "Application Support", "OpenWhispr");
+      const stuckData = path.join(stuck, "Library", "Application Support", "open-whispr");
       seed(path.join(stuckData, "audio", "1.webm"));
       seed(path.join(stuckData, "logs", "debug.log"));
       fs.chmodSync(path.join(stuckData, "audio"), 0o555);
@@ -1373,7 +1430,7 @@ test(
   { skip: process.platform === "win32" || process.getuid?.() === 0 },
   async () => {
     const home = path.join(root, "home");
-    const userData = path.join(home, "Library", "Application Support", "OpenWhispr");
+    const userData = path.join(home, "Library", "Application Support", "open-whispr");
     // The logs folder itself: its debug logs still go.
     const auditLogPath = path.join(userData, "logs");
     seed(path.join(userData, "logs", "debug.log"));
@@ -1439,7 +1496,7 @@ test(
   { skip: process.platform === "win32" || process.getuid?.() === 0 },
   async () => {
     const home = path.join(root, "home");
-    const userData = path.join(home, "Library", "Application Support", "OpenWhispr");
+    const userData = path.join(home, "Library", "Application Support", "open-whispr");
     mirrorWrote(userData, home, "Personal/1-a.md", mirrored(1));
     assert.match(macosScript()(home), /Removed/);
     assert.equal(exists(home, "Personal"), false);
@@ -1453,7 +1510,7 @@ test(
   { skip: process.platform === "win32" || process.getuid?.() === 0 },
   async () => {
     const home = path.join(root, "home");
-    const userData = path.join(home, "Library", "Application Support", "OpenWhispr");
+    const userData = path.join(home, "Library", "Application Support", "open-whispr");
     const vault = path.join(home, "Documents", "Vault");
     mirrorWrote(userData, vault, "Personal/1-a.md", mirrored(1));
     fs.truncateSync(path.join(vault, "Personal", "1-a.md"), (512 << 20) + 1);

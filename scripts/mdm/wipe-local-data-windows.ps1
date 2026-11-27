@@ -78,25 +78,33 @@ $fullPath = { param($Path) [IO.Path]::GetFullPath($Path).TrimEnd("\") }
 
 # Deletes a file or folder tree, read-only files included. A junction or link
 # is removed itself, never what it points to (Windows PowerShell's
-# Remove-Item -Recurse can follow one).
+# Remove-Item -Recurse can follow one), and each delete goes only where its path
+# really leads (OpenWhisprNative.Delete), so a user who signs in mid-run can't
+# swap a junction in on the way and send it elsewhere.
 function Remove-Tree([IO.FileSystemInfo]$Item) {
   $isLink = $Item.Attributes -band [IO.FileAttributes]::ReparsePoint
   if ($Item -is [IO.DirectoryInfo] -and -not $isLink) {
     foreach ($child in $Item.GetFileSystemInfos()) { Remove-Entry $child }
   }
-  if ($Item.Attributes -band [IO.FileAttributes]::ReadOnly) {
-    $Item.Attributes = $Item.Attributes -band -bnot [IO.FileAttributes]::ReadOnly
-  }
-  $Item.Delete()
+  [OpenWhisprNative]::Delete($Item.FullName)
 }
 
 # A file that can't go (one in use, say) is reported and the wipe carries on;
 # the script then exits non-zero so the MDM tool shows the device as failed.
 $failed = $false
-function Remove-Entry([IO.FileSystemInfo]$Item) {
+# A store (-Store) the user moved elsewhere and left a junction or link in place
+# of: the link goes, but what it leads to isn't followed, so it is reported, as
+# the app reports it.
+function Remove-Entry([IO.FileSystemInfo]$Item, [switch]$Store) {
   try {
     if ($Item.Name -match $trimmable) { throw "its name ends in a dot or space" }
+    # Read while the link is there.
+    $target = if ($Store -and ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { "$($Item.Target -join ", ")" }
     Remove-Tree $Item
+    if ($null -ne $target) {
+      Write-Warning "Removed $($Item.FullName): it led to $(if ($target) { $target } else { "elsewhere" }), which wasn't removed"
+      $script:failed = $true
+    }
   } catch {
     Write-Warning "Could not remove $($Item.FullName): $($_.Exception.Message)"
     $script:failed = $true
@@ -130,7 +138,7 @@ function Remove-AllExcept([string]$Dir, [string]$Root, [string[]]$Keep, [string]
     if ($isAuditDir -and $item -is [IO.FileInfo] -and $item.Name -match $auditFile) { continue }
     $onTheWay = $audit -and $item -is [IO.DirectoryInfo] -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -and
       ($audit -eq $item.FullName -or $audit.StartsWith("$($item.FullName)\", [StringComparison]::OrdinalIgnoreCase))
-    if ($onTheWay) { Remove-AllExcept $item.FullName $Root @() $Audit } else { Remove-Entry $item }
+    if ($onTheWay) { Remove-AllExcept $item.FullName $Root @() $Audit } else { Remove-Entry $item -Store }
   }
 }
 
@@ -138,12 +146,12 @@ function Remove-TempFiles([string]$Dir, [string]$Root) {
   if (-not (Test-ReachedFolder $Dir $Root)) { return }
   Get-ChildItem -LiteralPath $Dir -Force |
     Where-Object { $name = $_.Name; $tempPrefixes | Where-Object { $name.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) } } |
-    ForEach-Object { Remove-Entry $_ }
+    ForEach-Object { Remove-Entry $_ -Store }
 }
 
 # The native calls the script makes, compiled once: queries through the SQLite
 # that ships with Windows 10 and 11 (winsqlite3.dll; Windows has no sqlite3
-# tool), and an open file's hard link count.
+# tool), an open file's hard link count and real path, and deletes through it.
 function Initialize-Native {
   if ("OpenWhisprNative" -as [type]) { return }
   Add-Type -TypeDefinition @"
@@ -197,22 +205,73 @@ public static class OpenWhisprNative {
     if (!GetFileInformationByHandle(file, info)) throw new Win32Exception();
     return info[10];
   }
+
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern SafeFileHandle CreateFileW(string name, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern uint GetFinalPathNameByHandleW(SafeFileHandle file, StringBuilder path, uint length, uint flags);
+  [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetFileInformationByHandle(SafeFileHandle file, int infoClass, ref uint info, uint size);
+
+  static string Extended(string path) {
+    return path.StartsWith(@"\\") ? @"\\?\UNC\" + path.Substring(2) : @"\\?\" + path;
+  }
+
+  static string FinalPath(SafeFileHandle file) {
+    var real = new StringBuilder(32768);
+    uint length = GetFinalPathNameByHandleW(file, real, (uint)real.Capacity, 0);
+    if (length == 0 || length >= real.Capacity) throw new Win32Exception();
+    return real.ToString();
+  }
+
+  // Whether an open file is the one at path, reached with no junction or link
+  // on the way.
+  public static bool IsAt(SafeFileHandle file, string path) {
+    return string.Equals(FinalPath(file), Extended(path), StringComparison.OrdinalIgnoreCase);
+  }
+
+  // A folder's path as IsAt compares it: short names in long form, and any
+  // junction on the way to it resolved. Only for a root users can't swap.
+  public static string RealPath(string path) {
+    // FILE_READ_ATTRIBUTES, shared, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS.
+    using (var file = CreateFileW(path, 0x80, 7, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero)) {
+      if (file.IsInvalid) throw new Win32Exception();
+      string real = FinalPath(file);
+      return real.StartsWith(@"\\?\UNC\") ? @"\\" + real.Substring(8) : real.Substring(4);
+    }
+  }
+
+  // Deletes the file, empty folder or link at path, read-only or not, through a
+  // handle opened without following a link, once the handle shows it is there.
+  public static void Delete(string path) {
+    // DELETE and FILE_READ_ATTRIBUTES, shared, OPEN_EXISTING, with
+    // FILE_FLAG_BACKUP_SEMANTICS (folders) and FILE_FLAG_OPEN_REPARSE_POINT.
+    using (var file = CreateFileW(Extended(path), 0x10080, 7, IntPtr.Zero, 3, 0x02200000, IntPtr.Zero)) {
+      if (file.IsInvalid) throw new Win32Exception();
+      if (!IsAt(file, path)) throw new Exception("it is reached through a junction or link");
+      // FileDispositionInfoEx: FILE_DISPOSITION_FLAG_DELETE and _IGNORE_READONLY_ATTRIBUTE.
+      uint flags = 0x11;
+      if (!SetFileInformationByHandle(file, 21, ref flags, 4)) throw new Win32Exception();
+    }
+  }
 }
 "@
 }
 
 # Each row of a query on a SQLite database, as text.
 function Read-Sqlite([string]$Database, [string]$Query, [int]$Columns) {
-  Initialize-Native
   return , [OpenWhisprNative]::Query($Database, $Query, $Columns)
 }
+
+Initialize-Native
+
+# Where the database copies go, as IsAt compares it (an admin's temp folder can
+# be named with a short 8.3 name).
+$tempRoot = [OpenWhisprNative]::RealPath([IO.Path]::GetTempPath())
 
 # A folder holding nothing but the files Finder or Windows Explorer leave behind.
 function Remove-IfEmptied([string]$Dir) {
   $children = @(Get-ChildItem -LiteralPath $Dir -Force)
   if (@($children | Where-Object { -not ($_ -is [IO.FileInfo] -and @(".DS_Store", "Thumbs.db", "desktop.ini") -contains $_.Name) }).Count) { return $false }
   foreach ($child in $children) { Remove-Tree $child }
-  (Get-Item -LiteralPath $Dir -Force).Delete()
+  [OpenWhisprNative]::Delete((Get-Item -LiteralPath $Dir -Force).FullName)
   return $true
 }
 
@@ -227,7 +286,7 @@ function Remove-IfEmptied([string]$Dir) {
 # file it is a hard link to. Returns whether a recorded file was left behind or
 # the record couldn't be read, so the database that lists them stays for a run
 # again.
-function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
+function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath, [string]$ListedPath) {
   $database = Join-Path $UserData "transcriptions.db"
   if (-not (Test-RealFolder $UserData $ProfilePath)) { return $false }
   $source = Get-Item -LiteralPath $database -Force -ErrorAction SilentlyContinue
@@ -239,7 +298,7 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
           (New-Object Security.Principal.SecurityIdentifier $sid), "FullControl", "ContainerInherit, ObjectInherit", "None", "Allow")))
   }
   try {
-    $copy = [IO.Directory]::CreateDirectory((Join-Path ([IO.Path]::GetTempPath()) "wipe-local-data-$([guid]::NewGuid())"), $security)
+    $copy = [IO.Directory]::CreateDirectory((Join-Path $tempRoot "wipe-local-data-$([guid]::NewGuid())"), $security)
     try {
       foreach ($suffix in "", "-wal", "-journal") {
         $file = Get-Item -LiteralPath "$database$suffix" -Force -ErrorAction SilentlyContinue
@@ -261,7 +320,8 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
         Read-Sqlite $copied "SELECT base_path, rel_path, kind, content_hash FROM note_mirror_files ORDER BY base_path, rel_path" 4
       }
     } finally {
-      try { Remove-Tree $copy } catch {}
+      # A copy left behind holds the user's notes: reported, and swept next run.
+      Remove-Entry $copy
     }
   } catch {
     Write-Warning "Could not read the notes mirror's record in $($database): $($_.Exception.Message)"
@@ -270,6 +330,7 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
   }
 
   $profileRoot = & $fullPath $ProfilePath
+  $listedRoot = & $fullPath $ListedPath
   $sha256 = [Security.Cryptography.SHA256]::Create()
   $hashOf = { param($Text) -join ($sha256.ComputeHash([Text.Encoding]::UTF8.GetBytes($Text)) | ForEach-Object { $_.ToString("x2") }) }
   $leftBehind = $false
@@ -281,6 +342,11 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
   foreach ($row in $rows) {
     $base, $rel, $kind, $hash = $row
     $base = $base.Replace("/", "\").TrimEnd("\")
+    # The app records a folder by the profile path Windows lists, through a
+    # volume mounted in a folder too: the same folder as the real one.
+    if ($listedRoot -ne $profileRoot -and ([string]::Equals($base, $listedRoot, [StringComparison]::OrdinalIgnoreCase) -or $base.StartsWith("$listedRoot\", [StringComparison]::OrdinalIgnoreCase))) {
+      $base = $profileRoot + $base.Substring($listedRoot.Length)
+    }
     # As SYSTEM the script never leaves the profile, not even to look (a share
     # would get the device's credentials), so this is decided from the path as
     # recorded (a real path, so with no "." or ".." in it), before anything
@@ -420,7 +486,8 @@ function Get-AuditLogPath([string]$ProfilePath, [string]$User) {
         if ($null -eq $value) { $match.Value } else { $value }
       })
   }
-  if ($path -is [string] -and [IO.Path]::IsPathRooted($path)) { $path }
+  # Node's path.isAbsolute: a slash first, or a drive and one (never "C:" alone).
+  if ($path -is [string] -and $path -cmatch '^([\\/]|[A-Za-z]:[\\/])') { $path }
 }
 
 # The name of a profile's account, made safe for a file name, or "unknown".
@@ -446,10 +513,9 @@ if (-not $IncludeModels) {
   $cacheKept = $modelCache
 }
 
-# SYSTEM can't act as the user, so a profile whose user is signed in waits: they
-# could swap a folder for a junction mid-run and send the deletes elsewhere. With
-# a WipeLocalDataOnLaunch token deployed, the app wipes itself at its next
-# launch; run this again once they've signed out.
+# A profile whose user is signed in waits: OpenWhispr may be running there,
+# holding its files. With a WipeLocalDataOnLaunch token deployed, the app wipes
+# itself at its next launch; run this again once they've signed out.
 $signedIn = @(Get-CimInstance Win32_Process | ForEach-Object {
     (Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid -ErrorAction SilentlyContinue).Sid
   })
@@ -478,17 +544,20 @@ function Write-WipeRecord([string]$User, [string]$Audit, [string]$UserData, [str
   $dirs = @(if ($Audit -and -not $someoneSignedIn) { & $fullPath $Audit }) + $default
   foreach ($dir in $dirs) {
     try {
-      if ($dir -ne $default -and -not (Test-RealFolder $dir ([IO.Path]::GetPathRoot($dir)))) { continue }
+      # A share or drive itself has no folder on its way to check.
+      $root = [IO.Path]::GetPathRoot($dir).TrimEnd("\")
+      if ($dir -ne $default -and $dir -ne $root -and -not (Test-RealFolder $dir $root)) { continue }
       if ($dir -eq $default -and -not (Test-RealFolder $UserData $ProfilePath)) { continue }
       $null = [IO.Directory]::CreateDirectory($dir)
       if ($dir -eq $default -and -not (Test-RealFolder $dir $ProfilePath)) { continue }
       $file = Join-Path $dir "meeting-audit-$User-$($ts.Substring(0, 10)).jsonl"
       $existing = Get-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
       if ($existing -and ($existing -isnot [IO.FileInfo] -or ($existing.Attributes -band [IO.FileAttributes]::ReparsePoint))) { continue }
-      Initialize-Native
       $stream = [IO.File]::Open($file, "Append", "Write", "Read")
       try {
         if ([OpenWhisprNative]::LinkCount($stream.SafeFileHandle) -ne 1) { continue }
+        # Not one a junction swapped in on the way since the checks above leads to.
+        if (-not [OpenWhisprNative]::IsAt($stream.SafeFileHandle, $file)) { continue }
         $bytes = [Text.Encoding]::UTF8.GetBytes("$line`n")
         $stream.Write($bytes, 0, $bytes.Length)
       } finally {
@@ -524,6 +593,19 @@ if ($sharedExists -and $someoneSignedIn) {
 }
 $sharedFailed = $failed
 
+# Database copies a run cut short while reading one left (Remove-MirroredFiles),
+# made by SYSTEM, never a folder a user put at such a name (SYSTEM's temp
+# folder on Windows 10, C:\Windows\Temp, lets users create one). After the
+# shared folders, so one it can't remove fails the run but not their wipe.
+$privileged = @("S-1-5-18", "S-1-5-32-544")
+foreach ($leftover in Get-ChildItem -LiteralPath $tempRoot -Filter "wipe-local-data-*" -Directory -Force -ErrorAction SilentlyContinue) {
+  # One whose owner SYSTEM may not read isn't SYSTEM's.
+  $owner = try { $leftover.GetAccessControl().GetOwner([Security.Principal.SecurityIdentifier]).Value } catch { $null }
+  if (-not ($leftover.Attributes -band [IO.FileAttributes]::ReparsePoint) -and $privileged -contains $owner) {
+    Remove-Entry $leftover
+  }
+}
+
 foreach ($profilePath in $profilePaths) {
   # As Test-RealFolder compares it with paths built on it.
   $profilePath = & $fullPath $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($profilePath)
@@ -540,12 +622,17 @@ foreach ($profilePath in $profilePaths) {
     $script:failed = $true
     continue
   }
+  # As IsAt compares the paths built on it (a short name, or C:\Users moved to
+  # another drive through a junction); users can't swap the profile folder itself.
+  $listedPath = $profilePath
+  $profilePath = try { [OpenWhisprNative]::RealPath($profilePath) } catch { $profilePath }
   # Counted per profile, so "Removed" names only profiles where nothing failed.
   $failedBefore = $failed
   # By default only a profile whose path has spaces or non-ASCII characters
   # keeps data in the shared folders (getSafeTempDir, modelDirUtils).
-  $failed = $sharedFailed -and $profilePath -notmatch '^[\x21-\x7E]*$'
-  $userData = Join-Path $profilePath "AppData\Roaming\OpenWhispr"
+  $failed = $sharedFailed -and $listedPath -notmatch '^[\x21-\x7E]*$'
+  # Named after package.json's "name", as Electron names it.
+  $userData = Join-Path $profilePath "AppData\Roaming\open-whispr"
   # Marked before anything goes, so a run cut short leaves the app to finish the
   # wipe before it opens (SCRIPT_WIPE_MARKER in localDataWipe.js); a run that
   # finishes takes the mark. One that can't be marked is left as it is.
@@ -574,7 +661,7 @@ foreach ($profilePath in $profilePaths) {
     $audit = Get-AuditLogPath $profilePath $user
     $keptHere = $kept
     # A run again needs the record of what the notes mirror wrote, in the database.
-    if (Remove-MirroredFiles $userData $profilePath) {
+    if (Remove-MirroredFiles $userData $profilePath $listedPath) {
       $keptHere += "transcriptions.db", "transcriptions.db-wal", "transcriptions.db-shm", "transcriptions.db-journal"
     }
     Remove-AllExcept $userData $profilePath $keptHere $audit
@@ -582,7 +669,7 @@ foreach ($profilePath in $profilePaths) {
     $bridge = Join-Path $profilePath ".openwhispr"
     $bridgeFile = Join-Path $bridge "cli-bridge.json"
     if ((Test-ReachedFolder $bridge $profilePath) -and (Test-Path -LiteralPath $bridgeFile -PathType Leaf)) {
-      Remove-Entry (Get-Item -LiteralPath $bridgeFile -Force)
+      Remove-Entry (Get-Item -LiteralPath $bridgeFile -Force) -Store
     }
     Remove-TempFiles (Join-Path $profilePath "AppData\Local\Temp") $profilePath
     if ($hadData) {

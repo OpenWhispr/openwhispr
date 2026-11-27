@@ -1321,6 +1321,9 @@ async function startApp() {
   // fresh install. One that leaves something behind keeps the app closed, so
   // nothing opens what is left, and the next launch tries again.
   let wiped;
+  // Read first: the wipe takes .env's values, the saved language's too, out of
+  // the environment.
+  const uiLanguage = process.env.UI_LANGUAGE || app.getLocale();
   launchDeviceRead = readDeviceValues();
   launchDeviceRead.catch(() => {});
   try {
@@ -1335,7 +1338,9 @@ async function startApp() {
         ]),
     });
   } catch (error) {
-    // What stayed goes in the dialog: the logs folder went with the wipe.
+    // What stayed goes in the dialog: the logs folder went with the wipe. In the
+    // user's language, which the managers that set it haven't yet.
+    changeLanguage(uiLanguage);
     dialog.showErrorBox(
       i18nMain.t("startup.localDataWipe.title"),
       [i18nMain.t("startup.localDataWipe.message"), (error.errors ?? []).join("\n")].join("\n\n")

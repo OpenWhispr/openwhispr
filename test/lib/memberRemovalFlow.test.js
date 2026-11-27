@@ -191,10 +191,7 @@ test("a managed workspace's preview asks whether to wipe their devices, ticked",
     assert.equal(state.canWipeDevices, false);
   }
   // A preview that couldn't tell still asks, since the server wipes when told nothing.
-  assert.equal(
-    run(memberRemovalReducer, [open(), { type: "previewFailed" }]).canWipeDevices,
-    true
-  );
+  assert.equal(run(memberRemovalReducer, [open(), { type: "previewFailed" }]).canWipeDevices, true);
 });
 
 test("the wipe choice changes in confirm or failed only, and outlives a refused run", async () => {

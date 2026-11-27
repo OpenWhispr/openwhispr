@@ -69,11 +69,9 @@ jobs:
       - name: Apply dependency patches
         run: npm run apply:patches
       - name: Install Linux native test dependencies
-        # zsh: the macOS wipe script, tested here, writes its audit line with
-        # it, as every Mac has it.
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libatspi2.0-dev libglib2.0-dev libx11-dev libxtst-dev libxext-dev xvfb zsh
+          sudo apt-get install -y build-essential pkg-config libatspi2.0-dev libglib2.0-dev libx11-dev libxtst-dev libxext-dev xvfb
       - name: Build better-sqlite3 for the runner's node
         # --ignore-scripts skips the native build; DB-backed tests silently
         # skip without it. This job is the only test gate on push to main.

@@ -1835,6 +1835,39 @@ test("a removal the app couldn't record is heard again at the next lookup", asyn
   assert.deepEqual(context.removals, Array(2).fill({ accountId: "account-a", ...removal }));
 });
 
+// A rotated bearer heard the removal before its binding, so the first read once
+// it is bound checks it against the account's verdict before replacing that.
+test("a removal heard before the binding is checked again when the app couldn't record it", async (t) => {
+  const recorded = [];
+  const bound = new Set(["token-a"]);
+  let recording = true;
+  const responses = [managedBy("workspace-1"), () => unmanagedWith(removedFrom)];
+  let call = 0;
+  const context = setup(async () => responses[Math.min(call++, responses.length - 1)](), {
+    getValidatedAccountId: () => (bound.has(context.tokenState.token) ? "account-a" : null),
+    onWorkspaceRemoval: () => {
+      recorded.push(recording);
+      return recording;
+    },
+  });
+  t.after(context.cleanup);
+  const lookup = () =>
+    context.manager.getPolicy({
+      accountId: "account-a",
+      expectedAuthGeneration: context.tokenState.generation,
+    });
+  await lookup();
+  Object.assign(context.tokenState, { token: "token-b", generation: 2 });
+  await lookup();
+  bound.add("token-b");
+  recording = false;
+  await lookup();
+  recording = true;
+  await lookup();
+  assert.equal(recorded[0], false);
+  assert.equal(recorded.at(-1), true);
+});
+
 test("known pending screen-context denial blocks capture before the workspace settles", () => {
   const { isScreenContextBlocked } = require("../../src/helpers/workspacePolicyManager");
   const snapshot = {
