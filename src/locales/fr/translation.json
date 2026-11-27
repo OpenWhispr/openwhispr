@@ -3112,6 +3112,7 @@
         "modelsReady": "Modèles prêts",
         "deleteModels": "Supprimer les modèles"
       },
+      "fourierEnglishPilot": "Transcrit à la fin de l’enregistrement si l’anglais est sélectionné et que le dictionnaire est vide.",
       "transcriptionPreview": "Aperçu en direct",
       "transcriptionPreviewDescription": "Afficher la transcription dans une fenêtre flottante avant correction",
       "aec": {

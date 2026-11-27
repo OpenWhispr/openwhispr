@@ -1,5 +1,6 @@
 const { createHash } = require("node:crypto");
 const trustedPublishers = require("../registry/trusted-publishers.json");
+const { MAX_MANIFEST_BYTES, parseChecksums } = require("./qwen3AsrManifest.cjs");
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -32,7 +33,7 @@ function listArtifacts(catalog) {
     for (const [id, model] of Object.entries(catalog[section] || {}))
       artifacts.push({
         key: `${section}/${id}`,
-        kind,
+        kind: model.modelType === "qwen3-asr" ? "checksums" : kind,
         url: model.downloadUrl,
         sha256: model.sha256,
         size: model.expectedSizeBytes,
@@ -60,7 +61,7 @@ async function readJson(fetch, url) {
   return response.json();
 }
 
-async function hashDownload(fetch, url, maxBytes) {
+async function hashDownload(fetch, url, maxBytes, onChunk) {
   const response = await fetch(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`${url} answered HTTP ${response.status}`);
   const hash = createHash("sha256");
@@ -69,8 +70,32 @@ async function hashDownload(fetch, url, maxBytes) {
     hash.update(chunk);
     size += chunk.length;
     if (size > maxBytes) throw new Error(`${url} is larger than its release asset size`);
+    onChunk?.(chunk);
   }
   return { sha256: hash.digest("hex"), size };
+}
+
+async function checkBundle(artifact, url, fetch, listing, directory) {
+  const chunks = [];
+  const manifest = await hashDownload(fetch, url.href, MAX_MANIFEST_BYTES, (chunk) =>
+    chunks.push(chunk)
+  );
+  if (manifest.sha256 !== artifact.sha256)
+    return [`manifest sha256 is ${manifest.sha256}, catalog says ${artifact.sha256}`];
+  const entries = parseChecksums(Buffer.concat(chunks).toString("utf8"));
+  let total = 0;
+  for (const { name, sha256 } of entries) {
+    const file = directory ? directory + "/" + name : name;
+    const entry = listing.find((item) => item.path === file);
+    if (!entry) return [`${file} does not exist at the pinned revision`];
+    const size = entry.lfs?.size ?? entry.size;
+    if (!Number.isSafeInteger(size) || size <= 0) return [`${file} has invalid size`];
+    const digest =
+      entry.lfs?.oid ?? (await hashDownload(fetch, new URL(name, url).href, size)).sha256;
+    if (digest !== sha256) return [`${file} sha256 is ${digest}, manifest says ${sha256}`];
+    total += size;
+  }
+  return total === artifact.size ? [] : [`bundle size is ${total}, catalog says ${artifact.size}`];
 }
 
 async function checkHuggingFace(artifact, url, fetch) {
@@ -80,12 +105,14 @@ async function checkHuggingFace(artifact, url, fetch) {
   if (!trustedPublishers.huggingFace.includes(org))
     problems.push(`${org} is not a trusted Hugging Face publisher (registry/trusted-publishers.json)`);
   const directory = rest.slice(0, -1).join("/");
-  const listing = await readJson(
-    fetch,
-    `https://huggingface.co/api/models/${org}/${repo}/tree/${revision}${directory ? `/${directory}` : ""}`
-  );
+  const treeUrl = new URL(`https://huggingface.co/api/models/${org}/${repo}/tree/${revision}${directory ? `/${directory}` : ""}`);
+  if (artifact.kind === "checksums") treeUrl.searchParams.set("recursive", "true");
+  const listing = await readJson(fetch, treeUrl.href);
   const entry = listing?.find((item) => item.path === file);
   if (!entry) return [...problems, `${file} does not exist in ${org}/${repo} at ${revision}`];
+  if (artifact.kind === "checksums") {
+    return [...problems, ...(await checkBundle(artifact, url, fetch, listing, directory))];
+  }
   const actual = { sha256: entry.lfs?.oid, size: entry.lfs?.size ?? entry.size };
   if (artifact.sha256 && actual.sha256 !== artifact.sha256)
     problems.push(`sha256 is ${actual.sha256 ?? "not published"}, catalog says ${artifact.sha256}`);

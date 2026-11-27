@@ -57,6 +57,55 @@ test("only trusted Hugging Face publishers can supply files", async () => {
   assert.match(problems.join("\n"), /not a trusted Hugging Face publisher/);
 });
 
+test("a Fourier byte count change triggers artifact verification", () => {
+  const next = structuredClone(base);
+  next.parakeetModels["oruk-fourier-2b"].expectedSizeBytes++;
+  assert.deepEqual(
+    changedArtifacts(next, base).map((artifact) => artifact.key),
+    ["parakeetModels/oruk-fourier-2b"]
+  );
+});
+
+test("the Fourier manifest, payload digests and total size must all match", async () => {
+  const { files } = require("../lib/qwen3AsrManifest.cjs");
+  const hash = (bytes) => require("node:crypto").createHash("sha256").update(bytes).digest("hex");
+  const model = base.parakeetModels["oruk-fourier-2b"];
+  const manifest = files.map((file) => hash(file) + "  " + file).join("\n");
+  const size = files.reduce((total, file) => total + Buffer.byteLength(file), 0);
+  const artifact = {
+    key: "parakeetModels/oruk-fourier-2b",
+    kind: "checksums",
+    url: model.downloadUrl,
+    sha256: hash(manifest),
+    size,
+  };
+  const root = "onnx/sherpa-int8/";
+  const tree = [{ path: root + "SHA256SUMS", size: Buffer.byteLength(manifest) }];
+  for (const file of files) {
+    const entry = { path: root + file, size: Buffer.byteLength(file) };
+    if (!file.startsWith("tokenizer/")) entry.lfs = { oid: hash(file), size: entry.size };
+    tree.push(entry);
+  }
+  const fetch = async (url) => {
+    const { pathname, searchParams } = new URL(url);
+    if (pathname.includes("/api/models/")) {
+      assert.equal(searchParams.get("recursive"), "true");
+      return Response.json(tree);
+    }
+    if (pathname.endsWith("/SHA256SUMS")) return new Response(manifest);
+    const file = pathname.split(root)[1];
+    assert.ok(file.startsWith("tokenizer/"), "large weights are verified with LFS metadata");
+    return new Response(file);
+  };
+  assert.deepEqual(await verifyArtifact(artifact, { fetch }), []);
+  assert.match(
+    (await verifyArtifact({ ...artifact, size: size + 1 }, { fetch })).join("\n"),
+    /size/i
+  );
+  tree.find((entry) => entry.lfs).lfs.oid = sha;
+  assert.match((await verifyArtifact(artifact, { fetch })).join("\n"), /sha256/i);
+});
+
 test("GitHub release assets are checked by digest, or downloaded and hashed", async () => {
   const archive = {
     key: "parakeetModels/new",

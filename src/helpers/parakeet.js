@@ -28,6 +28,7 @@ const {
 } = require("./installedModels");
 const { getModelsDirForService } = require("./modelDirUtils");
 const { assertParakeetSupported, getParakeetCapability } = require("./parakeetCapability");
+const { parakeetDownloadSpace } = require("../models/parakeetDownload.ts");
 
 const {
   registryData: modelRegistryData,
@@ -36,6 +37,7 @@ const {
 const {
   getModelRuntime,
   getRequiredModelFiles,
+  getModelType,
   isSherpaLocalProvider,
 } = require("./parakeetModelInfo");
 
@@ -94,6 +96,14 @@ class ParakeetManager {
   // Cohere models keep their weights in encoder.int8.onnx.data; transducers in
   // encoder.int8.onnx. Used as the reported on-disk size of a model.
   _getModelWeightsSize(modelDir) {
+    const name = path.basename(modelDir);
+    if (getModelType(name) === "qwen3-asr") {
+      return getRequiredModelFiles(name).reduce(
+        (bytes, file) =>
+          bytes + (fs.statSync(path.join(modelDir, file), { throwIfNoEntry: false })?.size || 0),
+        0
+      );
+    }
     for (const file of ["encoder.int8.onnx.data", "encoder.int8.onnx"]) {
       try {
         return fs.statSync(path.join(modelDir, file)).size;
@@ -453,114 +463,130 @@ class ParakeetManager {
     };
     this.currentDownloadProcess = downloadProcess;
     let archiveRejected = false;
+    const modelType = getModelType(modelName);
 
     try {
       await fsPromises.mkdir(modelsDir, { recursive: true });
 
-      const spaceCheck = await checkDiskSpace(
-        modelsDir,
-        modelConfig.size * PARAKEET_DISK_SPACE_FACTOR
+      const requiredSpace = parakeetDownloadSpace(
+        modelConfig.size,
+        modelType,
+        PARAKEET_DISK_SPACE_FACTOR
       );
+      const spaceCheck = await checkDiskSpace(modelsDir, requiredSpace);
       if (!spaceCheck.ok) {
         throw new Error(
-          `Not enough disk space to download and extract model. Need ~${Math.round((modelConfig.size * PARAKEET_DISK_SPACE_FACTOR) / 1_000_000)}MB, ` +
+          `Not enough disk space to download and extract model. Need ~${Math.round(requiredSpace / 1_000_000)}MB, ` +
             `only ${Math.round(spaceCheck.availableBytes / 1_000_000)}MB available.`
         );
       }
 
-      let archiveReady = false;
-      try {
-        const stats = await fsPromises.stat(archivePath);
-        // A visibly truncated leftover would just fail extraction forever.
-        if (stats.size >= modelConfig.size * 0.9) {
-          if (modelConfig.sha256) await verifyFileSha256(archivePath, modelConfig.sha256, signal);
-          archiveReady = true;
-          debugLogger.info("Reusing existing archive from previous attempt", {
-            archivePath,
-            size: stats.size,
+      const onProgress = (downloadedBytes, totalBytes) => {
+        downloadProcess.percentage =
+          totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : 0;
+        downloadProcess.downloadedBytes = downloadedBytes;
+        downloadProcess.totalBytes = totalBytes;
+        if (progressCallback) {
+          progressCallback({
+            type: "progress",
+            model: modelName,
+            downloaded_bytes: downloadedBytes,
+            total_bytes: totalBytes,
+            percentage: totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : 0,
           });
-        } else if (stats.size > 0) {
-          await fsPromises.unlink(archivePath).catch(() => {});
         }
-      } catch {
-        await fsPromises.unlink(archivePath).catch(() => {});
-      }
-
-      if (!archiveReady) {
-        await downloadFile(modelConfig.url, archivePath, {
-          expectedSha256: modelConfig.sha256,
-          timeout: 600000,
+      };
+      let archiveReady = false;
+      if (modelType === "qwen3-asr") {
+        await require("./qwen3AsrBundle").installBundle(modelConfig, modelPath, {
+          download: downloadFile,
           signal,
-          onProgress: (downloadedBytes, totalBytes) => {
-            downloadProcess.percentage =
-              totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : 0;
-            downloadProcess.downloadedBytes = downloadedBytes;
-            downloadProcess.totalBytes = totalBytes;
-            if (progressCallback) {
-              progressCallback({
-                type: "progress",
-                model: modelName,
-                downloaded_bytes: downloadedBytes,
-                total_bytes: totalBytes,
-                percentage: totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : 0,
-              });
-            }
+          onProgress,
+          beforePublish: () => {
+            assertLocalModelOperation(this);
+            downloadProcess.phase = "installing";
+            progressCallback?.({ type: "installing", model: modelName, percentage: 100 });
           },
         });
-      }
-
-      // Checking a large archive takes minutes; show its progress, still cancellable.
-      const archiveBytes = (await fsPromises.stat(archivePath)).size;
-      const verifying = (bytesRead) =>
-        progressCallback?.({
-          type: "verifying",
-          model: modelName,
-          percentage: Math.min(100, Math.round((bytesRead / archiveBytes) * 100)),
-        });
-      verifying(0);
-      try {
-        await validateModelArchive(
-          archivePath,
-          modelConfig.extractDir,
-          signal,
-          modelConfig.size,
-          verifying
-        );
-      } catch (validationError) {
-        if (!validationError.isAbort && !signal.aborted) archiveRejected = true;
-        throw validationError;
-      }
-      if (signal.aborted) throw Object.assign(new Error("Download cancelled"), { isAbort: true });
-      downloadProcess.phase = "installing";
-      downloadProcess.percentage = 100;
-      if (progressCallback) {
-        progressCallback({ type: "installing", model: modelName, percentage: 100 });
-      }
-
-      const MAX_EXTRACT_RETRIES = 2;
-      for (let attempt = 1; attempt <= MAX_EXTRACT_RETRIES; attempt++) {
+      } else {
         try {
-          await this._extractModel(archivePath, modelName, modelConfig);
-          break;
-        } catch (extractError) {
-          // A revocation isn't a bad archive: no retry, and the finished file stays.
-          if (isLocalModelPolicyRefusal(extractError)) throw extractError;
-          debugLogger.warn("Model extraction failed", {
-            attempt,
-            maxAttempts: MAX_EXTRACT_RETRIES,
-            error: extractError.message,
-          });
-          if (attempt >= MAX_EXTRACT_RETRIES) {
-            // The archive is the prime suspect; drop it so the next attempt re-downloads.
+          const stats = await fsPromises.stat(archivePath);
+          // A visibly truncated leftover would just fail extraction forever.
+          if (stats.size >= modelConfig.size * 0.9) {
+            if (modelConfig.sha256) await verifyFileSha256(archivePath, modelConfig.sha256, signal);
+            archiveReady = true;
+            debugLogger.info("Reusing existing archive from previous attempt", {
+              archivePath,
+              size: stats.size,
+            });
+          } else if (stats.size > 0) {
             await fsPromises.unlink(archivePath).catch(() => {});
-            const err = new Error(`Model installation failed: ${extractError.message}`);
-            err.code = "EXTRACTION_FAILED";
-            throw err;
+          }
+        } catch {
+          await fsPromises.unlink(archivePath).catch(() => {});
+        }
+
+        if (!archiveReady) {
+          await downloadFile(modelConfig.url, archivePath, {
+            expectedSha256: modelConfig.sha256,
+            timeout: 600000,
+            signal,
+            onProgress,
+          });
+        }
+
+        // Checking a large archive takes minutes; show its progress, still cancellable.
+        const archiveBytes = (await fsPromises.stat(archivePath)).size;
+        const verifying = (bytesRead) =>
+          progressCallback?.({
+            type: "verifying",
+            model: modelName,
+            percentage: Math.min(100, Math.round((bytesRead / archiveBytes) * 100)),
+          });
+        verifying(0);
+        try {
+          await validateModelArchive(
+            archivePath,
+            modelConfig.extractDir,
+            signal,
+            modelConfig.size,
+            verifying
+          );
+        } catch (validationError) {
+          if (!validationError.isAbort && !signal.aborted) archiveRejected = true;
+          throw validationError;
+        }
+        if (signal.aborted) throw Object.assign(new Error("Download cancelled"), { isAbort: true });
+        downloadProcess.phase = "installing";
+        downloadProcess.percentage = 100;
+        if (progressCallback) {
+          progressCallback({ type: "installing", model: modelName, percentage: 100 });
+        }
+
+        const MAX_EXTRACT_RETRIES = 2;
+        for (let attempt = 1; attempt <= MAX_EXTRACT_RETRIES; attempt++) {
+          try {
+            await this._extractModel(archivePath, modelName, modelConfig);
+            break;
+          } catch (extractError) {
+            // A revocation isn't a bad archive: no retry, and the finished file stays.
+            if (isLocalModelPolicyRefusal(extractError)) throw extractError;
+            debugLogger.warn("Model extraction failed", {
+              attempt,
+              maxAttempts: MAX_EXTRACT_RETRIES,
+              error: extractError.message,
+            });
+            if (attempt >= MAX_EXTRACT_RETRIES) {
+              // The archive is the prime suspect; drop it so the next attempt re-downloads.
+              await fsPromises.unlink(archivePath).catch(() => {});
+              const err = new Error(`Model installation failed: ${extractError.message}`);
+              err.code = "EXTRACTION_FAILED";
+              throw err;
+            }
           }
         }
+        await fsPromises.unlink(archivePath).catch(() => {});
       }
-      await fsPromises.unlink(archivePath).catch(() => {});
-
       if (progressCallback) {
         assertLocalModelOperation(this);
         progressCallback({ type: "complete", model: modelName, percentage: 100 });

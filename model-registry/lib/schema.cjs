@@ -69,7 +69,12 @@ function isModelUrl(value) {
 const isPinnedUrl = (value) =>
   /^https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/[a-f0-9]{40}\//.test(value);
 const modelUrl = z.string().max(2048).refine(isModelUrl, "Unsupported model download URL");
-const archiveUrl = modelUrl.refine((value) => value.endsWith(".tar.bz2"), "Archives end in .tar.bz2");
+function matchesNativeArtifact(model) {
+  if (model.modelType === "qwen3-asr")
+    return model.runtime === "offline" && !!model.sha256 && !!model.expectedSizeBytes &&
+      !model.sherpaModelType && isPinnedUrl(model.downloadUrl) && model.downloadUrl.endsWith("/SHA256SUMS");
+  return model.downloadUrl.endsWith(".tar.bz2");
+}
 
 // Lifecycle (both flags optional): legacy still works but is hidden unless selected or
 // downloaded; retired no longer works and moves selections to its replacement.
@@ -147,11 +152,11 @@ const parakeetModel = {
   expectedSizeBytes: positive.optional(),
   language: text,
   supportedLanguages: z.array(z.string().min(1).max(20)).max(1000),
-  downloadUrl: archiveUrl,
+  downloadUrl: modelUrl,
   extractDir: safeName,
   manifestUrl: modelUrl.optional(),
   runtime: z.enum(["offline", "online"]).optional(),
-  modelType: z.enum(["transducer", "cohere-transcribe"]).optional(),
+  modelType: z.enum(["transducer", "cohere-transcribe", "qwen3-asr"]).optional(),
   sherpaModelType: z.literal("nemo_transducer").optional(),
   recommended: z.boolean().optional(),
   sha256: sha256.optional(),
@@ -185,7 +190,7 @@ function buildSchemas(strict) {
     transcription: object(transcriptionModel),
     local: object(localModel).refine(completeDraft, "Incomplete draft artifact"),
     whisper: object(whisperModel),
-    parakeet: object({ ...parakeetModel, organization: object(organizationShape).optional() }),
+    parakeet: object({ ...parakeetModel, organization: object(organizationShape).optional() }).refine(matchesNativeArtifact, "Expected a .tar.bz2 archive or a pinned Qwen3 ASR SHA256SUMS manifest with hash and bundle size"),
   };
   const providers = {
     cloudProviders: object(providerShape({}, models.cloud)),
@@ -522,7 +527,8 @@ function assertCompatibleCatalog(input, previousInput, { floor } = {}) {
       if (Object.hasOwn(previous[section], modelId)) continue;
       if (section === "parakeetModels")
         requireCondition(
-          Object.values(previous.parakeetModels).some((old) => same(engine(old), engine(model))),
+          Object.values(previous.parakeetModels).some((old) => same(engine(old), engine(model))) ||
+            same(engine(model), ["offline", "qwen3-asr", "auto"]),
           "Unsupported native engine combination"
         );
       if (!Object.hasOwn(bundled[section], modelId)) assertNewDownload(model);

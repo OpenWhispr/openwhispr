@@ -1,11 +1,19 @@
-function parseOfflineMessage(message) {
-  const text = String(message || "").trim();
+function parseOfflineMessage(message, modelType) {
+  let text = String(message || "").trim();
   try {
     const parsed = JSON.parse(text);
-    return typeof parsed?.text === "string" ? parsed.text.trim() : text;
+    if (typeof parsed?.text === "string") text = parsed.text.trim();
   } catch {
-    return text;
+    // Some versions send plain text.
   }
+  if (modelType === "qwen3-asr") {
+    if (text === "<message") return "";
+    return text.replace(
+      /^(?:(?:language|\*\*language|\$lang(?:uage)?) [A-Za-z -]{1,40})?<asr_text>\s*/i,
+      ""
+    );
+  }
+  return text;
 }
 
 // Latest-wins per finalized segment id (the server refines a segment before its

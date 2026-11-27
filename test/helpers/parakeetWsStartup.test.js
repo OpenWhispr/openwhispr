@@ -571,3 +571,15 @@ foreach ($entry in @($file, $file.Directory)) {
     assert.deepEqual(fs.readdirSync(tempDir), []);
   }
 );
+
+test("Fourier loads the Qwen3 decoder, external weights and tokenizer on the offline server", async () => {
+  const { args, binary } = await startupArgs("oruk-fourier-2b");
+  assert.equal(binary, "sherpa-offline");
+  for (const flag of ["conv-frontend", "encoder", "decoder", "tokenizer"])
+    assert.ok(args.some((arg) => arg.startsWith(`--qwen3-asr-${flag}=`)));
+  for (const flag of ["--joiner=", "--encoder=", "--tokens="])
+    assert.ok(!args.some((arg) => arg.startsWith(flag)));
+  assert.ok(args.includes("--feat-dim=128"));
+  assert.ok(args.includes("--max-batch-size=1"));
+  assert.ok(args.includes("--num-work-threads=1"));
+});

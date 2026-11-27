@@ -656,6 +656,18 @@ const DICTATION_NEED = 631e6 * 2.5;
 const CLEANUP_NEED = llmBytes("qwen3.5-2b-q4_k_m") * 1.2;
 const ASSISTANT_NEED = llmBytes("qwen3.5-4b-q4_k_m") * 1.2;
 
+test("managed Fourier setup can install the bundle with three GB free", async () => {
+  const { fitLocalSetupToSpace } = await load();
+  const id = "oruk-fourier-2b";
+  const selected = await plan(mac({}), {
+    policy: managed({ speechModels: [id] }),
+    requiredSpeechModelId: id,
+  });
+  const fit = fitLocalSetupToSpace(selected, { cleanup: false, assistant: false }, space(3));
+  assert.equal(fit.state, "fits");
+  assert.equal(fit.requiredBytes, registry.parakeetModels[id].expectedSizeBytes * 1.01);
+});
+
 test("required bytes apply each download's reserve factor", async () => {
   const { localSetupRequiredBytes, enabledDownloads } = await load();
   const p = await plan(mac({}));

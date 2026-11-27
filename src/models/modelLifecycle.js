@@ -35,7 +35,7 @@ function coversLanguages(model, retired) {
 }
 
 // The local speech model a retired selection moves to, on its own engine, since Whisper,
-// transducer and Cohere selections live in separate settings; null to stay. In order: the
+// Parakeet-managed and Cohere selections live in separate settings; null to stay. In order: the
 // named replacement already on disk; the retired file itself while it is on disk, since it
 // keeps running (getRunnableSpeechModel) and was the user's choice; another downloaded model
 // covering its languages; otherwise the named replacement or the recommended model, to
@@ -50,9 +50,9 @@ export function retiredLocalSpeechReplacement(
   const retired = getRetiredModel(section, "", modelId);
   if (!retired) return null;
   const models = getRegistryData()[section];
-  const engine = (model) => model.modelType === "cohere-transcribe";
+  const usesCohereSetting = (model) => model.modelType === "cohere-transcribe";
   const offered = Object.keys(models)
-    .filter((id) => engine(models[id]) === engine(retired))
+    .filter((id) => usesCohereSetting(models[id]) === usesCohereSetting(retired))
     .sort(
       (a, b) => Number(Boolean(models[b].recommended)) - Number(Boolean(models[a].recommended))
     );

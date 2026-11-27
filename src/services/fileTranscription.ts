@@ -143,6 +143,8 @@ export async function transcribeFile(
     signal?: AbortSignal;
     timestamps?: boolean;
     purpose?: "dictation" | "upload";
+    fourierAccount?: string;
+    language?: string;
     durationSeconds?: number;
   } = {}
 ): Promise<FileTranscriptionResult> {

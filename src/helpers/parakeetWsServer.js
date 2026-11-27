@@ -268,8 +268,10 @@ class ParakeetWsServer {
     this.modelRuntime = runtime;
     this.language = language;
 
-    const modelArgs =
-      getModelType(modelName) === "cohere-transcribe"
+    const qwen = getModelType(modelName) === "qwen3-asr";
+    const modelArgs = qwen
+      ? require("./qwen3AsrBundle").decoderArgs(modelDir)
+      : getModelType(modelName) === "cohere-transcribe"
         ? [
             `--cohere-transcribe-encoder=${path.join(modelDir, "encoder.int8.onnx")}`,
             `--cohere-transcribe-decoder=${path.join(modelDir, "decoder.int8.onnx")}`,
@@ -290,7 +292,7 @@ class ParakeetWsServer {
       });
     }
     const args = [
-      `--tokens=${path.join(modelDir, "tokens.txt")}`,
+      ...(qwen ? [] : [`--tokens=${path.join(modelDir, "tokens.txt")}`]),
       ...modelArgs,
       ...(runtime === "offline" && sherpaModelType ? [`--model-type=${sherpaModelType}`] : []),
       `--port=${this.port}`,
@@ -307,7 +309,10 @@ class ParakeetWsServer {
             // covers it app-side.
             "--warm-up=0",
           ]
-        : [`--num-threads=${INTRA_OP_THREADS}`, `--num-work-threads=${OFFLINE_WORK_THREADS}`]),
+        : [
+            `--num-threads=${INTRA_OP_THREADS}`,
+            `--num-work-threads=${qwen ? 1 : OFFLINE_WORK_THREADS}`,
+          ]),
     ];
 
     let hotwordsDir = null;
@@ -491,7 +496,8 @@ class ParakeetWsServer {
 
   // The online runtime is a single stream and takes segments in order.
   get maxConcurrentDecodes() {
-    return this.modelRuntime === "online" ? 1 : OFFLINE_DECODE_CONCURRENCY;
+    if (this.modelRuntime === "online" || getModelType(this.modelName) === "qwen3-asr") return 1;
+    return OFFLINE_DECODE_CONCURRENCY;
   }
 
   // The optional signal cancels pending transcription when its caller stops.
@@ -521,10 +527,10 @@ class ParakeetWsServer {
       return this._transcribeOnline(samplesBuffer, signal);
     }
 
-    return this._transcribeOffline(samplesBuffer, sampleRate, signal);
+    return this._transcribeOffline(samplesBuffer, sampleRate, signal, getModelType(this.modelName));
   }
 
-  _transcribeOffline(samplesBuffer, sampleRate, signal) {
+  _transcribeOffline(samplesBuffer, sampleRate, signal, modelType) {
     const timeoutMs = computeTranscriptionTimeoutMs(
       samplesBuffer.length / FLOAT32_BYTES_PER_SAMPLE / sampleRate
     );
@@ -602,7 +608,7 @@ class ParakeetWsServer {
           resultPreview: result.slice(0, 200),
         });
 
-        resolve({ text: parseOfflineMessage(result), elapsed });
+        resolve({ text: parseOfflineMessage(result, modelType), elapsed });
       });
 
       ws.on("error", (error) => {
