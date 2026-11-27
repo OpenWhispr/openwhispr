@@ -17,16 +17,11 @@ const SAMPLE_RATE = 16000;
 const SPEECH_AMPLITUDE = 0.3;
 
 // A noise floor near -59 dBFS with tones (stand-ins for speech) at the given starts.
-// `swell` rises and falls linearly, so its frames span every level like a word's onset.
 function recording(totalMs, tones) {
   const noise = makeSeededNoise({ durationMs: totalMs, amplitude: 0.002, sampleRate: SAMPLE_RATE });
-  const placed = tones.map(({ atMs, durationMs, amplitude = SPEECH_AMPLITUDE, swell = false }) => {
-    const tone = makeSine({ durationMs, amplitude, sampleRate: SAMPLE_RATE });
-    if (swell) {
-      for (let i = 0; i < tone.length; i++) tone[i] *= 1 - Math.abs((2 * i) / tone.length - 1);
-    }
-    return delayBy(tone, atMs, SAMPLE_RATE);
-  });
+  const placed = tones.map(({ atMs, durationMs, amplitude = SPEECH_AMPLITUDE }) =>
+    delayBy(makeSine({ durationMs, amplitude, sampleRate: SAMPLE_RATE }), atMs, SAMPLE_RATE)
+  );
   return pcm16ToWav(toInt16Buffer(mix(noise, ...placed)));
 }
 
@@ -54,28 +49,15 @@ test("a long pause between two stretches of speech shrinks to about 0.75 s", () 
   assert.equal(samplesAbove(buffer, 0.1), samplesAbove(input, 0.1), "both tones stay whole");
 });
 
-test("a dictation that is mostly pauses still has them shortened", () => {
-  // Speech fills about a tenth of it, so its 90th-percentile frame is a soft onset,
-  // some 9 dB above the noise.
-  const input = recording(
-    80000,
-    [0, 1, 2, 3, 4].map((k) => ({ atMs: 500 + k * 15800, durationMs: 1620, swell: true }))
-  );
-
-  const { buffer, removedSeconds } = shortenLongPauses(input);
-
-  assert.ok(removedSeconds > 60, `removed ${removedSeconds} s`);
-  assert.equal(samplesAbove(buffer, 0.05), samplesAbove(input, 0.05));
-});
-
 test("a noisy recording keeps its pauses even when a few frames are loud", () => {
-  // Noise near -33 dBFS, speech about 12 dB above it, and a louder burst in 3% of frames.
+  // Noise near -33 dBFS, speech about 12 dB above it, and a sound near full scale in 3%
+  // of frames, which must not stand in for the speech level.
   const noise = makeSeededNoise({ durationMs: 16000, amplitude: 0.0388, sampleRate: SAMPLE_RATE });
   const tone = (atMs, durationMs, amplitude) =>
     delayBy(makeSine({ durationMs, amplitude, sampleRate: SAMPLE_RATE }), atMs, SAMPLE_RATE);
   const input = pcm16ToWav(
     toInt16Buffer(
-      mix(noise, tone(500, 4000, 0.126), tone(10500, 4000, 0.126), tone(15000, 500, 0.3))
+      mix(noise, tone(500, 4000, 0.126), tone(10500, 4000, 0.126), tone(15000, 500, 0.9))
     )
   );
 

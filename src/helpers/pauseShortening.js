@@ -12,9 +12,6 @@ const KEPT_EDGE_FRAMES = 19; // ~0.38 s kept on each side of a shortened pause
 // a recording whose levels span less than MIN_LEVEL_RANGE_DB has no pause to tell apart.
 const QUIET_FRACTION = 0.3;
 const MIN_LEVEL_RANGE_DB = 15;
-// When speech fills too little of a recording for the 90th percentile to reach it, the
-// loudest frames stand in, but only this far above the noise; a noisy room's don't.
-const MIN_SPARSE_SPEECH_RANGE_DB = 25;
 
 function frameLevelsDb(samples) {
   const levels = new Float64Array(Math.ceil(samples.length / FRAME_SAMPLES));
@@ -33,14 +30,9 @@ function shortenLongPauses(wavBuffer) {
   const samples = new Float32Array(floatBytes.buffer, floatBytes.byteOffset, floatBytes.length / 4);
   const levels = frameLevelsDb(samples);
   const sorted = Array.from(levels).sort((a, b) => a - b);
-  const level = (fraction) => sorted[Math.floor(sorted.length * fraction)];
-  const noise = level(0.1);
-  // Reading every recording at the 98th percentile would raise the threshold and clip
-  // soft speech, so it is only for a dictation that is mostly pauses.
-  let speech = null;
-  if (level(0.9) - noise >= MIN_LEVEL_RANGE_DB) speech = level(0.9);
-  else if (level(0.98) - noise >= MIN_SPARSE_SPEECH_RANGE_DB) speech = level(0.98);
-  if (speech === null) return { buffer: wavBuffer, removedSeconds: 0 };
+  const noise = sorted[Math.floor(sorted.length * 0.1)];
+  const speech = sorted[Math.floor(sorted.length * 0.9)];
+  if (!(speech - noise >= MIN_LEVEL_RANGE_DB)) return { buffer: wavBuffer, removedSeconds: 0 };
 
   const threshold = noise + (speech - noise) * QUIET_FRACTION;
   const droppedFrames = [];
