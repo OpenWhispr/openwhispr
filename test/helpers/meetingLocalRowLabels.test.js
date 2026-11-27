@@ -42,6 +42,33 @@ function harness(identifications = []) {
   return context;
 }
 
+test("stored cloud and local rows agree with late finals after a whole-turn rejudgment", () => {
+  const ctx = harness();
+  const addRows = (delivery) => {
+    ctx.store(`cloud ${delivery}`, "system", T + 2200);
+    ctx.store(`local ${delivery}`, "system", T + 2200, null, true, T + 24_000);
+  };
+  ctx.applyIdentification({
+    ...identification("speaker_0", 0, 5000, "Ana"),
+    speechStartTime: T + 750,
+    speechEndTime: T + 4250,
+    tentative: true,
+  });
+  addRows("early");
+  ctx.applyIdentification({
+    ...identification("speaker_1", 0, 10_000, "Bea"),
+    speechStartTime: T + 750,
+    speechEndTime: T + 9250,
+    rejudged: true,
+    retroactive: true,
+  });
+  addRows("late");
+  assert.deepEqual(
+    Array.from(ctx.meetingDiarizationSegments, (row) => row.speakerName),
+    ["Bea", "Bea", "Bea", "Bea"]
+  );
+});
+
 test("a ranged system row is labelled when it is stored", () => {
   const ctx = harness([
     identification("speaker_0", 0, 3000),
@@ -53,7 +80,7 @@ test("a ranged system row is labelled when it is stored", () => {
   assert.equal("liveOverlapMs" in row, false);
 });
 
-test("a mic row and a row without a range are left alone", () => {
+test("a mic row stays unassigned and a late cloud row uses its speech timestamp", () => {
   const ctx = harness([
     identification("speaker_0", 0, 3000),
     identification("speaker_1", 3000, 9000),
@@ -62,7 +89,7 @@ test("a mic row and a row without a range are left alone", () => {
   ctx.store("cloud", "system", T + 3500);
   assert.deepEqual(
     Array.from(ctx.meetingDiarizationSegments, (segment) => segment.speaker),
-    [undefined, undefined]
+    [undefined, "speaker_1"]
   );
 });
 
@@ -274,4 +301,16 @@ test("capturing a stopped session clears its identifications for the next one", 
   const { diarizationSegments } = await ctx.captureMeetingDiarizationState();
   assert.deepEqual(Array.from(diarizationSegments), []);
   assert.deepEqual(Array.from(ctx.meetingLiveIdentifications), []);
+});
+
+test("a slow system decode keeps its speaker evidence until the local final is stored", () => {
+  const ctx = harness([identification("speaker_0", 0, 5000)]);
+  ctx.applyIdentification({ ...identification("speaker_1", 125_000, 130_000), retainFromTime: T });
+  ctx.store("late final", "system", T + 500, null, true, T + 4500);
+  assert.equal(ctx.meetingDiarizationSegments[0].speaker, "speaker_0");
+  ctx.applyIdentification(identification("speaker_1", 130_000, 135_000));
+  assert.equal(
+    ctx.meetingLiveIdentifications.some((id) => id.speakerId === "speaker_0"),
+    false
+  );
 });

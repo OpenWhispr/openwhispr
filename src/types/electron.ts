@@ -4093,7 +4093,10 @@ declare global {
           endTime: number;
           speechStartTime?: number;
           speechEndTime?: number;
+          retainFromTime?: number;
           retroactive?: boolean;
+          tentative?: boolean;
+          rejudged?: boolean;
         }) => void
       ) => () => void;
       onMeetingSpeakersMerged?: (
@@ -4174,6 +4177,7 @@ declare global {
           speakerEmbeddings?: Record<string, number[]> | null;
           removedSegments?: RemovedTranscriptSegment[];
           splitLiveSpeakers?: SplitLiveSpeakers;
+          reconciledLiveSpeakerIds?: Record<string, string>;
         }) => void
       ) => () => void;
 

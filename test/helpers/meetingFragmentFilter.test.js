@@ -15,6 +15,7 @@ const {
   fragmentFilterLanguages,
   isWrongScriptFragment,
 } = require("../../src/helpers/meetingFragmentFilter");
+const { pickIdentificationForPoint } = require("../../src/helpers/speakerRangeMatch");
 const { localBufferEntry, describeLocalChunk } = require("../../src/helpers/meetingLocalChunk");
 
 test("a short fragment in a script the meeting language doesn't use is dropped", () => {
@@ -106,6 +107,8 @@ function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
     windowManager: { controlPanelWindow: win },
     _startOrSkipDiarization() {},
     meetingDiarizationSegments: accepted,
+    meetingLiveIdentifications: [],
+    pickIdentificationForPoint,
     meetingConnectionOptions: { language, spokenLanguages },
     fragmentFilterLanguages,
     isWrongScriptFragment,

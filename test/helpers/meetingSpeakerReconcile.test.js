@@ -71,15 +71,10 @@ function loadHandlers() {
 }
 
 function createMappingRecorder(existingMappings) {
-  const calls = { set: [], remove: [] };
+  const calls = [];
   const databaseManager = {
     getSpeakerMappings: () => existingMappings,
-    setSpeakerMapping: (noteId, speakerId, profileId, displayName) => {
-      calls.set.push({ noteId, speakerId, profileId, displayName });
-    },
-    removeSpeakerMapping: (noteId, speakerId) => {
-      calls.remove.push({ noteId, speakerId });
-    },
+    remapSpeakers: (noteId, changes) => calls.push({ noteId, changes }),
   };
   return { calls, databaseManager };
 }
@@ -114,18 +109,14 @@ test("reconciliation keeps the mapping when live and offline ids already match",
 
   reconcile(IPCHandlers, databaseManager, "speaker_0");
 
-  assert.equal(calls.set.length, 1);
-  assert.deepEqual(calls.set[0], {
-    noteId: NOTE_ID,
-    speakerId: "speaker_0",
-    profileId: 5,
-    displayName: "Alice",
-  });
-  assert.deepEqual(
-    calls.remove,
-    [],
-    "removing the row that was just upserted deletes the user's identification"
-  );
+  assert.deepEqual(calls, [
+    {
+      noteId: NOTE_ID,
+      changes: [
+        { previousId: "speaker_0", speakerId: "speaker_0", profileId: 5, displayName: "Alice" },
+      ],
+    },
+  ]);
 });
 
 test("reconciliation migrates the mapping when the offline id differs", () => {
@@ -136,9 +127,45 @@ test("reconciliation migrates the mapping when the offline id differs", () => {
 
   reconcile(IPCHandlers, databaseManager, "speaker_3");
 
-  assert.equal(calls.set.length, 1);
-  assert.equal(calls.set[0].speakerId, "speaker_0");
-  assert.deepEqual(calls.remove, [{ noteId: NOTE_ID, speakerId: "speaker_3" }]);
+  assert.deepEqual(calls, [
+    {
+      noteId: NOTE_ID,
+      changes: [
+        { previousId: "speaker_3", speakerId: "speaker_0", profileId: 5, displayName: "Alice" },
+      ],
+    },
+  ]);
+});
+
+test("post-call reconciliation preserves both names and profiles when speaker ids swap", (t) => {
+  const { IPCHandlers } = loadHandlers();
+  const { createDb } = require("./harness/db");
+  const databaseManager = createDb(t);
+  if (!databaseManager) return;
+  const noteId = databaseManager.saveNote("Meeting", "", "meeting").note.id;
+  const ada = databaseManager.upsertSpeakerProfile(
+    "Ada",
+    null,
+    Buffer.from(new Float32Array([1, 0]).buffer)
+  );
+  const ben = databaseManager.upsertSpeakerProfile(
+    "Ben",
+    null,
+    Buffer.from(new Float32Array([0, 1]).buffer)
+  );
+  databaseManager.setSpeakerMapping(noteId, "speaker_0", ada.id, "Ada");
+  databaseManager.setSpeakerMapping(noteId, "speaker_1", ben.id, "Ben");
+  const handlers = Object.assign(Object.create(IPCHandlers.prototype), { databaseManager });
+  handlers._reconcileLiveSpeakerState(
+    { speaker_0: { noteId, embedding: [1, 0] }, speaker_1: { noteId, embedding: [0, 1] } },
+    { speaker_0: [0, 1], speaker_1: [1, 0] },
+    []
+  );
+  const saved = databaseManager.getSpeakerMappings(noteId);
+  assert.deepEqual(
+    Object.fromEntries(saved.map((row) => [row.speaker_id, [row.display_name, row.profile_id]])),
+    { speaker_0: ["Ben", ben.id], speaker_1: ["Ada", ada.id] }
+  );
 });
 
 // A permissive `this` for setupHandlers: registration only stores closures.
@@ -206,6 +233,29 @@ test("auto-labeling a finished one-on-one leaves the live speaker unnamed", asyn
   assert.deepEqual(mappings, [[NOTE_ID + 1, "speaker_0", 7, "Ann"]]);
   const { displayName, noteId } = liveSpeakerIdentifier.getTransientState().speaker_0;
   assert.deepEqual({ displayName, noteId }, { displayName: null, noteId: null });
+});
+
+test("saving an expanded one-on-one never binds additional voices to the original attendee", async () => {
+  const { IPCHandlers } = loadHandlers();
+  const mappings = [];
+  const note = {
+    participants: JSON.stringify([{ displayName: "Ann", email: "ann@example.com" }]),
+    expected_speaker_count: 3,
+    transcript: JSON.stringify([{ source: "system", speaker: "speaker_1", text: "joining" }]),
+  };
+  const fake = Object.assign(Object.create(IPCHandlers.prototype), {
+    databaseManager: {
+      getNote: () => note,
+      getGoogleAccounts: () => [],
+      getNoteSpeakerEmbeddings: () => [{ speaker_id: "speaker_1", embedding: Buffer.alloc(8) }],
+      getSpeakerMappings: () => [],
+      upsertSpeakerProfile: () => ({ id: 7, display_name: "Ann" }),
+      setSpeakerMapping: (...args) => mappings.push(args),
+    },
+  });
+  fake._tryAutoLabelOneOnOne(NOTE_ID);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(mappings, []);
 });
 
 // A note recorded before the current embeddings has no voice to enroll, but the

@@ -15,9 +15,11 @@ export function rangeOverlapMs(aStart, aEnd, bStart, bEnd) {
 function identificationSlices(identifications) {
   const bySegment = new Map();
   identifications.forEach((identification, order) => {
-    const group = bySegment.get(identification.startTime) ?? [];
+    const segmentStart = identification.speechStartTime ?? identification.startTime;
+    // A whole-turn rejudgment supersedes every tentative slice of this turn.
+    const group = identification.rejudged ? [] : (bySegment.get(segmentStart) ?? []);
     group.push({ identification, order });
-    bySegment.set(identification.startTime, group);
+    bySegment.set(segmentStart, group);
   });
 
   const slices = [];
@@ -107,6 +109,17 @@ export function isWithinSpeech(identification, timestamp) {
   );
 }
 
+// Reproduce live delivery for a late cloud final. The first padded window can
+// supply a label until an identification actually hears speech at the point.
+export function pickIdentificationForPoint(identifications, timestamp) {
+  let picked = null;
+  for (const identification of identifications) {
+    if (timestamp < identification.startTime || timestamp > identification.endTime) continue;
+    if (!picked || isWithinSpeech(identification, timestamp)) picked = identification;
+  }
+  return picked;
+}
+
 export function takesRowFromOtherSpeaker(row, timestamp, identification) {
   return row.speaker !== identification.speakerId && isWithinSpeech(identification, timestamp);
 }
@@ -114,7 +127,7 @@ export function takesRowFromOtherSpeaker(row, timestamp, identification) {
 // A retroactive window can be minutes old. The identifications that gave a ranged
 // row its speaker may be pruned by then, so the window would win the row on any
 // overlap. It moves a confirmed row only when it covers at least half of it.
-export function retroactiveMayMoveRangedRow(row, start, end, identification) {
+export function retroactiveMayMoveRangedRow(row, start, end, identification, history = []) {
   if (
     identification.retroactive !== true ||
     row.speakerStatus !== "confirmed" ||
@@ -124,13 +137,22 @@ export function retroactiveMayMoveRangedRow(row, start, end, identification) {
     return true;
   }
   const overlapMs = rangeOverlapMs(start, end, identification.startTime, identification.endTime);
-  return overlapMs * 2 >= end - start;
+  if (overlapMs * 2 >= end - start) return true;
+  // If the tentative window is still available, re-score with its correction
+  // even when this turn only covers a fraction of a mostly silent local row.
+  return (
+    identification.rejudged === true &&
+    history.some(
+      (prior) =>
+        prior.tentative === true &&
+        prior.speakerId === row.speaker &&
+        prior.speechStartTime === identification.speechStartTime &&
+        rangeOverlapMs(start, end, prior.startTime, prior.endTime) > 0
+    )
+  );
 }
 
-export function pruneIdentifications(
-  identifications,
-  newestEndTime,
-  retentionMs = IDENTIFICATION_RETENTION_MS
-) {
-  return identifications.filter((id) => id.endTime >= newestEndTime - retentionMs);
+export function pruneIdentifications(identifications, newestEndTime, retainFromTime = Infinity) {
+  const cutoff = Math.min(newestEndTime - IDENTIFICATION_RETENTION_MS, retainFromTime);
+  return identifications.filter((identification) => identification.endTime >= cutoff);
 }

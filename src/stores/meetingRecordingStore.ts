@@ -62,6 +62,7 @@ import { createSerialQueue } from "../utils/serialQueue";
 import { reduceMeetingSegmentEvent, type MeetingSegmentEvent } from "./meetingSegmentReducer";
 import {
   pickSpeakerForRange,
+  pickIdentificationForPoint,
   pruneIdentifications,
   rangeOverlapMs,
   rangedLabelChanges,
@@ -95,6 +96,8 @@ export interface TranscriptSegment {
   speakerStatus?: TranscriptSpeakerStatus;
   speakerLocked?: boolean;
   speakerLockSource?: TranscriptSpeakerLockSource;
+  /** A user named the current speaker, but later audio may still reassign the row. */
+  speakerNameFromUser?: boolean;
 }
 
 export const SIDE_PANEL_BREAKPOINT_PX = 1024;
@@ -109,6 +112,9 @@ interface SpeakerIdentification {
   speechEndTime?: number;
   /** An earlier window of a voice main just confirmed; it relabels rows but isn't the current speaker. */
   retroactive?: boolean;
+  retainFromTime?: number;
+  tentative?: boolean;
+  rejudged?: boolean;
 }
 
 interface RecentSystemSpeaker {
@@ -140,8 +146,8 @@ interface MeetingRecordingState {
   sessionDiarizationEnabled: boolean;
   sessionExpectedCount: number;
   userTouchedStepper: boolean;
-  /** Whether this session captures system audio, which live speaker detection reads. */
-  sessionSystemAudioActive: boolean;
+  /** A live identification has arrived on this session's system stream. */
+  liveSpeakerDetectionActive: boolean;
   error: string | null;
   /** Bumped on every error report so identical repeated errors still re-notify. */
   errorNonce: number;
@@ -549,9 +555,8 @@ let speakerIdentifications: SpeakerIdentification[] = [];
 // keeps the end of its audio range (it starts at the row's timestamp) and is picked
 // again from the kept identifications whenever a new one hears part of it.
 const segmentRangeEnds = new Map<string, number>();
-// Rows whose speaker came from an identification's padding alone, so the speaker
-// in whose speech they start can still take them (takesRowFromOtherSpeaker).
-const paddingConfirmedSegments = new Set<string>();
+// A point label based on padding or a tentative window can still move after naming.
+const unsettledPointRows = new Set<string>();
 let nextPlaceholderSpeakerIndex = 0;
 // First speaker index this session owns; a resumed note's earlier sessions keep the
 // ids below it. Main may raise it (see _resolveMeetingSpeakerIndexBase).
@@ -594,7 +599,7 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
     (getSettings() as { speakerDiarizationEnabled?: boolean }).speakerDiarizationEnabled ?? true,
   sessionExpectedCount: DEFAULT_EXPECTED_SPEAKER_COUNT,
   userTouchedStepper: false,
-  sessionSystemAudioActive: false,
+  liveSpeakerDetectionActive: false,
   error: null,
   errorNonce: 0,
   systemAudioSilentWarning: false,
@@ -608,12 +613,10 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   recordingCopy: null,
 }));
 
-// The UI reads it from the store (the stepper hint); the module copy serves the
-// IPC handlers, which run outside React.
 function setSessionSystemAudioActive(active: boolean): void {
   sessionSystemAudioActive = active;
-  if (useMeetingRecordingStore.getState().sessionSystemAudioActive !== active) {
-    useMeetingRecordingStore.setState({ sessionSystemAudioActive: active });
+  if (!active && useMeetingRecordingStore.getState().liveSpeakerDetectionActive) {
+    useMeetingRecordingStore.setState({ liveSpeakerDetectionActive: false });
   }
 }
 
@@ -820,7 +823,7 @@ function relabelRangedSegment(
   if (
     start == null ||
     rangeOverlapMs(start, end, identification.startTime, identification.endTime) <= 0 ||
-    !retroactiveMayMoveRangedRow(segment, start, end, identification)
+    !retroactiveMayMoveRangedRow(segment, start, end, identification, speakerIdentifications)
   ) {
     return segment;
   }
@@ -844,15 +847,15 @@ function applySpeakerIdentification(
   const isConfirmed =
     segment.speaker && !segment.speakerIsPlaceholder && segment.speakerStatus !== "provisional";
   if (isConfirmed && !takesRowFromOtherSpeaker(segment, timestamp, identification)) {
-    if (inSpeech) paddingConfirmedSegments.delete(segment.id);
+    if (inSpeech && !identification.tentative) unsettledPointRows.delete(segment.id);
     return segment;
   }
 
   // An identification without a speech range is taken at its word.
-  if (inSpeech || identification.speechStartTime == null) {
-    paddingConfirmedSegments.delete(segment.id);
+  if (!identification.tentative && (inSpeech || identification.speechStartTime == null)) {
+    unsettledPointRows.delete(segment.id);
   } else {
-    paddingConfirmedSegments.add(segment.id);
+    unsettledPointRows.add(segment.id);
   }
 
   // A provisional row can carry the previous speaker's name; it stays with that speaker.
@@ -868,7 +871,7 @@ function applySpeakerIdentification(
 
 // A system row this session hasn't confirmed was only carried onto its speaker,
 // so it shows the user's name for them but stays movable until an identification
-// confirms it. So does a row confirmed by an identification's padding alone, until
+// confirms it. So does a row given a tentative label or heard through padding alone, until
 // its speaker is heard in the row's own audio. A local-model row is never locked either, even once confirmed: it
 // is picked from whichever identifications overlap it so far, and a new voice
 // answering inside the previous speaker's window is picked for them until its own
@@ -887,10 +890,10 @@ function nameSpeakerRow(segment: TranscriptSegment, name: string): TranscriptSeg
     !segment.speakerLocked &&
     (segment.speakerStatus !== "confirmed" ||
       segmentRangeEnds.has(segment.id) ||
-      paddingConfirmedSegments.has(segment.id)) &&
+      unsettledPointRows.has(segment.id)) &&
     !isEarlierSessionSpeaker(segment.speaker)
   ) {
-    return normalizeTranscriptSegment({ ...segment, ...patch });
+    return normalizeTranscriptSegment({ ...segment, ...patch, speakerNameFromUser: true });
   }
   return lockTranscriptSpeaker(segment, patch);
 }
@@ -898,7 +901,8 @@ function nameSpeakerRow(segment: TranscriptSegment, name: string): TranscriptSeg
 function applyUserSpeakerName(segment: TranscriptSegment): TranscriptSegment {
   if (segment.speakerLocked || !segment.speaker) return segment;
   const lockedName = speakerLocks.get(segment.speaker);
-  return lockedName ? nameSpeakerRow(segment, lockedName) : segment;
+  if (lockedName) return nameSpeakerRow(segment, lockedName);
+  return segment.speakerNameFromUser ? { ...segment, speakerNameFromUser: undefined } : segment;
 }
 
 function rememberSystemSpeaker(
@@ -1305,7 +1309,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     sessionRecorderName = args.recorderName;
     speakerIdentifications = [];
     segmentRangeEnds.clear();
-    paddingConfirmedSegments.clear();
+    unsettledPointRows.clear();
     sessionSpeakerIndexBase = maxSpeakerIndex + 1;
     nextPlaceholderSpeakerIndex = sessionSpeakerIndexBase;
     recentSystemSpeaker = null;
@@ -1352,6 +1356,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     const publishSystemAudioInterruption = (data: MeetingSystemAudioInterruption): void => {
       logger.warn("Meeting system audio was interrupted", data, "meeting");
       useMeetingRecordingStore.setState((state) => ({
+        liveSpeakerDetectionActive: false,
         systemAudioInterrupted: {
           recovering: data.recovering === true,
           reason: data.reason,
@@ -1721,12 +1726,23 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
                     decorated.timestamp,
                     event.endTimestamp
                   );
-                } else {
-                  for (let i = speakerIdentifications.length - 1; i >= 0; i -= 1) {
-                    decorated = applySpeakerIdentification(decorated, speakerIdentifications[i]);
-                  }
+                } else if (decorated.source === "system" && decorated.timestamp != null) {
+                  const heard = pickIdentificationForPoint(
+                    speakerIdentifications,
+                    decorated.timestamp
+                  );
+                  if (heard) decorated = applySpeakerIdentification(decorated, heard);
                 }
                 const provisional = assignProvisionalSpeaker(decorated);
+                if (
+                  current.sessionExpectedCount <= 2 &&
+                  provisional.speakerIsPlaceholder &&
+                  provisional.speaker === `speaker_${sessionSpeakerIndexBase}` &&
+                  !provisional.speakerName &&
+                  startResult.oneOnOneAttendee
+                ) {
+                  provisional.speakerName = startResult.oneOnOneAttendee.displayName;
+                }
                 reserveSpeakerIndex(provisional.speaker);
                 return applyUserSpeakerName(provisional);
               },
@@ -1793,18 +1809,21 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
           rememberSystemSpeaker(data.speakerId, data.displayName ?? null, false, data.endTime);
         }
         speakerIdentifications = [
-          ...pruneIdentifications(speakerIdentifications, data.endTime),
+          ...pruneIdentifications(speakerIdentifications, data.endTime, data.retainFromTime),
           data,
         ];
         const next = useMeetingRecordingStore.getState().segments.map((segment) => {
-          const byPadding = paddingConfirmedSegments.has(segment.id);
+          const wasUnsettled = unsettledPointRows.has(segment.id);
           const identified = applySpeakerIdentification(segment, data);
           // A row its speaker has now been heard in can take the lock a name gives.
-          const settled = byPadding && !paddingConfirmedSegments.has(segment.id);
+          const settled = wasUnsettled && !unsettledPointRows.has(segment.id);
           return identified === segment && !settled ? segment : applyUserSpeakerName(identified);
         });
         segmentsRefValue = next;
-        useMeetingRecordingStore.setState({ segments: next });
+        useMeetingRecordingStore.setState({
+          segments: next,
+          ...(!data.retroactive && { liveSpeakerDetectionActive: true }),
+        });
       });
       if (speakerCleanup) ipcCleanups.push(speakerCleanup);
 
@@ -1817,7 +1836,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
             // Locked segments keep their user-set name but must still move to the
             // kept cluster: the removed id no longer exists in the identifier, so
             // later merges and renames would never reach a segment left on it.
-            if (seg.speakerLocked) {
+            if (seg.speakerLocked || seg.speakerNameFromUser) {
               return normalizeTranscriptSegment({ ...seg, speaker: keep });
             }
             return normalizeTranscriptSegment({
@@ -1890,17 +1909,12 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       if (speakerConfigCleanup) ipcCleanups.push(speakerConfigCleanup);
 
       if (startResult.oneOnOneAttendee) {
-        const synthetic: SpeakerIdentification = {
-          // Main's live identifier mints the session's first cluster at the base too.
-          speakerId: `speaker_${sessionSpeakerIndexBase}`,
-          displayName: startResult.oneOnOneAttendee.displayName,
-          startTime: 0,
-          endTime: Number.MAX_SAFE_INTEGER,
-        };
-        reserveSpeakerIndex(synthetic.speakerId);
-        setSystemPartialSpeakerIdentity(synthetic.speakerId, synthetic.displayName);
-        rememberSystemSpeaker(synthetic.speakerId, synthetic.displayName, false, Date.now());
-        speakerIdentifications.push(synthetic);
+        // The calendar starts a provisional identity until a voice is heard.
+        const speakerId = `speaker_${sessionSpeakerIndexBase}`;
+        const { displayName } = startResult.oneOnOneAttendee;
+        reserveSpeakerIndex(speakerId);
+        setSystemPartialSpeakerIdentity(speakerId, displayName);
+        rememberSystemSpeaker(speakerId, displayName, true, Date.now());
       }
 
       if (micResult) {
@@ -2718,6 +2732,7 @@ if (typeof window !== "undefined") {
         segments: recordedSegments,
         removedSegments: data.removedSegments,
         splitLiveSpeakers: data.splitLiveSpeakers,
+        reconciledLiveSpeakerIds: data.reconciledLiveSpeakerIds,
       });
 
       // A later session seeded this session's rows, so move its boundary when
@@ -2757,6 +2772,7 @@ if (typeof window !== "undefined") {
           segments: recordedSegments,
           removedSegments: data.removedSegments,
           splitLiveSpeakers: data.splitLiveSpeakers,
+          reconciledLiveSpeakerIds: data.reconciledLiveSpeakerIds,
         });
         sessionSeedLength -= merged.removedCount;
         segmentsRefValue = merged.segments;

@@ -106,7 +106,8 @@ export type SplitLiveSpeakers = Record<string, { speaker: string; name: string }
 const mergeSpeakerFields = (
   existing: TranscriptSegment,
   incoming: TranscriptSegment,
-  splitLiveSpeakers?: SplitLiveSpeakers
+  splitLiveSpeakers?: SplitLiveSpeakers,
+  reconciledLiveSpeakerIds?: Record<string, string>
 ) => {
   const merged = {
     ...incoming,
@@ -139,6 +140,20 @@ const mergeSpeakerFields = (
     }
   }
 
+  if (existing.speakerNameFromUser && existing.speaker) {
+    // Offline IDs can be reordered, and the selected self name can differ from
+    // its profile name ("You" vs the recorder's name). Follow the matched voice.
+    let matchedSpeaker: string | undefined = existing.speaker;
+    if (splitLiveSpeakers) matchedSpeaker = split?.speaker;
+    else if (reconciledLiveSpeakerIds) matchedSpeaker = reconciledLiveSpeakerIds[existing.speaker];
+    if (matchedSpeaker && matchedSpeaker === merged.speaker) {
+      merged.speakerName = existing.speakerName;
+      merged.speakerNameFromUser = true;
+    } else if (incoming.speakerName === undefined) {
+      delete merged.speakerName;
+    }
+  }
+
   if (isTranscriptSpeakerLocked(existing)) {
     // Keep the user's name/lock but let diarization refine the speaker cluster, so one
     // locked label can't freeze a bucket diarization splits into multiple speakers.
@@ -156,7 +171,8 @@ const mergeSpeakerFields = (
 export const mergeTranscriptSegments = (
   existingSegments: TranscriptSegment[],
   incomingSegments: TranscriptSegment[],
-  splitLiveSpeakers?: SplitLiveSpeakers
+  splitLiveSpeakers?: SplitLiveSpeakers,
+  reconciledLiveSpeakerIds?: Record<string, string>
 ) => {
   if (incomingSegments.length === 0) {
     return normalizeTranscriptSegments(existingSegments);
@@ -207,7 +223,12 @@ export const mergeTranscriptSegments = (
       usedIndexes.add(matchIndex);
       enrichedByIndex.set(
         matchIndex,
-        mergeSpeakerFields(existingSegments[matchIndex], segment, splitLiveSpeakers)
+        mergeSpeakerFields(
+          existingSegments[matchIndex],
+          segment,
+          splitLiveSpeakers,
+          reconciledLiveSpeakerIds
+        )
       );
     } else {
       unmatchedIncoming.push(
@@ -233,6 +254,7 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[]) =>
       endTimestamp: segment.endTimestamp,
       speaker: segment.speaker,
       speakerName: segment.speakerName,
+      speakerNameFromUser: segment.speakerNameFromUser,
       recorderName: segment.recorderName,
       speakerIsPlaceholder: segment.speakerIsPlaceholder,
       suggestedName: segment.suggestedName,
@@ -251,7 +273,9 @@ export const resolveMappedSpeakerName = (
   segment: TranscriptSegment,
   speakerMappings?: Record<string, string>
 ): string | undefined => {
-  if (segment.speakerName && isTranscriptSpeakerLocked(segment)) return undefined;
+  if (segment.speakerName && (segment.speakerNameFromUser || isTranscriptSpeakerLocked(segment))) {
+    return undefined;
+  }
   // A legacy self mapping belongs to the original recorder, not a teammate
   // who subsequently recorded into the note. Explicit row corrections win above.
   return segment.speaker && !(segment.speaker === "you" && segment.recorderName)
@@ -285,10 +309,12 @@ export const isSelfSideSegment = (
 ): boolean => {
   const name = resolveSegmentSpeakerName(segment, speakerMappings);
   if (name) {
-    // On a call the user is the mic, so a remote voice that recording matched to
-    // their voice profile is a misidentification; only a name the user set, which
-    // locks the rows that speaker was heard in, moves it across. Mappings also hold automatic matches.
-    const autoNamedRemote = segment.source === "system" && !isTranscriptSpeakerLocked(segment);
+    // Automatic profile matches can name a remote voice “You”. Only a name the user
+    // chose moves it to their side, even while live identification can still revise it.
+    const autoNamedRemote =
+      segment.source === "system" &&
+      !isTranscriptSpeakerLocked(segment) &&
+      !segment.speakerNameFromUser;
     return !autoNamedRemote && isYouSpeakerName(name, youLabel);
   }
   if (

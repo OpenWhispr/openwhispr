@@ -582,3 +582,22 @@ for (const [language, youLabel] of [
     });
   });
 }
+
+test("the export keeps an explicitly named movable self row separate from an automatic match", () => {
+  const note = { recorded_by_name: "Recorder" };
+  const row = {
+    source: "system",
+    speaker: "speaker_0",
+    speakerName: "You",
+    recorderName: "Recorder",
+  };
+  const segments = [
+    { ...row, timestamp: 0, text: "Automatic." },
+    { ...row, timestamp: 1, text: "Explicit.", speakerNameFromUser: true },
+  ];
+  const result = JSON.parse(formatJson(note, segments, { speaker_0: "Profile" }));
+  assert.deepEqual(
+    result.segments.map((segment) => segment.speaker),
+    ["Profile", "Recorder"]
+  );
+});

@@ -8,7 +8,9 @@ function resolveSpeaker(seg, speakerMappings, recorderLabel) {
     seg.speaker && !(seg.speaker === "you" && seg.recorderName)
       ? speakerMappings[seg.speaker]
       : undefined;
-  if (mappedName && !(seg.speakerName && isSpeakerLocked(seg))) return mappedName;
+  if (mappedName && !(seg.speakerName && (seg.speakerNameFromUser || isSpeakerLocked(seg)))) {
+    return mappedName;
+  }
   if (seg.speakerName && !seg.speakerIsPlaceholder) {
     const name = seg.speakerName.trim().toLowerCase();
     const isSelfName =
@@ -35,7 +37,7 @@ function speakerKey(seg) {
     named,
     seg.speaker ? "" : seg.source || "",
     seg.recorderName || "",
-    isSpeakerLocked(seg),
+    !!seg.speakerNameFromUser || isSpeakerLocked(seg),
   ].join("\u0000");
 }
 

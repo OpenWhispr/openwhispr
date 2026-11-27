@@ -98,6 +98,7 @@ export function mergeSessionDiarization(params: {
   segments: Array<Omit<TranscriptSegment, "id"> & { id?: string }>;
   removedSegments?: RemovedTranscriptSegment[];
   splitLiveSpeakers?: SplitLiveSpeakers;
+  reconciledLiveSpeakerIds?: Record<string, string>;
 }): { segments: TranscriptSegment[]; removedCount: number } {
   const { existing, seedLength, fallbackTranscript, segments, removedSegments, splitLiveSpeakers } =
     params;
@@ -121,7 +122,12 @@ export function mergeSessionDiarization(params: {
   return {
     segments: [
       ...existing.slice(0, seededCount),
-      ...mergeTranscriptSegments(keptRows, incoming, splitLiveSpeakers),
+      ...mergeTranscriptSegments(
+        keptRows,
+        incoming,
+        splitLiveSpeakers,
+        params.reconciledLiveSpeakerIds
+      ),
     ],
     removedCount: sessionRows.length - keptRows.length,
   };

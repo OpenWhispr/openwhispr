@@ -1434,9 +1434,8 @@ for (const options of [{ provider: "local" }, { provider: "deepgram-realtime", m
 }
 
 // Session start is what turns automatic mode on: a note with no speaker count
-// runs live identification at the app's limit behind the confidence gate, a note
-// with a count runs it at that count ungated, and a promoted voice's earlier
-// windows reach the renderer marked retroactive.
+// uses the full remote-speaker limit. A known count limits the available slots.
+// A promoted voice replays its earlier windows as retroactive identifications.
 const useNoteSpeakerConfig = (t, note) => {
   const IPCHandlers = require(modulePath);
   const methods = [
@@ -2175,4 +2174,68 @@ test("an in-person confirmation surfaces the control panel before asking", async
     ["panel", undefined],
     ["sheet", 2],
   ]);
+});
+
+test("a local decode retains its speaker through a later identification and meeting stop", async (t) => {
+  resetMeeting(t);
+  useNoteSpeakerConfig(t, {});
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  t.mock.method(liveSpeakerIdentifier, "isAvailable", () => true);
+  t.mock.method(liveSpeakerIdentifier, "feedAudio", async () => {});
+  t.mock.method(liveSpeakerIdentifier, "stop", async () => null);
+  let identify;
+  t.mock.method(liveSpeakerIdentifier, "start", async (callback) => {
+    identify = callback;
+    return true;
+  });
+
+  target._localModelPolicy = null;
+  target._activeLocalMeetingLease = null;
+  const decode = deferred();
+  let decoding = false;
+  target.parakeetManager = {
+    transcribeLocalParakeet: () => {
+      decoding = true;
+      return decode.promise;
+    },
+  };
+  let saved;
+  target._startOrSkipDiarization = (_id, _pcm, _start, segments) => {
+    saved = segments;
+  };
+  t.after(() => {
+    delete target.parakeetManager;
+    delete target._localModelPolicy;
+    delete target._activeLocalMeetingLease;
+    delete target._startOrSkipDiarization;
+  });
+
+  const started = await invoke("meeting-transcription-start", {
+    provider: "local",
+    localProvider: "nvidia",
+    noteId: 41,
+  });
+  assert.equal(started.success, true);
+  const capturedAt = Date.now();
+  const audio = new Int16Array(24_000).fill(2000);
+  eventHandlers.get("meeting-transcription-send")(
+    { sender: editor },
+    audio.buffer,
+    "system",
+    capturedAt
+  );
+  identify({ speakerId: "speaker_0", displayName: "Ana", startTime: 0, endTime: 1 });
+  t.mock.timers.tick(5000);
+  try {
+    await new Promise(setImmediate);
+    assert.equal(decoding, true);
+    identify({ speakerId: "speaker_1", startTime: 125, endTime: 130 });
+    const sent = notifications.findLast(([, channel]) => channel === "meeting-speaker-identified");
+    assert.equal(sent[2].retainFromTime, capturedAt);
+  } finally {
+    decode.resolve({ success: true, text: "Delayed audio" });
+  }
+  assert.equal((await invoke("meeting-transcription-stop")).success, true);
+  assert.equal(saved[0].text, "Delayed audio");
+  assert.equal(saved[0].speaker, "speaker_0");
 });

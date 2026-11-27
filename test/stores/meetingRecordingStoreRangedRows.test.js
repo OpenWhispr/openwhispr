@@ -18,7 +18,7 @@ const START_ARGS = {
   autoEndEligible: true,
 };
 
-function createElectronAPI() {
+function createElectronAPI(startResult) {
   const noopListener = () => () => {};
   const state = { segmentCallback: null, speakerCallback: null };
   const api = {
@@ -33,6 +33,7 @@ function createElectronAPI() {
       systemAudioMode: "native",
       systemAudioStrategy: "native",
       speakerIndexBase: options.speakerIndexBase,
+      ...startResult,
     }),
     meetingTranscriptionSetSystemAudioAvailable: async () => ({ success: true }),
     meetingTranscriptionStop: async () => ({ success: true, diarizationSessionId: null }),
@@ -61,8 +62,8 @@ function createElectronAPI() {
   return { api, state };
 }
 
-async function startMeeting(t) {
-  const { api, state } = createElectronAPI();
+async function startMeeting(t, startResult = {}) {
+  const { api, state } = createElectronAPI(startResult);
   let store = null;
   // Registered before the globals so the recording stops while `window` still exists.
   t.after(() => store?.stopRecording());
@@ -94,6 +95,65 @@ const B = (startTime, endTime, displayName) => ({
   displayName,
   startTime,
   endTime,
+});
+
+for (const mode of ["cloud", "local"]) {
+  test(`${mode} rows delivered before and after a whole-turn correction agree`, async (t) => {
+    const { store, identify, final, rows } = await startMeeting(t);
+    const words = {
+      source: "system",
+      timestamp: T + 2200,
+      ...(mode === "local" && { endTimestamp: T + 24_000 }),
+    };
+    identify({
+      ...A(T, T + 5000, "Ana"),
+      speechStartTime: T + 750,
+      speechEndTime: T + 4250,
+      tentative: true,
+    });
+    final({ text: "early delivery", ...words });
+    assert.equal(rows()[0].speaker, "speaker_0");
+    store.lockSpeaker("speaker_0", "Anna");
+    assert.equal(rows()[0].speakerLocked, false);
+    identify({
+      ...B(T, T + 10_000, "Bea"),
+      speechStartTime: T + 750,
+      speechEndTime: T + 9250,
+      rejudged: true,
+      retroactive: true,
+    });
+    final({ text: "late delivery", ...words });
+    assert.deepEqual(
+      rows().map(({ speakerName }) => speakerName),
+      ["Bea", "Bea"]
+    );
+  });
+}
+
+test("two cloud windows covering a timestamp only with padding agree on early and late finals", async (t) => {
+  const { identify, final, rows } = await startMeeting(t);
+  const point = { source: "system", timestamp: T + 5100 };
+  identify({ ...A(T, T + 5750, "Ana"), speechStartTime: T + 750, speechEndTime: T + 5000 });
+  final({ text: "early delivery", ...point });
+  identify({ ...B(T + 4650, T + 8000, "Bea"), speechStartTime: T + 5400, speechEndTime: T + 7250 });
+  final({ text: "late delivery", ...point });
+  assert.deepEqual(
+    rows().map((row) => row.speakerName),
+    ["Ana", "Ana"]
+  );
+});
+
+test("a second attendee's voice takes a local row from the one-on-one fallback", async (t) => {
+  const { store, identify, final, rows } = await startMeeting(t, {
+    oneOnOneAttendee: { displayName: "Ada", email: null },
+  });
+  final({ text: "hello", source: "system", timestamp: T, endTimestamp: T + 3000 });
+  assert.equal(rows()[0].speakerName, "Ada");
+  store.setSessionExpectedCount(3);
+  identify(B(T + 4000, T + 7000, "Bea"));
+  final({ text: "joining now", source: "system", timestamp: T + 4500, endTimestamp: T + 6500 });
+  assert.equal(rows()[1].speaker, "speaker_1");
+  assert.equal(rows()[1].speakerName, "Bea");
 });
 
 test("a ranged row takes the speaker heard for most of it", async (t) => {
@@ -218,4 +278,36 @@ test("a row in the earlier speaker's part keeps them as the next speaker is hear
   final({ text: "my part", source: "system", timestamp: T + 750, endTimestamp: T + 4000 });
   for (const end of [6750, 7750, 8750, 9750]) identify(inSegment(B, end));
   assert.equal(rows()[0].speaker, "speaker_0");
+});
+
+test("an explicitly named local You row stays movable and retains its side when reopened", async (t) => {
+  const { store, identify, final, rows } = await startMeeting(t);
+  const { isSelfSideSegment, mergeTranscriptSegments, serializeTranscriptSegments } =
+    await import("../../src/utils/transcriptSpeakerState.ts");
+  const { parseTranscriptSegments } = await import("../../src/utils/parseTranscriptSegments.ts");
+  identify(A(T, T + 2000));
+  final({ text: "mine", source: "system", timestamp: T + 500, endTimestamp: T + 8000 });
+  store.lockSpeaker("speaker_0", "You");
+  const [named] = rows();
+  assert.equal(named.speakerLocked, false);
+  assert.equal(isSelfSideSegment(named, {}, "You"), true);
+  const [stored] = parseTranscriptSegments(serializeTranscriptSegments([named]));
+  assert.equal(isSelfSideSegment(stored, { speaker_0: "My profile name" }, "You"), true);
+  const [reassigned] = mergeTranscriptSegments(
+    [stored],
+    [{ ...stored, speaker: "speaker_1", speakerName: undefined, speakerNameFromUser: undefined }]
+  );
+  assert.equal(reassigned.speakerName, undefined);
+  identify(B(T + 2000, T + 8500, "You"));
+  assert.equal(rows()[0].speaker, "speaker_1");
+  assert.equal(isSelfSideSegment(rows()[0], {}, "You"), false);
+});
+
+test("a delayed local final uses the evidence retained for its outstanding decode", async (t) => {
+  const { identify, final, rows } = await startMeeting(t);
+  identify(A(T, T + 5000, "Ana"));
+  identify({ ...B(T + 125_000, T + 130_000, "Bo"), retainFromTime: T });
+  final({ text: "delayed", source: "system", timestamp: T + 500, endTimestamp: T + 4500 });
+  assert.equal(rows()[0].speaker, "speaker_0");
+  assert.equal(rows()[0].speakerName, "Ana");
 });

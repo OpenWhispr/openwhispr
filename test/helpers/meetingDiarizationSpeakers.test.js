@@ -131,6 +131,7 @@ function diarizeMeeting(
   }).then((payload) => ({
     lines: payload.segments,
     splitLiveSpeakers: payload.splitLiveSpeakers,
+    reconciledLiveSpeakerIds: payload.reconciledLiveSpeakerIds,
   }));
 }
 
@@ -568,4 +569,43 @@ test("a split tells the renderer which voice each live speaker's name went to", 
     liveLabel,
   });
   assert.equal(oneVoice.splitLiveSpeakers, undefined);
+});
+
+test("a movable You name follows the matched voice when two offline speaker IDs swap", async () => {
+  const { mergeSessionDiarization } = await import("../../src/utils/diarizationCompletion.ts");
+  const { isSelfSideSegment } = await import("../../src/utils/transcriptSpeakerState.ts");
+  embeddingModelAvailable = true;
+  voices = new Map([
+    ["speaker_00", [0, 1]],
+    ["speaker_01", [1, 0]],
+  ]);
+  const result = await diarizeMeeting(turns(["speaker_00", "speaker_01"], 30, 8), {
+    liveSpeakerState: {
+      speaker_0: { displayName: "Recorder Profile", embedding: [1, 0] },
+      speaker_1: { displayName: "Bea", embedding: [0, 1] },
+    },
+  });
+  assert.equal(result.splitLiveSpeakers, undefined);
+  assert.deepEqual(result.reconciledLiveSpeakerIds, {
+    speaker_0: "speaker_1",
+    speaker_1: "speaker_0",
+  });
+  // Both rows provisionally displayed the mapped self voice before the stop.
+  const existing = result.lines.map((row) => ({
+    ...row,
+    speaker: "speaker_0",
+    speakerName: "You",
+    speakerNameFromUser: true,
+  }));
+  const { segments } = mergeSessionDiarization({
+    existing,
+    seedLength: 0,
+    segments: result.lines,
+    reconciledLiveSpeakerIds: result.reconciledLiveSpeakerIds,
+  });
+  for (const row of segments) {
+    const self = row.speaker === "speaker_1";
+    assert.equal(row.speakerName, self ? "You" : "Bea");
+    assert.equal(isSelfSideSegment(row, {}, "You"), self);
+  }
 });

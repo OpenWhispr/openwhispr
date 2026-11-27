@@ -285,17 +285,17 @@ test("original unnumbered mic rows show the resolved recorder and preserve named
 // Live speaker detection reads only the system stream, so an in-person recording
 // (no system audio) still relies on the stepper and keeps the "adjust" hint.
 test("the assumed-count hint says more are detected only while the session hears system audio", async () => {
-  const withSystemAudio = await renderChat({ isRecording: true, sessionSystemAudioActive: true });
+  const withSystemAudio = await renderChat({ isRecording: true, liveSpeakerDetectionActive: true });
   assert.ok(withSystemAudio.includes("more are detected automatically"));
   assert.ok(!withSystemAudio.includes("adjust if more"));
 
-  const micOnly = await renderChat({ isRecording: true, sessionSystemAudioActive: false });
+  const micOnly = await renderChat({ isRecording: true, liveSpeakerDetectionActive: false });
   assert.ok(micOnly.includes("adjust if more"));
   assert.ok(!micOnly.includes("more are detected automatically"));
 
   const touched = await renderChat({
     isRecording: true,
-    sessionSystemAudioActive: true,
+    liveSpeakerDetectionActive: true,
     userTouchedStepper: true,
   });
   assert.ok(!touched.includes("assuming 2"));

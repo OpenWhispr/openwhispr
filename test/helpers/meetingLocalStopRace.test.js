@@ -98,6 +98,7 @@ function harness({
     let meetingLocalModel = null;
     let meetingLocalLanguage = null;
     let meetingLocalTranscribePromise = null;
+    let decodingSystemAudioStart = null;
     let meetingDiarizationSegments = [];
     let meetingNoteId = null;
     let meetingSpeakerIndexBase = 0;
@@ -153,6 +154,7 @@ function harness({
       const index = chunkGates.findIndex((gate) => gate.source === source);
       if (index < 0) return;
       const [gate] = chunkGates.splice(index, 1);
+      meetingLocalBuffers[source] = [];
       await gate.promise;
       events.push("chunk-done:" + source);
       meetingDiarizationSegments.push({ text: gate.text, source, timestamp: 1 });
@@ -197,7 +199,7 @@ function harness({
       meetingLocalTranscript = "";
     };
 
-    ${sliceBetween("const transcribeAllLocalBuffers =", "const dropMeetingMicDiarizationCapture =")}
+    ${sliceBetween("const oldestPendingLocalSystemAudio =", "const dropMeetingMicDiarizationCapture =")}
     ${sliceBetween("const rollbackMeetingTranscriptionStart =", "const setupDictationCallbacks =")}
     ${sliceBetween("const assertMeetingAllowed =", "const fetchRealtimeToken =")}
     ${sliceBetween("const startMeetingTranscription =", "const sendMeetingAudio =")}
@@ -210,6 +212,8 @@ function harness({
         meetingLocalWin = win;
       },
       timerTick: () => transcribeAllLocalBuffers(),
+      oldestPendingLocalSystemAudio,
+      queueSystemAudio(startAt) { meetingLocalBuffers.system.push({ startAt }); },
       stop: (sessionId) => stopMeetingTranscription(sessionId),
       rollback: () => rollbackMeetingTranscriptionStart(),
       start: (options) => startMeetingTranscription({ sender: {} }, options),
@@ -581,4 +585,21 @@ test("an outside guest stops new local decodes and suppresses an in-flight resul
     assert.equal(decodes, outcome === "already-stopped" ? 0 : 1);
     assert.deepEqual(plain(finals), []);
   }
+});
+
+test("speaker evidence follows the oldest decoding or queued system audio", async () => {
+  const { api, holdChunk } = harness();
+  api.beginLocalSession();
+  api.queueSystemAudio(T);
+  const system = holdChunk("first", "system");
+  const mic = holdChunk("mic", "mic");
+  const decoding = api.timerTick();
+  api.queueSystemAudio(T + 5000);
+  assert.equal(api.oldestPendingLocalSystemAudio(), T);
+  system.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(api.oldestPendingLocalSystemAudio(), T + 5000);
+  mic.resolve();
+  await decoding;
+  assert.equal(api.oldestPendingLocalSystemAudio(), T + 5000);
 });

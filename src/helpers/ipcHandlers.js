@@ -242,6 +242,7 @@ const { resolveLiveSpeakerLimit, autoDisplayCount } = require("./liveSpeakerLimi
 const {
   rangeOverlapMs,
   pickSpeakerForRange,
+  pickIdentificationForPoint,
   rangedLabelChanges,
   pruneIdentifications,
   takesRowFromOtherSpeaker,
@@ -1628,8 +1629,10 @@ class IPCHandlers {
     }
   }
 
-  _resolveOneOnOneOtherParticipant(participantsJson) {
-    const others = this._parseNonSelfParticipants(participantsJson);
+  _resolveOneOnOneOtherParticipant(note) {
+    // A manually expanded meeting can have guests missing from its calendar roster.
+    if (normalizeStoredSpeakerCount(note?.expected_speaker_count) > 2) return null;
+    const others = this._parseNonSelfParticipants(note?.participants);
     if (others.length !== 1) return null;
     const displayName = others[0].displayName || others[0].email;
     if (!displayName) return null;
@@ -10292,10 +10295,12 @@ class IPCHandlers {
         hasBleedEvidence: source === "mic" ? !!micSuppression?.hasBleedEvidence : false,
         likelyRenderBleed: source === "mic" ? !!micSuppression?.likelyRenderBleed : false,
       };
-      // A local row is stored after the identifications for its audio have fired,
-      // so label it from the ones we kept.
-      if (source === "system" && endTimestamp !== null) {
-        const heard = pickSpeakerForRange(meetingLiveIdentifications, timestamp, endTimestamp);
+      // Local decoding and cloud finals can both arrive after speaker identification.
+      if (source === "system" && timestamp != null) {
+        const heard =
+          endTimestamp == null
+            ? pickIdentificationForPoint(meetingLiveIdentifications, timestamp)
+            : pickSpeakerForRange(meetingLiveIdentifications, timestamp, endTimestamp);
         if (heard) labelRowAsHeard(segment, heard);
       }
       meetingDiarizationSegments.push(segment);
@@ -10317,7 +10322,8 @@ class IPCHandlers {
     const applyLiveIdentificationToRows = (identification) => {
       meetingLiveIdentifications = pruneIdentifications(
         [...meetingLiveIdentifications, identification],
-        identification.endTime
+        identification.endTime,
+        identification.retainFromTime
       );
 
       for (const seg of meetingDiarizationSegments) {
@@ -10337,7 +10343,15 @@ class IPCHandlers {
           ) {
             continue;
           }
-          if (!retroactiveMayMoveRangedRow(seg, seg.timestamp, seg.endTimestamp, identification)) {
+          if (
+            !retroactiveMayMoveRangedRow(
+              seg,
+              seg.timestamp,
+              seg.endTimestamp,
+              identification,
+              meetingLiveIdentifications
+            )
+          ) {
             continue;
           }
           const heard = pickSpeakerForRange(
@@ -11358,6 +11372,7 @@ class IPCHandlers {
     // await it: a pass that finished after the reset would push its finals into
     // the next session and send them to no window.
     let meetingLocalTranscribePromise = null;
+    let decodingSystemAudioStart = null;
     let meetingPendingMicChunks = [];
     let meetingPendingMicFinals = [];
     let meetingPendingMicFinalTimer = null;
@@ -11387,7 +11402,7 @@ class IPCHandlers {
       if (!noteId) return null;
       try {
         const note = this.databaseManager.getNote(noteId);
-        return this._resolveOneOnOneOtherParticipant(note?.participants);
+        return this._resolveOneOnOneOtherParticipant(note);
       } catch (_) {
         return null;
       }
@@ -11677,11 +11692,13 @@ class IPCHandlers {
               return;
             }
 
-            bindOneOnOneAttendeeToSpeaker(identification.speakerId);
-
-            const displayName = meetingOneOnOneAttendee
-              ? meetingOneOnOneAttendee.displayName
-              : identification.displayName;
+            const isInitialAttendee =
+              meetingOneOnOneAttendee &&
+              identification.speakerId === `speaker_${meetingSpeakerIndexBase}`;
+            if (isInitialAttendee) bindOneOnOneAttendeeToSpeaker(identification.speakerId);
+            const displayName =
+              identification.displayName ??
+              (isInitialAttendee ? meetingOneOnOneAttendee.displayName : null);
 
             const startTime = Math.max(
               meetingLiveSpeakerStartedAt,
@@ -11691,7 +11708,11 @@ class IPCHandlers {
               startTime,
               meetingLiveSpeakerStartedAt + identification.endTime * 1000
             );
+            // Local ASR may fall minutes behind capture. Both processes need the
+            // windows for audio still decoding or queued for the next pass.
+            const retainFromTime = oldestPendingLocalSystemAudio();
             const enrichedIdentification = {
+              ...(retainFromTime != null && { retainFromTime }),
               ...identification,
               displayName,
               startTime,
@@ -11955,15 +11976,21 @@ class IPCHandlers {
       }
     };
 
+    const oldestPendingLocalSystemAudio = () =>
+      decodingSystemAudioStart ?? meetingLocalBuffers.system[0]?.startAt;
+
     const transcribeAllLocalBuffers = () => {
       if (this._audioFeaturePolicy.activeFailure("meeting")) return Promise.resolve();
       if (meetingLocalTranscribePromise) return meetingLocalTranscribePromise;
       meetingLocalTranscribePromise = (async () => {
         try {
+          decodingSystemAudioStart = meetingLocalBuffers.system[0]?.startAt ?? null;
           await transcribeLocalMeetingChunk("system");
+          decodingSystemAudioStart = null;
           if (!this._audioFeaturePolicy.activeFailure("meeting"))
             await transcribeLocalMeetingChunk("mic");
         } finally {
+          decodingSystemAudioStart = null;
           meetingLocalTranscribePromise = null;
         }
       })();
@@ -16948,7 +16975,7 @@ class IPCHandlers {
     setImmediate(async () => {
       try {
         const note = this.databaseManager.getNote(noteId);
-        const other = this._resolveOneOnOneOtherParticipant(note?.participants);
+        const other = this._resolveOneOnOneOtherParticipant(note);
         if (!other) return;
         const { displayName, email } = other;
 
@@ -17043,6 +17070,7 @@ class IPCHandlers {
     const reconciledSpeakers = new Set();
     const usedLiveSpeakers = new Set();
     const noteMappings = new Map();
+    const mappingChanges = new Map();
 
     const liveEntries = Object.entries(liveSpeakerState)
       .map(([speakerId, data]) => ({
@@ -17094,24 +17122,16 @@ class IPCHandlers {
         if (liveMapping) {
           displayName = liveMapping.display_name || displayName;
           profileId = liveMapping.profile_id ?? profileId;
-          this.databaseManager.setSpeakerMapping(
-            bestEntry.noteId,
-            mappedId,
+        }
+        if (liveMapping || displayName) {
+          const changes = mappingChanges.get(bestEntry.noteId) ?? [];
+          changes.push({
+            previousId: bestEntry.speakerId,
+            speakerId: mappedId,
             profileId,
-            displayName
-          );
-          // Live and offline ids share one namespace now, so they often match —
-          // removing the "old" row would delete the mapping just written.
-          if (bestEntry.speakerId !== mappedId) {
-            this.databaseManager.removeSpeakerMapping(bestEntry.noteId, bestEntry.speakerId);
-          }
-        } else if (displayName) {
-          this.databaseManager.setSpeakerMapping(
-            bestEntry.noteId,
-            mappedId,
-            profileId,
-            displayName
-          );
+            displayName,
+          });
+          mappingChanges.set(bestEntry.noteId, changes);
         }
       }
 
@@ -17119,6 +17139,9 @@ class IPCHandlers {
       if (displayName) {
         namedVoices.set(bestEntry.speakerId, { speaker: mappedId, name: displayName });
       }
+    }
+    for (const [noteId, changes] of mappingChanges) {
+      this.databaseManager.remapSpeakers(noteId, changes);
     }
     return namedVoices;
   }
@@ -17393,8 +17416,9 @@ class IPCHandlers {
         // and profile matching below name each voice. Without voices to match,
         // the names stay. null, not undefined: the renderer keeps a line's old
         // value for an undefined field.
+        const hasOfflineVoices = Object.keys(speakerEmbeddingsMap || {}).length > 0;
         const liveSpeakersSplit =
-          Object.keys(speakerEmbeddingsMap || {}).length > 0 &&
+          hasOfflineVoices &&
           speakerSet.size > Math.max(1, Object.keys(liveSpeakerState || {}).length);
         if (liveSpeakersSplit) {
           for (const segment of enrichedSegments) {
@@ -17465,6 +17489,13 @@ class IPCHandlers {
           segments: enrichedSegments,
           speakerEmbeddings: speakerEmbeddingsMap,
           splitLiveSpeakers,
+          // Even when the count stays the same, offline cluster IDs can swap.
+          ...(!liveSpeakersSplit &&
+            hasOfflineVoices && {
+              reconciledLiveSpeakerIds: Object.fromEntries(
+                Array.from(namedVoices, ([liveId, match]) => [liveId, match.speaker])
+              ),
+            }),
         });
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });

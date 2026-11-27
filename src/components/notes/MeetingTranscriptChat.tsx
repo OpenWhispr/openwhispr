@@ -853,7 +853,7 @@ interface MeetingTranscriptChatProps {
   sessionDiarizationEnabled?: boolean;
   sessionExpectedCount?: number;
   userTouchedStepper?: boolean;
-  sessionSystemAudioActive?: boolean;
+  liveSpeakerDetectionActive?: boolean;
   onSetSessionDiarizationEnabled?: (enabled: boolean) => void;
   onSetSessionExpectedCount?: (count: number) => void;
   onMapSpeaker?: (
@@ -894,7 +894,7 @@ export function MeetingTranscriptChat({
   sessionDiarizationEnabled = true,
   sessionExpectedCount = 2,
   userTouchedStepper = false,
-  sessionSystemAudioActive = false,
+  liveSpeakerDetectionActive = false,
   onSetSessionDiarizationEnabled,
   onSetSessionExpectedCount,
   onMapSpeaker,
@@ -1043,10 +1043,10 @@ export function MeetingTranscriptChat({
               </span>
               {showAssumedHint && (
                 <span className="text-muted-foreground truncate">
-                  {/* Live detection reads only the system stream; without it the
-                      stepper is an in-person recording's only lever. */}
+                  {/* The capture device can be active while the room is silent or
+                      the identification model is unavailable. */}
                   {t(
-                    sessionSystemAudioActive
+                    liveSpeakerDetectionActive
                       ? "notes.speaker.pill.assumedHintAuto"
                       : "notes.speaker.pill.assumedHint"
                   )}

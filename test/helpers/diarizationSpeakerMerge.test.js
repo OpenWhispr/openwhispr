@@ -25,7 +25,10 @@ const {
   fragmentFilterLanguages,
   isWrongScriptFragment,
 } = require("../../src/helpers/meetingFragmentFilter");
-const { pickSpeakerForRange } = require("../../src/helpers/speakerRangeMatch");
+const {
+  pickSpeakerForRange,
+  pickIdentificationForPoint,
+} = require("../../src/helpers/speakerRangeMatch");
 const { applyConfirmedSpeaker } = require("../../src/helpers/speakerAssignmentPolicy");
 
 const systemSegment = (timestamp, text) => ({ source: "system", timestamp, text });
@@ -270,6 +273,7 @@ function meetingRowsHarness({ holdMic = false } = {}) {
     meetingDiarizationSegments: segments,
     meetingLiveIdentifications: [],
     pickSpeakerForRange,
+    pickIdentificationForPoint,
     applyConfirmedSpeaker,
     meetingLocalTranscript: "",
     meetingLocalMode: false,
