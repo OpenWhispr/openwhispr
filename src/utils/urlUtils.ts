@@ -93,8 +93,9 @@ const AZURE_HOST_SUFFIXES = [
 export const DEFAULT_AZURE_TRANSCRIPTION_API_VERSION = "2025-03-01-preview";
 
 export function isAzureOpenAIEndpoint(url: string): boolean {
+  if (!url) return false;
   try {
-    const host = new URL(url).hostname.toLowerCase();
+    const host = new URL(withHttpsScheme(url)).hostname.toLowerCase();
     return AZURE_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
   } catch {
     return false;
@@ -113,8 +114,9 @@ export function buildAzureTranscriptionUrl(
   deployment: string,
   apiVersion?: string
 ): string | null {
+  if (!base) return null;
   try {
-    const parsed = new URL(base);
+    const parsed = new URL(withHttpsScheme(base));
     const path = parsed.pathname.replace(/\/+$/, "");
 
     if (/\/audio\/(transcriptions|translations)$/i.test(path)) {
@@ -148,9 +150,10 @@ export function buildManagedAzureTranscriptionUrl(
   deployment: string,
   apiVersion: string
 ): string | null {
+  if (!endpoint) return null;
   let origin: string;
   try {
-    origin = new URL(endpoint).origin;
+    origin = new URL(withHttpsScheme(endpoint)).origin;
   } catch {
     return null;
   }
