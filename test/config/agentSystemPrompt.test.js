@@ -280,3 +280,13 @@ test("calendar events are told in their local fields; start and end are for othe
     /Tell the user each event's date, weekday, startTime, endTime and timeZoneName exactly as returned; start and end are only for passing to other tools/
   );
 });
+
+test("connector rules keep dictated email content out of email_draft", async () => {
+  const { getAgentSystemPrompt } = await load();
+  const prompt = getAgentSystemPrompt([
+    { name: "email_draft", connectorId: "email", promptInstruction: "Use email_draft…" },
+  ]);
+
+  assert.match(prompt, /Dictating the text of an email or a reply[^.]*is not an email action/);
+  assert.match(prompt, /only open email_draft when the user asks to draft, write, compose or send/);
+});
