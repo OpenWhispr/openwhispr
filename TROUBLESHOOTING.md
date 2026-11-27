@@ -120,7 +120,7 @@
    - Hyprland: `wtype`, then `hyprctl dispatch sendshortcut`
    - Sway and other wlroots compositors: `wtype`
    - GNOME and KDE Plasma: the RemoteDesktop keyboard portal
-   - `ydotool` is a fallback and requires the `ydotoold` daemon
+   - `ydotool` is a fallback and requires the `ydotoold` daemon; the startup "Wayland Paste Setup" warning about it only appears when none of the methods above is available
 3. Restart OpenWhispr after installing
 
 OpenWhispr tries clipboard methods in order: `wl-copy` (most reliable) → renderer `navigator.clipboard` → X11 fallback.
