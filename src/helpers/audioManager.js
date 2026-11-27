@@ -34,6 +34,7 @@ import {
 } from "./preparedMicCapture";
 import { MicStreamHold } from "./micStreamHold";
 import { PcmTap } from "./pcmTap";
+import { LiveParakeetDecoder } from "./liveParakeetDecoder";
 import { ActiveMicRecoveryController } from "./activeMicRecovery";
 import { followsSystemDefaultMic } from "./micSelectionRecovery";
 import {
@@ -875,6 +876,7 @@ class AudioManager {
     this._previewFlushResolve = null;
     this._batchSegments = [];
     this._batchPcmTap = null;
+    this._liveDecoder = null;
     this._rotatingBatchRecorder = null;
     this._rotationResolve = null;
     this._batchStopRequested = false;
@@ -1565,8 +1567,26 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   _closeBatchPcmTap() {
+    this._liveDecoder?.stop();
+    this._liveDecoder = null;
     this._batchPcmTap?.close();
     this._batchPcmTap = null;
+  }
+
+  // Offline Parakeet decodes the recording's finished stretches while the user
+  // speaks, so only the tail is left after stop.
+  _startLiveDecoder() {
+    const settings = getSettings();
+    if (!this._batchPcmTap || settings.localTranscriptionProvider !== "nvidia") return;
+    const route = {
+      model: settings.parakeetModel || "parakeet-tdt-0.6b-v3",
+      language: getBaseLanguageCode(this.getEffectiveSttLanguage(settings)),
+    };
+    this._liveDecoder = new LiveParakeetDecoder(
+      this._batchPcmTap,
+      (wav) => window.electronAPI.transcribeLocalParakeet(wav, route),
+      route
+    );
   }
 
   _constraintsKey(constraints) {
@@ -1786,6 +1806,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // or the one built before the mic opened. A tap started now would miss
       // the opening, so an unusable pre-roll leaves the WebM path in charge.
       this._batchPcmTap = preRoll ? prepared.pcmTap : freshTap;
+      this._startLiveDecoder();
       this._recordingSpool = this._startRecordingSpool();
       this.createBatchRecorder(micStream, preRoll);
       freshTap?.attach(micStream);
@@ -1988,6 +2009,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const previewStopPromise = this.cleanupPreview({
       showCleanup: this.shouldShowPreviewCleanupState(),
     });
+    const liveDecoder = this._liveDecoder;
+    this._liveDecoder = null;
+    liveDecoder?.stop();
     const rawWavPromise = this._batchPcmTap?.stop();
     this._batchPcmTap = null;
     this.isRecording = false;
@@ -2074,6 +2098,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         ...(previewStop?.streamed ? { streamedText: previewStop.text } : {}),
         ...(isTranscriptionPolicyRefusal(previewStop) ? { localPolicyRefusal: previewStop } : {}),
         ...(rawWav ? { rawWav } : {}),
+        ...(liveDecoder ? { liveDecoder } : {}),
       },
       processingPipeline
     );
@@ -2802,13 +2827,31 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     try {
       let result;
+      const language = getBaseLanguageCode(this.getEffectiveSttLanguage(getSettings()));
       const streamedText =
         typeof metadata.streamedText === "string" ? metadata.streamedText.trim() : null;
+      const liveStart = performance.now();
+      // A model or language changed mid-recording discards the live pieces.
+      const liveText = streamedText
+        ? null
+        : await metadata.liveDecoder?.finish(metadata.rawWav, { model, language });
       // An empty stream is indistinguishable from silence; let the offline decode settle it.
       if (streamedText) {
         logger.debug("Parakeet using committed streaming transcript", { model }, "performance");
         timings.transcriptionProcessingDurationMs = 0;
         result = { success: true, text: streamedText };
+      } else if (liveText) {
+        timings.transcriptionProcessingDurationMs = Math.round(performance.now() - liveStart);
+        logger.debug(
+          "Parakeet using live-decoded transcript",
+          {
+            model,
+            liveSegments: metadata.liveDecoder.segmentCount,
+            transcriptionProcessingDurationMs: timings.transcriptionProcessingDurationMs,
+          },
+          "performance"
+        );
+        result = { success: true, text: liveText };
       } else {
         const source = metadata.rawWav ?? audioBlob;
         const arrayBuffer = await source.arrayBuffer();
@@ -2826,7 +2869,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const transcriptionStart = performance.now();
         result = await window.electronAPI.transcribeLocalParakeet(arrayBuffer, {
           model,
-          language: getBaseLanguageCode(this.getEffectiveSttLanguage(getSettings())),
+          language,
         });
         if (isTranscriptionPolicyRefusal(result)) throw errorFromIpcResult(result);
         timings.transcriptionProcessingDurationMs = Math.round(
