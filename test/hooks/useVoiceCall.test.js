@@ -6,6 +6,7 @@ const {
   createRendererServer,
   installBrowserGlobals,
   installHookDom,
+  installMicCaptureGlobals,
 } = require("../lib/rendererTestHarness");
 
 // A voice call on the agent window: start/end races (an End can land during any
@@ -36,6 +37,7 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
     starts: [],
     stopIds: [],
     micOpens: 0,
+    micDevices: [],
     micStops: 0,
     playerCloses: 0,
     voiceStates: [],
@@ -131,8 +133,9 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
       voiceCallLanguage: "en",
       ...settings,
     },
-    startMicStream: () => {
+    startMicStream: (options) => {
       calls.micOpens += 1;
+      calls.micDevices.push(options.deviceId);
       const next = deferred();
       pending.mic.push(next);
       return next.promise;
@@ -414,6 +417,22 @@ test("an End while the mic opens: the mic is closed, and the next call starts cl
   await act(() => hook.current.end());
   assert.equal(calls.micStops, 2);
   assert.deepEqual(calls.stopIds.slice(-1), [2]);
+});
+
+test("the call opens the microphone picked in Settings, not a leftover device id", async (t) => {
+  installMicCaptureGlobals(t);
+  navigator.mediaDevices.enumerateDevices = async () => [
+    { kind: "audioinput", deviceId: "default", label: "Default - USB Mic" },
+    { kind: "audioinput", deviceId: "usb-mic", label: "USB Mic" },
+    { kind: "audioinput", deviceId: "built-in-mic", label: "MacBook Pro Microphone" },
+  ];
+  const { calls, startListening } = await mountVoiceCall(t, {
+    settings: { microphoneSelectionMode: "built-in", selectedMicDeviceId: "usb-mic" },
+  });
+
+  await startListening();
+
+  assert.deepEqual(calls.micDevices, ["built-in-mic"]);
 });
 
 test("the call's language and speech model preferences reach main", async (t) => {

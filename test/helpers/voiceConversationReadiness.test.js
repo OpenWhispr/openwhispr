@@ -63,6 +63,18 @@ test("a downloaded model the organization refuses is told apart from a missing o
   );
 });
 
+test("a refused speech model is reported before voice models that would download for nothing", () => {
+  assert.deepEqual(
+    checkVoiceConversationReadiness({
+      ...READY,
+      recognizer: null,
+      refusal: "POLICY_MODEL_BLOCKED",
+      modelStatus: { ready: false, missing: ["supertonic-tts"], missingBytes: 128_800_000 },
+    }),
+    { ready: false, reason: "speech-model-refused", code: "POLICY_MODEL_BLOCKED" }
+  );
+});
+
 test("a local brain that is not downloaded is reported; cloud brains need no download", () => {
   const localMissing = {
     ...READY,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSettings, useSettingsStore } from "../../stores/settingsStore";
 import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
+import { resolvePreferredMicrophone } from "../../helpers/microphoneSelection";
 import logger from "../../utils/logger";
 import { createSpeechChunker } from "../../services/voice/speechChunker";
 import { spellOutDates } from "../../services/voice/spokenDates";
@@ -543,8 +544,12 @@ export function useVoiceCall({
   const openMic = useCallback(async () => {
     let frames = 0;
     let peak = 0;
+    // The microphone a take opens; startMicStream falls back to the default device.
+    const resolution = await resolvePreferredMicrophone({ settings: getSettings() }).catch(
+      () => null
+    );
     const mic = await startMicStream({
-      deviceId: getSettings().selectedMicDeviceId || null,
+      deviceId: resolution?.device?.deviceId || null,
       onFrame: (frame) => {
         // One diagnostic line ~2 s in: frames flow and the mic isn't silent.
         if (frames < 64) {

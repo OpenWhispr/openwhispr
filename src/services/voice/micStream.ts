@@ -49,6 +49,7 @@ registerProcessor("voice-conversation-frames", VoiceConversationFrameProcessor);
 /**
  * Opens the mic with Chromium's echo cancellation ON — unlike dictation, which
  * disables it — so the assistant's own playback is removed before the VAD hears it.
+ * AGC stays off as for dictation: on Windows it lowers the system mic volume (#476).
  */
 async function openEchoCancelledMic(deviceId?: string | null): Promise<MediaStream> {
   const constraints = (id?: string | null): MediaStreamConstraints => ({
@@ -57,7 +58,7 @@ async function openEchoCancelledMic(deviceId?: string | null): Promise<MediaStre
       channelCount: 1,
       echoCancellation: true,
       noiseSuppression: true,
-      autoGainControl: true,
+      autoGainControl: false,
     },
   });
   try {

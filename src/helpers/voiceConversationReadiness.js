@@ -19,6 +19,9 @@ function checkVoiceConversationReadiness({
   // A meeting recording holds the mic, and the assistant would answer the meeting.
   if (meetingRecording) return { ready: false, reason: "meeting-recording" };
   if (!CALL_LANGUAGES.includes(language)) return { ready: false, reason: "language-unsupported" };
+  // A downloaded model the organization refuses: no download would help.
+  if (!recognizer && refusal)
+    return { ready: false, reason: "speech-model-refused", code: refusal };
   if (!modelStatus.ready) {
     return {
       ready: false,
@@ -28,8 +31,6 @@ function checkVoiceConversationReadiness({
     };
   }
   if (!recognizer) {
-    // A downloaded model the organization refuses: downloading another won't help.
-    if (refusal) return { ready: false, reason: "speech-model-refused", code: refusal };
     // English and Auto take any local Parakeet model; another language needs one that knows it.
     return {
       ready: false,
