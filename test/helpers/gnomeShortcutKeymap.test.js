@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const childProcess = require("node:child_process");
 const Module = require("node:module");
+const { REGISTRATION } = require("../../src/helpers/gnomeGlobalShortcutsPortal");
 
 const modulePath = require.resolve("../../src/helpers/gnomeShortcut");
 const originalLoad = Module._load;
@@ -219,7 +220,7 @@ test("Hold hands the portal the keysym", async () => {
   manager.globalShortcutsPortal = {
     registerKeybinding: async (trigger) => {
       triggers.push(trigger);
-      return true;
+      return REGISTRATION.BOUND;
     },
     unregisterKeybinding: async () => {},
   };
@@ -234,7 +235,7 @@ test("Hold reports each portal down and up for the debug log before acting on it
   manager.globalShortcutsPortal = {
     registerKeybinding: async (_trigger, callback) => {
       portalCallback = callback;
-      return true;
+      return REGISTRATION.BOUND;
     },
     unregisterKeybinding: async () => {},
   };
@@ -251,7 +252,7 @@ test("Hold reports each portal down and up for the debug log before acting on it
 test("Hold falling back to Tap binds the keysym and reads the keymap once", async () => {
   const { manager, calls } = loadManager();
   manager.globalShortcutsPortal = {
-    registerKeybinding: async () => false,
+    registerKeybinding: async () => REGISTRATION.FAILED,
     unregisterKeybinding: async () => {},
   };
 
