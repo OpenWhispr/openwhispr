@@ -162,7 +162,8 @@ async function loadTonedOrukeetStart(t, cachePrefix) {
     new Promise((resolve) => (classifier.classify = resolve));
   const workletPort = {};
   globalThis.AudioWorkletNode = class {
-    constructor() {
+    constructor(context, name, options) {
+      this.options = options;
       this.port = workletPort;
     }
   };
@@ -214,6 +215,13 @@ async function loadTonedOrukeetStart(t, cachePrefix) {
 }
 
 const tick = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test("managed streaming mixes both microphone channels into its single PCM input", async (t) => {
+  const { manager } = await loadTonedOrukeetStart(t, "orukeet-pipeline-stereo-");
+  assert.equal(await manager.startStreamingRecording(), true);
+  assert.equal(manager.streamingProcessor.options?.channelCount, 1);
+  assert.equal(manager.streamingProcessor.options?.channelCountMode, "explicit");
+});
 
 test("with a custom cleanup prompt, which takes no tone, a start and the next warmup mint combined cleanup with no app known", async (t) => {
   const { window, useSettingsStore, manager, minted } = await loadTonedOrukeetStart(
