@@ -191,7 +191,7 @@ function createWorkspacePolicyManager({
     return cached?.managed === true || cached?.requiresManagedPolicy === true;
   }
 
-  // #3030: the server says this account was removed from a managed workspace.
+  // #3323: the server says this account was removed from a managed workspace.
   // Only a device whose last managed verdict for this credential (or account)
   // named that workspace acts on it: a removal from some other workspace, or a
   // sign-in on another device, wipes nothing. Once a lookup has run, that is the
@@ -504,7 +504,9 @@ function createWorkspacePolicyManager({
     const successfulRefreshAge =
       lastSuccessfulRefresh === undefined ? null : now() - lastSuccessfulRefresh;
     // `refresh` is for a caller the server just refused: the fresh verdict it
-    // holds is the one in question. The attempt throttle below still applies.
+    // holds is the one in question. The attempt throttle below still applies,
+    // but delays that lookup, for as long as the credential is current,
+    // rather than dropping it.
     if (
       !request.refresh &&
       current &&
@@ -529,6 +531,11 @@ function createWorkspacePolicyManager({
     const attemptIsThrottled =
       attemptAge !== null && attemptAge >= 0 && attemptAge < minimumAttemptIntervalMs;
     if (attemptIsThrottled) {
+      // A sign-out or another sign-in soon drops the refused credential, and
+      // with it the removal only its lookup can report.
+      if (request.refresh) {
+        setTimeout(() => void getPolicy(request), minimumAttemptIntervalMs - attemptAge).unref();
+      }
       if (requiresManagedPolicy(identity)) {
         return errorSnapshot(
           identity,

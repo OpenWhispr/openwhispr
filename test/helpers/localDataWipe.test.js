@@ -17,7 +17,7 @@ const {
   wipeLocalDataOnLaunch,
 } = require("../../src/helpers/localDataWipe");
 
-// #3030: IT wipes a leaver's local OpenWhispr data through MDM or by removing
+// #3323: IT wipes a leaver's local OpenWhispr data through MDM or by removing
 // them from the managing workspace; both triggers remove the same inventory.
 
 let root;
@@ -156,17 +156,23 @@ test("in a notes folder the user chose, only the files the mirror recorded and t
   seed(path.join(chosen, "Zettel", "202311151230-idea.md"), mirrored(202311151230));
   seed(path.join(chosen, "readme.md"), "mine");
   fs.mkdirSync(path.join(chosen, "Ideas"));
-  // Records that lead out of the folder, through ".." or a link, are not followed.
+  // Records that lead out of the folder, through ".." or a link, are not
+  // followed. A folder the user moved elsewhere and left a link in place of
+  // is reported, and the database still goes.
   const outside = path.join(root, "Elsewhere");
   seed(path.join(outside, "3-plan.md"), mirrored(3));
   fs.symlinkSync(outside, path.join(chosen, "Linked"));
   wrote("../Elsewhere/3-plan.md", mirrored(3));
   wrote("Linked/3-plan.md", mirrored(3));
+  wrote("Linked/4-call.md", mirrored(4));
   // A folder the mirror wrote to before it moved to the one above.
   const earlier = path.join(root, "Old notes");
   mirrorWrote(roots.userData, earlier, "Personal/5-retro.md", mirrored(5));
 
-  assert.deepEqual(await removeLocalData({ includeModels: false, roots }), []);
+  assert.deepEqual(await removeLocalData({ includeModels: false, roots }), [
+    `notes mirror: ${path.join(fs.realpathSync(chosen), "Linked")} now leads elsewhere, so its notes weren't removed`,
+  ]);
+  assert.equal(exists(roots.userData, "transcriptions.db"), false);
   assert.deepEqual(fs.readdirSync(chosen).sort(), [
     "Ideas",
     "Linked",
@@ -182,7 +188,7 @@ test("in a notes folder the user chose, only the files the mirror recorded and t
   ]);
   assert.deepEqual(fs.readdirSync(space).sort(), ["edited-22-brief.md", "notes.txt"]);
   assert.deepEqual(fs.readdirSync(path.join(chosen, "Zettel")), ["202311151230-idea.md"]);
-  assert.deepEqual(fs.readdirSync(outside), ["3-plan.md"]);
+  assert.deepEqual(fs.readdirSync(outside).sort(), ["3-plan.md", "4-call.md"]);
   assert.deepEqual(fs.readdirSync(earlier), []);
 });
 
@@ -389,6 +395,81 @@ test("a new token wipes once, records itself and the audit line, then asks for a
   assert.equal(auditLines().length, 2);
 });
 
+// Outside damage (a restore, a hand edit) can leave the record holding no
+// record; wiping again would wipe whoever uses the device now.
+test("a wipe record it can't parse counts the deployed token as acted on", async () => {
+  const statePath = path.join(roots.userData, "local-data-wipe.json");
+  for (const damage of ["", '{"token":"offboard-1"', "[]", "null"]) {
+    seedDevice();
+    seed(statePath, damage);
+    assert.equal(await launchHarness({ snapshot: managed("offboard-1") }).wipe(), false);
+    assert.equal(exists(roots.userData, "transcriptions.db"), true);
+    // Replaced by what it can tell, so a later token still wipes.
+    assert.deepEqual(wipeState(), { token: "offboard-1" });
+  }
+  assert.equal(await launchHarness({ snapshot: managed("offboard-2") }).wipe(), true);
+  assert.equal(exists(roots.userData, "transcriptions.db"), false);
+  // With a policy it can't read, there is no token to put in its place.
+  seedDevice();
+  seed(statePath, "");
+  assert.equal(await launchHarness({ readError: new Error("unreadable") }).wipe(), false);
+  assert.equal(fs.readFileSync(statePath, "utf8"), "");
+  // With none deployed, a first token deployed later still wipes.
+  assert.equal(
+    await launchHarness({ snapshot: { status: "absent", managed: false, policy: null } }).wipe(),
+    false
+  );
+  assert.deepEqual(wipeState(), {});
+  seed(statePath, "");
+  assert.equal(await launchHarness({ snapshot: managed(null) }).wipe(), false);
+  assert.deepEqual(wipeState(), {});
+  assert.equal(await launchHarness({ snapshot: managed("offboard-3") }).wipe(), true);
+});
+
+test(
+  "a wipe record it can't open wipes for no token, and a script's marker still wipes",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async () => {
+    seedDevice();
+    const statePath = path.join(roots.userData, "local-data-wipe.json");
+    seed(statePath, '{"token":"offboard-1"}');
+    fs.chmodSync(statePath, 0o000);
+    try {
+      assert.equal(await launchHarness({ snapshot: managed("offboard-2") }).wipe(), false);
+      assert.equal(exists(roots.userData, "transcriptions.db"), true);
+      // Left as it is: replacing it would drop what it holds.
+      assert.equal(fs.statSync(statePath).mode & 0o777, 0);
+      seed(path.join(roots.userData, "local-data-wipe.pending"), "");
+      assert.equal(await launchHarness({ snapshot: managed("offboard-2") }).wipe(), true);
+      assert.equal(exists(roots.userData, "transcriptions.db"), false);
+    } finally {
+      fs.chmodSync(statePath, 0o644);
+    }
+  }
+);
+
+// Antivirus or a backup tool can hold the record open for a moment.
+test(
+  "a wipe record held open a moment is read again, so an unfinished wipe still retries",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async () => {
+    seedDevice();
+    const statePath = path.join(roots.userData, "local-data-wipe.json");
+    seed(
+      statePath,
+      JSON.stringify({
+        pendingToken: "offboard-1",
+        pendingSettings: { includeModels: false, auditLogPath: null },
+      })
+    );
+    fs.chmodSync(statePath, 0o000);
+    setTimeout(() => fs.chmodSync(statePath, 0o644), 50);
+    assert.equal(await launchHarness({ snapshot: managed("offboard-1") }).wipe(), true);
+    assert.equal(exists(roots.userData, "transcriptions.db"), false);
+    assert.deepEqual(wipeState(), { token: "offboard-1" });
+  }
+);
+
 // main.js loads .env into process.env, and the relaunch inherits it.
 test("settings main loaded from .env don't follow the relaunch into the fresh install", async () => {
   seedDevice();
@@ -407,7 +488,7 @@ test("settings main loaded from .env don't follow the relaunch into the fresh in
   assert.deepEqual(env, { UI_LANGUAGE: "de", PATH: "/usr/bin" });
 });
 
-// #3030's second trigger: a running app that hears its account was removed
+// #3323's second trigger: a running app that hears its account was removed
 // from the managing workspace records it and quits; the next launch wipes.
 test("a recorded workspace removal wipes at the next launch, once, and leaves a notice", async () => {
   seedDevice();
@@ -617,6 +698,31 @@ test(
   }
 );
 
+// One it can't list, or whose entries it can't look at, may still hold this
+// user's recordings.
+test(
+  "a temp folder it can't read is reported, not taken for an empty one",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async () => {
+    const recording = path.join(roots.temp[0], "ow-recording.webm");
+    for (const [mode, reported] of [
+      [0o000, /^temp files: EACCES/],
+      [0o400, /^ow-recording\.webm: EACCES/],
+    ]) {
+      seed(recording);
+      fs.chmodSync(roots.temp[0], mode);
+      try {
+        const errors = await removeLocalData({ includeModels: false, roots });
+        assert.equal(errors.length, 1);
+        assert.match(errors[0], reported);
+      } finally {
+        fs.chmodSync(roots.temp[0], 0o755);
+      }
+      assert.equal(fs.existsSync(recording), true);
+    }
+  }
+);
+
 // Windows has no owner to check, and the temp folder getSafeTempDir() falls back
 // to is every such account's. The user's own temp folder is theirs alone.
 test(
@@ -722,8 +828,9 @@ const recordFailed = ({ errors }) => errors.length === 1 && /^wipe record: /.tes
 // A full disk mustn't keep the data the wipe is for.
 test("a wipe it can't put on record still removes the data, and keeps the app closed", async () => {
   seedDevice();
-  // A folder where the record goes: every write fails, as on a full or read-only disk.
-  fs.mkdirSync(path.join(roots.userData, "local-data-wipe.json"));
+  // A folder where the record is written first: every write fails, as on a
+  // full or read-only disk.
+  fs.mkdirSync(path.join(roots.userData, "local-data-wipe.json.tmp"));
   await assert.rejects(launchHarness({ snapshot: managed("offboard-1") }).wipe(), recordFailed);
   assert.equal(exists(roots.userData, "transcriptions.db"), false);
 });
@@ -1067,11 +1174,9 @@ test(
     wrote(vault, "Personal/15-retro.md", mirrored(15));
     seed(path.join(vault, "Personal", "15-retro.md"), `${mirrored(15)}\n\nmy edit`);
     seed(path.join(vault, "Zettel", "202311151230-idea.md"), mirrored(202311151230));
-    // Records that lead out of the folder, through ".." or a link, are not followed.
+    // A record that leads out of the folder through ".." is not followed.
     const beside = path.join(home, "Documents", "Elsewhere");
     wrote(vault, "../Elsewhere/3-plan.md", mirrored(3));
-    fs.symlinkSync(beside, path.join(vault, "Linked"));
-    wrote(vault, "Linked/3-plan.md", mirrored(3));
     // A folder of notes with none in it yet: its name goes with it.
     wrote(vault, "Workspaces/Acme/Private/Board - layoffs", "", "dir");
     const run = macosScript();
@@ -1158,7 +1263,7 @@ test(
     );
     assert.deepEqual(fs.readdirSync(cache).sort(), [...MODEL_CACHE_ENTRIES].sort());
     assert.deepEqual(fs.readdirSync(path.join(home, ".openwhispr")), ["cli-config.json"]);
-    assert.deepEqual(fs.readdirSync(vault).sort(), ["Linked", "Personal", "Zettel"]);
+    assert.deepEqual(fs.readdirSync(vault).sort(), ["Personal", "Zettel"]);
     assert.deepEqual(fs.readdirSync(path.join(vault, "Personal")), ["15-retro.md"]);
     assert.deepEqual(fs.readdirSync(path.join(vault, "Zettel")), ["202311151230-idea.md"]);
     assert.deepEqual(fs.readdirSync(beside), ["3-plan.md"]);
@@ -1199,6 +1304,36 @@ test(
     assert.deepEqual(fs.readdirSync(path.join(shared, "Team")).sort(), ["3-plan.md", "4-plan.md"]);
     assert.deepEqual(fs.readdirSync(awayData).sort(), ["audit", "local-data-wipe.pending"]);
     assert.equal(recorded(awayData)[0].reason, "incomplete");
+
+    // Nor does it go through a folder in a notes folder that the user moved
+    // elsewhere, out of it or not, and left a link in place of: reported once,
+    // it fails the run, and the database still goes.
+    for (const inside of [false, true]) {
+      const moved = path.join(root, inside ? "moved-in-home" : "moved-out-home");
+      const movedData = path.join(moved, "Library", "Application Support", "OpenWhispr");
+      const movedVault = path.join(moved, "Vault");
+      for (const [relPath, id] of [
+        ["Kept/1-a.md", 1],
+        ["Moved/2-b.md", 2],
+        ["Moved/3-c.md", 3],
+      ])
+        mirrorWrote(movedData, movedVault, relPath, mirrored(id));
+      const destination = inside ? path.join(movedVault, "Other") : path.join(moved, "Elsewhere");
+      fs.renameSync(path.join(movedVault, "Moved"), destination);
+      fs.symlinkSync(destination, path.join(movedVault, "Moved"));
+      const skipped = `Skipped ${path.join(fs.realpathSync(movedVault), "Moved")}: it is reached through a link, so its notes weren't removed`;
+      assert.throws(
+        () => run(moved),
+        (error) =>
+          error.status === 1 &&
+          error.stderr.split(skipped).length === 2 &&
+          !error.stdout.includes("Removed OpenWhispr local data")
+      );
+      assert.equal(exists(movedVault, "Kept"), false);
+      assert.deepEqual(fs.readdirSync(destination).sort(), ["2-b.md", "3-c.md"]);
+      assert.deepEqual(fs.readdirSync(movedData).sort(), ["audit", "local-data-wipe.pending"]);
+      assert.equal(recorded(movedData)[0].reason, "incomplete");
+    }
 
     // A folder it can't empty is reported, the rest still goes, and the exit
     // code tells the MDM tool the device failed. (Root ignores the mode.)

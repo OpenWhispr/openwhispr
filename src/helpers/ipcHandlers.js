@@ -1675,7 +1675,7 @@ class IPCHandlers {
     );
   }
 
-  // #3030: the account was removed from the workspace that managed this device.
+  // #3323: the account was removed from the workspace that managed this device.
   // The next launch wipes, before anything opens a file it removes. False when
   // the removal couldn't be recorded, so the policy lookup asks again.
   _wipeForWorkspaceRemoval(removal) {
@@ -5620,7 +5620,7 @@ class IPCHandlers {
       return { success: true, deletedCount };
     });
 
-    // The workspace removal wipe's one-time notice (#3030), for the control panel.
+    // The workspace removal wipe's one-time notice (#3323), for the control panel.
     ipcMain.handle("take-local-data-wipe-notice", (event) => {
       if (event.sender !== this.windowManager.controlPanelWindow?.webContents) return null;
       return require("./localDataWipe").takeWipeNotice(app.getPath("userData"));
@@ -5991,7 +5991,7 @@ class IPCHandlers {
 
     // Under `npm run dev` the Vite server dies with Electron, so a relaunched dev
     // instance would have no renderer: just quit there.
-    // After Reset app data, and after recording a workspace removal's wipe (#3030).
+    // After Reset app data, and after recording a workspace removal's wipe (#3323).
     this.relaunchApp = async () => {
       if (process.env.NODE_ENV === "development") return app.quit();
       // Once Squirrel.Mac holds a downloaded update it installs it on this quit regardless

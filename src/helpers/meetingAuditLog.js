@@ -8,7 +8,7 @@ const { LOCAL_POLICY_CODES } = require("./localModelPolicyGate");
 // (#3029). Meeting audio never reaches the server, and a managed device may run
 // signed out, so the record lives on the device. It holds no titles, names or
 // content: only when a recording started, stopped or was refused, and how, and
-// when the device policy wiped the device's local data (#3030).
+// when the device policy wiped the device's local data (#3323).
 
 const DAILY_FILE = /^\d{4}-\d{2}-\d{2}\.jsonl$/;
 // Any OS user's daily file, as the offboarding wipe keeps them.
@@ -42,7 +42,7 @@ const STOP_REASONS = new Set([
   "window-lost",
   "app-quit",
 ]);
-// What asked for a local data wipe (#3030).
+// What asked for a local data wipe (#3323).
 const WIPE_TRIGGERS = new Set(["device-policy", "workspace-removal", "script"]);
 // Plus main's device or product policy block and the renderer's own "restricted" refusal.
 const REFUSAL_REASONS = new Set([
@@ -320,7 +320,7 @@ function createMeetingAuditLog({
     );
   }
 
-  // #3030: the offboarding wipe, kept with the recordings it outlives. The
+  // #3323: the offboarding wipe, kept with the recordings it outlives. The
   // trigger is the device policy's token, a removal from the managing
   // workspace or the marker of an MDM script that couldn't finish; "incomplete"
   // means some store could not be deleted. A line written after the wipe keeps

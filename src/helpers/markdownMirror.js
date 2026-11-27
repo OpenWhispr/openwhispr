@@ -917,14 +917,16 @@ class MarkdownMirror {
     }
   }
 
-  // Erasing local data (#3030) in a folder the user chose removes only the
+  // Erasing local data (#3323) in a folder the user chose removes only the
   // files the mirror's record lists there that still hold what it wrote, the
   // folder directories it recorded, and the folders that leaves empty. Anything
   // else, an outside edit included, is the user's. The chosen folder itself
   // stays, and links are never followed. A file that can't go, or can't be read
   // to tell, doesn't stop the rest; the first failure is thrown at the end. The
   // record names the folder by its real path, so one that now leads elsewhere
-  // (a link put in its place) isn't the folder the mirror wrote to.
+  // (a link put in its place) isn't the folder the mirror wrote to. Returns the
+  // folders inside it that a link now stands in for, which hold recorded files
+  // it didn't look for.
   removeMirroredFiles(basePath, entries) {
     if (fs.realpathSync(basePath) !== basePath) {
       throw new Error(`The notes folder ${basePath} now leads elsewhere`);
@@ -932,17 +934,39 @@ class MarkdownMirror {
     const mirror = new MarkdownMirror();
     mirror._baseRealPath = fs.realpathSync.native(basePath);
     let failure = null;
+    const links = new Set();
     for (const entry of entries) {
       try {
-        if (entry.kind === "dir") mirror._vacatedDirs.add(mirror._absolutePath(entry.relPath));
+        const filePath = mirror._absolutePath(entry.relPath);
+        if (entry.kind === "dir") mirror._vacatedDirs.add(filePath);
         else if (mirror._isPristine(entry, { throwIfUnreadable: true }))
-          mirror._removeFile(mirror._absolutePath(entry.relPath));
+          mirror._removeFile(filePath);
+        else {
+          const link = mirror._linkOnTheWay(filePath);
+          if (link) links.add(link);
+        }
       } catch (error) {
         failure ??= error;
       }
     }
     mirror.removeVacatedDirs();
     if (failure) throw failure;
+    return [...links];
+  }
+
+  // The first folder between the base and a file inside it that is a link, or
+  // null.
+  _linkOnTheWay(filePath) {
+    if (!this._isInsideBase(filePath)) return null;
+    let current = this._baseRealPath;
+    for (const segment of path.relative(current, path.dirname(filePath)).split(path.sep)) {
+      if (!segment) return null;
+      current = path.join(current, segment);
+      const stats = fs.lstatSync(current, { throwIfNoEntry: false });
+      if (stats?.isSymbolicLink()) return current;
+      if (!stats?.isDirectory()) return null;
+    }
+    return null;
   }
 
   // An id alone is common in a user's vault. Require the old mirror's metadata,

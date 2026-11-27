@@ -1316,7 +1316,7 @@ async function startApp() {
   // contend for its port or storage lock.
   await reapStaleSidecars();
 
-  // #3030: the device policy's offboarding wipe runs before the logger, the
+  // #3323: the device policy's offboarding wipe runs before the logger, the
   // database or any sidecar opens a file it removes, then restarts the app as a
   // fresh install. One that leaves something behind keeps the app closed, so
   // nothing opens what is left, and the next launch tries again.

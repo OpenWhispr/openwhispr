@@ -96,7 +96,7 @@ test("WorkspacesService previews and runs a removal with the API's field names",
   await WorkspacesService.previewMemberRemoval("ws-1", ["user-2", "user-3"]);
   await WorkspacesService.removeMembers("ws-1", { userIds: ["user-2"], transferTo: "user-1" });
   await WorkspacesService.removeMembers("ws-1", { userIds: ["user-3"] });
-  // The admin's choice (#3030): the API wipes when the request doesn't say.
+  // The admin's choice (#3323): the API wipes when the request doesn't say.
   await WorkspacesService.removeMembers("ws-1", { userIds: ["user-3"], wipeDevices: false });
   await WorkspacesService.removeMembers("ws-1", { userIds: ["user-3"], wipeDevices: true });
 

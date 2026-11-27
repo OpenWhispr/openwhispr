@@ -331,7 +331,7 @@ function sessionUser(data: unknown): unknown {
 }
 
 // An admin removal revokes the session, and only the policy lookup says
-// whether it wipes this device (#3030): once per rejected credential, ask now,
+// whether it wipes this device (#3323): once per rejected credential, ask now,
 // before a sign-out or another sign-in drops it.
 function checkPolicyOnRejection(generation: number): void {
   if (snapshot.sessionRejectedGeneration === generation) return;

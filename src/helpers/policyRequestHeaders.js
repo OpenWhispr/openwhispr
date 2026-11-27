@@ -6,7 +6,7 @@ const POLICY_CAPABILITY_VERSION = "1";
 // never handed a route it would silently reroute.
 const CLIENT_CAPABILITIES =
   "orukeet,orukeet-pipeline-v2,orukeet-language-routing,enterprise-audio-v1,private-workspace-placement";
-// #3030: only the workspace policy lookup asks for the removal signal, so every
+// #3323: only the workspace policy lookup asks for the removal signal, so every
 // other request's 401 stays the session expiry its caller maps to sign-in.
 const WORKSPACE_REMOVAL_CAPABILITY = "workspace-removal-v1";
 

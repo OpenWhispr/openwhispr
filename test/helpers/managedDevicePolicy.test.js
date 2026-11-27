@@ -224,7 +224,7 @@ test("the macOS reader asks for every device key this build reads", () => {
   ]);
 });
 
-// #3030: the offboarding wipe keeps downloaded models unless this key asks.
+// #3323: the offboarding wipe keeps downloaded models unless this key asks.
 test("WipeLocalDataIncludesModels is a strict boolean that defaults to keeping models", async () => {
   const wipe = { WipeLocalDataOnLaunch: "offboard-1" };
   assert.equal(normalizeDeviceValues(wipe).wipeLocalDataOnLaunch, "offboard-1");

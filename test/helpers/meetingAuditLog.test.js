@@ -119,7 +119,7 @@ test("a refusal records its trigger and policy code", async () => {
   assert.equal(refused.sessionId, null);
 });
 
-// #3030: the offboarding wipe is recorded in the same fixed shape.
+// #3323: the offboarding wipe is recorded in the same fixed shape.
 test("a local data wipe is one line with its trigger, marked incomplete when a store survived", async () => {
   const { log } = harness();
   log.localDataWiped({ trigger: "device-policy", incomplete: false });

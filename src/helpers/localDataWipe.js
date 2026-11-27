@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-// #3030: every store OpenWhispr keeps on this device, listed once, for the
+// #3323: every store OpenWhispr keeps on this device, listed once, for the
 // offboarding wipe (the WipeLocalDataOnLaunch device key, or removal from the
 // managing workspace). A new store is added here (or to KEPT_USER_DATA_ENTRIES,
 // with its reason); test/helpers/localDataWipe.test.js fails until it is.
@@ -56,6 +56,7 @@ const USER_DATA_ENTRIES = [
   ".gpu-pack-orphan-flagged",
   ".whisper-gpu-retry-version",
   ".linux-system-audio-restore-token.json",
+  ".gnome-cancel-shortcut-approval",
 ];
 // The audit trail outlives the wipe it records, and the last token acted on
 // keeps the wipe to once per token. A script's marker stays until the wipe it
@@ -143,6 +144,45 @@ function readJson(filePath) {
   }
 }
 
+// The record at launch, {} when there is none. One that is there but can't be
+// read (once held open a moment, by antivirus or a backup tool, it is read
+// again), or holds no record (damage from outside: writeState never leaves one
+// torn), can't say whether the deployed token was acted on, so it counts as
+// acted on: wiping again would wipe whoever uses the device now. One it reads
+// that holds no record is replaced by that, so a later token still wipes,
+// unless the policy that says which token is deployed couldn't be read or was
+// rejected (tokenKnown false).
+async function readLaunchState(statePath, { token, tokenKnown }, logger) {
+  let text;
+  for (let attempt = 1; text === undefined; attempt += 1) {
+    try {
+      text = fs.readFileSync(statePath, "utf8");
+    } catch (error) {
+      if (error.code === "ENOENT") return {};
+      if (attempt === 3) {
+        logger.warn("Local data wipe record unreadable", { error: error.message });
+        return { token: token ?? undefined };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  try {
+    const state = JSON.parse(text);
+    if (state && typeof state === "object" && !Array.isArray(state)) return state;
+  } catch {
+    /* Damaged, below. */
+  }
+  logger.warn("Local data wipe record damaged");
+  if (!tokenKnown) return {};
+  const state = { token: token ?? undefined };
+  try {
+    writeState(statePath, state);
+  } catch {
+    /* Read the same way next launch. */
+  }
+  return state;
+}
+
 // Named as database.js names it.
 const databaseName = () =>
   process.env.NODE_ENV === "development" ? "transcriptions-dev.db" : "transcriptions.db";
@@ -168,17 +208,33 @@ function recordedMirrorFiles(userDataPath) {
   }
 }
 
-async function removeTempFiles(directory, remove, { shared = false } = {}) {
-  const names = await fs.promises.readdir(directory).catch(() => []);
+// Only a folder or file that isn't there holds nothing; one that can't be read
+// may hold this user's files, so it is reported.
+async function removeTempFiles(directory, remove, errors, { shared = false } = {}) {
+  // A shared temp folder (Linux /tmp, or getSafeTempDir()'s on Windows) holds
+  // other users' files too. Windows can't say whose a file is, so in its
+  // shared folder one this user may not reach or delete is another's.
+  const othersMayOwn = shared && !process.getuid;
+  let names;
+  try {
+    names = await fs.promises.readdir(directory);
+  } catch (error) {
+    if (error.code !== "ENOENT") errors.push(`temp files: ${error.message}`);
+    return;
+  }
   const ours = names.filter((name) => TEMP_PREFIXES.some((prefix) => name.startsWith(prefix)));
   for (const name of ours) {
     const target = path.join(directory, name);
-    const stat = await fs.promises.lstat(target).catch(() => null);
-    // A shared temp folder (Linux /tmp, or getSafeTempDir()'s on Windows) holds
-    // other users' files too. Windows can't say whose a file is, so in its
-    // shared folder one this user may not delete is another's.
-    if (stat && (!process.getuid || stat.uid === process.getuid()))
-      await remove(name, target, { othersMayOwn: shared && !process.getuid });
+    let stat;
+    try {
+      stat = await fs.promises.lstat(target);
+    } catch (error) {
+      if (!(error.code === "ENOENT" || (othersMayOwn && ["EPERM", "EACCES"].includes(error.code))))
+        errors.push(`${name}: ${error.message}`);
+      continue;
+    }
+    if (!process.getuid || stat.uid === process.getuid())
+      await remove(name, target, { othersMayOwn });
   }
 }
 
@@ -235,7 +291,10 @@ async function removeLocalData({ includeModels, roots = defaultRoots(), auditLog
   }
   for (const [basePath, entries] of mirrored) {
     try {
-      require("./markdownMirror").removeMirroredFiles(basePath, entries);
+      // The notes the user moved elsewhere behind a link stay for them to
+      // delete, and the database still goes, as with an unplugged drive.
+      for (const link of require("./markdownMirror").removeMirroredFiles(basePath, entries))
+        errors.push(`notes mirror: ${link} now leads elsewhere, so its notes weren't removed`);
     } catch (error) {
       // One on a drive or share that isn't connected, whatever error that
       // gives (an unreachable Windows share isn't ENOENT), still holds its
@@ -282,8 +341,10 @@ async function removeLocalData({ includeModels, roots = defaultRoots(), auditLog
     ),
     remove("cli-bridge.json", roots.bridgeFile),
     remove("portal-paste-token", roots.portalTokenFile),
-    ...roots.temp.map((directory) => removeTempFiles(directory, remove)),
-    ...roots.sharedTemp.map((directory) => removeTempFiles(directory, remove, { shared: true })),
+    ...roots.temp.map((directory) => removeTempFiles(directory, remove, errors)),
+    ...roots.sharedTemp.map((directory) =>
+      removeTempFiles(directory, remove, errors, { shared: true })
+    ),
   ]);
   try {
     // The queue's interrupted writes, which carry the writer's pid.
@@ -297,7 +358,7 @@ async function removeLocalData({ includeModels, roots = defaultRoots(), auditLog
 }
 
 // A running app that learns its account was removed from the workspace that
-// managed this device (#3030) records it here and quits; the next launch wipes,
+// managed this device (#3323) records it here and quits; the next launch wipes,
 // before anything opens a file it removes.
 function requestWorkspaceRemovalWipe(userDataPath, removal) {
   const statePath = path.join(userDataPath, WIPE_STATE_FILE);
@@ -377,16 +438,17 @@ async function wipeLocalDataOnLaunch({
   env = process.env,
 }) {
   const statePath = path.join(userDataPath, WIPE_STATE_FILE);
-  const state = readJson(statePath) ?? {};
   // Only a deployment this build reads and accepts can ask for a wipe or say
   // how one goes; a recorded removal wipes whatever the device policy says.
   // WipeLocalDataIncludesModels deployed on its own manages nothing, but still
   // says what a removal's wipe takes.
   let device = null;
   let includeModels = false;
+  let tokenKnown = false;
   try {
     const snapshot = await readDevicePolicy();
     if (snapshot.status === "valid") device = snapshot;
+    tokenKnown = device !== null || snapshot.status === "absent";
     includeModels = snapshot.wipeLocalDataIncludesModels === true;
   } catch (error) {
     logger.warn("Device policy unreadable", { error: error.message });
@@ -395,6 +457,7 @@ async function wipeLocalDataOnLaunch({
   // A token whose wipe left something behind wipes again, whatever the policy
   // reads now.
   const token = device?.wipeLocalDataOnLaunch ?? null;
+  const state = await readLaunchState(statePath, { token, tokenKnown }, logger);
   const wipeToken = token !== null && state.token !== token ? token : (state.pendingToken ?? null);
   const removal = state.pendingRemoval ?? null;
   const markerPath = path.join(userDataPath, SCRIPT_WIPE_MARKER);

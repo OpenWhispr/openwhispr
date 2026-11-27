@@ -5,7 +5,7 @@ import { isControlPanelWindow } from "../utils/windowContext";
 
 /**
  * Tells the person a removal from their organization's workspace wiped this
- * device (#3030). The wipe ran before any window existed and relaunched the
+ * device (#3323). The wipe ran before any window existed and relaunched the
  * app as a fresh install; main keeps the notice until the control panel takes
  * it, and the toast stays until it is dismissed.
  */

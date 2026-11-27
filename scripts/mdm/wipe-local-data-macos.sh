@@ -1,5 +1,5 @@
 #!/bin/bash
-# Removes OpenWhispr's local data from a Mac being offboarded (#3030), for MDM
+# Removes OpenWhispr's local data from a Mac being offboarded (#3323), for MDM
 # tools that run scripts as root (Jamf, Kandji, Intune). Each home's owner's
 # OpenWhispr is quit first. The WipeLocalDataOnLaunch device key does the same
 # from inside the app.
@@ -49,7 +49,7 @@ fi
 failed=0
 # Runs a command as the home's owner when run as root, so a link the user
 # swaps in mid-run can only reach what they could delete themselves. A home
-# whose account is gone has no one left to swap links, so root cleans it.
+# whose account is gone is cleaned as root (in_home_folder).
 as_owner_run() {
   if [[ -n "$run_as" ]]; then sudo -u "$run_as" "$@"; else "$@"; fi
 }
@@ -57,8 +57,26 @@ as_owner_run() {
 # record them (they hold note titles).
 as_owner() { as_owner_run xargs -0 "$@"; }
 
+# Whether root cleans this home: its account is gone.
+as_root() { [[ -z "$run_as" && $EUID -eq 0 ]]; }
+
+# Runs a command as root from inside a folder of the home, once there it is
+# sure to be in the home: another user who can write in a home whose account
+# is gone could swap a link into a path mid-run, and rm and rmdir act on a
+# link they are given, never on what it leads to.
+in_home_folder() {
+  local dir="$1" real
+  shift
+  (cd -P "$dir" 2>/dev/null && real="$(/bin/pwd -P)" &&
+    [[ "$real" == "$home_real" || "$real" == "$home_real"/* ]] && "$@")
+}
+
 remove() {
-  printf '%s\0' "$1" | as_owner rm -rf 2>/dev/null || {
+  if as_root; then
+    in_home_folder "${1%/*}" rm -rf -- "./${1##*/}"
+  else
+    printf '%s\0' "$1" | as_owner rm -rf
+  fi 2>/dev/null || {
     echo "Could not remove $1" >&2
     failed=1
   }
@@ -124,8 +142,13 @@ remove_if_emptied() {
       *) return 1 ;;
     esac
   done
-  printf '%s\0' "$dir/.DS_Store" "$dir/Thumbs.db" "$dir/desktop.ini" | as_owner rm -f
-  printf '%s\0' "$dir" | as_owner rmdir 2>/dev/null
+  if as_root; then
+    in_home_folder "$dir" rm -f .DS_Store Thumbs.db desktop.ini &&
+      in_home_folder "${dir%/*}" rmdir -- "./${dir##*/}" 2>/dev/null
+  else
+    printf '%s\0' "$dir/.DS_Store" "$dir/Thumbs.db" "$dir/desktop.ini" | as_owner rm -f
+    printf '%s\0' "$dir" | as_owner rmdir 2>/dev/null
+  fi
 }
 
 # A file's bytes, read as the home's owner, when it holds no more than the
@@ -133,8 +156,12 @@ remove_if_emptied() {
 # file, as the audit writer below opens its file, so a FIFO the user swaps in
 # after the checks can't hold the run, nor can a sparse file that takes no room
 # but would take days to read. The app can't read a note over 512 MiB either.
+# A home's record is bounded too, in files and in what they hold together, so
+# one home can't hold up the homes after it for hours.
 max_note_bytes=$((512 << 20))
 max_database_bytes=$((4 << 30))
+max_mirror_rows=50000
+max_mirror_bytes=$((4 << 30))
 read_regular_file='
   zmodload zsh/system zsh/stat && IFS= read -r -d "" file &&
   sysopen -r -o nofollow,nonblock -u fd -- "$file" && zstat -H st -f $fd &&
@@ -146,7 +173,7 @@ read_as_owner() { printf '%s\0' "$1" | as_owner_run /bin/zsh -fc "$read_regular_
 # that still hold what it wrote (a BOM and line endings aside, as the app
 # reads them), and folders that leaves empty. Anything else, an outside edit
 # included, is the user's. The chosen folder itself stays, and nothing is
-# reached through a link out of it. While the home's account exists, the
+# reached through a link in it. While the home's account exists, the
 # database and the files are read as its owner, so root never opens one they
 # planted. The database is read from a copy with its write-ahead log, so the
 # rows still in that log count. The copy sits in a folder only root can change,
@@ -160,7 +187,8 @@ read_as_owner() { printf '%s\0' "$1" | as_owner_run /bin/zsh -fc "$read_regular_
 # mirror's.
 remove_mirrored_files() {
   local database="$user_data/transcriptions.db" db snapshot suffix journal="" read_failed="" before="$failed"
-  local rows base rel kind hash file folder real_base real_dir raw plain skipped="" outside=""
+  local rows base rel kind hash file folder real_base real_dir raw plain skipped="" outside="" linked=""
+  local size budget="$max_mirror_bytes"
   [[ -f "$database" && ! -L "$database" ]] || return 0
   [[ ! -e "$database-journal" && ! -L "$database-journal" ]] || journal=1
   # In /tmp, where the reader can reach it: without a template, macOS's mktemp
@@ -186,14 +214,16 @@ remove_mirrored_files() {
     [[ -z "$read_failed" ]] && rows="$(as_owner_run sqlite3 -init /dev/null "file:$db?mode=rw" \
       "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'note_mirror_files' AND sql GLOB 'CREATE TABLE note_mirror_files[ (]*'")" &&
       { [[ -z "$rows" ]] || { [[ -z "$journal" ]] && rows="$(as_owner_run sqlite3 -init /dev/null -ascii "file:$db?mode=rw" \
-        "SELECT base_path, rel_path, kind, content_hash FROM note_mirror_files ORDER BY base_path")"; }; } ||
+        "SELECT base_path, rel_path, kind, content_hash FROM note_mirror_files ORDER BY base_path, rel_path LIMIT $((max_mirror_rows + 1))")"; }; } &&
+      { (($(printf '%s' "$rows" | tr -cd '\036' | wc -c) <= max_mirror_rows)) ||
+        read_failed=": it lists more than $max_mirror_rows entries"; } ||
       read_failed=1
     rm -rf "$snapshot" && trap - EXIT
   else
     read_failed=1
   fi
   if [[ -n "$read_failed" ]]; then
-    echo "Could not read the notes mirror's record in $database" >&2
+    echo "Could not read the notes mirror's record in $database${read_failed#1}" >&2
     failed=1
     keep_database=1
     return 0
@@ -218,15 +248,38 @@ remove_mirrored_files() {
       failed=1
       continue
     fi
+    # Never the mirror's: one that leads out through "..".
+    [[ "/$rel/" != */../* && "/$rel/" != */./* ]] || continue
     file="$base/$rel"
     if [[ "$kind" == dir ]]; then
       # A folder directory it made, gone with the folders below once empty.
       [[ "$(cd -P "$file" 2>/dev/null && pwd)" == "$file" ]] || continue
       folder="$file"
     else
-      real_dir="$(cd -P "$(dirname "$file")" 2>/dev/null && pwd)" || continue
-      [[ "$real_dir" == "$real_base" || "$real_dir" == "$real_base"/* ]] || continue
+      real_dir="$(cd -P "${file%/*}" 2>/dev/null && pwd)" || continue
+      # A folder on its way that is now a link, which the mirror never writes
+      # through: what it leads to stays for you to clean, reported, and the
+      # database still goes, as with a notes folder outside the home.
+      if [[ "$real_dir" != "${file%/*}" ]]; then
+        [[ $'\n'"$linked" == *$'\n'"${file%/*}"$'\n'* ]] || {
+          echo "Skipped ${file%/*}: it is reached through a link, so its notes weren't removed" >&2
+          linked+="${file%/*}"$'\n'
+        }
+        continue
+      fi
       [[ -f "$file" && ! -L "$file" ]] || continue
+      size="$(ls -ln "$file" 2>/dev/null | awk '{ print $5; exit }')" || size=""
+      if [[ ! "$size" =~ ^[0-9]+$ ]]; then
+        echo "Could not read $file" >&2
+        failed=1
+        continue
+      fi
+      if ((size > budget)); then
+        echo "Could not read $file: the notes recorded in $home take more than $((max_mirror_bytes >> 30)) GiB together" >&2
+        failed=1
+        break
+      fi
+      budget=$((budget - size))
       # One it can't read may still hold what it wrote: a failure, not an edit.
       raw="$(read_as_owner "$file" "$max_note_bytes" | openssl dgst -sha256 -r)" &&
         plain="$(read_as_owner "$file" "$max_note_bytes" | LC_ALL=C sed $'1s/^\xef\xbb\xbf//; s/\r$//' | openssl dgst -sha256 -r)" || {
@@ -236,14 +289,14 @@ remove_mirrored_files() {
       }
       [[ "$hash" == "${raw%% *}" || "$hash" == "${plain%% *}" ]] || continue
       remove "$file"
-      folder="$(dirname "$file")"
+      folder="${file%/*}"
     fi
     while [[ "$folder" == "$base"/* ]] && remove_if_emptied "$folder"; do
-      folder="$(dirname "$folder")"
+      folder="${folder%/*}"
     done
   done <<<"$rows"
   [[ "$failed" == "$before" ]] || keep_database=1
-  [[ -z "$outside" ]] || failed=1
+  [[ -z "$outside" && -z "$linked" ]] || failed=1
 }
 
 remove_temp_files() {

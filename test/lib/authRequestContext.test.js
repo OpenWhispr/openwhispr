@@ -218,7 +218,7 @@ test("a get-session 401 clears the binding so the app drops to guest", async (t)
   assert.equal(auth.getBoundSessionGeneration("user-a"), null);
 });
 
-// #3030: an admin removal revokes the session, and only the policy lookup says
+// #3323: an admin removal revokes the session, and only the policy lookup says
 // whether that wipes the device.
 test("a rejected session asks main once for a fresh policy; an unreachable one doesn't", async () => {
   const auth = await import("../../src/lib/authRequestContext.ts");

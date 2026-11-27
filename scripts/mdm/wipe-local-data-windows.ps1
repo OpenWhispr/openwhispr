@@ -1,5 +1,5 @@
 # Removes OpenWhispr's local data from a Windows device being offboarded
-# (#3030), for MDM tools that run scripts as SYSTEM (Intune). A profile whose
+# (#3323), for MDM tools that run scripts as SYSTEM (Intune). A profile whose
 # user is signed in, the only way OpenWhispr can be running in it, is skipped.
 # The WipeLocalDataOnLaunch device key does the same from inside the app.
 #
@@ -244,6 +244,12 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
       foreach ($suffix in "", "-wal", "-journal") {
         $file = Get-Item -LiteralPath "$database$suffix" -Force -ErrorAction SilentlyContinue
         if ($file -is [IO.FileInfo] -and -not ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+          # A sparse file takes no room where it is but all of it copied, so
+          # only one as the app writes it is copied, and no more than the macOS
+          # script reads.
+          if (($file.Attributes -band [IO.FileAttributes]::SparseFile) -or $file.Length -gt 4GB) {
+            throw "$($file.Name) is sparse or larger than 4 GB"
+          }
           [IO.File]::Copy($file.FullName, (Join-Path $copy.FullName "transcriptions.db$suffix"))
         }
       }
@@ -252,7 +258,7 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
       # a plain table its own SQL names is the app's, never a virtual one whose
       # module would run as SYSTEM on a file the user made.
       $rows = if ((Read-Sqlite $copied "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'note_mirror_files' AND sql GLOB 'CREATE TABLE note_mirror_files[ (]*'" 1).Count) {
-        Read-Sqlite $copied "SELECT base_path, rel_path, kind, content_hash FROM note_mirror_files ORDER BY base_path" 4
+        Read-Sqlite $copied "SELECT base_path, rel_path, kind, content_hash FROM note_mirror_files ORDER BY base_path, rel_path" 4
       }
     } finally {
       try { Remove-Tree $copy } catch {}
@@ -270,6 +276,7 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
   $vacated = @{}
   $skipped = $null
   $outside = $null
+  $linked = @{}
   $unsafe = $false
   foreach ($row in $rows) {
     $base, $rel, $kind, $hash = $row
@@ -323,7 +330,23 @@ function Remove-MirroredFiles([string]$UserData, [string]$ProfilePath) {
       continue
     }
     $dir = Split-Path $file
-    if ($dir -ne $base -and -not (Test-RealFolder $dir $base)) { continue }
+    if ($dir -ne $base) {
+      # Never the mirror's: one that leads out through "..".
+      if (@($rel -split '[\\/]' | Where-Object { $_ -match '^\.\.?$' }).Count) { continue }
+      $reached = Test-RealFolder $dir $base
+      if ($null -eq $reached) { continue }
+      # A folder on its way that is now a junction or link, which the mirror
+      # never writes through: what it leads to stays for you to clean, and the
+      # database still goes, as with a notes folder outside the profile.
+      if (-not $reached) {
+        if (-not $linked.ContainsKey($dir)) {
+          Write-Warning "Skipped $($dir): it is reached through a junction or link, so its notes weren't removed"
+          $linked[$dir] = $true
+        }
+        $unsafe = $true
+        continue
+      }
+    }
     $item = Get-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
     if (-not ($item -is [IO.FileInfo])) { continue }
     # A link put in its place, or a sync client's placeholder (OneDrive Files
@@ -507,6 +530,13 @@ foreach ($profilePath in $profilePaths) {
   $sid = $profileSids[$profilePath]
   if ($sid -and $signedIn -contains $sid) {
     Write-Warning "Skipped $($profilePath): its user is signed in. Run again after they sign out."
+    $script:failed = $true
+    continue
+  }
+  # A profile named by another path to it (C:\Documents and Settings\name)
+  # can't be told apart from one whose user is signed in.
+  if (-not $sid -and $someoneSignedIn) {
+    Write-Warning "Skipped $($profilePath): it isn't the path Windows lists for a user profile, and a user is signed in. Name the profile by that path, or run again when no one is signed in."
     $script:failed = $true
     continue
   }

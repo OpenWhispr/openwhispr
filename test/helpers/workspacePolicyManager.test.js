@@ -282,7 +282,10 @@ test("reuses a successful managed policy for five minutes, then accepts an updat
   assert.equal(context.broadcasts.length, 2);
 });
 
-test("a refresh after a server refusal skips the freshness window, not the throttle", async (t) => {
+// The refused credential may be gone soon after, and with it the removal only
+// its lookup reports.
+test("a refresh after a server refusal skips the freshness window, and the throttle only delays it", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   let currentTime = 0;
   let requestCount = 0;
   const updated = validPolicy("2026-08-05T00:05:00.000Z");
@@ -302,14 +305,31 @@ test("a refresh after a server refusal skips the freshness window, not the throt
 
   await context.manager.getPolicy(request);
   currentTime = 1_000;
-  const throttled = await context.manager.getPolicy({ ...request, refresh: true });
+  // Every window asks once.
+  const throttled = await Promise.all([
+    context.manager.getPolicy({ ...request, refresh: true }),
+    context.manager.getPolicy({ ...request, refresh: true }),
+  ]);
+  assert.equal(requestCount, 1);
   currentTime = 5_000;
-  const refreshed = await context.manager.getPolicy({ ...request, refresh: true });
+  t.mock.timers.tick(4_000);
+  await new Promise(setImmediate);
 
-  assert.equal(throttled.policy.features.meetingRecordingEnabled, undefined);
-  assert.equal(refreshed.policy.features.meetingRecordingEnabled, false);
+  assert.deepEqual(
+    throttled.map((snapshot) => snapshot.policy.features.meetingRecordingEnabled),
+    [undefined, undefined]
+  );
   assert.equal(requestCount, 2);
   assert.equal(context.broadcasts.at(-1).policy.features.meetingRecordingEnabled, false);
+
+  // One whose credential changed meanwhile isn't another account's lookup.
+  currentTime = 6_000;
+  await context.manager.getPolicy({ ...request, refresh: true });
+  context.tokenState.generation = 2;
+  currentTime = 10_000;
+  t.mock.timers.tick(4_000);
+  await new Promise(setImmediate);
+  assert.equal(requestCount, 2);
 });
 
 test("refreshes a managed identity to authoritative unmanaged after five minutes", async (t) => {
@@ -1388,7 +1408,7 @@ test("nothing is held for an identity that never fetched a policy", () => {
   assert.equal(manager.heldPolicy({ accountId: "account-a", expectedAuthGeneration: 1 }), null);
 });
 
-// #3030: a removal from the workspace that managed this device wipes it.
+// #3323: a removal from the workspace that managed this device wipes it.
 const removal = { workspaceId: "workspace-1", removedAt: "2026-11-12T10:00:00.000Z" };
 // What the API sends: the newest removal, and every one.
 const removedFrom = { workspaceRemoval: removal, workspaceRemovals: [removal] };
