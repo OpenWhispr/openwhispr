@@ -175,6 +175,7 @@ function buildTranscriptionEndpoint(base) {
 function resolveProviderRequest(config) {
   const provider = String(config?.provider || "").toLowerCase();
   const scope = String(config?.scope || "").toLowerCase();
+  // IPC has already resolved this field. A literal password can look like a reference.
   const apiKey = typeof config?.apiKey === "string" ? config.apiKey.trim() : "";
   let endpoints = ENDPOINTS[provider] ? [ENDPOINTS[provider]] : [];
   // A hosted provider's fixed endpoint never redirects. Following one would carry

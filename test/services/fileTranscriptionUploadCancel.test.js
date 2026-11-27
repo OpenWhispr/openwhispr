@@ -1,6 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { createUploadCancelRegistry } = require("../../src/helpers/uploadCancelRegistry");
+const { deferred } = require("../helpers/harness/deferred");
 
 // Cancelling a long OpenRouter upload must reach the main process, or every
 // remaining piece is still sent and billed. Both the single-file view and the
@@ -14,13 +16,19 @@ test("a bring-your-own-key upload hands its cancel id to the main process", asyn
   const { transcribeFileWithSpeakers } = await vite.ssrLoadModule(
     "/services/fileTranscription.ts"
   );
-  let received = null;
-  window.electronAPI.transcribeAudioFileByok = async (options) => {
-    received = options;
+  const lookup = deferred();
+  const registry = createUploadCancelRegistry();
+  let submittedKey;
+  window.electronAPI.resolveSecretRef = () => lookup.promise;
+  window.electronAPI.transcribeAudioFileByok = async ({ apiKey, requestId }) => {
+    submittedKey = apiKey;
+    const { signal } = registry.register(requestId);
+    await lookup.promise;
+    if (signal.aborted) return { success: false, code: "UPLOAD_CANCELLED" };
     return { success: true, text: "hello" };
   };
 
-  await transcribeFileWithSpeakers(
+  const upload = transcribeFileWithSpeakers(
     "/tmp/meeting.mp3",
     {
       useLocalWhisper: false,
@@ -29,7 +37,7 @@ test("a bring-your-own-key upload hands its cancel id to the main process", asyn
       parakeetModel: "parakeet-tdt-0.6b-v3",
       cohereModel: "",
       isOpenWhisprCloud: false,
-      getApiKey: () => "ork-openrouter",
+      getApiKey: () => "$OPENROUTER_API_KEY",
       cloudTranscriptionProvider: "openrouter",
       cloudTranscriptionBaseUrl: "",
       cloudTranscriptionModel: "google/chirp-3",
@@ -41,7 +49,12 @@ test("a bring-your-own-key upload hands its cancel id to the main process", asyn
     { requestId: "upload-7", timestamps: true }
   );
 
-  assert.equal(received.requestId, "upload-7");
+  const cancelled = registry.cancel("upload-7");
+  lookup.resolve("synthetic-openrouter");
+  const result = await upload;
+  assert.equal(cancelled, 1);
+  assert.equal(result.code, "UPLOAD_CANCELLED");
+  assert.equal(submittedKey, "$OPENROUTER_API_KEY");
 });
 
 test("an abandoned voice take skips cloud dispatch on a session refresh retry", async (t) => {

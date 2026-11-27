@@ -486,6 +486,12 @@ function mapVertexError(error, config = {}) {
  * @returns {{ message: string, action?: string, copyCommand?: string, retryable?: boolean }}
  */
 function mapEnterpriseError(provider, error, config = {}) {
+  if (error?.code === ENTERPRISE_CREDENTIAL_MISSING) {
+    return {
+      message: error.message,
+      action: "Set that environment variable, or enter the credential itself in Settings.",
+    };
+  }
   const managed = mapManagedIdentityError(error, provider);
   if (managed) return managed;
   switch (provider) {
@@ -572,6 +578,14 @@ function validateEnterpriseEndpoint(endpoint) {
  * Extracts the enterprise credential/config subset from an IPC payload
  * so SDK factories receive only the fields they expect.
  */
+const ENTERPRISE_SECRET_FIELDS = [
+  "bedrockAccessKeyId",
+  "bedrockSecretAccessKey",
+  "bedrockSessionToken",
+  "azureApiKey",
+  "vertexApiKey",
+];
+
 function pickEnterpriseConfig(config = {}) {
   return {
     bedrockRegion: config.bedrockRegion,
@@ -581,16 +595,72 @@ function pickEnterpriseConfig(config = {}) {
     bedrockSessionToken: config.bedrockSessionToken,
     azureEndpoint: config.azureEndpoint,
     azureApiVersion: config.azureApiVersion,
+    azureApiKey: config.azureApiKey,
     vertexProject: config.vertexProject,
     vertexLocation: config.vertexLocation,
+    vertexApiKey: config.vertexApiKey,
   };
+}
+
+const ENTERPRISE_CREDENTIAL_MISSING = "ENTERPRISE_CREDENTIAL_MISSING";
+
+// The credential fields each provider's call reads. A field the user filled in
+// that resolves to nothing must fail the call: left empty, Vertex would fall back
+// to Application Default Credentials and Bedrock to the ambient AWS chain, so the
+// auth method the user chose would silently change.
+const PROVIDER_SECRET_FIELDS = {
+  bedrock: ["bedrockAccessKeyId", "bedrockSecretAccessKey", "bedrockSessionToken"],
+  azure: ["apiKey", "azureApiKey"],
+  vertex: ["apiKey", "vertexApiKey"],
+};
+
+// Clone + resolve each secret field in place. Never OR Azure/Vertex keys into
+// a shared apiKey unless that provider is the one being called.
+function resolveManualEnterpriseRuntime(config = {}, provider, model, resolveSecretRef) {
+  // Older renderers send both sources. The Bedrock SDK selects the profile first.
+  if (provider === "bedrock" && config.bedrockProfile) {
+    return {
+      provider,
+      model,
+      apiKey: "",
+      enterprise: { bedrockProfile: config.bedrockProfile, bedrockRegion: config.bedrockRegion },
+    };
+  }
+  const { usableSecret, envRefName } = require("./envRef.cjs");
+  const resolve = (value) =>
+    resolveSecretRef ? resolveSecretRef(value || "") : usableSecret(value);
+  for (const field of PROVIDER_SECRET_FIELDS[provider] || []) {
+    const raw = typeof config[field] === "string" ? config[field].trim() : "";
+    if (raw && !resolve(raw)) {
+      const name = envRefName(raw);
+      throw Object.assign(
+        new Error(
+          name
+            ? `The environment variable ${name} is not set, so there is no credential to send.`
+            : "A credential field could not be read."
+        ),
+        { code: ENTERPRISE_CREDENTIAL_MISSING, field }
+      );
+    }
+  }
+  const picked = { ...pickEnterpriseConfig(config) };
+  for (const key of ENTERPRISE_SECRET_FIELDS) {
+    if (picked[key]) picked[key] = resolve(picked[key]);
+  }
+  let apiKey = resolve(config.apiKey);
+  if (!apiKey && provider === "azure") apiKey = picked.azureApiKey || "";
+  if (!apiKey && provider === "vertex") apiKey = picked.vertexApiKey || "";
+  return { provider, model, apiKey, enterprise: picked };
 }
 
 module.exports = {
   ENTERPRISE_PROVIDERS,
+  ENTERPRISE_CREDENTIAL_MISSING,
+  ENTERPRISE_SECRET_FIELDS,
   isEnterpriseProvider,
   mapEnterpriseError,
   pickEnterpriseConfig,
+  resolveManualEnterpriseRuntime,
   runAbortableOperation,
   runBedrockRequest,
   unwrapRetryError,

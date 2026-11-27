@@ -73,6 +73,7 @@ const {
 const { classifyAndLog } = require("./networkErrors");
 const { resolveSystemDefaultMicrophone } = require("./systemDefaultMicrophone");
 const { ipcErrorFields } = require("./ipcErrorFields");
+const { customTranscriptionKeyForRequest } = require("./transcriptionAuth");
 const {
   PROVIDER_ERROR_CODES,
   isProviderSettingsTarget,
@@ -2540,6 +2541,29 @@ class IPCHandlers {
     const runPaidKeyCheck = createPaidKeyCheck(() =>
       path.join(app.getPath("userData"), PAID_KEY_CHECKS_FILE)
     );
+    // A field may hold $VAR / ${VAR}; expand it here, on the way to the provider, so
+    // the check (and its cache digest) sees the secret, never the literal reference.
+    // A field that names a variable which isn't set is reported as such, never checked
+    // as an empty field: Corti would otherwise test the stored pair instead, and a
+    // keyless server would pass and save the unusable reference.
+    const resolveConnectionCheckSecrets = (config) => {
+      const { ENTERPRISE_SECRET_FIELDS } = require("./enterpriseProviderErrors");
+      const { isEnvRef } = require("./envRef.cjs");
+      const resolved = { ...config };
+      const unresolved = [];
+      for (const key of ["apiKey", "clientId", "clientSecret", ...ENTERPRISE_SECRET_FIELDS]) {
+        if (typeof resolved[key] !== "string" || !resolved[key].trim()) continue;
+        const raw = resolved[key];
+        resolved[key] = this.environmentManager.resolveSecretRef(raw);
+        if (isEnvRef(raw) && !resolved[key]) unresolved.push(key);
+      }
+      return { config: resolved, unresolved };
+    };
+    const UNSET_SECRET_REF_FAILURE = {
+      success: false,
+      errorCode: "secretRefUnset",
+      error: "The environment variable this field names is not set.",
+    };
     const checkProviderConnection = async (config) => {
       if (config?.provider === "corti" && config?.scope === "transcription") {
         try {
@@ -2565,9 +2589,11 @@ class IPCHandlers {
       }
       return testProviderConnection(config, proxyFetch, runPaidKeyCheck);
     };
-    handleRemoteProduct("test-provider-connection", (_event, config) =>
-      cachedConnectionCheck(config, () => checkProviderConnection(config))
-    );
+    handleRemoteProduct("test-provider-connection", (_event, rawConfig) => {
+      const { config, unresolved } = resolveConnectionCheckSecrets(rawConfig);
+      if (unresolved.length > 0) return { ...UNSET_SECRET_REF_FAILURE };
+      return cachedConnectionCheck(config, () => checkProviderConnection(config));
+    });
 
     ipcMain.handle("window-minimize", () => {
       if (this.windowManager.controlPanelWindow) {
@@ -2690,26 +2716,66 @@ class IPCHandlers {
     // Counts changes to any key in Settings. A streaming socket keeps the count it
     // was opened under, so a start never reuses one authenticated before a change.
     let credentialGeneration = 0;
-    const saveSecretKey = (getter, saver, storeKey) => (event, key) => {
-      if (typeof key !== "string") throw new TypeError("API key must be a string");
-      // Committing an unedited key field saves the same value again.
-      const changed = this.environmentManager[getter]() !== key;
-      const result = this.environmentManager[saver](key);
-      if (!changed) return result;
-      credentialGeneration += 1;
-      // Notify peers by setting name only; leave the editor's pending input alone.
-      for (const win of BrowserWindow.getAllWindows()) {
-        if (!win.isDestroyed() && win.webContents.id !== event.sender.id) {
-          win.webContents.send("api-key-updated", storeKey);
-        }
-      }
-      return result;
-    };
+    const saveSecretKey =
+      (envName, saver, storeKey) =>
+      (event, key, migration = false) => {
+        if (typeof key !== "string") throw new TypeError("API key must be a string");
+        // Committing an unedited key field saves the same value again. Compare the
+        // stored value, not its expansion, so an unedited $VAR is no change either.
+        const changed = this.environmentManager.getRawFieldValue(envName) !== key;
+        const mode = migration === "if-empty" ? migration : migration === true;
+        const result = this.environmentManager[saver](key, mode);
+        const complete = (saved) => {
+          // Migrating a literal or clearing a locked slot can change the
+          // credential even when the field still displays the same text.
+          if (
+            (!changed && typeof saved?.stored !== "string") ||
+            saved?.success === false ||
+            typeof saved?.retained === "string"
+          )
+            return saved;
+          credentialGeneration += 1;
+          // Notify peers by setting name only; leave the editor's pending input alone.
+          for (const win of BrowserWindow.getAllWindows()) {
+            if (!win.isDestroyed() && win.webContents.id !== event.sender.id) {
+              win.webContents.send("api-key-updated", storeKey);
+            }
+          }
+          return saved;
+        };
+        return result instanceof Promise ? result.then(complete) : complete(result);
+      };
 
     for (const k of BYOK_API_KEYS) {
-      ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
-      ipcMain.handle(`save-${k.base}-key`, saveSecretKey(k.get, k.save, k.storeKey));
+      ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager.getRawKey(k.env));
+      ipcMain.handle(`save-${k.base}-key`, saveSecretKey(k.env, k.save, k.storeKey));
     }
+
+    ipcMain.handle("resolve-secret-ref", (_event, value) => {
+      return this.environmentManager.resolveSecretRef(value);
+    });
+
+    // Chat readiness needs to know which references work, without reading their credentials.
+    ipcMain.handle("get-configured-secret-refs", (_event, references) => {
+      const { isEnvRef } = require("./envRef.cjs");
+      if (!Array.isArray(references)) return [];
+      return [...new Set(references)].filter(
+        (value) => isEnvRef(value) && this.environmentManager.resolveSecretRef(value)
+      );
+    });
+
+    // The login-shell import runs after windows may have read their keys; tell
+    // every window which fields it filled so they read them again.
+    this.environmentManager?.onLoginShellImport?.((names) => {
+      const { secretStoreKey } = require("../config/secretKeys");
+      const storeKeys = new Set(names.map(secretStoreKey).filter(Boolean));
+      if (storeKeys.size === 0) return;
+      credentialGeneration += 1;
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (win.isDestroyed()) continue;
+        for (const storeKey of storeKeys) win.webContents.send("api-key-updated", storeKey);
+      }
+    });
 
     ipcMain.handle("db-save-transcription", async (event, text, rawText, options) => {
       const result = this.databaseManager.saveTranscription(text, rawText, options);
@@ -6920,21 +6986,21 @@ class IPCHandlers {
     );
 
     ipcMain.handle("get-corti-client-id", async () => {
-      return this.environmentManager.getCortiClientId();
+      return this.environmentManager.getRawKey("CORTI_CLIENT_ID");
     });
 
     ipcMain.handle(
       "save-corti-client-id",
-      saveSecretKey("getCortiClientId", "saveCortiClientId", "cortiClientId")
+      saveSecretKey("CORTI_CLIENT_ID", "saveCortiClientId", "cortiClientId")
     );
 
     ipcMain.handle("get-corti-client-secret", async () => {
-      return this.environmentManager.getCortiClientSecret();
+      return this.environmentManager.getRawKey("CORTI_CLIENT_SECRET");
     });
 
     ipcMain.handle(
       "save-corti-client-secret",
-      saveSecretKey("getCortiClientSecret", "saveCortiClientSecret", "cortiClientSecret")
+      saveSecretKey("CORTI_CLIENT_SECRET", "saveCortiClientSecret", "cortiClientSecret")
     );
 
     handleProviderTranscription(
@@ -7017,11 +7083,19 @@ class IPCHandlers {
       })
     );
 
+    const getCustomTranscriptionKeyForRequest = (
+      rawKey = this.environmentManager.getRawKey("CUSTOM_TRANSCRIPTION_API_KEY")
+    ) => {
+      return customTranscriptionKeyForRequest(
+        rawKey,
+        this.environmentManager.resolveSecretRef(rawKey)
+      );
+    };
     // Headers and redirect mode for a request to the self-hosted speech server of `surface`
     // ("dictation" or "upload"), with the custom key for a route that takes one (Orukeet's).
-    const selfHostedRequest = (surface, route) => {
+    const selfHostedRequest = (surface, route, rawKey) => {
       const key =
-        route?.auth.keyRef === "custom" ? this.environmentManager.getCustomTranscriptionKey() : "";
+        route?.auth.keyRef === "custom" ? getCustomTranscriptionKeyForRequest(rawKey) : "";
       return selfHostedSttRequest(
         parseSelfHostedSttHeaders(this.environmentManager.getSelfHostedSttHeaders())[surface],
         key ? { Authorization: `Bearer ${key}` } : {}
@@ -7032,28 +7106,28 @@ class IPCHandlers {
     );
     ipcMain.handle(
       "save-self-hosted-stt-headers",
-      saveSecretKey("getSelfHostedSttHeaders", "saveSelfHostedSttHeaders", "selfHostedSttHeaders")
+      saveSecretKey("SELF_HOSTED_STT_HEADERS", "saveSelfHostedSttHeaders", "selfHostedSttHeaders")
     );
     ipcMain.handle("get-custom-transcription-key", async () => {
-      return this.environmentManager.getCustomTranscriptionKey();
+      return this.environmentManager.getRawKey("CUSTOM_TRANSCRIPTION_API_KEY");
     });
 
     ipcMain.handle(
       "save-custom-transcription-key",
       saveSecretKey(
-        "getCustomTranscriptionKey",
+        "CUSTOM_TRANSCRIPTION_API_KEY",
         "saveCustomTranscriptionKey",
         "customTranscriptionApiKey"
       )
     );
 
     ipcMain.handle("get-cleanup-custom-key", async () => {
-      return this.environmentManager.getCleanupCustomKey();
+      return this.environmentManager.getRawCleanupCustomKey();
     });
 
     ipcMain.handle(
       "save-cleanup-custom-key",
-      saveSecretKey("getCleanupCustomKey", "saveCleanupCustomKey", "cleanupCustomApiKey")
+      saveSecretKey("CUSTOM_CLEANUP_API_KEY", "saveCleanupCustomKey", "cleanupCustomApiKey")
     );
 
     // Enterprise provider key handlers
@@ -7070,29 +7144,29 @@ class IPCHandlers {
       return this.environmentManager.saveBedrockProfile(value);
     });
     ipcMain.handle("get-bedrock-access-key-id", async () => {
-      return this.environmentManager.getBedrockAccessKeyId();
+      return this.environmentManager.getRawKey("BEDROCK_ACCESS_KEY_ID");
     });
     ipcMain.handle(
       "save-bedrock-access-key-id",
-      saveSecretKey("getBedrockAccessKeyId", "saveBedrockAccessKeyId", "bedrockAccessKeyId")
+      saveSecretKey("BEDROCK_ACCESS_KEY_ID", "saveBedrockAccessKeyId", "bedrockAccessKeyId")
     );
     ipcMain.handle("get-bedrock-secret-access-key", async () => {
-      return this.environmentManager.getBedrockSecretAccessKey();
+      return this.environmentManager.getRawKey("BEDROCK_SECRET_ACCESS_KEY");
     });
     ipcMain.handle(
       "save-bedrock-secret-access-key",
       saveSecretKey(
-        "getBedrockSecretAccessKey",
+        "BEDROCK_SECRET_ACCESS_KEY",
         "saveBedrockSecretAccessKey",
         "bedrockSecretAccessKey"
       )
     );
     ipcMain.handle("get-bedrock-session-token", async () => {
-      return this.environmentManager.getBedrockSessionToken();
+      return this.environmentManager.getRawKey("BEDROCK_SESSION_TOKEN");
     });
     ipcMain.handle(
       "save-bedrock-session-token",
-      saveSecretKey("getBedrockSessionToken", "saveBedrockSessionToken", "bedrockSessionToken")
+      saveSecretKey("BEDROCK_SESSION_TOKEN", "saveBedrockSessionToken", "bedrockSessionToken")
     );
     ipcMain.handle("get-azure-endpoint", async () => {
       return this.environmentManager.getAzureEndpoint();
@@ -7101,11 +7175,11 @@ class IPCHandlers {
       return this.environmentManager.saveAzureEndpoint(value);
     });
     ipcMain.handle("get-azure-api-key", async () => {
-      return this.environmentManager.getAzureApiKey();
+      return this.environmentManager.getRawKey("AZURE_OPENAI_API_KEY");
     });
     ipcMain.handle(
       "save-azure-api-key",
-      saveSecretKey("getAzureApiKey", "saveAzureApiKey", "azureApiKey")
+      saveSecretKey("AZURE_OPENAI_API_KEY", "saveAzureApiKey", "azureApiKey")
     );
     ipcMain.handle("get-azure-deployment", async () => {
       return this.environmentManager.getAzureDeployment();
@@ -7132,11 +7206,11 @@ class IPCHandlers {
       return this.environmentManager.saveVertexLocation(value);
     });
     ipcMain.handle("get-vertex-api-key", async () => {
-      return this.environmentManager.getVertexApiKey();
+      return this.environmentManager.getRawKey("VERTEX_API_KEY");
     });
     ipcMain.handle(
       "save-vertex-api-key",
-      saveSecretKey("getVertexApiKey", "saveVertexApiKey", "vertexApiKey")
+      saveSecretKey("VERTEX_API_KEY", "saveVertexApiKey", "vertexApiKey")
     );
 
     // Enterprise provider test connection
@@ -9291,14 +9365,13 @@ class IPCHandlers {
       },
     });
     const resolveEnterpriseRuntime = async (event, provider, model, config = {}) => {
-      const manual = {
-        provider,
-        model,
-        apiKey: config.apiKey || "",
-        enterprise: require("./enterpriseProviderErrors").pickEnterpriseConfig(config),
-      };
       const context = config.managedContext;
-      if (!context) return manual;
+      if (!context) {
+        const { resolveManualEnterpriseRuntime } = require("./enterpriseProviderErrors");
+        return resolveManualEnterpriseRuntime(config, provider, model, (value) =>
+          this.environmentManager.resolveSecretRef(value)
+        );
+      }
       const authHeaders = await getAuthHeader(event);
       const resolved = await this.enterpriseIdentityManager.resolveProvider({
         accountId: context.accountId,
@@ -9909,7 +9982,7 @@ class IPCHandlers {
               : provider === "xai"
                 ? this.environmentManager.getXaiKey()
                 : route.auth.keyRef === "custom"
-                  ? this.environmentManager.getCustomTranscriptionKey()
+                  ? getCustomTranscriptionKeyForRequest()
                   : route.auth.keyRef === "groq"
                     ? this.environmentManager.getGroqKey()
                     : route.auth.keyRef === "openrouter"
@@ -12274,7 +12347,7 @@ class IPCHandlers {
               });
             } else {
               await streaming.connect({
-                apiKey: this.environmentManager.getCustomTranscriptionKey(),
+                apiKey: getCustomTranscriptionKeyForRequest(),
                 headers:
                   options.transcriptionMode === "self-hosted"
                     ? selfHostedRequest("dictation").headers
@@ -14239,7 +14312,7 @@ class IPCHandlers {
           durationSeconds,
           requestId,
           purpose,
-          apiKey,
+          apiKey: rawApiKey,
           baseUrl,
           model,
           diarize,
@@ -14318,6 +14391,11 @@ class IPCHandlers {
               model: route.model,
               surface: "transcription",
             };
+            const suppliedKey = typeof rawApiKey === "string" ? rawApiKey.trim() : "";
+            const apiKey =
+              route.provider === "custom"
+                ? getCustomTranscriptionKeyForRequest(suppliedKey)
+                : this.environmentManager.resolveSecretRef(suppliedKey);
 
             // OpenRouter's upstream providers stop after ~60 s of work per request,
             // so its uploads go out in 4-minute pieces, cut straight from the source
@@ -14390,7 +14468,11 @@ class IPCHandlers {
                 { model: route.model, language: route.language }
               );
               // A voice draft goes to dictation's server, a file to the Upload tab's.
-              const request = selfHostedRequest(audioFilePurpose(filePath, purpose), route);
+              const request = selfHostedRequest(
+                audioFilePurpose(filePath, purpose),
+                route,
+                suppliedKey || undefined
+              );
               const data = await postMultipart(
                 new URL(route.endpoint),
                 body,

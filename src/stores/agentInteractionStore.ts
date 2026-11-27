@@ -14,6 +14,7 @@ import { isConnectorReady, refreshConnectorStatus } from "./connectorStatusStore
 import type { CalendarProvider } from "../utils/calendarConnect";
 import type { SettingsState } from "./settingsStore";
 import { getCachedPlatform } from "../utils/platform";
+import { isEnvRef } from "../helpers/envRef";
 
 // Every surface that renders a card imports this store, and the settings
 // store brings the app's i18n setup with it, so it loads only when used.
@@ -32,6 +33,23 @@ const API_KEY_SETTERS = {
 
 type ApiKeyProvider = keyof typeof API_KEY_SETTERS;
 export const API_KEY_PROVIDERS = Object.keys(API_KEY_SETTERS) as ApiKeyProvider[];
+
+async function getConfiguredRefs(references: string[]): Promise<string[]> {
+  if (!references.length) return [];
+  return (await window.electronAPI?.getConfiguredSecretRefs?.(references).catch(() => [])) ?? [];
+}
+
+export async function getMissingApiKeyProviders(
+  settings: SettingsState,
+  providers: ApiKeyProvider[]
+): Promise<ApiKeyProvider[]> {
+  const keys = providers.map((provider) => settings[`${provider}ApiKey`]?.trim() ?? "");
+  const references = [...new Set(keys.filter(isEnvRef))];
+  const configured = await getConfiguredRefs(references);
+  return providers.filter(
+    (_, index) => !keys[index] || (isEnvRef(keys[index]) && !configured.includes(keys[index]))
+  );
+}
 
 /**
  * Cards with no dismiss control of their own: Esc in one dismisses it, and
@@ -466,13 +484,34 @@ export async function submitApiKey(key: string, value: string): Promise<void> {
   const secret = value.trim();
   const { provider } = entry.payload;
   if (!secret || !Object.hasOwn(API_KEY_SETTERS, provider)) return;
-  const { useSettingsStore } = await loadSettingsStore();
-  if (!isOpen(key)) return;
-  if (!isApiKeySetupAllowed(provider, entry.payload.scope ?? "chatIntelligence")) {
+  const waiter = waiters.get(key);
+  patchEntry(key, { state: "working", error: undefined });
+  const { useSettingsStore, secretInputError } = await loadSettingsStore();
+  if (waiters.get(key) !== waiter) return;
+  const keyProvider = provider as ApiKeyProvider;
+  const scope = entry.payload.scope ?? "chatIntelligence";
+  let referenceError: string | null = null;
+  if (isEnvRef(secret) && isApiKeySetupAllowed(provider, scope)) {
+    referenceError = secretInputError(
+      keyProvider,
+      secret,
+      useSettingsStore.getState()[`${keyProvider}ApiKey`]
+    );
+    if (!referenceError) {
+      const configured = await getConfiguredRefs([secret]);
+      if (waiters.get(key) !== waiter) return;
+      if (!configured.includes(secret)) referenceError = "secretRefUnset";
+    }
+  }
+  if (!isApiKeySetupAllowed(provider, scope)) {
     settle(key, { status: "unavailable", reason: "policy_blocked" });
     return;
   }
-  useSettingsStore.getState()[API_KEY_SETTERS[provider as ApiKeyProvider]](secret);
+  const error = referenceError ?? useSettingsStore.getState()[API_KEY_SETTERS[keyProvider]](secret);
+  if (error) {
+    patchEntry(key, { state: "pending", error });
+    return;
+  }
   settle(key, { status: "saved" });
 }
 
@@ -501,7 +540,7 @@ async function settingsReady(
       inferenceScope: payload.scope ?? "chatIntelligence",
     }).config;
     if (mode !== "providers" || !Object.hasOwn(API_KEY_SETTERS, provider)) return undefined;
-    return Boolean(settings[`${provider as ApiKeyProvider}ApiKey`]);
+    return (await getMissingApiKeyProviders(settings, [provider as ApiKeyProvider])).length === 0;
   }
   if (target === "integrations.calendars") {
     const { getSettings, selectCalendarConnected } = await loadSettingsStore();

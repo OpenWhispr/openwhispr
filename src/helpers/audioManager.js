@@ -8,6 +8,7 @@ import {
 } from "../services/ai/chatRequestBody";
 import logger from "../utils/logger";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
+import { resolveApiKey } from "../utils/resolveApiKey";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
@@ -97,7 +98,10 @@ import {
   isManagedTranscriptionActive,
 } from "../services/managedTranscription.ts";
 import { getTranscriptionApiKey } from "../services/fileTranscription";
-import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
+import {
+  customTranscriptionKeyForRequest,
+  shouldSkipTranscriptionApiKey,
+} from "./transcriptionAuth";
 import { supportsWhisperSegments } from "./uploadTimestamps";
 import { dropNoSpeechSegments } from "./noSpeechSegments";
 import {
@@ -742,6 +746,7 @@ class AudioManager {
     this.onTranscriptionComplete = null;
     this.onPartialTranscript = null;
     this.micCaptureStatus = "inactive";
+    this.apiKeyGeneration = 0;
     this.cachedApiKey = null;
     this.cachedApiKeyProvider = null;
     this._micWarmedAt = 0;
@@ -787,6 +792,7 @@ class AudioManager {
     });
 
     this._onApiKeyChanged = () => {
+      this.apiKeyGeneration += 1;
       this.cachedApiKey = null;
       this.cachedApiKeyProvider = null;
       // Replace a socket warmed with the previous key now rather than at the next
@@ -2923,49 +2929,29 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const provider = s.cloudTranscriptionProvider || "openai";
 
+    if (provider === "custom") {
+      // Pick the credential before resolving it, so an unavailable reference
+      // cannot fall back to an older account. Recheck it for each recording.
+      const rawKey =
+        s.customTranscriptionApiKey?.trim() ||
+        (await window.electronAPI.getCustomTranscriptionKey?.());
+      return customTranscriptionKeyForRequest(rawKey, await resolveApiKey(rawKey)) || null;
+    }
+
     // Check cache (invalidate if provider changed)
     if (this.cachedApiKey !== null && this.cachedApiKeyProvider === provider) {
       return this.cachedApiKey;
     }
 
+    const generation = this.apiKeyGeneration;
     let apiKey = null;
 
-    if (provider === "custom") {
-      // Prefer store value (user-entered via UI) over main process (.env)
-      apiKey = s.customTranscriptionApiKey || "";
-      if (!apiKey.trim()) {
-        try {
-          apiKey = await window.electronAPI.getCustomTranscriptionKey?.();
-        } catch (err) {
-          logger.debug(
-            "Failed to get custom transcription key via IPC",
-            { error: err?.message },
-            "transcription"
-          );
-        }
-      }
-      apiKey = apiKey?.trim() || "";
-
-      logger.debug(
-        "Custom STT API key retrieval",
-        {
-          provider,
-          hasKey: !!apiKey,
-          keyLength: apiKey?.length || 0,
-        },
-        "transcription"
-      );
-
-      // For custom, we allow null/empty - the endpoint may not require auth
-      if (!apiKey) {
-        apiKey = null;
-      }
-    } else if (provider === "mistral") {
+    if (provider === "mistral") {
       // Prefer store value (user-entered via UI) over main process (.env)
       // to avoid stale keys in process.env after auth mode transitions
-      apiKey = s.mistralApiKey;
+      apiKey = await resolveApiKey(s.mistralApiKey);
       if (!isValidApiKey(apiKey, "mistral")) {
-        apiKey = await window.electronAPI.getMistralKey?.();
+        apiKey = await resolveApiKey(await window.electronAPI.getMistralKey?.());
       }
       if (!isValidApiKey(apiKey, "mistral")) {
         const err = new Error(
@@ -2976,15 +2962,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
     } else if (provider === "corti") {
       // Tokens are minted in the main process; only verify credentials exist here
-      let clientId = s.cortiClientId;
-      let clientSecret = s.cortiClientSecret;
-      if (!clientId?.trim() || !clientSecret?.trim()) {
-        [clientId, clientSecret] = await Promise.all([
+      let clientId = await resolveApiKey(s.cortiClientId);
+      let clientSecret = await resolveApiKey(s.cortiClientSecret);
+      if (!clientId || !clientSecret) {
+        const [rawId, rawSecret] = await Promise.all([
           window.electronAPI.getCortiClientId?.(),
           window.electronAPI.getCortiClientSecret?.(),
         ]);
+        [clientId, clientSecret] = await Promise.all([
+          resolveApiKey(rawId),
+          resolveApiKey(rawSecret),
+        ]);
       }
-      if (!clientId?.trim() || !clientSecret?.trim()) {
+      if (!clientId || !clientSecret) {
         const err = new Error(
           "Corti credentials not found. Please set your Client ID and Client Secret in the Control Panel."
         );
@@ -2993,9 +2983,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       apiKey = null;
     } else if (provider === "tinfoil") {
-      apiKey = s.tinfoilApiKey;
-      if (!apiKey?.trim()) {
-        apiKey = await window.electronAPI.getTinfoilKey?.();
+      apiKey = await resolveApiKey(s.tinfoilApiKey);
+      if (!apiKey) {
+        apiKey = await resolveApiKey(await window.electronAPI.getTinfoilKey?.());
       }
       if (!apiKey?.trim()) {
         const err = new Error(
@@ -3005,9 +2995,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         throw err;
       }
     } else if (provider === "gemini") {
-      apiKey = s.geminiApiKey;
-      if (!apiKey?.trim()) {
-        apiKey = await window.electronAPI.getGeminiKey?.();
+      apiKey = await resolveApiKey(s.geminiApiKey);
+      if (!apiKey) {
+        apiKey = await resolveApiKey(await window.electronAPI.getGeminiKey?.());
       }
       if (!apiKey?.trim()) {
         const err = new Error(
@@ -3017,9 +3007,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         throw err;
       }
     } else if (provider === "elevenlabs") {
-      apiKey = s.elevenlabsApiKey;
-      if (!apiKey?.trim()) {
-        apiKey = await window.electronAPI.getElevenlabsKey?.();
+      apiKey = await resolveApiKey(s.elevenlabsApiKey);
+      if (!apiKey) {
+        apiKey = await resolveApiKey(await window.electronAPI.getElevenlabsKey?.());
       }
       if (!apiKey?.trim()) {
         throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
@@ -3029,9 +3019,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
     } else if (provider === "groq") {
       // Prefer store value (user-entered via UI) over main process (.env)
-      apiKey = s.groqApiKey;
+      apiKey = await resolveApiKey(s.groqApiKey);
       if (!isValidApiKey(apiKey, "groq")) {
-        apiKey = await window.electronAPI.getGroqKey?.();
+        apiKey = await resolveApiKey(await window.electronAPI.getGroqKey?.());
       }
       if (!isValidApiKey(apiKey, "groq")) {
         const err = new Error(
@@ -3041,9 +3031,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         throw err;
       }
     } else if (provider === "xai") {
-      apiKey = s.xaiApiKey;
+      apiKey = await resolveApiKey(s.xaiApiKey);
       if (!isValidApiKey(apiKey, "xai")) {
-        apiKey = await window.electronAPI.getXaiKey?.();
+        apiKey = await resolveApiKey(await window.electronAPI.getXaiKey?.());
       }
       if (!isValidApiKey(apiKey, "xai")) {
         const err = new Error(
@@ -3054,9 +3044,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
     } else if (provider === "assemblyai") {
       // The Dictation proxy reads the key in main; only verify one exists here.
-      apiKey = s.assemblyaiApiKey;
-      if (!apiKey?.trim()) {
-        apiKey = await window.electronAPI.getAssemblyAIKey?.();
+      apiKey = await resolveApiKey(s.assemblyaiApiKey);
+      if (!apiKey) {
+        apiKey = await resolveApiKey(await window.electronAPI.getAssemblyAIKey?.());
       }
       if (!apiKey?.trim()) {
         const err = new Error(
@@ -3067,9 +3057,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         throw err;
       }
     } else if (provider === "openrouter") {
-      apiKey = s.openrouterApiKey;
-      if (!apiKey?.trim()) {
-        apiKey = await window.electronAPI.getOpenrouterKey?.();
+      apiKey = await resolveApiKey(s.openrouterApiKey);
+      if (!apiKey) {
+        apiKey = await resolveApiKey(await window.electronAPI.getOpenrouterKey?.());
       }
       if (!apiKey?.trim()) {
         const err = new Error(
@@ -3082,9 +3072,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Default to OpenAI
       // Prefer store value (user-entered via UI) over main process (.env)
       // to avoid stale keys in process.env after auth mode transitions
-      apiKey = s.openaiApiKey;
+      apiKey = await resolveApiKey(s.openaiApiKey);
       if (!isValidApiKey(apiKey, "openai")) {
-        apiKey = await window.electronAPI.getOpenAIKey();
+        apiKey = await resolveApiKey(await window.electronAPI.getOpenAIKey());
       }
       if (!isValidApiKey(apiKey, "openai")) {
         const err = new Error(
@@ -3095,8 +3085,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
     }
 
-    this.cachedApiKey = apiKey;
-    this.cachedApiKeyProvider = provider;
+    if (generation === this.apiKeyGeneration) {
+      this.cachedApiKey = apiKey;
+      this.cachedApiKeyProvider = provider;
+    }
     return apiKey;
   }
 

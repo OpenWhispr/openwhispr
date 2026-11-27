@@ -489,3 +489,26 @@ test("ElevenLabs credentials are read only for a meeting", async () => {
   }
   assert.equal(reads, 0);
 });
+
+test("realtime providers use the literal credential returned by the main getter", async () => {
+  const { fetchRealtimeTokenForProvider } = await load();
+  for (const [provider, getter] of [
+    ["elevenlabs-realtime", "getElevenlabsKey"],
+    ["deepgram-realtime", "getDeepgramKey"],
+    ["assemblyai-realtime", "getAssemblyAIKey"],
+  ]) {
+    const literal = "${OLD_PASSWORD}";
+    const result = await fetchRealtimeTokenForProvider(
+      provider,
+      deps({
+        environmentManager: { [getter]: () => literal },
+        proxyFetch: async (_url, init) => {
+          assert.equal(init.headers.Authorization, literal);
+          return jsonResponse(200, { token: "fixture-token" });
+        },
+      }),
+      { mode: "byok", purpose: "meeting" }
+    );
+    assert.equal(result, provider === "assemblyai-realtime" ? "fixture-token" : literal);
+  }
+});

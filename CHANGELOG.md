@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- API key fields accept `$NAME` and `${NAME}` as references to an OpenWhispr credential. For example, a custom endpoint can use `$OPENAI_API_KEY`. Passwords saved by earlier releases keep their literal meaning, including passwords with that exact spelling.
+- Clearing a saved credential while the system vault is locked keeps it cleared after unlock and restart.
+- On macOS and Linux, an empty key field can now use a matching export from Bash or Zsh. If your custom transcription endpoint uses anonymous access, leave `CUSTOM_TRANSCRIPTION_API_KEY` unset.
+
 ## [1.12.2] - 2026-11-25
 
 Subfolders in the notes sidebar, a mic mute during note recordings, and date and time variables in snippets. Organizations can block transcription of meetings with outside guests. This release fixes Windows PCs with Smart App Control that couldn't start the app, Linux apps that crashed from leaked file handles after many dictations, the voice assistant failing on every take with Gemini Live, and lost words in ElevenLabs Note Recording.

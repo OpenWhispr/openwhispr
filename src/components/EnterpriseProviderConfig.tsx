@@ -5,12 +5,15 @@ import { Loader2, Search } from "./icons";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import ApiKeyInput from "./ui/ApiKeyInput";
+import SecretRefErrorText from "./ui/SecretRefErrorText";
+import { useCredentialDraft } from "../hooks/useCredentialDraft";
 import ModelCardList, { type ModelCardOption } from "./ui/ModelCardList";
 import SearchableModelList from "./ui/SearchableModelList";
 import CustomModelInput from "./ui/CustomModelInput";
 import TestConnectionButton from "./TestConnectionButton";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
 import { useSettingsStore } from "../stores/settingsStore";
+import { getManualEnterpriseCallSettings } from "../services/ai/enterpriseSettings";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { adjustBedrockModelForRegion, BEDROCK_REGIONS } from "../utils/bedrockRegions";
 
@@ -121,6 +124,7 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
   const store = useSettingsStore();
   const suggestedModels = useSuggestedModels("bedrock");
   const [catalog, setCatalog] = useState<BedrockCatalogState>({ status: "idle" });
+  const sessionToken = useCredentialDraft();
   const catalogRequestRef = useRef(0);
 
   const regionModels = useMemo(
@@ -132,19 +136,11 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
     [suggestedModels, store.bedrockRegion]
   );
 
-  const getConnectionConfig = () => ({
-    bedrockRegion: store.bedrockRegion,
-    bedrockProfile: store.bedrockAuthMode === "sso" ? store.bedrockProfile : "",
-    bedrockAccessKeyId: store.bedrockAuthMode === "keys" ? store.bedrockAccessKeyId : "",
-    bedrockSecretAccessKey: store.bedrockAuthMode === "keys" ? store.bedrockSecretAccessKey : "",
-    bedrockSessionToken: store.bedrockAuthMode === "keys" ? store.bedrockSessionToken : "",
-  });
-
   const loadCatalog = async (region: string) => {
     const requestId = ++catalogRequestRef.current;
     setCatalog({ status: "loading" });
     const result = await window.electronAPI?.listBedrockModels?.({
-      ...getConnectionConfig(),
+      ...getManualEnterpriseCallSettings("bedrock", store),
       bedrockRegion: region,
     });
     if (requestId !== catalogRequestRef.current) return;
@@ -171,7 +167,7 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
   };
 
   const getTestConfig = () => ({
-    ...getConnectionConfig(),
+    ...getManualEnterpriseCallSettings("bedrock", store),
     model: reasoningModel,
   });
 
@@ -249,11 +245,19 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
             </FieldLabel>
             <Input
               dir="ltr"
-              value={store.bedrockSessionToken}
-              onChange={(e) => store.setBedrockSessionToken(e.target.value)}
+              value={sessionToken.value("bedrockSessionToken", store.bedrockSessionToken)}
+              onChange={(e) =>
+                sessionToken.change(
+                  "bedrockSessionToken",
+                  e.target.value,
+                  store.setBedrockSessionToken
+                )
+              }
+              onBlur={sessionToken.save}
               placeholder=""
               className="text-sm"
             />
+            <SecretRefErrorText code={sessionToken.error("bedrockSessionToken")} />
           </div>
         </div>
       )}
@@ -347,9 +351,7 @@ function AzureConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderCo
   const store = useSettingsStore();
 
   const getTestConfig = () => ({
-    azureEndpoint: store.azureEndpoint,
-    azureApiVersion: store.azureApiVersion,
-    apiKey: store.azureApiKey,
+    ...getManualEnterpriseCallSettings("azure", store),
     model: store.azureDeploymentName || reasoningModel,
   });
 
@@ -424,9 +426,7 @@ function VertexConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderC
   const suggestedModels = useSuggestedModels("vertex");
 
   const getTestConfig = () => ({
-    vertexProject: store.vertexProject,
-    vertexLocation: store.vertexLocation,
-    apiKey: store.vertexAuthMode === "apikey" ? store.vertexApiKey : "",
+    ...getManualEnterpriseCallSettings("vertex", store),
     model: reasoningModel,
   });
 

@@ -6,6 +6,10 @@ const Module = require("node:module");
 const os = require("node:os");
 const path = require("node:path");
 const { deferred } = require("./harness/deferred");
+const { secretResolverMethods } = require("./harness/secretResolver");
+
+// Fake values only: what the variables a field may name hold in this test.
+const fakeEnv = { CORTI_CLIENT_ID: "corti-id-from-env", GROQ_API_KEY: "  " };
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
@@ -73,6 +77,8 @@ Module._load = function loadWithMocks(request, parent, isMain) {
         "./effectivePolicyManager",
         "./productPolicy",
         "./devicePolicyNetwork",
+        "./envRef.cjs",
+        "./enterpriseProviderErrors",
         "./workspacePolicyManager",
       ].includes(request)
     )
@@ -110,7 +116,7 @@ test.before(() => {
   Ctor.prototype.setupHandlers.call(
     withDevicePolicy(
       new Proxy(
-        {},
+        { environmentManager: secretResolverMethods(fakeEnv) },
         { get: (value, property) => (property in value ? value[property] : anything()) }
       )
     )
@@ -216,4 +222,77 @@ test("Corti's own refusal and its no-verdict failures reach the panel, never rem
   } finally {
     tokenAnswer = async () => "token";
   }
+});
+
+test("a Corti field naming an unset variable fails the check and never tests the stored pair", async () => {
+  const before = tokens.length;
+  const result = await check({
+    scope: "transcription",
+    provider: "corti",
+    clientId: "$CORTI_CLIENT_SECRET",
+    clientSecret: "corti-secret-typed",
+    environment: "eu",
+    tenant: "",
+  });
+  assert.equal(result.success, false);
+  assert.equal(result.errorCode, "secretRefUnset");
+  assert.equal(tokens.length, before, "no token request with the draft or the stored pair");
+});
+
+test("a Corti field naming a whitespace-only export never checks the previous pair", async () => {
+  const before = tokens.length;
+  const result = await check({
+    scope: "transcription",
+    provider: "corti",
+    clientId: "$GROQ_API_KEY",
+    clientSecret: "fixture-secret",
+  });
+  assert.equal(result.errorCode, "secretRefUnset");
+  assert.equal(tokens.length, before);
+});
+
+test("chat can check which references are configured without receiving credential values", async () => {
+  const configured = await handlers.get("get-configured-secret-refs")({}, [
+    "${CORTI_CLIENT_ID}",
+    "$GROQ_API_KEY",
+    "$PATH",
+    "fixture-literal",
+    "${CORTI_CLIENT_ID}",
+  ]);
+  assert.deepEqual(configured, ["${CORTI_CLIENT_ID}"]);
+});
+
+test("a Corti field naming a set variable is checked with its value", async () => {
+  tokenAnswer = async () => ({ accessToken: "t" });
+  const before = tokens.length;
+  const result = await check({
+    scope: "transcription",
+    provider: "corti",
+    clientId: "${CORTI_CLIENT_ID}",
+    clientSecret: "corti-secret-ref-check",
+    environment: "eu",
+    tenant: "",
+  });
+  assert.equal(result.success, true);
+  assert.deepEqual(tokens.slice(before), [
+    {
+      environment: "eu",
+      tenant: "base",
+      clientId: "corti-id-from-env",
+      clientSecret: "corti-secret-ref-check",
+    },
+  ]);
+});
+
+test("a key naming an unset variable is reported, not checked keyless", async () => {
+  const before = probes.length;
+  const result = await check({
+    scope: "transcription",
+    provider: "custom",
+    baseUrl: "https://stt.example.test/v1",
+    apiKey: "$OPENAI_API_KEY",
+    model: "m",
+  });
+  assert.equal(result.errorCode, "secretRefUnset");
+  assert.equal(probes.length, before);
 });

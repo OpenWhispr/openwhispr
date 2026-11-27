@@ -4,8 +4,10 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const Module = require("node:module");
+const { isolateProfileCredentials } = require("./harness/profileCredentials");
 
 const HOTKEY_ENV_KEYS = ["VOICE_AGENT_KEY", "CHAT_AGENT_KEY"];
+test.beforeEach(isolateProfileCredentials);
 
 function snapshotEnvironment() {
   return new Map(
@@ -56,18 +58,7 @@ function loadEnvironmentManager(t, userDataDirectory) {
 }
 
 function installDotenvStub(t) {
-  const dotenvPath = require.resolve("dotenv");
-  const originalDotenv = require.cache[dotenvPath];
-  require.cache[dotenvPath] = {
-    id: dotenvPath,
-    filename: dotenvPath,
-    loaded: true,
-    exports: { config: () => ({ parsed: {} }) },
-  };
-  t.after(() => {
-    if (originalDotenv) require.cache[dotenvPath] = originalDotenv;
-    else delete require.cache[dotenvPath];
-  });
+  t.mock.method(require("dotenv"), "config", () => ({ parsed: {} }));
 }
 
 test("adopts a legacy chat-agent hotkey as the voice-agent hotkey", async (t) => {

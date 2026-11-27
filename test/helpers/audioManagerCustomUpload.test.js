@@ -3,6 +3,48 @@ const assert = require("node:assert/strict");
 const { loadAudioManager } = require("./harness/audioManager");
 const { deferred } = require("./harness/deferred");
 
+test("Custom dictation checks the selected reference on every recording before sending audio", async (t) => {
+  const settings = {
+    transcriptionMode: "providers",
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "custom",
+    cloudTranscriptionBaseUrl: "https://stt.example.com/v1",
+    cloudTranscriptionModel: "whisper-1",
+    customTranscriptionApiKey: "$GROQ_API_KEY",
+  };
+  const { createManager, window, setSettings } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-custom-dictation-auth-",
+    settingsKey: "__customDictationAuthSettings",
+    settings,
+  });
+  let resolved = "${OLD_CUSTOM_PASSWORD}";
+  window.electronAPI.resolveSecretRef = async () => resolved;
+  window.electronAPI.getCustomTranscriptionKey = async () => "older-stored-key";
+  const headers = [];
+  t.mock.method(globalThis, "fetch", async (_url, init) => {
+    headers.push(new Headers(init.headers).get("authorization"));
+    return Response.json({ text: "hello" });
+  });
+  const manager = createManager({
+    cachedApiKey: null,
+    processTranscription: async (text) => text,
+    isReasoningAvailable: async () => false,
+  });
+  const dictate = () =>
+    manager.processWithOpenAIAPI(new Blob(["audio"], { type: "audio/wav" }), {
+      durationSeconds: 1,
+    });
+  assert.equal((await dictate()).success, true);
+  resolved = "";
+  await assert.rejects(dictate(), { code: "API_KEY_MISSING" });
+  setSettings({ ...settings, customTranscriptionApiKey: "" });
+  window.electronAPI.getCustomTranscriptionKey = async () => "$GROQ_API_KEY";
+  await assert.rejects(dictate(), { code: "API_KEY_MISSING" });
+  window.electronAPI.getCustomTranscriptionKey = async () => "";
+  assert.equal((await dictate()).success, true);
+  assert.deepEqual(headers, ["Bearer ${OLD_CUSTOM_PASSWORD}", null]);
+});
+
 async function loadCustomManager(t, decode) {
   const originalContext = globalThis.OfflineAudioContext;
   globalThis.OfflineAudioContext = class {

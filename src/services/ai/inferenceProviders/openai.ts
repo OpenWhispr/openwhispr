@@ -10,7 +10,11 @@ import { getCloudModel, getOpenAiApiConfig } from "../../../models/ModelRegistry
 import { getSettings } from "../../../stores/settingsStore";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import logger from "../../../utils/logger";
-import { canBorrowCleanupCustomKey, resolveConfiguredOpenAIBase } from "../openaiBase";
+import {
+  canBorrowCleanupCustomKey,
+  resolveConfiguredOpenAIBase,
+  resolveCustomLlmKey,
+} from "../openaiBase";
 import {
   applyChatCompletionsParams,
   emptyOutputError,
@@ -182,7 +186,7 @@ export const openaiProvider: InferenceProvider = {
       isCustomProvider,
     });
 
-    const overrideKey = isCustomProvider ? config.customApiKey?.trim() : "";
+    const overrideKey = isCustomProvider ? await resolveCustomLlmKey(config.customApiKey) : "";
     const canFallBackToSharedKey = !isCustomProvider || canBorrowCleanupCustomKey(config.baseUrl);
     const apiKey =
       overrideKey ||
@@ -269,7 +273,6 @@ export const openaiProvider: InferenceProvider = {
         model,
         textLength: text.length,
         hasApiKey: !!apiKey,
-        apiKeyPreview: apiKey ? `${apiKey.substring(0, 8)}...` : "(none)",
       });
     }
 

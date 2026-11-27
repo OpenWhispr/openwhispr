@@ -1790,6 +1790,17 @@ export interface ReferralItem {
   first_payment_at: string | null;
 }
 
+export type SecretKeySaveResult = {
+  success: boolean;
+  reason?: string;
+  retained?: string;
+  stored?: string;
+};
+// A legacy plaintext migration can supersede a shell import. Cross-scope seeding
+// uses "if-empty" to preserve every existing destination, including shell imports.
+type SecretKeyMigration = boolean | "if-empty";
+type SaveLegacyCredential = (key: string, migrateLegacy?: boolean) => Promise<SecretKeySaveResult>;
+
 declare global {
   interface Window {
     commitHeldSpaceDeletes?: () => Promise<void>;
@@ -2571,9 +2582,11 @@ declare global {
 
       // API key management
       getOpenAIKey: () => Promise<string>;
-      saveOpenAIKey: (key: string) => Promise<{ success: boolean }>;
+      saveOpenAIKey: SaveLegacyCredential;
+      resolveSecretRef?: (value: string) => Promise<string>;
+      getConfiguredSecretRefs?: (references: string[]) => Promise<string[]>;
       getAnthropicKey: () => Promise<string | null>;
-      saveAnthropicKey: (key: string) => Promise<void>;
+      saveAnthropicKey: SaveLegacyCredential;
       getUiLanguage: () => Promise<string>;
       saveUiLanguage: (language: string) => Promise<{ success: boolean; language: string }>;
       setUiLanguage: (language: string) => Promise<{ success: boolean; language: string }>;
@@ -2988,7 +3001,7 @@ declare global {
 
       // Gemini API key management
       getGeminiKey: () => Promise<string | null>;
-      saveGeminiKey: (key: string) => Promise<void>;
+      saveGeminiKey: SaveLegacyCredential;
       proxyGeminiTranscription?: (data: {
         audioBuffer: ArrayBuffer;
         model?: string;
@@ -2998,9 +3011,12 @@ declare global {
 
       // Groq API key management
       getGroqKey: () => Promise<string | null>;
-      saveGroqKey: (key: string) => Promise<void>;
+      saveGroqKey: SaveLegacyCredential;
       getOpenrouterKey: () => Promise<string | null>;
-      saveOpenrouterKey: (key: string) => Promise<void>;
+      saveOpenrouterKey: (
+        key: string,
+        migration?: SecretKeyMigration
+      ) => Promise<SecretKeySaveResult>;
 
       // xAI API key management
       getXaiKey?: () => Promise<string | null>;
@@ -3013,7 +3029,7 @@ declare global {
 
       // Mistral API key management
       getMistralKey: () => Promise<string | null>;
-      saveMistralKey: (key: string) => Promise<void>;
+      saveMistralKey: SaveLegacyCredential;
       proxyMistralTranscription: (data: {
         audioBuffer: ArrayBuffer;
         model?: string;
@@ -3066,19 +3082,22 @@ declare global {
       getSelfHostedSttHeaders?: () => Promise<string | null>;
       saveSelfHostedSttHeaders?: (value: string) => Promise<void>;
       getCustomTranscriptionKey?: () => Promise<string | null>;
-      saveCustomTranscriptionKey?: (key: string) => Promise<void>;
+      saveCustomTranscriptionKey?: SaveLegacyCredential;
       getCleanupCustomKey?: () => Promise<string | null>;
-      saveCleanupCustomKey?: (key: string) => Promise<void>;
+      saveCleanupCustomKey?: SaveLegacyCredential;
       getNoteFormattingCustomKey?: () => Promise<string | null>;
-      saveNoteFormattingCustomKey?: (key: string) => Promise<void>;
+      saveNoteFormattingCustomKey?: SaveLegacyCredential;
       getTranslationCustomKey?: () => Promise<string | null>;
-      saveTranslationCustomKey?: (key: string) => Promise<void>;
+      saveTranslationCustomKey?: SaveLegacyCredential;
       getDictationAgentCustomKey?: () => Promise<string | null>;
-      saveDictationAgentCustomKey?: (key: string) => Promise<void>;
+      saveDictationAgentCustomKey?: (
+        key: string,
+        migration?: SecretKeyMigration
+      ) => Promise<SecretKeySaveResult>;
       getDictationAgentVisionCustomKey?: () => Promise<string | null>;
-      saveDictationAgentVisionCustomKey?: (key: string) => Promise<void>;
+      saveDictationAgentVisionCustomKey?: SaveLegacyCredential;
       getChatAgentCustomKey?: () => Promise<string | null>;
-      saveChatAgentCustomKey?: (key: string) => Promise<void>;
+      saveChatAgentCustomKey?: SaveLegacyCredential;
 
       // Enterprise provider key persistence
       getBedrockRegion?: () => Promise<string | null>;

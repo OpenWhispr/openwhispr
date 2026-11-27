@@ -9,6 +9,8 @@ import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "./icons";
 import { ProviderIcon } from "./ui/ProviderIcon";
+import SecretRefErrorText from "./ui/SecretRefErrorText";
+import { describeSecretRefError } from "../utils/describeProviderError";
 import { LocalModelPolicyNotice } from "./ui/LocalModelPolicyNotice";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import ModelCardList from "./ui/ModelCardList";
@@ -33,6 +35,7 @@ import {
 } from "../utils/modelPickerStyles";
 import {
   selectPolicyEffectiveSettings,
+  secretInputError,
   selectResolvedMeetingTranscription,
   selectResolvedUploadTranscription,
   useSettingsStore,
@@ -67,7 +70,7 @@ import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { ConnectionCheckAnnouncer } from "./ui/ConnectionCheckAnnouncer";
 import { ProviderCheckField } from "./ui/ProviderCheckField";
 import { usePanelVisible } from "./ui/usePanelVisible";
-import { useCredentialDraft } from "../hooks/useCredentialDraft";
+import { credentialDraftRefused, useCredentialDraft } from "../hooks/useCredentialDraft";
 import { useFocusHold } from "../hooks/useFocusHold";
 import { useTypingPause } from "../hooks/useTypingPause";
 import {
@@ -415,6 +418,14 @@ const PROVIDER_CREDENTIALS: Record<
 };
 
 const TINFOIL_AUDIO_DOCS_URL = "https://docs.tinfoil.sh/models/audio";
+
+const cortiCredentialGroup = {
+  fields: PROVIDER_CREDENTIALS.corti.fields.map(({ key }) => key),
+  validate(field: string, value: string): string | null {
+    if (field !== "cortiClientId" && field !== "cortiClientSecret") return null;
+    return secretInputError(field, value, useSettingsStore.getState()[field]);
+  },
+};
 
 const LOCAL_PROVIDER_TABS: Array<{ id: string; name: string; disabled?: boolean }> =
   LOCAL_ASR_ORGANIZATIONS;
@@ -1307,7 +1318,7 @@ export default function TranscriptionModelPicker({
 
   const providerCredentials =
     PROVIDER_CREDENTIALS[displayedCloudProvider] ?? PROVIDER_CREDENTIALS.openai;
-  const keyDraft = useCredentialDraft();
+  const keyDraft = useCredentialDraft(cortiCredentialGroup);
   const credentialValues: Record<ProviderCredentialField["key"], string> = {
     openaiApiKey: keyDraft.value("openaiApiKey", openaiApiKey),
     groqApiKey: keyDraft.value("groqApiKey", groqApiKey),
@@ -1424,7 +1435,7 @@ export default function TranscriptionModelPicker({
   });
   // The field that completes the connection carries the status.
   const checkedCredential = isCorti ? "cortiClientSecret" : providerCredentials.fields[0].key;
-  const refused = check.failure?.errorCode === "credentialsRejected";
+  const refused = credentialDraftRefused(displayedCloudProvider, check.failure?.errorCode);
   // The typed values the check carries, as one string so the effect sees each new set.
   const checkedFields = JSON.stringify(
     isCustom
@@ -1438,12 +1449,14 @@ export default function TranscriptionModelPicker({
     followKeyDraft({
       phase: check.phase,
       checked: JSON.parse(checkedFields),
-      // Someone's own server may refuse a key for other reasons, so its refusal holds nothing back.
-      refused: refused && !isCustom,
+      refused,
+      credentialRevision: check.credentialRevision,
     });
-  }, [check.phase, checkedFields, isCustom, refused, followKeyDraft]);
+  }, [check.phase, check.credentialRevision, checkedFields, refused, followKeyDraft]);
   const customFailureReason =
-    !customKey.trim() && refused ? t("reasoning.custom.endpointUnauthorized") : undefined;
+    !customKey.trim() && check.failure?.errorCode === "credentialsRejected"
+      ? t("reasoning.custom.endpointUnauthorized")
+      : undefined;
 
   const cloudModelOptions = useMemo(() => {
     if (!currentCloudProvider) return [];
@@ -1726,6 +1739,7 @@ export default function TranscriptionModelPicker({
                       autoComplete="off"
                       spellCheck={false}
                     />
+                    <SecretRefErrorText code={keyDraft.error("customTranscriptionApiKey")} />
                   </div>
                   <div className="space-y-1.5">
                     <label className="block text-xs font-medium text-foreground">
@@ -1752,6 +1766,7 @@ export default function TranscriptionModelPicker({
                 <div className="space-y-2">
                   {providerCredentials.fields.map((field, index) => {
                     const label = field.labelKey ? t(field.labelKey) : t("common.apiKey");
+                    const fieldError = describeSecretRefError(keyDraft.error(field.key), t);
                     return (
                       <div key={field.key} className="space-y-1.5">
                         <div className="flex items-center justify-between">
@@ -1783,7 +1798,10 @@ export default function TranscriptionModelPicker({
                         ) : (
                           <ProviderCheckField
                             aria-label={label}
-                            check={field.key === checkedCredential ? check : undefined}
+                            check={
+                              field.key === checkedCredential && !fieldError ? check : undefined
+                            }
+                            error={fieldError}
                             invalidOn="credentialsRejected"
                             type={field.input === "secret" ? "password" : "text"}
                             value={credentialValues[field.key]}

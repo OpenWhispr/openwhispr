@@ -1,4 +1,5 @@
 const { withDevicePolicy } = require("./harness/devicePolicy");
+const { secretResolverMethods } = require("./harness/secretResolver");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -144,6 +145,9 @@ const databaseManager = new Proxy(
 function buildFakeThis() {
   const target = {
     sessionId: "test-session",
+    environmentManager: new Proxy(secretResolverMethods(), {
+      get: (value, property) => (property in value ? value[property] : anything()),
+    }),
     windowManager: new Proxy(
       { controlPanelWindow: null, mainWindow: null },
       { get: (value, property) => (property in value ? value[property] : anything()) }
@@ -2566,7 +2570,12 @@ for (const stage of ["startup", "streaming"]) {
         if (output && !cancelled) output.close();
         await pending;
       });
-      await entered.promise;
+      await Promise.race([
+        entered.promise,
+        pending.then((result) =>
+          assert.fail(`Stream ended before reaching ${stage}: ${result?.error}`)
+        ),
+      ]);
       const sameAccount = boundary === "same-account rotation";
       handleAuthTokenChange({
         token: `enterprise-${stage}-${boundary}-next`,

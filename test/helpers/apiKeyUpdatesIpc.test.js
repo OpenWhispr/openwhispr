@@ -8,22 +8,44 @@ const { deferred } = require("./harness/deferred");
 const bindings = [
   ...BYOK_API_KEYS.map((key) => ({ ...key, channel: `save-${key.base}-key` })),
   ...[
-    ["corti-client-id", "cortiClientId", "saveCortiClientId"],
-    ["corti-client-secret", "cortiClientSecret", "saveCortiClientSecret"],
-    ["custom-transcription-key", "customTranscriptionApiKey", "saveCustomTranscriptionKey"],
-    ["cleanup-custom-key", "cleanupCustomApiKey", "saveCleanupCustomKey"],
-    ["bedrock-access-key-id", "bedrockAccessKeyId", "saveBedrockAccessKeyId"],
-    ["bedrock-secret-access-key", "bedrockSecretAccessKey", "saveBedrockSecretAccessKey"],
-    ["bedrock-session-token", "bedrockSessionToken", "saveBedrockSessionToken"],
-    ["azure-api-key", "azureApiKey", "saveAzureApiKey"],
-    ["vertex-api-key", "vertexApiKey", "saveVertexApiKey"],
-  ].map(([channel, storeKey, save]) => ({
+    ["corti-client-id", "cortiClientId", "saveCortiClientId", "CORTI_CLIENT_ID"],
+    ["corti-client-secret", "cortiClientSecret", "saveCortiClientSecret", "CORTI_CLIENT_SECRET"],
+    [
+      "custom-transcription-key",
+      "customTranscriptionApiKey",
+      "saveCustomTranscriptionKey",
+      "CUSTOM_TRANSCRIPTION_API_KEY",
+    ],
+    ["cleanup-custom-key", "cleanupCustomApiKey", "saveCleanupCustomKey", "CUSTOM_CLEANUP_API_KEY"],
+    [
+      "bedrock-access-key-id",
+      "bedrockAccessKeyId",
+      "saveBedrockAccessKeyId",
+      "BEDROCK_ACCESS_KEY_ID",
+    ],
+    [
+      "bedrock-secret-access-key",
+      "bedrockSecretAccessKey",
+      "saveBedrockSecretAccessKey",
+      "BEDROCK_SECRET_ACCESS_KEY",
+    ],
+    [
+      "bedrock-session-token",
+      "bedrockSessionToken",
+      "saveBedrockSessionToken",
+      "BEDROCK_SESSION_TOKEN",
+    ],
+    ["azure-api-key", "azureApiKey", "saveAzureApiKey", "AZURE_OPENAI_API_KEY"],
+    ["vertex-api-key", "vertexApiKey", "saveVertexApiKey", "VERTEX_API_KEY"],
+  ].map(([channel, storeKey, save, env]) => ({
     channel: `save-${channel}`,
     storeKey,
     save,
+    env,
     get: save.replace(/^save/, "get"),
   })),
 ];
+const storeKeyForEnv = Object.fromEntries(bindings.map(({ env, storeKey }) => [env, storeKey]));
 const handlers = new Map();
 const eventHandlers = new Map();
 const keys = new Map();
@@ -54,7 +76,8 @@ function setDeviceValues(values) {
 }
 const environmentManager = Object.fromEntries(
   bindings.flatMap(({ get, save, storeKey }) => [
-    [get, () => keys.get(storeKey) || ""],
+    // Getters expand a stored $VAR reference; the IPC layer compares raw values.
+    [get, () => (keys.get(storeKey) || "").replace(/^\$\w+$/, "expanded-placeholder")],
     [
       save,
       (key) => {
@@ -64,6 +87,11 @@ const environmentManager = Object.fromEntries(
     ],
   ])
 );
+environmentManager.getRawKey = (env) => keys.get(storeKeyForEnv[env]) || "";
+// saveSecretKey compares what the field shows (the cleanup alias and headers aside, the raw key).
+environmentManager.getRawFieldValue = environmentManager.getRawKey;
+environmentManager.resolveSecretRef = (value) => (/^\$\w+$/.test(value || "") ? "" : value || "");
+environmentManager.onLoginShellImport = () => () => {};
 
 // The warm-socket contract the real clients share: a warmup records its options
 // only when it opens the socket (one already open or opening wins), cleanup
@@ -791,6 +819,88 @@ test("every secret saver notifies peers by name only, including removal", () => 
     () => invoke("save-custom-transcription-key", { key: "secret-sentinel" }),
     TypeError
   );
+});
+
+test("re-saving an unedited $VAR reference is no change", () => {
+  notifications.length = 0;
+  invoke("save-custom-transcription-key", "$OPENAI_API_KEY");
+  assert.deepEqual(notifications, [[2, "api-key-updated", "customTranscriptionApiKey"]]);
+  notifications.length = 0;
+  invoke("save-custom-transcription-key", "$OPENAI_API_KEY");
+  assert.deepEqual(notifications, []);
+  invoke("save-custom-transcription-key", "");
+});
+
+test("a rejected $VAR reference notifies no one", (t) => {
+  const save = environmentManager.saveCustomTranscriptionKey;
+  t.after(() => {
+    environmentManager.saveCustomTranscriptionKey = save;
+  });
+  environmentManager.saveCustomTranscriptionKey = () => ({
+    success: false,
+    reason: "unknown-ref",
+  });
+  notifications.length = 0;
+  assert.deepEqual(invoke("save-custom-transcription-key", "$MY_COMPANY_KEY"), {
+    success: false,
+    reason: "unknown-ref",
+  });
+  assert.deepEqual(notifications, []);
+});
+
+test("a delayed legacy migration that retains an explicit clear does not notify peers", (t) => {
+  const retained = { success: true, retained: "" };
+  t.mock.method(environmentManager, "saveTranslationCustomKey", (_key, migrateLegacy) => {
+    assert.equal(migrateLegacy, true);
+    return retained;
+  });
+  notifications.length = 0;
+  assert.deepEqual(invoke("save-translation-custom-key", "stale-copy", true), retained);
+  assert.deepEqual(notifications, []);
+});
+
+for (const [scenario, displayed, migration] of [
+  ["migrating a literal with the shell marker's spelling", "$TRANSLATION_CUSTOM_API_KEY", true],
+  ["clearing an unreadable vault entry", "", false],
+]) {
+  test(`${scenario} invalidates peer credentials`, async (t) => {
+    t.mock.method(environmentManager, "getRawFieldValue", () => displayed);
+    t.mock.method(environmentManager, "saveTranslationCustomKey", async () => ({
+      success: true,
+      stored: displayed,
+    }));
+    notifications.length = 0;
+    await invoke("save-translation-custom-key", displayed, migration);
+    assert.deepEqual(notifications, [[2, "api-key-updated", "translationCustomApiKey"]]);
+  });
+}
+
+test("startup seeding asks main to fill only an empty destination", (t) => {
+  const retained = { success: true, retained: "$OPENROUTER_API_KEY" };
+  t.mock.method(environmentManager, "saveOpenrouterKey", (_key, migration) => {
+    assert.equal(migration, "if-empty");
+    return retained;
+  });
+  notifications.length = 0;
+  assert.deepEqual(invoke("save-openrouter-key", "old-custom", "if-empty"), retained);
+  assert.deepEqual(notifications, []);
+});
+
+test("a pending upgrade save only notifies peers after it is durable", async (t) => {
+  let finish;
+  t.mock.method(environmentManager, "saveOpenrouterKey", () =>
+    new Promise((resolve) => { finish = resolve; })
+  );
+  notifications.length = 0;
+  const failed = invoke("save-openrouter-key", "older-copy", "if-empty");
+  assert.deepEqual(notifications, []);
+  finish({ success: false, reason: "storage-unavailable" });
+  assert.equal((await failed).success, false);
+  assert.deepEqual(notifications, []);
+  const success = invoke("save-openrouter-key", "older-copy", "if-empty");
+  finish({ success: true });
+  await success;
+  assert.deepEqual(notifications, [[2, "api-key-updated", "openrouterApiKey"]]);
 });
 
 // provider, the instance it keeps, the saver of the key it reads, and the session

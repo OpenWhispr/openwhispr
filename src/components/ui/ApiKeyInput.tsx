@@ -31,6 +31,7 @@ export default function ApiKeyInput({
   const resolvedLabel = label ?? t("apiKeyInput.label");
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hasKey = apiKey.length > 0;
@@ -52,15 +53,34 @@ export default function ApiKeyInput({
 
   const save = useCallback(() => {
     try {
-      setApiKey(draft.trim());
+      // A refused $VAR comes back as a code; the saved key is left as it was.
+      const result: unknown = setApiKey(draft.trim());
+      if (typeof result === "string" && result) {
+        throw Object.assign(new Error(result), { code: result });
+      }
+      setError(null);
+      setIsEditing(false);
     } catch (err) {
+      const code = (err as Error & { code?: string }).code;
       logger.warn("Failed to save API key", { error: (err as Error).message }, "settings");
+      setError(
+        code === "self-reference"
+          ? t("apiKeyInput.selfReference", {
+              defaultValue: "Use a different variable name here, or leave this field empty.",
+            })
+          : code === "unknown-ref"
+            ? t("apiKeyInput.unknownRef", {
+                defaultValue:
+                  "Only OpenWhispr secret names can be referenced (for example $OPENAI_API_KEY).",
+              })
+            : (err as Error).message
+      );
     }
-    setIsEditing(false);
-  }, [draft, setApiKey]);
+  }, [draft, setApiKey, t]);
 
   const cancel = () => {
     setDraft("");
+    setError(null);
     setIsEditing(false);
   };
 
@@ -102,7 +122,10 @@ export default function ApiKeyInput({
               type="text"
               placeholder={resolvedPlaceholder}
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                if (error) setError(null);
+              }}
               onKeyDown={handleKeyDown}
               aria-label={ariaLabel || resolvedLabel || t("apiKeyInput.label")}
               className={`h-8 text-sm font-mono pr-16 ${variantClasses}`}
@@ -156,6 +179,12 @@ export default function ApiKeyInput({
           </button>
         )}
       </div>
+
+      {error && (
+        <p role="alert" className="text-xs text-destructive mt-1">
+          {error}
+        </p>
+      )}
 
       {helpText && <p className="text-xs text-muted-foreground/70 mt-1">{helpText}</p>}
     </div>

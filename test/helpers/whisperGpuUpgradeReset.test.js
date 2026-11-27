@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { isolateProfileCredentials } = require("./harness/profileCredentials");
 // The real parser, taken before any test stubs dotenv's loader
 const { parse: parseDotenv } = require("dotenv");
 
@@ -47,7 +48,8 @@ function clearFailureKeys() {
   for (const key of FAILURE_KEYS) delete process.env[key];
 }
 
-test.beforeEach(() => {
+test.beforeEach((t) => {
+  isolateProfileCredentials(t);
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpu-upgrade-reset-"));
   appVersion = "1.9.1";
   clearFailureKeys();
@@ -67,7 +69,7 @@ async function withRealEnvironmentManager(run) {
     id: dotenvPath,
     filename: dotenvPath,
     loaded: true,
-    exports: { config: () => ({ parsed: {} }) },
+    exports: { parse: parseDotenv, config: () => ({ parsed: {} }) },
   };
   const originalResourcesPath = process.resourcesPath;
   process.resourcesPath = userDataDir;

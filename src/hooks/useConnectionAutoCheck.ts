@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { referenceRevision, subscribeSecretRevisions } from "../helpers/secretRevisions";
 import { useDelayedFlag } from "./useDelayedFlag";
 
 type TestProviderConnection = NonNullable<Window["electronAPI"]["testProviderConnection"]>;
@@ -12,6 +13,8 @@ type ConnectionCheckPhase = "idle" | "waiting" | "checking" | "connected" | "unv
 
 export interface ConnectionAutoCheck {
   phase: ConnectionCheckPhase;
+  /** Changes when the source of a referenced credential changes in main. */
+  credentialRevision: number;
   /** The answer while phase is "failed" or "unverified". */
   failure: ProviderConnectionResult | null;
   /** Re-sends the current entry at once. */
@@ -50,7 +53,15 @@ export function useConnectionAutoCheck({
 }: ConnectionAutoCheckOptions): ConnectionAutoCheck {
   // Any change, even one back to an earlier value or one that empties a field, starts a new
   // revision. An answer is shown only for the revision it was sent for.
-  const configKey = JSON.stringify(config);
+  const credentialRevision = useSyncExternalStore(
+    subscribeSecretRevisions,
+    () =>
+      referenceRevision(config.apiKey) +
+      referenceRevision(config.clientId) +
+      referenceRevision(config.clientSecret),
+    () => 0
+  );
+  const configKey = JSON.stringify([config, credentialRevision]);
   const [tracked, setTracked] = useState({ configKey, ready, revision: 0 });
   if (tracked.configKey !== configKey || tracked.ready !== ready) {
     setTracked({ configKey, ready, revision: tracked.revision + 1 });
@@ -108,6 +119,7 @@ export function useConnectionAutoCheck({
 
   return {
     phase,
+    credentialRevision,
     failure: phase === "failed" || phase === "unverified" ? settled : null,
     retry,
     announcement:

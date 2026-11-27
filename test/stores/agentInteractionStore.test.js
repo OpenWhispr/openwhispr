@@ -232,7 +232,12 @@ test("a key goes straight to the settings saver and never into the store or resu
   const store = await loadStore();
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   const saved = [];
-  useSettingsStore.setState({ setGroqApiKey: (key) => saved.push(key) });
+  useSettingsStore.setState({
+    setGroqApiKey: (key) => {
+      saved.push(key);
+      return null;
+    },
+  });
   const pending = store.requestInteraction(context("call-7").value, {
     kind: "apiKey",
     provider: "groq",
@@ -246,6 +251,77 @@ test("a key goes straight to the settings saver and never into the store or resu
   assert.deepEqual(result, { status: "saved" });
   const serialized = JSON.stringify(store.useAgentInteractionStore.getState().entries);
   assert.equal(serialized.includes("gsk_secret_value"), false);
+});
+
+test("a recovery card preserves the working key until the submitted reference resolves", async (t) => {
+  let available = false;
+  const store = await loadStore({
+    getConfiguredSecretRefs: async (refs) => (available ? refs : []),
+  });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const previous = useSettingsStore.getState();
+  t.after(() => useSettingsStore.setState(previous));
+  const saved = [];
+  useSettingsStore.setState({
+    groqApiKey: "existing-key",
+    setGroqApiKey(value) {
+      saved.push(value);
+      useSettingsStore.setState({ groqApiKey: value });
+      return null;
+    },
+  });
+  const key = "m1::recover-ref";
+  const pending = store.requestInteraction(context("recover-ref").value, {
+    kind: "apiKey",
+    provider: "groq",
+    providerName: "Groq",
+  });
+  t.after(() => store.cancelInteraction(key));
+  await store.submitApiKey(key, "$OPENAI_API_KEY");
+  const entry = store.useAgentInteractionStore.getState().entries[key];
+  assert.equal(entry.state, "pending");
+  assert.equal(entry.error, "secretRefUnset");
+  assert.equal(useSettingsStore.getState().groqApiKey, "existing-key");
+  assert.deepEqual(saved, []);
+  available = true;
+  await store.submitApiKey(key, "$OPENAI_API_KEY");
+  assert.deepEqual(await pending, { status: "saved" });
+  assert.deepEqual(saved, ["$OPENAI_API_KEY"]);
+});
+
+test("cancelling a recovery card while its reference is checked prevents the save", async (t) => {
+  const lookup = Promise.withResolvers();
+  const started = Promise.withResolvers();
+  const store = await loadStore({
+    getConfiguredSecretRefs: () => {
+      started.resolve();
+      return lookup.promise;
+    },
+  });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const previous = useSettingsStore.getState();
+  t.after(() => useSettingsStore.setState(previous));
+  const saved = [];
+  useSettingsStore.setState({
+    setGroqApiKey: (value) => {
+      saved.push(value);
+      return null;
+    },
+  });
+  const key = "m1::cancel-ref";
+  const pending = store.requestInteraction(context("cancel-ref").value, {
+    kind: "apiKey",
+    provider: "groq",
+    providerName: "Groq",
+  });
+  t.after(() => store.cancelInteraction(key));
+  const submission = store.submitApiKey(key, "${OPENAI_API_KEY}");
+  await Promise.race([started.promise, submission]);
+  store.cancelInteraction(key);
+  lookup.resolve(["${OPENAI_API_KEY}"]);
+  await submission;
+  assert.deepEqual(await pending, { status: "cancelled" });
+  assert.deepEqual(saved, []);
 });
 
 test("a connection is reported only once the connector's status says connected", async () => {
@@ -627,6 +703,40 @@ test("Done is offered only after Settings opened, and llms checks the chat's key
   await store.confirmSettingsDone("m1::call-25");
   assert.deepEqual(await pending, { status: "done", ready: true });
   useSettingsStore.setState(previous, true);
+});
+
+test("chat recovery and Done follow the current value of a referenced credential", async (t) => {
+  let configured = false;
+  const store = await loadStore({
+    getConfiguredSecretRefs: async (refs) => {
+      assert.deepEqual(refs, ["$GROQ_API_KEY"]);
+      return configured ? refs : [];
+    },
+  });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const original = useSettingsStore.getState();
+  t.after(() => useSettingsStore.setState(original, true));
+  useSettingsStore.setState({
+    chatAgentMode: "providers",
+    chatAgentProvider: "openai",
+    chatAgentModel: "gpt-5-mini",
+    openaiApiKey: "$GROQ_API_KEY",
+    geminiApiKey: "fixture-literal",
+  });
+  for (const ready of [false, true]) {
+    configured = ready;
+    const id = `ref-${ready}`;
+    const pending = store.requestInteraction(context(id).value, {
+      kind: "settings",
+      target: "llms",
+    });
+    await store.confirmSettingsDone(`m1::${id}`);
+    assert.deepEqual(await pending, { status: "done", ready });
+    assert.deepEqual(
+      await store.getMissingApiKeyProviders(useSettingsStore.getState(), ["openai", "gemini"]),
+      ready ? [] : ["openai"]
+    );
+  }
 });
 
 test("Done never asks for a key the chat's model doesn't use", async () => {

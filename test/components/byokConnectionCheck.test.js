@@ -121,6 +121,21 @@ test("Corti checks once both the client ID and secret are filled, in the secret"
   );
 });
 
+test("onboarding refuses the whole Corti edit when either field is invalid", async (t) => {
+  const step = await mountByokStep(t, {
+    settings: CORTI,
+    secrets: { cortiClientId: "old-id", cortiClientSecret: "old-secret" },
+  });
+  await step.typeLabeled("onboarding.rehaul.provider.clientId", "new-id");
+  await step.typeLabeled(LABEL.clientSecret, "$CORTI_CLIENT_SECRET");
+  await step.wait(500);
+  await step.answerConnection({ success: false, errorCode: "network", unverified: true });
+  await step.proceed();
+  assert.equal(step.proceeded(), 0);
+  assert.equal(step.state().cortiClientId, "old-id");
+  assert.equal(step.state().cortiClientSecret, "old-secret");
+});
+
 test("self-hosted: nothing is sent while the address has focus; leaving it checks", async (t) => {
   const step = await mountByokStep(t, { selfHostedRequested: true });
   await step.type(PLACEHOLDER.modelId, "local-model");

@@ -418,7 +418,8 @@
           "timeout": "连接测试超时。",
           "network": "无法连接到服务商。",
           "invalidHeaders": "HTTP 请求头无效。请检查名称和值；无法自定义 Content-Type 和传输请求头。",
-          "redirected": "服务器重定向了请求。请输入它重定向到的地址。"
+          "redirected": "服务器重定向了请求。请输入它重定向到的地址。",
+          "secretRefUnset": "此字段引用的环境变量未设置。"
         }
       },
       "local": {
@@ -806,7 +807,7 @@
       "ollama": "（Ollama）",
       "localAi": "（LocalAI）",
       "apiKeyOptional": "API Key（可选）",
-      "apiKeyHelp": "可选。作为 Bearer token 用于身份验证，与 OpenAI API Key 无关。",
+      "apiKeyHelp": "可选。留空则使用对应环境变量，或填写 $OPENAI_API_KEY 以复用。启动时会导入 shell 导出的变量（如 ~/.zshrc）。",
       "applyAndRefresh": "应用并刷新",
       "queryPrefix": "我们将查询",
       "querySuffix": "获取可用模型。",
@@ -983,7 +984,8 @@
     },
     "elevenlabs": {
       "keytermsNote": "OpenWhispr 会将词典中符合条件的词条发送给 ElevenLabs。包含这些词条时，ElevenLabs 会加收 20% 的费用。"
-    }
+    },
+    "apiKeyEnvHelp": "可选。留空则使用 CUSTOM_TRANSCRIPTION_API_KEY，或填写 $OPENAI_API_KEY。启动时会导入 shell 导出的变量（如 ~/.zshrc）。"
   },
   "hooks": {
     "audioRecording": {
@@ -4949,14 +4951,16 @@
     "remindLater": "稍后提醒我"
   },
   "apiKeyInput": {
-    "placeholder": "输入你的 API Key",
+    "placeholder": "粘贴 API Key 或 $ENV_VAR",
     "label": "API Key",
     "save": "保存",
     "cancelEdit": "取消编辑",
     "edit": "编辑",
     "add": "添加",
     "editButton": "编辑密钥",
-    "addButton": "添加密钥"
+    "addButton": "添加密钥",
+    "selfReference": "Use a different variable name here, or leave this field empty.",
+    "unknownRef": "Only OpenWhispr secret names can be referenced (for example $OPENAI_API_KEY)."
   },
   "gpu": {
     "transcriptionBanner": "使用 GPU 加速转录",

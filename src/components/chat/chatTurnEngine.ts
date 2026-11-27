@@ -82,7 +82,7 @@ import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecuti
 import { isQueryResultData } from "../../services/tools/connectors/runQueryAction";
 import type { InteractionToolOptions } from "../../services/tools/interactionTools";
 import { isApiKeySetupAllowed } from "../../helpers/agentApiKeyPolicy";
-import { API_KEY_PROVIDERS } from "../../stores/agentInteractionStore";
+import { API_KEY_PROVIDERS, getMissingApiKeyProviders } from "../../stores/agentInteractionStore";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
 import type { ChatInferenceScope, ConnectionTarget } from "../../types/agentInteractions";
 import type {
@@ -756,9 +756,11 @@ export function createChatTurnEngine(
                 connectorsAvailable,
                 calendarConnected,
               }),
-              missingKeyProviders: API_KEY_PROVIDERS.filter(
-                (provider) =>
-                  !settings[`${provider}ApiKey`] && isApiKeySetupAllowed(provider, inferenceScope)
+              missingKeyProviders: await getMissingApiKeyProviders(
+                settings,
+                API_KEY_PROVIDERS.filter((provider) =>
+                  isApiKeySetupAllowed(provider, inferenceScope)
+                )
               ),
               // A screenshot reaches a BYOK model that can see; Cloud's chat
               // path doesn't route images yet.
@@ -770,6 +772,7 @@ export function createChatTurnEngine(
               inferenceScope,
             }
           : undefined;
+        if (cancelled()) return;
         const connectors = connectorsAvailable
           ? {
               emailDraftTarget: currentEmailDraftTarget(),

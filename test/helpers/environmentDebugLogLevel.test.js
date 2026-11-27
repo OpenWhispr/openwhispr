@@ -7,10 +7,12 @@ const path = require("node:path");
 const Module = require("node:module");
 const vm = require("node:vm");
 const { deferred } = require("./harness/deferred");
+const { isolateProfileCredentials } = require("./harness/profileCredentials");
 // The real parser, taken before any test stubs dotenv's loader
 const { parse: parseDotenv } = require("dotenv");
 
 const ENV_KEYS = ["OPENWHISPR_LOG_LEVEL", "DICTATION_KEY", "ACTIVATION_MODE"];
+test.beforeEach(isolateProfileCredentials);
 
 function snapshotEnvironment() {
   return new Map(
@@ -70,6 +72,7 @@ function installDotenvStub(t, userDataEnvPath) {
     filename: dotenvPath,
     loaded: true,
     exports: {
+      parse: parseDotenv,
       config: ({ path: envPath, override }) => {
         if (envPath !== userDataEnvPath || !fs.existsSync(envPath)) return { parsed: {} };
         const parsed = parseDotenv(fs.readFileSync(envPath, "utf8"));

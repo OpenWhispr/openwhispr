@@ -23,7 +23,7 @@ const bindings = [
   ].map(([storeKey, get]) => ({ storeKey, get })),
 ];
 
-async function loadSettings(t, overrides = {}) {
+async function loadSettings(t, overrides = {}, initialStorage = {}) {
   const keys = new Map(bindings.map(({ storeKey }) => [storeKey, `old-${storeKey}`]));
   const events = new EventTarget();
   let update;
@@ -31,7 +31,11 @@ async function loadSettings(t, overrides = {}) {
     bindings.map(({ storeKey, get }) => [get, async () => keys.get(storeKey)])
   );
   const { window, storage } = installBrowserGlobals(t, {
-    initialStorage: { _dictationAgentSeeded: "1", customDictionary: '["OpenWhispr"]' },
+    initialStorage: {
+      _dictationAgentSeeded: "1",
+      customDictionary: '["OpenWhispr"]',
+      ...initialStorage,
+    },
     window: {
       addEventListener: events.addEventListener.bind(events),
       removeEventListener: events.removeEventListener.bind(events),
@@ -125,6 +129,369 @@ test("the next batch dictation reads the changed key, not its populated cache", 
     manager.cleanup();
   }
 });
+
+test("a shell update during a debounced edit reconciles after save and clears pre-save caches", async (t) => {
+  const context = await loadSettings(t);
+  await context.initializeSettings();
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { electronAPI } = context.window;
+  const saved = deferred();
+  electronAPI.saveOpenAIKey = async (key) => {
+    await saved.promise;
+    context.keys.set("openaiApiKey", key);
+  };
+  const state = () => context.useSettingsStore.getState();
+  state().setOpenaiApiKey("$GROQ_API_KEY");
+  context.keys.set("openaiApiKey", "$OPENAI_API_KEY");
+  await context.update("openaiApiKey");
+  assert.equal(state().openaiApiKey, "$GROQ_API_KEY");
+  t.mock.timers.tick(250);
+  await context.update("openaiApiKey");
+  assert.equal(state().openaiApiKey, "$GROQ_API_KEY");
+  await new Promise(setImmediate);
+  const clearsBeforeSave = context.window.cacheClears.length;
+  saved.resolve();
+  await new Promise(setImmediate);
+  assert.ok(context.window.cacheClears.length > clearsBeforeSave);
+  assert.equal(state().openaiApiKey, "$GROQ_API_KEY");
+  assert.equal(context.keys.get("openaiApiKey"), "$GROQ_API_KEY");
+});
+
+test("a delayed dictation read cannot refill the cache after a referenced enterprise key changes", async (t) => {
+  const held = deferred();
+  let target = "first-target";
+  let first = true;
+  const context = await loadSettings(t, {
+    resolveSecretRef: async () => {
+      if (first) {
+        first = false;
+        return held.promise;
+      }
+      return target;
+    },
+    saveVertexApiKey: async (key) => {
+      target = key;
+    },
+  });
+  await context.initializeSettings();
+  context.useSettingsStore.setState({
+    useLocalWhisper: false,
+    transcriptionMode: "providers",
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "custom",
+    customTranscriptionApiKey: "$VERTEX_API_KEY",
+  });
+  const { default: AudioManager } = await context.vite.ssrLoadModule("/helpers/audioManager.js");
+  const manager = new AudioManager();
+  try {
+    const firstRequest = manager.getAPIKey();
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    context.useSettingsStore.getState().setVertexApiKey("second-target");
+    t.mock.timers.tick(250);
+    await new Promise(setImmediate);
+    held.resolve("first-target");
+    await firstRequest;
+    assert.equal(await manager.getAPIKey(), "second-target");
+    assert.equal(context.window.cacheClears.length, 0);
+  } finally {
+    manager.cleanup();
+  }
+});
+
+test("a local edit supersedes hydration and an earlier in-flight getter", async (t) => {
+  const startup = deferred();
+  const reading = deferred();
+  const context = await loadSettings(t, {
+    getOpenAIKey: async () => {
+      reading.resolve();
+      return startup.promise;
+    },
+  });
+  const initialization = context.initializeSettings();
+  await reading.promise;
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const state = () => context.useSettingsStore.getState();
+  state().setOpenaiApiKey("edited-during-startup");
+  startup.resolve("old-startup-key");
+  await initialization;
+  assert.equal(state().openaiApiKey, "edited-during-startup");
+  t.mock.timers.tick(250);
+  await new Promise(setImmediate);
+
+  const pending = deferred();
+  context.window.electronAPI.getOpenAIKey = () => pending.promise;
+  const refresh = context.update("openaiApiKey");
+  state().setOpenaiApiKey("$GROQ_API_KEY");
+  t.mock.timers.tick(250);
+  await new Promise(setImmediate);
+  pending.resolve("$OPENAI_API_KEY");
+  await refresh;
+  assert.equal(state().openaiApiKey, "$GROQ_API_KEY");
+});
+
+test("a blocked plaintext migration preserves its source until the user replaces or clears it", async (t) => {
+  const context = await loadSettings(t, {
+    getTranslationCustomKey: async () => "",
+    getChatAgentCustomKey: async () => "",
+    saveTranslationCustomKey: async (_key, migration) =>
+      migration ? { success: false, reason: "storage-unavailable" } : { success: true },
+    saveChatAgentCustomKey: async () => ({ success: true }),
+  });
+  context.storage.setItem("translationCustomApiKey", "upgrade-translation");
+  context.storage.setItem("chatAgentCustomApiKey", "upgrade-chat");
+  await context.initializeSettings();
+  assert.equal(context.storage.getItem("translationCustomApiKey"), "upgrade-translation");
+  assert.equal(context.storage.getItem("chatAgentCustomApiKey"), null);
+  assert.equal(context.useSettingsStore.getState().chatAgentCustomApiKey, "upgrade-chat");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  context.useSettingsStore.getState().setTranslationCustomApiKey("");
+  t.mock.timers.tick(250);
+  await new Promise(setImmediate);
+  assert.equal(context.storage.getItem("translationCustomApiKey"), null);
+});
+
+test("failed overlapping vault edits restore the credential that main retained", async (t) => {
+  const clear = deferred();
+  const context = await loadSettings(t, {
+    getCleanupCustomKey: async () => "$CUSTOM_CLEANUP_API_KEY",
+    saveCleanupCustomKey: async (key) =>
+      key
+        ? {
+            success: false,
+            reason: "storage-unavailable",
+            retained: "$CUSTOM_CLEANUP_API_KEY",
+          }
+        : clear.promise,
+  });
+  await context.initializeSettings();
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const state = () => context.useSettingsStore.getState();
+  state().setCleanupCustomApiKey("");
+  t.mock.timers.tick(250);
+  state().setCleanupCustomApiKey("replacement");
+  t.mock.timers.tick(250);
+  clear.resolve({ success: false, reason: "storage-unavailable" });
+  await new Promise(setImmediate);
+  assert.equal(state().cleanupCustomApiKey, "$CUSTOM_CLEANUP_API_KEY");
+});
+
+test("an upgrade keeps renderer-only passwords literal, including after an interrupted migration", async (t) => {
+  const calls = [];
+  let vaultLocked = true;
+  const api = {
+    getCleanupCustomKey: async () => "",
+    getCustomTranscriptionKey: async () => "",
+    getChatAgentCustomKey: async () => "",
+    getDictationAgentCustomKey: async () => "",
+    saveCleanupCustomKey: async (key, migration) => {
+      calls.push(["cleanup", key, migration]);
+      return { success: true, stored: "$CUSTOM_CLEANUP_API_KEY" };
+    },
+    saveCustomTranscriptionKey: async (key, migration) => {
+      calls.push(["speech", key, migration]);
+      return vaultLocked
+        ? { success: false, reason: "storage-unavailable" }
+        : { success: true, stored: "$CUSTOM_TRANSCRIPTION_API_KEY" };
+    },
+    saveChatAgentCustomKey: async () => ({ success: true, stored: "$CHAT_AGENT_CUSTOM_API_KEY" }),
+    saveDictationAgentCustomKey: async (key, migration) => {
+      calls.push(["voice", key, migration]);
+      return { success: true, stored: "$DICTATION_AGENT_CUSTOM_API_KEY" };
+    },
+  };
+  let disk = {
+    customReasoningApiKey: "${OPENAI_API_KEY}",
+    customTranscriptionApiKey: "$PRIVATE_PASSWORD",
+    chatAgentCustomApiKey: "$GROQ_API_KEY",
+    _dictationAgentSeeded: "key-pending",
+  };
+  await t.test("first launch", async (t) => {
+    const context = await loadSettings(t, api, disk);
+    await context.initializeSettings();
+    const state = context.useSettingsStore.getState();
+    assert.equal(state.cleanupCustomApiKey, "$CUSTOM_CLEANUP_API_KEY");
+    assert.equal(state.chatAgentCustomApiKey, "$CHAT_AGENT_CUSTOM_API_KEY");
+    assert.equal(state.dictationAgentCustomApiKey, "$DICTATION_AGENT_CUSTOM_API_KEY");
+    assert.equal(context.storage.getItem("customTranscriptionApiKey"), "$PRIVATE_PASSWORD");
+    assert.equal(context.storage.getItem("customReasoningApiKey"), null);
+    assert.equal(context.storage.getItem("cleanupCustomApiKey"), null);
+    disk = Object.fromEntries(
+      ["_llmScopeKeysMigrated", "_dictationAgentSeeded", "customTranscriptionApiKey"].map((key) => [
+        key,
+        context.storage.getItem(key),
+      ])
+    );
+  });
+  await t.test("next launch after unlock", async (t) => {
+    vaultLocked = false;
+    const context = await loadSettings(t, api, disk);
+    await context.initializeSettings();
+    assert.equal(
+      context.useSettingsStore.getState().customTranscriptionApiKey,
+      "$CUSTOM_TRANSCRIPTION_API_KEY"
+    );
+    assert.equal(context.storage.getItem("customTranscriptionApiKey"), null);
+  });
+  assert.deepEqual(calls, [
+    ["speech", "$PRIVATE_PASSWORD", true],
+    ["cleanup", "${OPENAI_API_KEY}", true],
+    ["voice", "$CHAT_AGENT_CUSTOM_API_KEY", "if-empty"],
+    ["speech", "$PRIVATE_PASSWORD", true],
+  ]);
+});
+
+test("a profile that already retired its old provider mirrors cannot restore a stale password", async (t) => {
+  const context = await loadSettings(
+    t,
+    {
+      getCustomTranscriptionKey: async () => "",
+      saveCustomTranscriptionKey: () => assert.fail("retired provider mirror was saved"),
+    },
+    { _llmScopeKeysMigrated: "1", customTranscriptionApiKey: "$STALE" }
+  );
+  await context.initializeSettings();
+  assert.equal(context.useSettingsStore.getState().customTranscriptionApiKey, "");
+  assert.equal(context.storage.getItem("customTranscriptionApiKey"), null);
+});
+
+test("Voice Assistant waits for the old Chat credential to migrate before completing its setup", async (t) => {
+  const context = await loadSettings(t, {
+    getChatAgentCustomKey: async () => "",
+    getDictationAgentCustomKey: async () => "",
+    saveChatAgentCustomKey: async () => ({ success: false, reason: "storage-unavailable" }),
+  });
+  context.storage.setItem("_dictationAgentSeeded", "key-pending");
+  context.storage.setItem("chatAgentCustomApiKey", "old-chat");
+  await context.initializeSettings();
+  assert.equal(context.storage.getItem("chatAgentCustomApiKey"), "old-chat");
+  assert.equal(context.storage.getItem("_dictationAgentSeeded"), "key-pending");
+  assert.equal(context.useSettingsStore.getState().dictationAgentCustomApiKey, "");
+});
+
+test("scope hydration distinguishes a stored reference from a shell alias with the same text", async (t) => {
+  const migrates = [];
+  const context = await loadSettings(t, {
+    getTranslationCustomKey: async () => "$GROQ_API_KEY",
+    getChatAgentCustomKey: async () => "$GROQ_API_KEY",
+    saveTranslationCustomKey: async (...args) => {
+      migrates.push(args);
+      return { success: true };
+    },
+    saveChatAgentCustomKey: async (...args) => {
+      migrates.push(args);
+      return { success: true, retained: "$GROQ_API_KEY" };
+    },
+  });
+  context.storage.setItem("translationCustomApiKey", "legacy-translation");
+  context.storage.setItem("chatAgentCustomApiKey", "stale-chat");
+  await context.initializeSettings();
+  assert.deepEqual(migrates, [
+    ["legacy-translation", true],
+    ["stale-chat", true],
+  ]);
+  const state = context.useSettingsStore.getState();
+  assert.equal(state.translationCustomApiKey, "legacy-translation");
+  assert.equal(state.chatAgentCustomApiKey, "$GROQ_API_KEY");
+  assert.equal(context.storage.getItem("translationCustomApiKey"), null);
+  assert.equal(context.storage.getItem("chatAgentCustomApiKey"), null);
+});
+
+for (const change of [
+  "sources replaced",
+  "sources cleared",
+  "destinations replaced",
+  "destinations cleared",
+  "occupied destinations",
+  "previous migration",
+  "main retained an edit",
+]) {
+  test(`startup credential seeding respects ${change}`, async (t) => {
+    const started = deferred();
+    const release = deferred();
+    const values = new Map([
+      ["openrouterApiKey", change === "occupied destinations" ? "router-existing" : ""],
+      ["dictationAgentCustomApiKey", change === "occupied destinations" ? "agent-existing" : ""],
+      ["cleanupCustomApiKey", "old-cleanup"],
+      ["chatAgentCustomApiKey", "old-chat"],
+    ]);
+    const saves = [];
+    const writer = (key) => async (value, migration) => {
+      saves.push([key, value, migration]);
+      if (change === "main retained an edit" && migration) {
+        const retained = key === "openrouterApiKey" ? "" : "retained-agent";
+        values.set(key, retained);
+        return { success: true, retained };
+      }
+      values.set(key, value);
+      return { success: true };
+    };
+    const context = await loadSettings(t, {
+      getOpenAIKey: async () => {
+        started.resolve();
+        return release.promise;
+      },
+      getOpenrouterKey: async () => values.get("openrouterApiKey"),
+      getDictationAgentCustomKey: async () => values.get("dictationAgentCustomApiKey"),
+      getCleanupCustomKey: async () => values.get("cleanupCustomApiKey"),
+      getChatAgentCustomKey: async () => values.get("chatAgentCustomApiKey"),
+      saveOpenrouterKey: writer("openrouterApiKey"),
+      saveDictationAgentCustomKey: writer("dictationAgentCustomApiKey"),
+    });
+    if (change === "previous migration") {
+      context.storage.setItem("_openrouterCustomKeySeeded", "1");
+    } else {
+      context.storage.setItem("_dictationAgentSeeded", "key-pending");
+    }
+    context.useSettingsStore.setState({
+      enterpriseSetupMode: "manual",
+      cleanupMode: "providers",
+      cleanupProvider: "custom",
+      cleanupCloudBaseUrl: "https://openrouter.ai/api/v1",
+    });
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const initialization = context.initializeSettings();
+    await started.promise;
+    const state = () => context.useSettingsStore.getState();
+    if (change.startsWith("sources")) {
+      values.set("cleanupCustomApiKey", change === "sources replaced" ? "peer-cleanup" : "");
+      values.set("chatAgentCustomApiKey", change === "sources replaced" ? "peer-chat" : "");
+      await context.update("cleanupCustomApiKey");
+      await context.update("chatAgentCustomApiKey");
+    } else if (change.startsWith("destinations")) {
+      values.set("openrouterApiKey", change === "destinations replaced" ? "peer-router" : "");
+      await context.update("openrouterApiKey");
+      state().setDictationAgentCustomApiKey(
+        change === "destinations replaced" ? "local-agent" : ""
+      );
+    }
+    release.resolve("");
+    await initialization;
+    t.mock.timers.tick(250);
+    await new Promise(setImmediate);
+    const expected = {
+      "sources replaced": ["peer-cleanup", "peer-chat"],
+      "sources cleared": ["", ""],
+      "destinations replaced": ["peer-router", "local-agent"],
+      "destinations cleared": ["", ""],
+      "occupied destinations": ["router-existing", "agent-existing"],
+      "previous migration": ["", ""],
+      "main retained an edit": ["", "retained-agent"],
+    }[change];
+    assert.deepEqual([state().openrouterApiKey, state().dictationAgentCustomApiKey], expected);
+    assert.deepEqual(
+      [values.get("openrouterApiKey"), values.get("dictationAgentCustomApiKey")],
+      expected
+    );
+    const shouldCopy = change === "sources replaced" || change === "main retained an edit";
+    assert.equal(
+      saves.filter(([, , migration]) => migration === "if-empty").length,
+      shouldCopy ? 2 : 0
+    );
+    assert.equal(context.storage.getItem("_dictationAgentSeeded"), "1");
+    if (change !== "sources cleared")
+      assert.equal(context.storage.getItem("_openrouterCustomKeySeeded"), "1");
+  });
+}
 
 test("a changed key re-warms streaming dictation without opening the mic", async (t) => {
   const warmups = [];

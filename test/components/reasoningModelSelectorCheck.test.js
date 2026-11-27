@@ -244,6 +244,17 @@ for (const [answered, answer, saved] of [
   });
 }
 
+test("an unset reference keeps the saved provider key through blur and closing Settings", async (t) => {
+  const panel = await mount(t, { secrets: { openaiApiKey: "sk-saved" } });
+  await panel.type(KEY, "$GROQ_API_KEY");
+  await panel.blur(KEY);
+  await panel.wait(0);
+  await panel.answer({ success: false, errorCode: "secretRefUnset" });
+  assert.equal(panel.field(KEY).props.value, "$GROQ_API_KEY");
+  await panel.unmount();
+  assert.equal(panel.state().openaiApiKey, "sk-saved");
+});
+
 test("a refused key saves once a later check of it passes", async (t) => {
   const panel = await mount(t, { secrets: { openaiApiKey: "sk-saved" } });
   await panel.wait(0);

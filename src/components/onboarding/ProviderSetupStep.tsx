@@ -17,7 +17,7 @@ import { ProviderIcon } from "../ui/ProviderIcon";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "../ui/select";
 import { useConnectionAutoCheck } from "../../hooks/useConnectionAutoCheck";
 import { isWindowSwitchBlur } from "../../hooks/useFocusHold";
-import { useSettingsStore } from "../../stores/settingsStore";
+import { secretInputError, useSettingsStore } from "../../stores/settingsStore";
 import { normalizeBaseUrl } from "../../config/constants";
 import { withHttpsScheme } from "../../utils/urlUtils";
 import { isByokTranscriptionModelAllowed } from "../../services/managedTranscription";
@@ -313,6 +313,7 @@ export function ByokProviderStep({
     seed.provider === "corti" ? store.cortiClientSecret : ""
   );
   const [endpointFocused, setEndpointFocused] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // The card the saved setup picked goes on the session once, at mount (both deps are
   // stable), so the draft this visit writes reopens on it; later switches report
@@ -456,6 +457,11 @@ export function ByokProviderStep({
     if (!isWindowSwitchBlur(event)) setEndpointFocused(false);
   };
 
+  // Secret setters reject a $VAR that points at themselves or at a name that is
+  // not an OpenWhispr secret, and they throw to say so. Every branch therefore
+  // writes the API key *first*: a rejected reference then leaves the URL, model
+  // and mode untouched instead of half-configuring the provider, and the step
+  // stays put with saveError rendered under the button.
   const commitAndProceed = () => {
     if (
       !selfHosted &&
@@ -463,47 +469,76 @@ export function ByokProviderStep({
       !isByokTranscriptionModelAllowed(selectedProvider, selectedModel)
     )
       return;
-    let transcriptionModel: string | undefined = selectedModel;
-    if (selfHosted) {
-      const committedBaseUrl = withHttpsScheme(draftBaseUrl);
-      if (assistant) {
-        store.setChatAgentRemoteUrl(committedBaseUrl);
-        store.setChatAgentCustomApiKey(draftApiKey);
-        store.setChatAgentModel(draftCustomModel);
-        store.setChatAgentMode("self-hosted");
-        store.setChatAgentProvider("custom");
-      } else if (draftApiKey.trim()) {
-        store.setCloudTranscriptionBaseUrl(committedBaseUrl);
-        store.setCustomTranscriptionApiKey(draftApiKey);
-        transcriptionModel = draftCustomModel;
-        // A Settings server routes ahead of the keyed Custom endpoint, and sends no key.
-        store.setRemoteTranscriptionUrl("");
-      } else {
-        // Key-less, so it is the Settings self-hosted server; the Custom endpoint and its
-        // key stay as they were. byok + custom is what derives the self-hosted mode.
-        transcriptionModel = undefined;
-        store.setRemoteTranscriptionUrl(committedBaseUrl);
-        store.setRemoteTranscriptionModel(draftCustomModel);
-        store.setRemoteTranscriptionType("openai-compatible");
+    // Secret setters return an error code for a refused reference instead of saving.
+    const must = (result: unknown) => {
+      if (typeof result === "string" && result) {
+        throw Object.assign(new Error(result), { code: result });
       }
-    } else if (assistant) {
-      knownCredential.set(draftApiKey);
-      store.setChatAgentMode("providers");
-      store.switchReasoningProvider("chatIntelligence", selectedProvider, selectedModel);
-      store.setChatAgentModel(selectedModel);
-    } else if (isCortiTranscription) {
-      store.setCortiClientId(draftCortiClientId);
-      store.setCortiClientSecret(draftCortiClientSecret);
-    } else {
-      knownCredential.set(draftApiKey);
-    }
-    if (!assistant) {
-      store.setCloudTranscriptionForAllScopes({
-        useLocalWhisper: false,
-        cloudTranscriptionMode: "byok",
-        cloudTranscriptionProvider: selfHosted ? "custom" : selectedProvider,
-        cloudTranscriptionModel: transcriptionModel,
-      });
+    };
+    let transcriptionModel: string | undefined = selectedModel;
+    try {
+      if (selfHosted) {
+        const committedBaseUrl = withHttpsScheme(draftBaseUrl);
+        if (assistant) {
+          must(store.setChatAgentCustomApiKey(draftApiKey));
+          store.setChatAgentRemoteUrl(committedBaseUrl);
+          store.setChatAgentModel(draftCustomModel);
+          store.setChatAgentMode("self-hosted");
+          store.setChatAgentProvider("custom");
+        } else if (draftApiKey.trim()) {
+          must(store.setCustomTranscriptionApiKey(draftApiKey));
+          store.setCloudTranscriptionBaseUrl(committedBaseUrl);
+          transcriptionModel = draftCustomModel;
+          // A Settings server routes ahead of the keyed Custom endpoint, and sends no key.
+          store.setRemoteTranscriptionUrl("");
+        } else {
+          // Key-less, so it is the Settings self-hosted server; the Custom endpoint and its
+          // key stay as they were. byok + custom is what derives the self-hosted mode.
+          transcriptionModel = undefined;
+          store.setRemoteTranscriptionUrl(committedBaseUrl);
+          store.setRemoteTranscriptionModel(draftCustomModel);
+          store.setRemoteTranscriptionType("openai-compatible");
+        }
+      } else if (assistant) {
+        must(knownCredential.set(draftApiKey));
+        store.setChatAgentMode("providers");
+        store.switchReasoningProvider("chatIntelligence", selectedProvider, selectedModel);
+        store.setChatAgentModel(selectedModel);
+      } else if (isCortiTranscription) {
+        const current = useSettingsStore.getState();
+        must(secretInputError("cortiClientId", draftCortiClientId, current.cortiClientId));
+        must(
+          secretInputError("cortiClientSecret", draftCortiClientSecret, current.cortiClientSecret)
+        );
+        must(store.setCortiClientId(draftCortiClientId));
+        must(store.setCortiClientSecret(draftCortiClientSecret));
+      } else {
+        must(knownCredential.set(draftApiKey));
+      }
+      if (!assistant) {
+        store.setCloudTranscriptionForAllScopes({
+          useLocalWhisper: false,
+          cloudTranscriptionMode: "byok",
+          cloudTranscriptionProvider: selfHosted ? "custom" : selectedProvider,
+          cloudTranscriptionModel: transcriptionModel,
+        });
+      }
+      setSaveError(null);
+    } catch (err) {
+      const code = (err as Error & { code?: string }).code;
+      setSaveError(
+        code === "self-reference"
+          ? t("apiKeyInput.selfReference", {
+              defaultValue: "Use a different variable name here, or leave this field empty.",
+            })
+          : code === "unknown-ref"
+            ? t("apiKeyInput.unknownRef", {
+                defaultValue:
+                  "Only OpenWhispr secret names can be referenced (for example $OPENAI_API_KEY).",
+              })
+            : (err as Error).message
+      );
+      return;
     }
     onProceed();
   };
@@ -685,6 +720,11 @@ export function ByokProviderStep({
         <StepPrimaryAction onClick={commitAndProceed} disabled={!usable} className="mt-4! w-full">
           {t("onboarding.rehaul.provider.proceed")}
         </StepPrimaryAction>
+        {saveError && (
+          <p role="alert" className="mt-2 text-xs text-destructive">
+            {saveError}
+          </p>
+        )}
       </div>
 
       <ConnectionCheckAnnouncer announcement={check.announcement} />

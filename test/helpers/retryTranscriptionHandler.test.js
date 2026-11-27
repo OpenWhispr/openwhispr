@@ -1,5 +1,6 @@
 const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
+const { secretResolverMethods } = require("./harness/secretResolver");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 const fs = require("node:fs");
@@ -286,10 +287,11 @@ function buildFakeThis() {
       getAssemblyAIKey: () => "aai-assemblyai",
       getElevenlabsKey: () => "xi-elevenlabs",
       getOpenrouterKey: () => "ork-openrouter",
-      getCustomTranscriptionKey: () => "ck-custom",
       getSelfHostedSttHeaders: () => selfHostedHeaders,
       getCortiClientId: () => "corti-id",
       getCortiClientSecret: () => "corti-secret",
+      // The credential path expands stored $VAR references through the manager.
+      ...secretResolverMethods({ CUSTOM_TRANSCRIPTION_API_KEY: "ck-custom" }),
     },
   };
   return new Proxy(target, {
@@ -3251,6 +3253,61 @@ const selfHostedUpload = {
   model: "",
   language: "",
 };
+
+test("Custom uploads and retries require an explicit reference to resolve, while a blank key stays optional", async (t) => {
+  const env = { CUSTOM_TRANSCRIPTION_API_KEY: "$GROQ_API_KEY", GROQ_API_KEY: "fixture-key" };
+  const credentials = secretResolverMethods(env);
+  t.mock.method(fakeThis.environmentManager, "getRawKey", credentials.getRawKey);
+  t.mock.method(fakeThis.environmentManager, "resolveSecretRef", credentials.resolveSecretRef);
+  const upload = (baseUrl) =>
+    invokeUpload({
+      provider: "custom",
+      transcriptionMode: "providers",
+      apiKey: env.CUSTOM_TRANSCRIPTION_API_KEY,
+      model: "whisper-1",
+      baseUrl,
+    });
+  for (const request of [
+    () => invoke(CUSTOM_SETTINGS),
+    () => upload(CUSTOM_SETTINGS.cloudTranscriptionBaseUrl),
+    () => invoke(selfHostedRetry),
+    () => invokeUpload(selfHostedUpload),
+  ]) {
+    env.CUSTOM_TRANSCRIPTION_API_KEY = "$GROQ_API_KEY";
+    env.GROQ_API_KEY = "fixture-key";
+    fetches.length = 0;
+    assert.equal((await request()).success, true);
+    assert.equal(new Headers(fetches[0].init.headers).get("authorization"), "Bearer fixture-key");
+    delete env.GROQ_API_KEY;
+    fetches.length = 0;
+    assert.equal((await request()).code, "API_KEY_MISSING");
+    assert.equal(fetches.length, 0);
+    env.CUSTOM_TRANSCRIPTION_API_KEY = "";
+    assert.equal((await request()).success, true);
+    assert.equal(new Headers(fetches[0].init.headers).get("authorization"), null);
+  }
+  env.CUSTOM_TRANSCRIPTION_API_KEY = "$GROQ_API_KEY";
+  fetches.length = 0;
+  assert.equal((await upload("https://openrouter.ai/api/v1")).code, "API_KEY_MISSING");
+  assert.equal(fetches.length, 0);
+  env.CUSTOM_TRANSCRIPTION_API_KEY = "older-stored-key";
+  assert.equal(
+    (await invokeUpload({ ...selfHostedUpload, apiKey: "$GROQ_API_KEY" })).code,
+    "API_KEY_MISSING"
+  );
+  assert.equal(fetches.length, 0);
+  assert.equal(
+    (
+      await invokeUpload({
+        ...selfHostedUpload,
+        remoteTranscriptionModel: "whisper-1",
+        apiKey: "$GROQ_API_KEY",
+      })
+    ).success,
+    true
+  );
+  assert.equal(new Headers(fetches[0].init.headers).get("authorization"), null);
+});
 
 async function withSelfHostedHeaders(value, run) {
   const previous = selfHostedHeaders;
