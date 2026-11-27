@@ -2804,6 +2804,9 @@
         "disableAllDescription": "Tout couper sauf les messages d'erreur",
         "meetingDetection": "Détection de réunion",
         "meetingDetectionDescription": "Prévenir quand une réunion est détectée pour lancer l'enregistrement",
+        "ignoredApps": "Apps ignorées",
+        "ignoredAppsDescription": "La détection de réunion ne vous sollicite pas quand ces apps utilisent le micro",
+        "stopIgnoringApp": "Ne plus ignorer",
         "calendarReminders": "Rappels de calendrier",
         "calendarRemindersDescription": "Prévenir quand une réunion planifiée va commencer"
       },
@@ -6868,6 +6871,7 @@
     "start": "Prendre des notes",
     "join": "Rejoindre et transcrire",
     "joinOnly": "Rejoindre la réunion",
+    "ignoreApp": "Pas une réunion ? Ne plus demander pour {{app}}",
     "folders": {
       "choose": "Choisir le dossier de réunion",
       "search": "Rechercher des dossiers",

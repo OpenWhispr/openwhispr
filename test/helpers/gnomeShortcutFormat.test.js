@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const GnomeShortcutManager = require("../../src/helpers/gnomeShortcut");
+const { REGISTRATION } = require("../../src/helpers/gnomeGlobalShortcutsPortal");
 
 test("letter and function-key shortcuts still convert", () => {
   assert.equal(GnomeShortcutManager.convertToGnomeFormat("Alt+R"), "<Alt>r");
@@ -90,7 +91,7 @@ test("failed portal registration restores the working GNOME tap binding", async 
     registrations.push(shortcut);
     return true;
   };
-  manager.globalShortcutsPortal.registerKeybinding = async () => false;
+  manager.globalShortcutsPortal.registerKeybinding = async () => REGISTRATION.FAILED;
 
   assert.equal(await manager.registerPushToTalk("Alt+R", () => undefined), false);
   assert.deepEqual(registrations, ["<Alt>r"]);

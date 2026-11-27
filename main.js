@@ -332,6 +332,7 @@ const AppleCalendarManager = require("./src/helpers/appleCalendarManager");
 const CalendarReminderScheduler = require("./src/helpers/calendarReminderScheduler");
 const MeetingProcessDetector = require("./src/helpers/meetingProcessDetector");
 const AudioActivityDetector = require("./src/helpers/audioActivityDetector");
+const { resolveCaptureApps } = require("./src/helpers/meetingCaptureApps");
 const {
   collectAudioCaptureHelperPids,
   createExcludedProcessIdProvider,
@@ -701,7 +702,8 @@ function initializeCoreManagers() {
           windowsLoopbackAudioManager,
         ])
       ),
-      () => meetingProcessDetector.getDetectedProcesses().length > 0
+      () => meetingProcessDetector.getDetectedProcesses().length > 0,
+      resolveCaptureApps
     ),
     windowManager,
     databaseManager,

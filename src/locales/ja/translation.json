@@ -2043,6 +2043,9 @@
         "disableAllDescription": "エラーメッセージ以外をすべて消音にする",
         "meetingDetection": "会議の検出",
         "meetingDetectionDescription": "会議が検出されたときに通知して録音を開始できるようにする",
+        "ignoredApps": "無視するアプリ",
+        "ignoredAppsDescription": "これらのアプリがマイクを使っても会議の確認を表示しません",
+        "stopIgnoringApp": "無視をやめる",
         "calendarReminders": "カレンダーリマインダー",
         "calendarRemindersDescription": "予定された会議がまもなく始まるときに通知する"
       },
@@ -6840,6 +6843,7 @@
     "start": "メモを取る",
     "join": "参加して文字起こし",
     "joinOnly": "会議に参加",
+    "ignoreApp": "会議ではありませんか？{{app}} では確認しない",
     "folders": {
       "choose": "会議フォルダーを選択",
       "search": "フォルダーを検索",

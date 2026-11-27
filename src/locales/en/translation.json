@@ -2798,6 +2798,9 @@
         "disableAllDescription": "Silence everything except error messages",
         "meetingDetection": "Meeting detection",
         "meetingDetectionDescription": "Notify when a meeting is detected so you can start recording",
+        "ignoredApps": "Ignored apps",
+        "ignoredAppsDescription": "Meeting detection doesn't prompt when these apps use the microphone",
+        "stopIgnoringApp": "Stop ignoring",
         "calendarReminders": "Calendar reminders",
         "calendarRemindersDescription": "Notify when a scheduled meeting is about to start"
       },
@@ -6840,6 +6843,7 @@
     "start": "Take notes",
     "join": "Join and transcribe",
     "joinOnly": "Join meeting",
+    "ignoreApp": "Not a meeting? Don't ask for {{app}}",
     "folders": {
       "choose": "Choose meeting folder",
       "search": "Search folders",

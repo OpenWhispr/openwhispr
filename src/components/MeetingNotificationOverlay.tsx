@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import type {
+  MeetingDetectionApp,
   MeetingNotificationData,
   MeetingDestinationContext,
   MeetingError,
@@ -20,6 +21,7 @@ import { MeetingNotificationCard } from "./MeetingNotificationCard";
 import { MeetingNotificationFolderPicker } from "./MeetingNotificationFolderPicker";
 import { meetingFolderLabel } from "./meetingFolderLabel";
 import { Check, ChevronDown } from "./icons";
+import { useSettingsStore } from "../stores/settingsStore";
 import "../styles/meeting-notification.css";
 import {
   getMeetingNotificationPresentation,
@@ -277,9 +279,10 @@ export default function MeetingNotificationOverlay(): ReactElement {
       operation.current = op;
       setBusy(true);
       loadGeneration.current++;
+      const closesCard = action === "dismiss" || action === "ignore";
       try {
-        if (action === "dismiss") {
-          // Main closes the window as soon as it handles a dismiss: slide out first.
+        if (closesCard) {
+          // Main closes the window as soon as it handles these: slide out first.
           setIsVisible(false);
           await new Promise<void>((resolve) => setTimeout(resolve, 200));
         }
@@ -288,8 +291,8 @@ export default function MeetingNotificationOverlay(): ReactElement {
           action,
           context?.existingNote ? { existingNote: context.existingNote } : {}
         );
-        // A dismiss that fails leaves nothing to choose, so it never opens the picker.
-        if (result?.success === true || action === "dismiss") setIsVisible(false);
+        // A dismiss or ignore that fails leaves nothing to choose, so it never opens the picker.
+        if (result?.success === true || closesCard) setIsVisible(false);
         else if (
           current.joinUrl &&
           (result?.code === "POLICY_EXTERNAL_ATTENDEES" ||
@@ -305,7 +308,7 @@ export default function MeetingNotificationOverlay(): ReactElement {
           setError(result?.code ?? "START_FAILED");
         }
       } catch {
-        if (action === "dismiss") setIsVisible(false);
+        if (closesCard) setIsVisible(false);
         else {
           changeMode("list");
           setError("START_FAILED");
@@ -323,6 +326,19 @@ export default function MeetingNotificationOverlay(): ReactElement {
   const dismiss = useCallback((): void => {
     void respond("dismiss");
   }, [respond]);
+
+  const ignoreApp = useCallback(
+    (app: MeetingDetectionApp): void => {
+      const { meetingDetectionIgnoredApps, setMeetingDetectionIgnoredApps } =
+        useSettingsStore.getState();
+      setMeetingDetectionIgnoredApps([
+        ...meetingDetectionIgnoredApps.filter((ignored) => ignored.id !== app.id),
+        app,
+      ]);
+      void respond("ignore");
+    },
+    [respond]
+  );
 
   const handleMouseEnter = useCallback((): void => {
     setIsHovered(true);
@@ -402,6 +418,7 @@ export default function MeetingNotificationOverlay(): ReactElement {
 
   const title = presentation.title ?? t(presentation.titleKey);
   const body = t(presentation.bodyKey);
+  const appToIgnore = presentation.ignoreApp;
 
   const isDragging = dragX !== null;
   const motionStyle: CSSProperties = isDragging
@@ -475,6 +492,12 @@ export default function MeetingNotificationOverlay(): ReactElement {
               ) : undefined
             }
             onDismiss={presentation.dismissible ? dismiss : undefined}
+            ignoreLabel={
+              appToIgnore
+                ? t("meetingNotification.ignoreApp", { app: appToIgnore.name })
+                : undefined
+            }
+            onIgnore={appToIgnore ? () => ignoreApp(appToIgnore) : undefined}
             closeVisible={isHovered}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}

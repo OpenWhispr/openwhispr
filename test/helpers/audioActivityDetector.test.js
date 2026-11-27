@@ -78,7 +78,14 @@ function createFakeChild(spawnError) {
 // here. Both spellings feed the detector's excluded-pid provider.
 function createDetector(
   platform,
-  { excludedProcessIds, ownPids, execResponses = [], spawnError, isMeetingAppRunning } = {}
+  {
+    excludedProcessIds,
+    ownPids,
+    execResponses = [],
+    spawnError,
+    isMeetingAppRunning,
+    resolveCaptureApps,
+  } = {}
 ) {
   const getExcludedProcessIds =
     excludedProcessIds ?? (ownPids ? () => [...ownPids] : () => [process.pid]);
@@ -110,7 +117,11 @@ function createDetector(
     logEntries
   );
 
-  const detector = new AudioActivityDetector(getExcludedProcessIds, isMeetingAppRunning);
+  const detector = new AudioActivityDetector(
+    getExcludedProcessIds,
+    isMeetingAppRunning,
+    resolveCaptureApps
+  );
   detector._isMicActive = async () => false;
   return { detector, children, calls, execCalls, logEntries };
 }
@@ -1971,3 +1982,272 @@ for (const gate of ["setUserRecording", "setMicWarmHold"]) {
     assert.equal(detector.hasPrompted, false, "a later inactive period still rearms detection");
   });
 }
+
+// The apps behind capture pids, as meetingCaptureApps.js names them (#3412).
+const CAPTURE_APPS = {
+  11: { id: "orca.exe", name: "Orca" },
+  22: { id: "ms-teams.exe", name: "ms-teams" },
+};
+const resolveTestCaptureApps = async (pids) =>
+  new Map(pids.filter((pid) => CAPTURE_APPS[pid]).map((pid) => [pid, CAPTURE_APPS[pid]]));
+
+for (const platform of ["darwin", "win32"]) {
+  test(`${platform}: an ignored app holding the mic never prompts, still holds it for auto-end, and prompts once no longer ignored`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+    const { detector, children } = createDetector(platform, {
+      resolveCaptureApps: resolveTestCaptureApps,
+    });
+    t.after(() => detector.stop());
+    const detections = [];
+    detector.on("sustained-audio-detected", (data) => detections.push(data));
+    detector.setIgnoredApps(["orca.exe"]);
+
+    await detector.start();
+    children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\n");
+    await flushImmediate();
+    t.mock.timers.tick(SUSTAINED_MS);
+
+    assert.equal(detections.length, 0);
+    assert.deepEqual(detector.getExternalMicState(), { reliable: true, externalMicActive: true });
+
+    // Settings' "Stop ignoring" while Orca still holds the mic.
+    detector.setIgnoredApps([]);
+    t.mock.timers.tick(SUSTAINED_MS);
+
+    assert.equal(detections.length, 1);
+    assert.deepEqual(detections[0].apps, [CAPTURE_APPS[11]]);
+  });
+}
+
+test("win32: another app beside an ignored one still prompts, naming only that app", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("win32", {
+    resolveCaptureApps: resolveTestCaptureApps,
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+  detector.setIgnoredApps(["orca.exe"]);
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\nMIC_START 22\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 1);
+  assert.deepEqual(detections[0].apps, [CAPTURE_APPS[22]]);
+});
+
+test("win32: ignoring an app while its prompt is pending cancels the prompt", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("win32", {
+    resolveCaptureApps: resolveTestCaptureApps,
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\n");
+  await flushImmediate();
+  detector.setIgnoredApps(["orca.exe"]);
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 0);
+});
+
+test("win32: a capture whose app can't be named still prompts", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("win32", {
+    resolveCaptureApps: async () => {
+      throw new Error("process list unavailable");
+    },
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+  detector.setIgnoredApps(["orca.exe"]);
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 1);
+  assert.deepEqual(detections[0].apps, []);
+});
+
+// A process listing can take seconds on a busy Mac, longer than the sustained
+// threshold, and every new capture looks its app up again.
+function createSlowLookupDetector(t) {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  let finishLookup;
+  const { detector, children } = createDetector("win32", {
+    resolveCaptureApps: () =>
+      new Promise((resolve) => {
+        finishLookup = (pids) => resolve(new Map(pids.map((pid) => [pid, CAPTURE_APPS[pid]])));
+      }),
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+  return { detector, children, detections, finishLookup: (pids) => finishLookup(pids) };
+}
+
+test("win32: an ignored app doesn't prompt when its lookup outlasts the sustained threshold", async (t) => {
+  const { detector, children, detections, finishLookup } = createSlowLookupDetector(t);
+  detector.setIgnoredApps(["orca.exe"]);
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 0, "the prompt waits for the capture's app");
+
+  finishLookup([11]);
+  await flushImmediate();
+  t.mock.timers.tick(5000);
+  assert.equal(detections.length, 0);
+});
+
+test("win32: a slow lookup that names another app prompts once it is named", async (t) => {
+  const { detector, children, detections, finishLookup } = createSlowLookupDetector(t);
+  detector.setIgnoredApps(["orca.exe"]);
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 22\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 0);
+
+  finishLookup([22]);
+  await flushImmediate();
+  t.mock.timers.tick(250);
+  assert.equal(detections.length, 1);
+  assert.deepEqual(detections[0].apps, [CAPTURE_APPS[22]], "the card can offer to ignore it");
+});
+
+test("win32: a lookup that never finishes still prompts after a bounded wait", async (t) => {
+  const { detector, children, detections } = createSlowLookupDetector(t);
+  detector.setIgnoredApps(["orca.exe"]);
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS + 2500);
+  assert.equal(detections.length, 0);
+
+  t.mock.timers.tick(500);
+  assert.equal(detections.length, 1, "a stuck lookup must never cost a meeting");
+  assert.deepEqual(detections[0].apps, []);
+});
+
+test("win32: a prompt with a capture it can't name names no app", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("win32", {
+    resolveCaptureApps: resolveTestCaptureApps,
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\nMIC_START 33\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 1);
+  assert.deepEqual(detections[0].apps, []);
+});
+
+test("win32: after ignoring the app a prompt was for, a meeting app still prompts", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("win32", {
+    resolveCaptureApps: resolveTestCaptureApps,
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 1);
+
+  // The card's "Don't ask for Orca", while Orca still holds the mic.
+  detector.setIgnoredApps(["orca.exe"]);
+  children[0].stdout.emit("data", "MIC_START 22\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 2);
+  assert.deepEqual(detections[1].apps, [CAPTURE_APPS[22]]);
+});
+
+test("win32: a call that started while the ignored app's card was open prompts once it's ignored", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("win32", {
+    resolveCaptureApps: resolveTestCaptureApps,
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 11\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  children[0].stdout.emit("data", "MIC_START 22\n");
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 1, "Orca's prompt holds back the call");
+
+  // The card's "Don't ask for Orca": the list syncs, then the card answers.
+  detector.setIgnoredApps(["orca.exe"]);
+  detector.releasePrompt();
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 2);
+  assert.deepEqual(detections[1].apps, [CAPTURE_APPS[22]]);
+});
+
+test("linux: an ignored app's capture does not drive meeting prompts", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("linux", {
+    resolveCaptureApps: resolveTestCaptureApps,
+    execResponses: [
+      { stdout: "[]" },
+      { stdout: JSON.stringify([{ properties: { "application.process.id": "11" } }]) },
+    ],
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+  detector.setIgnoredApps(["orca.exe"]);
+
+  await detector.start();
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'new' on source-output #1\n");
+  await flushImmediate();
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 0);
+  assert.deepEqual(detector.getExternalMicState(), { reliable: true, externalMicActive: true });
+});
+
+test("linux: polling skips an ignored app's capture once it is named", async () => {
+  const orca = { stdout: JSON.stringify([{ properties: { "application.process.id": "11" } }]) };
+  const { detector } = createDetector("linux", {
+    resolveCaptureApps: resolveTestCaptureApps,
+    execResponses: [orca, orca],
+  });
+  detector._running = true;
+  detector.setIgnoredApps(["orca.exe"]);
+
+  assert.equal(await detector._checkLinux(), true, "a capture counts until its app is named");
+  await flushImmediate();
+  assert.equal(await detector._checkLinux(), false);
+  detector.stop();
+});

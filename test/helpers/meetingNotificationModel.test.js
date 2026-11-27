@@ -131,3 +131,28 @@ test("outside and unreadable guests show their localized explanation and only Jo
     assert.equal(card.action, "open");
   }
 });
+
+test("an audio prompt raised by one app offers to stop asking about it", async () => {
+  const { getMeetingNotificationPresentation } = await load();
+  const detection = {
+    detectionId: "audio:sustained-audio",
+    source: "audio",
+    key: "sustained-audio",
+    event: null,
+    variant: "detected",
+    joinUrl: null,
+  };
+  const orca = { id: "orca.exe", name: "Orca" };
+  const teams = { id: "ms-teams.exe", name: "ms-teams" };
+
+  assert.deepEqual(
+    getMeetingNotificationPresentation({ ...detection, apps: [orca] }).ignoreApp,
+    orca
+  );
+  // Two apps hold the mic: ignoring one is not what the user would expect.
+  assert.equal(
+    getMeetingNotificationPresentation({ ...detection, apps: [orca, teams] }).ignoreApp,
+    undefined
+  );
+  assert.equal(getMeetingNotificationPresentation(detection).ignoreApp, undefined);
+});

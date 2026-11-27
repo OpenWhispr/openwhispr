@@ -9,7 +9,7 @@ class ProcessListCache {
     this._pending = null;
   }
 
-  async getProcessList() {
+  async getProcesses() {
     const now = Date.now();
     if (this._cache && now - this._cacheTime < CACHE_TTL_MS) {
       return this._cache;
@@ -25,15 +25,19 @@ class ProcessListCache {
     }
   }
 
+  async getProcessList() {
+    const procs = await this.getProcesses();
+    return procs.map((p) => (p.name || "").toLowerCase());
+  }
+
   async _fetch(now) {
     try {
       const psList = (await import("ps-list")).default;
       const procs = await psList();
-      const names = procs.map((p) => (p.name || "").toLowerCase());
-      this._cache = names;
+      this._cache = procs;
       this._cacheTime = now;
-      debugLogger.debug("Process list refreshed", { count: names.length }, "meeting");
-      return names;
+      debugLogger.debug("Process list refreshed", { count: procs.length }, "meeting");
+      return procs;
     } catch (err) {
       debugLogger.warn("Failed to fetch process list", { error: err.message }, "meeting");
       return [];

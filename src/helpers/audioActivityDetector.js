@@ -10,6 +10,11 @@ const execAsync = promisify(exec);
 const CHECK_INTERVAL_MS = process.platform === "win32" ? 15 * 1000 : 3 * 1000;
 const SUSTAINED_THRESHOLD_CHECKS = 2;
 const SUSTAINED_EVENT_DRIVEN_MS = 2 * 1000;
+// How long past the sustained threshold a prompt waits for its captures' apps
+// to be named (a process listing can take seconds on a busy Mac), and how
+// often it looks again meanwhile.
+const APP_LOOKUP_GRACE_MS = 3 * 1000;
+const APP_LOOKUP_RECHECK_MS = 250;
 const COOLDOWN_MS = 5 * 60 * 1000;
 const INACTIVE_RESET_MS = 60 * 1000;
 // PipeWire/PulseAudio emit 'change' subscribe events several times a second on
@@ -71,14 +76,22 @@ class AudioActivityDetector extends EventEmitter {
   // the Electron process tree by default, plus any live capture helpers when
   // main.js composes them in (see electronProcessIds.js). `isMeetingAppRunning`
   // corroborates macOS device activity that cannot be attributed to a process;
-  // without it such activity never prompts.
+  // without it such activity never prompts. `resolveCaptureApps` maps capture
+  // pids to their apps (see meetingCaptureApps.js), which the prompt names and
+  // the user's ignore list matches; without it no app is named or ignored.
   constructor(
     getExcludedProcessIds = () => [...getOwnProcessPids()],
-    isMeetingAppRunning = () => false
+    isMeetingAppRunning = () => false,
+    resolveCaptureApps = null
   ) {
     super();
     this._getExcludedProcessIds = getExcludedProcessIds;
     this._isMeetingAppRunning = isMeetingAppRunning;
+    this._resolveCaptureApps = resolveCaptureApps;
+    this._ignoredAppIds = new Set();
+    // pid -> { id, name }, or null once a lookup found nothing.
+    this._captureApps = new Map();
+    this._resolvingCaptureApps = false;
     this.checkInterval = null;
     this.consecutiveChecks = 0;
     this.audioActiveStart = null;
@@ -193,6 +206,13 @@ class AudioActivityDetector extends EventEmitter {
     if (!this._lastKnownMicAttributed) this._reevaluateAfterGate();
   }
 
+  // Apps the user marked "not a meeting" (ids from meetingCaptureApps.js). Their
+  // captures never prompt, though auto-end still counts them as holding the mic.
+  setIgnoredApps(appIds) {
+    this._ignoredAppIds = new Set(appIds);
+    this._reevaluateCaptureApps();
+  }
+
   async start() {
     if (this._running) return;
     this._running = true;
@@ -258,6 +278,14 @@ class AudioActivityDetector extends EventEmitter {
     debugLogger.info("Audio detection prompt reset (no cooldown)", {}, "meeting");
   }
 
+  // The prompted app was marked "not a meeting". A capture that started while
+  // its card was open (a real call) was held back by that prompt, and with the
+  // ignored app gone from the evidence no edge announces it, so look again.
+  releasePrompt() {
+    this.resetPrompt();
+    this._reevaluateAfterGate();
+  }
+
   _reset() {
     this.consecutiveChecks = 0;
     this.audioActiveStart = null;
@@ -275,6 +303,7 @@ class AudioActivityDetector extends EventEmitter {
   _resetListenerState() {
     this._activeMicPids.clear();
     this._nonMeetingCapturePids.clear();
+    this._captureApps.clear();
     this._activeSources = 0;
     this._lastKnownMicState = false;
     this._externalCapturePids.clear();
@@ -563,14 +592,16 @@ class AudioActivityDetector extends EventEmitter {
     }
   }
 
+  // Only meeting evidence drives the prompt, as in the Linux reconcile: a
+  // capture from an ignored app holds the mic for auto-end but never prompts.
   _parsePidScopedListenerLine(line) {
     const startMatch = line.match(/^MIC_START\s+(\d+)$/);
     if (startMatch) {
       const pid = parseInt(startMatch[1], 10);
       if (this._isExcludedProcessId(pid)) return;
       this._activeMicPids.add(pid);
-      const externalMicActive = this._updateExternalMicState();
-      this._onMicStateChanged(externalMicActive);
+      this._updateExternalMicState();
+      this._onMicStateChanged(this._externalCapturePids.size > 0);
       return;
     }
 
@@ -579,8 +610,8 @@ class AudioActivityDetector extends EventEmitter {
       const pid = parseInt(stopMatch[1], 10);
       if (this._isExcludedProcessId(pid)) return;
       this._activeMicPids.delete(pid);
-      const externalMicActive = this._updateExternalMicState();
-      this._onMicStateChanged(externalMicActive);
+      this._updateExternalMicState();
+      this._onMicStateChanged(this._externalCapturePids.size > 0);
       return;
     }
   }
@@ -736,25 +767,80 @@ class AudioActivityDetector extends EventEmitter {
         { error: err.message },
         "meeting"
       );
-      return false;
+      return;
     }
 
     const externalPids = [...this._activeMicPids].filter(
       (processId) => !excludedProcessIds.has(processId)
     );
+    this._lookUpCaptureApps(externalPids);
     // Only meeting evidence arms and re-arms the prompt; auto-end still counts
     // every capture but a peak meter as holding the mic.
     this._externalCapturePids = new Set(
-      externalPids.filter((processId) => !this._nonMeetingCapturePids.has(processId))
+      externalPids.filter(
+        (processId) =>
+          !this._nonMeetingCapturePids.has(processId) && !this._isIgnoredCapture(processId)
+      )
     );
     const externalMicActive = externalPids.length > 0;
     if (!this._pidScopedCapability || !this._isOwnershipSnapshotLive()) {
       this._setExternalMicSnapshot(false, false, emitChange);
-      return externalMicActive;
+      return;
     }
 
     this._setExternalMicSnapshot(true, externalMicActive, emitChange);
-    return externalMicActive;
+  }
+
+  _isIgnoredCapture(processId) {
+    return this._ignoredAppIds.has(this._captureApps.get(processId)?.id);
+  }
+
+  // A pid counts as meeting evidence until its app is known. The prompt waits a
+  // bounded while for a pending lookup, so only a stuck or failed one costs a
+  // prompt for an ignored app, never a missed meeting.
+  _lookUpCaptureApps(externalPids) {
+    if (!this._resolveCaptureApps) return;
+    for (const processId of this._captureApps.keys()) {
+      if (!externalPids.includes(processId)) this._captureApps.delete(processId);
+    }
+    const pending = externalPids.filter((processId) => !this._captureApps.has(processId));
+    if (!pending.length || this._resolvingCaptureApps || !this._running) return;
+    this._resolvingCaptureApps = true;
+    this._resolveCaptureApps(pending)
+      .catch((err) => {
+        debugLogger.debug("Failed to name microphone apps", { error: err.message }, "meeting");
+        return new Map();
+      })
+      .then((apps) => {
+        this._resolvingCaptureApps = false;
+        for (const processId of pending) {
+          if (this._activeMicPids.has(processId)) {
+            this._captureApps.set(processId, apps.get(processId) ?? null);
+          }
+        }
+        this._reevaluateCaptureApps();
+      });
+  }
+
+  // A lookup or an ignore-list change can turn the only capture into a
+  // non-meeting one, or back, and no listener edge announces that.
+  _reevaluateCaptureApps() {
+    const hadEvidence = this._externalCapturePids.size > 0;
+    this._updateExternalMicState();
+    const hasEvidence = this._externalCapturePids.size > 0;
+    if (hadEvidence !== hasEvidence && this._listenerProcess) this._onMicStateChanged(hasEvidence);
+  }
+
+  // Names the prompt's apps only when it knows every one, or the card could
+  // offer to ignore one app while another capture keeps the prompt alive.
+  _promptApps() {
+    const apps = new Map();
+    for (const processId of this._externalCapturePids) {
+      const app = this._captureApps.get(processId);
+      if (!app) return [];
+      apps.set(app.id, app);
+    }
+    return [...apps.values()];
   }
 
   _setExternalMicSnapshot(reliable, externalMicActive, emitChange) {
@@ -873,29 +959,49 @@ class AudioActivityDetector extends EventEmitter {
       if (!this.audioActiveStart) this.audioActiveStart = Date.now();
 
       if (!this._sustainedTimer) {
-        this._sustainedTimer = setTimeout(() => {
-          this._sustainedTimer = null;
-          if (this._userRecording || this._micWarmHold || this.hasPrompted) return;
-          if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
-          if (!this._isUnattributedActivityCorroborated()) return;
-
-          this._markPrompted();
-          const now = Date.now();
-          const durationMs = now - this.audioActiveStart;
-          const attributed = this._lastKnownMicAttributed;
-          debugLogger.info(
-            "Sustained audio activity detected (event-driven)",
-            { durationMs, attributed },
-            "meeting"
-          );
-          this.emit("sustained-audio-detected", { durationMs, detectedAt: now, attributed });
-        }, SUSTAINED_EVENT_DRIVEN_MS);
+        this._scheduleSustainedPrompt(
+          SUSTAINED_EVENT_DRIVEN_MS,
+          Date.now() + SUSTAINED_EVENT_DRIVEN_MS + APP_LOOKUP_GRACE_MS
+        );
       }
     } else {
       this._clearSustainedTimer();
       this.audioActiveStart = null;
       if (this.hasPrompted) this._startResetTimer();
     }
+  }
+
+  _scheduleSustainedPrompt(delayMs, appLookupDeadline) {
+    this._sustainedTimer = setTimeout(() => {
+      this._sustainedTimer = null;
+      if (this._userRecording || this._micWarmHold || this.hasPrompted) return;
+      if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
+      if (!this._isUnattributedActivityCorroborated()) return;
+      // A capture whose app is still being looked up may be an ignored one: a
+      // lookup that names it clears this timer, and the deadline bounds the
+      // wait so a stuck lookup still prompts.
+      if (this._hasUnnamedEvidence() && Date.now() < appLookupDeadline) {
+        this._scheduleSustainedPrompt(APP_LOOKUP_RECHECK_MS, appLookupDeadline);
+        return;
+      }
+
+      this._markPrompted();
+      const now = Date.now();
+      const durationMs = now - this.audioActiveStart;
+      const attributed = this._lastKnownMicAttributed;
+      const apps = this._promptApps();
+      debugLogger.info(
+        "Sustained audio activity detected (event-driven)",
+        { durationMs, attributed, apps: apps.map((app) => app.name) },
+        "meeting"
+      );
+      this.emit("sustained-audio-detected", { durationMs, detectedAt: now, attributed, apps });
+    }, delayMs);
+  }
+
+  _hasUnnamedEvidence() {
+    if (!this._resolveCaptureApps) return false;
+    return [...this._externalCapturePids].some((processId) => !this._captureApps.has(processId));
   }
 
   // ---------------------------------------------------------------------------
@@ -952,12 +1058,22 @@ class AudioActivityDetector extends EventEmitter {
           this._markPrompted();
           const now = Date.now();
           const durationMs = now - this.audioActiveStart;
+          const apps = this._promptApps();
           debugLogger.info(
             "Sustained audio activity detected",
-            { consecutiveChecks: this.consecutiveChecks, durationMs },
+            {
+              consecutiveChecks: this.consecutiveChecks,
+              durationMs,
+              apps: apps.map((app) => app.name),
+            },
             "meeting"
           );
-          this.emit("sustained-audio-detected", { durationMs, detectedAt: now, attributed: true });
+          this.emit("sustained-audio-detected", {
+            durationMs,
+            detectedAt: now,
+            attributed: true,
+            apps,
+          });
         }
       } else {
         if (this.consecutiveChecks > 0) {
@@ -1023,7 +1139,10 @@ class AudioActivityDetector extends EventEmitter {
       this._nonMeetingCapturePids = nonMeetingCapturePids;
       this._setPidScopedCapability(true);
       return [...capturePids].some(
-        (processId) => !excludedProcessIds.has(processId) && !nonMeetingCapturePids.has(processId)
+        (processId) =>
+          !excludedProcessIds.has(processId) &&
+          !nonMeetingCapturePids.has(processId) &&
+          !this._isIgnoredCapture(processId)
       );
     } catch (err) {
       this._setPidScopedCapability(false);
