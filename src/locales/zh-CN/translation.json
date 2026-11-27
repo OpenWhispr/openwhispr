@@ -2037,7 +2037,8 @@
         "disableAllDescription": "静音除错误消息外的所有内容",
         "meetingDetection": "会议检测",
         "meetingDetectionDescription": "检测到会议时通知您以便开始录音",
-        "ignoredAppDescription": "此应用使用麦克风时，会议检测不会提示",
+        "ignoredApps": "已忽略的应用",
+        "ignoredAppsDescription": "这些应用使用麦克风时，会议检测不会提示",
         "stopIgnoringApp": "取消忽略",
         "calendarReminders": "日历提醒",
         "calendarRemindersDescription": "预定会议即将开始时通知您"

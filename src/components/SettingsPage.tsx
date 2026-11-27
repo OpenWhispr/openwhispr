@@ -2805,27 +2805,46 @@ export default function SettingsPage({
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
-                {meetingDetectionIgnoredApps.map((app) => (
-                  <SettingsPanelRow key={app.id}>
-                    <SettingsRow
-                      label={app.name}
-                      description={t("settingsPage.general.notifications.ignoredAppDescription")}
-                    >
-                      <Button
-                        onClick={() =>
-                          setMeetingDetectionIgnoredApps(
-                            meetingDetectionIgnoredApps.filter((ignored) => ignored.id !== app.id)
-                          )
-                        }
-                        variant="ghost"
-                        size="sm"
-                        className="text-foreground/70 hover:text-foreground"
-                      >
-                        {t("settingsPage.general.notifications.stopIgnoringApp")}
-                      </Button>
-                    </SettingsRow>
+                {meetingDetectionIgnoredApps.length > 0 && (
+                  // Dimmed like the toggles above while detection is off, but
+                  // Stop ignoring stays usable so the list can still be tidied.
+                  <SettingsPanelRow
+                    className={notificationsEnabled && notifyMeetingDetection ? "" : "opacity-60"}
+                  >
+                    <p className="text-xs font-medium text-foreground">
+                      {t("settingsPage.general.notifications.ignoredApps")}
+                    </p>
+                    <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">
+                      {t("settingsPage.general.notifications.ignoredAppsDescription")}
+                    </p>
+                    <ul className="mt-2 space-y-1">
+                      {meetingDetectionIgnoredApps.map((app) => (
+                        <li key={app.id} className="flex items-center justify-between gap-3">
+                          <span
+                            className="min-w-0 truncate text-xs text-foreground"
+                            title={app.name}
+                          >
+                            {app.name}
+                          </span>
+                          <Button
+                            onClick={() =>
+                              setMeetingDetectionIgnoredApps(
+                                meetingDetectionIgnoredApps.filter(
+                                  (ignored) => ignored.id !== app.id
+                                )
+                              )
+                            }
+                            variant="ghost"
+                            size="sm"
+                            className="shrink-0 text-foreground/70 hover:text-foreground"
+                          >
+                            {t("settingsPage.general.notifications.stopIgnoringApp")}
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
                   </SettingsPanelRow>
-                ))}
+                )}
                 <SettingsPanelRow>
                   <SettingsRow
                     label={t("settingsPage.general.notifications.calendarReminders")}

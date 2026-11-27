@@ -2798,7 +2798,8 @@
         "disableAllDescription": "Tout couper sauf les messages d'erreur",
         "meetingDetection": "Détection de réunion",
         "meetingDetectionDescription": "Prévenir quand une réunion est détectée pour lancer l'enregistrement",
-        "ignoredAppDescription": "La détection de réunion ne vous sollicite pas quand cette app utilise le micro",
+        "ignoredApps": "Apps ignorées",
+        "ignoredAppsDescription": "La détection de réunion ne vous sollicite pas quand ces apps utilisent le micro",
         "stopIgnoringApp": "Ne plus ignorer",
         "calendarReminders": "Rappels de calendrier",
         "calendarRemindersDescription": "Prévenir quand une réunion planifiée va commencer"

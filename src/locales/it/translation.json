@@ -2037,7 +2037,8 @@
         "disableAllDescription": "Silenzia tutto tranne i messaggi di errore",
         "meetingDetection": "Rilevamento riunioni",
         "meetingDetectionDescription": "Avvisa quando viene rilevata una riunione per avviare la registrazione",
-        "ignoredAppDescription": "Il rilevamento delle riunioni non avvisa quando questa app usa il microfono",
+        "ignoredApps": "App ignorate",
+        "ignoredAppsDescription": "Il rilevamento delle riunioni non avvisa quando queste app usano il microfono",
         "stopIgnoringApp": "Non ignorare più",
         "calendarReminders": "Promemoria calendario",
         "calendarRemindersDescription": "Avvisa quando una riunione programmata sta per iniziare"

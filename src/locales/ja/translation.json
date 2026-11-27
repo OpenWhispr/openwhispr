@@ -2037,7 +2037,8 @@
         "disableAllDescription": "エラーメッセージ以外をすべて消音にする",
         "meetingDetection": "会議の検出",
         "meetingDetectionDescription": "会議が検出されたときに通知して録音を開始できるようにする",
-        "ignoredAppDescription": "このアプリがマイクを使っても会議の確認を表示しません",
+        "ignoredApps": "無視するアプリ",
+        "ignoredAppsDescription": "これらのアプリがマイクを使っても会議の確認を表示しません",
         "stopIgnoringApp": "無視をやめる",
         "calendarReminders": "カレンダーリマインダー",
         "calendarRemindersDescription": "予定された会議がまもなく始まるときに通知する"

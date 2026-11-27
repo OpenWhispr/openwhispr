@@ -5666,7 +5666,8 @@
         "disableAllDescription": "كتم كل شيء باستثناء رسائل الخطأ",
         "meetingDetection": "اكتشاف الاجتماع",
         "meetingDetectionDescription": "إعلام عند اكتشاف اجتماع حتى تتمكن من بدء التسجيل",
-        "ignoredAppDescription": "لا يعرض اكتشاف الاجتماعات تنبيهًا عندما يستخدم هذا التطبيق الميكروفون",
+        "ignoredApps": "التطبيقات المتجاهلة",
+        "ignoredAppsDescription": "لا يعرض اكتشاف الاجتماعات تنبيهًا عندما تستخدم هذه التطبيقات الميكروفون",
         "stopIgnoringApp": "إيقاف التجاهل",
         "calendarReminders": "تذكيرات التقويم",
         "calendarRemindersDescription": "إعلام عند اقتراب موعد بدء اجتماع مجدول"

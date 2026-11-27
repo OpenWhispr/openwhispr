@@ -98,7 +98,7 @@ export function MeetingNotificationCard({
               type="button"
               onClick={onIgnore}
               disabled={busy}
-              className="mt-1 text-left text-[11px] leading-tight text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-60"
+              className="mt-1 text-start text-[11px] leading-tight break-words text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-60"
             >
               {ignoreLabel}
             </button>

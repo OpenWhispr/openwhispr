@@ -490,6 +490,21 @@ function readStringArray(key: string, fallback: string[]): string[] {
   }
 }
 
+// Keeps only well-formed entries, so a hand-edited or corrupt value can't break
+// the Settings rows or the card's ignore action.
+function parseIgnoredApps(stored: string | null): MeetingDetectionApp[] {
+  try {
+    const parsed: unknown = JSON.parse(stored ?? "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (app): app is MeetingDetectionApp =>
+        typeof app?.id === "string" && typeof app?.name === "string"
+    );
+  } catch {
+    return [];
+  }
+}
+
 type MicrophoneSelectionMode = "system" | "built-in" | "specific";
 
 // `message` is main's translated reason, when it gave one.
@@ -583,7 +598,6 @@ const ARRAY_SETTINGS = new Set([
   "onboardingUseCases",
   "spokenLanguages",
   "translationTargets",
-  "meetingDetectionIgnoredApps",
 ]);
 
 const NUMERIC_SETTINGS = new Set([
@@ -1948,14 +1962,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   notificationsEnabled: readBoolean("notificationsEnabled", true),
   notifyMeetingDetection: readBoolean("notifyMeetingDetection", true),
   notifyCalendarReminders: readBoolean("notifyCalendarReminders", true),
-  meetingDetectionIgnoredApps: (() => {
-    try {
-      const parsed = JSON.parse(readString("meetingDetectionIgnoredApps", "[]"));
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  })(),
+  meetingDetectionIgnoredApps: parseIgnoredApps(readString("meetingDetectionIgnoredApps", "[]")),
   autoUpdatesEnabled: readBoolean("autoUpdatesEnabled", true),
   ...(() => {
     let accounts: CalendarAccount[] = [];
@@ -4652,6 +4659,8 @@ export async function initializeSettings(): Promise<void> {
     let value: unknown;
     if (BOOLEAN_SETTINGS.has(key)) {
       value = newValue === "true";
+    } else if (key === "meetingDetectionIgnoredApps") {
+      value = parseIgnoredApps(newValue);
     } else if (ARRAY_SETTINGS.has(key)) {
       try {
         const parsed = JSON.parse(newValue);
