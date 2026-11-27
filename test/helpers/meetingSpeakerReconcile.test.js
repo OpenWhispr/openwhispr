@@ -379,7 +379,7 @@ test.describe("automatic speaker mode", () => {
       expectedCount: 3,
       explicit: true,
     });
-    assert.deepEqual(limits.at(-1), { maxSpeakers: 2, gated: false });
+    assert.deepEqual(limits.at(-1), { maxSpeakers: 2, gated: true });
   });
 
   // The stepper must not show fewer speakers than are on screen, and new
@@ -390,7 +390,7 @@ test.describe("automatic speaker mode", () => {
     call("_refreshMeetingSpeakerConfigFromNote", NOTE_ID, noteWithTwoOthers);
     assert.equal(self.activeMeetingSpeakerConfig.auto, false);
     assert.equal(self.activeMeetingSpeakerConfig.expectedCount, 5);
-    assert.deepEqual(limits.at(-1), { maxSpeakers: 4, gated: false });
+    assert.deepEqual(limits.at(-1), { maxSpeakers: 4, gated: true });
     assert.deepEqual(
       broadcasts.map((broadcast) => broadcast.payload),
       [{ enabled: true, expectedCount: 5 }]
@@ -403,7 +403,7 @@ test.describe("automatic speaker mode", () => {
     call("_refreshMeetingSpeakerConfigFromNote", NOTE_ID, noteWithTwoOthers);
     assert.equal(self.activeMeetingSpeakerConfig.auto, false);
     assert.equal(self.activeMeetingSpeakerConfig.expectedCount, 3);
-    assert.deepEqual(limits.at(-1), { maxSpeakers: 2, gated: false });
+    assert.deepEqual(limits.at(-1), { maxSpeakers: 2, gated: true });
     assert.deepEqual(
       broadcasts.map((broadcast) => broadcast.payload),
       [{ enabled: true, expectedCount: 3 }]

@@ -849,7 +849,7 @@ const useNoteSpeakerConfig = (t, note) => {
 
 for (const [label, note, limit] of [
   ["no speaker count", {}, { maxSpeakers: 7, gated: true }],
-  ["a speaker count", { expected_speaker_count: 3 }, { maxSpeakers: 2, gated: false }],
+  ["a speaker count", { expected_speaker_count: 3 }, { maxSpeakers: 2, gated: true }],
 ]) {
   test(`a meeting on a note with ${label} starts live identification with its limit`, async (t) => {
     resetMeeting(t);
@@ -861,10 +861,7 @@ for (const [label, note, limit] of [
     const options = { provider: "deepgram-realtime", mode: "byok", noteId: 41 };
     assert.equal((await invoke("meeting-transcription-start", options)).success, true);
     const startOptions = liveStart.mock.calls[0].arguments[1];
-    assert.deepEqual(
-      { maxSpeakers: startOptions.maxSpeakers, gated: startOptions.gated },
-      limit
-    );
+    assert.deepEqual({ maxSpeakers: startOptions.maxSpeakers, gated: startOptions.gated }, limit);
   });
 }
 
@@ -892,7 +889,9 @@ test("a retroactive identification reaches the renderer marked retroactive", asy
   );
   notifications.length = 0;
   onIdentified({ speakerId: "speaker_1", startTime: 1, endTime: 4, retroactive: true });
-  const identified = notifications.filter(([, channel]) => channel === "meeting-speaker-identified");
+  const identified = notifications.filter(
+    ([, channel]) => channel === "meeting-speaker-identified"
+  );
   assert.equal(identified.length, 1);
   assert.equal(identified[0][2].speakerId, "speaker_1");
   assert.equal(identified[0][2].retroactive, true);

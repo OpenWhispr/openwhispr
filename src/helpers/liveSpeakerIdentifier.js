@@ -57,9 +57,9 @@ const MATCH_THRESHOLD = 0.6;
 // stricter bar: at 0.70 fewer than 1% of voices had a different speaker that close.
 const RECLUSTER_THRESHOLD = 0.7;
 const MATCH_MARGIN = 0.03;
-// Automatic mode (no speaker count) gates new voices: one that matches no
-// confirmed speaker is held as a candidate until it has 3 segments totalling
-// 8 s, or one segment of 12 s. On real meetings a voice drifts below 0.60
+// A meeting that can have more than one remote speaker gates new voices: one
+// that matches no confirmed speaker is held as a candidate until it has 3
+// segments totalling 8 s, or one segment of 12 s. On real meetings a voice drifts below 0.60
 // against its own earlier segments in 20% of segments, which splits one person
 // into several; matching at 0.45 while gated drops that to 2%. Stored profiles
 // keep MATCH_THRESHOLD.
@@ -67,9 +67,6 @@ const CANDIDATE_MIN_SEGMENTS = 3;
 const CANDIDATE_MIN_SECONDS = 8;
 const CANDIDATE_SOLO_SECONDS = 12;
 const MAX_CANDIDATES = 8;
-// A promotion replays every stored window as its own IPC call, so a voice held a
-// long time (at the cap) keeps only its most recent windows.
-const MAX_CANDIDATE_WINDOWS = 50;
 const AUTO_MATCH_THRESHOLD = 0.45;
 const DEFAULT_CANDIDATE_RULE = Object.freeze({
   minSegments: CANDIDATE_MIN_SEGMENTS,
@@ -701,7 +698,18 @@ class LiveSpeakerIdentifier {
       displayName: resolved.displayName || null,
       startTime: Math.max(0, this.segmentStartSample / SAMPLE_RATE - LIVE_WINDOW_PADDING_SECONDS),
       endTime: this.segmentEndSample / SAMPLE_RATE + LIVE_WINDOW_PADDING_SECONDS,
+      ...this._segmentSpeechRange(),
     });
+  }
+
+  // The window an identification covers is padded on both sides, so it reaches
+  // into the neighbouring speakers' audio. The speech range is the part that is
+  // this segment's own.
+  _segmentSpeechRange() {
+    return {
+      speechStartTime: this.segmentStartSample / SAMPLE_RATE,
+      speechEndTime: this.segmentEndSample / SAMPLE_RATE,
+    };
   }
 
   async _finalizeSpeechSegment() {
@@ -726,12 +734,12 @@ class LiveSpeakerIdentifier {
       this.segmentStartSample / SAMPLE_RATE - LIVE_WINDOW_PADDING_SECONDS
     );
     const endTime = this.segmentEndSample / SAMPLE_RATE + LIVE_WINDOW_PADDING_SECONDS;
+    const window = { startTime, endTime, ...this._segmentSpeechRange() };
     const resolved = this._resolveSpeakerForEmbedding(embedding, {
       updateCentroid: true,
       segment: {
         seconds: (this.segmentEndSample - this.segmentStartSample) / SAMPLE_RATE,
-        startTime,
-        endTime,
+        ...window,
       },
     });
 
@@ -745,10 +753,10 @@ class LiveSpeakerIdentifier {
 
       // A promoted or absorbed candidate's earlier lines go out first, so the
       // renderer can relabel them without taking them for the current speaker.
-      for (const window of resolved.backfill || []) {
-        this.onSpeakerIdentified?.({ speakerId, displayName, ...window, retroactive: true });
+      for (const earlier of resolved.backfill || []) {
+        this.onSpeakerIdentified?.({ speakerId, displayName, ...earlier, retroactive: true });
       }
-      this.onSpeakerIdentified?.({ speakerId, displayName, startTime, endTime });
+      this.onSpeakerIdentified?.({ speakerId, displayName, ...window });
     }
 
     this.currentSegmentSpeakerId = null;
@@ -826,7 +834,36 @@ class LiveSpeakerIdentifier {
   }
 
   _resolveSpeakerForEmbedding(embedding, options = {}) {
+    const resolved = this._matchOrCreateSpeaker(embedding, options);
+    // A held voice can turn out to be a speaker confirmed without it: by a
+    // stored profile, or once that speaker's centroid has moved. Only a finished
+    // segment can send its lines along.
+    if (options.segment && resolved.speakerId && !resolved.forced && this._candidates.length > 0) {
+      resolved.backfill = [
+        ...resolved.backfill,
+        ...this._takeWindowsOfCandidatesMatching(resolved.speakerId),
+      ].sort((left, right) => left.startTime - right.startTime);
+    }
+    return resolved;
+  }
+
+  _matchOrCreateSpeaker(embedding, options) {
     const { updateCentroid = false, segment = null } = options;
+
+    // While gated, a live window matches at the lower threshold on audio too
+    // short to judge a new voice. A finished segment that doesn't match the
+    // speaker its live window gave it is judged again on its own, or one weak
+    // match would pull a different voice into that speaker's centroid.
+    if (
+      segment &&
+      this.gated &&
+      this.currentSegmentSpeakerId &&
+      !this.currentSegmentForced &&
+      this._findTransientMatch(embedding) !== this.currentSegmentSpeakerId
+    ) {
+      this.currentSegmentSpeakerId = null;
+      this.currentSegmentSpeakerName = null;
+    }
 
     let speakerId = this.currentSegmentSpeakerId || this._findTransientMatch(embedding);
     let displayName = this.currentSegmentSpeakerName || null;
@@ -881,7 +918,13 @@ class LiveSpeakerIdentifier {
       };
     }
 
-    if (this.gated && this.transientEmbeddings.size > 0) {
+    // The first voice needs no gate, and at the cap there is no new speaker to
+    // hold a voice for: it is folded onto the nearest one, as without the gate.
+    if (
+      this.gated &&
+      this.transientEmbeddings.size > 0 &&
+      this.transientEmbeddings.size < this.maxSpeakers
+    ) {
       // Live windows are too short to judge a new voice, so only finished
       // segments add evidence.
       return segment
@@ -895,8 +938,26 @@ class LiveSpeakerIdentifier {
       speakerId,
       displayName: this.transientDisplayNames.get(speakerId) || null,
       forced,
-      backfill: [],
+      // A voice held before the cap was reached takes its earlier lines along.
+      backfill: forced && segment ? this._takeCandidateWindows(embedding) : [],
     };
+  }
+
+  _takeCandidateWindows(embedding) {
+    const candidate = this._findCandidateMatch(embedding);
+    if (!candidate) return [];
+    this._removeCandidate(candidate);
+    return candidate.windows;
+  }
+
+  _takeWindowsOfCandidatesMatching(speakerId) {
+    const windows = [];
+    for (const candidate of this._candidates) {
+      if (this._findTransientMatch(candidate.centroid) !== speakerId) continue;
+      this._removeCandidate(candidate);
+      windows.push(...candidate.windows);
+    }
+    return windows;
   }
 
   _holdAsCandidate(embedding, segment) {
@@ -923,17 +984,14 @@ class LiveSpeakerIdentifier {
       };
     }
 
-    if (
-      this._candidateHasEnoughEvidence(candidate, segment.seconds) &&
-      this.transientEmbeddings.size < this.maxSpeakers
-    ) {
+    if (this._candidateHasEnoughEvidence(candidate, segment.seconds)) {
       const speakerId = this._assignSpeakerId(candidate.centroid);
       this._removeCandidate(candidate);
       return { speakerId, displayName: null, forced: false, backfill: candidate.windows };
     }
 
-    candidate.windows.push({ startTime: segment.startTime, endTime: segment.endTime });
-    if (candidate.windows.length > MAX_CANDIDATE_WINDOWS) candidate.windows.shift();
+    const { seconds: _seconds, ...window } = segment;
+    candidate.windows.push(window);
     return { speakerId: null, displayName: null, forced: false, backfill: [] };
   }
 
@@ -1038,5 +1096,4 @@ module.exports.CANDIDATE_MIN_SEGMENTS = CANDIDATE_MIN_SEGMENTS;
 module.exports.CANDIDATE_MIN_SECONDS = CANDIDATE_MIN_SECONDS;
 module.exports.CANDIDATE_SOLO_SECONDS = CANDIDATE_SOLO_SECONDS;
 module.exports.MAX_CANDIDATES = MAX_CANDIDATES;
-module.exports.MAX_CANDIDATE_WINDOWS = MAX_CANDIDATE_WINDOWS;
 module.exports.AUTO_MATCH_THRESHOLD = AUTO_MATCH_THRESHOLD;

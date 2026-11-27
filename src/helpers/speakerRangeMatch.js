@@ -93,6 +93,40 @@ export function rangedLabelChanges(row, heard) {
   );
 }
 
+// An identification's window is padded on both sides, so it reaches a reply that
+// starts right after its speaker stops. Its speech range, when it has one, is the
+// part that is the speaker's own, and two speech ranges never overlap unless they
+// belong to the same segment. So a row first given to a speaker by padding alone
+// goes to the speaker in whose speech it starts.
+export function isWithinSpeech(identification, timestamp) {
+  return (
+    identification.speechStartTime != null &&
+    identification.speechEndTime != null &&
+    timestamp >= identification.speechStartTime &&
+    timestamp <= identification.speechEndTime
+  );
+}
+
+export function takesRowFromOtherSpeaker(row, timestamp, identification) {
+  return row.speaker !== identification.speakerId && isWithinSpeech(identification, timestamp);
+}
+
+// A retroactive window can be minutes old. The identifications that gave a ranged
+// row its speaker may be pruned by then, so the window would win the row on any
+// overlap. It moves a confirmed row only when it covers at least half of it.
+export function retroactiveMayMoveRangedRow(row, start, end, identification) {
+  if (
+    identification.retroactive !== true ||
+    row.speakerStatus !== "confirmed" ||
+    row.speakerIsPlaceholder === true ||
+    row.speaker === identification.speakerId
+  ) {
+    return true;
+  }
+  const overlapMs = rangeOverlapMs(start, end, identification.startTime, identification.endTime);
+  return overlapMs * 2 >= end - start;
+}
+
 export function pruneIdentifications(
   identifications,
   newestEndTime,

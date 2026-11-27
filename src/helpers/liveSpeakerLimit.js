@@ -5,22 +5,30 @@ const MAX_REMOTE_SPEAKERS = MAX_SPEAKER_COUNT - 1;
 
 /**
  * Decides how many remote speakers live identification may name, and whether
- * it must pass the confidence gate.
+ * a new voice must pass the confidence gate.
  *
  * - explicit (stepper): the user's number is exact, even below speakers found.
  * - attendees: an estimate, so it never drops below speakers already found.
- * - auto (no count): the most the app supports, behind the gate.
+ * - auto (no count): the most the app supports.
+ *
+ * The gate keeps one voice from splitting into several speakers, which uses up
+ * a known count as surely as an unknown one, so it is on whenever there can be
+ * more than one remote speaker.
  *
  * @param {{ expectedCount: number, explicit?: boolean, auto?: boolean }} config
  * @param {number} [confirmedCount] remote speakers already confirmed
  * @returns {{ maxSpeakers: number, gated: boolean }}
  */
 function resolveLiveSpeakerLimit(config, confirmedCount = 0) {
-  if (config.auto) return { maxSpeakers: MAX_REMOTE_SPEAKERS, gated: true };
+  const maxSpeakers = Math.min(remoteSpeakerLimit(config, confirmedCount), MAX_REMOTE_SPEAKERS);
+  return { maxSpeakers, gated: maxSpeakers > 1 };
+}
+
+function remoteSpeakerLimit(config, confirmedCount) {
+  if (config.auto) return MAX_REMOTE_SPEAKERS;
 
   const remoteFromCount = Math.max(1, config.expectedCount - 1);
-  const maxSpeakers = config.explicit ? remoteFromCount : Math.max(remoteFromCount, confirmedCount);
-  return { maxSpeakers: Math.min(maxSpeakers, MAX_REMOTE_SPEAKERS), gated: false };
+  return config.explicit ? remoteFromCount : Math.max(remoteFromCount, confirmedCount);
 }
 
 /**

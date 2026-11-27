@@ -60,6 +60,9 @@ import {
   pruneIdentifications,
   rangeOverlapMs,
   rangedLabelChanges,
+  isWithinSpeech,
+  retroactiveMayMoveRangedRow,
+  takesRowFromOtherSpeaker,
 } from "../helpers/speakerRangeMatch";
 import {
   canStopMeetingRecordingSession,
@@ -94,6 +97,9 @@ interface SpeakerIdentification {
   displayName?: string | null;
   startTime: number;
   endTime: number;
+  /** The window without its padding: the speaker's own audio. */
+  speechStartTime?: number;
+  speechEndTime?: number;
   /** An earlier window of a voice main just confirmed; it relabels rows but isn't the current speaker. */
   retroactive?: boolean;
 }
@@ -508,6 +514,9 @@ let speakerIdentifications: SpeakerIdentification[] = [];
 // keeps the end of its audio range (it starts at the row's timestamp) and is picked
 // again from the kept identifications whenever a new one hears part of it.
 const segmentRangeEnds = new Map<string, number>();
+// Rows whose speaker came from an identification's padding alone, so the speaker
+// in whose speech they start can still take them (takesRowFromOtherSpeaker).
+const paddingConfirmedSegments = new Set<string>();
 let nextPlaceholderSpeakerIndex = 0;
 // First speaker index this session owns; a resumed note's earlier sessions keep the
 // ids below it. Main may raise it (see _resolveMeetingSpeakerIndexBase).
@@ -735,7 +744,8 @@ function relabelRangedSegment(
   // let a label flip as old identifications age out.
   if (
     start == null ||
-    rangeOverlapMs(start, end, identification.startTime, identification.endTime) <= 0
+    rangeOverlapMs(start, end, identification.startTime, identification.endTime) <= 0 ||
+    !retroactiveMayMoveRangedRow(segment, start, end, identification)
   ) {
     return segment;
   }
@@ -752,11 +762,22 @@ function applySpeakerIdentification(
   const rangeEnd = segmentRangeEnds.get(segment.id);
   if (rangeEnd != null) return relabelRangedSegment(segment, rangeEnd, identification);
 
-  if (
-    !isSegmentWithinIdentificationWindow(segment, identification) ||
-    (segment.speaker && !segment.speakerIsPlaceholder && segment.speakerStatus !== "provisional")
-  ) {
+  if (!isSegmentWithinIdentificationWindow(segment, identification)) return segment;
+
+  const timestamp = segment.timestamp as number;
+  const inSpeech = isWithinSpeech(identification, timestamp);
+  const isConfirmed =
+    segment.speaker && !segment.speakerIsPlaceholder && segment.speakerStatus !== "provisional";
+  if (isConfirmed && !takesRowFromOtherSpeaker(segment, timestamp, identification)) {
+    if (inSpeech) paddingConfirmedSegments.delete(segment.id);
     return segment;
+  }
+
+  // An identification without a speech range is taken at its word.
+  if (inSpeech || identification.speechStartTime == null) {
+    paddingConfirmedSegments.delete(segment.id);
+  } else {
+    paddingConfirmedSegments.add(segment.id);
   }
 
   // A provisional row can carry the previous speaker's name; it stays with that speaker.
@@ -772,7 +793,8 @@ function applySpeakerIdentification(
 
 // A system row this session hasn't confirmed was only carried onto its speaker,
 // so it shows the user's name for them but stays movable until an identification
-// confirms it. A local-model row is never locked either, even once confirmed: it
+// confirms it. So does a row confirmed by an identification's padding alone, until
+// its speaker is heard in the row's own audio. A local-model row is never locked either, even once confirmed: it
 // is picked from whichever identifications overlap it so far, and a new voice
 // answering inside the previous speaker's window is picked for them until its own
 // (retroactive) window arrives; the re-pick keeps or drops the name. Other
@@ -788,7 +810,9 @@ function nameSpeakerRow(segment: TranscriptSegment, name: string): TranscriptSeg
   if (
     segment.source === "system" &&
     !segment.speakerLocked &&
-    (segment.speakerStatus !== "confirmed" || segmentRangeEnds.has(segment.id)) &&
+    (segment.speakerStatus !== "confirmed" ||
+      segmentRangeEnds.has(segment.id) ||
+      paddingConfirmedSegments.has(segment.id)) &&
     !isEarlierSessionSpeaker(segment.speaker)
   ) {
     return normalizeTranscriptSegment({ ...segment, ...patch });
@@ -1114,6 +1138,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     sessionRecorderName = args.recorderName;
     speakerIdentifications = [];
     segmentRangeEnds.clear();
+    paddingConfirmedSegments.clear();
     sessionSpeakerIndexBase = maxSpeakerIndex + 1;
     nextPlaceholderSpeakerIndex = sessionSpeakerIndexBase;
     recentSystemSpeaker = null;
@@ -1582,8 +1607,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
           data,
         ];
         const next = useMeetingRecordingStore.getState().segments.map((segment) => {
+          const byPadding = paddingConfirmedSegments.has(segment.id);
           const identified = applySpeakerIdentification(segment, data);
-          return identified === segment ? segment : applyUserSpeakerName(identified);
+          // A row its speaker has now been heard in can take the lock a name gives.
+          const settled = byPadding && !paddingConfirmedSegments.has(segment.id);
+          return identified === segment && !settled ? segment : applyUserSpeakerName(identified);
         });
         segmentsRefValue = next;
         useMeetingRecordingStore.setState({ segments: next });

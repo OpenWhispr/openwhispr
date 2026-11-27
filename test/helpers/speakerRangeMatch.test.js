@@ -138,3 +138,33 @@ test("identifications are kept for 120 s behind the newest", async () => {
   );
   assert.equal(IDENTIFICATION_RETENTION_MS, 120_000);
 });
+
+test("a row goes to another speaker only when it starts in that speaker's speech", async () => {
+  const { takesRowFromOtherSpeaker, isWithinSpeech } = await load();
+  const row = { speaker: "speaker_0" };
+  const reply = { ...B(4650, 7750), speechStartTime: 5400, speechEndTime: 7000 };
+
+  assert.equal(takesRowFromOtherSpeaker(row, 5400, reply), true);
+  assert.equal(takesRowFromOtherSpeaker(row, 4800, reply), false, "only in the padding");
+  assert.equal(takesRowFromOtherSpeaker({ speaker: "speaker_1" }, 5400, reply), false);
+  assert.equal(isWithinSpeech(B(4650, 7750), 5400), false, "no speech range sent");
+});
+
+test("a retroactive window moves a confirmed ranged row only when it covers half of it", async () => {
+  const { retroactiveMayMoveRangedRow } = await load();
+  const row = { speaker: "speaker_0", speakerStatus: "confirmed" };
+  const late = (startTime, endTime) => ({ ...B(startTime, endTime), retroactive: true });
+
+  assert.equal(retroactiveMayMoveRangedRow(row, 1000, 5200, late(5000, 6000)), false);
+  assert.equal(retroactiveMayMoveRangedRow(row, 1000, 5200, late(3000, 6000)), true);
+  assert.equal(retroactiveMayMoveRangedRow(row, 1000, 5200, B(5000, 6000)), true, "live window");
+  assert.equal(
+    retroactiveMayMoveRangedRow(
+      { ...row, speakerStatus: "provisional" },
+      1000,
+      5200,
+      late(5000, 6000)
+    ),
+    true
+  );
+});

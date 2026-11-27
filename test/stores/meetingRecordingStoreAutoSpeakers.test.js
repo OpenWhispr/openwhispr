@@ -178,6 +178,76 @@ test("a line that arrives already confirmed for a named speaker is locked", asyn
   assert.equal(rows()[0].speakerName, "Ana");
 });
 
+// An identification's window is padded 750 ms each side, so a reply that starts
+// right after a speaker stops falls inside that speaker's window.
+const spoke = (identification, speechStartTime, speechEndTime) => ({
+  ...identification,
+  speechStartTime,
+  speechEndTime,
+});
+const anaThenQuickReply = (identify, final) => {
+  identify(spoke(A(T, T + 5750), T + 750, T + 5000));
+  final({ text: "quick reply", source: "system", timestamp: T + 5400 });
+};
+const replyConfirmed = () => ({
+  ...spoke(B(T + 4650, T + 7750), T + 5400, T + 7000),
+  retroactive: true,
+});
+
+test("a reply confirmed by the previous speaker's padding moves to the voice it starts in", async (t) => {
+  const { identify, final, rows } = await startMeeting(t);
+  anaThenQuickReply(identify, final);
+  assert.equal(rows()[0].speaker, "speaker_0");
+  assert.equal(rows()[0].speakerStatus, "confirmed");
+
+  identify(replyConfirmed());
+  assert.equal(rows()[0].speaker, "speaker_1");
+});
+
+test("a line in a speaker's own speech stays theirs when another window's padding covers it", async (t) => {
+  const { identify, final, rows } = await startMeeting(t);
+  identify(spoke(A(T, T + 5750), T + 750, T + 5000));
+  final({ text: "ana's last words", source: "system", timestamp: T + 4800 });
+  identify(replyConfirmed());
+  assert.equal(rows()[0].speaker, "speaker_0");
+});
+
+test("a reply confirmed by a named speaker's padding is not locked, and moves", async (t) => {
+  const { identify, final, lockSpeaker, rows } = await startMeeting(t);
+  lockSpeaker("speaker_0", "Ana");
+  anaThenQuickReply(identify, final);
+  assert.equal(rows()[0].speakerName, "Ana");
+  assert.notEqual(rows()[0].speakerLocked, true);
+
+  identify(replyConfirmed());
+  assert.equal(rows()[0].speaker, "speaker_1");
+  assert.equal(rows()[0].speakerName, undefined);
+});
+
+test("a line confirmed by padding is locked once its named speaker is heard in it", async (t) => {
+  const { identify, final, lockSpeaker, rows } = await startMeeting(t);
+  lockSpeaker("speaker_0", "Ana");
+  anaThenQuickReply(identify, final);
+  identify(spoke(A(T + 4650, T + 9000), T + 5400, T + 8250));
+  assert.equal(rows()[0].speakerLocked, true);
+  assert.equal(rows()[0].speakerName, "Ana");
+});
+
+// By the time a long-held voice is confirmed, the identifications that gave a
+// ranged row its speaker are pruned, so the old window is the only one left.
+test("a late retroactive window that only clips a confirmed ranged row leaves it", async (t) => {
+  const { identify, final, rows } = await startMeeting(t);
+  identify(A(T, T + 6000));
+  final({ text: "ana at length", source: "system", timestamp: T + 1000, endTimestamp: T + 5200 });
+  identify(A(T + 200_000, T + 201_000));
+
+  identify({ ...B(T + 5000, T + 6000), retroactive: true });
+  assert.equal(rows()[0].speaker, "speaker_0");
+
+  identify({ ...B(T + 2000, T + 6000), retroactive: true });
+  assert.equal(rows()[0].speaker, "speaker_1");
+});
+
 test("an automatic count update moves an untouched stepper up and down", async (t) => {
   const { configUpdated, store } = await startMeeting(t);
   configUpdated({ enabled: true, expectedCount: 4, auto: true });

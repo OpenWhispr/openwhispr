@@ -180,6 +180,8 @@ const {
   pickSpeakerForRange,
   rangedLabelChanges,
   pruneIdentifications,
+  takesRowFromOtherSpeaker,
+  retroactiveMayMoveRangedRow,
 } = require("./speakerRangeMatch");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
 const createMeetingSystemAudioWatchdog = require("./meetingSystemAudioWatchdog");
@@ -1518,10 +1520,9 @@ class IPCHandlers {
   // live cap never drops below the speakers already confirmed
   // (resolveLiveSpeakerLimit). The after-call cap still reads the note.
   //
-  // A stepper press from automatic mode also lands here first: the renderer's
-  // note write arrives before its debounced explicit push (150 ms), so for that
-  // moment the config is attendee-style until _setSessionSpeakerConfig makes it
-  // explicit.
+  // A stepper press never lands here: it writes only the note's count, and this
+  // runs for participants writes alone. Its debounced push makes the config
+  // explicit (_setSessionSpeakerConfig).
   _refreshMeetingSpeakerConfigFromNote(noteId, note) {
     const config = this.activeMeetingSpeakerConfig;
     if (!config || config.explicit) return;
@@ -8537,12 +8538,12 @@ class IPCHandlers {
       // so label it from the ones we kept.
       if (source === "system" && endTimestamp !== null) {
         const heard = pickSpeakerForRange(meetingLiveIdentifications, timestamp, endTimestamp);
-        if (heard) labelRangedRow(segment, heard);
+        if (heard) labelRowAsHeard(segment, heard);
       }
       meetingDiarizationSegments.push(segment);
     };
 
-    const labelRangedRow = (segment, heard) => {
+    const labelRowAsHeard = (segment, heard) => {
       if (!canAutoRelabelSpeaker(segment)) return;
       // Another speaker's name must never stay on a row that turned out to be someone else.
       const keptName = segment.speaker === heard.speakerId ? segment.speakerName : undefined;
@@ -8578,24 +8579,31 @@ class IPCHandlers {
           ) {
             continue;
           }
+          if (!retroactiveMayMoveRangedRow(seg, seg.timestamp, seg.endTimestamp, identification)) {
+            continue;
+          }
           const heard = pickSpeakerForRange(
             meetingLiveIdentifications,
             seg.timestamp,
             seg.endTimestamp
           );
-          if (heard && rangedLabelChanges(seg, heard)) labelRangedRow(seg, heard);
+          if (heard && rangedLabelChanges(seg, heard)) labelRowAsHeard(seg, heard);
           continue;
         }
 
-        if (
-          seg.timestamp >= identification.startTime &&
-          seg.timestamp <= identification.endTime &&
-          (!seg.speaker || seg.speakerIsPlaceholder)
-        ) {
+        if (seg.timestamp < identification.startTime || seg.timestamp > identification.endTime) {
+          continue;
+        }
+        if (!seg.speaker || seg.speakerIsPlaceholder) {
           applyConfirmedSpeaker(seg, {
             speaker: identification.speakerId,
             speakerName: identification.displayName || seg.speakerName,
             speakerIsPlaceholder: false,
+          });
+        } else if (takesRowFromOtherSpeaker(seg, seg.timestamp, identification)) {
+          labelRowAsHeard(seg, {
+            speakerId: identification.speakerId,
+            displayName: identification.displayName ?? null,
           });
         }
       }
@@ -9861,6 +9869,16 @@ class IPCHandlers {
               displayName,
               startTime,
               endTime,
+              ...(identification.speechStartTime != null && {
+                speechStartTime: Math.max(
+                  startTime,
+                  meetingLiveSpeakerStartedAt + identification.speechStartTime * 1000
+                ),
+                speechEndTime: Math.min(
+                  endTime,
+                  meetingLiveSpeakerStartedAt + identification.speechEndTime * 1000
+                ),
+              }),
             };
 
             win.webContents.send("meeting-speaker-identified", enrichedIdentification);

@@ -740,13 +740,15 @@ test("gated: a voice matching a stored profile is a speaker at once, with its na
   });
 });
 
-test("gated: at the cap a new voice stays a candidate", () => {
+test("gated: at the cap a new voice is folded onto the nearest speaker, as without the gate", () => {
   const { id } = gatedIdentifier();
   id.setSpeakerLimit({ maxSpeakers: 1, gated: true });
   hear(id, voiceA, 0, 2);
-  hear(id, voiceB, 10, 4);
-  hear(id, voiceB, 20, 4);
-  assert.equal(hear(id, voiceB, 30, 4).speakerId, null);
+  assert.deepEqual(pick(hear(id, voiceB, 10, 4), "speakerId", "forced"), {
+    speakerId: "speaker_0",
+    forced: true,
+  });
+  assert.equal(id._candidates.length, 0);
   assert.equal(id.getConfirmedSpeakerCount(), 1);
 });
 
@@ -773,42 +775,53 @@ test("candidates are not in the stop state, recluster or mapSpeaker", () => {
   assert.equal(id.mapSpeaker("speaker_1", 3, "Bea", 9), true);
 });
 
-test("a ready candidate held at the cap is promoted with all its windows once the cap rises", () => {
+test("a voice held before the cap was reached takes its earlier lines along when folded", () => {
   const { id } = gatedIdentifier();
-  id.setSpeakerLimit({ maxSpeakers: 1, gated: true });
-  hear(id, voiceA, 0, 2);
-  hear(id, voiceB, 10, 4);
-  hear(id, voiceB, 20, 4);
-  assert.equal(hear(id, voiceB, 30, 4).speakerId, null);
+  id.setSpeakerLimit({ maxSpeakers: 2, gated: true });
+  hear(id, oneHot(0), 0, 2);
+  assert.equal(hear(id, oneHot(1), 10, 2).speakerId, null);
+  assert.equal(hear(id, oneHot(2), 20, 12).speakerId, "speaker_1");
 
-  id.setSpeakerLimit({ maxSpeakers: 7, gated: true });
-  assert.deepEqual(pick(hear(id, voiceB, 40, 4)), {
-    speakerId: "speaker_1",
-    backfill: [
-      { startTime: 10, endTime: 14 },
-      { startTime: 20, endTime: 24 },
-      { startTime: 30, endTime: 34 },
-    ],
+  assert.deepEqual(pick(hear(id, oneHot(1), 40, 2), "forced", "backfill"), {
+    forced: true,
+    backfill: [{ startTime: 10, endTime: 12 }],
   });
+  assert.equal(id._candidates.length, 0);
 });
 
-// A promotion replays every stored window as its own IPC call, so a voice held a
-// long time at the cap keeps only its most recent windows.
-test("a candidate held with 60 windows is promoted with the most recent 50", () => {
+// A live window matches at the gated threshold on about 1.6 s of audio.
+test("gated: a finished segment that doesn't match its live window's speaker is judged again", () => {
   const { id } = gatedIdentifier();
-  assert.equal(require(identifierModulePath).MAX_CANDIDATE_WINDOWS, 50);
-  id.setSpeakerLimit({ maxSpeakers: 1, gated: true });
-  hear(id, voiceA, 0, 2);
-  for (let i = 0; i < 60; i += 1) {
-    assert.equal(hear(id, voiceB, 10 + i * 10, 4).speakerId, null);
-  }
+  hear(id, oneHot(0), 0, 2);
+  const centroid = Array.from(id.getSpeakerEmbedding("speaker_0"));
 
-  id.setSpeakerLimit({ maxSpeakers: 7, gated: true });
-  const { speakerId, backfill } = hear(id, voiceB, 1000, 4);
-  assert.equal(speakerId, "speaker_1");
-  assert.equal(backfill.length, 50);
-  assert.deepEqual(backfill[0], { startTime: 110, endTime: 114 });
-  assert.deepEqual(backfill.at(-1), { startTime: 600, endTime: 604 });
+  id.currentSegmentSpeakerId = "speaker_0";
+  assert.equal(hear(id, oneHot(1), 10, 2).speakerId, null);
+  assert.equal(id._candidates.length, 1);
+  assert.deepEqual(Array.from(id.getSpeakerEmbedding("speaker_0")), centroid);
+
+  id.currentSegmentSpeakerId = "speaker_0";
+  assert.equal(hear(id, oneHot(0), 20, 2).speakerId, "speaker_0");
+});
+
+test("gated: a held voice's lines go to the speaker a stored profile then confirms", () => {
+  const { id } = gatedIdentifier({
+    profiles: [{ id: 7, display_name: "Bea", embedding: oneHot(1) }],
+  });
+  hear(id, oneHot(0), 0, 2);
+
+  // 0.55 like the profile: under its 0.6, so the voice is held.
+  const drifted = oneHot(2);
+  drifted[1] = 0.55;
+  drifted[2] = Math.sqrt(1 - 0.55 ** 2);
+  assert.equal(hear(id, drifted, 10, 2).speakerId, null);
+
+  assert.deepEqual(pick(hear(id, oneHot(1), 20, 2), "speakerId", "displayName", "backfill"), {
+    speakerId: "speaker_1",
+    displayName: "Bea",
+    backfill: [{ startTime: 10, endTime: 12 }],
+  });
+  assert.equal(id._candidates.length, 0);
 });
 
 // Feeds 5 s of a new voice's live windows beside one confirmed speaker and

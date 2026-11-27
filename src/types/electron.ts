@@ -3766,6 +3766,8 @@ declare global {
           displayName?: string | null;
           startTime: number;
           endTime: number;
+          speechStartTime?: number;
+          speechEndTime?: number;
           retroactive?: boolean;
         }) => void
       ) => () => void;
