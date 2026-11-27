@@ -105,6 +105,78 @@ test("cleanup validates completed provider output using the request's prompt set
     }
   );
 
+  await t.test("cleanup that copies the prompt this app sent is rejected", async (st) => {
+    setCustomPrompt("");
+    const copied = "The speaker is never talking to you.";
+    window.electronAPI.processLocalReasoning = async () => ({ success: true, text: copied });
+    const originalFetch = globalThis.fetch;
+    st.after(() => {
+      globalThis.fetch = originalFetch;
+    });
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: copied }, finish_reason: "stop" }] }),
+        { headers: { "Content-Type": "application/json" } }
+      );
+    for (const config of [
+      {},
+      { provider: "lan", lanUrl: "https://cleanup.example.test" },
+      {
+        provider: "custom",
+        baseUrl: "https://cleanup.example.test/v1/chat/completions",
+        customApiKey: "synthetic-key",
+      },
+    ]) {
+      await assert.rejects(
+        process(config),
+        {
+          code: "CLEANUP_OUTPUT_INVALID",
+          messageKey: "hooks.audioRecording.errorDescriptions.cleanupAddedText",
+        },
+        config.provider ?? "local"
+      );
+    }
+    // OpenWhispr Cloud writes its prompt on the server.
+    window.electronAPI.cloudReason = async () => ({ success: true, text: copied });
+    assert.equal(await process({ provider: "openwhispr" }), copied);
+  });
+
+  await t.test("dictionary words in a reply do not count as copied instructions", async (st) => {
+    setCustomPrompt("");
+    const names = ["Siobhan", "Anneliese", "Joaquin", "Niamh", "Saoirse", "Tadhg"];
+    const { customDictionary } = useSettingsStore.getState();
+    st.after(() => useSettingsStore.setState({ customDictionary }));
+    useSettingsStore.setState({ customDictionary: names });
+    const reply = names.join(", ");
+    window.electronAPI.processLocalReasoning = async () => ({ success: true, text: reply });
+    assert.equal(await process(), reply);
+  });
+
+  await t.test("the comparison uses the tone and dictionary the request sent", async (st) => {
+    setCustomPrompt("");
+    const { customDictionary } = useSettingsStore.getState();
+    st.after(() => useSettingsStore.setState({ customDictionary }));
+    const rejected = {
+      code: "CLEANUP_OUTPUT_INVALID",
+      messageKey: "hooks.audioRecording.errorDescriptions.cleanupAddedText",
+    };
+    window.electronAPI.processLocalReasoning = async (_text, _model, _agent, options) => ({
+      success: true,
+      text: options.systemPrompt.slice(-150),
+    });
+    await assert.rejects(process({ toneStyle: { appCategory: "work", tone: "formal" } }), rejected);
+
+    useSettingsStore.setState({ customDictionary: ["Zephyr"] });
+    window.electronAPI.processLocalReasoning = async (_text, _model, _agent, options) => {
+      useSettingsStore.setState({ customDictionary: [] });
+      return {
+        success: true,
+        text: options.systemPrompt.slice(options.systemPrompt.lastIndexOf("\n")),
+      };
+    };
+    await assert.rejects(process(), rejected);
+  });
+
   await t.test("history retry keeps the raw row on rejected cleanup, flags partials", async () => {
     setCustomPrompt("");
     useSettingsStore.setState({
