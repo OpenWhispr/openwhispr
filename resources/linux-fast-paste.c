@@ -1122,10 +1122,8 @@ static long monotonic_ms(void) {
     return now.tv_sec * 1000L + now.tv_nsec / 1000000L;
 }
 
-static modifier_state_t await_modifier_release(int timeout_ms, int *waited_ms) {
-    Display *display = is_wayland_session() ? NULL : XOpenDisplay(NULL);
-    int fds[MAX_KEYBOARDS];
-    int count = display ? 0 : open_keyboards(fds);
+static modifier_state_t poll_modifier_release(Display *display, int *fds, int count,
+                                              int timeout_ms, int *waited_ms) {
     *waited_ms = 0;
     if (!display && count == 0) return MODIFIERS_UNKNOWN;
 
@@ -1140,11 +1138,24 @@ static modifier_state_t await_modifier_release(int timeout_ms, int *waited_ms) {
         *waited_ms = (int)(monotonic_ms() - started_at);
     }
 
-    if (display) XCloseDisplay(display);
-    for (int i = 0; i < count; i++) close(fds[i]);
-
     if (state == MODIFIERS_RELEASED && *waited_ms > 0) usleep(MODIFIER_SETTLE_MS * 1000);
     return state;
+}
+
+/* The line goes out before the devices close: each evdev close waits out an RCU
+ * grace period, and the caller pastes as soon as it reads the line. */
+static void await_modifier_release(int timeout_ms) {
+    static const char *state_names[] = { "released", "held", "unknown" };
+    Display *display = is_wayland_session() ? NULL : XOpenDisplay(NULL);
+    int fds[MAX_KEYBOARDS];
+    int count = display ? 0 : open_keyboards(fds);
+    int waited_ms;
+    modifier_state_t state = poll_modifier_release(display, fds, count, timeout_ms, &waited_ms);
+    printf("MODIFIERS %s %d\n", state_names[state], waited_ms);
+    fflush(stdout);
+
+    if (display) XCloseDisplay(display);
+    for (int i = 0; i < count; i++) close(fds[i]);
 }
 
 int main(int argc, char *argv[]) {
@@ -1203,10 +1214,7 @@ int main(int argc, char *argv[]) {
     if (input_region_server) return serve_input_region(target_window);
 
     if (modifier_wait_ms >= 0) {
-        static const char *state_names[] = { "released", "held", "unknown" };
-        int waited_ms;
-        modifier_state_t state = await_modifier_release(modifier_wait_ms, &waited_ms);
-        printf("MODIFIERS %s %d\n", state_names[state], waited_ms);
+        await_modifier_release(modifier_wait_ms);
         return 0;
     }
 
