@@ -120,7 +120,6 @@ export default function PasteToolsInfo({
     const wlCopyMissing = !!pasteToolsInfo.wlCopyMissing;
     const wtypeMissing = needsWtype(pasteToolsInfo);
     const needsPasteTool = !pasteToolsInfo.available || wtypeMissing;
-    const cosmicTerminalsOnly = wtypeMissing && !!pasteToolsInfo.isCosmic;
     const recommendedTool = wtypeMissing
       ? "wtype"
       : pasteToolsInfo.recommendedInstall === "wtype"
@@ -162,9 +161,7 @@ export default function PasteToolsInfo({
               {showInstall ? (
                 <>
                   <p className="text-sm text-warning dark:text-warning mt-1">
-                    {cosmicTerminalsOnly ? (
-                      t("pasteToolsInfo.wtypeCosmicTerminalsDescription")
-                    ) : wtypeMissing ? (
+                    {wtypeMissing ? (
                       t("pasteToolsInfo.wtypeFallbackDescription")
                     ) : (
                       <>
@@ -202,7 +199,7 @@ export default function PasteToolsInfo({
               )}
 
               {/* Without wl-copy, a manual Ctrl+V in a Wayland app pastes stale text too. */}
-              {showInstall && !cosmicTerminalsOnly && !wlCopyMissing && (
+              {showInstall && !wlCopyMissing && (
                 <p className="text-sm text-warning dark:text-warning mt-3">
                   {t("pasteToolsInfo.withoutToolPrefix")}{" "}
                   <kbd dir="ltr" className="bg-warning/20 px-1 rounded text-xs">

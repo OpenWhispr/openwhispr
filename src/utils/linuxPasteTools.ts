@@ -35,13 +35,10 @@ export function getLinuxPasteInstallCommands(
       ];
 }
 
-// wtype is the paste tool on wlroots. On COSMIC other apps paste without it, but
-// terminals only receive Ctrl+Shift+V through wtype.
+// wtype is the paste tool on wlroots. COSMIC is left out: cosmic-comp drops the
+// modifiers wtype sends (pop-os/cosmic-comp#2945), so it would break terminal paste.
 export function needsWtype(pasteTools: PasteToolsResult) {
-  return (
-    !pasteTools.hasWtype &&
-    (!!pasteTools.isWlroots || (!!pasteTools.isCosmic && pasteTools.available))
-  );
+  return !pasteTools.hasWtype && !!pasteTools.isWlroots;
 }
 
 export function needsLinuxPasteToolGuidance(pasteTools: PasteToolsResult) {

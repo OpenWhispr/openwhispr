@@ -1946,9 +1946,9 @@ class ClipboardManager {
       else if (isTerminalTarget) args.push("--terminal");
     };
 
-    // cosmic-comp has the virtual keyboard too, and wtype is the only way to give a
-    // terminal there its Ctrl+Shift+V: the uinput fallback below is always Shift+Insert.
-    if (isWayland && wtypeExists && (isWlroots || (isCosmic && isTerminalTarget))) {
+    // cosmic-comp ignores virtual-keyboard modifiers (pop-os/cosmic-comp#2945), so wtype's
+    // Ctrl+Shift+V types a bare "v" there and still exits 0. COSMIC uses uinput instead.
+    if (isWayland && wtypeExists && isWlroots) {
       try {
         await this._runLinuxPasteCommand("wtype", wtypeArgs, "wtype", options);
         this.safeLog("✅ Paste successful using wtype");
@@ -2731,9 +2731,7 @@ Would you like to open System Settings now?`;
 
     const tools = [];
     const hasHyprlandShortcut = isWayland && isHyprland && this.commandExists("hyprctl");
-    // On COSMIC wtype only pastes into terminals, so it is reported for the setup
-    // guidance but never listed as a paste tool or method there.
-    const hasWtype = isWayland && (isWlroots || isCosmic) && this.commandExists("wtype");
+    const hasWtype = isWayland && isWlroots && this.commandExists("wtype");
     const canUseYdotool = this.commandExists("ydotool") && this._isYdotoolDaemonRunning();
     const canUseXdotool = !isWayland || xwaylandAvailable;
 
