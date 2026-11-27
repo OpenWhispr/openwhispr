@@ -3614,7 +3614,10 @@
         "mistral_ministral_3_14b_instruct_2512_q4_k_m": "Modello 14B di Mistral con uso di strumenti, contesto 256K",
         "mistral_ministral_3_8b_instruct_2512_q4_k_m": "Modello veloce senza fase di ragionamento per pulizia e strumenti",
         "mistral_ministral_3_3b_instruct_2512_q4_k_m": "Piccolo e veloce per ripulire la dettatura",
-        "gemma_gemma_4_12b_it_qat_q4_0": "Build QAT ufficiale di Google, ideale per computer da 16 GB"
+        "gemma_gemma_4_12b_it_qat_q4_0": "Build QAT ufficiale di Google, ideale per computer da 16 GB",
+        "openwhispr_cleanup_0_8b_v1_q8_0": "Il modello di pulizia più veloce di OpenWhispr, addestrato per la dettatura",
+        "openwhispr_cleanup_2b_v1_q4_k_m": "Il modello di pulizia bilanciato di OpenWhispr, addestrato per la dettatura",
+        "openwhispr_cleanup_4b_v1_q4_k_m": "Il modello di pulizia più preciso di OpenWhispr, addestrato per la dettatura"
       },
       "diarization": {
         "segmentation": "Rilevamento dei confini del parlato per l'identificazione dei parlanti",

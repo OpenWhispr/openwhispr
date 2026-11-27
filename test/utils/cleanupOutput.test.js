@@ -84,3 +84,55 @@ test("cleanup leaves legitimate, ambiguous, and out-of-scope output alone", asyn
     assert.doesNotThrow(() => assertValidCleanupOutput(raw, output), output);
   }
 });
+
+test("the wider check rejects an empty answer to real speech", async () => {
+  const { assertPlausibleCleanupOutput } = await import("../../src/utils/cleanupOutput.ts");
+  for (const output of ["", "   \n", "..."]) {
+    assert.throws(() => assertPlausibleCleanupOutput(RAW, output), {
+      code: "CLEANUP_OUTPUT_INVALID",
+      messageKey: "hooks.audioRecording.errorDescriptions.cleanupEmptyReply",
+    });
+  }
+});
+
+test("the wider check accepts an empty answer to filler or a few words", async () => {
+  const { assertPlausibleCleanupOutput } = await import("../../src/utils/cleanupOutput.ts");
+  for (const raw of ["um uh", "um so yeah uh like okay", "uh thank you", "", "hmm okay so well"]) {
+    assert.doesNotThrow(() => assertPlausibleCleanupOutput(raw, ""), raw);
+  }
+});
+
+test("the wider check rejects an answer far longer than what was said", async () => {
+  const { assertPlausibleCleanupOutput } = await import("../../src/utils/cleanupOutput.ts");
+  for (const [raw, output] of [
+    [RAW, `${CLEAN} ${CLEAN} ${CLEAN}`],
+    [
+      "write a haiku about autumn",
+      "Crisp leaves drift and fall, golden light on quiet paths, the year breathes out slow.",
+    ],
+    [
+      LONG_RAW,
+      `${LONG_CLEAN} Here is a summary of the key points you raised, along with some suggestions for next steps.`,
+    ],
+  ]) {
+    assert.throws(() => assertPlausibleCleanupOutput(raw, output), {
+      code: "CLEANUP_OUTPUT_INVALID",
+      message: /far more text/,
+    });
+  }
+});
+
+test("the wider check accepts ordinary cleanup, including modest growth", async () => {
+  const { assertPlausibleCleanupOutput } = await import("../../src/utils/cleanupOutput.ts");
+  for (const [raw, output] of [
+    [RAW, CLEAN],
+    [LONG_RAW, LONG_CLEAN],
+    // Short dictations may grow past 1.5x while staying short.
+    ["thx c u 2moro", "Thanks, see you tomorrow at the office."],
+    ["send it", "Send it."],
+    // Numbers and abbreviations spelled out.
+    ["meet at 3 pm on the 5th re q3 kpis", "Meet at three PM on the fifth regarding Q3 KPIs."],
+  ]) {
+    assert.doesNotThrow(() => assertPlausibleCleanupOutput(raw, output), output);
+  }
+});

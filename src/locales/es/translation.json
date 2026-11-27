@@ -3666,7 +3666,10 @@
         "mistral_ministral_3_14b_instruct_2512_q4_k_m": "Modelo de 14B de Mistral con uso de herramientas, contexto de 256K",
         "mistral_ministral_3_8b_instruct_2512_q4_k_m": "Modelo rápido sin fase de razonamiento para limpieza y herramientas",
         "mistral_ministral_3_3b_instruct_2512_q4_k_m": "Pequeño y rápido para limpiar el dictado",
-        "gemma_gemma_4_12b_it_qat_q4_0": "Build QAT oficial de Google, ideal para equipos de 16 GB"
+        "gemma_gemma_4_12b_it_qat_q4_0": "Build QAT oficial de Google, ideal para equipos de 16 GB",
+        "openwhispr_cleanup_0_8b_v1_q8_0": "El modelo de limpieza más rápido de OpenWhispr, entrenado para dictado",
+        "openwhispr_cleanup_2b_v1_q4_k_m": "El modelo de limpieza equilibrado de OpenWhispr, entrenado para dictado",
+        "openwhispr_cleanup_4b_v1_q4_k_m": "El modelo de limpieza más preciso de OpenWhispr, entrenado para dictado"
       },
       "diarization": {
         "segmentation": "Detección de límites del habla para la identificación de hablantes",

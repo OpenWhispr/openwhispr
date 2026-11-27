@@ -1849,6 +1849,12 @@
           "descriptionKey": "models.descriptions.local.liquidai_lfm2_5_230m_q8_0"
         }
       ]
+    },
+    {
+      "id": "openwhispr-local",
+      "name": "OpenWhispr",
+      "baseUrl": "https://huggingface.co",
+      "models": []
     }
   ],
   "openwhisprCloudModels": {

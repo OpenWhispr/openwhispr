@@ -420,7 +420,10 @@
         "mistral_ministral_3_14b_instruct_2512_q4_k_m": "نموذج Mistral بحجم 14B مع استخدام الأدوات، سياق 256K",
         "mistral_ministral_3_8b_instruct_2512_q4_k_m": "نموذج سريع بلا مرحلة تفكير للتنظيف والأدوات",
         "mistral_ministral_3_3b_instruct_2512_q4_k_m": "صغير وسريع لتنظيف الإملاء",
-        "gemma_gemma_4_12b_it_qat_q4_0": "إصدار QAT الرسمي من Google، الأنسب للأجهزة بذاكرة 16 GB"
+        "gemma_gemma_4_12b_it_qat_q4_0": "إصدار QAT الرسمي من Google، الأنسب للأجهزة بذاكرة 16 GB",
+        "openwhispr_cleanup_0_8b_v1_q8_0": "أسرع نموذج تنظيف من OpenWhispr، مدرّب على الإملاء",
+        "openwhispr_cleanup_2b_v1_q4_k_m": "نموذج التنظيف المتوازن من OpenWhispr، مدرّب على الإملاء",
+        "openwhispr_cleanup_4b_v1_q4_k_m": "أدق نموذج تنظيف من OpenWhispr، مدرّب على الإملاء"
       }
     },
     "errors": {

@@ -1,6 +1,7 @@
 {
   "huggingFace": [
     "LiquidAI",
+    "OpenWhispr",
     "Qwen",
     "bartowski",
     "ggerganov",
