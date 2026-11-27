@@ -4378,6 +4378,7 @@
         "finalizing": "話者を確定中…",
         "justYou": "あなたのみ",
         "assumedHint": "2人と想定 — 違う場合は変更してください",
+        "assumedHintAuto": "2人と想定 — それ以上は自動で検出されます",
         "speakersLabel": "話者数",
         "labelToggle": "話者をラベル付け",
         "toggleAria": "この録音の話者識別を切り替える",

@@ -15,6 +15,8 @@ const {
   fragmentFilterLanguages,
   isWrongScriptFragment,
 } = require("../../src/helpers/meetingFragmentFilter");
+const { pickIdentificationForPoint } = require("../../src/helpers/speakerRangeMatch");
+const { localBufferEntry, describeLocalChunk } = require("../../src/helpers/meetingLocalChunk");
 
 test("a short fragment in a script the meeting language doesn't use is dropped", () => {
   for (const fragment of ["어.", "Да.", "うん。", "是啊。", "음."]) {
@@ -105,6 +107,8 @@ function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
     windowManager: { controlPanelWindow: win },
     _startOrSkipDiarization() {},
     meetingDiarizationSegments: accepted,
+    meetingLiveIdentifications: [],
+    pickIdentificationForPoint,
     meetingConnectionOptions: { language, spokenLanguages },
     fragmentFilterLanguages,
     isWrongScriptFragment,
@@ -292,7 +296,14 @@ function localHarness({ language, text }) {
     fragmentFilterLanguages,
     isWrongScriptFragment,
     Buffer,
-    meetingLocalBuffers: { mic: [Buffer.alloc(4800)], system: [Buffer.alloc(4800)] },
+    describeLocalChunk,
+    meetingLocalBuffers: {
+      mic: [localBufferEntry(Buffer.alloc(4800), { capturedAt: 0 })],
+      system: [localBufferEntry(Buffer.alloc(4800), { capturedAt: 0 })],
+    },
+    shouldSuppressMicTranscriptSegment: () => ({ suppress: false }),
+    shouldSkipDuplicateMicSegment: () => false,
+    hasRiskyMicDuplicateProfile: () => false,
     meetingLocalProvider: "whisper",
     meetingLocalModel: "base",
     meetingLocalLanguage: language,

@@ -1433,6 +1433,80 @@ for (const options of [{ provider: "local" }, { provider: "deepgram-realtime", m
   });
 }
 
+// Session start is what turns automatic mode on: a note with no speaker count
+// uses the full remote-speaker limit. A known count limits the available slots.
+// A promoted voice replays its earlier windows as retroactive identifications.
+const useNoteSpeakerConfig = (t, note) => {
+  const IPCHandlers = require(modulePath);
+  const methods = [
+    "_resolveInitialMeetingSpeakerConfig",
+    "_noteExpectedSpeakerCountOrNull",
+    "_parseNonSelfParticipants",
+  ];
+  for (const method of methods) target[method] = IPCHandlers.prototype[method];
+  target.activeMeetingSpeakerConfig = null;
+  target.speakerDiarizationEnabled = true;
+  target.databaseManager = { getNote: () => note, getGoogleAccounts: () => [] };
+  t.after(() => {
+    for (const method of methods) delete target[method];
+    delete target.activeMeetingSpeakerConfig;
+    delete target.speakerDiarizationEnabled;
+    delete target.databaseManager;
+  });
+};
+
+for (const [label, note, limit] of [
+  ["no speaker count", {}, { maxSpeakers: 7, gated: true }],
+  ["a speaker count", { expected_speaker_count: 3 }, { maxSpeakers: 2, gated: true }],
+]) {
+  test(`a meeting on a note with ${label} starts live identification with its limit`, async (t) => {
+    resetMeeting(t);
+    invoke("save-deepgram-key", "A");
+    useNoteSpeakerConfig(t, note);
+    t.mock.method(liveSpeakerIdentifier, "isAvailable", () => true);
+    const liveStart = t.mock.method(liveSpeakerIdentifier, "start", async () => false);
+
+    const options = { provider: "deepgram-realtime", mode: "byok", noteId: 41 };
+    assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+    const startOptions = liveStart.mock.calls[0].arguments[1];
+    assert.deepEqual({ maxSpeakers: startOptions.maxSpeakers, gated: startOptions.gated }, limit);
+  });
+}
+
+test("a retroactive identification reaches the renderer marked retroactive", async (t) => {
+  resetMeeting(t);
+  invoke("save-deepgram-key", "A");
+  useNoteSpeakerConfig(t, {});
+  t.mock.method(liveSpeakerIdentifier, "isAvailable", () => true);
+  t.mock.method(liveSpeakerIdentifier, "feedAudio", async () => {});
+  t.mock.method(liveSpeakerIdentifier, "stop", async () => null);
+  let onIdentified = null;
+  t.mock.method(liveSpeakerIdentifier, "start", async (callback) => {
+    onIdentified = callback;
+    return true;
+  });
+
+  const options = { provider: "deepgram-realtime", mode: "byok", noteId: 41 };
+  assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+  // The first system chunk anchors identification times; nothing is sent before it.
+  for (const streaming of meetingStreams()) streaming.sendAudio = () => true;
+  eventHandlers.get("meeting-transcription-send")(
+    { sender: editor },
+    new Uint8Array(4800).buffer,
+    "system"
+  );
+  notifications.length = 0;
+  onIdentified({ speakerId: "speaker_1", startTime: 1, endTime: 4, retroactive: true });
+  const identified = notifications.filter(
+    ([, channel]) => channel === "meeting-speaker-identified"
+  );
+  assert.equal(identified.length, 1);
+  assert.equal(identified[0][2].speakerId, "speaker_1");
+  assert.equal(identified[0][2].retroactive, true);
+  // Converted to wall-clock times like any other identification.
+  assert.equal(identified[0][2].endTime - identified[0][2].startTime, 3000);
+});
+
 // The renderer stops applying retracts once a stop begins, so main hands each
 // meeting's retracted mic rows to its diarization and starts the next one empty.
 test("a mic row retracted during a meeting reaches that meeting's diarization only", async (t) => {
@@ -2100,4 +2174,68 @@ test("an in-person confirmation surfaces the control panel before asking", async
     ["panel", undefined],
     ["sheet", 2],
   ]);
+});
+
+test("a local decode retains its speaker through a later identification and meeting stop", async (t) => {
+  resetMeeting(t);
+  useNoteSpeakerConfig(t, {});
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  t.mock.method(liveSpeakerIdentifier, "isAvailable", () => true);
+  t.mock.method(liveSpeakerIdentifier, "feedAudio", async () => {});
+  t.mock.method(liveSpeakerIdentifier, "stop", async () => null);
+  let identify;
+  t.mock.method(liveSpeakerIdentifier, "start", async (callback) => {
+    identify = callback;
+    return true;
+  });
+
+  target._localModelPolicy = null;
+  target._activeLocalMeetingLease = null;
+  const decode = deferred();
+  let decoding = false;
+  target.parakeetManager = {
+    transcribeLocalParakeet: () => {
+      decoding = true;
+      return decode.promise;
+    },
+  };
+  let saved;
+  target._startOrSkipDiarization = (_id, _pcm, _start, segments) => {
+    saved = segments;
+  };
+  t.after(() => {
+    delete target.parakeetManager;
+    delete target._localModelPolicy;
+    delete target._activeLocalMeetingLease;
+    delete target._startOrSkipDiarization;
+  });
+
+  const started = await invoke("meeting-transcription-start", {
+    provider: "local",
+    localProvider: "nvidia",
+    noteId: 41,
+  });
+  assert.equal(started.success, true);
+  const capturedAt = Date.now();
+  const audio = new Int16Array(24_000).fill(2000);
+  eventHandlers.get("meeting-transcription-send")(
+    { sender: editor },
+    audio.buffer,
+    "system",
+    capturedAt
+  );
+  identify({ speakerId: "speaker_0", displayName: "Ana", startTime: 0, endTime: 1 });
+  t.mock.timers.tick(5000);
+  try {
+    await new Promise(setImmediate);
+    assert.equal(decoding, true);
+    identify({ speakerId: "speaker_1", startTime: 125, endTime: 130 });
+    const sent = notifications.findLast(([, channel]) => channel === "meeting-speaker-identified");
+    assert.equal(sent[2].retainFromTime, capturedAt);
+  } finally {
+    decode.resolve({ success: true, text: "Delayed audio" });
+  }
+  assert.equal((await invoke("meeting-transcription-stop")).success, true);
+  assert.equal(saved[0].text, "Delayed audio");
+  assert.equal(saved[0].speaker, "speaker_0");
 });

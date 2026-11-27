@@ -90,7 +90,13 @@ function turns(speakers, count, seconds) {
 // line per diarized turn of 2 s or more, and returns the labelled lines.
 function diarizeMeeting(
   diarizerOutput,
-  { sessionConfig = null, source = "system", liveSpeakerState = null, liveLabel = {} } = {}
+  {
+    sessionConfig = null,
+    source = "system",
+    liveSpeakerState = null,
+    liveLabel = {},
+    note = null,
+  } = {}
 ) {
   const diarizationManager = Object.assign(new DiarizationManager(), {
     isAvailable: () => true,
@@ -104,7 +110,12 @@ function diarizeMeeting(
   const handlers = Object.assign(Object.create(IPCHandlers.prototype), {
     diarizationManager,
     speakerDiarizationEnabled: true,
-    databaseManager: { getNote: () => null, getSpeakerProfiles: () => profiles },
+    databaseManager: {
+      getNote: () => note,
+      getGoogleAccounts: () => [],
+      getSpeakerProfiles: () => profiles,
+    },
+    _diarizationSpeakerReservations: new Map(),
   });
   const transcript = diarizerOutput
     .filter((turn) => turn.end - turn.start >= 2)
@@ -125,12 +136,13 @@ function diarizeMeeting(
       { isDestroyed: () => false, webContents: { send: (_channel, payload) => resolve(payload) } },
       liveSpeakerState,
       sessionConfig,
-      null,
+      note ? 42 : null,
       source
     );
   }).then((payload) => ({
     lines: payload.segments,
     splitLiveSpeakers: payload.splitLiveSpeakers,
+    reconciledLiveSpeakerIds: payload.reconciledLiveSpeakerIds,
   }));
 }
 
@@ -302,6 +314,44 @@ test("a live speaker's name stays only on the voice it matches once the call is 
     ["speaker_0", ["Bob"]],
     ["speaker_1", [null]],
   ]);
+});
+
+// Automatic mode names several remote speakers live; after the call each name
+// must land on the cluster with that speaker's voice, whatever order the
+// diarizer numbered them in.
+test("names set on two live speakers carry to their matching after-call voices", async () => {
+  embeddingModelAvailable = true;
+  const voiceOf = { A: [1, 0, 0], B: [0, 1, 0], C: [0, 0, 1] };
+  const clusterVoices = { speaker_00: "B", speaker_01: "A", speaker_02: "C" };
+  voices = new Map(
+    Object.entries(clusterVoices).map(([cluster, voice]) => [cluster, voiceOf[voice]])
+  );
+  const output = turns(Object.keys(clusterVoices), 30, 8);
+
+  const result = await diarizeMeeting(output, {
+    liveSpeakerState: {
+      speaker_0: { displayName: "Ana", embedding: voiceOf.A },
+      speaker_1: { displayName: "Bea", embedding: voiceOf.B },
+    },
+  });
+
+  // Every line of a voice must carry the same name, so a voice with mixed names
+  // reads as a list and fails the comparison.
+  const namesByVoice = ({ lines }) => {
+    const names = {};
+    for (const turn of output) {
+      const line = lines.find((candidate) => candidate.timestamp === turn.start);
+      const voice = clusterVoices[turn.speaker];
+      names[voice] = [...new Set([...(names[voice] ?? []), line.speakerName ?? null])];
+    }
+    return Object.fromEntries(
+      Object.entries(names).map(([voice, voiceNames]) => [
+        voice,
+        voiceNames.length === 1 ? voiceNames[0] : voiceNames,
+      ])
+    );
+  };
+  assert.deepEqual(namesByVoice(result), { A: "Ana", B: "Bea", C: null });
 });
 
 test("live names stay when the voices can't be read to place them", async () => {
@@ -530,4 +580,163 @@ test("a split tells the renderer which voice each live speaker's name went to", 
     liveLabel,
   });
   assert.equal(oneVoice.splitLiveSpeakers, undefined);
+});
+
+test("a movable You name follows the matched voice when two offline speaker IDs swap", async () => {
+  const { mergeSessionDiarization } = await import("../../src/utils/diarizationCompletion.ts");
+  const { isSelfSideSegment } = await import("../../src/utils/transcriptSpeakerState.ts");
+  embeddingModelAvailable = true;
+  voices = new Map([
+    ["speaker_00", [0, 1]],
+    ["speaker_01", [1, 0]],
+  ]);
+  const result = await diarizeMeeting(turns(["speaker_00", "speaker_01"], 30, 8), {
+    liveSpeakerState: {
+      speaker_0: { displayName: "Recorder Profile", embedding: [1, 0] },
+      speaker_1: { displayName: "Bea", embedding: [0, 1] },
+    },
+  });
+  assert.equal(result.splitLiveSpeakers, undefined);
+  assert.deepEqual(result.reconciledLiveSpeakerIds, {
+    speaker_0: "speaker_1",
+    speaker_1: "speaker_0",
+  });
+  // Both rows provisionally displayed the mapped self voice before the stop.
+  const existing = result.lines.map((row) => ({
+    ...row,
+    speaker: "speaker_0",
+    speakerName: "You",
+    speakerNameFromUser: true,
+  }));
+  const { segments } = mergeSessionDiarization({
+    existing,
+    seedLength: 0,
+    segments: result.lines,
+    reconciledLiveSpeakerIds: result.reconciledLiveSpeakerIds,
+  });
+  for (const row of segments) {
+    const self = row.speaker === "speaker_1";
+    assert.equal(row.speakerName, self ? "You" : "Bea");
+    assert.equal(isSelfSideSegment(row, {}, "You"), self);
+  }
+});
+
+// Names the user gave without a lock (local-model lines, lines only carried onto
+// a speaker) must survive as a locked name would when their voice matches nothing.
+test("a user's name on unlocked lines stays when its live speaker matched no voice", async () => {
+  const { mergeSessionDiarization } = await import("../../src/utils/diarizationCompletion.ts");
+  embeddingModelAvailable = true;
+  voices = new Map([
+    ["speaker_00", [0, 1]],
+    ["speaker_01", [1, 0]],
+  ]);
+  const result = await diarizeMeeting(turns(["speaker_00", "speaker_01"], 30, 8), {
+    liveSpeakerState: {
+      speaker_0: { displayName: "Ann", embedding: [1, 0] },
+      speaker_2: { displayName: "Bob", embedding: [-1, 0] },
+    },
+  });
+  assert.deepEqual(result.reconciledLiveSpeakerIds, { speaker_0: "speaker_1" });
+
+  const heardAs = (row) =>
+    row.speaker === "speaker_1"
+      ? { speaker: "speaker_0", speakerName: "Ann" }
+      : { speaker: "speaker_2", speakerName: "Bob" };
+  const existing = result.lines.map((row) => ({
+    ...row,
+    ...heardAs(row),
+    speakerNameFromUser: true,
+  }));
+  const { segments } = mergeSessionDiarization({
+    existing,
+    seedLength: 0,
+    segments: result.lines,
+    reconciledLiveSpeakerIds: result.reconciledLiveSpeakerIds,
+  });
+  for (const row of segments) {
+    assert.equal(row.speakerName, row.speaker === "speaker_1" ? "Ann" : "Bob");
+  }
+});
+
+test("after a split, a user's unlocked name stays only where its voice is or none matched", async () => {
+  const { mergeSessionDiarization } = await import("../../src/utils/diarizationCompletion.ts");
+  const row = (id, speaker, speakerName) => ({
+    id,
+    text: id,
+    source: "system",
+    timestamp: START_MS,
+    speaker,
+    speakerName,
+    speakerNameFromUser: true,
+  });
+  const { segments } = mergeSessionDiarization({
+    existing: [
+      row("ann-voice", "speaker_0", "Ann"),
+      row("other-voice", "speaker_0", "Ann"),
+      row("bob", "speaker_2", "Bob"),
+    ],
+    seedLength: 0,
+    segments: [
+      { ...row("ann-voice", "speaker_1", null), speakerNameFromUser: undefined },
+      { ...row("other-voice", "speaker_3", null), speakerNameFromUser: undefined },
+      { ...row("bob", "speaker_4", null), speakerNameFromUser: undefined },
+    ],
+    splitLiveSpeakers: { speaker_0: { speaker: "speaker_1", name: "Ann" } },
+  });
+  assert.deepEqual(
+    segments.map((segment) => segment.speakerName ?? null),
+    ["Ann", null, "Bob"]
+  );
+});
+
+// Automatic mode confirmed four remote voices, then one attendee was added to
+// the note: its count of two must not fold the four into one (#2641).
+const oneAttendee = { participants: JSON.stringify([{ email: "guest@example.com" }]) };
+const liveSpeakers = (count) =>
+  Object.fromEntries(Array.from({ length: count }, (_, i) => [`speaker_${i}`, {}]));
+const fourVoices = () => {
+  voices = new Map([
+    ["speaker_00", [1, 0, 0, 0]],
+    ["speaker_01", [0, 1, 0, 0]],
+    ["speaker_02", [0, 0, 1, 0]],
+    ["speaker_03", [0, 0, 0, 1]],
+  ]);
+  return [
+    ...turns(["speaker_00"], 20, 12),
+    ...startingAt(13, turns(["speaker_01"], 20, 6)),
+    ...startingAt(400, turns(["speaker_02"], 10, 8)),
+    ...startingAt(600, turns(["speaker_03"], 6, 2.5)),
+  ];
+};
+
+test("attendees added mid-call don't fold the voices live identification confirmed", async () => {
+  const kept = await diarizeMeeting(fourVoices(), {
+    note: oneAttendee,
+    liveSpeakerState: liveSpeakers(4),
+  });
+  assert.equal(speakersOf(kept.lines).length, 4, "the quiet fourth voice included");
+
+  const listOnly = await diarizeMeeting(fourVoices(), { note: oneAttendee });
+  assert.equal(speakersOf(listOnly.lines).length, 1, "without live speakers the list decides");
+});
+
+test("a voice live identification split in two is still one speaker after the call", async () => {
+  voices = new Map([
+    ["speaker_00", [1, 0, 0]],
+    ["speaker_01", [0.8, 0.6, 0]],
+    ["speaker_02", [0, 0, 1]],
+  ]);
+  const output = [
+    ...turns(["speaker_00"], 20, 12),
+    ...startingAt(13, turns(["speaker_01"], 20, 6)),
+    ...startingAt(400, turns(["speaker_02"], 10, 8)),
+  ];
+
+  const { lines } = await diarizeMeeting(output, {
+    note: oneAttendee,
+    liveSpeakerState: liveSpeakers(4),
+  });
+
+  assert.equal(speakersOf(lines).length, 2);
+  assert.equal(speakerAt(lines, 13), speakerAt(lines, 0));
 });

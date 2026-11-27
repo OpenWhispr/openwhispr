@@ -5022,6 +5022,7 @@
         "finalizing": "Finalisation des intervenants…",
         "justYou": "Juste vous",
         "assumedHint": "2 par défaut — ajustez si plus",
+        "assumedHintAuto": "2 par défaut — les autres sont détectés automatiquement",
         "speakersLabel": "Intervenants",
         "labelToggle": "Étiqueter les intervenants",
         "toggleAria": "Activer l'identification des intervenants pour cet enregistrement",

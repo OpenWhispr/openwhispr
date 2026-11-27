@@ -478,6 +478,7 @@ export default function PersonalNotesView({
   const sessionDiarizationEnabled = useMeetingRecordingStore((s) => s.sessionDiarizationEnabled);
   const sessionExpectedCount = useMeetingRecordingStore((s) => s.sessionExpectedCount);
   const userTouchedStepper = useMeetingRecordingStore((s) => s.userTouchedStepper);
+  const liveSpeakerDetectionActive = useMeetingRecordingStore((s) => s.liveSpeakerDetectionActive);
   const meetingRecordingAllowed = useTranscriptionContextAllowed("meeting");
   const recordingCopy = useMeetingRecordingStore((s) => s.recordingCopy);
 
@@ -1206,6 +1207,7 @@ export default function PersonalNotesView({
               sessionDiarizationEnabled={sessionDiarizationEnabled}
               sessionExpectedCount={sessionExpectedCount}
               userTouchedStepper={userTouchedStepper}
+              liveSpeakerDetectionActive={liveSpeakerDetectionActive}
               onSetSessionDiarizationEnabled={setSessionDiarizationEnabled}
               onSetSessionExpectedCount={setSessionExpectedCount}
               folderName={activeFolderName}

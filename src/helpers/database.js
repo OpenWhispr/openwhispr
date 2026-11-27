@@ -10766,6 +10766,19 @@ class DatabaseManager {
     }
   }
 
+  remapSpeakers(noteId, changes) {
+    // Live and offline clusters share ids. Remove all old keys before writing
+    // destinations so swaps and longer cycles survive reconciliation.
+    this.db.transaction(() => {
+      for (const { previousId, speakerId } of changes) {
+        if (previousId !== speakerId) this.removeSpeakerMapping(noteId, previousId);
+      }
+      for (const { speakerId, profileId, displayName } of changes) {
+        this.setSpeakerMapping(noteId, speakerId, profileId, displayName);
+      }
+    })();
+  }
+
   getSpeakerMappings(noteId) {
     try {
       if (!this.db) throw new Error("Database not initialized");

@@ -4090,6 +4090,7 @@ declare global {
           source: "mic" | "system";
           type: "partial" | "final" | "retract";
           timestamp?: number;
+          endTimestamp?: number;
         }) => void
       ) => () => void;
       onMeetingSpeakerIdentified?: (
@@ -4098,6 +4099,12 @@ declare global {
           displayName?: string | null;
           startTime: number;
           endTime: number;
+          speechStartTime?: number;
+          speechEndTime?: number;
+          retainFromTime?: number;
+          retroactive?: boolean;
+          tentative?: boolean;
+          rejudged?: boolean;
         }) => void
       ) => () => void;
       onMeetingSpeakersMerged?: (
@@ -4111,7 +4118,7 @@ declare global {
         ) => void
       ) => () => void;
       onMeetingSessionSpeakerConfigUpdated?: (
-        callback: (config: { enabled: boolean; expectedCount: number }) => void
+        callback: (config: { enabled: boolean; expectedCount: number; auto?: boolean }) => void
       ) => () => void;
       onMeetingTranscriptionError?: (callback: (error: string) => void) => () => void;
       onMeetingTranscriptionFatalError?: (callback: (error: string) => void) => () => void;
@@ -4178,6 +4185,7 @@ declare global {
           speakerEmbeddings?: Record<string, number[]> | null;
           removedSegments?: RemovedTranscriptSegment[];
           splitLiveSpeakers?: SplitLiveSpeakers;
+          reconciledLiveSpeakerIds?: Record<string, string>;
         }) => void
       ) => () => void;
 

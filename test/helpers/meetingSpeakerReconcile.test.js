@@ -71,15 +71,10 @@ function loadHandlers() {
 }
 
 function createMappingRecorder(existingMappings) {
-  const calls = { set: [], remove: [] };
+  const calls = [];
   const databaseManager = {
     getSpeakerMappings: () => existingMappings,
-    setSpeakerMapping: (noteId, speakerId, profileId, displayName) => {
-      calls.set.push({ noteId, speakerId, profileId, displayName });
-    },
-    removeSpeakerMapping: (noteId, speakerId) => {
-      calls.remove.push({ noteId, speakerId });
-    },
+    remapSpeakers: (noteId, changes) => calls.push({ noteId, changes }),
   };
   return { calls, databaseManager };
 }
@@ -114,18 +109,14 @@ test("reconciliation keeps the mapping when live and offline ids already match",
 
   reconcile(IPCHandlers, databaseManager, "speaker_0");
 
-  assert.equal(calls.set.length, 1);
-  assert.deepEqual(calls.set[0], {
-    noteId: NOTE_ID,
-    speakerId: "speaker_0",
-    profileId: 5,
-    displayName: "Alice",
-  });
-  assert.deepEqual(
-    calls.remove,
-    [],
-    "removing the row that was just upserted deletes the user's identification"
-  );
+  assert.deepEqual(calls, [
+    {
+      noteId: NOTE_ID,
+      changes: [
+        { previousId: "speaker_0", speakerId: "speaker_0", profileId: 5, displayName: "Alice" },
+      ],
+    },
+  ]);
 });
 
 test("reconciliation migrates the mapping when the offline id differs", () => {
@@ -136,9 +127,45 @@ test("reconciliation migrates the mapping when the offline id differs", () => {
 
   reconcile(IPCHandlers, databaseManager, "speaker_3");
 
-  assert.equal(calls.set.length, 1);
-  assert.equal(calls.set[0].speakerId, "speaker_0");
-  assert.deepEqual(calls.remove, [{ noteId: NOTE_ID, speakerId: "speaker_3" }]);
+  assert.deepEqual(calls, [
+    {
+      noteId: NOTE_ID,
+      changes: [
+        { previousId: "speaker_3", speakerId: "speaker_0", profileId: 5, displayName: "Alice" },
+      ],
+    },
+  ]);
+});
+
+test("post-call reconciliation preserves both names and profiles when speaker ids swap", (t) => {
+  const { IPCHandlers } = loadHandlers();
+  const { createDb } = require("./harness/db");
+  const databaseManager = createDb(t);
+  if (!databaseManager) return;
+  const noteId = databaseManager.saveNote("Meeting", "", "meeting").note.id;
+  const ada = databaseManager.upsertSpeakerProfile(
+    "Ada",
+    null,
+    Buffer.from(new Float32Array([1, 0]).buffer)
+  );
+  const ben = databaseManager.upsertSpeakerProfile(
+    "Ben",
+    null,
+    Buffer.from(new Float32Array([0, 1]).buffer)
+  );
+  databaseManager.setSpeakerMapping(noteId, "speaker_0", ada.id, "Ada");
+  databaseManager.setSpeakerMapping(noteId, "speaker_1", ben.id, "Ben");
+  const handlers = Object.assign(Object.create(IPCHandlers.prototype), { databaseManager });
+  handlers._reconcileLiveSpeakerState(
+    { speaker_0: { noteId, embedding: [1, 0] }, speaker_1: { noteId, embedding: [0, 1] } },
+    { speaker_0: [0, 1], speaker_1: [1, 0] },
+    []
+  );
+  const saved = databaseManager.getSpeakerMappings(noteId);
+  assert.deepEqual(
+    Object.fromEntries(saved.map((row) => [row.speaker_id, [row.display_name, row.profile_id]])),
+    { speaker_0: ["Ben", ben.id], speaker_1: ["Ada", ada.id] }
+  );
 });
 
 // A permissive `this` for setupHandlers: registration only stores closures.
@@ -206,6 +233,29 @@ test("auto-labeling a finished one-on-one leaves the live speaker unnamed", asyn
   assert.deepEqual(mappings, [[NOTE_ID + 1, "speaker_0", 7, "Ann"]]);
   const { displayName, noteId } = liveSpeakerIdentifier.getTransientState().speaker_0;
   assert.deepEqual({ displayName, noteId }, { displayName: null, noteId: null });
+});
+
+test("saving an expanded one-on-one never binds additional voices to the original attendee", async () => {
+  const { IPCHandlers } = loadHandlers();
+  const mappings = [];
+  const note = {
+    participants: JSON.stringify([{ displayName: "Ann", email: "ann@example.com" }]),
+    expected_speaker_count: 3,
+    transcript: JSON.stringify([{ source: "system", speaker: "speaker_1", text: "joining" }]),
+  };
+  const fake = Object.assign(Object.create(IPCHandlers.prototype), {
+    databaseManager: {
+      getNote: () => note,
+      getGoogleAccounts: () => [],
+      getNoteSpeakerEmbeddings: () => [{ speaker_id: "speaker_1", embedding: Buffer.alloc(8) }],
+      getSpeakerMappings: () => [],
+      upsertSpeakerProfile: () => ({ id: 7, display_name: "Ann" }),
+      setSpeakerMapping: (...args) => mappings.push(args),
+    },
+  });
+  fake._tryAutoLabelOneOnOne(NOTE_ID);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(mappings, []);
 });
 
 // A note recorded before the current embeddings has no voice to enroll, but the
@@ -303,17 +353,216 @@ test("a shrinking roster leaves the speaker cap untouched", () => {
   assert.deepEqual(emptied.broadcasts, []);
 });
 
+// With no count from the stepper or the note, main runs live identification
+// uncapped and gated, and the stepper follows the speakers it confirms.
+test.describe("automatic speaker mode", () => {
+  const EMPTY_NOTE_ID = NOTE_ID + 1;
+  const TWO_OTHERS_NOTE_ID = NOTE_ID + 2;
+  const noteWithTwoOthers = {
+    participants: JSON.stringify([{ email: "one@example.com" }, { email: "two@example.com" }]),
+  };
+  const notes = { [NOTE_ID]: {}, [EMPTY_NOTE_ID]: {}, [TWO_OTHERS_NOTE_ID]: noteWithTwoOthers };
+
+  let self;
+  let liveSpeakerIdentifier;
+  let broadcasts;
+  let limits;
+  let noteWrites;
+  let confirmed;
+
+  const call = (method, ...args) => self[method](...args);
+
+  test.beforeEach(() => {
+    let IPCHandlers;
+    ({ IPCHandlers, liveSpeakerIdentifier, broadcasts } = loadHandlers());
+    limits = [];
+    noteWrites = [];
+    confirmed = 0;
+    liveSpeakerIdentifier.setSpeakerLimit = (limit) => limits.push(limit);
+    liveSpeakerIdentifier.getConfirmedSpeakerCount = () => confirmed;
+    self = Object.assign(Object.create(IPCHandlers.prototype), {
+      activeMeetingSpeakerConfig: { enabled: true, expectedCount: 2, auto: true },
+      _activeMeetingNoteId: NOTE_ID,
+      speakerDiarizationEnabled: true,
+      databaseManager: {
+        getNote: (id) => notes[id] ?? null,
+        getGoogleAccounts: () => [],
+        updateNote: (...args) => noteWrites.push(args),
+      },
+    });
+  });
+
+  test("a note with no count and no attendees starts in automatic mode", () => {
+    assert.deepEqual(call("_resolveInitialMeetingSpeakerConfig", EMPTY_NOTE_ID), {
+      enabled: true,
+      expectedCount: 2,
+      auto: true,
+    });
+  });
+
+  test("a note with attendees is not automatic", () => {
+    assert.equal(call("_resolveInitialMeetingSpeakerConfig", TWO_OTHERS_NOTE_ID).auto, false);
+  });
+
+  test("automatic mode runs the identifier uncapped and gated", () => {
+    self.activeMeetingSpeakerConfig = { enabled: true, expectedCount: 2, auto: true };
+    call("_applyLiveSpeakerLimit");
+    assert.deepEqual(limits.at(-1), { maxSpeakers: 7, gated: true });
+  });
+
+  test("the diarization toggle keeps automatic mode", () => {
+    self.activeMeetingSpeakerConfig = { enabled: true, expectedCount: 2, auto: true };
+    call("_setSessionSpeakerConfig", { enabled: false, expectedCount: 2, countIsExplicit: false });
+    assert.deepEqual(self.activeMeetingSpeakerConfig, {
+      enabled: false,
+      expectedCount: 2,
+      auto: true,
+    });
+    assert.deepEqual(limits.at(-1), { maxSpeakers: 7, gated: true });
+  });
+
+  test("a stepper press ends automatic mode with an exact count, even below the speakers found", () => {
+    confirmed = 4;
+    call("_setSessionSpeakerConfig", { enabled: true, expectedCount: 3, countIsExplicit: true });
+    assert.deepEqual(self.activeMeetingSpeakerConfig, {
+      enabled: true,
+      expectedCount: 3,
+      explicit: true,
+    });
+    assert.deepEqual(limits.at(-1), { maxSpeakers: 2, gated: true });
+  });
+
+  // The stepper must not show fewer speakers than are on screen, and new
+  // placeholder ids are minted from it.
+  test("attendees ending automatic mode never lower the count or the cap below the speakers found", () => {
+    self.activeMeetingSpeakerConfig = { enabled: true, expectedCount: 5, auto: true };
+    confirmed = 4;
+    call("_refreshMeetingSpeakerConfigFromNote", NOTE_ID, noteWithTwoOthers);
+    assert.equal(self.activeMeetingSpeakerConfig.auto, false);
+    assert.equal(self.activeMeetingSpeakerConfig.expectedCount, 5);
+    assert.deepEqual(limits.at(-1), { maxSpeakers: 4, gated: true });
+    assert.deepEqual(
+      broadcasts.map((broadcast) => broadcast.payload),
+      [{ enabled: true, expectedCount: 5 }]
+    );
+  });
+
+  // One attendee tagged by mistake must not leave the call capped for good.
+  test("removing the attendees that ended automatic mode resumes it", () => {
+    confirmed = 3;
+    call("_refreshMeetingSpeakerConfigFromNote", NOTE_ID, noteWithTwoOthers);
+    assert.equal(self.activeMeetingSpeakerConfig.auto, false);
+
+    call("_refreshMeetingSpeakerConfigFromNote", NOTE_ID, { participants: "[]" });
+    assert.deepEqual(self.activeMeetingSpeakerConfig, {
+      enabled: true,
+      expectedCount: 4,
+      auto: true,
+    });
+    assert.deepEqual(limits.at(-1), { maxSpeakers: 7, gated: true });
+    assert.deepEqual(broadcasts.at(-1).payload, { enabled: true, expectedCount: 4, auto: true });
+  });
+
+  test("attendees ending automatic mode take the note's count when it is higher", () => {
+    self.activeMeetingSpeakerConfig = { enabled: true, expectedCount: 2, auto: true };
+    confirmed = 1;
+    call("_refreshMeetingSpeakerConfigFromNote", NOTE_ID, noteWithTwoOthers);
+    assert.equal(self.activeMeetingSpeakerConfig.auto, false);
+    assert.equal(self.activeMeetingSpeakerConfig.expectedCount, 3);
+    assert.deepEqual(limits.at(-1), { maxSpeakers: 2, gated: true });
+    assert.deepEqual(
+      broadcasts.map((broadcast) => broadcast.payload),
+      [{ enabled: true, expectedCount: 3 }]
+    );
+  });
+
+  // The renderer's diarization toggle push is debounced, so it can land after
+  // stop cleared the session config; building one then from a note id that may
+  // already be gone would hand the next session a stale automatic config.
+  test("a diarization toggle push with no session config stores none", () => {
+    const enabledCalls = [];
+    liveSpeakerIdentifier.setEnabled = (enabled) => enabledCalls.push(enabled);
+    self.activeMeetingSpeakerConfig = null;
+    self._activeMeetingNoteId = null;
+    call("_setSessionSpeakerConfig", { enabled: false, expectedCount: 2, countIsExplicit: false });
+    assert.equal(self.activeMeetingSpeakerConfig, null);
+    assert.deepEqual(enabledCalls, [false]);
+    assert.deepEqual(limits, []);
+  });
+
+  test("an explicit push with no session config still stores the user's count", () => {
+    self.activeMeetingSpeakerConfig = null;
+    call("_setSessionSpeakerConfig", { enabled: true, expectedCount: 4, countIsExplicit: true });
+    assert.deepEqual(self.activeMeetingSpeakerConfig, {
+      enabled: true,
+      expectedCount: 4,
+      explicit: true,
+    });
+  });
+
+  test("the display count follows promotions and merges, never below 2, and is broadcast as automatic", () => {
+    self.activeMeetingSpeakerConfig = { enabled: true, expectedCount: 2, auto: true };
+    confirmed = 3;
+    call("_syncAutoSpeakerDisplayCount");
+    confirmed = 2;
+    call("_syncAutoSpeakerDisplayCount");
+    confirmed = 0;
+    call("_syncAutoSpeakerDisplayCount");
+    assert.deepEqual(
+      broadcasts.map((broadcast) => broadcast.channel),
+      Array(3).fill("meeting-session-speaker-config-updated")
+    );
+    assert.deepEqual(
+      broadcasts.map((broadcast) => broadcast.payload),
+      [
+        { enabled: true, expectedCount: 4, auto: true },
+        { enabled: true, expectedCount: 3, auto: true },
+        { enabled: true, expectedCount: 2, auto: true },
+      ]
+    );
+    assert.equal(noteWrites.length, 0);
+  });
+
+  test("the display count is not synced once a count is known, and is never written to the note", () => {
+    self.activeMeetingSpeakerConfig = { enabled: true, expectedCount: 3, explicit: true };
+    confirmed = 5;
+    call("_syncAutoSpeakerDisplayCount");
+    assert.equal(broadcasts.length, 0);
+    assert.equal(noteWrites.length, 0);
+  });
+
+  // A resumed note's live ids start past its earlier sessions' (speaker_3 here),
+  // but only the voices confirmed in this session count toward the display.
+  test("a resumed note counts only this session's speakers", async () => {
+    delete liveSpeakerIdentifier.getConfirmedSpeakerCount;
+    await liveSpeakerIdentifier.start({ speakerIndexBase: 3, maxSpeakers: 7, gated: true });
+
+    assert.equal(liveSpeakerIdentifier._assignSpeakerId(new Float32Array([1, 0])), "speaker_3");
+    call("_syncAutoSpeakerDisplayCount");
+    assert.equal(self.activeMeetingSpeakerConfig.expectedCount, 2);
+    assert.deepEqual(broadcasts, []);
+
+    assert.equal(liveSpeakerIdentifier._assignSpeakerId(new Float32Array([0, 1])), "speaker_4");
+    call("_syncAutoSpeakerDisplayCount");
+    assert.deepEqual(
+      broadcasts.map((broadcast) => broadcast.payload),
+      [{ enabled: true, expectedCount: 3, auto: true }]
+    );
+  });
+});
+
 function makeCapResolver() {
   const { IPCHandlers } = loadHandlers();
   return (args) =>
     IPCHandlers.prototype._resolveSpeakerCap.call(
       Object.assign(Object.create(IPCHandlers.prototype), {
-        databaseManager: { getNote: () => args.note ?? null },
+        databaseManager: { getNote: () => args.note ?? null, getGoogleAccounts: () => [] },
       }),
       {
         sessionConfig: args.sessionConfig ?? null,
         noteId: args.noteId ?? null,
         diarizedSource: args.diarizedSource,
+        liveSpeakerState: args.liveSpeakerState ?? null,
       }
     );
 }
@@ -342,6 +591,53 @@ test("with no count, the remote side gets no count-derived cap", () => {
 
   assert.equal(resolve({}), null);
   assert.equal(resolve({ sessionConfig: { expectedCount: 2, explicit: false } }), null);
+});
+
+// Attendees added after automatic mode had confirmed more voices: the note's
+// count would fold those voices into each other, the collapse of #2641.
+test("an attendee count never caps below the speakers live identification confirmed", () => {
+  const resolve = makeCapResolver();
+  const live = (count) =>
+    Object.fromEntries(Array.from({ length: count }, (_, i) => [`speaker_${i}`, {}]));
+  const attendees = (others) => ({
+    participants: JSON.stringify(
+      Array.from({ length: others }, (_, i) => ({ email: `guest${i}@example.com` }))
+    ),
+  });
+  const withNote = (note, extra) => resolve({ noteId: NOTE_ID, note, ...extra });
+
+  assert.equal(withNote(attendees(1), { liveSpeakerState: live(4) }), 4);
+  assert.equal(withNote(attendees(4), { liveSpeakerState: live(2) }), 4, "a longer list stands");
+  assert.equal(withNote(attendees(1), { liveSpeakerState: live(9) }), 7, "never past the maximum");
+  assert.equal(withNote(attendees(1), {}), 1, "no live speakers: the list alone decides");
+  assert.equal(withNote(attendees(1), { liveSpeakerState: {} }), 1);
+});
+
+// A number the user set is exact, however many voices live identification found.
+test("a count set by hand is not raised to the live speakers", () => {
+  const resolve = makeCapResolver();
+  const liveSpeakerState = { speaker_0: {}, speaker_1: {}, speaker_2: {}, speaker_3: {} };
+
+  assert.equal(
+    resolve({ sessionConfig: { expectedCount: 2, explicit: true }, liveSpeakerState }),
+    1
+  );
+  assert.equal(
+    resolve({ noteId: NOTE_ID, note: { expected_speaker_count: 2 }, liveSpeakerState }),
+    1,
+    "a count stored on the note was set by hand too"
+  );
+  assert.equal(resolve({ liveSpeakerState }), null, "with no count, clustering still decides");
+  assert.equal(
+    resolve({
+      noteId: NOTE_ID,
+      note: { participants: JSON.stringify([{ email: "guest@example.com" }]) },
+      diarizedSource: "mic",
+      liveSpeakerState,
+    }),
+    2,
+    "live identification never hears an in-person recording"
+  );
 });
 
 // Mic mode (in-person session): the user is one of the diarized voices, so the

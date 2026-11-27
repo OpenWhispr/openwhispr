@@ -461,6 +461,7 @@ function loadIdentifierHearingVoices() {
   const feed = async (windows, vadProbability) => {
     probability = vadProbability;
     for (let i = 0; i < windows; i++) {
+      identifier.sampleCursor = cursor + 512;
       await identifier._processWindow(new Float32Array(512), cursor, cursor + 512);
       cursor += 512;
     }
@@ -618,4 +619,479 @@ test("a new meeting never inherits the previous meeting's partial resample group
   const fresh = await collect16kStream(new LiveSpeakerIdentifier(), chunks);
 
   assert.equal(firstMismatch(afterReset, fresh), -1);
+});
+
+// The gate (automatic mode): a voice that matches no confirmed speaker is held
+// as a candidate until it has been heard enough, so one person drifting below
+// the match threshold doesn't split into several speakers.
+const bea = { id: 7, display_name: "Bea", embedding: voiceB };
+
+function gatedIdentifier({ profiles = [] } = {}) {
+  const { LiveSpeakerIdentifier } = loadIdentifier();
+  const id = new LiveSpeakerIdentifier();
+  id.setSpeakerLimit({ maxSpeakers: 7, gated: true });
+  id.getSpeakerProfiles = () => profiles;
+  return { id, LiveSpeakerIdentifier };
+}
+
+const hear = (identifier, voice, startTime, seconds) =>
+  identifier._resolveSpeakerForEmbedding(voice, {
+    updateCentroid: true,
+    segment: { seconds, startTime, endTime: startTime + seconds },
+  });
+
+const pick = (result, ...keys) =>
+  Object.fromEntries(
+    (keys.length ? keys : ["speakerId", "backfill"]).map((key) => [key, result[key]])
+  );
+
+const oneHot = (axis) => {
+  const values = new Array(12).fill(0);
+  values[axis] = 1;
+  return new Float32Array(values);
+};
+
+test("gated: the first voice is a speaker at once", () => {
+  const { id } = gatedIdentifier();
+  assert.equal(hear(id, voiceA, 0, 2).speakerId, "speaker_0");
+});
+
+test("gated: a voice heard once creates no speaker and uses no label number", () => {
+  const { id } = gatedIdentifier();
+  hear(id, voiceA, 0, 2);
+  assert.equal(hear(id, voiceB, 10, 2).speakerId, null);
+  assert.equal(id._resolveSpeakerForEmbedding(voiceB, { updateCentroid: false }).speakerId, null);
+  assert.equal(id.getConfirmedSpeakerCount(), 1);
+  // One 12 s stretch is enough on its own; the next real speaker is Speaker 2.
+  assert.equal(hear(id, voiceC, 20, 12).speakerId, "speaker_1");
+});
+
+test("gated: a third stretch totalling 8 s promotes the voice and hands back its earlier windows", () => {
+  const { id } = gatedIdentifier();
+  hear(id, voiceA, 0, 2);
+  hear(id, voiceB, 10, 3);
+  hear(id, voiceB, 20, 3);
+  const result = hear(id, voiceB, 30, 3);
+  assert.equal(result.speakerId, "speaker_1");
+  assert.deepEqual(result.backfill, [
+    { startTime: 10, endTime: 13 },
+    { startTime: 20, endTime: 23 },
+  ]);
+});
+
+test("gated: three stretches under 8 s in total are not enough", () => {
+  const { id } = gatedIdentifier();
+  hear(id, voiceA, 0, 2);
+  hear(id, voiceB, 10, 2);
+  hear(id, voiceB, 20, 2);
+  assert.equal(hear(id, voiceB, 30, 2).speakerId, null);
+});
+
+test("gated: two long stretches are not enough short of 12 s each", () => {
+  const { id } = gatedIdentifier();
+  hear(id, voiceA, 0, 2);
+  hear(id, voiceB, 10, 5);
+  assert.equal(hear(id, voiceB, 20, 5).speakerId, null);
+});
+
+test("gated: one stretch of 12 s is enough", () => {
+  const { id } = gatedIdentifier();
+  hear(id, voiceA, 0, 2);
+  assert.deepEqual(pick(hear(id, voiceB, 10, 12)), { speakerId: "speaker_1", backfill: [] });
+});
+
+test("gated: a voice 0.5 like a confirmed speaker joins it; ungated it does not", () => {
+  const { id, LiveSpeakerIdentifier } = gatedIdentifier();
+  const near = unit([0.5, 0.866, 0]); // 0.5 to A: above 0.45, below 0.6
+  hear(id, voiceA, 0, 2);
+  assert.equal(hear(id, near, 10, 3).speakerId, "speaker_0");
+
+  const open = new LiveSpeakerIdentifier();
+  open.setSpeakerLimit({ maxSpeakers: 3, gated: false });
+  hear(open, voiceA, 0, 2);
+  assert.equal(hear(open, near, 10, 3).speakerId, "speaker_1");
+});
+
+test("gated: a stored profile still needs 0.6", () => {
+  const { id } = gatedIdentifier({ profiles: [bea] });
+  hear(id, voiceA, 0, 2);
+  const result = hear(id, unit([0, 0.5, 0.866]), 10, 3); // 0.5 to Bea's profile
+  assert.equal(result.displayName ?? null, null);
+  assert.equal(result.speakerId, null, "held as a candidate, not matched to Bea or to A");
+});
+
+test("gated: a candidate that settles onto a confirmed speaker is absorbed", () => {
+  const { id } = gatedIdentifier();
+  const drift = unit([0.42, 0.907, 0]); // 0.42 to A: below 0.45
+  const settle = unit([0.42, 0.45, 0.788]); // 0.42 to A, 0.58 to drift; the pair's mean is 0.47 to A
+  hear(id, voiceA, 0, 2);
+  assert.equal(hear(id, drift, 10, 2).speakerId, null);
+  const result = hear(id, settle, 20, 2);
+  assert.equal(result.speakerId, "speaker_0");
+  assert.deepEqual(result.backfill, [{ startTime: 10, endTime: 12 }]);
+  assert.equal(id.getConfirmedSpeakerCount(), 1);
+});
+
+test("gated: a voice matching a stored profile is a speaker at once, with its name", () => {
+  const { id } = gatedIdentifier({ profiles: [bea] });
+  hear(id, voiceA, 0, 2);
+  assert.deepEqual(pick(hear(id, voiceB, 10, 2), "speakerId", "displayName"), {
+    speakerId: "speaker_1",
+    displayName: "Bea",
+  });
+});
+
+test("gated: at the cap a new voice is folded onto the nearest speaker, as without the gate", () => {
+  const { id } = gatedIdentifier();
+  id.setSpeakerLimit({ maxSpeakers: 1, gated: true });
+  hear(id, voiceA, 0, 2);
+  assert.deepEqual(pick(hear(id, voiceB, 10, 4), "speakerId", "forced"), {
+    speakerId: "speaker_0",
+    forced: true,
+  });
+  assert.equal(id._candidates.length, 0);
+  assert.equal(id.getConfirmedSpeakerCount(), 1);
+});
+
+test("gated: at the cap a weak match labels the speaker but stays out of its voice", () => {
+  const { id } = gatedIdentifier();
+  id.setSpeakerLimit({ maxSpeakers: 2, gated: true });
+  hear(id, voiceA, 0, 2);
+  assert.equal(hear(id, voiceB, 10, 12).speakerId, "speaker_1");
+
+  const overflow = unit([0.5, 0, Math.sqrt(0.75)]);
+  assert.equal(hear(id, overflow, 30, 3).speakerId, "speaker_0");
+  assert.deepEqual(id.getSpeakerEmbedding("speaker_0"), voiceA);
+
+  hear(id, similarToVoiceA(0.9), 40, 3);
+  assert.ok(
+    cosineSimilarity(id.getSpeakerEmbedding("speaker_0"), voiceA) < 1,
+    "a match on the ungated threshold still trains the speaker at the cap"
+  );
+});
+
+test("turning the gate off drops candidates and behaves as before", () => {
+  const { id } = gatedIdentifier();
+  hear(id, voiceA, 0, 2);
+  hear(id, voiceB, 10, 2);
+  id.setSpeakerLimit({ maxSpeakers: 3, gated: false });
+  assert.equal(id._candidates.length, 0);
+  assert.deepEqual(pick(hear(id, voiceB, 20, 2)), { speakerId: "speaker_1", backfill: [] });
+});
+
+test("candidates are not in the stop state, recluster or mapSpeaker", () => {
+  const { id } = gatedIdentifier();
+  hear(id, voiceA, 0, 2);
+  hear(id, voiceB, 10, 2);
+  assert.deepEqual(Object.keys(id.getTransientState()), ["speaker_0"]);
+  assert.deepEqual(id._performRecluster(), []);
+  assert.equal(id.getSpeakerEmbedding("speaker_1"), null, "no speaker exists for the candidate");
+  assert.equal(id.mapSpeaker("speaker_1", 3, "Bea", 9), false);
+
+  // speaker_1 is exactly the id a promotion gives this candidate.
+  assert.equal(hear(id, voiceB, 20, 12).speakerId, "speaker_1");
+  assert.equal(id.mapSpeaker("speaker_1", 3, "Bea", 9), true);
+});
+
+test("a voice held before the cap was reached takes its earlier lines along when folded", () => {
+  const { id } = gatedIdentifier();
+  id.setSpeakerLimit({ maxSpeakers: 2, gated: true });
+  hear(id, oneHot(0), 0, 2);
+  assert.equal(hear(id, oneHot(1), 10, 2).speakerId, null);
+  assert.equal(hear(id, oneHot(2), 20, 12).speakerId, "speaker_1");
+
+  assert.deepEqual(pick(hear(id, oneHot(1), 40, 2), "forced", "backfill"), {
+    forced: true,
+    backfill: [{ startTime: 10, endTime: 12 }],
+  });
+  assert.equal(id._candidates.length, 0);
+});
+
+test("a promoted speaker is weighted by the segments it was heard in", () => {
+  const { id } = gatedIdentifier();
+  hear(id, oneHot(0), 0, 2);
+  hear(id, oneHot(1), 10, 3);
+  hear(id, oneHot(1), 20, 3);
+  assert.equal(hear(id, oneHot(1), 30, 3).speakerId, "speaker_1");
+  assert.equal(id.transientCounts.get("speaker_1"), 3);
+});
+
+// A live window matches at the gated threshold on about 1.6 s of audio.
+test("gated: a finished segment that doesn't match its live window's speaker is judged again", () => {
+  const { id } = gatedIdentifier();
+  hear(id, oneHot(0), 0, 2);
+  const centroid = Array.from(id.getSpeakerEmbedding("speaker_0"));
+
+  id.currentSegmentSpeakerId = "speaker_0";
+  assert.equal(hear(id, oneHot(1), 10, 2).speakerId, null);
+  assert.equal(id._candidates.length, 1);
+  assert.deepEqual(Array.from(id.getSpeakerEmbedding("speaker_0")), centroid);
+
+  id.currentSegmentSpeakerId = "speaker_0";
+  assert.equal(hear(id, oneHot(0), 20, 2).speakerId, "speaker_0");
+});
+
+test("gated: a held voice's lines go to the speaker a stored profile then confirms", () => {
+  const { id } = gatedIdentifier({
+    profiles: [{ id: 7, display_name: "Bea", embedding: oneHot(1) }],
+  });
+  hear(id, oneHot(0), 0, 2);
+
+  // 0.55 like the profile: under its 0.6, so the voice is held.
+  const drifted = oneHot(2);
+  drifted[1] = 0.55;
+  drifted[2] = Math.sqrt(1 - 0.55 ** 2);
+  assert.equal(hear(id, drifted, 10, 2).speakerId, null);
+
+  assert.deepEqual(pick(hear(id, oneHot(1), 20, 2), "speakerId", "displayName", "backfill"), {
+    speakerId: "speaker_1",
+    displayName: "Bea",
+    backfill: [{ startTime: 10, endTime: 12 }],
+  });
+  assert.equal(id._candidates.length, 0);
+});
+
+// Feeds 5 s of a new voice's live windows beside one confirmed speaker and
+// counts the embeddings extracted.
+async function countLiveExtractions({ gated }) {
+  let extractions = 0;
+  const { LiveSpeakerIdentifier } = loadIdentifier({
+    extractEmbeddingFromSamples: async () => {
+      extractions += 1;
+      return voiceB;
+    },
+  });
+  const identifier = new LiveSpeakerIdentifier();
+  identifier.setSpeakerLimit({ maxSpeakers: 7, gated });
+  identifier._resolveSpeakerForEmbedding(voiceA, { updateCentroid: true });
+  identifier._getVadProbability = async () => 1;
+  const emitted = [];
+  identifier.onSpeakerIdentified = (event) => emitted.push(event);
+
+  for (let cursor = 0; cursor < 16000 * 5; cursor += 512) {
+    await identifier._processWindow(new Float32Array(512), cursor, cursor + 512);
+  }
+  return { extractions, emitted, identifier };
+}
+
+test("a held voice's live windows are throttled like any other voice's", async () => {
+  const ungated = await countLiveExtractions({ gated: false });
+  const gated = await countLiveExtractions({ gated: true });
+
+  assert.equal(ungated.extractions, 4, "about one extraction per second of speech");
+  assert.equal(gated.extractions, ungated.extractions);
+  assert.deepEqual(gated.emitted, [], "a held voice is never identified live");
+  assert.equal(gated.identifier.currentSegmentSpeakerId, null);
+});
+
+test("at most 8 candidates are kept, the weakest dropped first", () => {
+  const { id } = gatedIdentifier();
+  hear(id, oneHot(0), 0, 2);
+  for (let i = 1; i <= 9; i += 1) hear(id, oneHot(i), i * 10, i === 1 ? 1.6 : 3);
+  assert.equal(id._candidates.length, 8);
+  // The 1.6 s one was dropped, so this starts again.
+  assert.equal(hear(id, oneHot(1), 200, 3).speakerId, null);
+  const restarted = id._candidates.find((candidate) =>
+    candidate.windows.some((window) => window.startTime === 200)
+  );
+  assert.equal(restarted.windows.length, 1);
+});
+
+test("start() resets candidates with the rest of the meeting state", () => {
+  const { id } = gatedIdentifier();
+  hear(id, voiceA, 0, 2);
+  hear(id, voiceB, 10, 2);
+  id._resetMeetingState();
+  assert.equal(id._candidates.length, 0);
+});
+
+test("a promotion emits the earlier windows first, flagged retroactive", async () => {
+  let voice = null;
+  const { LiveSpeakerIdentifier } = loadIdentifier({
+    extractEmbeddingFromSamples: async () => voice,
+  });
+  const identifier = new LiveSpeakerIdentifier();
+  identifier.setSpeakerLimit({ maxSpeakers: 7, gated: true });
+  const emitted = [];
+  identifier.onSpeakerIdentified = (event) => emitted.push(event);
+
+  const finishSegment = async (segmentVoice, startSeconds) => {
+    voice = segmentVoice;
+    identifier.speechActive = true;
+    identifier.speechChunks = [new Float32Array(16000 * 3)];
+    identifier.segmentStartSample = 16000 * startSeconds;
+    identifier.segmentEndSample = 16000 * (startSeconds + 3);
+    await identifier._finalizeSpeechSegment();
+  };
+
+  await finishSegment(voiceA, 0);
+  for (const startSeconds of [10, 20, 30]) await finishSegment(voiceB, startSeconds);
+
+  assert.deepEqual(
+    emitted.map((e) => [e.speakerId, !!e.retroactive]),
+    [
+      ["speaker_0", false],
+      ["speaker_1", true],
+      ["speaker_1", true],
+      ["speaker_1", false],
+    ]
+  );
+  assert.deepEqual(
+    emitted.map((e) => e.startTime),
+    [0, 9.25, 19.25, 29.25],
+    "the earlier windows go out oldest first, before the current one"
+  );
+});
+
+test("the gate's evidence rule and thresholds are pinned", () => {
+  loadIdentifier();
+  assert.deepEqual(
+    pick(
+      require(identifierModulePath),
+      "CANDIDATE_MIN_SEGMENTS",
+      "CANDIDATE_MIN_SECONDS",
+      "CANDIDATE_SOLO_SECONDS",
+      "MAX_CANDIDATES",
+      "AUTO_MATCH_THRESHOLD"
+    ),
+    {
+      CANDIDATE_MIN_SEGMENTS: 3,
+      CANDIDATE_MIN_SECONDS: 8,
+      CANDIDATE_SOLO_SECONDS: 12,
+      MAX_CANDIDATES: 8,
+      AUTO_MATCH_THRESHOLD: 0.45,
+    }
+  );
+});
+
+test("lowering the live limit excludes surplus profiles and the active speaker until raised", async () => {
+  const { identifier, speak } = loadIdentifierHearingVoices();
+  identifier.setSpeakerLimit({ maxSpeakers: 3, gated: true });
+  identifier.getSpeakerProfiles = () => [bea, { id: 8, display_name: "Cam", embedding: voiceC }];
+  await speak(voiceA);
+  await speak(voiceB);
+  await speak(voiceC);
+
+  const events = [];
+  identifier.onSpeakerIdentified = (event) => {
+    events.push(event);
+    if (events.length === 1) identifier.setSpeakerLimit({ maxSpeakers: 1, gated: false });
+  };
+  await speak(voiceB);
+  await speak(voiceC);
+  assert.equal(events[0].speakerId, "speaker_1");
+  assert.ok(events.length > 2);
+  assert.ok(events.slice(1).every((event) => event.speakerId === "speaker_0"));
+  assert.deepEqual(Object.keys(identifier.getTransientState()), [
+    "speaker_0",
+    "speaker_1",
+    "speaker_2",
+  ]);
+
+  identifier.setSpeakerLimit({ maxSpeakers: 3, gated: true });
+  await speak(voiceB);
+  assert.equal(events.at(-1).speakerId, "speaker_1");
+  assert.equal(events.at(-1).displayName, "Bea");
+});
+
+test("an enrolled attendee wins over a weak transient match, including at final rejudgment", async () => {
+  const { identifier, speak } = loadIdentifierHearingVoices();
+  const enrolledVoice = similarToVoiceA(0.5);
+  identifier.setSpeakerLimit({ maxSpeakers: 2, gated: true });
+  identifier.getSpeakerProfiles = () => [{ ...bea, embedding: enrolledVoice }];
+  const events = [];
+  identifier.onSpeakerIdentified = (event) => events.push(event);
+  await speak(voiceA);
+  await speak(voiceA, enrolledVoice);
+  assert.equal(events.at(-2).tentative, true);
+  assert.equal(events.at(-1).tentative, undefined);
+  assert.equal(events.at(-1).displayName, "Bea");
+  assert.equal(events.at(-1).speakerId, "speaker_1");
+  assert.equal(events.at(-1).rejudged, true);
+  assert.deepEqual(identifier.getSpeakerEmbedding("speaker_0"), voiceA);
+});
+
+test("a live forced match backfills the candidate's earlier rejudged turn on finalization", async () => {
+  const { identifier, speak } = loadIdentifierHearingVoices();
+  identifier.setSpeakerLimit({ maxSpeakers: 2, gated: true });
+  const events = [];
+  identifier.onSpeakerIdentified = (event) => events.push(event);
+  await speak(voiceA);
+  await speak(voiceA, voiceB);
+  identifier.getSpeakerProfiles = () => [{ ...bea, embedding: voiceC }];
+  await speak(voiceC);
+  await speak(voiceB);
+  const backfilled = events.filter((event) => event.retroactive);
+  assert.equal(backfilled.length, 1);
+  assert.equal(backfilled[0].speakerId, events.at(-1).speakerId);
+  assert.equal(backfilled[0].rejudged, true);
+  assert.ok(backfilled[0].speechEndTime < 8);
+  assert.equal(identifier._candidates.length, 0);
+});
+
+test("re-enabling identification only backfills turns heard while enabled", async () => {
+  const { identifier, speak } = loadIdentifierHearingVoices();
+  identifier.setSpeakerLimit({ maxSpeakers: 3, gated: true });
+  const events = [];
+  identifier.onSpeakerIdentified = (event) => events.push(event);
+  await speak(voiceA);
+  await speak(voiceB);
+  identifier.setEnabled(false);
+  await speak(voiceB);
+  await speak(voiceB);
+  identifier.setEnabled(true);
+  await speak(voiceB);
+  await speak(voiceB);
+  const replayedStarts = events
+    .filter((event) => event.retroactive)
+    .map((event) => event.speechStartTime);
+  assert.ok(
+    replayedStarts.some((start) => start < 4),
+    "retains evidence from the enabled turn"
+  );
+  assert.ok(
+    replayedStarts.every((start) => start < 4 || start > 15),
+    "excludes both disabled turns"
+  );
+  assert.equal(events.at(-1).speakerId, "speaker_1");
+});
+
+test("queued audio keeps its position and toggle state when the identifier is behind", async () => {
+  const { LiveSpeakerIdentifier } = loadIdentifier({
+    extractEmbeddingFromSamples: async () => voiceA,
+  });
+  const identifier = new LiveSpeakerIdentifier();
+  identifier.running = true;
+  identifier.session = {};
+  identifier._getVadProbability = async () => 1;
+  const emitted = [];
+  identifier.onSpeakerIdentified = (event) => emitted.push(event);
+  const fiveSeconds = Buffer.alloc(24000 * 2 * 5);
+  const first = identifier.feedAudio(fiveSeconds);
+  identifier.setEnabled(false);
+  const disabled = identifier.feedAudio(fiveSeconds);
+  identifier.setEnabled(true);
+  const last = identifier.feedAudio(fiveSeconds);
+  const stopping = identifier.stop();
+  identifier.setEnabled(false); // A debounced toggle left over from the recording.
+  const [, , , finalState] = await Promise.all([first, disabled, last, stopping]);
+  assert.deepEqual(Object.keys(finalState), ["speaker_0"]);
+  assert.ok(emitted.some((event) => event.speechStartTime === 0));
+  assert.ok(emitted.some((event) => event.startTime >= 10));
+  assert.ok(emitted.every((event) => event.speechEndTime < 5 || event.startTime >= 10));
+});
+
+test("an enrolled overflow voice cannot train the weakly matching speaker it is folded onto", async () => {
+  const { identifier, speak } = loadIdentifierHearingVoices();
+  const enrolledVoice = similarToVoiceA(0.5);
+  identifier.setSpeakerLimit({ maxSpeakers: 2, gated: true });
+  identifier.getSpeakerProfiles = () => [
+    { ...bea, embedding: enrolledVoice },
+    { id: 8, display_name: "Cam", embedding: voiceC },
+  ];
+  await speak(voiceA);
+  await speak(voiceC);
+  await speak(enrolledVoice);
+  assert.deepEqual(identifier.getSpeakerEmbedding("speaker_0"), voiceA);
+  assert.equal(identifier.getConfirmedSpeakerCount(), 2);
 });

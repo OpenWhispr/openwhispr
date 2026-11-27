@@ -19,8 +19,10 @@ export const resolveParticipantExpectedSpeakerCount = (
 };
 
 // Raise-only, mirroring _refreshMeetingSpeakerConfigFromNote in main: a roster
-// that shrinks mid-recording must not pull the cap below the speakers already
-// discovered, and main would not broadcast the lower value back anyway.
+// that shrinks mid-recording, or that is smaller than the speakers automatic
+// mode already found, must not pull the stepper below the speakers on screen.
+// Main keeps its count at least that high too, so it never broadcasts a lower
+// value back.
 export const resolveParticipantSpeakerCountSync = ({
   recordingNoteId,
   noteId,

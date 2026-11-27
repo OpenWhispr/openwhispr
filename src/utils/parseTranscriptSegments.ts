@@ -12,6 +12,7 @@ export function parseTranscriptSegments(raw: string): TranscriptSegment[] {
       endTimestamp?: number;
       speaker?: string;
       speakerName?: string;
+      speakerNameFromUser?: boolean;
       recorderName?: string;
       speakerIsPlaceholder?: boolean;
       suggestedName?: string;
@@ -32,6 +33,7 @@ export function parseTranscriptSegments(raw: string): TranscriptSegment[] {
         ...(Number.isFinite(s.endTimestamp) ? { endTimestamp: s.endTimestamp } : {}),
         speaker: s.speaker,
         speakerName: s.speakerName,
+        ...(s.speakerNameFromUser === true && { speakerNameFromUser: true }),
         recorderName: typeof s.recorderName === "string" ? s.recorderName : undefined,
         speakerIsPlaceholder: s.speakerIsPlaceholder,
         suggestedName: s.suggestedName,

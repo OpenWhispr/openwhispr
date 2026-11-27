@@ -507,7 +507,11 @@ class DiarizationManager {
         // Completion times and audio-range starts aren't speech onsets; retain
         // their original matching window until speech-aligned bounds are available.
         let segEnd = nextStart ?? segStart + 2.5;
-        if (seg.timestampIsSpeechStart !== false) {
+        // A row that carries its own speech range is matched on exactly that audio.
+        const hasOwnRange = seg.endTimestamp != null && seg.endTimestamp > segStart;
+        if (hasOwnRange) {
+          segEnd = seg.endTimestamp;
+        } else if (seg.timestampIsSpeechStart !== false) {
           const spokenEnd = segStart + spokenSeconds(seg.text);
           // Exclude the pause after an onset-timed row from speaker matching.
           segEnd =

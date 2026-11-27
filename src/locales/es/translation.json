@@ -4509,6 +4509,7 @@
         "finalizing": "Finalizando participantes…",
         "justYou": "Solo tú",
         "assumedHint": "se asumen 2 — ajústalo si hay más",
+        "assumedHintAuto": "se asumen 2 — los demás se detectan automáticamente",
         "speakersLabel": "Participantes",
         "labelToggle": "Etiquetar participantes",
         "toggleAria": "Alternar identificación de participantes para esta grabación",

@@ -238,6 +238,16 @@ const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
+const { resolveLiveSpeakerLimit, autoDisplayCount } = require("./liveSpeakerLimit");
+const {
+  rangeOverlapMs,
+  pickSpeakerForRange,
+  pickIdentificationForPoint,
+  rangedLabelChanges,
+  pruneIdentifications,
+  takesRowFromOtherSpeaker,
+  retroactiveMayMoveRangedRow,
+} = require("./speakerRangeMatch");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
 const createMeetingSystemAudioWatchdog = require("./meetingSystemAudioWatchdog");
 const createMeetingSystemAudioHandover = require("./meetingSystemAudioHandover");
@@ -249,6 +259,7 @@ const {
   partitionOverlappingPendingMicFinals,
 } = require("./meetingMicHoldback");
 const { fragmentFilterLanguages, isWrongScriptFragment } = require("./meetingFragmentFilter");
+const { localBufferEntry, describeLocalChunk } = require("./meetingLocalChunk");
 const {
   computeChunkStats,
   resolveMicChunkAction,
@@ -1618,8 +1629,10 @@ class IPCHandlers {
     }
   }
 
-  _resolveOneOnOneOtherParticipant(participantsJson) {
-    const others = this._parseNonSelfParticipants(participantsJson);
+  _resolveOneOnOneOtherParticipant(note) {
+    // A manually expanded meeting can have guests missing from its calendar roster.
+    if (normalizeStoredSpeakerCount(note?.expected_speaker_count) > 2) return null;
+    const others = this._parseNonSelfParticipants(note?.participants);
     if (others.length !== 1) return null;
     const displayName = others[0].displayName || others[0].email;
     if (!displayName) return null;
@@ -1639,10 +1652,8 @@ class IPCHandlers {
     return null;
   }
 
-  _resolveNoteExpectedSpeakerCount(note) {
-    return this._noteExpectedSpeakerCountOrNull(note) ?? DEFAULT_EXPECTED_SPEAKER_COUNT;
-  }
-
+  // A note with neither a stored count nor attendees starts in automatic mode:
+  // `expectedCount` is then only the number the stepper shows.
   _resolveInitialMeetingSpeakerConfig(noteId) {
     let note = null;
     if (noteId != null) {
@@ -1656,7 +1667,59 @@ class IPCHandlers {
       (note?.diarization_enabled == null
         ? this.speakerDiarizationEnabled
         : note.diarization_enabled !== 0) !== false;
-    return { enabled, expectedCount: this._resolveNoteExpectedSpeakerCount(note) };
+    const noteCount = this._noteExpectedSpeakerCountOrNull(note);
+    return {
+      enabled,
+      expectedCount: noteCount ?? DEFAULT_EXPECTED_SPEAKER_COUNT,
+      auto: noteCount == null,
+    };
+  }
+
+  _applyLiveSpeakerLimit() {
+    const config = this.activeMeetingSpeakerConfig;
+    if (!config) return;
+    liveSpeakerIdentifier.setSpeakerLimit(
+      resolveLiveSpeakerLimit(config, liveSpeakerIdentifier.getConfirmedSpeakerCount())
+    );
+  }
+
+  _setSessionSpeakerConfig(payload) {
+    const enabled = payload?.enabled !== false;
+    if (payload?.countIsExplicit === true) {
+      const expectedCount = Math.max(
+        1,
+        Math.min(MAX_SPEAKER_COUNT, Number(payload.expectedCount) || DEFAULT_EXPECTED_SPEAKER_COUNT)
+      );
+      this.activeMeetingSpeakerConfig = { enabled, expectedCount, explicit: true };
+    } else if (this.activeMeetingSpeakerConfig) {
+      // The diarization toggle reuses this channel and only carries the count
+      // along, so it changes `enabled` alone: it must neither end automatic mode
+      // nor freeze the count against roster-driven refreshes.
+      this.activeMeetingSpeakerConfig = { ...this.activeMeetingSpeakerConfig, enabled };
+    }
+    // A toggle push with no session config is a debounced one landing after stop
+    // (or before start): building a config then would hand the next session a
+    // stale one, since start keeps a config it finds. Start resolves its own.
+    liveSpeakerIdentifier.setEnabled(enabled);
+    this._applyLiveSpeakerLimit();
+  }
+
+  // In automatic mode the stepper follows the speakers live identification has
+  // confirmed, down as well as up. The number is never written to the note:
+  // only a stepper press sets the note's count.
+  _syncAutoSpeakerDisplayCount() {
+    const config = this.activeMeetingSpeakerConfig;
+    if (!config?.auto) return;
+
+    const expectedCount = autoDisplayCount(liveSpeakerIdentifier.getConfirmedSpeakerCount());
+    if (expectedCount === config.expectedCount) return;
+
+    this.activeMeetingSpeakerConfig = { ...config, expectedCount };
+    broadcastToWindows("meeting-session-speaker-config-updated", {
+      enabled: config.enabled,
+      expectedCount,
+      auto: true,
+    });
   }
 
   // Participants added mid-meeting must raise the speaker cap that was derived
@@ -1667,16 +1730,40 @@ class IPCHandlers {
   // _assignOrForceCluster fold every later voice onto an existing speaker — the
   // exact identity collapse this refresh exists to prevent. A roster that shrinks
   // (or empties) mid-meeting therefore leaves the cap where it is.
+  //
+  // In automatic mode the count is only a display number, so any count the note
+  // yields ends automatic mode. The stepper then never shows fewer than the
+  // speakers already on screen (new placeholder ids are minted from it), and the
+  // live cap never drops below the speakers already confirmed
+  // (resolveLiveSpeakerLimit), nor does the after-call cap (_resolveSpeakerCap). When the
+  // attendees that ended automatic mode are all removed again, it resumes.
+  //
+  // A stepper press never lands here: it writes only the note's count, and this
+  // runs for participants writes alone. Its debounced push makes the config
+  // explicit (_setSessionSpeakerConfig).
   _refreshMeetingSpeakerConfigFromNote(noteId, note) {
     const config = this.activeMeetingSpeakerConfig;
     if (!config || config.explicit) return;
     if (noteId == null || this._activeMeetingNoteId !== noteId) return;
 
-    const expectedCount = this._noteExpectedSpeakerCountOrNull(note);
-    if (expectedCount == null || expectedCount <= config.expectedCount) return;
+    const noteCount = this._noteExpectedSpeakerCountOrNull(note);
+    if (noteCount == null) {
+      if (config.autoEnded) this._resumeAutoSpeakerMode(config);
+      return;
+    }
+    if (!config.auto && noteCount <= config.expectedCount) return;
 
-    this.activeMeetingSpeakerConfig = { ...config, expectedCount };
-    liveSpeakerIdentifier.setMaxSpeakers(Math.max(1, expectedCount - 1));
+    const expectedCount = config.auto
+      ? Math.max(noteCount, autoDisplayCount(liveSpeakerIdentifier.getConfirmedSpeakerCount()))
+      : noteCount;
+
+    this.activeMeetingSpeakerConfig = {
+      ...config,
+      expectedCount,
+      auto: false,
+      ...(config.auto && { autoEnded: true }),
+    };
+    this._applyLiveSpeakerLimit();
     broadcastToWindows("meeting-session-speaker-config-updated", {
       enabled: config.enabled,
       expectedCount,
@@ -1686,6 +1773,17 @@ class IPCHandlers {
       { noteId, expectedCount },
       "speaker"
     );
+  }
+
+  _resumeAutoSpeakerMode({ autoEnded: _autoEnded, ...config }) {
+    const expectedCount = autoDisplayCount(liveSpeakerIdentifier.getConfirmedSpeakerCount());
+    this.activeMeetingSpeakerConfig = { ...config, expectedCount, auto: true };
+    this._applyLiveSpeakerLimit();
+    broadcastToWindows("meeting-session-speaker-config-updated", {
+      enabled: config.enabled,
+      expectedCount,
+      auto: true,
+    });
   }
 
   _getPersonalDictionarySafe() {
@@ -10183,18 +10281,125 @@ class IPCHandlers {
       source,
       timestamp,
       micSuppression = null,
-      timestampIsSpeechStart = true
+      timestampIsSpeechStart = true,
+      endTimestamp = null
     ) => {
-      meetingDiarizationSegments.push({
+      const segment = {
         text,
         source,
         timestamp,
         ...(timestampIsSpeechStart === false ? { timestampIsSpeechStart: false } : {}),
+        ...(endTimestamp !== null ? { endTimestamp } : {}),
         committedAt: Date.now(),
         suppressionReason: source === "mic" ? micSuppression?.reason || null : null,
         hasBleedEvidence: source === "mic" ? !!micSuppression?.hasBleedEvidence : false,
         likelyRenderBleed: source === "mic" ? !!micSuppression?.likelyRenderBleed : false,
+      };
+      // Local decoding and cloud finals can both arrive after speaker identification.
+      if (source === "system" && timestamp != null) {
+        const heard =
+          endTimestamp == null
+            ? pickIdentificationForPoint(meetingLiveIdentifications, timestamp)
+            : pickSpeakerForRange(meetingLiveIdentifications, timestamp, endTimestamp);
+        if (heard) labelRowAsHeard(segment, heard);
+      }
+      meetingDiarizationSegments.push(segment);
+    };
+
+    const labelRowAsHeard = (segment, heard) => {
+      if (!canAutoRelabelSpeaker(segment)) return;
+      // Another speaker's name must never stay on a row that turned out to be someone else.
+      const keptName = segment.speaker === heard.speakerId ? segment.speakerName : undefined;
+      const speakerName = heard.displayName ?? keptName;
+      applyConfirmedSpeaker(segment, {
+        speaker: heard.speakerId,
+        speakerName,
+        speakerIsPlaceholder: false,
       });
+      if (speakerName == null) delete segment.speakerName;
+    };
+
+    const applyLiveIdentificationToRows = (identification) => {
+      meetingLiveIdentifications = pruneIdentifications(
+        [...meetingLiveIdentifications, identification],
+        identification.endTime,
+        identification.retainFromTime
+      );
+
+      for (const seg of meetingDiarizationSegments) {
+        if (seg.source !== "system" || seg.timestamp == null) continue;
+
+        if (seg.endTimestamp != null) {
+          // Ranged rows go to whoever was heard longest in their own audio. Only rows in
+          // this identification's audio can change; re-picking the rest would let a label
+          // flip as old identifications age out.
+          if (
+            rangeOverlapMs(
+              seg.timestamp,
+              seg.endTimestamp,
+              identification.startTime,
+              identification.endTime
+            ) <= 0
+          ) {
+            continue;
+          }
+          if (
+            !retroactiveMayMoveRangedRow(
+              seg,
+              seg.timestamp,
+              seg.endTimestamp,
+              identification,
+              meetingLiveIdentifications
+            )
+          ) {
+            continue;
+          }
+          const heard = pickSpeakerForRange(
+            meetingLiveIdentifications,
+            seg.timestamp,
+            seg.endTimestamp
+          );
+          if (heard && rangedLabelChanges(seg, heard)) labelRowAsHeard(seg, heard);
+          continue;
+        }
+
+        if (seg.timestamp < identification.startTime || seg.timestamp > identification.endTime) {
+          continue;
+        }
+        if (!seg.speaker || seg.speakerIsPlaceholder) {
+          applyConfirmedSpeaker(seg, {
+            speaker: identification.speakerId,
+            speakerName: identification.displayName || seg.speakerName,
+            speakerIsPlaceholder: false,
+          });
+        } else if (takesRowFromOtherSpeaker(seg, seg.timestamp, identification)) {
+          labelRowAsHeard(seg, {
+            speakerId: identification.speakerId,
+            displayName: identification.displayName ?? null,
+          });
+        }
+      }
+    };
+
+    const remapMergedSpeakers = (merges) => {
+      for (const { keep, remove, displayName } of merges) {
+        for (const seg of meetingDiarizationSegments) {
+          if (seg.speaker === remove) {
+            seg.speaker = keep;
+            if (displayName) seg.speakerName = displayName;
+          }
+        }
+        // Local rows stored after the merge are labelled from these, and the removed id no longer exists.
+        meetingLiveIdentifications = meetingLiveIdentifications.map((identification) =>
+          identification.speakerId === remove
+            ? {
+                ...identification,
+                speakerId: keep,
+                ...(displayName ? { displayName } : {}),
+              }
+            : identification
+        );
+      }
     };
 
     const sendMeetingFinalSegment = ({
@@ -10202,6 +10407,7 @@ class IPCHandlers {
       source,
       timestamp,
       timestampIsSpeechStart = true,
+      endTimestamp = null,
       micSuppression = null,
       send = null,
       includeInLocalTranscript = false,
@@ -10215,7 +10421,8 @@ class IPCHandlers {
         source,
         timestamp,
         micSuppression,
-        timestampIsSpeechStart
+        timestampIsSpeechStart,
+        endTimestamp
       );
 
       if (send) {
@@ -10224,6 +10431,7 @@ class IPCHandlers {
           source,
           type: "final",
           timestamp,
+          ...(endTimestamp !== null ? { endTimestamp } : {}),
         });
       }
     };
@@ -10349,6 +10557,7 @@ class IPCHandlers {
       meetingSystemAudioHeard = false;
       meetingSystemAudioHandover.reset();
       meetingDiarizationSegments = [];
+      meetingLiveIdentifications = [];
       meetingRetractedMicSegments = [];
       const { pcmPath, startedAt, diarizedSource, cleanupPcmPaths } = resolveDiarizationInput({
         systemPcmPath,
@@ -11142,6 +11351,9 @@ class IPCHandlers {
     let meetingSystemAudioHeard = false;
     const meetingSystemAudioHandover = createMeetingSystemAudioHandover();
     let meetingDiarizationSegments = [];
+    // Epoch-ms live identifications from the last couple of minutes, kept so rows
+    // stored after their window fired can still be labelled.
+    let meetingLiveIdentifications = [];
     let meetingRetractedMicSegments = [];
     let meetingLiveSpeakerActive = false;
     let meetingLiveSpeakerState = null;
@@ -11160,6 +11372,7 @@ class IPCHandlers {
     // await it: a pass that finished after the reset would push its finals into
     // the next session and send them to no window.
     let meetingLocalTranscribePromise = null;
+    let decodingSystemAudioStart = null;
     let meetingPendingMicChunks = [];
     let meetingPendingMicFinals = [];
     let meetingPendingMicFinalTimer = null;
@@ -11189,7 +11402,7 @@ class IPCHandlers {
       if (!noteId) return null;
       try {
         const note = this.databaseManager.getNote(noteId);
-        return this._resolveOneOnOneOtherParticipant(note?.participants);
+        return this._resolveOneOnOneOtherParticipant(note);
       } catch (_) {
         return null;
       }
@@ -11198,11 +11411,12 @@ class IPCHandlers {
     const resolveDiarizationEnabled = () =>
       (this.activeMeetingSpeakerConfig?.enabled ?? this.speakerDiarizationEnabled) !== false;
 
-    const resolveSessionMaxSpeakers = () => {
-      const count = this.activeMeetingSpeakerConfig?.expectedCount;
-      const total = count ? Math.min(count, MAX_SPEAKER_COUNT) : DEFAULT_EXPECTED_SPEAKER_COUNT;
-      return Math.max(1, total - 1);
-    };
+    // A new session has confirmed no speakers yet, so only the config decides.
+    const resolveSessionSpeakerLimit = () =>
+      resolveLiveSpeakerLimit(
+        this.activeMeetingSpeakerConfig ??
+          this._resolveInitialMeetingSpeakerConfig(this._activeMeetingNoteId)
+      );
 
     const bindOneOnOneAttendeeToSpeaker = (speakerId) => {
       if (!meetingOneOnOneAttendee || meetingOneOnOneProfileBound || !speakerId) return;
@@ -11232,12 +11446,18 @@ class IPCHandlers {
       }
     };
 
-    const dispatchMeetingAudioBuffer = (buffer, source, synthetic = false, capturedAt = null) => {
+    const dispatchMeetingAudioBuffer = (
+      buffer,
+      source,
+      synthetic = false,
+      capturedAt = null,
+      receivedAt = null
+    ) => {
       if (meetingLocalMode) {
         // Local STT timestamps each batch with wall time, not a sample cursor.
         // Large synthetic gaps would dilute speech and inflate the next batch.
         if (synthetic) return;
-        meetingLocalBuffers[source].push(buffer);
+        meetingLocalBuffers[source].push(localBufferEntry(buffer, { capturedAt, receivedAt }));
         return;
       }
 
@@ -11392,7 +11612,7 @@ class IPCHandlers {
           continue;
         }
 
-        dispatchMeetingAudioBuffer(next.buffer, "mic", false, capturedAt);
+        dispatchMeetingAudioBuffer(next.buffer, "mic", false, capturedAt, next.queuedAt);
       }
     };
 
@@ -11441,6 +11661,8 @@ class IPCHandlers {
       }
 
       meetingLiveSpeakerActive = false;
+      // Kept: the stop path decodes the last local chunks after this, and only main can
+      // label them. Session capture and reset clear the list.
       meetingLiveSpeakerState = await liveSpeakerIdentifier.stop();
       return meetingLiveSpeakerState;
     };
@@ -11470,11 +11692,13 @@ class IPCHandlers {
               return;
             }
 
-            bindOneOnOneAttendeeToSpeaker(identification.speakerId);
-
-            const displayName = meetingOneOnOneAttendee
-              ? meetingOneOnOneAttendee.displayName
-              : identification.displayName;
+            const isInitialAttendee =
+              meetingOneOnOneAttendee &&
+              identification.speakerId === `speaker_${meetingSpeakerIndexBase}`;
+            if (isInitialAttendee) bindOneOnOneAttendeeToSpeaker(identification.speakerId);
+            const displayName =
+              identification.displayName ??
+              (isInitialAttendee ? meetingOneOnOneAttendee.displayName : null);
 
             const startTime = Math.max(
               meetingLiveSpeakerStartedAt,
@@ -11484,34 +11708,35 @@ class IPCHandlers {
               startTime,
               meetingLiveSpeakerStartedAt + identification.endTime * 1000
             );
+            // Local ASR may fall minutes behind capture. Both processes need the
+            // windows for audio still decoding or queued for the next pass.
+            const retainFromTime = oldestPendingLocalSystemAudio();
             const enrichedIdentification = {
+              ...(retainFromTime != null && { retainFromTime }),
               ...identification,
               displayName,
               startTime,
               endTime,
+              ...(identification.speechStartTime != null && {
+                speechStartTime: Math.max(
+                  startTime,
+                  meetingLiveSpeakerStartedAt + identification.speechStartTime * 1000
+                ),
+                speechEndTime: Math.min(
+                  endTime,
+                  meetingLiveSpeakerStartedAt + identification.speechEndTime * 1000
+                ),
+              }),
             };
 
             win.webContents.send("meeting-speaker-identified", enrichedIdentification);
 
-            for (const seg of meetingDiarizationSegments) {
-              if (
-                seg.source === "system" &&
-                seg.timestamp != null &&
-                seg.timestamp >= startTime &&
-                seg.timestamp <= endTime &&
-                (!seg.speaker || seg.speakerIsPlaceholder)
-              ) {
-                applyConfirmedSpeaker(seg, {
-                  speaker: identification.speakerId,
-                  speakerName: displayName || seg.speakerName,
-                  speakerIsPlaceholder: false,
-                });
-              }
-            }
+            applyLiveIdentificationToRows(enrichedIdentification);
+            this._syncAutoSpeakerDisplayCount();
           },
           {
             getSpeakerProfiles: getLiveSpeakerProfiles,
-            maxSpeakers: resolveSessionMaxSpeakers(),
+            ...resolveSessionSpeakerLimit(),
             enabled: true,
             speakerIndexBase: meetingSpeakerIndexBase,
           }
@@ -11536,16 +11761,10 @@ class IPCHandlers {
           const merges = await liveSpeakerIdentifier.recluster();
           if (!merges.length) return;
 
-          for (const { keep, remove, displayName } of merges) {
-            for (const seg of meetingDiarizationSegments) {
-              if (seg.speaker === remove) {
-                seg.speaker = keep;
-                if (displayName) seg.speakerName = displayName;
-              }
-            }
-          }
+          remapMergedSpeakers(merges);
 
           win.webContents.send("meeting-speakers-merged", merges);
+          this._syncAutoSpeakerDisplayCount();
         }, 30_000);
       } else {
         meetingLiveSpeakerStartedAt = null;
@@ -11556,11 +11775,11 @@ class IPCHandlers {
 
     const transcribeLocalMeetingChunk = async (source) => {
       if (this._meetingAdmission?.activeRefusal()) return;
-      const chunks = meetingLocalBuffers[source];
-      if (!chunks.length) return;
+      const chunk = describeLocalChunk(meetingLocalBuffers[source]);
+      if (!chunk) return;
       const lease = this._activeLocalMeetingLease;
 
-      const pcm24k = Buffer.concat(chunks);
+      const pcm24k = chunk.pcm;
       meetingLocalBuffers[source] = [];
 
       const pcm16k = downsample24kTo16k(pcm24k);
@@ -11631,14 +11850,9 @@ class IPCHandlers {
             debugLogger.debug("Dropping wrong-script local meeting fragment", { source });
             return;
           }
-          const segTimestamp = Date.now();
           let micSuppression = null;
           if (source === "mic") {
-            const chunkDurationMs = (pcm24k.length / 2 / 24000) * 1000;
-            micSuppression = shouldSuppressMicTranscriptSegment(
-              segTimestamp - chunkDurationMs,
-              segTimestamp
-            );
+            micSuppression = shouldSuppressMicTranscriptSegment(chunk.startAt, chunk.endAt);
             debugLogger.debug("Local meeting transcription candidate", {
               source,
               text: text.slice(0, 80),
@@ -11659,7 +11873,7 @@ class IPCHandlers {
               return;
             }
 
-            if (shouldSkipDuplicateMicSegment(text, segTimestamp, micSuppression)) {
+            if (shouldSkipDuplicateMicSegment(text, chunk.speechStartAt, micSuppression)) {
               debugLogger.debug("Skipping duplicate local mic segment that matches system audio", {
                 text: text.slice(0, 80),
                 averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
@@ -11675,7 +11889,7 @@ class IPCHandlers {
           }
 
           if (source === "system") {
-            const pending = removePendingMicFinalsFor(text, segTimestamp);
+            const pending = removePendingMicFinalsFor(text, chunk.speechStartAt);
             if (pending.length > 0) {
               debugLogger.debug(
                 "Dropping buffered local mic segments after system transcript arrived",
@@ -11686,7 +11900,7 @@ class IPCHandlers {
               );
             }
 
-            const retracted = removeRacingMicEntriesFor(text, segTimestamp);
+            const retracted = removeRacingMicEntriesFor(text, chunk.speechStartAt);
             for (const stale of retracted) {
               if (meetingLocalWin && !meetingLocalWin.isDestroyed()) {
                 meetingLocalWin.webContents.send("meeting-transcription-segment", {
@@ -11718,15 +11932,15 @@ class IPCHandlers {
             });
             queuePendingMicFinal({
               text,
-              timestamp: segTimestamp,
+              timestamp: chunk.speechStartAt,
               micSuppression,
               holdbackMs: LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS,
               emit: () =>
                 sendMeetingFinalSegment({
                   text,
                   source,
-                  timestamp: segTimestamp,
-                  timestampIsSpeechStart: false,
+                  timestamp: chunk.speechStartAt,
+                  endTimestamp: chunk.speechEndAt,
                   micSuppression,
                   send: sendLocalSegment,
                   includeInLocalTranscript: true,
@@ -11738,8 +11952,8 @@ class IPCHandlers {
           sendMeetingFinalSegment({
             text,
             source,
-            timestamp: segTimestamp,
-            timestampIsSpeechStart: false,
+            timestamp: chunk.speechStartAt,
+            endTimestamp: chunk.speechEndAt,
             micSuppression,
             send: sendLocalSegment,
             includeInLocalTranscript: true,
@@ -11762,15 +11976,21 @@ class IPCHandlers {
       }
     };
 
+    const oldestPendingLocalSystemAudio = () =>
+      decodingSystemAudioStart ?? meetingLocalBuffers.system[0]?.startAt;
+
     const transcribeAllLocalBuffers = () => {
       if (this._audioFeaturePolicy.activeFailure("meeting")) return Promise.resolve();
       if (meetingLocalTranscribePromise) return meetingLocalTranscribePromise;
       meetingLocalTranscribePromise = (async () => {
         try {
+          decodingSystemAudioStart = meetingLocalBuffers.system[0]?.startAt ?? null;
           await transcribeLocalMeetingChunk("system");
+          decodingSystemAudioStart = null;
           if (!this._audioFeaturePolicy.activeFailure("meeting"))
             await transcribeLocalMeetingChunk("mic");
         } finally {
+          decodingSystemAudioStart = null;
           meetingLocalTranscribePromise = null;
         }
       })();
@@ -11833,6 +12053,7 @@ class IPCHandlers {
       meetingSystemAudioHeard = false;
       meetingSystemAudioHandover.reset();
       meetingDiarizationSegments = [];
+      meetingLiveIdentifications = [];
       meetingRetractedMicSegments = [];
       meetingLocalWin = null;
       meetingLocalTranscript = "";
@@ -12432,6 +12653,7 @@ class IPCHandlers {
       // Stop captures and clears the segments, but a stop that fails partway
       // (the audio tap won't stop) never gets there.
       meetingDiarizationSegments = [];
+      meetingLiveIdentifications = [];
       meetingConnectionWin = BrowserWindow.fromWebContents(event.sender);
       meetingReconnectCount = 0;
       meetingReconnectedAt = 0;
@@ -12654,7 +12876,7 @@ class IPCHandlers {
           }
         }
 
-        dispatchMeetingAudioBuffer(outboundBuffer, "system", synthetic, capturedAt);
+        dispatchMeetingAudioBuffer(outboundBuffer, "system", synthetic, capturedAt, receivedAt);
         return;
       }
 
@@ -16179,25 +16401,7 @@ class IPCHandlers {
 
     ipcMain.handle("meeting-set-session-speaker-config", async (_event, payload) => {
       try {
-        const enabled = payload?.enabled !== false;
-        const expectedCount = Math.max(
-          1,
-          Math.min(
-            MAX_SPEAKER_COUNT,
-            Number(payload?.expectedCount) || DEFAULT_EXPECTED_SPEAKER_COUNT
-          )
-        );
-        // Only a stepper-set count is explicit; the diarization toggle reuses this
-        // channel and must not freeze the count against roster-driven refreshes.
-        this.activeMeetingSpeakerConfig = {
-          enabled,
-          expectedCount,
-          explicit: payload?.countIsExplicit === true,
-        };
-        liveSpeakerIdentifier.setEnabled(enabled);
-        // Live identification only labels other speakers (the mic track is "you"),
-        // so cap at expectedCount - 1 to match resolveSessionMaxSpeakers().
-        liveSpeakerIdentifier.setMaxSpeakers(Math.max(1, expectedCount - 1));
+        this._setSessionSpeakerConfig(payload);
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
@@ -16779,7 +16983,7 @@ class IPCHandlers {
     setImmediate(async () => {
       try {
         const note = this.databaseManager.getNote(noteId);
-        const other = this._resolveOneOnOneOtherParticipant(note?.participants);
+        const other = this._resolveOneOnOneOtherParticipant(note);
         if (!other) return;
         const { displayName, email } = other;
 
@@ -16874,6 +17078,7 @@ class IPCHandlers {
     const reconciledSpeakers = new Set();
     const usedLiveSpeakers = new Set();
     const noteMappings = new Map();
+    const mappingChanges = new Map();
 
     const liveEntries = Object.entries(liveSpeakerState)
       .map(([speakerId, data]) => ({
@@ -16892,8 +17097,8 @@ class IPCHandlers {
       return noteMappings.get(noteId);
     };
 
-    // Closest pairs first: with no count, one live speaker stands for every
-    // remote voice, and its name belongs to the voice it sounds most like, not
+    // Closest pairs first: one live speaker can stand for several remote voices
+    // (alike ones, or one never confirmed), and its name belongs to the voice it sounds most like, not
     // to the first one that clears the bar.
     const pairs = [];
     for (const [mappedId, embeddingArray] of Object.entries(speakerEmbeddingsMap)) {
@@ -16925,24 +17130,16 @@ class IPCHandlers {
         if (liveMapping) {
           displayName = liveMapping.display_name || displayName;
           profileId = liveMapping.profile_id ?? profileId;
-          this.databaseManager.setSpeakerMapping(
-            bestEntry.noteId,
-            mappedId,
+        }
+        if (liveMapping || displayName) {
+          const changes = mappingChanges.get(bestEntry.noteId) ?? [];
+          changes.push({
+            previousId: bestEntry.speakerId,
+            speakerId: mappedId,
             profileId,
-            displayName
-          );
-          // Live and offline ids share one namespace now, so they often match —
-          // removing the "old" row would delete the mapping just written.
-          if (bestEntry.speakerId !== mappedId) {
-            this.databaseManager.removeSpeakerMapping(bestEntry.noteId, bestEntry.speakerId);
-          }
-        } else if (displayName) {
-          this.databaseManager.setSpeakerMapping(
-            bestEntry.noteId,
-            mappedId,
-            profileId,
-            displayName
-          );
+            displayName,
+          });
+          mappingChanges.set(bestEntry.noteId, changes);
         }
       }
 
@@ -16950,6 +17147,9 @@ class IPCHandlers {
       if (displayName) {
         namedVoices.set(bestEntry.speakerId, { speaker: mappedId, name: displayName });
       }
+    }
+    for (const [noteId, changes] of mappingChanges) {
+      this.databaseManager.remapSpeakers(noteId, changes);
     }
     return namedVoices;
   }
@@ -16984,14 +17184,17 @@ class IPCHandlers {
 
   // The most speakers post-call diarization may keep, from the count the user or
   // the note gives; clustering finds how many actually spoke.
-  _resolveSpeakerCap({ sessionConfig, noteId, diarizedSource }) {
+  _resolveSpeakerCap({ sessionConfig, noteId, diarizedSource, liveSpeakerState = null }) {
     // Only a count the user set explicitly outranks the note: participants added
     // mid-meeting postdate the config snapshot taken at recording start.
     let expectedTotal = sessionConfig?.explicit ? sessionConfig.expectedCount : null;
+    let fromAttendees = false;
 
     if (!expectedTotal && noteId != null) {
       try {
-        expectedTotal = this._noteExpectedSpeakerCountOrNull(this.databaseManager.getNote(noteId));
+        const note = this.databaseManager.getNote(noteId);
+        expectedTotal = this._noteExpectedSpeakerCountOrNull(note);
+        fromAttendees = normalizeStoredSpeakerCount(note?.expected_speaker_count) == null;
       } catch (_) {
         expectedTotal = null;
       }
@@ -17004,7 +17207,13 @@ class IPCHandlers {
 
     if (expectedTotal) {
       const total = Math.min(expectedTotal, MAX_SPEAKER_COUNT);
-      return micMode ? total : Math.max(1, total - 1);
+      if (micMode) return total;
+      // Attendees only estimate who spoke. Ones added after automatic mode had
+      // confirmed more voices would fold those voices into each other (#2641),
+      // so the cap never drops below the speakers live identification confirmed.
+      // It stays a cap: clustering still merges a voice live split in two.
+      const liveConfirmed = fromAttendees ? Object.keys(liveSpeakerState || {}).length : 0;
+      return Math.min(Math.max(1, total - 1, liveConfirmed), MAX_SPEAKER_COUNT - 1);
     }
 
     if (micMode) {
@@ -17013,8 +17222,9 @@ class IPCHandlers {
 
     // Only system audio reaches the diarizer (the mic track is "you"), so a cap
     // would count other speakers. With no count there's none: live
-    // identification folds every remote voice into one then, so its speaker ids
-    // can't tell how many people spoke (#2641).
+    // identification ran in automatic mode then, where a voice may stay a
+    // candidate and similar voices can share an id, so its speaker ids can't
+    // tell how many people spoke; clustering decides (#2641).
     return null;
   }
 
@@ -17037,14 +17247,11 @@ class IPCHandlers {
       transcriptSegments[0]?.timestamp ||
       0;
     const isEpochMs = startMs > 1e9;
+    const toSeconds = (value) => (isEpochMs ? (value - startMs) / 1000 : value);
     const normalized = transcriptSegments.map((seg) => ({
       ...seg,
-      timestamp:
-        seg.timestamp != null
-          ? isEpochMs
-            ? (seg.timestamp - startMs) / 1000
-            : seg.timestamp
-          : undefined,
+      timestamp: seg.timestamp != null ? toSeconds(seg.timestamp) : undefined,
+      ...(seg.endTimestamp != null ? { endTimestamp: toSeconds(seg.endTimestamp) } : {}),
     }));
 
     // Split before any send so diarized, skipped and failed runs drop the same
@@ -17067,7 +17274,11 @@ class IPCHandlers {
           noteId,
           ...payload,
           segments: payload.segments.map(
-            ({ timestampIsSpeechStart: _timestampIsSpeechStart, ...segment }) => segment
+            ({
+              timestampIsSpeechStart: _timestampIsSpeechStart,
+              endTimestamp: _endTimestamp,
+              ...segment
+            }) => segment
           ),
           removedSegments,
         });
@@ -17090,7 +17301,12 @@ class IPCHandlers {
 
     const fs = require("fs");
 
-    const speakerCap = this._resolveSpeakerCap({ sessionConfig, noteId, diarizedSource });
+    const speakerCap = this._resolveSpeakerCap({
+      sessionConfig,
+      noteId,
+      diarizedSource,
+      liveSpeakerState,
+    });
     // Reserved before the async work so a "record more" started while this runs
     // numbers its speakers past every cluster the result can name. With no count
     // the cap is settled after clustering, and it never exceeds MAX_SPEAKER_COUNT - 1.
@@ -17216,14 +17432,15 @@ class IPCHandlers {
         }
 
         // Live identification names its speaker on every line it labels (here
-        // and in the renderer), and with no count its one speaker covers every
-        // remote voice. When the call holds more than one voice and more voices
+        // and in the renderer), and one live speaker can cover several remote
+        // voices. When the call holds more than one voice and more voices
         // than live speakers, every line's name is cleared, and reconciliation
         // and profile matching below name each voice. Without voices to match,
         // the names stay. null, not undefined: the renderer keeps a line's old
         // value for an undefined field.
+        const hasOfflineVoices = Object.keys(speakerEmbeddingsMap || {}).length > 0;
         const liveSpeakersSplit =
-          Object.keys(speakerEmbeddingsMap || {}).length > 0 &&
+          hasOfflineVoices &&
           speakerSet.size > Math.max(1, Object.keys(liveSpeakerState || {}).length);
         if (liveSpeakersSplit) {
           for (const segment of enrichedSegments) {
@@ -17239,9 +17456,10 @@ class IPCHandlers {
           enrichedSegments
         );
         // A name the user gave a live speaker is locked, in the renderer, onto
-        // every line that speaker labelled. After a split the renderer keeps
-        // that lock only on the voice the name went to; a name that matched no
-        // voice isn't listed, and stays on all of its lines.
+        // the lines that speaker was heard in (not ones only carried onto them,
+        // or local-model lines). After a split the renderer keeps that lock only
+        // on the voice the name went to; a name that matched no voice isn't
+        // listed, and stays on the lines it named, locked or not.
         const splitLiveSpeakers = liveSpeakersSplit ? Object.fromEntries(namedVoices) : undefined;
 
         if (speakerEmbeddingsMap) {
@@ -17293,6 +17511,13 @@ class IPCHandlers {
           segments: enrichedSegments,
           speakerEmbeddings: speakerEmbeddingsMap,
           splitLiveSpeakers,
+          // Even when the count stays the same, offline cluster IDs can swap.
+          ...(!liveSpeakersSplit &&
+            hasOfflineVoices && {
+              reconciledLiveSpeakerIds: Object.fromEntries(
+                Array.from(namedVoices, ([liveId, match]) => [liveId, match.speaker])
+              ),
+            }),
         });
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });

@@ -5015,6 +5015,7 @@
         "finalizing": "Finalizing speakers…",
         "justYou": "Just you",
         "assumedHint": "assuming 2 — adjust if more",
+        "assumedHintAuto": "assuming 2 — more are detected automatically",
         "speakersLabel": "Speakers",
         "labelToggle": "Label speakers",
         "toggleAria": "Toggle speaker identification for this recording",

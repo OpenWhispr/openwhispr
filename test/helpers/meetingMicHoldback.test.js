@@ -461,3 +461,56 @@ test("partitionOverlappingPendingMicFinals splits pending finals by system overl
     { text: "c", relaxed: false },
   ]);
 });
+
+// Local rows are stamped from capture times, so a mic row and the system row of
+// the same chunk now sit a few hundred ms apart instead of a decode apart.
+const LOCAL_CHUNK_START = NOW;
+const LOCAL_MIC_TIMESTAMP = LOCAL_CHUNK_START + 200;
+const LOCAL_SYSTEM_TIMESTAMP = LOCAL_CHUNK_START + 150;
+const overlapMatcher = () => true;
+
+test("local mode: a mic row and a system row from the same chunk are still a racing pair", () => {
+  const indices = selectRacingMicEntryIndices({
+    segments: [
+      micSeg({
+        hasBleedEvidence: true,
+        timestamp: LOCAL_MIC_TIMESTAMP,
+        committedAt: LOCAL_MIC_TIMESTAMP,
+      }),
+    ],
+    systemText: "we should ship on friday",
+    systemTimestamp: LOCAL_SYSTEM_TIMESTAMP,
+    hasNearbyTranscriptMatch: overlapMatcher,
+    duplicateWindowMs: DUPLICATE_WINDOW,
+    retractWindowMs: RETRACT_WINDOW,
+  });
+  assert.deepEqual(indices, [0]);
+});
+
+test("local mode: a held mic final is dropped when the same chunk's system row lands", () => {
+  const { kept, removed } = partitionOverlappingPendingMicFinals({
+    pending: [
+      entry({
+        timestamp: LOCAL_MIC_TIMESTAMP,
+        micSuppression: { hasBleedEvidence: true },
+      }),
+    ],
+    systemText: "we should ship on friday",
+    systemTimestamp: LOCAL_SYSTEM_TIMESTAMP,
+    hasNearbyTranscriptMatch: overlapMatcher,
+  });
+  assert.equal(removed.length, 1);
+  assert.equal(kept.length, 0);
+});
+
+test("local mode: a mic row is a duplicate of the same chunk's system row", () => {
+  assert.equal(
+    isDuplicateMicSegment({
+      text: "we should ship on friday",
+      timestamp: LOCAL_MIC_TIMESTAMP,
+      suppression: { hasBleedEvidence: true },
+      hasNearbyTranscriptMatch: overlapMatcher,
+    }),
+    true
+  );
+});

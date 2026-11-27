@@ -248,6 +248,7 @@ interface NoteEditorProps {
   sessionDiarizationEnabled?: boolean;
   sessionExpectedCount?: number;
   userTouchedStepper?: boolean;
+  liveSpeakerDetectionActive?: boolean;
   onSetSessionDiarizationEnabled?: (enabled: boolean) => void;
   onSetSessionExpectedCount?: (count: number) => void;
   folderName?: string | null;
@@ -286,6 +287,7 @@ export default function NoteEditor({
   sessionDiarizationEnabled,
   sessionExpectedCount,
   userTouchedStepper,
+  liveSpeakerDetectionActive,
   onSetSessionDiarizationEnabled,
   onSetSessionExpectedCount,
   folderName,
@@ -1528,6 +1530,7 @@ export default function NoteEditor({
                   sessionDiarizationEnabled={sessionDiarizationEnabled}
                   sessionExpectedCount={sessionExpectedCount}
                   userTouchedStepper={userTouchedStepper}
+                  liveSpeakerDetectionActive={liveSpeakerDetectionActive}
                   onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
                   onSetSessionExpectedCount={onSetSessionExpectedCount}
                   onMapSpeaker={handleMapSpeaker}
@@ -1547,6 +1550,7 @@ export default function NoteEditor({
                   sessionDiarizationEnabled={sessionDiarizationEnabled}
                   sessionExpectedCount={sessionExpectedCount}
                   userTouchedStepper={userTouchedStepper}
+                  liveSpeakerDetectionActive={liveSpeakerDetectionActive}
                   onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
                   onSetSessionExpectedCount={onSetSessionExpectedCount}
                   onMapSpeaker={handleMapSpeaker}
