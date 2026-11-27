@@ -224,9 +224,73 @@ const STT_CONFIG_TTL_MS = 15 * 60 * 1000;
 const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short recordings still carry audio frames. See #871.
 // Failure detector only: fires when the worklet or audio graph is dead and never flushes.
 const PREVIEW_FLUSH_WATCHDOG_MS = 1000;
+const STREAMING_PCM_SAMPLE_RATE = 16000;
+const STREAMING_PCM_FRAME_SAMPLES = 800;
+const STREAMING_PCM_FRAME_BYTES = STREAMING_PCM_FRAME_SAMPLES * Int16Array.BYTES_PER_ELEMENT;
 const neverCancelled = () => false;
 const MIN_SPARSE_RECORDING_DURATION_SECONDS = 3;
 const MIN_UNIQUE_WORD_GAIN = 2;
+
+function createAssemblyAiAudioQueue(send) {
+  const frames = [];
+  let state = "pending";
+  let timer = null;
+  let resolveDrain = null;
+
+  const sendNext = () => {
+    if (state !== "active" || timer !== null) return;
+    const frame = frames.shift();
+    if (!frame) {
+      resolveDrain?.();
+      resolveDrain = null;
+      return;
+    }
+
+    // The last worklet frame can be shorter than the transport's minimum.
+    let payload = frame;
+    if (frame.byteLength < STREAMING_PCM_FRAME_BYTES) {
+      const padded = new Uint8Array(STREAMING_PCM_FRAME_BYTES);
+      padded.set(new Uint8Array(frame));
+      payload = padded.buffer;
+    }
+    // Use the actual send time. After a stall, catching up would burst audio
+    // faster than AssemblyAI's realtime rate limit.
+    const samples = payload.byteLength / Int16Array.BYTES_PER_ELEMENT;
+    timer = setTimeout(
+      () => {
+        timer = null;
+        sendNext();
+      },
+      Math.ceil((samples * 1000) / STREAMING_PCM_SAMPLE_RATE)
+    );
+    send(payload);
+  };
+
+  return {
+    enqueue(frame) {
+      if (state === "cancelled") return;
+      frames.push(frame);
+      sendNext();
+    },
+    start() {
+      if (state === "cancelled") return;
+      state = "active";
+      sendNext();
+    },
+    drain() {
+      if (timer === null) return Promise.resolve();
+      return new Promise((resolve) => (resolveDrain = resolve));
+    },
+    cancel() {
+      state = "cancelled";
+      clearTimeout(timer);
+      timer = null;
+      frames.length = 0;
+      resolveDrain?.();
+      resolveDrain = null;
+    },
+  };
+}
 
 // A selection edit that fails leaves its transcript behind; it rides out on the
 // error so the failed history entry keeps it. Only those errors carry it: they
@@ -927,7 +991,7 @@ class AudioManager {
   getWorkletBlobUrl() {
     if (this.workletBlobUrl) return this.workletBlobUrl;
     const code = `
-const BUFFER_SIZE = 800;
+const BUFFER_SIZE = ${STREAMING_PCM_FRAME_SAMPLES};
 class PCMStreamingProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
@@ -1347,6 +1411,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._activeStreamingProviderName = null;
     this._activeStreamingConfig = null;
     this._activePipelineOptions = undefined;
+    this._assemblyAiAudioQueue?.cancel();
+    this._assemblyAiAudioQueue = null;
+    this._earlyStreamingCaptureStop = null;
   }
 
   getStreamingProviderName() {
@@ -2329,6 +2396,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._cancelActivationCapture(this._activeProcessingPipeline?.activationCapture);
     if (this.isProcessing) {
       this._processingCancellationGeneration = (this._processingCancellationGeneration ?? 0) + 1;
+      if (this._earlyStreamingCaptureStop && !this._streamingStopPromise) {
+        void this.cancelStreamingRecording();
+        return true;
+      }
       this._requestStreamingCancellation();
       // Streaming finalization can be inside a provider or model await that
       // cannot be aborted. Keep the lifecycle truthfully busy until that await
@@ -5446,7 +5517,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       return this.persistentAudioContext;
     }
-    this.persistentAudioContext = new AudioContext({ sampleRate: 16000 });
+    this.persistentAudioContext = new AudioContext({ sampleRate: STREAMING_PCM_SAMPLE_RATE });
     this.workletModuleLoaded = false;
     return this.persistentAudioContext;
   }
@@ -5632,6 +5703,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this._streamingSpeechGateState = createLocalSpeechGateState();
       this._activeStreamingSessionId = sessionId;
       providerName = this.getStreamingProviderName();
+      const provider = this.getStreamingProvider(providerName);
+      const assemblyAiAudioQueue =
+        providerName === "assemblyai" && getSettings().cloudTranscriptionMode === "byok"
+          ? createAssemblyAiAudioQueue((frame) => provider.send(frame))
+          : null;
+      this._assemblyAiAudioQueue = assemblyAiAudioQueue;
       this._activeStreamingProviderName = providerName;
       this._activeStreamingConfig = { ...this.sttConfig };
       const ownsSession = () => this._activeStreamingSessionId === sessionId;
@@ -5653,6 +5730,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const stream = prepared?.stream ?? (await this._acquireCaptureStream(constraints));
       acquiredStream = stream;
       const tMedia = performance.now();
+      if (assemblyAiAudioQueue) {
+        // Give an early stop ownership of the mic before worklet setup awaits.
+        this.streamingStream = stream;
+        if (startWasCancelled()) {
+          this._settleStreamingStart();
+          return false;
+        }
+      }
 
       const audioTrack = stream.getAudioTracks()[0];
 
@@ -5679,6 +5764,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       // 2. Set up the audio pipeline to capture while the provider connects.
       const audioContext = await this.getOrCreateAudioContext();
+      if (assemblyAiAudioQueue && startWasCancelled()) {
+        this._settleStreamingStart();
+        return false;
+      }
       this.streamingAudioContext = audioContext;
       this.streamingSource = audioContext.createMediaStreamSource(stream);
       this.streamingStream = stream;
@@ -5694,8 +5783,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.workletModuleLoaded = true;
       }
 
+      if (assemblyAiAudioQueue && startWasCancelled()) {
+        this._settleStreamingStart();
+        return false;
+      }
       this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
-      const provider = this.getStreamingProvider(providerName);
       // Decided once, with the provider, so a config refresh mid-recording
       // cannot change how this session's stream errors are handled. Only a
       // session whose fallback recorder started has a capture to fail over
@@ -5703,19 +5795,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const { cloudTranscriptionMode } = getSettings();
       const managedOrukeet = isManagedOrukeetStream({ providerName, cloudTranscriptionMode });
       const failsOver = Boolean(this.streamingFallbackRecorder) && managedOrukeet;
-      // These routes cue before the session exists. Keep their opening audio
-      // across token fetches and retries, outside the transport's bounded buffer.
-      let heldFrames =
-        managedOrukeet || (providerName === "assemblyai" && cloudTranscriptionMode === "byok")
-          ? []
-          : null;
+      // These routes cue before the session exists. Hold opening audio across
+      // retries, and pace AssemblyAI's replay and live frames on the same queue.
+      let heldFrames = managedOrukeet ? [] : null;
+      let workletFlushed = false;
 
       this.streamingProcessor.port.onmessage = (event) => {
         // The worklet posts its remaining PCM followed by a "flushed" sentinel
         // on stop; the sentinel must not be sent as audio (realtime backends
         // reject the odd-length non-PCM bytes with "Invalid audio data").
-        if (!ownsSession() || !this.isStreaming) return;
+        if (!ownsSession() || !this.isStreaming || workletFlushed) return;
         if (event.data === "flushed") {
+          workletFlushed = true;
           this._streamingFlushResolve?.();
           return;
         }
@@ -5723,7 +5814,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // still has its opening words in the gate.
         recordPcm16SpeechWindow(this._streamingSpeechGateState, event.data);
         if (this._streamingFailoverReason) return;
-        if (heldFrames) heldFrames.push(event.data);
+        if (assemblyAiAudioQueue) assemblyAiAudioQueue.enqueue(event.data);
+        else if (heldFrames) heldFrames.push(event.data);
         else provider.send(event.data);
       };
 
@@ -5763,6 +5855,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const errorCleanup = provider.onError((error) => {
         if (!ownsSession()) return;
         logger.error("Streaming provider error", { error }, "streaming");
+        assemblyAiAudioQueue?.cancel();
         // Managed Orukeet refuses a second concurrent recording on the account
         // and can drop a socket mid-recording. The fallback recorder has the
         // whole capture, so keep recording and let stop upload it to Cloud
@@ -5888,6 +5981,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       if (result.needsFallback) {
+        if (this._earlyStreamingCaptureStop) {
+          // Stop already closed the mic. Let the normal batch pipeline recheck
+          // the selected route and policy using the capture we retained.
+          assemblyAiAudioQueue.cancel();
+          return this.stopStreamingRecording({ batchFallback: true });
+        }
         this.isRecording = false;
         this.recordingStartTime = null;
         this.stopRequestedDuringStreamingStart = false;
@@ -5897,6 +5996,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return this.startRecording();
       }
 
+      assemblyAiAudioQueue?.start();
       if (!this._streamingFailoverReason) heldFrames?.forEach((frame) => provider.send(frame));
       heldFrames = null;
 
@@ -5992,6 +6092,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         description: errorDescription,
       });
 
+      if (this._earlyStreamingCaptureStop) {
+        await this._earlyStreamingCaptureStop.completion;
+        if (startWasCancelled()) return false;
+        this.isProcessing = false;
+      }
       await this.cleanupStreaming();
       this.isRecording = false;
       this.recordingStartTime = null;
@@ -6025,8 +6130,80 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
   }
 
-  async stopStreamingRecording() {
+  async flushStreamingWorklet() {
+    const processor = this.streamingProcessor;
+    if (!processor) return;
+    let watchdog;
+    const flushed = new Promise((resolve, reject) => {
+      this._streamingFlushResolve = resolve;
+      watchdog = setTimeout(
+        () => reject(new Error("Audio worklet did not flush")),
+        PREVIEW_FLUSH_WATCHDOG_MS
+      );
+    });
+    try {
+      processor.port.postMessage("stop");
+      await flushed;
+    } finally {
+      clearTimeout(watchdog);
+      if (this.streamingProcessor === processor) {
+        this._streamingFlushResolve = null;
+        processor.port.onmessage = null;
+        processor.disconnect();
+        this.streamingProcessor = null;
+      }
+    }
+  }
+
+  finishAssemblyAiCapture() {
+    // Detach the input and stop the recorder now. The worklet can still post
+    // its last captured samples after the live input has been released.
+    const flushed = this.flushStreamingWorklet().catch((error) => {
+      logger.warn("AssemblyAI capture did not flush", { error: error.message }, "streaming");
+    });
+    this.disconnectStreamingSource();
+    const fallback =
+      this._streamingMicSwapPromise ??
+      this.finishStreamingFallbackSegment().catch((error) => {
+        logger.warn(
+          "AssemblyAI fallback recording did not finish",
+          { error: error.message },
+          "streaming"
+        );
+      });
+    this.releaseStreamingCaptureStream();
+    return Promise.all([flushed, fallback]);
+  }
+
+  stopStreamingCaptureDuringStart() {
+    if (!this.streamingStartInProgress || !this._assemblyAiAudioQueue) return false;
+    if (!this.isRecording) {
+      if (this._earlyStreamingCaptureStop || this._streamingStopPromise) return false;
+      // A release before the capture report must also close a mic that is open
+      // while Chromium is still preparing the audio context or worklet.
+      void this.cancelStreamingRecording();
+      return true;
+    }
+    this.stopRequestedDuringStreamingStart = true;
+    this.isRecording = false;
+    this.isProcessing = true;
+    this.micRecovery.stop();
+
+    const completion = this.finishAssemblyAiCapture();
+    if (this._activationCapture) {
+      void window.electronAPI?.stopActivationCapture?.(this._activationCapture).catch(() => {});
+    }
+    this._earlyStreamingCaptureStop = {
+      stoppedAt: Date.now(),
+      completion,
+    };
+    this.onStateChange?.({ isRecording: false, isProcessing: true, isStreaming: false });
+    return true;
+  }
+
+  async stopStreamingRecording({ batchFallback = false } = {}) {
     if (this.streamingStartInProgress) {
+      if (this.stopStreamingCaptureDuringStart()) return true;
       this.stopRequestedDuringStreamingStart = true;
       logger.debug("Streaming stop requested while start is in progress", {}, "streaming");
       return true;
@@ -6039,8 +6216,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const sessionId = this._activeStreamingSessionId;
     const spool = this._takeRecordingSpool();
-    const delivery = { activationCapture: this._takeActivationCapture() };
-    if (delivery.activationCapture)
+    const delivery = { activationCapture: this._takeActivationCapture(), batchFallback };
+    if (delivery.activationCapture && !this._earlyStreamingCaptureStop)
       void window.electronAPI?.stopActivationCapture?.(delivery.activationCapture).catch(() => {});
     const stopPromise = this._finalizeStreamingRecording(sessionId, delivery);
     this._streamingStopPromise = stopPromise;
@@ -6071,6 +6248,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   _requestStreamingCancellation() {
     this._streamingCancellationGeneration += 1;
+    this._assemblyAiAudioQueue?.cancel();
     ReasoningService.cancelAllRequests();
     window.electronAPI?.cancelCloudTranscription?.();
     this._activeTranscriptionAbortController?.abort();
@@ -6087,6 +6265,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._cancelActivationCapture(this._takeActivationCapture());
     if (this._streamingStopPromise) {
       if (this._streamingStopMode === "finalize") {
+        this._activeProcessingPipeline = null;
         this._requestStreamingCancellation();
       }
       return this._streamingStopPromise;
@@ -6127,7 +6306,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       const providerStop = this._waitForStreamingStartSettlement()
-        .then(() => {
+        .then(async () => {
+          await this._earlyStreamingCaptureStop?.completion;
           // Startup may have attached replacement capture resources after the
           // first synchronous cleanup. Reclaim them once startup can no longer
           // mutate the session, then disconnect its provider.
@@ -6193,8 +6373,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return true;
     };
 
+    const stoppedCapture = this._earlyStreamingCaptureStop;
     const durationSeconds = this.recordingStartTime
-      ? (Date.now() - this.recordingStartTime) / 1000
+      ? ((stoppedCapture?.stoppedAt ?? Date.now()) - this.recordingStartTime) / 1000
       : null;
     const analyticsOccurredAt = new Date(this.recordingStartTime || Date.now());
 
@@ -6209,9 +6390,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.onStateChange?.({ isRecording: false, isProcessing: true, isStreaming: false });
 
     this.micRecovery.stop();
-    // Let an in-flight mic swap settle so its fallback segment isn't lost and
-    // its replacement recorder doesn't outlive this stop.
-    if (this._streamingMicSwapPromise) await this._streamingMicSwapPromise;
+    if (stoppedCapture) {
+      await stoppedCapture.completion;
+    } else if (this._assemblyAiAudioQueue) {
+      await this.finishAssemblyAiCapture();
+    } else if (this._streamingMicSwapPromise) {
+      // Let the swap finish its fallback segment before ending the capture.
+      await this._streamingMicSwapPromise;
+    }
     if (wasCancelled()) return abandonFinalization();
 
     const t0 = performance.now();
@@ -6224,27 +6410,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // The worklet emits PCM followed by "flushed" on the same message port.
     // IPC sends and the finalize invoke preserve that order in the main process.
     if (this.streamingProcessor && provider.finalizeAcknowledged) {
-      const processor = this.streamingProcessor;
-      let watchdog;
-      const flushed = new Promise((resolve, reject) => {
-        this._streamingFlushResolve = resolve;
-        watchdog = setTimeout(
-          () => reject(new Error("Audio worklet did not flush")),
-          PREVIEW_FLUSH_WATCHDOG_MS
-        );
-      });
-      processor.port.postMessage("stop");
       try {
-        await flushed;
+        await this.flushStreamingWorklet();
       } catch (error) {
-        // Incomplete capture must use the retained recording, never commit a
-        // truncated stream. Keep cleanup running so the microphone is released.
+        // An incomplete acknowledged capture must use the fallback recording.
         acknowledgedFinal = Promise.resolve({ success: false, error: error.message });
-      } finally {
-        clearTimeout(watchdog);
-        this._streamingFlushResolve = null;
-        processor.disconnect();
-        this.streamingProcessor = null;
       }
       if (wasCancelled()) return abandonFinalization();
       acknowledgedFinal ||= provider.finalize().catch((error) => ({
@@ -6260,14 +6430,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       this.streamingProcessor = null;
     }
-    if (this.streamingSource) {
-      try {
-        this.streamingSource.disconnect();
-      } catch (e) {
-        // Ignore
-      }
-      this.streamingSource = null;
-    }
+    this.disconnectStreamingSource();
     this.streamingAnalyser = null;
     this.streamingAudioContext = null;
 
@@ -6293,16 +6456,35 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.streamingFallbackChunks = [];
     this._streamingFallbackSegments = [];
 
-    if (this.streamingStream) {
-      this.streamingStream.getTracks().forEach((track) => track.stop());
-      this.streamingStream = null;
-      this._markCaptureStreamReleased();
-    }
+    this.releaseStreamingCaptureStream();
     const tAudioCleanup = performance.now();
+
+    if (delivery.batchFallback) {
+      this.isStreaming = false;
+      this.cleanupStreamingListeners(sessionId);
+      await provider.stop().catch((error) => {
+        logger.debug("Streaming disconnect error", { error: error.message }, "streaming");
+      });
+      if (wasCancelled() || !fallbackBlob?.size) return true;
+      const pipeline = this._startProcessingPipeline();
+      pipeline.activationCapture = delivery.activationCapture;
+      this._localSpeechGateState = this._streamingSpeechGateState;
+      await this.processAudio(
+        fallbackBlob,
+        { durationSeconds, analyticsOccurredAt: analyticsOccurredAt.toISOString() },
+        pipeline
+      );
+      delivery.resultHandled = pipeline.resultHandled;
+      return true;
+    }
 
     // 2. Wait for flushed buffer to travel: port -> main thread -> IPC -> WebSocket -> server.
     //    Then mark streaming done so no further audio is forwarded.
-    if (!provider.finalizeAcknowledged) await new Promise((resolve) => setTimeout(resolve, 120));
+    if (this._assemblyAiAudioQueue) {
+      await this._assemblyAiAudioQueue.drain();
+    } else if (!provider.finalizeAcknowledged) {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
     if (wasCancelled()) return abandonFinalization();
     this.isStreaming = false;
     const tFlush = performance.now();
@@ -6950,7 +7132,27 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return (await window.electronAPI?.stopDictationPreview?.({ showCleanup, flushed })) || null;
   }
 
+  disconnectStreamingSource() {
+    if (this.streamingSource) {
+      try {
+        this.streamingSource.disconnect();
+      } catch (e) {
+        // Ignore
+      }
+      this.streamingSource = null;
+    }
+  }
+
+  releaseStreamingCaptureStream() {
+    if (this.streamingStream) {
+      this.streamingStream.getTracks().forEach((track) => track.stop());
+      this.streamingStream = null;
+      this._markCaptureStreamReleased();
+    }
+  }
+
   cleanupStreamingAudio() {
+    this._assemblyAiAudioQueue?.cancel();
     this._streamingFlushResolve?.();
     this._streamingFlushResolve = null;
     if (this.streamingFallbackRecorder?.state === "recording") {
@@ -6971,23 +7173,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.streamingProcessor = null;
     }
 
-    if (this.streamingSource) {
-      try {
-        this.streamingSource.disconnect();
-      } catch (e) {
-        // Ignore
-      }
-      this.streamingSource = null;
-    }
+    this.disconnectStreamingSource();
 
     this.streamingAnalyser = null;
     this.streamingAudioContext = null;
 
-    if (this.streamingStream) {
-      this.streamingStream.getTracks().forEach((track) => track.stop());
-      this.streamingStream = null;
-      this._markCaptureStreamReleased();
-    }
+    this.releaseStreamingCaptureStream();
 
     this.isStreaming = false;
   }

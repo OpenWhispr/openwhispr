@@ -64,6 +64,12 @@ export default class FakeAudioManager {
       globalThis.__startOnStart?.(this);
     });
   }
+  stopStreamingCaptureDuringStart() {
+    if (globalThis.__startRoute.provider !== "assemblyai" || !this.state.isRecording) return false;
+    globalThis.__startEvents.push("mic-stopped");
+    this.report({ isRecording: false, isProcessing: true, isStreaming: false });
+    return true;
+  }
   stopStreamingRecording() {
     this.report({ isRecording: false, isProcessing: false, isStreaming: false });
     return Promise.resolve(true);
@@ -213,8 +219,38 @@ test("AssemblyAI cues once when capture begins while the provider is connecting"
     activeManager.finishStart(true);
     await started;
   });
-  assert.deepEqual(eventsBeforeConnect, ["start"]);
-  assert.deepEqual(globalThis.__startEvents, ["start", "pause", "register"]);
+  assert.deepEqual(eventsBeforeConnect, STARTED);
+  assert.deepEqual(globalThis.__startEvents, STARTED);
+});
+
+test("AssemblyAI stops capture and releases the start effects before connecting", async (t) => {
+  const hook = await mountHook(t, { streaming: true, provider: "assemblyai", mode: "byok" });
+  let activeManager;
+  globalThis.__startOnStart = (manager) => {
+    activeManager = manager;
+    manager.report(RECORDING);
+  };
+
+  let started;
+  await React.act(async () => {
+    started = hook.api.startRecording();
+  });
+  await settle();
+  await React.act(async () => {
+    await hook.api.stopRecording();
+  });
+  const beforeConnect = [...globalThis.__startEvents];
+  await React.act(async () => {
+    activeManager.report(IDLE);
+    activeManager.finishStart(true);
+    await started;
+  });
+
+  assert.equal(beforeConnect.includes("mic-stopped"), true);
+  assert.equal(beforeConnect.includes("unregister"), true);
+  assert.equal(beforeConnect.includes("resume"), true);
+  assert.equal(beforeConnect.includes("stop"), true);
+  assert.equal(globalThis.__startEvents.filter((event) => event === "stop").length, 1);
 });
 
 test("a streaming start that falls back to batch cues once and stays paused with Escape held", async (t) => {
