@@ -85,9 +85,9 @@ export async function startMicStream({
     for (const track of stream.getTracks()) track.stop();
     await context.close().catch(() => {});
   };
-  // Started from a global hotkey, not a click, so Chromium may create it suspended
-  // and the worklet would never run. Not awaited: resume() can hang when the audio
-  // device is wedged, and the worklet starts whenever it resolves.
+  // A Call after a take starts from an effect, not a click, so Chromium may create
+  // it suspended and the worklet would never run. Not awaited: resume() can hang
+  // when the audio device is wedged, and the worklet starts whenever it resolves.
   if (context.state === "suspended") context.resume().catch(() => {});
   let source: MediaStreamAudioSourceNode;
   let node: AudioWorkletNode;
