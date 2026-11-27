@@ -1,13 +1,16 @@
+import { useRef, type Ref } from "react";
 import { useTranslation } from "react-i18next";
-import { Keyboard, Maximize, Mic, Square, X, type IconComponent } from "../icons";
+import { Keyboard, Maximize, Mic, Phone, Square, X, type IconComponent } from "../icons";
 import { cn } from "../lib/utils";
 import { ICON_BUTTON } from "../chat/interactions/cardStyles";
-import { PillWaveform } from "../dictation/PillWaveform";
+import { SoundBars } from "./SoundBars";
+import { useSoundMeter } from "./useSoundMeter";
 import type { AgentPillButton, AgentPillControls } from "./agentWindowState";
 import { useAgentWindowDrag } from "./useAgentWindowDrag";
 
 const BUTTONS: Record<AgentPillButton, { icon: IconComponent; label: string }> = {
   expand: { icon: Maximize, label: "agentWindow.actions.expand" },
+  call: { icon: Phone, label: "agentWindow.call.actions.start" },
   mic: { icon: Mic, label: "agentWindow.actions.speak" },
   keyboard: { icon: Keyboard, label: "agentWindow.actions.type" },
   stop: { icon: Square, label: "agentWindow.actions.stop" },
@@ -15,17 +18,18 @@ const BUTTONS: Record<AgentPillButton, { icon: IconComponent; label: string }> =
 };
 
 interface AgentPillProps {
+  ref?: Ref<HTMLDivElement>;
   controls: AgentPillControls;
-  /** The waveform moves only while the take records. */
+  /** The Sound bars follow the microphone only while the take records. */
   recording: boolean;
   readLevel: () => number;
-  /** Shown in place of the waveform (already translated). */
+  /** Shown in place of the Sound bars (already translated). */
   notice?: string | null;
   /** The provider or microphone failure behind a voice notice. */
   noticeDetail?: string;
   /** Voice input is unavailable with this transcription provider: Mic is off. */
   micUnavailableHint?: string;
-  /** A take is still transcribing, or a reply is running. */
+  /** A take is still transcribing, or a reply is running: Mic and Call are off. */
   micDisabled?: boolean;
   /** A card waits on the user: Expand pulses blue until the modal opens to it. */
   expandCue?: boolean;
@@ -37,6 +41,7 @@ interface AgentPillProps {
 
 /** The agent's pill: what it is doing, then its controls. */
 export function AgentPill({
+  ref,
   controls,
   recording,
   readLevel,
@@ -51,9 +56,12 @@ export function AgentPill({
 }: AgentPillProps) {
   const { t } = useTranslation();
   const dragHandlers = useAgentWindowDrag();
+  const barsRef = useRef<HTMLDivElement>(null);
+  useSoundMeter(barsRef, recording, readLevel);
   const hasStatus = Boolean(notice || controls.waiting || controls.thinking || controls.waveform);
   return (
     <div
+      ref={ref}
       className={cn(
         "flex h-10 max-w-full cursor-grab items-center rounded-full border border-border pe-1.25 select-none active:cursor-grabbing text-muted-foreground shadow-[var(--shadow-card)]",
         hasStatus ? "ps-2.5" : "ps-1.25",
@@ -82,11 +90,10 @@ export function AgentPill({
           {t("agentMode.input.thinking")}
         </span>
       ) : controls.waveform ? (
-        <PillWaveform
-          getLevel={readLevel}
-          active={recording}
-          className="h-6 shrink-0 text-foreground"
-        />
+        // The bars' own width, with as much space before them as the divider leaves after.
+        <span className="flex shrink-0 items-center ps-0.5">
+          <SoundBars ref={barsRef} />
+        </span>
       ) : null}
       {hasStatus && !controls.thinking && (
         <span className="mx-3 h-3.5 w-px shrink-0 bg-border" aria-hidden="true" />
@@ -100,7 +107,10 @@ export function AgentPill({
               key={button}
               type="button"
               onClick={() => onAction(button)}
-              disabled={button === "mic" && (micDisabled || Boolean(unavailable))}
+              disabled={
+                (button === "mic" && (micDisabled || Boolean(unavailable))) ||
+                (button === "call" && micDisabled)
+              }
               aria-label={t(label)}
               title={unavailable ?? t(label)}
               className={cn(ICON_BUTTON, button === "expand" && expandCue && "agent-expand-cue")}

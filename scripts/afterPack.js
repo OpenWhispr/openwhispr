@@ -26,6 +26,8 @@ const {
 const {
   WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
   WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
+  privatizeOnnxRuntimeDir,
+  verifyOnnxRuntimePrivatizedDir,
 } = require("./download-sherpa-onnx");
 
 // ---------------------------------------------------------------------------
@@ -330,6 +332,60 @@ function verifyUnpackedBinaries(context) {
 }
 
 // ---------------------------------------------------------------------------
+// Voice conversation dependencies (onnxruntime-node + onnxruntime-web)
+// ---------------------------------------------------------------------------
+
+// The voice worker runs its speech models on onnxruntime-node, which has no Intel Mac
+// binding: an Intel Mac runs them on onnxruntime-web, and a universal app's arm64 half
+// is the only one with a native runtime.
+function requiredOrtBindings({ platform, arch }) {
+  if (platform !== "darwin") return [arch];
+  return arch === "x64" ? [] : ["arm64"];
+}
+
+// All Smart Turn loads from onnxruntime-web in Node (require → ort.node.min.js, which
+// starts the threaded WASM build). electron-builder.json leaves out the package's other
+// builds (~100 MB of browser, WebGPU and JSPI variants), so a mismatch there must fail
+// here: a missing file otherwise only shows up as silence-only turn detection.
+const SMART_TURN_RUNTIME_FILES = [
+  "ort.node.min.js",
+  "ort-wasm-simd-threaded.mjs",
+  "ort-wasm-simd-threaded.wasm",
+];
+
+function prepareVoiceDependencies(context) {
+  const modulesDir = path.join(resolveResourcesDir(context), "app.asar.unpacked", "node_modules");
+  const platform = context.electronPlatformName;
+  const bindingDirs = requiredOrtBindings({ platform, arch: Arch[context.arch] }).map((arch) =>
+    path.join(modulesDir, "onnxruntime-node", "bin", "napi-v6", platform, arch)
+  );
+  const missingBinding = bindingDirs.find(
+    (dir) => !fs.existsSync(path.join(dir, "onnxruntime_binding.node"))
+  );
+  if (missingBinding) {
+    throw new Error(
+      `afterPack: missing onnxruntime_binding.node in ${missingBinding}; voice conversation would fail to load for this target`
+    );
+  }
+  const ortDist = path.join(modulesDir, "onnxruntime-web", "dist");
+  const missingRuntime = SMART_TURN_RUNTIME_FILES.filter(
+    (file) => !fs.existsSync(path.join(ortDist, file))
+  );
+  if (missingRuntime.length > 0) {
+    throw new Error(
+      `afterPack: missing ${missingRuntime.join(", ")} in ${ortDist}; Smart Turn would fall back to silence-only turns`
+    );
+  }
+  if (platform === "win32") {
+    for (const dir of bindingDirs) {
+      privatizeOnnxRuntimeDir(dir);
+      verifyOnnxRuntimePrivatizedDir(dir);
+      console.log(`  afterPack: onnxruntime-node loads ${WINDOWS_ONNXRUNTIME_PRIVATE_NAME}`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Model catalog pin
 // ---------------------------------------------------------------------------
 
@@ -360,6 +416,7 @@ exports.default = async function (context) {
   stripOnnxruntimeBinaries(context);
   wrapLinuxBinary(context);
   verifyMeetingAecHelper(context);
+  prepareVoiceDependencies(context);
   verifyUnpackedBinaries(context);
   if (shouldVerifyLinuxSqliteBaseline(context.electronPlatformName, Arch[context.arch])) {
     verifyLinuxSqliteBaseline(context.appOutDir, `${context.packager.executableName}-app`);
@@ -371,4 +428,6 @@ exports.default = async function (context) {
 exports.verifyWindowsOnnxRuntimePrivatized = verifyWindowsOnnxRuntimePrivatized;
 exports.verifyWindowsKeyListener = verifyWindowsKeyListener;
 exports.verifyWindowsFastPaste = verifyWindowsFastPaste;
+exports.requiredOrtBindings = requiredOrtBindings;
+exports.prepareVoiceDependencies = prepareVoiceDependencies;
 exports.verifyRegistryPinned = verifyRegistryPinned;

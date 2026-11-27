@@ -93,6 +93,34 @@ test("afterPack signs native modules in the packaged Windows app", async (t) => 
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, "");
   }
+  // The voice runtime afterPack checks and makes private on Windows.
+  const ortBinding = path.join(
+    unpacked,
+    "node_modules",
+    "onnxruntime-node",
+    "bin",
+    "napi-v6",
+    "win32",
+    "x64"
+  );
+  fs.mkdirSync(ortBinding, { recursive: true });
+  fs.writeFileSync(
+    path.join(ortBinding, "onnxruntime.dll"),
+    buildPeImage({ imports: ["KERNEL32.dll"] })
+  );
+  fs.writeFileSync(
+    path.join(ortBinding, "onnxruntime_binding.node"),
+    buildPeImage({ imports: ["KERNEL32.dll", "onnxruntime.dll"] })
+  );
+  const ortWeb = path.join(unpacked, "node_modules", "onnxruntime-web", "dist");
+  fs.mkdirSync(ortWeb, { recursive: true });
+  for (const file of [
+    "ort.node.min.js",
+    "ort-wasm-simd-threaded.mjs",
+    "ort-wasm-simd-threaded.wasm",
+  ]) {
+    fs.writeFileSync(path.join(ortWeb, file), "");
+  }
   t.mock.method(console, "log", () => {});
   t.mock.method(console, "warn", () => {});
   const { context, signed, commands } = buildContext(
@@ -172,7 +200,7 @@ test("packaging does not distribute or download NirCmd", () => {
 });
 
 test(
-  "Windows SignTool verifies the vendor addon and rejects unsigned or modified files",
+  "Windows SignTool verifies a vendor DLL and rejects unsigned or modified files",
   {
     skip: process.platform !== "win32",
   },
@@ -180,18 +208,20 @@ test(
     const { inspectWindowsSignatures } = require("../../scripts/lib/windows-signatures");
     const appOutDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-signatures-"));
     t.after(() => fs.rmSync(appOutDir, { recursive: true, force: true }));
-    const addon = path.join(
+    // Not the binding: download-sherpa-onnx rewrites its imports in node_modules,
+    // which breaks its signature.
+    const vendorDll = path.join(
       __dirname,
-      "../../node_modules/onnxruntime-node/bin/napi-v6/win32/x64/onnxruntime_binding.node"
+      "../../node_modules/onnxruntime-node/bin/napi-v6/win32/x64/DirectML.dll"
     );
-    const signedFile = path.join(appOutDir, "ONNX provider's addon.node");
-    fs.copyFileSync(addon, signedFile);
+    const signedFile = path.join(appOutDir, "ONNX provider's DirectML.dll");
+    fs.copyFileSync(vendorDll, signedFile);
     fs.writeFileSync(path.join(appOutDir, "unsigned.dll"), buildPeImage());
     const modified = fs.readFileSync(signedFile);
     const coffHeader = modified.readUInt32LE(0x3c) + 4;
     const firstSection = coffHeader + 20 + modified.readUInt16LE(coffHeader + 16);
     modified[modified.readUInt32LE(firstSection + 20)] ^= 1;
-    fs.writeFileSync(path.join(appOutDir, "modified.node"), modified);
+    fs.writeFileSync(path.join(appOutDir, "modified.dll"), modified);
 
     const report = await inspectWindowsSignatures({
       appOutDir,
@@ -203,6 +233,6 @@ test(
       /CN=Microsoft Corporation/
     );
     assert.ok(report.find(({ file }) => file === "unsigned.dll").error);
-    assert.ok(report.find(({ file }) => file === "modified.node").error);
+    assert.ok(report.find(({ file }) => file === "modified.dll").error);
   }
 );

@@ -5,7 +5,7 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 const { installInteractiveDom } = require("../lib/interactiveDom");
 const { SKILLS_MOCKS, ariaLabel, click, findAll, settle } = require("../lib/skillsHarness");
 
-async function mountChat(t, electronAPI = {}) {
+async function mountChat(t, { messages, ...electronAPI } = {}) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -16,7 +16,7 @@ async function mountChat(t, electronAPI = {}) {
     },
   });
   const container = installInteractiveDom(t);
-  const calls = { sends: [], regenerated: [], streaming: null };
+  const calls = { sends: [], regenerated: [], rewrites: [], streaming: null, messages };
   globalThis.__agentSkillCalls = calls;
   t.after(() => delete globalThis.__agentSkillCalls);
   const vite = await createRendererServer(t, {
@@ -25,12 +25,13 @@ async function mountChat(t, electronAPI = {}) {
     mockModules: {
       "react-i18next": SKILLS_MOCKS["react-i18next"],
       "/chat/useChatPersistence": `
-        const messages = [
-          { id: "u1", role: "user", content: "Prep my meeting", isStreaming: false },
+        const messages = globalThis.__agentSkillCalls.messages ?? [
+          { id: "u1", role: "user", content: "Prep my meeting", isStreaming: false, dbId: 7 },
           { id: "a1", role: "assistant", content: "Your prep", isStreaming: false },
         ];
         export function useChatPersistence() { return {
-          messages, conversationId: 1, noteId: null, forkOrigin: null, setMessages() {},
+          messages, conversationId: 1, noteId: null, forkOrigin: null,
+          setMessages(update) { globalThis.__agentSkillCalls.rewrites.push(update(messages)); },
           async createConversation() { return 1; },
           async loadConversation(id, beforeOpen) { beforeOpen?.(); return { id }; },
           getSessionVersion: () => 1,
@@ -50,10 +51,13 @@ async function mountChat(t, electronAPI = {}) {
       `,
       "/chat/useChatMessageSender": `
         export function useChatMessageSender() { return async (text, options) => {
-          globalThis.__agentSkillCalls.sends.push({ text, options }); return true;
+          globalThis.__agentSkillCalls.sends.push({ text, options });
+          return globalThis.__agentSkillCalls.hold ?? true;
         }; }
       `,
-      "/chat/useInterruptedInteractions": `export function useInterruptedInteractions() {}`,
+      "/chat/useInterruptedInteractions": `export function useInterruptedInteractions(_host, send) {
+        globalThis.__agentSkillCalls.restoredSend = send;
+      }`,
     },
   });
   const [{ useAgentChat }, { AgentComposer }, { SkillChip }] = await Promise.all([
@@ -152,4 +156,66 @@ test("regenerating an assistant answer keeps the skill it was using", async (t) 
   await React.act(async () => view.chat().regenerate(view.chat().messages[1]));
   assert.equal(view.calls.regenerated.length, 1);
   assert.deepEqual(view.calls.regenerated[0].options.attachedSkill, { name: "meeting-prep" });
+});
+
+test("a request a pause cut short replaces its first half and answers in place of its reply", async (t) => {
+  const view = await mountChat(t);
+  const updates = [];
+  globalThis.window.electronAPI.updateAgentMessage = async (...args) => updates.push(args);
+  const voice = { replyLanguage: null };
+  await React.act(async () => view.chat().sendJoined("Prep my meeting with Dana", { voice }));
+  const [answered] = view.calls.regenerated;
+  assert.equal(answered.text, "Prep my meeting with Dana");
+  assert.deepEqual(
+    answered.messages.map((message) => message.content),
+    ["Prep my meeting with Dana"]
+  );
+  assert.equal(answered.options.replaceMessage.id, "a1");
+  assert.equal(answered.options.voice, voice);
+  assert.deepEqual(
+    view.calls.rewrites[0].map((message) => message.content),
+    ["Prep my meeting with Dana", "Your prep"]
+  );
+  assert.deepEqual(updates, [[7, "Prep my meeting with Dana", undefined]]);
+  assert.equal(view.calls.sends.length, 0, "no second request is added");
+
+  await React.act(async () => view.chat().sendJoined("Plan my week", { voice }));
+  assert.equal(view.calls.sends.at(-1).text, "Plan my week", "anything else is sent as it is");
+});
+
+test("a first half stopped before its reply started is still replaced, never left as a fragment", async (t) => {
+  const view = await mountChat(t, {
+    messages: [{ id: "u1", role: "user", content: "Prep my meeting", isStreaming: false }],
+  });
+  await React.act(async () =>
+    view.chat().sendJoined("Prep my meeting with Dana", { voice: { replyLanguage: null } })
+  );
+  const [answered] = view.calls.regenerated;
+  assert.deepEqual(
+    answered.messages.map((message) => message.content),
+    ["Prep my meeting with Dana"]
+  );
+  assert.equal(answered.options.replaceMessage, undefined);
+  assert.deepEqual(
+    view.calls.rewrites[0].map((message) => message.content),
+    ["Prep my meeting with Dana"]
+  );
+  assert.equal(view.calls.sends.length, 0, "no second request is added");
+});
+
+test("a spoken turn waits for a restored card's answer to finish sending", async (t) => {
+  const view = await mountChat(t);
+  let release;
+  view.calls.hold = new Promise((resolve) => (release = resolve));
+  void view.calls.restoredSend("Thursday");
+  let settled = false;
+  void view
+    .chat()
+    .settled()
+    .then(() => (settled = true));
+  await settle();
+  assert.equal(settled, false, "the answer's send still holds the chat");
+  release(true);
+  await settle();
+  assert.equal(settled, true);
 });

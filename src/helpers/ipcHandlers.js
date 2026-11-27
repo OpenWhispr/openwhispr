@@ -28,6 +28,7 @@ const { ANALYTICS_HISTORY_BACKFILL_VERSION } = require("./analytics");
 const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
 const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
 const { broadcastToWindows } = require("./windowBroadcast");
+const { registerVoiceConversationIpc } = require("./voiceConversationIpc");
 const { isFromWindow } = require("./ipcSender");
 const { openExternalUrl } = require("./externalUrlOpener");
 const { PRIVACY_SETTINGS_URL, usesAppControlPicker } = require("./macAppControl");
@@ -2104,6 +2105,14 @@ class IPCHandlers {
   }
 
   setupHandlers() {
+    this.voiceConversation = registerVoiceConversationIpc({
+      parakeetManager: this.parakeetManager,
+      whisperManager: this.whisperManager,
+      isFromCallWindow: (event) => isFromWindow(event, this.windowManager.agentWindow?.window),
+      warmSemanticSearch: () => this.getSemanticSearch?.()?.warmUp(),
+      isMeetingRecording: () => Boolean(this.meetingDetectionEngine?.isRecordingMeeting()),
+    });
+
     this._remoteStreamPolicies = new Map();
     this._retireAccountProductStreams = (accountId) => {
       this.googleCalendarManager?.stop();
@@ -2431,6 +2440,9 @@ class IPCHandlers {
 
     // The agent window's own channels; each checks that it is the sender.
     ipcMain.on("agent-window-ready", (event) => this.windowManager.agentWindow?.markReady(event));
+    ipcMain.on("agent-window-pointer", (event, over) =>
+      this.windowManager.agentWindow?.setPointerOverContent(event, over)
+    );
     ipcMain.on("agent-window-drag", (event, dragging) =>
       this.windowManager.agentWindow?.setDragging(event, dragging)
     );
@@ -5076,6 +5088,14 @@ class IPCHandlers {
       if (!this.selectionManager) {
         return { status: "unavailable", code: "selection_manager_unavailable" };
       }
+      // A voice call reads the app in front as each turn is spoken, not the one
+      // the window's hotkey was last pressed over; with the asking window
+      // focused there is no field of another app to read.
+      if (options.refreshTarget === true) {
+        if (event.sender.isFocused()) return { status: "none" };
+        void this.textEditMonitor?.captureTargetPid?.();
+        void this.selectionManager.captureTarget({ force: true });
+      }
       return this.selectionManager.captureSelectedText({
         probeEditable: options.probeEditable === true,
       });
@@ -6126,6 +6146,11 @@ class IPCHandlers {
       } catch (e) {
         errors.push(`Embedding worker stop: ${e.message}`);
       }
+      try {
+        await require("./voiceWorkerClient").stop();
+      } catch (e) {
+        errors.push(`Voice worker stop: ${e.message}`);
+      }
 
       // Revoke Google OAuth tokens before DB is closed
       try {
@@ -6195,6 +6220,12 @@ class IPCHandlers {
         await this.diarizationManager?.deleteModels();
       } catch (e) {
         errors.push(`Diarization models: ${e.message}`);
+      }
+      try {
+        const { getVoiceModelsDir } = require("./voiceModels");
+        fs.rmSync(getVoiceModelsDir(), { recursive: true, force: true });
+      } catch (e) {
+        errors.push(`Voice models: ${e.message}`);
       }
       try {
         const modelManager = require("./modelManagerBridge").default;
@@ -12437,6 +12468,7 @@ class IPCHandlers {
       meetingReconnectedAt = 0;
       meetingFatalErrorSent = false;
       this.meetingDetectionEngine?.endRecordingSession();
+      this.voiceConversation?.endSessionForMeeting();
       this.meetingDetectionEngine?.setUserRecording(true);
 
       const completeStart = async (result) => {

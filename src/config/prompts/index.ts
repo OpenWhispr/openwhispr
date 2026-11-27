@@ -5,7 +5,7 @@ import { getLanguageInstruction } from "../../utils/languageSupport";
 import { splitSharedDictionaryWords } from "../../utils/snippets";
 import {
   PROMPT_KINDS,
-  PLAIN_TEXT_RESPONSE_SUFFIX,
+  plainTextResponseSuffix,
   CARET_RESPONSE_DISPOSITION_SUFFIX,
   type PromptKind,
 } from "./registry";
@@ -53,10 +53,14 @@ export function appendScreenContextSuffix(prompt: string, uiLanguage?: string): 
 
 // An answer typed at the user's caret in another app. Append after every other
 // suffix: trailing instructions are the ones models weight most.
-export function appendPlainTextResponseSuffix(prompt: string, requireDisposition = false): string {
+export function appendPlainTextResponseSuffix(
+  prompt: string,
+  requireDisposition: boolean,
+  allowToolActions: boolean
+): string {
   return (
     prompt +
-    PLAIN_TEXT_RESPONSE_SUFFIX +
+    plainTextResponseSuffix(allowToolActions) +
     (requireDisposition ? CARET_RESPONSE_DISPOSITION_SUFFIX : "")
   );
 }

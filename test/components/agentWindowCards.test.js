@@ -53,7 +53,35 @@ const MOCKS = {
         newChat() { globalThis.__chat.newChats += 1; },
         fork: async () => null,
         regenerate() {},
+        settled: async () => {},
+        sendJoined: async (text, options) => {
+          globalThis.__chat.sentOptions.push(options);
+          globalThis.__chat.sent.push(text);
+          return true;
+        },
       };
+    }
+  `,
+  // A call that starts at once: the test speaks its turns through onUserTurn.
+  "/useVoiceCall": `
+    import { useSyncExternalStore } from "react";
+    const listeners = new Set();
+    let session = "off";
+    const set = (next) => { session = next; listeners.forEach((listener) => listener()); };
+    globalThis.__call = { starts: 0 };
+    const call = {
+      readLevel: () => 0,
+      start: async () => { globalThis.__call.starts += 1; set("active"); return true; },
+      end: async () => set("off"),
+      stopReply() {}, stopSpeech() {}, announce() {}, setMicMuted() {}, setInputHeld() {}, clearFailure() {},
+    };
+    export function useVoiceCall(options) {
+      globalThis.__call.options = options;
+      const current = useSyncExternalStore(
+        (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
+        () => session
+      );
+      return { ...call, session: current, micMuted: false, speaking: false, failure: null, harnessAvailable: false };
     }
   `,
   "/useAgentVoice": `
@@ -1432,6 +1460,96 @@ test("Esc on an idle window starts a new chat; over a running reply it only stop
   assert.equal(globalThis.__chat.newChats, 1);
 });
 
+test("in a call, Esc stops a running turn the call isn't speaking (a Regenerate)", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ messages: [user, finished] });
+  await React.act(async () => view.button("Start Voice Agent").click());
+  await view.chat({ busy: true, messages: [user, reply([], "Here is")] });
+
+  await React.act(async () =>
+    view.happyWindow.document.dispatchEvent(
+      new view.happyWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    )
+  );
+  assert.equal(globalThis.__chat.cancels, 1);
+  assert.ok(view.button("End call"), "the call goes on");
+  await view.waitForLayout("modal");
+  assert.ok(!view.main.layouts.at(-1).call, "a call in the modal isn't resized as one");
+});
+
+test("in a call, Esc while a card sends stops only speech: the send's turn goes on", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ messages: [user, finished] });
+  await React.act(async () => view.button("Start Voice Agent").click());
+  await view.chat({ busy: true, messages: [user, reply([slackCall], "Posting it.")] });
+  await view.askApproval("c5");
+  await sendCard(view, "c5");
+
+  await React.act(async () =>
+    view.happyWindow.document.dispatchEvent(
+      new view.happyWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    )
+  );
+  assert.equal(globalThis.__chat.cancels, 0, "its outcome is still told");
+  assert.ok(view.button("End call"), "the call goes on");
+  await view.waitForLayout("modal");
+});
+
+test("in a call, Esc in a waiting card's field stops its turn, as the card has no Cancel", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ messages: [user, finished] });
+  await React.act(async () => view.button("Start Voice Agent").click());
+  await view.chat({ busy: true, messages: [user, reply([slackCall], "Posting it.")] });
+  await view.askApproval("c5");
+
+  await React.act(async () =>
+    view.host
+      .querySelector("[data-approval-card] textarea")
+      .dispatchEvent(
+        new view.happyWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+      )
+  );
+  assert.equal(globalThis.__chat.cancels, 1);
+  assert.ok(view.button("End call"), "the call goes on");
+});
+
+test("a call's transcript shrinks into its pill before the compact pill takes its place", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ messages: [user, finished] });
+  await React.act(async () => view.button("Start Voice Agent").click());
+  await view.waitForLayout("modal");
+  const modal = () => view.host.querySelector(".agent-modal");
+  const headerMinimize = view.host.querySelector(
+    '.agent-modal header button[aria-label="Minimize"]'
+  );
+
+  await React.act(async () => headerMinimize.click());
+  assert.equal(modal()?.dataset.callPanel, "leaving", "the panel shrinks first");
+  assert.match(
+    modal().style.getPropertyValue("--call-pill-inset"),
+    /^-?[\d.]+px -?[\d.]+px -?[\d.]+px -?[\d.]+px$/,
+    "into the pill's box"
+  );
+  assert.equal(view.layout(), "modal", "while the window still holds it");
+  assert.equal(
+    view.host.querySelector(".agent-window-content").dataset.instant,
+    "true",
+    "and the pill will show again at once"
+  );
+
+  await view.wait(400);
+  assert.equal(modal(), null, "then the window goes back to the call's compact pill");
+  assert.ok(view.host.querySelector("[data-voice-pill]"));
+});
+
 test("Esc over selected text clears the selection and keeps the chat", async (t) => {
   const view = await mountWindow(t);
   await React.act(async () => view.main.handlers.open({ layout: "modal" }));
@@ -1671,6 +1789,206 @@ test("an answer the field refused stays in the window", async (t) => {
   assert.equal(pastes.length, 1);
   assert.equal(hides(), 0);
   assert.equal(globalThis.__chat.newChats, 0);
+});
+
+// A spoken turn of a call started from the typing layout.
+async function callTurn(view, text, turn = {}) {
+  await React.act(async () => view.main.handlers.open({ layout: "typing" }));
+  await React.act(async () => view.button("Start Voice Agent").click());
+  const ended = [];
+  await React.act(async () => globalThis.__call.options.onSpeechStart());
+  await React.act(async () =>
+    globalThis.__call.options.onUserTurn({
+      text,
+      speech: { onEnd: (outcome) => ended.push(outcome) },
+      replyLanguage: null,
+      dryRunWrites: false,
+      joinedRequest: null,
+      isCurrent: () => true,
+      heard: Promise.resolve(),
+      ...turn,
+    })
+  );
+  return ended;
+}
+
+test("a call types an answer into the field the user is in as they speak, and stays in its pill", async (t) => {
+  const view = await mountWindow(t);
+  const probes = [];
+  const pastes = [];
+  let finishPaste;
+  let hides = 0;
+  Object.assign(view.happyWindow.electronAPI, {
+    captureSelectedText: async (options) => {
+      probes.push(options);
+      return { status: "editable", sessionId: "caret-1" };
+    },
+    pasteAtCapturedTarget: (...args) => {
+      pastes.push(args);
+      return new Promise((resolve) => {
+        finishPaste = () => resolve({ success: true });
+      });
+    },
+    cancelSelectionEdit: async () => {},
+    agentWindowHide: async () => {
+      hides += 1;
+      return true;
+    },
+  });
+  await callTurn(view, "Write a thank-you note to my team");
+  const options = globalThis.__chat.sentOptions[0];
+
+  assert.deepEqual(probes, [{ probeEditable: true, refreshTarget: true }]);
+  assert.equal(options.plainTextResponse, true);
+  assert.ok(options.voice, "the reply is still spoken");
+  let completed = false;
+  await React.act(async () => {
+    void Promise.resolve(
+      options.onComplete({ assistantId: "a1", content: "**Thanks**, team!", onlyRead: true })
+    ).then(() => {
+      completed = true;
+    });
+  });
+  await view.settle();
+  assert.deepEqual(pastes, [["caret-1", "Thanks, team!"]]);
+  assert.ok(completed, "the turn ends, and its last sentence is spoken, while the answer is typed");
+  await React.act(async () => finishPaste());
+  await view.settle();
+  assert.equal(hides, 0, "the call goes on");
+  assert.ok(view.button("End call"), "in its pill");
+});
+
+test("a call turn spoken with no writable field in front is answered as before", async (t) => {
+  const view = await mountWindow(t);
+  const released = [];
+  Object.assign(view.happyWindow.electronAPI, {
+    captureSelectedText: async () => ({ status: "selected", sessionId: "selection-1", text: "Hi" }),
+    cancelSelectionEdit: async (sessionId) => released.push(sessionId),
+  });
+  await callTurn(view, "What's on my calendar?");
+  const options = globalThis.__chat.sentOptions[0];
+
+  assert.deepEqual(released, ["selection-1"], "a selection there is left alone");
+  assert.equal(options.plainTextResponse, undefined);
+  assert.equal(options.onComplete, undefined);
+});
+
+test("a call types its answer only once its reply is heard", async (t) => {
+  const view = await mountWindow(t);
+  const pastes = [];
+  Object.assign(view.happyWindow.electronAPI, {
+    captureSelectedText: async () => ({ status: "editable", sessionId: "caret-1" }),
+    pasteAtCapturedTarget: async (...args) => {
+      pastes.push(args);
+      return { success: true };
+    },
+    cancelSelectionEdit: async () => {},
+  });
+  let hear;
+  await callTurn(view, "Write a thank-you note", {
+    heard: new Promise((resolve) => {
+      hear = resolve;
+    }),
+  });
+  const { onComplete } = globalThis.__chat.sentOptions[0];
+  await React.act(async () =>
+    onComplete({ assistantId: "a1", content: "Thanks!", onlyRead: true })
+  );
+  await view.settle();
+  assert.deepEqual(pastes, [], "held for the user's speech, the request may yet go on");
+  await React.act(async () => hear());
+  await view.settle();
+  assert.deepEqual(pastes, [["caret-1", "Thanks!"]]);
+});
+
+for (const [kind, joinedRequest] of [
+  ["a pause cut short", "Write a thank-you note to my team"],
+  ["talked over after a tool call", null],
+]) {
+  test(`a request ${kind} reads the field again when the turn before took the read`, async (t) => {
+    const view = await mountWindow(t);
+    const probes = [];
+    Object.assign(view.happyWindow.electronAPI, {
+      captureSelectedText: async (options) => {
+        probes.push(options);
+        return { status: "editable", sessionId: `caret-${probes.length}` };
+      },
+      cancelSelectionEdit: async () => {},
+    });
+    await callTurn(view, "Write a thank-you note");
+    await React.act(async () =>
+      globalThis.__call.options.onUserTurn({
+        text: "to my team",
+        speech: { onEnd() {} },
+        replyLanguage: null,
+        dryRunWrites: false,
+        joinedRequest,
+        isCurrent: () => true,
+        heard: Promise.resolve(),
+      })
+    );
+    await view.settle();
+
+    assert.equal(probes.length, 2);
+    assert.equal(globalThis.__chat.sent[1], joinedRequest ?? "to my team");
+    assert.equal(globalThis.__chat.sentOptions[1].plainTextResponse, true);
+  });
+}
+
+test("a call started from the agent pill grows its pill out of that one, then settles", async (t) => {
+  const view = await mountWindow(t, { platform: "darwin" });
+  await React.act(async () => view.main.handlers.open({ layout: "typing" }));
+  await view.settle();
+  // happy-dom lays nothing out: the agent pill's width as a real window measures it.
+  const agentPill = view.button("Start Voice Agent").closest(".rounded-full.border");
+  agentPill.getBoundingClientRect = () => ({ width: 181, height: 40 });
+  await React.act(async () => view.button("Start Voice Agent").click());
+  const pill = () => view.host.querySelector("[data-voice-pill]");
+  assert.equal(pill().dataset.callEnter, "", "it grows out of the agent pill");
+  assert.equal(pill().style.getPropertyValue("--call-enter-from"), "181px");
+  assert.equal(
+    pill().style.getPropertyValue("--call-enter-drop"),
+    "12px",
+    "from its place, in the transcript's window"
+  );
+  assert.equal(
+    view.host.querySelector(".agent-window-content").dataset.instant,
+    "true",
+    "in place of the usual fade"
+  );
+  // Settings above the pill get a window of their own, with no room below the pill.
+  await React.act(async () => view.button("Settings").click());
+  assert.equal(pill().style.getPropertyValue("--call-enter-drop"), "0px", "so it grows in place");
+  await view.waitForLayout("standalone");
+  await view.settle();
+  assert.equal(pill().dataset.callEnter, undefined, "and is done once it has grown");
+});
+
+test("Call on a take still listening drops it and starts once the take lets go of the microphone", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () => globalThis.__voice.set("recording"));
+  await React.act(async () => view.button("Start Voice Agent").click());
+
+  assert.equal(globalThis.__voice.cancels, 1);
+  assert.equal(globalThis.__call.starts, 0, "the take still holds the microphone");
+  await React.act(async () => globalThis.__voice.set("idle"));
+  await view.settle();
+  assert.equal(globalThis.__call.starts, 1);
+  assert.ok(view.button("End call"));
+  assert.deepEqual(globalThis.__chat.sent, [], "what the take heard is never sent");
+
+  // The press no longer owns the window: Esc on a later take only drops it.
+  await React.act(async () => view.button("End call").click());
+  await React.act(async () => view.button("Speak").click());
+  await React.act(async () => globalThis.__voice.set("recording"));
+  await React.act(async () =>
+    view.happyWindow.document.dispatchEvent(
+      new view.happyWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    )
+  );
+  await view.settle();
+  assert.equal(globalThis.__chat.newChats, 0, "the chat stays");
 });
 
 for (const action of ["dismiss", "Stop", "account change", "unmount", "newer request"]) {

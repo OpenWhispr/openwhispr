@@ -115,6 +115,7 @@ export {
   MicOff,
   Minimize,
   Office,
+  Phone,
   Quote,
   RubyText,
   SkillStack,

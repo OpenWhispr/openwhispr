@@ -394,6 +394,11 @@ const MinimizeMark = glyph(
   </>
 );
 
+// The voice call's handset (its microphone toggle shares the note recording's MicOff).
+const PhoneMark = glyph(
+  <path d="M8.5 3.5H5.5a2 2 0 0 0-2 2.2C4.2 13.6 10.4 19.8 18.3 20.5a2 2 0 0 0 2.2-2v-3l-4-1.5-2 2a12 12 0 0 1-6.5-6.5l2-2z" />
+);
+
 const VolumeMark = glyph(
   <>
     <path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z" />
@@ -520,3 +525,4 @@ export const UserXmark = createIcon("user-xmark", UserXmarkMark);
 export const UserSettings = createIcon("user-settings", UserSettingsMark);
 export const EnvelopePlus = createIcon("envelope-plus", EnvelopePlusMark);
 export const Volume = createIcon("volume", VolumeMark);
+export const Phone = createIcon("phone", PhoneMark);

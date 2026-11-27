@@ -3,11 +3,12 @@
 
 // The window shrinks to what it shows, plus an 8px margin on every side for
 // the surface's shadow; on Windows and Linux its transparent parts still take
-// clicks. The pill row is never wider than PILL_CONTENT_WIDTH (the idle pill
-// is 176px, and Thinking… in German 199px), except the pill that reads
-// "Waiting for answer" (the reference's is 287px, French 299px) or a notice.
+// clicks. The pill row is never wider than PILL_CONTENT_WIDTH (with Call, the
+// idle pill is 206px and the listening one 181px; Thinking… in German 199px),
+// except the pill that reads "Waiting for answer" (the reference's is 287px,
+// French 299px) or a notice.
 const SHADOW_MARGIN = 8;
-const PILL_CONTENT_WIDTH = 200;
+const PILL_CONTENT_WIDTH = 216;
 const WAITING_PILL_CONTENT_WIDTH = 304;
 const PILL_HEIGHT = 40;
 const COMPOSER = { width: 510, height: 145 };
@@ -16,11 +17,42 @@ const MODAL = { width: 480, height: 520 };
 // A standalone card is as tall as it measures, within these bounds; a taller
 // one scrolls inside.
 const STANDALONE_CARD = { width: 420, minHeight: 80, maxHeight: 400 };
+// In a voice call the pill carries its status above it (237×65 in the reference);
+// its transcript is the modal, as in typed chat.
+const CALL_PILL = { width: 240, height: 65 };
+// A long answer card with the call's pill is about 597px in the reference.
+const CALL_CARD_MAX_HEIGHT = 520;
+// A call's answer and connect cards are 450px wide in the reference (its questions 420px, centred).
+const CALL_CARD_WIDTH = 450;
+// In the transcript the call's pill sits inside the modal's bottom padding and border
+// (AgentModal's footer, 12px and 1px): 13px above where a lone pill sits. A call's compact
+// layouts are lifted by that much, so Expand and Minimize leave the pill where it is.
+const CALL_WINDOW_LIFT = 13;
 
-const standaloneSize = (cardHeight) => ({
-  width: STANDALONE_CARD.width + 2 * SHADOW_MARGIN,
-  height: cardHeight + COMPOSER_GAP + PILL_HEIGHT + 2 * SHADOW_MARGIN,
+const standaloneSize = (
+  cardHeight,
+  pillHeight = PILL_HEIGHT,
+  cardWidth = STANDALONE_CARD.width
+) => ({
+  width: cardWidth + 2 * SHADOW_MARGIN,
+  height: cardHeight + COMPOSER_GAP + pillHeight + 2 * SHADOW_MARGIN,
 });
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+function callLayoutSize(layout, contentHeight) {
+  if (layout === "standalone") {
+    return standaloneSize(
+      clamp(contentHeight, STANDALONE_CARD.minHeight, CALL_CARD_MAX_HEIGHT),
+      CALL_PILL.height,
+      CALL_CARD_WIDTH
+    );
+  }
+  return {
+    width: CALL_PILL.width + 2 * SHADOW_MARGIN,
+    height: CALL_PILL.height + 2 * SHADOW_MARGIN,
+  };
+}
 
 const AGENT_LAYOUT_SIZES = Object.freeze({
   pill: {
@@ -106,21 +138,27 @@ function clampAgentAnchor(
 /**
  * The window's bounds for a layout, kept inside the work area: a modal too
  * tall for it shrinks. A standalone card brings its measured height; a wide
- * pill is the one waiting for an answer.
+ * pill is the one waiting for an answer. A voice call has its own pill.
  */
-function computeAgentWindowBounds({ anchor, layout, workArea, contentHeight = 0, wide = false }) {
-  const size =
-    layout === "standalone"
-      ? standaloneSize(
-          Math.min(Math.max(contentHeight, STANDALONE_CARD.minHeight), STANDALONE_CARD.maxHeight)
-        )
+function computeAgentWindowBounds({
+  anchor,
+  layout,
+  workArea,
+  contentHeight = 0,
+  wide = false,
+  call = false,
+}) {
+  const size = call
+    ? callLayoutSize(layout, contentHeight)
+    : layout === "standalone"
+      ? standaloneSize(clamp(contentHeight, STANDALONE_CARD.minHeight, STANDALONE_CARD.maxHeight))
       : layout === "pill" && wide
         ? WAITING_PILL_SIZE
         : (AGENT_LAYOUT_SIZES[layout] ?? AGENT_LAYOUT_SIZES.pill);
   const width = Math.min(size.width, workArea.width);
   const height = Math.min(size.height, workArea.height);
   const x = Math.round(anchor.centerX - width / 2);
-  const y = Math.round(anchor.bottom - height);
+  const y = Math.round(anchor.bottom - height - (call ? CALL_WINDOW_LIFT : 0));
   return {
     x: Math.max(workArea.x, Math.min(x, workArea.x + workArea.width - width)),
     y: Math.max(workArea.y, Math.min(y, workArea.y + workArea.height - height)),
@@ -131,6 +169,7 @@ function computeAgentWindowBounds({ anchor, layout, workArea, contentHeight = 0,
 
 module.exports = {
   AGENT_LAYOUT_SIZES,
+  CALL_WINDOW_LIFT,
   WAITING_PILL_SIZE,
   computeAgentAnchor,
   clampAgentAnchor,

@@ -83,10 +83,14 @@ async function mountEmailCard(
       store.cancelApproval(key);
     }
   });
-  const calls = { commit: [], cancel: [] };
+  const calls = { commit: [], cancel: [], clipboard: [] };
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
+        writeClipboard: async (text) => {
+          calls.clipboard.push(text);
+          return { success: true };
+        },
         connectorPrepare: async () => ({
           status: "ready",
           actionId: "a1",
@@ -318,4 +322,16 @@ test("a stripped display name shows the addresses the email will go to", async (
   await React.act(async () => type(field(container, "toLabel"), "josh, Dana Lee <dana@acme.test>"));
   assert.deepEqual(draftFields().to, ["dana@acme.test"]);
   assert.ok(sendsTo(), "the resolved addresses are shown");
+});
+
+test("outside a call Copy copies the message alone, and no field has a copy of its own", async (t) => {
+  const { container, calls } = await mountEmailCard(t);
+  const labelled = (label) =>
+    findElement(container, (element) => element.getAttribute?.("aria-label") === label);
+  assert.equal(labelled("connectors.approval.email.copySubject"), null);
+  assert.equal(labelled("connectors.approval.email.copyBody"), null);
+
+  await React.act(async () => dispatch(button(container, "common.copy"), "click"));
+
+  assert.deepEqual(calls.clipboard, ["Numbers attached."]);
 });

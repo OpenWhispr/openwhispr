@@ -7,6 +7,7 @@ const { plasmaWorkAreas } = require("./plasmaWorkAreas");
 const { AGENT_WINDOW_CONFIG, WindowPositionUtil } = require("./windowConfig");
 const {
   AGENT_LAYOUT_SIZES,
+  CALL_WINDOW_LIFT,
   computeAgentAnchor,
   clampAgentAnchor,
   computeAgentWindowBounds,
@@ -39,6 +40,12 @@ class AgentWindowManager {
     // A standalone card's measured height.
     this.contentHeight = 0;
     this.wide = false;
+    // The layouts of a voice call (its pill and the cards above it).
+    this.call = false;
+    // Whether the pointer is over something the window shows, and whether clicks
+    // pass through the rest (a call's pill on macOS, _keepsTranscriptWindow).
+    this.pointerOverContent = false;
+    this.passingClicks = false;
     this.anchor = null;
     this.displayId = null;
     this.savedAnchors = new Map();
@@ -46,7 +53,10 @@ class AgentWindowManager {
       constrainBounds: (bounds) => {
         const display = this._windowDisplay();
         this.anchor = clampAgentAnchor(
-          { centerX: bounds.x + bounds.width / 2, bottom: bounds.y + bounds.height },
+          {
+            centerX: bounds.x + bounds.width / 2,
+            bottom: bounds.y + bounds.height + (this._sizedAsCall() ? CALL_WINDOW_LIFT : 0),
+          },
           display.workArea || display.bounds,
           this._defaultAnchor(display).bottom
         );
@@ -152,19 +162,30 @@ class AgentWindowManager {
 
   setLayout(event, request) {
     if (!isFromWindow(event, this.window) || !AGENT_LAYOUT_SIZES[request?.layout]) return false;
+    const call = request.call === true;
     const standalone = request.layout === "standalone";
     if (standalone && !Number.isFinite(request.contentHeight)) return false;
     const focus = request.focus === true;
-    if (request.layout !== this.layout) void this.dragManager.stopWindowDrag();
+    if (request.layout !== this.layout || call !== this.call) {
+      void this.dragManager.stopWindowDrag();
+    }
     // A card that only changed height must not take the keyboard back from
     // the app the user went to.
     const refocus = request.layout !== this.layout || focus !== this.keyboardFocus;
     this.layout = request.layout;
+    this.call = call;
     this.contentHeight = standalone ? request.contentHeight : 0;
     this.wide = request.layout === "pill" && request.wide === true;
     this._applyBounds();
+    this._applyClickThrough();
     if (refocus) this._setKeyboardFocus(focus);
     return true;
+  }
+
+  setPointerOverContent(event, over) {
+    if (!isFromWindow(event, this.window)) return;
+    this.pointerOverContent = over === true;
+    this._applyClickThrough();
   }
 
   hide(event) {
@@ -293,11 +314,14 @@ class AgentWindowManager {
   // The window is gone (crash, failed load): nothing it held may block dictation.
   _forget() {
     void this.dragManager.stopWindowDrag();
+    this.pointerOverContent = false;
+    this.passingClicks = false;
     this.window = null;
     this.ready = false;
     this.pending = null;
     this.layout = "pill";
     this.wide = false;
+    this.call = false;
     this.keyboardFocus = false;
     this.inputRegion?.stop();
     this.inputRegion = null;
@@ -343,7 +367,9 @@ class AgentWindowManager {
     // Shrunk while hidden, so the next show never paints a stale modal frame.
     this.layout = "pill";
     this.wide = false;
+    this.call = false;
     if (this.anchor) this._applyBounds();
+    this._applyClickThrough();
   }
 
   _place(display) {
@@ -405,11 +431,37 @@ class AgentWindowManager {
   _bounds(display) {
     return computeAgentWindowBounds({
       anchor: this.anchor,
-      layout: this.layout,
+      layout: this._keepsTranscriptWindow() ? "modal" : this.layout,
       workArea: display.workArea || display.bounds,
       contentHeight: this.contentHeight,
       wide: this.wide,
+      call: this._sizedAsCall(),
     });
+  }
+
+  // On macOS a call's pill keeps the transcript's window: a transparent window can't
+  // resize and draw its new size in the same frame, so Expand and Minimize would blink
+  // the pill. The renderer places the pill where the transcript's sits, and clicks pass
+  // through the rest (_applyClickThrough): macOS doesn't let them through on its own.
+  _keepsTranscriptWindow() {
+    return this.platform === "darwin" && this.call && this.layout === "pill";
+  }
+
+  // Clicks reach the app behind everywhere but what the window shows, while a call's
+  // pill keeps the transcript's window (the renderer reports the pointer).
+  _applyClickThrough() {
+    const win = this.window;
+    if (!win || win.isDestroyed()) return;
+    const passing = this._keepsTranscriptWindow() && !this.pointerOverContent;
+    if (passing === this.passingClicks) return;
+    this.passingClicks = passing;
+    if (passing) win.setIgnoreMouseEvents(true, { forward: true });
+    else win.setIgnoreMouseEvents(false);
+  }
+
+  // A call layout with a window of its own, lifted so its pill sits where the transcript's does.
+  _sizedAsCall() {
+    return this.call && !this._keepsTranscriptWindow();
   }
 
   // Displays changed: re-anchor on the window's display.

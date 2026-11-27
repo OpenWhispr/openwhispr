@@ -87,6 +87,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   // The agent window (`?agent=true`) and the dictation window's ways into it.
   agentWindowReady: () => ipcRenderer.send("agent-window-ready"),
+  agentWindowSetPointerOverContent: (over) => ipcRenderer.send("agent-window-pointer", over),
   agentWindowSetLayout: (request) => ipcRenderer.invoke("agent-window-set-layout", request),
   agentWindowHide: () => ipcRenderer.invoke("agent-window-hide"),
   agentWindowSetDragging: (dragging) => ipcRenderer.send("agent-window-drag", dragging),
@@ -597,6 +598,44 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "gpu-pack-migration-notice-ready",
     (callback) => () => callback()
   ),
+
+  // Voice calls on the agent window: a hands-free listen → answer → speak session.
+  voiceConversation: {
+    start: (options) => ipcRenderer.invoke("voice-conversation:start", options),
+    sendMic: (samples) => ipcRenderer.send("voice-conversation:mic", samples),
+    pauseInput: (sessionId, paused) =>
+      ipcRenderer.invoke("voice-conversation:pause-input", sessionId, paused),
+    holdReply: (sessionId, held) =>
+      ipcRenderer.send("voice-conversation:hold-reply", sessionId, held),
+    setLanguage: (sessionId, request) =>
+      ipcRenderer.invoke("voice-conversation:set-language", sessionId, request),
+    keepModelWarm: (modelId) => ipcRenderer.invoke("voice-conversation:keep-model-warm", modelId),
+    speak: (request) => ipcRenderer.invoke("voice-conversation:speak", request),
+    prepareSpeech: (request) => ipcRenderer.invoke("voice-conversation:prepare-speech", request),
+    cancelSpeech: (utteranceId) =>
+      ipcRenderer.invoke("voice-conversation:cancel-speech", { utteranceId }),
+    stop: (sessionId) => ipcRenderer.invoke("voice-conversation:stop", sessionId),
+    getReadiness: (request) => ipcRenderer.invoke("voice-conversation:get-readiness", request),
+    languages: (request) => ipcRenderer.invoke("voice-conversation:languages", request),
+    downloadModels: () => ipcRenderer.invoke("voice-conversation:download-models"),
+    cancelModelDownload: () => ipcRenderer.invoke("voice-conversation:cancel-download"),
+    openVoiceLicense: () => ipcRenderer.invoke("voice-conversation:open-voice-license"),
+    onDownloadProgress: registerListener(
+      "voice-conversation:download-progress",
+      (callback) => (_event, progress) => callback(progress)
+    ),
+    isHarness: () => ipcRenderer.invoke("voice-conversation:harness-enabled"),
+    reportTurn: (report) => ipcRenderer.send("voice-conversation:turn-report", report),
+    reportTurnEvent: (turnEvent) => ipcRenderer.send("voice-conversation:turn-event", turnEvent),
+    onHarnessDone: registerListener(
+      "voice-conversation:harness-done",
+      (callback) => () => callback()
+    ),
+    onEvent: registerListener(
+      "voice-conversation:event",
+      (callback) => (_event, payload) => callback(payload)
+    ),
+  },
 
   // Local Parakeet (NVIDIA) functions
   transcribeLocalParakeet: (audioBlob, options) =>
@@ -1662,6 +1701,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   connectorQuery: (connectorId, action, args) =>
     ipcRenderer.invoke("connector-query", connectorId, action, args),
   connectorCommit: (actionId, edits) => ipcRenderer.invoke("connector-commit", actionId, edits),
+  connectorDestinations: (actionId) => ipcRenderer.invoke("connector-destinations", actionId),
   connectorCancel: (actionId, reason) => ipcRenderer.invoke("connector-cancel", actionId, reason),
   connectorRunDirect: (connectorId, action, args, runId) =>
     ipcRenderer.invoke("connector-run-direct", connectorId, action, args, runId),

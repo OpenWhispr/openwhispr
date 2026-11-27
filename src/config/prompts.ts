@@ -8,6 +8,7 @@ import {
   type UnavailableCapability,
 } from "./agentCapabilities";
 import { NOTE_TAKER_LABEL } from "../utils/transcriptEvidence";
+import type { SpokenLanguage } from "../services/voice/types";
 import { useSettingsStore } from "../stores/settingsStore";
 
 export {
@@ -112,6 +113,7 @@ const TOOL_GROUPS: Record<string, string> = {
   update_snippets: "The user's snippets and dictionary",
   update_dictionary: "The user's snippets and dictionary",
   copy_to_clipboard: "Clipboard",
+  look_at_screen: "The user's screen",
   load_skill: "The user's skills",
   propose_skill: "The user's skills",
   update_skill: "The user's skills",
@@ -296,6 +298,38 @@ export function getAgentSystemPrompt(
   }
 
   return prompt;
+}
+
+const SPOKEN_LANGUAGE_NAMES: Record<SpokenLanguage, string> = {
+  en: "English",
+  // Without the script, a Hindi reply sometimes came back in Urdu script.
+  hi: "Hindi, written in Devanagari script",
+  es: "Spanish",
+  fr: "French",
+  de: "German",
+};
+// The tool line comes first: brevity alone made a local model answer from
+// memory instead of using its tools (2/10 tool use in #2349's harness, 9/10 with it).
+const SPOKEN_REPLY_RULE =
+  "This request was spoken in a live voice call, and your reply will be read aloud. When a tool could help, call it in this same response; never just say you will check. Answer in one or two short sentences unless the user asks for more. When asked to do something, say first what you did, or that you couldn't and why.";
+// Left out when the reply is also typed at the user's caret: there it is the text itself.
+const SPOKEN_REPLY_NO_DRAFT =
+  "Never write out an email, message or other draft in your reply unless the user asks to hear it.";
+const SPOKEN_REPLY_FORMAT =
+  "Never use Markdown, lists, tables, headings, code, links or emoji, and write numbers, times and dates the way a person would say them, with month and weekday names in full (Tuesday, not Tue; November 19, not Nov 19), never dates in digits (11/19, 2026-11-19), and 3 PM rather than 3:00 PM.";
+
+/**
+ * How a reply read aloud in a voice call is written, and in which language
+ * (null: the one spoken). `typedAtCaret`: it is also typed where the user is typing.
+ */
+export function getSpokenReplyRule(language: SpokenLanguage | null, typedAtCaret: boolean): string {
+  const name = language ? SPOKEN_LANGUAGE_NAMES[language] : undefined;
+  return [
+    SPOKEN_REPLY_RULE,
+    ...(typedAtCaret ? [] : [SPOKEN_REPLY_NO_DRAFT]),
+    SPOKEN_REPLY_FORMAT,
+    name ? `Reply in ${name}.` : "Reply in the language the user spoke.",
+  ].join(" ");
 }
 
 /**

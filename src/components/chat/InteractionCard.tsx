@@ -22,6 +22,7 @@ import { ConnectionCard } from "./interactions/ConnectionCard";
 import { AccessCard } from "./interactions/AccessCard";
 import { ApiKeyCard } from "./interactions/ApiKeyCard";
 import { SettingsCard } from "./interactions/SettingsCard";
+import { useCallCardPlacement } from "./callCardContext";
 
 function CardBody({ entry }: { entry: InteractionEntry }): ReactElement {
   const { payload } = entry;
@@ -40,12 +41,13 @@ function CardBody({ entry }: { entry: InteractionEntry }): ReactElement {
 }
 
 // The card's text or key field, else its option to start from, else the card.
-function focusCard(root: HTMLElement): void {
+// Quietly: with no focus ring until the user moves by keyboard.
+function focusCard(root: HTMLElement, quietly = false): void {
   const target =
     root.querySelector<HTMLElement>("input, textarea") ??
     root.querySelector<HTMLElement>('[role="radio"][tabindex="0"], [role="checkbox"]') ??
     root;
-  target.focus({ preventScroll: true });
+  target.focus({ preventScroll: true, focusVisible: quietly ? false : undefined });
 }
 
 const focusLost = (): boolean =>
@@ -81,7 +83,16 @@ const draftInProgress = (): boolean =>
 function useCardFocus(
   rootRef: RefObject<HTMLDivElement | null>,
   shape: string,
-  { restored, keyField }: { restored: boolean; keyField: boolean }
+  {
+    restored,
+    keyField,
+    arrivesQuietly,
+  }: {
+    restored: boolean;
+    keyField: boolean;
+    /** As it appears, the card takes the keyboard without a focus ring (a call's card, asked for by voice). */
+    arrivesQuietly: boolean;
+  }
 ): void {
   const shapeRef = useRef(shape);
   useLayoutEffect(() => {
@@ -91,8 +102,8 @@ function useCardFocus(
       document.activeElement === rootRef.current.parentElement ||
       (keyField && emptyComposerFocused())
     )
-      focusCard(rootRef.current);
-  }, [keyField, restored, rootRef]);
+      focusCard(rootRef.current, arrivesQuietly);
+  }, [arrivesQuietly, keyField, restored, rootRef]);
   useLayoutEffect(() => {
     if (shapeRef.current === shape) return;
     shapeRef.current = shape;
@@ -121,6 +132,7 @@ export function InteractionCard({
   heightRef?: MutableRefObject<number>;
 }): ReactElement {
   const rootRef = useRef<HTMLDivElement>(null);
+  const callPlacement = useCallCardPlacement();
   // The space the card takes, margins included, so the row that replaces it
   // starts exactly there.
   useLayoutEffect(() => {
@@ -133,7 +145,11 @@ export function InteractionCard({
   useCardFocus(
     rootRef,
     [entry.step, entry.state, entry.settingsOpened, entry.error].map(String).join("|"),
-    { restored: entry.restored === true, keyField: entry.payload.kind === "apiKey" }
+    {
+      restored: entry.restored === true,
+      keyField: entry.payload.kind === "apiKey",
+      arrivesQuietly: callPlacement !== null,
+    }
   );
   // Esc never reaches the agent window, whose Esc cancels the whole turn. On a
   // card without its own dismiss control it dismisses that card: the turn goes
@@ -151,6 +167,7 @@ export function InteractionCard({
       tabIndex={-1}
       data-interaction-card={entry.key}
       data-kind={entry.payload.kind}
+      data-call={callPlacement ?? undefined}
       onKeyDown={onKeyDown}
       className="my-1.5 rounded-2xl bg-surface-1 p-3.5 text-[13px] outline-none agent:p-3 agent:text-[15px]"
     >

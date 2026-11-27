@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   AGENT_LAYOUT_SIZES,
+  CALL_WINDOW_LIFT,
   clampAgentAnchor,
   computeAgentAnchor,
   computeAgentWindowBounds,
@@ -56,5 +57,37 @@ test("a dictation pill lifts the dock only while it is in the dock's lower 40%",
         assert.ok(bottom <= top - 8, label);
       }
     }
+  }
+});
+
+test("a call's layouts: its taller pill and cards above it", () => {
+  const workArea = { x: 0, y: 0, width: 1512, height: 944 };
+  const anchor = { centerX: 756, bottom: 940 };
+  const size = (layout, contentHeight) => {
+    const { width, height } = computeAgentWindowBounds({
+      anchor,
+      layout,
+      workArea,
+      contentHeight,
+      call: true,
+    });
+    return [width, height];
+  };
+  assert.deepEqual(size("pill"), [256, 81]);
+  assert.deepEqual(size("standalone", 182), [466, 182 + 12 + 65 + 16]);
+  assert.deepEqual(size("standalone", 900), [466, 520 + 12 + 65 + 16], "a long answer's reference");
+});
+
+test("a call's pill stays put on screen between its compact layouts and the transcript", () => {
+  const workArea = { x: 0, y: 0, width: 1512, height: 944 };
+  const anchor = { centerX: 756, bottom: 940 };
+  const bounds = (layout, call, contentHeight) =>
+    computeAgentWindowBounds({ anchor, layout, workArea, call, contentHeight });
+  // The pill's bottom: the window's less its 8px shadow margin, and in the transcript
+  // less the modal footer's padding and border too.
+  const transcript = bounds("modal", false);
+  const transcriptPillBottom = transcript.y + transcript.height - 8 - CALL_WINDOW_LIFT;
+  for (const compact of [bounds("pill", true), bounds("standalone", true, 182)]) {
+    assert.equal(compact.y + compact.height - 8, transcriptPillBottom);
   }
 });

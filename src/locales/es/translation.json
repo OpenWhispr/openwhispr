@@ -5112,7 +5112,7 @@
       "title": "Contexto de pantalla",
       "description": "Adjunta una captura de tu pantalla activa a los comandos del asistente de voz.",
       "enable": "Compartir contexto de pantalla",
-      "enableDescription": "Captura la pantalla donde está el cursor al iniciar una grabación del asistente de voz. Nunca se guarda ni se registra.",
+      "enableDescription": "Captura la pantalla donde está el cursor al iniciar una grabación del asistente de voz o cuando el asistente necesita ver tu pantalla. Nunca se guarda ni se registra.",
       "unsupported": "La captura de pantalla no está disponible en Linux Wayland.",
       "visionModel": "Modelo de visión aparte",
       "visionModelDescription": "Envía los comandos que incluyen una captura a otro modelo con capacidad de visión.",
@@ -5213,6 +5213,8 @@
       "request_accessStatus": "Pidiendo acceso...",
       "look_at_screenName": "Mirar la pantalla",
       "look_at_screenStatus": "Mirando tu pantalla...",
+      "look_at_screenSuccess": "Se ha leído la pantalla.",
+      "look_at_screenFailed": "No se ha podido leer la pantalla.",
       "request_api_keyName": "Clave de API",
       "request_api_keyStatus": "Pidiendo una clave de API...",
       "open_settingsName": "Ajustes",
@@ -5365,7 +5367,82 @@
       "steps_one": "{{count}} paso",
       "steps_other": "{{count}} pasos"
     },
-    "waitingForAnswer": "Esperando respuesta"
+    "waitingForAnswer": "Esperando respuesta",
+    "call": {
+      "status": {
+        "starting": "Iniciando voz…",
+        "listening": "Escuchando",
+        "working": "Trabajando",
+        "speaking": "Hablando",
+        "micOff": "Micrófono apagado",
+        "waiting": "Esperando una acción",
+        "sendingEmail": "Enviando correo",
+        "sendingMessage": "Enviando mensaje",
+        "stopped": "Detenido"
+      },
+      "actions": {
+        "start": "Iniciar Voice Agent",
+        "settings": "Ajustes",
+        "micOff": "Apagar micrófono",
+        "micOn": "Encender micrófono",
+        "end": "Terminar llamada",
+        "stopReply": "Dejar de hablar",
+        "backToText": "Volver a escribir",
+        "showCard": "Mostrar lo pendiente"
+      },
+      "settings": {
+        "title": "Ajustes",
+        "close": "Cerrar ajustes",
+        "voice": "Voz",
+        "speed": "Velocidad",
+        "language": "Idioma",
+        "voices": {
+          "helios": "Helios",
+          "aurora": "Aurora"
+        },
+        "male": "Masculina",
+        "female": "Femenina",
+        "slower": "Más lento",
+        "faster": "Más rápido",
+        "speedValue": "{{value}}x",
+        "autoDetect": "Detección automática",
+        "searchLanguages": "Buscar idiomas",
+        "noLanguages": "No se encontraron idiomas",
+        "languageUnavailable": "Ningún modelo de voz de este equipo entiende {{language}}",
+        "needsSpeechModel": "Necesita un modelo de voz",
+        "voiceLicense": "Las voces usan Supertonic 3 con la licencia OpenRAIL-M.",
+        "viewLicense": "Ver licencia"
+      },
+      "setup": {
+        "download": "Descargar",
+        "openSettings": "Abrir Ajustes",
+        "changeLanguage": "Cambiar idioma",
+        "retry": "Reintentar",
+        "cancel": "Cancelar",
+        "downloading": "Descargando… {{percent}}%",
+        "downloadFailed": "No se pudieron descargar los modelos de voz. Revisa tu conexión e inténtalo de nuevo.",
+        "reasons": {
+          "voice-models-missing": "Las llamadas de voz necesitan {{size}} MB de modelos de voz en este equipo.",
+          "speech-model-missing": "Las llamadas de voz necesitan un modelo de voz local para oírte. Descarga uno en Ajustes.",
+          "language-model-missing": "Ningún modelo de voz de este equipo entiende el idioma de la llamada ({{language}}). Descarga uno en Ajustes o elige otro idioma.",
+          "language-unsupported": "Las llamadas aún no están disponibles en este idioma.",
+          "brain-not-downloaded": "El modelo del Asistente de voz aún no está descargado.",
+          "brain-sign-in-required": "Inicia sesión para responder llamadas con OpenWhispr Cloud o elige otro modelo.",
+          "brain-key-missing": "Añade una clave de API para el modelo del Asistente de voz.",
+          "meeting-recording": "Se está grabando una reunión. Las llamadas podrán empezar cuando termine.",
+          "mic-busy": "El dictado está usando el micrófono.",
+          "mic-denied": "OpenWhispr no puede usar el micrófono. Permítelo en Ajustes.",
+          "start-failed": "No se pudo iniciar la llamada."
+        }
+      },
+      "notices": {
+        "endedForMeeting": "Terminó por reunión",
+        "workerStopped": "La voz falló",
+        "endedIdle": "Terminó por silencio",
+        "micLost": "Micro desconectado"
+      }
+    },
+    "backToLatest": "Volver a lo último"
   },
   "integrations": {
     "apiAccessDisabled": "Tu organización ha desactivado el acceso a la API y a MCP.",
@@ -5625,7 +5702,13 @@
         "subjectTooLong": "El asunto debe tener {{max}} caracteres como máximo.",
         "bodyTooLong": "El mensaje es demasiado largo para Gmail. Acórtalo para enviarlo.",
         "unknown": "No se pudo confirmar el envío. Revisa tu carpeta de enviados.",
-        "fromLabel": "De"
+        "fromLabel": "De",
+        "title": "Correo",
+        "copyAll": "Copiar todo",
+        "copyRecipients": "Copiar destinatarios",
+        "copyCc": "Copiar CC",
+        "copySubject": "Copiar asunto",
+        "copyBody": "Copiar mensaje"
       },
       "github": {
         "notes": {
@@ -5675,9 +5758,13 @@
       },
       "sentEarlier": "Ya lo intentaste antes en este chat. Comprueba si se completó antes de volver a enviarlo.",
       "slack": {
+        "workspaceLabel": "Espacio de trabajo",
         "channelLabel": "Canal",
         "asLabel": "Como",
         "destination": "{{workspace}} · {{destination}}",
+        "findChannel": "Buscar un canal",
+        "noChannels": "No se encontraron canales",
+        "channelsUnavailable": "No se pudieron cargar tus canales.",
         "notes": {
           "replyInThread": "Respuesta en el hilo iniciado el {{started, datetime(dateStyle: medium; timeStyle: short)}}"
         },
