@@ -1036,7 +1036,7 @@
         "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos.",
         "providerKeyMissing": "No hay ninguna clave de API configurada para tu proveedor de transcripción. Añádela en Ajustes → Conversión de voz a texto.",
         "cleanupTruncated": "El modelo de IA se quedó sin espacio antes de terminar de limpiar tu dictado.",
-        "cleanupAddedText": "La limpieza con IA añadió texto que no dijiste. Se conservó el texto original.",
+        "cleanupAddedText": "El modelo de limpieza en el dispositivo añadió texto que no dijiste, así que se conservó tu texto original. Prueba otro modelo para obtener un mejor rendimiento.",
         "cleanupDuplicated": "La limpieza con IA repitió la transcripción. Se conservó el texto original.",
         "cleanupEmptyReply": "El modelo de IA devolvió una respuesta vacía en lugar del dictado limpio."
       },

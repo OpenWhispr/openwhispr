@@ -95,7 +95,9 @@ export function assertValidCleanupOutput(
       outputLength: output.length,
     });
     throw Object.assign(
-      new Error("AI cleanup added text you didn't say. The original text was kept."),
+      new Error(
+        "The on-device model for clean up added text you didn’t say, so your original text was kept. Try a different model for better performance."
+      ),
       {
         code: "CLEANUP_OUTPUT_INVALID",
         messageKey: "hooks.audioRecording.errorDescriptions.cleanupAddedText",
