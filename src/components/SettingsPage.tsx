@@ -88,7 +88,7 @@ import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
-import { formatHotkeyLabel } from "../utils/hotkeys";
+import { formatHotkeyLabel, formatHotkeyListLabel, parseHotkeyList } from "../utils/hotkeys";
 import {
   getLinuxPasteInstallCommands,
   needsLinuxPasteToolGuidance,
@@ -1300,6 +1300,7 @@ export default function SettingsPage({
     setWhisperVadSamplesOverlap,
   } = useSettings();
 
+  const activeDictationKey = useSettingsStore((s) => s.activeDictationKey);
   const meetingProcessDetection = useSettingsStore((state) => state.meetingProcessDetection);
   const meetingDetectionIgnoredApps = useSettingsStore(
     (state) => state.meetingDetectionIgnoredApps
@@ -1634,8 +1635,9 @@ export default function SettingsPage({
     isUsingHyprland,
     hyprlandConfigStatus,
     pushToTalkUnavailableReason,
+    doubleTapUnavailableReason,
     linuxInputAccessDenied,
-  } = useHotkeyModeInfo("settings", dictationKey);
+  } = useHotkeyModeInfo("settings", activeDictationKey ?? undefined);
   const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
@@ -3712,7 +3714,7 @@ EOF`,
 
                 {(!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
                   <SettingsPanelRow>
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
                       <span className="text-xs text-muted-foreground/80">
                         {t("settingsPage.general.hotkey.activationMode")}
                       </span>
@@ -3720,6 +3722,14 @@ EOF`,
                         value={activationMode}
                         onChange={setActivationMode}
                         pushDisabledReason={pushToTalkUnavailableReason ?? undefined}
+                        doubleTapDisabledReason={doubleTapUnavailableReason ?? undefined}
+                        doubleTapHotkey={
+                          isUsingNativeShortcut
+                            ? formatHotkeyLabel(
+                                parseHotkeyList(activeDictationKey || effectiveDefaultHotkey)[0]
+                              )
+                            : formatHotkeyListLabel(activeDictationKey || effectiveDefaultHotkey)
+                        }
                       />
                     </div>
                     {/* Denied input access gets the setup box below instead. */}
@@ -3729,7 +3739,7 @@ EOF`,
                       </p>
                     )}
                     {getCachedPlatform() === "linux" &&
-                      (activationMode === "push" || linuxInputAccessDenied) && (
+                      (activationMode !== "tap" || linuxInputAccessDenied) && (
                         <LinuxPttSetupInfo
                           isAvailable={!linuxInputAccessDenied && linuxPttAvailable}
                         />

@@ -56,6 +56,16 @@ test("onboarding permission checks use the resolved macOS feature gate", () => {
   );
 });
 
+test("the onboarding dictation picker enables double-tap with the selected or recommended shortcut", () => {
+  const source = readFileSync("src/components/OnboardingFlow.tsx", "utf8");
+  const picker = source.match(/<ActivationModeSelector\b[\s\S]*?\/>/)?.[0] ?? "";
+
+  assert.match(
+    picker,
+    /doubleTapHotkey=\{formatHotkeyInstruction\(\s*dictationHotkey \|\| recommendedDictationHotkey\s*\)\}/
+  );
+});
+
 test("no onboarding route hands an older build's pending pick to the tray", () => {
   // The tray applies a pending pick, switching cleanup and the assistant on, only
   // while this flag is set. The local route has already written the user's own

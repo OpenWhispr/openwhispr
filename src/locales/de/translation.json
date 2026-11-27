@@ -125,6 +125,10 @@
       "keyReservedByGnome": "GNOME verwendet „{{hotkey}}“ bereits für eines seiner eigenen Tastenkürzel. Wählen Sie eine andere Taste.",
       "rightModifierNeedsListener": "„{{hotkey}}“ kann auf diesem Desktop nicht verwendet werden, da seine Tastenkürzel eine normale Taste benötigen. Fügen Sie eine Taste hinzu, z. B. Control+Alt+Space.",
       "holdNeedsReleaseKey": "Halten zum Sprechen braucht eine Taste, deren Loslassen macOS erkennt: Globe, eine rechte Taste wie Rechte Option oder ein Kürzel mit Modifikator. Tippen funktioniert mit jeder Taste.",
+      "doubleTapNeedsReleaseKey": "Für „{{hotkey}}“ ist doppeltes Drücken nicht verfügbar, da macOS das Loslassen einer Taste nicht erkennen kann.",
+      "doubleTapNeedsNonModifierKey": "Zweimaliges Drücken ist für „{{hotkey}}“ auf diesem System nicht verfügbar. Verwende eine unterstützte Nicht-Modifikatortaste, etwa die Leertaste.",
+      "doubleTapNeedsUpdatedKeyListener": "Für zweimaliges Drücken wird eine aktualisierte Tastaturüberwachung benötigt.",
+      "doubleTapKeyboardMonitorUnavailable": "Zweimaliges Drücken ist nicht verfügbar, weil die Tastaturüberwachung unter macOS nicht läuft.",
       "holdNeedsRegularKey": "Um Halten zu nutzen, fügen Sie dem Kürzel eine normale Taste hinzu, z. B. Control+Alt+Space. Ihr Desktop kann das Halten reiner Modifikatortasten nicht melden.",
       "holdNeedsGnomePortal": "Um Halten zu nutzen, braucht GNOME das Portal für globale Tastenkürzel, das ab GNOME 48 enthalten ist. Tippen funktioniert auch ohne.",
       "registrationFailed": "\"{{hotkey}}\" konnte nicht registriert werden. Möglicherweise wird es von einer anderen Anwendung verwendet.",
@@ -2750,6 +2754,8 @@
         "title": "Schwebendes Symbol"
       },
       "hotkey": {
+        "holdWithDoubleTap": "Halten + zweimal drücken",
+        "doubleTapHint": "Halte {{hotkey}} zum Sprechen gedrückt. Drücke {{hotkey}} zweimal zum freihändigen Diktieren und erneut zum Beenden.",
         "activationMode": "Aktivierungsmodus",
         "description": "Die Tastenkombination, die das Sprachdiktat startet und stoppt",
         "resetToDefault": "Auf {{hotkey}} zurücksetzen",

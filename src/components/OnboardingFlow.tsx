@@ -250,12 +250,19 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     check: checkScreenRecording,
     request: requestScreenRecordingAccess,
   } = useScreenRecordingPermission();
+  const withExtraDictationHotkeys = useCallback(
+    (primary: string) =>
+      serializeHotkeyList([primary, ...parseHotkeyList(settings.dictationKey).slice(1)]),
+    [settings.dictationKey]
+  );
+
   const {
     supportsPushToTalk,
     pushToTalkUnavailableReason,
+    doubleTapUnavailableReason,
     linuxInputAccessDenied,
     loaded: hotkeyModeLoaded,
-  } = useHotkeyModeInfo("onboarding", dictationHotkey);
+  } = useHotkeyModeInfo("onboarding", withExtraDictationHotkeys(dictationHotkey));
   const { activationMode, setActivationMode } = settings;
   // This hook also starts the membership fetch for already-authenticated users;
   // relying on the login transition alone would leave resumed onboarding stuck
@@ -615,12 +622,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     };
   }, []);
 
-  const withExtraDictationHotkeys = useCallback(
-    (primary: string) =>
-      serializeHotkeyList([primary, ...parseHotkeyList(settings.dictationKey).slice(1)]),
-    [settings.dictationKey]
-  );
-
   const hotkeyErrorRef = useRef<string | null>(null);
   const { registerHotkey, isRegistering } = useHotkeyRegistration({
     onSuccess: (registered) => {
@@ -651,14 +652,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const confirmDictationHotkey = useCallback(
     async (value: string) => {
-      // A key the OS cannot see released falls back to Tap rather than failing
-      // the pick; the card below shows Hold disabled with the reason.
-      if (activationMode === "push") {
-        const info = await window.electronAPI?.getHotkeyModeInfo?.(value);
+      const hotkeys = withExtraDictationHotkeys(value);
+      // A new shortcut can require a simpler mode before it can register.
+      if (activationMode !== "tap") {
+        const info = await window.electronAPI?.getHotkeyModeInfo?.(hotkeys);
         if (info && !info.supportsPushToTalk) setActivationMode("tap");
+        else if (activationMode === "push-double-tap" && info?.doubleTapUnavailableReason) {
+          setActivationMode("push");
+        }
       }
       hotkeyErrorRef.current = null;
-      const registered = await registerHotkey(withExtraDictationHotkeys(value));
+      const registered = await registerHotkey(hotkeys);
       return registered ? null : (hotkeyErrorRef.current ?? t("onboarding.rehaul.hotkey.inUse"));
     },
     [activationMode, registerHotkey, setActivationMode, t, withExtraDictationHotkeys]
@@ -1134,14 +1138,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             />
             {!assistant && (
               <div className="mx-auto mt-8 w-full max-w-md rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-3">
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col items-start gap-3">
                   <div className="min-w-0 text-start">
                     <p className="text-sm font-medium leading-5 text-[var(--onboarding-text-primary)]">
                       {t("onboarding.rehaul.dictationHotkey.activation")}
                     </p>
                     <p className="text-sm leading-5 text-[var(--onboarding-text-secondary)]">
                       {t(
-                        activationMode === "push"
+                        activationMode !== "tap"
                           ? "onboarding.activation.holdDescription"
                           : "onboarding.activation.tapDescription"
                       )}
@@ -1152,6 +1156,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                     value={activationMode}
                     onChange={setActivationMode}
                     pushDisabledReason={pushToTalkUnavailableReason ?? undefined}
+                    doubleTapDisabledReason={doubleTapUnavailableReason ?? undefined}
+                    doubleTapHotkey={formatHotkeyInstruction(
+                      dictationHotkey || recommendedDictationHotkey
+                    )}
                   />
                 </div>
                 {/* Denied input access gets the setup box below instead. */}
@@ -1160,7 +1168,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                     {pushToTalkUnavailableReason}
                   </p>
                 )}
-                {platform === "linux" && (activationMode === "push" || linuxInputAccessDenied) && (
+                {platform === "linux" && (activationMode !== "tap" || linuxInputAccessDenied) && (
                   <LinuxPttSetupInfo isAvailable={!linuxInputAccessDenied} />
                 )}
               </div>
@@ -1182,7 +1190,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         const description = t(
           assistant
             ? `onboarding.rehaul.assistantDemo.scenarios.${scenario}.description`
-            : activationMode === "push"
+            : activationMode !== "tap"
               ? "onboarding.activation.holdHotkey"
               : "onboarding.rehaul.dictationDemo.description",
           // Formatted for reading: the raw accelerator would show internal

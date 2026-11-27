@@ -2990,6 +2990,13 @@ class IPCHandlers {
       }
     );
 
+    ipcMain.on("hands-free-dictation-start-rejected", (event, requestId) => {
+      if (!isFromWindow(event, this.windowManager.mainWindow) || !Number.isSafeInteger(requestId)) {
+        return;
+      }
+      this.windowManager.rejectHandsFreeDictationStart(requestId);
+    });
+
     // Dictionary handlers
     ipcMain.on("auto-learn-changed", (_event, enabled) => {
       // Both renderer windows re-sync this on mount — ignore same-value updates (#1080).
@@ -6474,7 +6481,7 @@ class IPCHandlers {
           );
           await hotkeyManager.hyprlandManager.registerKeybinding(
             effectiveHotkey,
-            this.windowManager.getActivationMode() === "push"
+            this.windowManager.getActivationMode() !== "tap"
           );
         }
 
@@ -6488,7 +6495,7 @@ class IPCHandlers {
             effectiveHotkey,
             "dictation",
             callback,
-            this.windowManager.getActivationMode() === "push"
+            this.windowManager.getActivationMode() !== "tap"
           );
           if (result !== true) {
             debugLogger.warn(
@@ -6523,10 +6530,9 @@ class IPCHandlers {
 
     ipcMain.handle("get-hotkey-mode-info", async (_event, requestedHotkey) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
-      const hotkey =
-        typeof requestedHotkey === "string" && requestedHotkey.trim()
-          ? requestedHotkey.split(",")[0].trim()
-          : hotkeyManager.getCurrentHotkey();
+      const requested =
+        typeof requestedHotkey === "string" && requestedHotkey.trim() ? requestedHotkey : undefined;
+      const hotkey = requested?.split(",")[0].trim() ?? hotkeyManager.getCurrentHotkey();
       const isUsingNativeShortcut = this.windowManager.isUsingNativeShortcutHotkeys();
       const supportsPushToTalk = hotkeyManager.supportsPushToTalk(hotkey);
 
@@ -6539,6 +6545,8 @@ class IPCHandlers {
         pushToTalkUnavailableReason: supportsPushToTalk
           ? null
           : hotkeyManager.getPushToTalkUnavailableReason(hotkey),
+        doubleTapUnavailableReason:
+          hotkeyManager.getDictationDoublePressUnavailableReason(requested),
         // Lets the renderer show the setup box outside push mode, where the
         // disabled-Hold tooltip is the only other place this surfaces. Desktop
         // backends see their own hotkeys, so access matters only without one.

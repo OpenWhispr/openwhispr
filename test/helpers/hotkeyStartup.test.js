@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const Module = require("node:module");
+const createDictationStartupMode = require("../../src/helpers/dictationStartupMode");
 const GnomeShortcutManager = require("../../src/helpers/gnomeShortcut");
 
 const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/hotkeyManager.js"), "utf8");
@@ -52,6 +54,7 @@ function fixture(
     "./hyprlandShortcut": Hyprland,
     "./kdeShortcut": { isKDE: () => backend === "KDE" },
     "./i18nMain": { i18nMain: { t: (key) => key } },
+    "./globeKeyManager": require("../../src/helpers/globeKeyManager"),
     "./hotkeyList": require("../../src/helpers/hotkeyList"),
     "./hotkeyRepeatGate": require("../../src/helpers/hotkeyRepeatGate"),
   };
@@ -115,25 +118,18 @@ function fixture(
 // Runs main.js's startup Hold check, the code between createMainWindow() and the
 // backend's delayed registration, against the given window manager.
 function startupHoldCheck(windowManager, { writes = [], notifications = [] } = {}) {
-  const main = fs.readFileSync(path.join(__dirname, "../../main.js"), "utf8");
-  const start = main.indexOf("async function dropUnsupportedStartupHold() {");
-  assert.notEqual(start, -1);
-  const recheck = main.indexOf("async function checkStartupHold() {", start);
-  assert.notEqual(recheck, -1);
-  const fn = main.slice(start, main.indexOf("\n}\n", recheck) + 3);
-  return vm.runInNewContext(`(async () => {${fn}\nawait checkStartupHold();})()`, {
+  const { checkStartupHold } = createDictationStartupMode({
     windowManager,
     environmentManager: { saveActivationMode: (mode) => writes.push(mode) },
     debugLogger: { warn() {} },
-    BrowserWindow: {
-      getAllWindows: () => [
-        {
-          isDestroyed: () => false,
-          webContents: { send: (...args) => notifications.push(args) },
-        },
-      ],
-    },
+    getAllWindows: () => [
+      {
+        isDestroyed: () => false,
+        webContents: { send: (...args) => notifications.push(args) },
+      },
+    ],
   });
+  return checkStartupHold();
 }
 
 // Mirrors startApp: restore the saved Hold, start the backend (registration is
@@ -149,6 +145,7 @@ async function startWithSavedHold(f, mode) {
       getActivationMode: () => f.cache._cachedActivationMode,
       hotkeyManager: f.manager,
       setActivationModeCache: (next) => f.cache.setActivationModeCache(next),
+      reconcileNativeKeyListeners() {},
     },
     { writes, notifications }
   );
@@ -233,6 +230,7 @@ for (const backend of ["GNOME", "Hyprland"]) {
       getActivationMode: () => f.cache._cachedActivationMode,
       hotkeyManager: f.manager,
       setActivationModeCache: (next) => f.cache.setActivationModeCache(next),
+      reconcileNativeKeyListeners() {},
     });
     f.timers.shift().callback();
     reads[0]("Control+Alt");
@@ -269,6 +267,73 @@ for (const backend of ["GNOME", "Hyprland", "KDE"]) {
     await f.manager.registrationReady;
     assert.equal(f.manager.currentHotkey, "F8");
   });
+}
+
+function loadWindowManager() {
+  const originalLoad = Module._load;
+  Module._load = function loadWithStubs(request, parent, isMain) {
+    if (request === "electron") return {};
+    if (request === "./debugLogger" || request === "./menuManager" || request === "./dockManager")
+      return {};
+    if (request === "./hotkeyManager" || request === "./dragManager") return class {};
+    if (request === "./windowConfig") return { NOTIFICATION_WINDOW_CONFIG: {} };
+    if (request === "./i18nMain") return { i18nMain: { t: (key) => key } };
+    return originalLoad.call(this, request, parent, isMain);
+  };
+  try {
+    return require("../../src/helpers/windowManager");
+  } finally {
+    Module._load = originalLoad;
+  }
+}
+
+async function restoreSavedCombinedMode(f) {
+  const WindowManager = loadWindowManager();
+  const windowManager = Object.assign(Object.create(WindowManager.prototype), {
+    _cachedActivationMode: "tap",
+    hotkeyManager: f.manager,
+    resetDictationDoublePress() {},
+    reconcileNativeKeyListeners() {},
+  });
+  const { restoreSavedActivationMode } = createDictationStartupMode({
+    windowManager,
+    environmentManager: { getActivationMode: () => "push-double-tap" },
+  });
+  await restoreSavedActivationMode();
+  return windowManager;
+}
+
+for (const platform of ["win32", "linux"]) {
+  for (const [savedHotkey, expectedMode] of [
+    ["F8", "push-double-tap"],
+    ["Control+Super", "push"],
+  ]) {
+    test(`${platform} validates restored combined mode after registering ${savedHotkey}`, async () => {
+      const f = fixture(null, savedHotkey, true, platform);
+      f.manager.nativeListenerSupportsExactModifiers = () => true;
+      let finishSavedHotkeyRead;
+      f.window.webContents.isLoading = () => false;
+      f.window.webContents.executeJavaScript = () =>
+        new Promise((resolve) => {
+          finishSavedHotkeyRead = resolve;
+        });
+      f.manager.setupShortcuts = (hotkey) => {
+        f.manager.currentHotkey = hotkey;
+        return { success: true };
+      };
+
+      const windowManager = await restoreSavedCombinedMode(f);
+      await f.manager.initializeHotkey(f.window, () => {});
+      await startupHoldCheck(windowManager);
+      assert.equal(windowManager.getActivationMode(), "push-double-tap");
+      assert.equal(f.manager.activationMode, "push");
+
+      finishSavedHotkeyRead(savedHotkey);
+      await f.manager.registrationReady;
+      await tick();
+      assert.equal(windowManager.getActivationMode(), expectedMode);
+    });
+  }
 }
 
 for (const platform of ["darwin", "win32", "linux"]) {
@@ -393,12 +458,13 @@ test("startup Tap fallback preserves the saved preference when registration fail
     {
       getActivationMode: () => "push",
       hotkeyManager: {
-        once() {},
+        registrationReady: Promise.resolve(),
         isUsingNativeShortcut: () => true,
         getSavedDictationHotkey: async () => "Scrolllock",
         supportsPushToTalk: () => false,
       },
       setActivationModeCache: async () => false,
+      reconcileNativeKeyListeners() {},
     },
     { writes, notifications }
   );
@@ -411,11 +477,12 @@ test("startup Tap fallback preserves the saved preference when registration fail
 test("startup checks the registered hotkey when no desktop backend delays it", async () => {
   const checked = [];
   const notifications = [];
+  let mode = "push";
   await startupHoldCheck(
     {
-      getActivationMode: () => "push",
+      getActivationMode: () => mode,
       hotkeyManager: {
-        once() {},
+        registrationReady: Promise.resolve(),
         isUsingNativeShortcut: () => false,
         getSavedDictationHotkey: async () => "Control+Shift+Space",
         getCurrentHotkey: () => "F8",
@@ -424,12 +491,41 @@ test("startup checks the registered hotkey when no desktop backend delays it", a
           return hotkey !== "F8";
         },
       },
-      setActivationModeCache: async () => true,
+      setActivationModeCache: async (nextMode) => {
+        mode = nextMode;
+        return true;
+      },
+      reconcileNativeKeyListeners() {},
     },
     { notifications }
   );
   assert.deepEqual(checked, ["F8"]);
   assert.equal(notifications.length, 1);
+});
+
+test("startup falls back to Hold when a secondary macOS binding cannot double-tap", async () => {
+  const f = fixture(null, "GLOBE,F8", true, "darwin");
+  f.manager.slots.get("dictation").hotkeys = ["GLOBE", "F8"];
+  const writes = [];
+  const notifications = [];
+  const changes = [];
+  await startupHoldCheck(
+    {
+      getActivationMode: () => "push-double-tap",
+      hotkeyManager: f.manager,
+      setActivationModeCache: async (mode) => {
+        changes.push(mode);
+        return true;
+      },
+      reconcileNativeKeyListeners() {},
+    },
+    { writes, notifications }
+  );
+
+  await tick();
+  assert.deepEqual(changes, ["push"]);
+  assert.equal(notifications[0][1].value, "push");
+  assert.deepEqual(writes, []);
 });
 
 test("startup checks Hold before the control panel opens and the hotkey registers", () => {

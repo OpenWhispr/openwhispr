@@ -18,6 +18,8 @@
 static HHOOK g_hook = NULL;
 static DWORD g_targetVk = 0;
 static BOOL g_isKeyDown = FALSE;
+static BOOL g_exactModifiers = FALSE;
+static BOOL g_exactTargetDown = FALSE;
 
 // Modifier key requirements
 static BOOL g_requireCtrl = FALSE;
@@ -31,6 +33,7 @@ static BOOL g_shiftDown = FALSE;
 static BOOL g_leftWinDown = FALSE;
 static BOOL g_rightWinDown = FALSE;
 static BOOL g_altGrCtrlDown = FALSE;
+static BOOL g_altGrRightAltDown = FALSE;
 
 // On AltGr layouts (e.g. AZERTY) Windows sends a synthetic Left Ctrl before
 // every Right Alt press, marked by 0x200 in its scan code. It is not a Ctrl
@@ -62,6 +65,9 @@ static void UpdateModifierState(DWORD vkCode, BOOL isKeyDown) {
     }
 
     if (IsAltVk(vkCode)) {
+        // AltGr's synthetic Ctrl can be released before its physical Right Alt.
+        if (g_exactModifiers && vkCode == VK_RMENU)
+            g_altGrRightAltDown = isKeyDown && (g_altGrCtrlDown || g_altGrRightAltDown);
         g_altDown = isKeyDown;
         return;
     }
@@ -95,9 +101,16 @@ static BOOL IsRequiredModifierEvent(DWORD vkCode) {
 static void SyncModifierState(DWORD currentVkCode) {
     // GetAsyncKeyState reports AltGr's synthetic Left Ctrl as held, so it is
     // read per side and Left Ctrl is ignored while that synthetic press is down.
-    if (!IsCtrlVk(currentVkCode))
+    if (!IsCtrlVk(currentVkCode)) {
+        BOOL leftCtrlDown = (GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0;
+        if (g_exactModifiers && currentVkCode != VK_RMENU && !leftCtrlDown)
+            g_altGrCtrlDown = FALSE;
         g_ctrlDown = (GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0 ||
-                     ((GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0 && !g_altGrCtrlDown);
+                     (leftCtrlDown && !g_altGrCtrlDown);
+    }
+    if (g_altGrRightAltDown && currentVkCode != VK_RMENU &&
+        !(GetAsyncKeyState(VK_RMENU) & 0x8000))
+        g_altGrRightAltDown = FALSE;
     if (!IsAltVk(currentVkCode))
         g_altDown = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
     if (!IsShiftVk(currentVkCode))
@@ -109,11 +122,22 @@ static void SyncModifierState(DWORD currentVkCode) {
 }
 
 static BOOL AreRequiredModifiersPressed(void) {
+    if (g_exactModifiers) {
+        return !g_altGrCtrlDown && !g_altGrRightAltDown &&
+               g_requireCtrl == g_ctrlDown && g_requireAlt == g_altDown &&
+               g_requireShift == g_shiftDown && g_requireWin == (g_leftWinDown || g_rightWinDown);
+    }
     if (g_requireCtrl && !g_ctrlDown) return FALSE;
     if (g_requireAlt && !g_altDown) return FALSE;
     if (g_requireShift && !g_shiftDown) return FALSE;
     if (g_requireWin && !(g_leftWinDown || g_rightWinDown)) return FALSE;
     return TRUE;
+}
+
+static void InterruptKeyPress(void) {
+    g_isKeyDown = FALSE;
+    puts("KEY_INTERRUPTED");
+    fflush(stdout);
 }
 
 // Map key name to virtual key code
@@ -209,6 +233,8 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 
         if (IsAltGrCtrl(kbd)) {
             g_altGrCtrlDown = isKeyDown;
+            if (g_exactModifiers && g_isKeyDown && isKeyDown)
+                InterruptKeyPress();
             return CallNextHookEx(g_hook, nCode, wParam, lParam);
         }
         // A real Left Ctrl event clears a synthetic press whose key-up was missed.
@@ -217,6 +243,14 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         if ((isKeyDown || isKeyUp) && isModifierEvent) {
             UpdateModifierState(kbd->vkCode, isKeyDown);
             SyncModifierState(kbd->vkCode);
+        } else if (g_exactModifiers && kbd->vkCode == g_targetVk) {
+            // A modifier may already be held when this listener starts.
+            SyncModifierState(kbd->vkCode);
+        }
+
+        if (g_exactModifiers && g_isKeyDown && isKeyDown && isModifierEvent &&
+            !AreRequiredModifiersPressed()) {
+            InterruptKeyPress();
         }
 
         // Stop an active press as soon as one of its required modifiers is released.
@@ -229,11 +263,14 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 
         // Self-heal a missed target-key KEY_UP. GetAsyncKeyState is only reliable
         // for keys other than the one in the current callback, so verify here.
-        if (g_isKeyDown && !g_useModifiersOnly && kbd->vkCode != g_targetVk &&
+        if ((g_isKeyDown || g_exactTargetDown) && !g_useModifiersOnly && kbd->vkCode != g_targetVk &&
             !(GetAsyncKeyState(g_targetVk) & 0x8000)) {
-            g_isKeyDown = FALSE;
-            printf("KEY_UP\n");
-            fflush(stdout);
+            g_exactTargetDown = FALSE;
+            if (g_isKeyDown) {
+                g_isKeyDown = FALSE;
+                puts(g_exactModifiers ? "KEY_INTERRUPTED" : "KEY_UP");
+                fflush(stdout);
+            }
         }
 
         if (g_useModifiersOnly) {
@@ -255,14 +292,17 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 
         // Check for the target key
         if (kbd->vkCode == g_targetVk) {
-            if (isKeyDown) {
-                // Only trigger if modifiers are satisfied and not already down
+            if (isKeyDown && (!g_exactModifiers || !g_exactTargetDown)) {
+                if (g_exactModifiers) g_exactTargetDown = TRUE;
                 if (!g_isKeyDown && AreRequiredModifiersPressed()) {
                     g_isKeyDown = TRUE;
                     printf("KEY_DOWN\n");
                     fflush(stdout);
+                } else if (g_exactModifiers) {
+                    InterruptKeyPress();
                 }
             } else if (isKeyUp) {
+                g_exactTargetDown = FALSE;
                 // Target key released
                 if (g_isKeyDown) {
                     g_isKeyDown = FALSE;
@@ -339,6 +379,10 @@ DWORD ParseCompoundHotkey(const char* hotkey) {
 }
 
 int main(int argc, char* argv[]) {
+    if (argc == 2 && strcmp(argv[1], "--supports-exact-modifiers") == 0) {
+        puts("EXACT_MODIFIERS_READY");
+        return 0;
+    }
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <key>\n", argv[0]);
         fprintf(stderr, "Examples:\n");
@@ -350,6 +394,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    g_exactModifiers = argc == 3 && strcmp(argv[2], "--exact-modifiers") == 0;
     g_targetVk = ParseCompoundHotkey(argv[1]);
     if (g_targetVk == 0 && (g_requireCtrl || g_requireAlt || g_requireShift || g_requireWin)) {
         g_useModifiersOnly = TRUE;
@@ -359,6 +404,13 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Error: Invalid key '%s'\n", argv[1]);
         return 1;
     }
+
+    if (g_exactModifiers && (g_useModifiersOnly || IsCtrlVk(g_targetVk) || IsAltVk(g_targetVk) ||
+                             IsShiftVk(g_targetVk) || IsWinVk(g_targetVk))) {
+        fprintf(stderr, "Error: Exact modifier matching needs a non-modifier key\n");
+        return 1;
+    }
+    g_exactTargetDown = g_exactModifiers && (GetAsyncKeyState(g_targetVk) & 0x8000) != 0;
 
     // Log what we're listening for
     fprintf(stderr, "Listening for: %s (VK=0x%02X, Ctrl=%d, Alt=%d, Shift=%d, Win=%d, ModOnly=%d)\n",
@@ -375,7 +427,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Signal that we're ready
-    printf("READY\n");
+    puts(g_exactModifiers ? "EXACT_MODIFIERS_READY" : "READY");
     fflush(stdout);
 
     // Message loop - required for low-level hooks to work

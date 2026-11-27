@@ -20,10 +20,61 @@ const RESTART_RESET_MS = 10000;
 const PREFERENCE_RECOVERY_TIMEOUT_MS = 2000;
 const PREFERENCE_RECOVERY_TERMINATION_TIMEOUT_MS = 1000;
 
+const MAC_COMPOUND_TERMINAL_NAMES = new Set([
+  "space",
+  "return",
+  "tab",
+  "esc",
+  "backspace",
+  "delete",
+  "home",
+  "end",
+  "pageup",
+  "pagedown",
+  "left",
+  "right",
+  "up",
+  "down",
+  "numdec",
+  "numadd",
+  "numsub",
+  "nummult",
+  "numdiv",
+]);
+
+const MAC_COMPOUND_TERMINAL_ALIASES = {
+  enter: "return",
+  escape: "esc",
+  plus: "+",
+};
+
+function normalizeMacCompoundTerminalKey(value) {
+  if (typeof value !== "string") return null;
+  const token = value.trim().toLowerCase();
+  const key = Object.hasOwn(MAC_COMPOUND_TERMINAL_ALIASES, token)
+    ? MAC_COMPOUND_TERMINAL_ALIASES[token]
+    : token;
+  if (
+    MAC_COMPOUND_TERMINAL_NAMES.has(key) ||
+    /^[!-~]$/.test(key) ||
+    /^f(?:[1-9]|1[0-9]|20)$/.test(key) ||
+    /^num[0-9]$/.test(key)
+  ) {
+    return key;
+  }
+  return null;
+}
+
 class GlobeKeyManager extends EventEmitter {
+  static getMacCompoundTerminalKey(hotkey) {
+    if (typeof hotkey !== "string" || !hotkey.includes("+")) return null;
+    return normalizeMacCompoundTerminalKey(hotkey.split("+").at(-1));
+  }
+
   constructor({ preferenceStatePath = null } = {}) {
     super();
     this.process = null;
+    this.keyboardMonitorStatus = "pending";
     this.isSupported = process.platform === "darwin";
     this.hasReportedError = false;
     this._isStopping = false;
@@ -34,13 +85,21 @@ class GlobeKeyManager extends EventEmitter {
     this.config = { mouseButtons: [], suppressGlobeAction: false };
   }
 
+  get hasKeyboardMonitor() {
+    return this.keyboardMonitorStatus === "ready";
+  }
+
   // Replaces the listener's whole state, so every call has to pass all of it.
-  setConfiguration({ mouseButtons = [], suppressGlobeAction = false } = {}) {
+  setConfiguration({ mouseButtons = [], suppressGlobeAction = false, compoundKeys = [] } = {}) {
+    const terminals = [
+      ...new Set(compoundKeys.map(normalizeMacCompoundTerminalKey).filter(Boolean)),
+    ].sort();
     const next = {
       mouseButtons: [
         ...new Set(mouseButtons.filter((button) => /^MouseButton[45]$/i.test(button))),
       ].sort(),
       suppressGlobeAction: Boolean(suppressGlobeAction),
+      ...(terminals.length ? { compoundKeys: terminals } : {}),
     };
 
     if (JSON.stringify(next) === JSON.stringify(this.config)) {
@@ -80,6 +139,9 @@ class GlobeKeyManager extends EventEmitter {
     const args = [];
     if (this.config.mouseButtons.length > 0) {
       args.push(this.config.mouseButtons.join(","));
+    }
+    for (const key of this.config.compoundKeys ?? []) {
+      args.push("--compound-key", key);
     }
     if (this.preferenceStatePath) {
       args.push("--globe-preference-state", this.preferenceStatePath);
@@ -239,6 +301,7 @@ class GlobeKeyManager extends EventEmitter {
     this.hasReportedError = false;
     const child = spawn(listenerPath, this._listenerArgs());
     this.process = child;
+    this._setKeyboardMonitorStatus("pending");
     debugLogger.info("[GlobeKeyManager] Process spawned", {
       pid: child.pid,
       config: this.config,
@@ -262,18 +325,28 @@ class GlobeKeyManager extends EventEmitter {
     }, RESTART_RESET_MS);
 
     child.stdout.setEncoding("utf8");
+    let unfinishedLine = "";
     child.stdout.on("data", (chunk) => {
-      chunk
-        .split(/\r?\n/)
+      if (this.process !== child) return;
+      const lines = (unfinishedLine + chunk).split(/\r?\n/);
+      unfinishedLine = lines.pop();
+      lines
         .map((line) => line.trim())
         .filter(Boolean)
         .forEach((line) => {
-          if (line === "FN_DOWN") {
+          if (this.process !== child) return;
+          if (line === "KEY_MONITOR_READY") {
+            this._setKeyboardMonitorStatus("ready");
+          } else if (line === "KEY_MONITOR_UNAVAILABLE") {
+            this._setKeyboardMonitorStatus("unavailable");
+          } else if (line === "FN_DOWN") {
             this.emit("globe-down");
           } else if (line === "FN_UP") {
             this.emit("globe-up");
           } else if (line === "FN_INTERRUPTED") {
             this.emit("globe-interrupted");
+          } else if (line === "FN_TAP_INTERRUPTED") {
+            this.emit("globe-tap-interrupted");
           } else if (line.startsWith("RIGHT_MOD_DOWN:")) {
             const modifier = line.replace("RIGHT_MOD_DOWN:", "").trim();
             if (modifier) {
@@ -283,6 +356,21 @@ class GlobeKeyManager extends EventEmitter {
             const modifier = line.replace("RIGHT_MOD_UP:", "").trim();
             if (modifier) {
               this.emit("right-modifier-up", modifier);
+            }
+          } else if (line.startsWith("RIGHT_MOD_INTERRUPTED:")) {
+            const modifier = line.slice("RIGHT_MOD_INTERRUPTED:".length);
+            if (/^Right(?:Option|Command|Control|Shift)$/.test(modifier)) {
+              this.emit("right-modifier-interrupted", modifier);
+            }
+          } else if (line.startsWith("COMPOUND_KEY_UP:")) {
+            const key = line.slice("COMPOUND_KEY_UP:".length);
+            if (this.config.compoundKeys?.includes(key)) {
+              this.emit("compound-key-up", key);
+            }
+          } else if (line.startsWith("MODIFIER_DOWN:")) {
+            const modifier = line.slice("MODIFIER_DOWN:".length);
+            if (/^(?:control|command|option|shift|fn)$/.test(modifier)) {
+              this.emit("modifier-down", modifier);
             }
           } else if (line.startsWith("MODIFIER_UP:")) {
             const modifier = line.replace("MODIFIER_UP:", "").trim().toLowerCase();
@@ -305,6 +393,7 @@ class GlobeKeyManager extends EventEmitter {
 
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (data) => {
+      if (this.process !== child) return;
       const message = data.toString().trim();
       if (message.length > 0) {
         if (message.includes("Failed to create event monitor")) {
@@ -316,9 +405,9 @@ class GlobeKeyManager extends EventEmitter {
     });
 
     child.on("error", (error) => {
+      if (this.process !== child) return;
       debugLogger.info("[GlobeKeyManager] Process error", { error: error.message });
       this.reportError(error);
-      if (this.process === child) this.process = null;
     });
 
     child.on("exit", (code, signal) => {
@@ -329,6 +418,7 @@ class GlobeKeyManager extends EventEmitter {
         return;
       }
       this.process = null;
+      this._setKeyboardMonitorStatus("unavailable");
       if (this._restartResetTimer) {
         clearTimeout(this._restartResetTimer);
         this._restartResetTimer = null;
@@ -375,8 +465,15 @@ class GlobeKeyManager extends EventEmitter {
     });
   }
 
+  _setKeyboardMonitorStatus(status) {
+    if (this.keyboardMonitorStatus === status) return;
+    this.keyboardMonitorStatus = status;
+    this.emit("keyboard-monitor-status-changed", status);
+  }
+
   stop() {
     this._isStopping = true;
+    this._setKeyboardMonitorStatus("unavailable");
     if (this._restartResetTimer) {
       clearTimeout(this._restartResetTimer);
       this._restartResetTimer = null;
@@ -392,6 +489,7 @@ class GlobeKeyManager extends EventEmitter {
       return;
     }
     this.hasReportedError = true;
+    this._setKeyboardMonitorStatus("unavailable");
     if (this.process) {
       try {
         this.process.kill();

@@ -8,11 +8,15 @@
  * (dictation, voice assistant, translation, meeting) and drive push-to-talk.
  */
 
-const { spawn } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 const path = require("path");
 const EventEmitter = require("events");
 const fs = require("fs");
 const debugLogger = require("./debugLogger");
+
+const EXACT_MODIFIERS_FLAG = "--exact-modifiers";
+const EXACT_MODIFIERS_PROBE = "--supports-exact-modifiers";
+const EXACT_MODIFIERS_READY = "EXACT_MODIFIERS_READY";
 
 class WindowsKeyManager extends EventEmitter {
   constructor() {
@@ -20,19 +24,21 @@ class WindowsKeyManager extends EventEmitter {
     this.isSupported = process.platform === "win32";
     this.hasReportedError = false;
     this.hasReportedUnavailable = false;
-    this.listeners = new Map(); // key string -> child process
+    this.listeners = new Map(); // key string -> { child, exact }
+    this.exactModifiersProbe = null;
   }
 
   /**
    * Reconcile the watched keys to exactly `keys`: spawn a listener for each new
    * key, stop listeners no longer wanted. Idempotent — safe to call repeatedly.
    */
-  setKeys(keys) {
+  setKeys(keys, { exactKeys = [] } = {}) {
     if (!this.isSupported) return;
     const desired = new Set(keys.filter(Boolean));
+    const strict = new Set(exactKeys);
 
-    for (const key of [...this.listeners.keys()]) {
-      if (!desired.has(key)) this._stopKey(key);
+    for (const [key, listener] of this.listeners) {
+      if (!desired.has(key) || listener.exact !== strict.has(key)) this._stopKey(key);
     }
 
     if (desired.size === 0) return;
@@ -48,41 +54,59 @@ class WindowsKeyManager extends EventEmitter {
     }
 
     for (const key of desired) {
-      if (!this.listeners.has(key)) this._startKey(key, listenerPath);
+      if (!this.listeners.has(key)) this._startKey(key, listenerPath, strict.has(key));
     }
   }
 
-  _startKey(key, listenerPath) {
+  _startKey(key, listenerPath, exact) {
+    const args = exact ? [key, EXACT_MODIFIERS_FLAG] : [key];
     let child;
     try {
-      child = spawn(listenerPath, [key], {
+      child = spawn(listenerPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
       });
     } catch (error) {
       debugLogger.error("[WindowsKeyManager] Failed to spawn process", { error: error.message });
-      this.reportError(error);
+      this.reportError(error, exact ? key : undefined);
       return;
     }
 
     this.hasReportedError = false;
-    this.listeners.set(key, child);
+    const entry = { child, exact };
+    this.listeners.set(key, entry);
     debugLogger.debug("[WindowsKeyManager] Starting key listener", {
       key,
       binaryPath: listenerPath,
     });
 
+    let exactReady = false;
+    const dispatch = (line) => {
+      if (exact && line === EXACT_MODIFIERS_READY) {
+        exactReady = true;
+        this.handleOutputLine("READY", key);
+      } else if (exact && !exactReady && line === "READY") {
+        this.exactModifiersProbe = { binary: listenerPath, supported: false };
+        this._stopKey(key);
+        const error = new Error("Windows key listener does not support exact modifiers");
+        error.code = "exact_modifiers_unavailable";
+        this.reportError(error, exact ? key : undefined);
+      } else if (!exact || exactReady) {
+        this.handleOutputLine(line, key, exactReady ? { exactModifiers: true } : undefined);
+      }
+    };
+
     let lineBuffer = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
-      if (this.listeners.get(key) !== child) return;
+      if (this.listeners.get(key) !== entry) return;
       lineBuffer += chunk;
       const lines = lineBuffer.split(/\r?\n/);
       lineBuffer = lines.pop();
       for (const raw of lines) {
-        if (this.listeners.get(key) !== child) return;
+        if (this.listeners.get(key) !== entry) return;
         const line = raw.trim();
-        if (line) this.handleOutputLine(line, key);
+        if (line) dispatch(line);
       }
     });
 
@@ -96,45 +120,46 @@ class WindowsKeyManager extends EventEmitter {
     });
 
     child.on("error", (error) => {
-      if (this.listeners.get(key) !== child) return;
+      if (this.listeners.get(key) !== entry) return;
       this.listeners.delete(key);
-      this.reportError(error);
+      this.reportError(error, exact ? key : undefined);
     });
 
     // exit can precede the final KEY_UP on stdout; close waits for the pipe to drain.
     child.on("close", (code, signal) => {
       const trailingLine = lineBuffer.trim();
-      if (trailingLine && this.listeners.get(key) === child) {
-        this.handleOutputLine(trailingLine, key);
+      if (trailingLine && this.listeners.get(key) === entry) {
+        dispatch(trailingLine);
       }
 
-      // wasTracked is false for intentional stops (_stopKey deletes first), so this
-      // reports only unexpected exits — including signal crashes, where code is null.
-      const wasTracked = this.listeners.get(key) === child;
+      // Intentional stops untrack the child first. Even a clean exit can leave
+      // hands-free dictation without its stop shortcut.
+      const wasTracked = this.listeners.get(key) === entry;
       if (wasTracked) this.listeners.delete(key);
-      if (wasTracked && (code || signal)) {
+      if (wasTracked && (exact || code || signal)) {
         this.reportError(
           new Error(
             `Windows key listener exited with code ${code ?? "null"} signal ${signal ?? "null"}`
-          )
+          ),
+          exact ? key : undefined
         );
       }
     });
   }
 
   _stopKey(key) {
-    const child = this.listeners.get(key);
-    if (!child) return;
+    const entry = this.listeners.get(key);
+    if (!entry) return;
     this.listeners.delete(key);
     debugLogger.debug("[WindowsKeyManager] Stopping key listener", { key });
     try {
-      child.kill();
+      entry.child.kill();
     } catch {
       // Already gone
     }
   }
 
-  handleOutputLine(line, key) {
+  handleOutputLine(line, key, metadata) {
     if (line === "READY") {
       debugLogger.debug("[WindowsKeyManager] Listener ready", { key });
       this.emit("ready", key);
@@ -142,12 +167,17 @@ class WindowsKeyManager extends EventEmitter {
     }
 
     if (line === "KEY_DOWN") {
-      this.emit("key-down", key);
+      this.emit("key-down", key, metadata);
       return;
     }
 
     if (line === "KEY_UP") {
-      this.emit("key-up", key);
+      this.emit("key-up", key, metadata);
+      return;
+    }
+
+    if (line === "KEY_INTERRUPTED" && metadata?.exactModifiers) {
+      this.emit("key-interrupted", key, metadata);
       return;
     }
 
@@ -175,14 +205,30 @@ class WindowsKeyManager extends EventEmitter {
       : { available: false, reason: "binary_missing" };
   }
 
-  /**
-   * Report an error (only once per session to avoid log spam)
-   */
-  reportError(error) {
-    if (this.hasReportedError) return;
+  reportError(error, exactKey) {
+    // Every exact listener loss must reach the recording lifecycle.
+    if (this.hasReportedError && !exactKey) return;
     this.hasReportedError = true;
     debugLogger.warn("[WindowsKeyManager] Error occurred", { error: error.message });
-    this.emit("error", error);
+    this.emit("error", error, exactKey);
+  }
+
+  supportsExactModifiers() {
+    const binary = this.resolveListenerBinary();
+    if (!binary) return false;
+    if (this.exactModifiersProbe?.binary !== binary) {
+      // The probe exits before installing a hook or opening input devices.
+      const result = spawnSync(binary, [EXACT_MODIFIERS_PROBE], {
+        encoding: "utf8",
+        timeout: 2000,
+        windowsHide: true,
+      });
+      this.exactModifiersProbe = {
+        binary,
+        supported: result.status === 0 && result.stdout?.trim() === EXACT_MODIFIERS_READY,
+      };
+    }
+    return this.exactModifiersProbe.supported;
   }
 
   /**

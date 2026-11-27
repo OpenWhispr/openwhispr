@@ -125,6 +125,10 @@
       "keyReservedByGnome": "GNOME ya usa \"{{hotkey}}\" para uno de sus propios atajos. Elige otra tecla.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" no se puede usar en este escritorio, cuyos atajos necesitan una tecla normal. Añade una tecla, como Control+Alt+Space.",
       "holdNeedsReleaseKey": "Mantener para hablar necesita una tecla cuya liberación macOS pueda detectar: Globo, una tecla derecha como Opción derecha o un atajo con modificador. Pulsar funciona con cualquier tecla.",
+      "doubleTapNeedsReleaseKey": "La doble pulsación no está disponible para «{{hotkey}}» porque macOS no puede detectar cuándo se suelta una de sus teclas.",
+      "doubleTapNeedsNonModifierKey": "La doble pulsación no está disponible para «{{hotkey}}» en este sistema. Usa una tecla no modificadora compatible, como la barra espaciadora.",
+      "doubleTapNeedsUpdatedKeyListener": "La doble pulsación requiere un detector de teclas actualizado.",
+      "doubleTapKeyboardMonitorUnavailable": "La doble pulsación no está disponible porque el monitor del teclado de macOS no está en funcionamiento.",
       "holdNeedsRegularKey": "Para usar Mantener, añade una tecla normal al atajo, como Control+Alt+Space. Tu escritorio no puede detectar cuándo mantienes pulsadas solo teclas modificadoras.",
       "holdNeedsGnomePortal": "Para usar Mantener, GNOME necesita su portal de atajos globales, incluido desde GNOME 48. Pulsar funciona sin él.",
       "registrationFailed": "No se pudo registrar \"{{hotkey}}\". Puede estar en uso por otra aplicación.",
@@ -2047,6 +2051,8 @@
         "bottomLeft": "Inferior izquierda"
       },
       "hotkey": {
+        "holdWithDoubleTap": "Mantener + pulsar dos veces",
+        "doubleTapHint": "Mantén pulsado {{hotkey}} para hablar. Pulsa {{hotkey}} dos veces para dictar en modo manos libres y una vez más para terminar.",
         "activationMode": "Modo de activación",
         "description": "La combinación de teclas que inicia y detiene el dictado por voz",
         "resetToDefault": "Restablecer a {{hotkey}}",

@@ -1,3 +1,4 @@
+import type { DictationActivationMode } from "../helpers/dictationActivationMode.mjs";
 import type { ModelDefinition } from "../models/ModelRegistry";
 import type { ReasoningConfig } from "../services/BaseReasoningService";
 import type { PermissionGuideState, PermissionGuideAction } from "./permissionGuide";
@@ -1952,7 +1953,10 @@ declare global {
       onToggleVoiceAgent?: (callback: () => void) => () => void;
       onToggleTranslation?: (callback: () => void) => () => void;
       onMeetingStartRefused?: (callback: (code: string) => void) => () => void;
-      onStartDictation?: (callback: () => void) => () => void;
+      onStartDictation?: (
+        callback: (options?: { handsFreeRequestId?: number }) => void
+      ) => () => void;
+      rejectHandsFreeDictationStart?: (requestId: number) => void;
       onStopDictation?: (callback: () => void) => () => void;
       onPrepareDictation?: (callback: () => void) => () => void;
       onCancelDictationPreparation?: (callback: () => void) => () => void;
@@ -2938,6 +2942,7 @@ declare global {
       // Hotkey management
       updateHotkey: (key: string) => Promise<{ success: boolean; message: string }>;
       setHotkeyListeningMode?: (enabled: boolean) => Promise<{ success: boolean }>;
+      onHotkeyModeInfoChanged?: (callback: () => void) => () => void;
       getHotkeyModeInfo?: (hotkey?: string) => Promise<{
         isUsingGnome: boolean;
         isUsingHyprland: boolean;
@@ -2945,6 +2950,7 @@ declare global {
         isUsingNativeShortcut: boolean;
         supportsPushToTalk: boolean;
         pushToTalkUnavailableReason: string | null;
+        doubleTapUnavailableReason: string | null;
         linuxInputAccessDenied?: boolean;
       }>;
       getHyprlandConfigStatus?: () => Promise<{ canWrite: boolean; path: string } | null>;
@@ -3221,8 +3227,8 @@ declare global {
       saveDictationKey?: (key: string) => Promise<void>;
 
       // Activation mode persistence (file-based for reliable startup)
-      getActivationMode?: () => Promise<"tap" | "push">;
-      saveActivationMode?: (mode: "tap" | "push") => Promise<void>;
+      getActivationMode?: () => Promise<DictationActivationMode>;
+      saveActivationMode?: (mode: DictationActivationMode) => Promise<void>;
 
       // Debug logging
       getLogLevel?: () => Promise<string>;
@@ -3281,7 +3287,7 @@ declare global {
       openWhisperModelsFolder?: () => Promise<{ success: boolean; error?: string }>;
 
       // Windows Push-to-Talk notifications
-      notifyActivationModeChanged?: (mode: "tap" | "push") => void;
+      notifyActivationModeChanged?: (mode: DictationActivationMode) => void;
       notifyHotkeyChanged?: (hotkey: string) => void;
       registerMeetingHotkey?: (hotkey: string) => Promise<{ success: boolean; message?: string }>;
       notifyFloatingIconAutoHideChanged?: (enabled: boolean) => void;

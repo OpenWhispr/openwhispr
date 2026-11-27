@@ -125,6 +125,10 @@
       "keyReservedByGnome": "GNOME はすでに \"{{hotkey}}\" を独自のショートカットに使用しています。別のキーを選んでください。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" はこのデスクトップでは使用できません。ショートカットには通常のキーが必要です。Control+Alt+Space のようにキーを追加してください。",
       "holdNeedsReleaseKey": "ホールドして話すには、macOS が離したことを検知できるキーが必要です。Globe、右 Option のような右側のキー、または修飾キー付きのショートカットです。タップならどのキーでも使えます。",
+      "doubleTapNeedsReleaseKey": "macOSで「{{hotkey}}」のキーのいずれかが離されたことを検知できないため、ダブルタップは利用できません。",
+      "doubleTapNeedsNonModifierKey": "この環境では「{{hotkey}}」を2回押して起動できません。スペースなど、対応している修飾キー以外のキーを使ってください。",
+      "doubleTapNeedsUpdatedKeyListener": "2回押しには、更新されたキー監視機能が必要です。",
+      "doubleTapKeyboardMonitorUnavailable": "macOSのキーボード監視が動作していないため、2回押しは利用できません。",
       "holdNeedsRegularKey": "ホールドを使うには、Control+Alt+Space のようにショートカットに通常のキーを追加してください。デスクトップは修飾キーだけを押し続けていることを検知できません。",
       "holdNeedsGnomePortal": "ホールドを使うには、GNOME 48 以降に含まれるグローバルショートカットポータルが必要です。タップはポータルがなくても使えます。",
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
@@ -1995,6 +1999,8 @@
         "bottomLeft": "左下"
       },
       "hotkey": {
+        "holdWithDoubleTap": "長押し＋2回押し",
+        "doubleTapHint": "{{hotkey}} を長押しして話します。{{hotkey}} を2回押すとハンズフリーになり、もう一度押すと終了します。",
         "activationMode": "起動モード",
         "description": "音声ディクテーションの開始/停止に使用するキーの組み合わせ",
         "resetToDefault": "{{hotkey}}にリセット",

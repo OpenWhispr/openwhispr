@@ -22,6 +22,19 @@
 3. Run `rm -rf node_modules package-lock.json && npm ci`
 4. Rebuild the app
 
+### Hold + double-tap is unavailable
+
+Select **Hold + double-tap** under **Settings → Hotkeys → Dictation Hotkey → Activation Mode**, or on the dictation shortcut step in onboarding. Hold your assigned shortcut to dictate, or double-tap it for hands-free dictation and press it again to stop. Tap and Hold remain available wherever their existing requirements are met.
+
+| Platform or backend                           | Bindings for Hold + double-tap                                                                                                                                                                                                                                           |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| macOS                                         | Globe/Fn, right-side modifier keys such as Right Option, mouse buttons 4 and 5, and supported modifier-plus-key shortcuts such as Ctrl+Space. A standalone regular key such as F8 does not report a release on this backend. The macOS keyboard monitor must be running. |
+| Windows                                       | Use a supported regular key or a shortcut with a regular key, such as F8 or Ctrl+Space. The default Control+Super has only modifiers, so choose a different dictation shortcut to enable this mode.                                                                      |
+| Linux using the low-level keyboard listener   | Use a supported regular key or a shortcut with a regular key, such as F8 or Ctrl+Space. The listener needs access to the keyboard input devices.                                                                                                                         |
+| Linux using GNOME, KDE, or Hyprland shortcuts | Use a shortcut that supports Hold on the active desktop backend. The desktop backend uses the primary dictation shortcut.                                                                                                                                                |
+
+On backends that register multiple dictation shortcuts, each active shortcut must support the mode. Settings shows the reason when a binding is unsupported. If it asks for an updated key listener, install a current OpenWhispr build or rebuild the native helper from your current checkout. An older helper can continue to support ordinary Hold but cannot enable Hold + double-tap.
+
 ### Microphone Permission Issues
 
 **Symptoms:** "Permission denied", microphone prompt doesn't appear, or "No microphones detected"

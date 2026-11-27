@@ -739,8 +739,12 @@ function initializeCoreManagers() {
   windowManager.agentWindow = new AgentWindowManager(windowManager);
   if (process.platform === "linux") {
     windowManager.hotkeyManager.nativeListenerProbe = () => linuxKeyManager.checkAvailability();
+    windowManager.hotkeyManager.nativeListenerSupportsExactModifiers = () =>
+      linuxKeyManager.supportsExactModifiers();
   } else if (process.platform === "win32") {
     windowManager.hotkeyManager.nativeListenerProbe = () => windowsKeyManager.checkAvailability();
+    windowManager.hotkeyManager.nativeListenerSupportsExactModifiers = () =>
+      windowsKeyManager.supportsExactModifiers();
   }
 
   // IPC handlers must be registered before window content loads
@@ -810,6 +814,7 @@ function initializeDeferredManagers() {
 
   if (process.platform === "darwin") {
     globeKeyManager.on("error", (error) => {
+      windowManager.resetDictationDoublePress();
       if (globeKeyAlertShown) {
         return;
       }
@@ -1256,47 +1261,6 @@ function startAuthBridgeServer() {
   });
 }
 
-// Startup restores the saved activation mode before any hotkey registers. Desktop
-// backends (GNOME, KDE, Hyprland) register the saved hotkey a moment later, in
-// this mode, so check that hotkey rather than the provisional default it
-// replaces: a supported Hold is kept and an unsupported one becomes Tap before
-// registration. Elsewhere, check the hotkey that registered. This is a runtime
-// fallback, not a change to the user's saved preference: the next launch retries it.
-async function dropUnsupportedStartupHold() {
-  if (windowManager.getActivationMode() !== "push") return;
-  const manager = windowManager.hotkeyManager;
-  const hotkey = manager.isUsingNativeShortcut()
-    ? await manager.getSavedDictationHotkey()
-    : manager.getCurrentHotkey();
-  if (!manager.supportsPushToTalk(hotkey)) {
-    const changed = await windowManager.setActivationModeCache("tap");
-    if (changed) {
-      for (const browserWindow of BrowserWindow.getAllWindows()) {
-        if (!browserWindow.isDestroyed()) {
-          browserWindow.webContents.send("setting-updated", {
-            key: "activationMode",
-            value: "tap",
-          });
-        }
-      }
-    }
-  }
-}
-
-// A desktop backend that cannot register falls back to globalShortcut after the
-// first check, and globalShortcut may still be reading the saved hotkey, so
-// check again once that registration settles.
-async function checkStartupHold() {
-  windowManager.hotkeyManager.once("hotkey-loaded", () => {
-    dropUnsupportedStartupHold().catch((err) => {
-      debugLogger.warn("[HotkeyManager] Startup activation mode recheck failed", {
-        error: err.message,
-      });
-    });
-  });
-  await dropUnsupportedStartupHold();
-}
-
 // Main application startup
 async function startApp() {
   // Await so a stale sidecar is confirmed dead before new ones can spawn and
@@ -1370,7 +1334,15 @@ async function startApp() {
 
   applyOpenWhisprOriginHeader(session.defaultSession);
 
-  await windowManager.setActivationModeCache(environmentManager.getActivationMode());
+  const createDictationStartupMode = require("./src/helpers/dictationStartupMode");
+  const { restoreSavedActivationMode, checkStartupHold, dropUnsupportedStartupHold } =
+    createDictationStartupMode({
+      windowManager,
+      environmentManager,
+      getAllWindows: () => BrowserWindow.getAllWindows(),
+      debugLogger,
+    });
+  await restoreSavedActivationMode();
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
   windowManager.setPanelStartPosition(environmentManager.getPanelStartPosition());
 
@@ -1675,228 +1647,51 @@ async function startApp() {
 
   if (process.platform === "darwin") {
     const { isGlobeLikeHotkey, isMouseButtonHotkey } = require("./src/helpers/hotkeyManager");
-    let globeKeyDownTime = 0;
-    let globeKeyIsRecording = false;
-    let globeLastStopTime = 0;
-    const MIN_HOLD_DURATION_MS = 150;
-    const POST_STOP_COOLDOWN_MS = 300;
-
-    globeKeyManager.on("globe-down", async () => {
-      const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
-      const mainWindowLive = isLiveWindow(windowManager.mainWindow);
-      debugLogger?.debug("[Globe] globe-down received", {
-        currentHotkey,
-        mainWindowLive,
-        activationMode: mainWindowLive ? windowManager.getActivationMode() : "n/a",
-      });
-
-      // Forward to control panel for hotkey capture
-      if (isLiveWindow(windowManager.controlPanelWindow)) {
-        windowManager.controlPanelWindow.webContents.send("globe-key-pressed");
-      }
-
-      // Handle dictation if Globe/Fn is one of the dictation hotkeys
-      const dictationUsesGlobe = hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey);
-      if (dictationUsesGlobe) {
-        if (mainWindowLive && windowManager.isDictationProcessing()) {
-          debugLogger?.debug("[Globe] Ignored — dictation processing");
-        } else if (mainWindowLive) {
-          // Capture target app PID BEFORE showing the overlay
-          if (textEditMonitor) textEditMonitor.captureTargetPid();
-          const activationMode = windowManager.getActivationMode();
-          if (activationMode === "push") {
-            const now = Date.now();
-            if (now - globeLastStopTime < POST_STOP_COOLDOWN_MS) {
-              debugLogger?.debug("[Globe] Ignored — cooldown active");
-              return;
+    const { broadcastToWindows } = require("./src/helpers/windowBroadcast");
+    const {
+      MIN_HOLD_DURATION_MS,
+      POST_STOP_COOLDOWN_MS,
+      registerMacDictationHotkeys,
+      registerMacKeyboardMonitor,
+    } = require("./src/helpers/dictationHotkeyWiring");
+    registerMacKeyboardMonitor({
+      globeKeyManager,
+      windowManager,
+      broadcastToWindows,
+      onUnavailable: () => {
+        activationModeChangeQueue = activationModeChangeQueue
+          .then(async () => {
+            if (globeKeyManager.keyboardMonitorStatus === "unavailable") {
+              await dropUnsupportedStartupHold();
             }
-            windowManager.showDictationPanel();
-            windowManager.sendPrepareDictation();
-            const pressTime = now;
-            globeKeyDownTime = pressTime;
-            globeKeyIsRecording = false;
-            setTimeout(async () => {
-              if (globeKeyDownTime === pressTime && !globeKeyIsRecording) {
-                globeKeyIsRecording = true;
-                debugLogger?.debug("[Globe] Starting dictation (push hold)");
-                windowManager.sendStartDictation();
-              }
-            }, MIN_HOLD_DURATION_MS);
-          } else {
-            windowManager.sendToggleDictation();
-          }
-        } else {
-          debugLogger?.debug("[Globe] Ignored — mainWindow not live");
-        }
-      }
-
-      // Check voice agent slot for Globe/Fn key
-      const voiceAgentUsesGlobe = hotkeyManager
-        .getSlotHotkeys("voiceAgent")
-        .some(isGlobeLikeHotkey);
-      const translationUsesGlobe = hotkeyManager
-        .getSlotHotkeys("translation")
-        .some(isGlobeLikeHotkey);
-      if (voiceAgentUsesGlobe) {
-        windowManager.sendToggleVoiceAgent();
-      }
-      if (translationUsesGlobe) {
-        windowManager.sendToggleTranslation();
-      }
-      if (!voiceAgentUsesGlobe && !translationUsesGlobe && !dictationUsesGlobe) {
-        debugLogger?.debug("[Globe] Ignored — hotkey is not GLOBE", { currentHotkey });
-      }
+          })
+          .catch((error) => {
+            debugLogger.error("Failed to apply the macOS hotkey fallback", {
+              error: error.message,
+            });
+          });
+      },
     });
-
-    globeKeyManager.on("globe-up", async () => {
-      debugLogger?.debug("[Globe] globe-up received", { wasRecording: globeKeyIsRecording });
-
-      // Forward to control panel for hotkey capture (Fn key released)
-      if (isLiveWindow(windowManager.controlPanelWindow)) {
-        windowManager.controlPanelWindow.webContents.send("globe-key-released");
-      }
-
-      if (hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey)) {
-        const activationMode = windowManager.getActivationMode();
-        if (activationMode === "push") {
-          if (globeKeyDownTime === 0 && !globeKeyIsRecording) {
-            // The press was ignored (dictation was processing); releasing it
-            // must not cancel preparation or hide the thinking pill.
-            debugLogger?.debug("[Globe] Release without a registered press — ignored");
-          } else {
-            globeKeyDownTime = 0;
-            globeLastStopTime = Date.now();
-            if (globeKeyIsRecording) {
-              globeKeyIsRecording = false;
-              debugLogger?.debug("[Globe] Stopping dictation (push release)");
-              windowManager.sendStopDictation();
-            } else {
-              windowManager.sendCancelDictationPreparation();
-              windowManager.hideDictationPanel();
-            }
-          }
-        }
-      }
-
-      // Fn release also stops compound push-to-talk for Fn+F-key hotkeys
-      windowManager.handleMacPushModifierUp("fn");
-    });
-
-    // Another key was pressed while Fn was held — user is using Fn as a
-    // navigation modifier (Fn+Arrow → Home, Fn+Backspace → Forward Delete, etc.).
-    // Cancel any bare-Fn push-to-talk in progress instead of transcribing noise.
-    // Only the bare-Fn path uses globeKeyDownTime/globeKeyIsRecording, so compound
-    // Fn-hotkey push-to-talk and tap mode are untouched.
-    globeKeyManager.on("globe-interrupted", () => {
-      if (globeKeyDownTime === 0 && !globeKeyIsRecording) {
-        return;
-      }
-      const wasRecording = globeKeyIsRecording;
-      debugLogger?.debug("[Globe] Fn+key interrupted push-to-talk", { wasRecording });
-      globeKeyDownTime = 0;
-      globeKeyIsRecording = false;
-      globeLastStopTime = Date.now();
-      if (wasRecording) {
-        windowManager.sendCancelDictation();
-      } else {
-        windowManager.sendCancelDictationPreparation();
-        windowManager.hideDictationPanel();
-      }
-    });
-
-    globeKeyManager.on("modifier-up", (modifier) => {
-      if (windowManager?.handleMacPushModifierUp) {
-        windowManager.handleMacPushModifierUp(modifier);
-      }
-    });
-
-    // Right-side single modifier handling (e.g., RightOption as hotkey)
-    let rightModDownTime = 0;
-    let rightModIsRecording = false;
-    let rightModLastStopTime = 0;
-    let rightModActiveKey = null;
-
-    globeKeyManager.on("right-modifier-down", async (modifier) => {
-      hotkeyManager.logHotkeyEvent("macos-native", "down", modifier);
-      // Check voice agent slot for right-modifier
-      if (hotkeyManager.slotHasHotkey("voiceAgent", modifier)) {
-        windowManager.sendToggleVoiceAgent();
-      }
-      if (hotkeyManager.slotHasHotkey("translation", modifier)) {
-        windowManager.sendToggleTranslation();
-      }
-
-      if (!hotkeyManager.slotHasHotkey("dictation", modifier)) return;
-      if (!isLiveWindow(windowManager.mainWindow)) return;
-      if (windowManager.isDictationProcessing()) return;
-
-      const activationMode = windowManager.getActivationMode();
-      if (textEditMonitor) textEditMonitor.captureTargetPid();
-      if (activationMode === "push") {
-        if (rightModActiveKey && rightModActiveKey !== modifier) return;
-        const now = Date.now();
-        if (now - rightModLastStopTime < POST_STOP_COOLDOWN_MS) return;
-        windowManager.showDictationPanel();
-        windowManager.sendPrepareDictation();
-        const pressTime = now;
-        rightModActiveKey = modifier;
-        rightModDownTime = pressTime;
-        rightModIsRecording = false;
-        setTimeout(() => {
-          if (rightModDownTime === pressTime && !rightModIsRecording) {
-            rightModIsRecording = true;
-            windowManager.sendStartDictation();
-          }
-        }, MIN_HOLD_DURATION_MS);
-      } else {
-        windowManager.sendToggleDictation();
-      }
-    });
-
-    globeKeyManager.on("right-modifier-up", async (modifier) => {
-      hotkeyManager.logHotkeyEvent("macos-native", "up", modifier);
-      if (hotkeyManager.slotHasHotkey("dictation", modifier)) {
-        if (!isLiveWindow(windowManager.mainWindow)) return;
-
-        const activationMode = windowManager.getActivationMode();
-        if (activationMode === "push" && (!rightModActiveKey || rightModActiveKey === modifier)) {
-          if (rightModDownTime === 0 && !rightModIsRecording) {
-            // The press was ignored (dictation was processing); releasing it
-            // must not cancel preparation or hide the thinking pill.
-            debugLogger?.debug("[RightMod] Release without a registered press — ignored");
-          } else {
-            rightModActiveKey = null;
-            rightModDownTime = 0;
-            rightModLastStopTime = Date.now();
-            if (rightModIsRecording) {
-              rightModIsRecording = false;
-              windowManager.sendStopDictation();
-            } else {
-              windowManager.sendCancelDictationPreparation();
-              windowManager.hideDictationPanel();
-            }
-          }
-        }
-      }
-
-      const rightModToBase = {
-        RightCommand: "command",
-        RightOption: "option",
-        RightControl: "control",
-        RightShift: "shift",
-      };
-      const baseMod = rightModToBase[modifier];
-      if (baseMod && windowManager?.handleMacPushModifierUp) {
-        windowManager.handleMacPushModifierUp(baseMod);
-      }
+    const resetMacDictationHotkeys = registerMacDictationHotkeys({
+      globeKeyManager,
+      windowManager,
+      textEditMonitor,
+      isGlobeLikeHotkey,
+      isLiveWindow,
+      debugLogger,
     });
 
     const MAC_NATIVE_HOTKEY_SLOTS = ["dictation", "voiceAgent", "translation"];
     const syncMacNativeHotkeyConfiguration = () => {
-      globeKeyManager.setConfiguration(
-        hotkeyManager.getMacNativeListenerConfig(MAC_NATIVE_HOTKEY_SLOTS)
-      );
+      const compoundKeys = windowManager.isDictationDoublePressEnabled()
+        ? hotkeyManager.getSlotHotkeys("dictation").map(GlobeKeyManager.getMacCompoundTerminalKey)
+        : [];
+      globeKeyManager.setConfiguration({
+        ...hotkeyManager.getMacNativeListenerConfig(MAC_NATIVE_HOTKEY_SLOTS),
+        compoundKeys: compoundKeys.filter(Boolean),
+      });
     };
+    windowManager.onActivationModeChanged = syncMacNativeHotkeyConfiguration;
 
     // Mouse Button 4/5 handling (e.g., Logitech MX Master side buttons)
     let mouseButtonDownTime = 0;
@@ -1921,12 +1716,17 @@ async function startApp() {
       if (windowManager.isDictationProcessing()) return;
 
       const activationMode = windowManager.getActivationMode();
+      if (activationMode !== "tap" && windowManager.pressHandsFreeDictation(button)) return;
       if (textEditMonitor) textEditMonitor.captureTargetPid();
 
-      if (activationMode === "push") {
+      if (activationMode !== "tap") {
         if (mouseButtonActiveButton && mouseButtonActiveButton !== button) return;
         const now = Date.now();
-        if (now - mouseButtonLastStopTime < POST_STOP_COOLDOWN_MS) return;
+        if (
+          now - mouseButtonLastStopTime < POST_STOP_COOLDOWN_MS &&
+          !windowManager.canPairDictationTap(button)
+        )
+          return;
         windowManager.showDictationPanel();
         windowManager.sendPrepareDictation();
         const pressTime = now;
@@ -1936,6 +1736,7 @@ async function startApp() {
         setTimeout(() => {
           if (mouseButtonDownTime === pressTime && !mouseButtonIsRecording) {
             mouseButtonIsRecording = true;
+            windowManager.interruptDictationTap(button);
             windowManager.sendStartDictation();
           }
         }, MIN_HOLD_DURATION_MS);
@@ -1954,9 +1755,10 @@ async function startApp() {
 
       const activationMode = windowManager.getActivationMode();
       if (
-        activationMode === "push" &&
+        activationMode !== "tap" &&
         (!mouseButtonActiveButton || mouseButtonActiveButton === button)
       ) {
+        if (windowManager.releaseHandsFreeDictation(button)) return;
         if (mouseButtonDownTime === 0 && !mouseButtonIsRecording) {
           // The press was ignored (dictation was processing); releasing it
           // must not cancel preparation or hide the thinking pill.
@@ -1968,7 +1770,7 @@ async function startApp() {
           if (mouseButtonIsRecording) {
             mouseButtonIsRecording = false;
             windowManager.sendStopDictation();
-          } else {
+          } else if (!windowManager.tryStartHandsFreeDictation(button)) {
             windowManager.sendCancelDictationPreparation();
             windowManager.hideDictationPanel();
           }
@@ -2027,12 +1829,7 @@ async function startApp() {
 
     // Reset native key state when hotkey changes
     ipcMain.on("hotkey-changed", (_event, _newHotkey) => {
-      globeKeyDownTime = 0;
-      globeKeyIsRecording = false;
-      globeLastStopTime = 0;
-      rightModDownTime = 0;
-      rightModIsRecording = false;
-      rightModLastStopTime = 0;
+      resetMacDictationHotkeys();
       mouseButtonDownTime = 0;
       mouseButtonIsRecording = false;
       mouseButtonLastStopTime = 0;
@@ -2045,57 +1842,27 @@ async function startApp() {
   // right-side-modifier combos), routed to the owning slot here. macOS is handled
   // separately above via globeKeyManager.
   if (process.platform === "win32" || process.platform === "linux") {
+    const { broadcastToWindows } = require("./src/helpers/windowBroadcast");
     const isWindows = process.platform === "win32";
     const nativeKeyManager = isWindows ? windowsKeyManager : linuxKeyManager;
-    debugLogger.debug("[Push-to-Talk] Native key listener setup starting");
-
-    // Dictation supports push-to-talk and needs the overlay window; meeting
-    // drives other windows (matching their globalShortcut callbacks and macOS).
-    const dispatchNativeKeyDown = (key) => {
-      hotkeyManager.logHotkeyEvent("native-listener", "down", key);
-      if (hotkeyManager.slotHasHotkey("dictation", key)) {
-        if (!isLiveWindow(windowManager.mainWindow)) return;
-        if (windowManager.getActivationMode() === "push") {
-          windowManager.startWindowsPushToTalk(key);
-        } else {
-          windowManager.sendToggleDictation();
-        }
-        return;
-      }
-      if (hotkeyManager.slotHasHotkey("voiceAgent", key)) {
-        windowManager.sendToggleVoiceAgent();
-      } else if (hotkeyManager.slotHasHotkey("translation", key)) {
-        windowManager.sendToggleTranslation();
-      } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
-        windowManager.startManualMeeting({ activate: false, startSource: "hotkey" });
-      }
-    };
-
-    // Only dictation drives push-to-talk, so only its key-up matters.
-    const dispatchNativeKeyUp = (key) => {
-      hotkeyManager.logHotkeyEvent("native-listener", "up", key);
-      if (!hotkeyManager.slotHasHotkey("dictation", key)) return;
-      if (windowManager.winPushState?.active) {
-        windowManager.handleWindowsPushKeyUp(key);
-      } else if (
-        isLiveWindow(windowManager.mainWindow) &&
-        windowManager.getActivationMode() === "push"
-      ) {
-        windowManager.handleWindowsPushKeyUp(key);
-      }
-    };
-
-    nativeKeyManager.on("key-down", dispatchNativeKeyDown);
-    nativeKeyManager.on("key-up", dispatchNativeKeyUp);
-
-    nativeKeyManager.on("error", (error) => {
-      debugLogger.warn("[Push-to-Talk] Native key listener error", { error: error.message });
-      if (isWindows && isLiveWindow(windowManager.mainWindow)) {
-        windowManager.mainWindow.webContents.send("windows-ptt-unavailable", {
-          reason: "error",
-          message: error.message,
-        });
-      }
+    const { registerRawDictationHotkeys } = require("./src/helpers/dictationHotkeyWiring");
+    registerRawDictationHotkeys({
+      nativeKeyManager,
+      windowManager,
+      isWindows,
+      isLiveWindow,
+      debugLogger,
+      onExactModifiersUnavailable: () => {
+        activationModeChangeQueue = activationModeChangeQueue
+          .then(async () => {
+            await dropUnsupportedStartupHold();
+            windowManager.reconcileNativeKeyListeners();
+            broadcastToWindows("hotkey-mode-info-changed");
+          })
+          .catch((err) => {
+            debugLogger.error("Failed to apply the native hotkey fallback", { error: err.message });
+          });
+      },
     });
 
     nativeKeyManager.on("unavailable", () => {
@@ -2122,6 +1889,7 @@ async function startApp() {
         // GNOME, KDE and Hyprland run this listener only as a spare release
         // source in Hold; their own shortcut still presses and releases.
         if (!hotkeyManager.reliesOnLinuxKeyListener()) return;
+        windowManager.resetDictationDoublePress();
         // Settings owns the recovery (toast, Hold disabled, back to Tap) and it
         // renders in the control panel, not the pill this event used to reach.
         for (const browserWindow of BrowserWindow.getAllWindows()) {

@@ -107,6 +107,7 @@ function hotkeyModeInfo(backend, platform = "linux", hotkey = "F8") {
   hotkeyManager = Object.assign(new HotkeyManager(), {
     isInitialized: true,
     nativeListenerProbe: inputDenied,
+    nativeListenerSupportsExactModifiers: () => true,
     ...backend,
   });
   const original = Object.getOwnPropertyDescriptor(process, "platform");
@@ -204,4 +205,130 @@ test("Windows with its key listener still offers Hold", async () => {
 // the next launch. A window that syncs afterwards must show the mode in effect.
 test("renderers read the activation mode in effect, not the saved preference", async () => {
   assert.equal(await handlers.get("get-activation-mode")({}), "tap");
+});
+
+test("an unsupported macOS secondary binding disables only double-tap", async () => {
+  const info = await hotkeyModeInfo({}, "darwin", "GLOBE,F8");
+
+  assert.equal(info.supportsPushToTalk, true);
+  assert.equal(info.pushToTalkUnavailableReason, null);
+  assert.match(info.doubleTapUnavailableReason, /F8.*key releases/);
+});
+
+test("double-tap stays available when all active macOS bindings can release", async () => {
+  const info = await hotkeyModeInfo({}, "darwin", "GLOBE,RightOption");
+
+  assert.equal(info.doubleTapUnavailableReason, null);
+});
+
+test("Linux native shortcuts check the single binding the backend registers", async () => {
+  const info = await hotkeyModeInfo(DESKTOP_BACKENDS.KDE, "linux", "F8,Control+Super");
+
+  assert.equal(info.doubleTapUnavailableReason, null);
+});
+
+test("Linux desktop-native double-tap does not depend on the evdev key parser", async () => {
+  const info = await hotkeyModeInfo(DESKTOP_BACKENDS.KDE, "linux", "Control+Left");
+
+  assert.equal(info.doubleTapUnavailableReason, null);
+});
+
+test("combined mode requires a terminal key macOS can see released", async () => {
+  const compound = await hotkeyModeInfo({}, "darwin", "Control+Space");
+  assert.equal(compound.doubleTapUnavailableReason, null);
+
+  const modifierOnly = await hotkeyModeInfo({}, "darwin", "Control+Shift");
+  assert.equal(modifierOnly.supportsPushToTalk, true);
+  assert.match(modifierOnly.doubleTapUnavailableReason, /Control\+Shift.*key releases/);
+});
+
+test("unavailable macOS keyboard monitoring disables only double-tap", async () => {
+  const info = await hotkeyModeInfo(
+    { getMacKeyboardMonitorStatus: () => "unavailable" },
+    "darwin",
+    "GLOBE,RightOption"
+  );
+
+  assert.equal(info.supportsPushToTalk, true);
+  assert.equal(info.pushToTalkUnavailableReason, null);
+  assert.match(info.doubleTapUnavailableReason, /keyboard monitor/i);
+});
+
+test("pending and ready macOS keyboard monitoring do not disable double-tap", async () => {
+  for (const status of ["pending", "ready"]) {
+    const info = await hotkeyModeInfo(
+      { getMacKeyboardMonitorStatus: () => status },
+      "darwin",
+      "GLOBE,RightOption"
+    );
+
+    assert.equal(info.doubleTapUnavailableReason, null);
+  }
+});
+
+for (const platform of ["win32", "linux"]) {
+  test(`${platform} modifier-only bindings disable double-tap while keeping Hold`, async () => {
+    const backend = { nativeListenerProbe: () => ({ available: true }) };
+
+    for (const binding of ["RightControl", "Control+Super", "Control+RightShift"]) {
+      const info = await hotkeyModeInfo(backend, platform, binding);
+
+      assert.equal(info.supportsPushToTalk, true);
+      assert.equal(info.pushToTalkUnavailableReason, null);
+      assert.match(info.doubleTapUnavailableReason, /non-modifier key/);
+      assert.ok(info.doubleTapUnavailableReason.includes(binding));
+    }
+  });
+
+  test(`${platform} an older listener still supports Hold but cannot offer double-tap`, async () => {
+    const info = await hotkeyModeInfo(
+      {
+        nativeListenerProbe: () => ({ available: true }),
+        nativeListenerSupportsExactModifiers: () => false,
+      },
+      platform,
+      "Control+Space"
+    );
+
+    assert.equal(info.supportsPushToTalk, true);
+    assert.match(info.doubleTapUnavailableReason, /updated key listener/);
+  });
+
+  test(`${platform} double-tap stays available for a chord with a regular key`, async () => {
+    const backend = { nativeListenerProbe: () => ({ available: true }) };
+    const info = await hotkeyModeInfo(backend, platform, "Control+Shift+Space");
+
+    assert.equal(info.doubleTapUnavailableReason, null);
+  });
+
+  test(`${platform} double-tap requires a chord the raw key parser can match exactly`, async () => {
+    const backend = { nativeListenerProbe: () => ({ available: true }) };
+
+    const clipped = `${"Ctrl+".repeat(52)}Space`;
+    for (const binding of ["Control+Left", "RightControl+A", "Control+\tSpace", clipped]) {
+      const info = await hotkeyModeInfo(backend, platform, binding);
+
+      assert.equal(info.supportsPushToTalk, true);
+      assert.match(info.doubleTapUnavailableReason, /non-modifier key/);
+      assert.ok(info.doubleTapUnavailableReason.includes(binding));
+    }
+  });
+
+  test(`${platform} a modifier-only secondary binding disables double-tap`, async () => {
+    const backend = { nativeListenerProbe: () => ({ available: true }) };
+    const info = await hotkeyModeInfo(backend, platform, "Control+Shift+Space,RightControl");
+
+    assert.equal(info.supportsPushToTalk, true);
+    assert.match(info.doubleTapUnavailableReason, /RightControl/);
+  });
+}
+
+test("mode info without a candidate uses the registered dictation list", async () => {
+  const info = await hotkeyModeInfo(
+    { currentHotkey: "GLOBE", getSlotHotkeys: () => ["GLOBE", "F8"] },
+    "darwin",
+    null
+  );
+
+  assert.match(info.doubleTapUnavailableReason, /F8.*key releases/);
 });

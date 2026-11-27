@@ -11,6 +11,7 @@ export interface HotkeyModeInfo {
   isUsingHyprland: boolean;
   supportsPushToTalk: boolean;
   pushToTalkUnavailableReason: string | null;
+  doubleTapUnavailableReason: string | null;
   /** Linux only: the evdev listener cannot read /dev/input, which Hold needs. */
   linuxInputAccessDenied: boolean;
   hyprlandConfigStatus: HyprlandConfigStatus | null;
@@ -23,6 +24,7 @@ const DEFAULT_INFO: HotkeyModeInfo = {
   isUsingHyprland: false,
   supportsPushToTalk: true,
   pushToTalkUnavailableReason: null,
+  doubleTapUnavailableReason: null,
   linuxInputAccessDenied: false,
   hyprlandConfigStatus: null,
   loaded: false,
@@ -38,19 +40,22 @@ export function useHotkeyModeInfo(scope: string, hotkey?: string): HotkeyModeInf
 
   useEffect(() => {
     let cancelled = false;
+    let requestId = 0;
     const checkHotkeyMode = async () => {
+      const request = ++requestId;
       try {
         const info = await window.electronAPI?.getHotkeyModeInfo?.(hotkey);
-        if (!info || cancelled) return;
+        if (!info || cancelled || request !== requestId) return;
         const hyprlandConfigStatus = info.isUsingHyprland
           ? ((await window.electronAPI?.getHyprlandConfigStatus?.()) ?? null)
           : null;
-        if (cancelled) return;
+        if (cancelled || request !== requestId) return;
         setModeInfo({
           isUsingNativeShortcut: info.isUsingNativeShortcut,
           isUsingHyprland: info.isUsingHyprland,
           supportsPushToTalk: info.supportsPushToTalk,
           pushToTalkUnavailableReason: info.pushToTalkUnavailableReason,
+          doubleTapUnavailableReason: info.doubleTapUnavailableReason,
           linuxInputAccessDenied: info.linuxInputAccessDenied ?? false,
           hyprlandConfigStatus,
           loaded: true,
@@ -59,9 +64,11 @@ export function useHotkeyModeInfo(scope: string, hotkey?: string): HotkeyModeInf
         logger.error("Failed to check hotkey mode", { error }, scope);
       }
     };
-    checkHotkeyMode();
+    const unsubscribe = window.electronAPI?.onHotkeyModeInfoChanged?.(checkHotkeyMode);
+    void checkHotkeyMode();
     return () => {
       cancelled = true;
+      unsubscribe?.();
     };
   }, [scope, hotkey]);
 
