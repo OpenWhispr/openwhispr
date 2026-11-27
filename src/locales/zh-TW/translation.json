@@ -5251,7 +5251,8 @@
       "transcriptionFailed": "無法轉寫",
       "micUnavailable": "無法開啟麥克風",
       "regenerateFailed": "無法重新產生回答",
-      "dictationActive": "聽寫正在使用麥克風"
+      "dictationActive": "聽寫正在使用麥克風",
+      "answerAgain": "請重新回答這個問題"
     },
     "composer": {
       "placeholder": "說出或輸入你的問題…",

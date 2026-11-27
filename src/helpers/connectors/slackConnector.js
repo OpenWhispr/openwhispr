@@ -3,6 +3,7 @@ const { isValidEmailAddress } = require("./emailCompose");
 const { createSlackApi } = require("./slackApi");
 const { createSlackAuth } = require("./slackAuth");
 const { createSlackDirectory } = require("./slackDirectory");
+const { slackTitleNames } = require("./slackWindowTitle");
 const { connectorResultPage } = require("./oauthResultPage");
 
 // markdown_text's documented limit, applied to what Slack receives.
@@ -27,6 +28,13 @@ const TOO_LARGE_FOR_NAMES =
 // names typed in capitals ("GABE", "D2C") never match; a longer one such as
 // "DESIGN2025" can, so findTarget tries a bare one as a name as well.
 const SLACK_ID = /^[CDGUW](?=[A-Z0-9]*\d)[A-Z0-9]{8,}$/;
+// conversations.open takes at most 8 people besides the user.
+const MAX_GROUP_PEOPLE = 8;
+const GROUP_DM_SCOPE = "mpim:write";
+const GROUP_DMS_NOT_GRANTED =
+  "Slack hasn't let OpenWhispr open group DMs for this account (a workspace admin may need to approve it), so nothing was sent. Tell the user, and offer to post to a channel or to each person instead.";
+// What a channel name can hold: lowercase or caseless letters, digits, - and _.
+const CHANNEL_NAME = /^[\p{Ll}\p{Lo}\p{Lm}\p{M}\p{Nd}_-]+$/u;
 // A message in a link: p, then its ts without the dot.
 const LINK_MESSAGE = /^p(\d{10})(\d{6})$/;
 const MESSAGE_TS = /^\d{10}\.\d{6}$/;
@@ -97,10 +105,13 @@ function replyInThreadNote(threadTs) {
   };
 }
 
-// A person's DM is known only once Send opens it, which checks the thread
-// again; until then, a thread outside any DM can't be with them.
+// A person's DM, or a group DM, is known only once Send opens it, which
+// checks the thread again; until then, a thread outside any DM can't be with
+// one person, and a group DM's id is never a D….
 function threadFits(target, thread) {
-  return target.kind === "user" ? thread.channelId.startsWith("D") : target.id === thread.channelId;
+  if (target.kind === "user") return thread.channelId.startsWith("D");
+  if (target.kind === "group") return !thread.channelId.startsWith("D");
+  return target.id === thread.channelId;
 }
 
 function failureMessage(errorCode, label = "", fallback = "Slack didn't accept the message.") {
@@ -160,6 +171,19 @@ function parseDestination(raw) {
   return { kind: "any", query: value };
 }
 
+// A name as a list of people reads it: case, accents and the spaces around
+// its commas aside. "Smith,Gabriel" is the person "Smith, Gabriel", but
+// "Gabe Gabriel" never stands for the list "Gabe, Gabriel".
+function listName(value) {
+  return String(value)
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .split(",")
+    .map((part) => part.trim().replace(/\s+/g, " "))
+    .join(",");
+}
+
 function clarify(message, candidates = []) {
   const labels = candidates.map((candidate) => candidate.hint ?? candidate.label);
   return {
@@ -183,6 +207,12 @@ function prepareFailed(errorCode, message) {
   return { status: "failed", errorCode, message };
 }
 
+// The scopes a login lists, when Slack said them at connect; a login from
+// before they were kept lists none, so it is tried.
+function scopesKnown(credential) {
+  return Array.isArray(credential?.scopes);
+}
+
 // Which Slack login a lookup or an opened DM belongs to.
 function loginCacheKey(binding, credential) {
   return `${binding.ownerAccountId}:${credential.teamId}:${credential.userId}:${binding.generation}`;
@@ -196,11 +226,12 @@ function createSlackConnector({ api, auth, directory, credentials }) {
 
   // An id names exactly one channel, person or DM. A person's is looked up
   // directly; a channel's must be among the user's channels, which a list
-  // cut off at the page cap may not show.
+  // cut off at the page cap may not show. A DM or group DM a Send opened is
+  // known by who it is with.
   async function findById(id, token, cacheKey) {
+    const opened = openedDms.get(`${cacheKey}:${id}`);
+    if (opened) return { candidate: { id, kind: "dm", label: opened.label } };
     if (id.startsWith("D")) {
-      const person = openedDms.get(`${cacheKey}:${id}`);
-      if (person) return { candidate: { id, kind: "dm", label: person.label } };
       return {
         clarify: clarify(
           `Slack doesn't say whose direct message ${id} is. Ask the user who to send it to, by name or email.`
@@ -286,6 +317,8 @@ function createSlackConnector({ api, auth, directory, credentials }) {
           `More than one match for "${parsed.query}". Ask the user which one they meant.`,
           resolved.candidates
         ),
+        // Who matched, so prepare can tell people who share a name from a list of people.
+        matches: resolved.candidates,
       };
     }
     const where =
@@ -340,16 +373,107 @@ function createSlackConnector({ api, auth, directory, credentials }) {
     return { result: second, access: refreshed };
   }
 
+  // A group DM is named by its people, comma-separated, each exactly one
+  // person. The user is left out, since Slack adds them; with one other
+  // person left it is their DM. Null when the list isn't only people.
+  async function findGroup(destination, binding, access, cacheKey) {
+    const parts = destination.split(",").map((part) => part.trim());
+    if (parts.length < 2 || parts.some((part) => !part)) return null;
+    const people = [];
+    for (const part of parts) {
+      const found = await findTargetWithRefresh(parseDestination(part), binding, access, cacheKey);
+      if (found.error) return { error: found.error };
+      // Asked about that one name, with no picker: a pick would replace the whole list.
+      if (found.clarify) return { clarify: { ...found.clarify, choices: undefined } };
+      if (found.candidate?.kind !== "user") return null;
+      const { id } = found.candidate;
+      if (id !== access.credential.userId && !people.some((person) => person.id === id)) {
+        people.push(found.candidate);
+      }
+    }
+    if (people.length === 1) return { candidate: people[0] };
+    if (people.length === 0 || people.length > MAX_GROUP_PEOPLE) {
+      return {
+        clarify: clarify(
+          `A Slack group DM is with 2 to ${MAX_GROUP_PEOPLE} other people. Ask the user who to send it to.`
+        ),
+      };
+    }
+    return {
+      candidate: {
+        kind: "group",
+        // Sorted, so the same people typed in another order are the same group.
+        id: people
+          .map((person) => person.id)
+          .sort()
+          .join(","),
+        label: people.map((person) => person.hint ?? person.label).join(", "),
+      },
+    };
+  }
+
   // Lookups only read, but a refused token gets the same treatment: one
   // more try after refreshing the bound login, then a reconnect.
-  async function findTargetWithRefresh(parsed, binding, access, cacheKey) {
-    const first = await findTarget(parsed, access.token, cacheKey);
+  async function lookupWithRefresh(lookup, binding, access) {
+    const first = await lookup(access);
     if (!RETRY_AFTER_REFRESH.has(first.error)) return first;
     const refreshed = await auth.getAccessToken(binding, { forceRefresh: true });
     if (!refreshed.ok) return { error: refreshed.errorCode };
-    const second = await findTarget(parsed, refreshed.token, cacheKey);
+    const second = await lookup(refreshed);
     if (!RETRY_AFTER_REFRESH.has(second.error)) return second;
     return { error: refusedAgain(binding).errorCode };
+  }
+
+  function findTargetWithRefresh(parsed, binding, access, cacheKey) {
+    return lookupWithRefresh(({ token }) => findTarget(parsed, token, cacheKey), binding, access);
+  }
+
+  // The conversation open in the Slack window the hotkey was pressed over: the
+  // one conversation a name in its title is exactly, a channel the user is in,
+  // a person, or a group DM's people (comma-separated). Nothing when the title
+  // doesn't name the connected workspace (Slack may show another), when not
+  // every channel and person was read (a name could be someone else's), or
+  // when no name or several conversations match: a guess never picks where a
+  // post goes. A bot, an app or a deactivated account counts as a match too,
+  // since its DM is titled with its name, though no one can post to it. People
+  // from another organization (Slack Connect) aren't listed at all, so a DM
+  // with one can still match a colleague of that name; the card names them.
+  async function findOpenConversation(title, binding, access, cacheKey) {
+    const names = slackTitleNames(title, access.credential.teamName);
+    if (names.length === 0) return {};
+    const lists = await Promise.all([
+      directory.channels(access.token, cacheKey),
+      directory.people(access.token, cacheKey),
+      directory.notPeople(access.token, cacheKey),
+    ]);
+    const failure = lists.find((list) => !list.ok);
+    if (failure) return { error: failure.errorCode };
+    if (lists.some((list) => list.truncated)) return {};
+    const candidates = lists.flatMap((list) => list.items);
+    const exactly = (name) => {
+      const resolved = resolveTarget(name, candidates, { exactOnly: true });
+      return resolved.status === "match" && resolved.candidate.kind !== "not_person"
+        ? resolved.candidate
+        : null;
+    };
+    const found = new Map();
+    for (const name of names) {
+      const named = exactly(name);
+      // A name that could be a channel's (lowercase, no spaces) may be a
+      // channel the user isn't in, which the list doesn't hold, so it never
+      // stands for a person.
+      if (named?.kind === "user" && CHANNEL_NAME.test(name)) continue;
+      if (named) {
+        found.set(named.id, named);
+        continue;
+      }
+      const parts = name.split(",").map((part) => part.trim());
+      if (parts.length < 2 || !parts.every((part) => exactly(part)?.kind === "user")) continue;
+      const group = await findGroup(name, binding, access, cacheKey);
+      if (group?.error) return group;
+      if (group?.candidate) found.set(group.candidate.id, group.candidate);
+    }
+    return found.size === 1 ? { candidate: [...found.values()][0] } : {};
   }
 
   return {
@@ -376,15 +500,17 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       };
     },
 
-    async prepare(action, args, { binding } = {}) {
+    // slackWindowTitle: the title of the Slack window the agent hotkey was
+    // pressed over, for a post that names no destination (main only).
+    async prepare(action, args, { binding, slackWindowTitle } = {}) {
       if (action !== "send_message")
         return prepareFailed("unknown_action", "Unknown Slack action.");
       const text = typeof args.text === "string" ? args.text : "";
       const problem = textProblem(text);
       if (problem) return prepareFailed(problem, failureMessage(problem));
       const destination = typeof args.destination === "string" ? args.destination.trim() : "";
-      if (!destination)
-        return clarify("Ask the user which Slack channel or person to send this to.");
+      const askWhere = () => clarify("Ask the user which Slack channel or person to send this to.");
+      if (!destination && !slackWindowTitle) return askWhere();
       const threadLink = typeof args.thread === "string" ? args.thread.trim() : "";
       const threadArg = threadLink ? parseSlackLink(threadLink) : null;
       if (threadLink && !threadArg?.threadTs) {
@@ -399,14 +525,33 @@ function createSlackConnector({ api, auth, directory, credentials }) {
         );
       }
       const { credential } = access;
-      const parsed = parseDestination(destination);
+      const parsed = destination ? parseDestination(destination) : {};
       // A destination that links to a message replies in its thread, unless
       // the call names a thread itself.
       const thread =
         threadArg ??
         (parsed.threadTs ? { channelId: parsed.query, threadTs: parsed.threadTs } : null);
       const cacheKey = loginCacheKey(binding, credential);
-      const found = await findTargetWithRefresh(parsed, binding, access, cacheKey);
+      let found;
+      if (destination) {
+        // "Smith, Gabe" may be one person (or several who share that name, a
+        // picker), but only by that whole name; any other match for a list of
+        // people ("Ana, Sam" for Ana Sampson, #gabe-gabriel) is a looser one.
+        const named = await findTargetWithRefresh(parsed, binding, access, cacheKey);
+        const whole = listName(destination);
+        const isWholeName = (candidate) =>
+          candidate.kind === "user" && candidate.names.some((name) => listName(name) === whole);
+        const wholeName = named.candidate
+          ? isWholeName(named.candidate)
+          : Boolean(named.matches?.every(isWholeName));
+        found = (!wholeName && (await findGroup(destination, binding, access, cacheKey))) || named;
+      } else {
+        found = await lookupWithRefresh(
+          (current) => findOpenConversation(slackWindowTitle, binding, current, cacheKey),
+          binding,
+          access
+        );
+      }
       if (found.clarify) return found.clarify;
       if (found.error) {
         return prepareFailed(
@@ -414,6 +559,7 @@ function createSlackConnector({ api, auth, directory, credentials }) {
           failureMessage(found.error, "", "Couldn't reach Slack to look that up. Try again.")
         );
       }
+      if (!found.candidate) return askWhere();
 
       const target = {
         kind: found.candidate.kind,
@@ -421,11 +567,31 @@ function createSlackConnector({ api, auth, directory, credentials }) {
         // A person with their username, since display names repeat.
         label: found.candidate.hint ?? found.candidate.label,
       };
-      // A person's DM is known only once Send opens it, unless an earlier Send
-      // here opened the thread's DM with someone else: then nothing is opened.
+      // Refused before the card, never by flagging the login: a reconnect
+      // can't grant what the workspace withholds, and posts elsewhere still work.
+      if (
+        target.kind === "group" &&
+        scopesKnown(credential) &&
+        !credential.scopes.includes(GROUP_DM_SCOPE)
+      ) {
+        return prepareFailed("missing_scope", GROUP_DMS_NOT_GRANTED);
+      }
+      // A DM is known only once Send opens it, unless an earlier Send here
+      // opened the thread's DM with someone else: then nothing is opened.
       const threadDm = thread && openedDms.get(`${cacheKey}:${thread.channelId}`);
-      const otherPersonsDm = target.kind === "user" && threadDm && threadDm.userId !== target.id;
-      if (thread && (!threadFits(target, thread) || otherPersonsDm)) {
+      const otherPersonsDm =
+        (target.kind === "user" || target.kind === "group") &&
+        threadDm &&
+        threadDm.userId !== target.id;
+      // A group DM is never one of the user's channels: a thread in one can't
+      // be in it, and Send would open the group DM in Slack before finding out.
+      const groupThreadInChannel =
+        thread &&
+        target.kind === "group" &&
+        (await directory.channels(access.token, cacheKey)).items?.some(
+          (channel) => channel.id === thread.channelId
+        );
+      if (thread && (!threadFits(target, thread) || otherPersonsDm || groupThreadInChannel)) {
         return prepareFailed("thread_mismatch", failureMessage("thread_mismatch", target.label));
       }
       return {
@@ -471,9 +637,9 @@ function createSlackConnector({ api, auth, directory, credentials }) {
 
       let channel = target.id;
       let current = access;
-      if (target.kind === "user") {
+      if (target.kind === "user" || target.kind === "group") {
         // Opening a DM creates it in Slack, so it happens only after the user
-        // pressed Send (spec §5 invariant 2).
+        // pressed Send (spec §5 invariant 2). A group's id lists its people.
         const opened = await writeWithRefresh(
           "conversations.open",
           { users: target.id },
@@ -484,7 +650,18 @@ function createSlackConnector({ api, auth, directory, credentials }) {
         const channelId = opened.result.ok ? opened.result.data?.channel?.id : null;
         // Whatever happened to the DM, the message itself was never posted.
         if (!channelId) {
-          const errorCode = opened.result.ok ? "bad_response" : opened.result.errorCode;
+          // A login from before group DMs lacks mpim:write: it is flagged, so the
+          // card and Settings offer a reconnect, which asks for it and records
+          // what Slack granted. One that lists its scopes is never flagged.
+          const reconnectForScope =
+            target.kind === "group" &&
+            opened.result.errorCode === "missing_scope" &&
+            !scopesKnown(current.credential);
+          const errorCode = opened.result.ok
+            ? "bad_response"
+            : reconnectForScope
+              ? auth.markReconnect(binding).errorCode
+              : opened.result.errorCode;
           return {
             state: "failed",
             errorCode,

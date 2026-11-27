@@ -2434,6 +2434,9 @@ class IPCHandlers {
     ipcMain.on("agent-window-drag", (event, dragging) =>
       this.windowManager.agentWindow?.setDragging(event, dragging)
     );
+    ipcMain.on("agent-window-request-started", (event) =>
+      this.windowManager.agentWindow?.requestStarted(event)
+    );
     ipcMain.handle(
       "agent-window-set-layout",
       (event, request) => this.windowManager.agentWindow?.setLayout(event, request) ?? false
@@ -8933,6 +8936,8 @@ class IPCHandlers {
             ...tokenStore.getState(),
             binding: accountScopeBinding.read(),
           }),
+        getSlackWindowTitle: (event) =>
+          this.windowManager?.agentWindow?.slackWindowTitle(event) ?? null,
         findContacts: (query) =>
           searchContacts(this.databaseManager.getContactLookupSources(), query),
         noteAttendees: createNoteAttendeesLookup({

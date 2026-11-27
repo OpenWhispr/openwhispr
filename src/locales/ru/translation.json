@@ -5423,7 +5423,8 @@
       "transcriptionFailed": "Не удалось расшифровать",
       "micUnavailable": "Не удалось открыть микрофон",
       "regenerateFailed": "Не удалось сгенерировать ответ заново",
-      "dictationActive": "Микрофон занят диктовкой"
+      "dictationActive": "Микрофон занят диктовкой",
+      "answerAgain": "Ответьте на этот вопрос ещё раз"
     },
     "composer": {
       "placeholder": "Продиктуйте или введите вопрос…",

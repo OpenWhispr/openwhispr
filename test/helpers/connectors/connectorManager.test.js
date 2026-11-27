@@ -188,6 +188,16 @@ async function setup(connectorOverrides, logOptions, managerOptions = {}) {
   return { manager, fake, log };
 }
 
+test("prepare hands the connector the Slack window title only when there is one", async () => {
+  const { manager, fake } = await setup();
+  const title = "eng (Channel) - Acme - Slack";
+  await manager.prepare("fake", "post", { text: "hi" }, { ...ALLOWED, slackWindowTitle: title });
+  await manager.prepare("fake", "post", { text: "hi" }, { ...ALLOWED, slackWindowTitle: null });
+
+  assert.equal(fake.calls.prepare[0].context.slackWindowTitle, title);
+  assert.equal("slackWindowTitle" in fake.calls.prepare[1].context, false);
+});
+
 test("creating the manager reconciles interrupted rows", async () => {
   const { log } = await setup();
   assert.equal(log.reconciledCount(), 1);

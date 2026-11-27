@@ -5611,7 +5611,8 @@
       "transcriptionFailed": "Transkription fehlgeschlagen",
       "micUnavailable": "Mikrofon nicht verfügbar",
       "regenerateFailed": "Antwort konnte nicht neu generiert werden",
-      "dictationActive": "Das Diktat nutzt das Mikrofon"
+      "dictationActive": "Das Diktat nutzt das Mikrofon",
+      "answerAgain": "Diese Frage erneut beantworten"
     },
     "composer": {
       "placeholder": "Frage diktieren oder eintippen…",

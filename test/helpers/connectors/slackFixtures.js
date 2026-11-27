@@ -9,7 +9,7 @@ const FIXTURES = {
     app_id: "A0TEST",
     authed_user: {
       id: "U0CHAD",
-      scope: "chat:write,channels:read,groups:read,im:write,users:read,users:read.email",
+      scope: "chat:write,channels:read,groups:read,im:write,mpim:write,users:read,users:read.email",
       access_token: "xoxe.xoxp-1-test-access",
       token_type: "user",
       refresh_token: "xoxe-1-test-refresh",
@@ -23,7 +23,7 @@ const FIXTURES = {
     ok: true,
     app_id: "A0TEST",
     user_id: "U0CHAD",
-    scope: "chat:write,channels:read,groups:read,im:write,users:read,users:read.email",
+    scope: "chat:write,channels:read,groups:read,im:write,mpim:write,users:read,users:read.email",
     token_type: "user",
     access_token: "xoxe.xoxp-1-test-access-2",
     refresh_token: "xoxe-1-test-refresh-2",

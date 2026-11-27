@@ -20,21 +20,9 @@ import {
   MAX_EMAIL_SUBJECT_LENGTH,
   recipientsLabel,
 } from "../../helpers/connectors/emailCompose";
+import { approvalCardFields } from "../../utils/approvalCardFields";
+import { issueProblemCopy, issueSentCopy, issueUnknownCopy } from "../../utils/issueApprovalFields";
 import {
-  emailFieldProblems,
-  hasEmailFieldProblem,
-  toEmailFields,
-} from "../../utils/emailApprovalFields";
-import {
-  issueFieldProblem,
-  issueProblemCopy,
-  issueSentCopy,
-  issueUnknownCopy,
-  issueVerb,
-  toIssueFields,
-} from "../../utils/issueApprovalFields";
-import {
-  salesforceFieldProblem,
   salesforceFieldsCopyText,
   salesforceOutcomeKey,
 } from "../../utils/salesforceApprovalFields";
@@ -106,31 +94,15 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   // The draft is editable while it can still go out: before Send, or after a
   // failure while Retry waits.
   const editing = (pending && !entry.reconnect) || waitingForRetry;
-  // An email card lays out its fields; a malformed one without them falls
-  // back to the plain layout rather than showing empty fields.
-  const emailFields =
-    preview.verbKey === "email" && draft.fields ? toEmailFields(draft.fields) : null;
-  // So does an issue or comment card, with its title and body.
-  const verb = issueVerb(preview.verbKey);
-  const issueFields = verb && draft.fields ? toIssueFields(draft.fields, verb) : null;
+  const { emailFields, verb, issueFields, problems, issueProblem, salesforceProblem, sendBlocked } =
+    approvalCardFields(entry);
   const slack = preview.verbKey === "slackPost";
   // Who it goes to follows the user's edits: main's answer once sent,
   // otherwise the card's own To and Cc.
   const destination =
     entry.destinationLabel ??
     ((emailFields && recipientsLabel(emailFields.to, emailFields.cc)) || preview.destinationLabel);
-  const problems = emailFields ? emailFieldProblems(emailFields) : null;
-  const issueProblem = verb && issueFields ? issueFieldProblem(issueFields, verb) : null;
-  // Send commits exactly what the card shows, so it waits until the card
-  // holds something the provider would accept.
   const isSalesforceFields = preview.verbKey === "salesforceFields";
-  const salesforceProblem = isSalesforceFields
-    ? salesforceFieldProblem(preview.salesforceFields, draft.fields)
-    : null;
-  const sendBlocked =
-    salesforceProblem !== null ||
-    Boolean(problems && hasEmailFieldProblem(problems)) ||
-    issueProblem !== null;
   const problemsId = useId();
   const emailProblemText = !problems
     ? null

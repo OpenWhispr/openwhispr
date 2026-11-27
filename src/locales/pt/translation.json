@@ -5279,7 +5279,8 @@
       "transcriptionFailed": "Não foi possível transcrever",
       "micUnavailable": "Não foi possível abrir o microfone",
       "regenerateFailed": "Não foi possível gerar a resposta novamente",
-      "dictationActive": "O ditado está usando o microfone"
+      "dictationActive": "O ditado está usando o microfone",
+      "answerAgain": "Responda a esta pergunta de novo"
     },
     "composer": {
       "placeholder": "Dite ou digite sua pergunta…",

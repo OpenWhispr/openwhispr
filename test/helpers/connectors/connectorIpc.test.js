@@ -117,7 +117,12 @@ test("each channel reaches the manager, with policy only where something can lea
     manager.calls.map((call) => call.name),
     ["status", "prepare", "commit", "cancel", "runDirect", "recentActions"]
   );
-  assert.deepEqual(manager.calls[1].args, ["slack", "send_message", { text: "hi" }, ALLOWED]);
+  assert.deepEqual(manager.calls[1].args, [
+    "slack",
+    "send_message",
+    { text: "hi" },
+    { ...ALLOWED, slackWindowTitle: null },
+  ]);
   assert.deepEqual(manager.calls[2].args, ["action-1", { body: "hi!" }, ALLOWED]);
   const [connectorId, action, args, auth, runtime] = manager.calls[4].args;
   assert.deepEqual(
@@ -128,6 +133,59 @@ test("each channel reaches the manager, with policy only where something can lea
   assert.equal(runtime.signal.aborted, false);
   assert.deepEqual(manager.calls[5].args, ["email", 5, "account-a"]);
   assert.equal(policyCalls.length, 3);
+});
+
+test("the Slack window the hotkey was pressed over reaches only Slack's prepare", async () => {
+  const { registerConnectorIpc } = await load();
+  const ipcMain = fakeIpcMain();
+  const manager = fakeManager();
+  const asked = [];
+  registerConnectorIpc({
+    ipcMain,
+    manager,
+    getPolicyState: async () => "allowed",
+    getAccountScope: () => SCOPE,
+    getSlackWindowTitle: async (event) => {
+      asked.push(event);
+      return "eng (Channel) - Acme - Slack";
+    },
+  });
+  const event = { sender: "agent-window" };
+  const prepare = ipcMain.handlers.get("connector-prepare");
+  await prepare(event, "slack", "send_message", { text: "hi" });
+  await prepare(event, "linear", "create_issue", { title: "Bug" });
+
+  assert.deepEqual(
+    manager.calls.map((call) => call.args[3].slackWindowTitle),
+    ["eng (Channel) - Acme - Slack", null]
+  );
+  assert.deepEqual(asked, [event]);
+});
+
+test("an account switch while the Slack window title is read gives the prepare the new account", async () => {
+  const { registerConnectorIpc } = await load();
+  const ipcMain = fakeIpcMain();
+  const manager = fakeManager();
+  let scope = SCOPE;
+  registerConnectorIpc({
+    ipcMain,
+    manager,
+    getPolicyState: async () => "allowed",
+    getAccountScope: () => scope,
+    getSlackWindowTitle: async () => {
+      scope = { accountId: "account-b", authGeneration: 4 };
+      return "eng (Channel) - Acme - Slack";
+    },
+  });
+  await ipcMain.handlers.get("connector-prepare")(
+    { sender: "agent-window" },
+    "slack",
+    "send_message",
+    {
+      text: "hi",
+    }
+  );
+  assert.equal(manager.calls[0].args[3].accountId, "account-b");
 });
 
 test("a cancel that lands while a direct run waits on policy stops it", async () => {

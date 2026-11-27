@@ -31,6 +31,7 @@ function personCandidate(user) {
 
 function createSlackDirectory({ api, now = Date.now }) {
   const cache = new Map();
+  const loading = new Map();
 
   // Stops at MAX_PAGES and says so: callers must not treat a cut-off list
   // as every channel or person there is.
@@ -51,13 +52,22 @@ function createSlackDirectory({ api, now = Date.now }) {
     return { ok: true, items, truncated: true };
   }
 
-  async function cached(kind, cacheKey, load) {
+  // Callers asking at once share one load (people and notPeople read the same list).
+  function cached(kind, cacheKey, load) {
     const key = `${kind}:${cacheKey}`;
     const hit = cache.get(key);
-    if (hit && now() - hit.at < CACHE_TTL_MS) return hit.value;
-    const value = await load();
-    if (value.ok) cache.set(key, { at: now(), value });
-    return value;
+    if (hit && now() - hit.at < CACHE_TTL_MS) return Promise.resolve(hit.value);
+    let pending = loading.get(key);
+    if (!pending) {
+      pending = load()
+        .then((value) => {
+          if (value.ok) cache.set(key, { at: now(), value });
+          return value;
+        })
+        .finally(() => loading.delete(key));
+      loading.set(key, pending);
+    }
+    return pending;
   }
 
   // Only channels the user is in: a user token can't post anywhere else.
@@ -73,11 +83,30 @@ function createSlackDirectory({ api, now = Date.now }) {
     );
   }
 
+  // Everyone in the workspace, read once for both lists below.
+  function members(token, cacheKey) {
+    return cached("members", cacheKey, () =>
+      listAll("users.list", {}, token, (data) => data.members ?? [])
+    );
+  }
+
+  async function membersWhere(token, cacheKey, keep, toCandidate) {
+    const list = await members(token, cacheKey);
+    return list.ok ? { ...list, items: list.items.filter(keep).map(toCandidate) } : list;
+  }
+
   function people(token, cacheKey) {
-    return cached("people", cacheKey, () =>
-      listAll("users.list", {}, token, (data) =>
-        (data.members ?? []).filter(isPerson).map(personCandidate)
-      )
+    return membersWhere(token, cacheKey, isPerson, personCandidate);
+  }
+
+  // Bots, apps and deactivated accounts: no one to post to, but a DM with one
+  // is titled with its name, so a person who shares it isn't the one it's with.
+  function notPeople(token, cacheKey) {
+    return membersWhere(
+      token,
+      cacheKey,
+      (user) => Boolean(user) && !isPerson(user),
+      (user) => ({ ...personCandidate(user), kind: "not_person" })
     );
   }
 
@@ -99,7 +128,7 @@ function createSlackDirectory({ api, now = Date.now }) {
   const personById = (token, id) =>
     lookUpPerson("users.info", { user: id }, "user_not_found", token);
 
-  return { channels, people, personByEmail, personById };
+  return { channels, people, notPeople, personByEmail, personById };
 }
 
 module.exports = { createSlackDirectory };

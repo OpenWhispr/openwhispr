@@ -120,12 +120,14 @@ function sameAccountScope(left, right) {
 }
 
 // getAccountScope() is the signed-in account bound to the current credential
-// and its generation, or null.
+// and its generation, or null. getSlackWindowTitle(event) is the Slack window
+// the agent hotkey was pressed over, for that window's requests only.
 function registerConnectorIpc({
   ipcMain,
   manager,
   getPolicyState,
   getAccountScope,
+  getSlackWindowTitle = () => null,
   findContacts,
   noteAttendees,
 }) {
@@ -152,7 +154,13 @@ function registerConnectorIpc({
     if (!isNonEmptyString(connectorId) || !isNonEmptyString(action) || !isPlainObject(args)) {
       return { status: "unavailable", reason: "invalid_request" };
     }
-    return manager.prepare(connectorId, action, args, await resolveCallAuth(event));
+    // Read before the account, so a switch while a title read runs can't pair
+    // the account from before it with the login after it.
+    const slackWindowTitle = connectorId === "slack" ? await getSlackWindowTitle(event) : null;
+    return manager.prepare(connectorId, action, args, {
+      ...(await resolveCallAuth(event)),
+      slackWindowTitle,
+    });
   });
 
   // Reads for the model: the same checks as prepare, and nothing is written.
