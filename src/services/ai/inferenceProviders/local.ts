@@ -1,5 +1,7 @@
 import type { InferenceProvider } from "./types";
 import { wrapCleanupTranscript } from "../../../config/prompts";
+import { getCleanupPromptProfile, runProfiledCleanup } from "../../../config/cleanupPromptProfiles";
+import { useSettingsStore } from "../../../stores/settingsStore";
 import logger from "../../../utils/logger";
 import { buildLocalInferenceError } from "../../../utils/localInferenceError";
 
@@ -14,6 +16,38 @@ export const localProvider: InferenceProvider = {
     const startTime = Date.now();
 
     logger.logReasoning("LOCAL_IPC_CALL", { model, textLength: text.length });
+
+    // A fine-tune with its own request shape replaces the shared cleanup prompt
+    // and wrapper for default dictation cleanup; see cleanupPromptProfiles.ts.
+    const profile = getCleanupPromptProfile(model, {
+      ...config,
+      hasCustomCleanupPrompt: !!useSettingsStore.getState().customPrompts.cleanup,
+    });
+    if (profile) {
+      let parts = 0;
+      const cleaned = await runProfiledCleanup(profile, text, async (userContent) => {
+        parts++;
+        const part = await window.electronAPI.processLocalReasoning(userContent, model, agentName, {
+          ...config,
+          systemPrompt: profile.systemPrompt,
+          temperature: profile.temperature,
+          disableThinking: true,
+        });
+        if (!part.success) {
+          logger.logReasoning("LOCAL_ERROR", { model, part: parts, error: part.error });
+          throw buildLocalInferenceError(part);
+        }
+        return part.text;
+      });
+      logger.logReasoning("LOCAL_SUCCESS", {
+        model,
+        promptProfile: true,
+        parts,
+        processingTimeMs: Date.now() - startTime,
+        resultLength: cleaned.length,
+      });
+      return cleaned;
+    }
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, config.toneStyle);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
