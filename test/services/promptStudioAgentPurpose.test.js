@@ -17,8 +17,10 @@ function findRunButton(node) {
   return findRunButton(node.props?.children);
 }
 
-test("Prompt Studio labels dictation-agent runs for policy enforcement", async (t) => {
+test("Prompt Studio preserves agent policy and default versus edited cleanup semantics", async (t) => {
   const calls = [];
+  const promptWrites = [];
+  globalThis.__promptStudioWrites = promptWrites;
   globalThis.__promptStudioReasoningCalls = calls;
 
   const { createServer } = await import("vite");
@@ -69,10 +71,10 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
         load(id) {
           if (id === "\0prompt-studio-react") {
             return `
-              let call = 0;
               export function useState(initial) {
-                call += 1;
-                const value = call === 1 ? "test" : typeof initial === "function" ? initial() : initial;
+                const value = initial === "current" ? "test"
+                  : initial === "default prompt" ? globalThis.__editedCleanupPrompt ?? initial
+                  : typeof initial === "function" ? initial() : initial;
                 return [value, () => {}];
               }
               export function useSyncExternalStore(_subscribe, getSnapshot) {
@@ -173,9 +175,10 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
                 translationDisableThinking: false,
                 translationTargetLanguage: "es",
                 customPrompts: { cleanup: "", dictationAgent: "", translate: "" },
-                preferredLanguage: "en",
+                preferredLanguage: "auto",
+                chineseScriptPreference: "simplified",
                 cleanupDisableThinking: false,
-                setCustomPrompt() {},
+                setCustomPrompt(kind, value) { globalThis.__promptStudioWrites.push([kind, value]); },
               };
               export function useSettingsStore(selector) { return selector(state); }
               useSettingsStore.getState = () => state;
@@ -226,6 +229,8 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
     await vite.close();
     fs.rmSync(cacheDir, { recursive: true, force: true });
     delete globalThis.__promptStudioReasoningCalls;
+    delete globalThis.__promptStudioWrites;
+    delete globalThis.__editedCleanupPrompt;
   });
 
   const { default: PromptStudio } = await vite.ssrLoadModule("/components/ui/PromptStudio.tsx");
@@ -237,4 +242,17 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0][3].requiresAgent, true);
+  for (const draft of ["default prompt", "Fix punctuation only."]) {
+    promptWrites.length = 0;
+    globalThis.__editedCleanupPrompt = draft;
+    await findRunButton(PromptStudio({ kind: "cleanup" })).props.onClick();
+    assert.deepEqual(promptWrites, [
+      ["cleanup", draft === "default prompt" ? "" : draft],
+      ["cleanup", ""],
+    ]);
+    assert.equal(calls.at(-1)[3].inferenceScope, "dictationCleanup");
+    assert.equal(calls.at(-1)[3].language, "auto");
+    assert.equal(calls.at(-1)[3].cleanupScript, "simplified");
+    assert.equal(calls.at(-1)[3].requireCompleteOutput, true);
+  }
 });

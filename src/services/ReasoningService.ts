@@ -436,7 +436,7 @@ class ReasoningService extends BaseReasoningService {
     // No systemPrompt override means the default cleanup path: a deterministic
     // transform, so zero temperature and a delimited transcript.
     const isCleanup = !config.systemPrompt;
-    const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName, config.toneStyle);
+    const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName, config);
     const userPrompt = isCleanup ? wrapCleanupTranscript(text) : text;
 
     const messages = [
@@ -618,7 +618,8 @@ class ReasoningService extends BaseReasoningService {
     text: string,
     model: string = "",
     agentName: string | null = null,
-    config: ReasoningConfig = {}
+    config: ReasoningConfig = {},
+    onScriptHandled?: () => void
   ): Promise<string> {
     const managed = await this.resolveManagedScope(
       model,
@@ -694,6 +695,7 @@ class ReasoningService extends BaseReasoningService {
     const assertStillAllowed = runningPolicyCheck(assertAllowed);
     const unsubscribe = onPolicyRestriction(assertStillAllowed, () => cancelRequest(requestId));
     try {
+      let cleanupApplied = providerId !== "openwhispr";
       const result = await handler.call({
         text,
         // A saved selection the catalog has retired must not reach the provider.
@@ -701,10 +703,14 @@ class ReasoningService extends BaseReasoningService {
         agentName,
         config: { ...dispatchConfig, requestId },
         ctx: this.providerContext,
+        onManagedCleanupApplied: () => {
+          cleanupApplied = true;
+        },
       });
       assertStillAllowed();
       if (isRequestCancelled(requestId)) throw requestCancelledError();
       if (validateCleanup) assertValidCleanupOutput(text, result);
+      if (dispatchConfig.cleanupScript && cleanupApplied && result.trim()) onScriptHandled?.();
 
       logger.logReasoning("PROVIDER_SUCCESS", {
         provider: providerId,

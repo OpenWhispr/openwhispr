@@ -13513,6 +13513,7 @@ class IPCHandlers {
             requestPurpose: opts.requestPurpose,
             promptMode: opts.promptMode,
             purpose: opts.purpose,
+            cleanupScript: opts.cleanupScript,
             screenContext: opts.screenContext,
             tone: opts.tone,
             appCategory: opts.appCategory,
@@ -13572,6 +13573,7 @@ class IPCHandlers {
           promptMode: data.promptMode,
           matchType: data.matchType,
           screenContextApplied: data.screenContextApplied,
+          cleanupApplied: data.cleanupApplied,
         };
       } catch (error) {
         if (controller.signal.aborted) {

@@ -20,6 +20,7 @@ import {
   selectIsCloudTranslationMode,
 } from "../../stores/settingsStore";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
+import { getCleanupLanguageContext } from "../../utils/chineseScript";
 import { getLanguageLabel } from "../../utils/languageSupport";
 import { getLlmDictionaryWords } from "../../utils/snippets";
 import { resolveDictationAgentInference } from "../../helpers/dictationAgentInference";
@@ -271,10 +272,15 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
       const modelToUse = isCloudMode ? cleanupModel || "auto" : cleanupModel;
 
       const previous = customPrompt;
-      setCustomPrompt(kind, editedPrompt);
+      setCustomPrompt(kind, editedPrompt === defaultPrompt ? "" : editedPrompt);
       try {
         const result = await ReasoningService.processText(testText, modelToUse, agentName, {
           inferenceScope: "dictationCleanup",
+          ...getCleanupLanguageContext(
+            effectiveSettings.preferredLanguage,
+            effectiveSettings.chineseScriptPreference
+          ),
+          requireCompleteOutput: true,
           disableThinking: effectiveSettings.cleanupDisableThinking,
           reasoningEffort: effectiveSettings.cleanupReasoningEffort,
         });

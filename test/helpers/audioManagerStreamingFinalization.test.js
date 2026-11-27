@@ -1560,7 +1560,15 @@ function orukeetProvider(final) {
 // and the published result.
 async function stopManagedDictation(
   AudioManager,
-  { final, providerName = "orukeet", language = "auto", upload, settings = {}, overrides = {} }
+  {
+    final,
+    providerName = "orukeet",
+    language = "auto",
+    upload,
+    settings = {},
+    overrides = {},
+    cleanupApplied,
+  }
 ) {
   globalThis.__streamingFinalizationSettings = {
     ...globalThis.__streamingFinalizationSettings,
@@ -1587,7 +1595,7 @@ async function stopManagedDictation(
   const reasonCalls = [];
   globalThis.window.electronAPI.cloudReason = async (text, opts) => {
     reasonCalls.push([text, opts]);
-    return { success: true, text: `${text}。` };
+    return { success: true, text: `${text}。`, cleanupApplied };
   };
   const usage = [];
   globalThis.window.electronAPI.cloudStreamingUsage = async (text, seconds, opts) => {
@@ -2078,14 +2086,21 @@ test("combined cleanup is reused once, while changed options or failed cleanup u
       export const isCloudTranslationMode = () => false;
     `,
   });
-  for (const [cleanupStatus, changed, calls, empty] of [
+  for (const [cleanupStatus, changed, calls, empty, cleanupApplied] of [
     ["complete", false, 0, false],
     ["complete", true, 1, false],
     ["fallback", false, 1, false],
     ["complete", false, 1, true],
+    ["fallback", false, 1, false, true],
   ]) {
-    const options = { customDictionary: ["Orukeet"], language: "en" };
+    const options = {
+      customDictionary: ["Orukeet"],
+      language: "auto",
+      cleanupScript: "simplified",
+    };
+    const finalizations = [];
     const { reasonCalls, usage, published } = await stopManagedDictation(AudioManager, {
+      cleanupApplied,
       final: {
         success: true,
         text: "please send invoice 128",
@@ -2101,13 +2116,23 @@ test("combined cleanup is reused once, while changed options or failed cleanup u
         },
         cleanupOptions: options,
       },
-      settings: { useCleanupModel: true, cleanupCloudMode: "openwhispr", customPrompts: {} },
+      settings: {
+        useCleanupModel: true,
+        cleanupCloudMode: "openwhispr",
+        customPrompts: {},
+        chineseScriptPreference: "simplified",
+      },
       overrides: {
         _activePipelineOptions: changed ? { ...options, language: "fr" } : options,
-        finalizeChineseScript: async (text) => text,
+        finalizeChineseScript: async (text, _settings, options) => {
+          finalizations.push(options?.afterCleanup);
+          return text;
+        },
       },
     });
     assert.equal(reasonCalls.length, calls);
+    // Only an accepted cleanup reply is finalized as one; anything else is raw text.
+    assert.deepEqual(finalizations, [!calls || cleanupApplied === true]);
     assert.equal(published[0].rawText, "please send invoice 128");
     assert.equal(
       published[0].text,

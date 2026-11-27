@@ -35,7 +35,6 @@ async function load(t, cachePrefix) {
   const createManager = (fields) =>
     Object.assign(Object.create(AudioManager.prototype), {
       sttConfig: { orukeetPipeline: "gemma12" },
-      getCleanupLanguage: () => "en",
       ...fields,
     });
   return { window, useSettingsStore, usePolicyStore, createManager };
@@ -56,6 +55,12 @@ test("combined cleanup options honor every eligibility guard and use the actual 
     locale: "en",
   };
   assert.deepEqual(manager.getPipelineCleanupOptions(useSettingsStore.getState()), untoned);
+  useSettingsStore.setState({ preferredLanguage: "auto", chineseScriptPreference: "traditional" });
+  assert.deepEqual(manager.getPipelineCleanupOptions(useSettingsStore.getState()), {
+    ...untoned,
+    language: "auto",
+    cleanupScript: "traditional",
+  });
   // Tone & Style: the tone picked for the app being dictated into, which a
   // custom cleanup prompt never takes.
   useSettingsStore.setState({ ...good, toneStyleEnabled: true });

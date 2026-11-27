@@ -16,6 +16,7 @@ export interface ResolvePromptOptions {
   agentName: string | null;
   uiLanguage?: string;
   language?: string;
+  cleanupScript?: "simplified" | "traditional";
   customDictionary?: string[];
   targetLanguageLabel?: string;
 }
@@ -61,6 +62,14 @@ export function appendPlainTextResponseSuffix(prompt: string, requireDisposition
   );
 }
 
+// Auto-detect with a Chinese script preference: the script for Chinese passages
+// only, never a single output language, so mixed speech isn't translated. English
+// in every locale. A verbatim copy of openwhispr-api's cleanupScriptInstruction
+// (lib/prompts.ts), which builds the Cloud prompt; change both together.
+function cleanupScriptInstruction(script: "simplified" | "traditional"): string {
+  return `Use ${script === "simplified" ? "Simplified" : "Traditional"} characters for Chinese passages. Preserve the speaker's wording and regional vocabulary. Keep each passage in its original language, including English and Japanese.`;
+}
+
 // Teammates' words are data another person controls, so they never join the
 // user's own list: they go in a JSON array labelled as hints, the way selection
 // edits quote the whole dictionary. English in every locale, like the Tone &
@@ -101,7 +110,10 @@ function applySubstitutions(template: string, opts: ResolvePromptOptions): strin
     prompt = prompt.replace(/\{\{targetLanguage\}\}/g, opts.targetLanguageLabel);
   }
 
-  const langInstruction = getLanguageInstruction(opts.language);
+  const langInstruction =
+    opts.language === "auto" && opts.cleanupScript
+      ? cleanupScriptInstruction(opts.cleanupScript)
+      : getLanguageInstruction(opts.language);
   if (langInstruction) prompt += "\n\n" + langInstruction;
 
   return appendDictionarySuffix(prompt, opts.customDictionary, opts.uiLanguage);
