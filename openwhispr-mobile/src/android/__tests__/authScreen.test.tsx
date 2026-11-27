@@ -223,6 +223,7 @@ import AuthScreen from '@/screens/AuthScreen.android';
 import { ResetPasswordScreen } from '../auth/ResetPasswordScreen';
 import { handleAuthBack } from '../auth/backPress';
 import { VerifyLinkScreen } from '../auth/VerifyLinkScreen';
+import { forgetSignUp } from '../auth/signedUpHere';
 
 beforeEach(() => {
   store.clear();
@@ -368,6 +369,27 @@ describe('Android verify email (section 6)', () => {
     isAnonymous: false,
     emailVerified: false,
   };
+
+  beforeEach(() => forgetSignUp());
+
+  it('keeps the just-signed-up Verify your email when the new account rebuilds the screen (6.1)', async () => {
+    mockCheckUser.mockResolvedValue('signup');
+    mockVerificationStatus.mockResolvedValue({ verified: false });
+    mockAuth.signUp.mockImplementation(async () => mockSetAuth({ user: unverified }));
+    const first = render(<AuthScreen onClose={jest.fn()} />);
+    fireEvent.changeText(first.getByLabelText('Email address'), 'New@example.com ');
+    fireEvent.press(first.getByText('Continue'));
+    await waitFor(() => expect(first.getAllByText('Create account').length).toBeGreaterThan(0));
+    fireEvent.changeText(first.getByLabelText('Password'), 'river-maple-77');
+    await act(async () => fireEvent.press(first.getAllByText('Create account')[1]));
+    // Root re-keys its Stack for the new account, so the screen mounts again from scratch.
+    first.unmount();
+    const view = render(<AuthScreen onClose={jest.fn()} />);
+    expect(view.getByText('Verify your email')).toBeTruthy();
+    expect(view.getByText('Resend in 1:00')).toBeTruthy();
+    expect(view.getByText('Use a different email')).toBeTruthy();
+    expect(view.queryByText('Use another account')).toBeNull();
+  });
 
   it('waits on Verify your email after sign-up, then says Email verified (6.1, 6.5)', async () => {
     mockCheckUser.mockResolvedValue('signup');

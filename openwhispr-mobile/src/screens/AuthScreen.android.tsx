@@ -41,6 +41,7 @@ import { useAuthT, type AuthKey } from '@/android/auth/strings';
 import { setAuthBackHandler } from '@/android/auth/backPress';
 import { VerifyEmail } from '@/android/auth/VerifyEmail';
 import { needsEmailVerification } from '@/android/auth/emailVerification';
+import { forgetSignUp, rememberSignUp, wasSignedUpHere } from '@/android/auth/signedUpHere';
 
 /** Why the app sent someone here; names the title and line (1.2). */
 export type AuthReason = 'sync' | 'share' | 'meeting' | 'cloud' | 'plan' | 'referral';
@@ -111,8 +112,6 @@ export default function AuthScreen({
   const [emailFocused, setEmailFocused] = useState(false);
   const [keyboardUp, setKeyboardUp] = useState(false);
   const attempted = useRef<{ email: string; method: SignInMethod } | null>(null);
-  // Created here (6.1) rather than signed in to an account that never verified (6.4).
-  const signedUpHere = useRef(false);
   const passwordRef = useRef<TextInputType>(null);
   const nameRef = useRef<TextInputType>(null);
   const scroll = useRef<ScrollView>(null);
@@ -192,7 +191,10 @@ export default function AuthScreen({
     safeHaptics('medium');
     setPasswordError(null);
     attempted.current = { email: address, method: 'email' };
-    signedUpHere.current = view === 'signup';
+    // Created here (6.1) rather than signed in to an account that never verified (6.4). Kept outside
+    // this screen, since the new account rebuilds it before Verify your email shows.
+    if (view === 'signup') rememberSignUp(address);
+    else forgetSignUp();
     await run(() =>
       view === 'signup'
         ? signUp(address, password, name.trim() || undefined)
@@ -204,6 +206,7 @@ export default function AuthScreen({
     async (provider: 'google' | 'microsoft') => {
       safeHaptics('light');
       attempted.current = { email: '', method: provider };
+      forgetSignUp();
       await run(provider === 'google' ? signInWithGoogle : signInWithMicrosoft);
     },
     [run, signInWithGoogle, signInWithMicrosoft],
@@ -228,12 +231,13 @@ export default function AuthScreen({
   }, [verifying]);
   const leaveVerification = useCallback(() => {
     void signOut();
-    signedUpHere.current = false;
+    forgetSignUp();
     setEmail('');
     go('start');
   }, [go, signOut]);
   const finishVerification = useCallback(() => {
     // The API says it's verified; the route and onboarding move on once the user says so too.
+    forgetSignUp();
     const current = useAuthStore.getState().user;
     if (current) useAuthStore.setState({ user: { ...current, emailVerified: true } });
   }, []);
@@ -493,7 +497,7 @@ export default function AuthScreen({
           {verifying && user ? (
             <VerifyEmail
               email={user.email}
-              resumed={!signedUpHere.current}
+              resumed={!wasSignedUpHere(user.email)}
               onLeave={leaveVerification}
               onContinue={finishVerification}
               onVerified={confirmEmail}
