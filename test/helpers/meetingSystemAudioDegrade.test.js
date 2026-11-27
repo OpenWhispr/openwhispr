@@ -28,6 +28,7 @@ function harness({ systemAudioHeard = false } = {}) {
     meetingSystemAudioHeard: systemAudioHeard,
     meetingSystemAudioHandover: createMeetingSystemAudioHandover({ now: () => now }),
     meetingSystemAudioWatchdog: { detachCapture: () => events.push("detach") },
+    setMeetingSystemAudioStrategy: (strategy) => events.push(`strategy:${strategy}`),
     debugLogger: { warn() {}, debug() {}, error() {}, info() {} },
     windowsLoopbackAudioManager: { stop: async () => events.push("stop") },
     BrowserWindow: {
@@ -80,7 +81,7 @@ test("renderer chunks are held back until loopback hears what the helper misses"
   sendRenderer(AUDIBLE);
   sendRenderer(AUDIBLE);
 
-  assert.deepEqual(events, ["detach", "stop", "send:system", "send:system"]);
+  assert.deepEqual(events, ["detach", "strategy:loopback", "stop", "send:system", "send:system"]);
 });
 
 test("renderer chunks pass straight through when no helper handover is pending", () => {

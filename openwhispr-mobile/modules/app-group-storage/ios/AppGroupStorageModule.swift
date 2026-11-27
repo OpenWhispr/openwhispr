@@ -2,6 +2,7 @@ import ExpoModulesCore
 import UIKit
 import AVFoundation
 import GameController
+import Security
 
 public class AppGroupStorageModule: Module {
   private var appBundleId: String {
@@ -57,6 +58,19 @@ public class AppGroupStorageModule: Module {
   // audioStateLock; the input tap only ever takes audioStateLock, so the
   // audio thread never waits on pipeline work.
   private let audioPipelineLock = NSRecursiveLock()
+  // A meeting recording shares this process's AVAudioSession. While it holds
+  // the lease the warm mic stays parked and never deactivates the session.
+  // Its own lock, never held while calling into the pipeline, so it stays
+  // out of the audioPipelineLock/audioStateLock order.
+  private let captureLeaseLock = NSLock()
+  private var captureLease = CaptureLeasePolicy()
+  // Published to the App Group while the lease is held, so the keyboard
+  // extension (another process) leaves the microphone to the meeting. Main only.
+  // The keyboard reads it (plugins/keyboard-extension/ios/MeetingCaptureLease.swift)
+  // and counts one older than 15 s as free, so the interval stays well under that.
+  private var captureLeaseHeartbeatTimer: Timer?
+  private let captureLeaseHeartbeatKey = "capture_lease_heartbeat_ms"
+  private let captureLeaseHeartbeatIntervalSeconds: TimeInterval = 5.0
   private var audioEngine: AVAudioEngine?
   private var recordingFile: AVAudioFile?
   private var recordingFileUrl: URL?
@@ -92,11 +106,14 @@ public class AppGroupStorageModule: Module {
   private var backgroundObserverToken: NSObjectProtocol?
   private var audioInterruptionObserverToken: NSObjectProtocol?
   private var mediaServicesResetObserverToken: NSObjectProtocol?
+  private var engineConfigurationObserverToken: NSObjectProtocol?
   // Refreshed while OpenWhispr is foreground so the keyboard can tell it is
   // hosted by our own app (record in place) rather than another app (hand off).
   private var foregroundHeartbeatTimer: Timer?
   private let containingAppForegroundKey = "containing_app_foreground_at_ms"
 
+  // Accessed only on main, like the Darwin recording observers.
+  private var recordingStartupGate = KeyboardRecordingStartupGate()
   private let returnAttemptGate = ReturnAttemptGate()
   // The host the last return resolved, kept for the "Back to <App>" button:
   // the extension keys are cleared on read and the observed host goes stale.
@@ -116,6 +133,8 @@ public class AppGroupStorageModule: Module {
 
     OnCreate {
       self.initializeSharedState()
+      // A crash leaves the last heartbeat behind; a fresh module holds no lease.
+      self.removeCaptureLeaseHeartbeat()
       self.addDarwinStartObserver()
       self.addDarwinStatusObserver()
       self.addDarwinDictationModeObserver()
@@ -158,7 +177,24 @@ public class AppGroupStorageModule: Module {
       }
       defaults.removeObject(forKey: key)
       defaults.synchronize()
+      if key == self.hotkeyJsReadyAtMsKey {
+        DispatchQueue.main.async { [weak self] in self?.recordingStartupGate.reset() }
+      }
       return defaults.object(forKey: key) == nil
+    }
+
+    Function("setKeyboardSessionCredential") { (cookie: String?) -> Bool in
+      self.writeKeyboardSessionCredential(cookie)
+    }
+
+    // Where the keyboard leaves the dictations it handled itself (direct-dictations/).
+    Function("getAppGroupContainerPath") { () -> String? in
+      FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: self.appGroupId)?.path
+    }
+
+    // A take the keyboard was killed before encoding is raw 16 kHz mono 16-bit PCM.
+    Function("wrapPcmAsWav") { (pcmPath: String, wavPath: String) -> Bool in
+      Self.wrapPcmAsWav(pcmPath: pcmPath, wavPath: wavPath)
     }
 
     Function("setKeyboardStatus") { (status: String, detail: String?) -> Void in
@@ -191,8 +227,8 @@ public class AppGroupStorageModule: Module {
       }
     }
 
-    // Called by useKeyboardHandoff once its recording listeners are subscribed.
-    // The hotkey's cold start (plugins/hotkey-dictation) waits for this stamp, and
+    // Called once recording listeners and local preferences are ready. Both
+    // keyboard Darwin requests and the hardware hotkey wait for this stamp, and
     // only trusts one carrying this process's pid: a crash skips the hook's
     // cleanup, and the next launch's intent can read before OnCreate clears it.
     Function("markHotkeyJsReady") { () -> Void in
@@ -200,6 +236,7 @@ public class AppGroupStorageModule: Module {
       let nowMs = Int(Date().timeIntervalSince1970 * 1000)
       defaults.set("\(getpid()):\(nowMs)", forKey: self.hotkeyJsReadyAtMsKey)
       defaults.synchronize()
+      DispatchQueue.main.async { [weak self] in self?.releasePendingDarwinStart() }
     }
 
     // Drives the one-time "Using a keyboard?" nudge toward the hardware-keyboard
@@ -259,6 +296,21 @@ public class AppGroupStorageModule: Module {
       }
     }
 
+    // Resolves only once the warm mic is parked, so meeting capture never
+    // starts while the keyboard pipeline still owns the session.
+    AsyncFunction("acquireCaptureLease") { (owner: String, promise: Promise) in
+      DispatchQueue.main.async {
+        self.acquireCaptureLease(owner: owner)
+        promise.resolve(nil)
+      }
+    }
+
+    Function("releaseCaptureLease") { (owner: String) -> Void in
+      DispatchQueue.main.async {
+        self.releaseCaptureLease(owner: owner)
+      }
+    }
+
     OnDestroy {
       DispatchQueue.main.async {
         self.stopRecording(reason: "module.onDestroy")
@@ -276,6 +328,7 @@ public class AppGroupStorageModule: Module {
         self.stopForegroundHeartbeat()
         self.stopWarmMicIdleTimer()
         self.stopKeepAliveHeartbeat()
+        self.stopCaptureLeaseHeartbeat()
         // Graceful termination: preserve a not-yet-inserted agent RESULT so it
         // survives a clean quit the same way it survives jetsam — the keyboard
         // can still show/insert it on reopen (≤10 min). On-launch clearing (the
@@ -843,6 +896,14 @@ public class AppGroupStorageModule: Module {
       }
     }
 
+    // A keyboard clip would reconfigure the session a meeting is recording on.
+    // Checked after the defer is in place so it republishes ready=0.
+    if isCaptureLeaseHeld() {
+      setKeyboardStatus("error", detail: "capture_lease_held")
+      logMarker("startRecording.rejectedCaptureLease", extra: "trigger=\(trigger)")
+      return false
+    }
+
     removeDarwinStartObserver()
 
     // isInputFlowing guards against a zombie engine (suspended-and-resumed
@@ -1041,18 +1102,50 @@ public class AppGroupStorageModule: Module {
 
   // MARK: - Audio Engine
 
+  // The warm mic keeps this session live for minutes after a take, so these
+  // options decide how the user's music sounds all that time. Bluetooth HFP
+  // alone (call mode) left AirPods muffled and mono while the mic was warm.
+  // On iOS 26, AirPods that support high-quality recording record and play
+  // at full bandwidth instead; iOS falls back to HFP for any headset that
+  // doesn't, so its mic is still used. A2DP only reaches output-only devices
+  // (speakers, car audio), since iOS prefers HFP on a device that has both.
+  private static var captureCategoryOptions: AVAudioSession.CategoryOptions {
+    var options: AVAudioSession.CategoryOptions = [
+      .defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP, .mixWithOthers,
+    ]
+    if #available(iOS 26.0, *) {
+      options.insert(.bluetoothHighQualityRecording)
+    }
+    return options
+  }
+
+  // Which mic the session got and, for a Bluetooth one, whether it records at
+  // full bandwidth or fell back to call mode. Port types only, never names.
+  private func logCaptureRoute(_ session: AVAudioSession) {
+    guard let input = session.currentRoute.inputs.first else {
+      logMarker("audioSession.route", extra: "input=none")
+      return
+    }
+    var extra = "input=\(input.portType.rawValue)"
+    if #available(iOS 26.0, *), let bluetooth = input.bluetoothMicrophoneExtension {
+      let quality = bluetooth.highQualityRecording
+      extra += " hqSupported=\(quality.isSupported) hqEnabled=\(quality.isEnabled)"
+    }
+    logMarker("audioSession.route", extra: extra)
+  }
+
   private func configureAudioSessionForCapture() throws {
     let session = AVAudioSession.sharedInstance()
     // .default (not .measurement) so iOS applies its normal input gain/AGC to
     // the mic. .measurement disables that conditioning for "raw" audio, which
     // captured voice so quietly (~-40 dB peak, only ~12 dB over the noise floor)
     // that the speech-activity check discarded it as no-speech unless the user
-    // nearly shouted. If this still isn't loud enough, .voiceChat applies
-    // stronger voice AGC.
+    // nearly shouted. Keep .default: .bluetoothHighQualityRecording works with
+    // no other mode.
     try session.setCategory(
       .playAndRecord,
       mode: .default,
-      options: [.defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers]
+      options: Self.captureCategoryOptions
     )
 
     // During a cold launch handed off from another app — and equally during a
@@ -1067,6 +1160,7 @@ public class AppGroupStorageModule: Module {
         if attempt > 0 {
           logMarker("audioSession.activatedAfterRetry", extra: "attempt=\(attempt)")
         }
+        logCaptureRoute(session)
         return
       } catch {
         lastError = error
@@ -1158,11 +1252,22 @@ public class AppGroupStorageModule: Module {
     setWarmMicState(isWarm: false)
     stopKeepAliveHeartbeat()
 
-    do {
-      try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-    } catch {
-      logMarker("audioEngine.deactivateSessionFailed", extra: "reason=\(reason) error=\(error.localizedDescription)")
+    // Every teardown path (idle timeout, interruption, media-services reset,
+    // Dictation mode switch, OnDestroy) ends here, so this one check keeps them
+    // all from deactivating the session under a meeting recording.
+    if isCaptureLeaseHeld() {
+      logMarker("audioEngine.keptSessionForCaptureLease", extra: "reason=\(reason)")
+    } else {
+      do {
+        try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+      } catch {
+        logMarker("audioEngine.deactivateSessionFailed", extra: "reason=\(reason) error=\(error.localizedDescription)")
+      }
     }
+    // A backgrounded app can suspend now, so LiveActivityController drops the idle
+    // session card before iOS can kill the app without warning.
+    NotificationCenter.default.post(
+      name: Notification.Name("\(Self.notificationPrefix).warmMicReleased"), object: nil)
 
     logMarker("audioEngine.stopped", extra: "reason=\(reason)")
   }
@@ -1514,6 +1619,34 @@ public class AppGroupStorageModule: Module {
     logMarker("darwinStopObserver.removed")
   }
 
+  private func startDarwinRecording() {
+    if startRecording(trigger: "darwin.startNotification") {
+      logMarker("darwinStartObserver.startSucceeded")
+      sendEvent("onBackgroundRecordingStarted", [:])
+    } else {
+      logMarker("darwinStartObserver.startFailed")
+    }
+  }
+
+  private func releasePendingDarwinStart() {
+    // Keep the final replay check and engine start together with JS recorder operations.
+    audioPipelineLock.lock()
+    defer { audioPipelineLock.unlock() }
+    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    defaults.synchronize()
+    guard defaults.string(forKey: hotkeyJsReadyAtMsKey)?.hasPrefix("\(getpid()):") == true else {
+      recordingStartupGate.reset()
+      return
+    }
+    if recordingStartupGate.release(
+      currentJobId: sharedRecordingJobId(),
+      stopRequested: defaults.string(forKey: stopRequestedKey) == "1",
+      cancelled: defaults.string(forKey: "keyboard_cancel_requested") == "1"
+    ) {
+      startDarwinRecording()
+    }
+  }
+
   private func addDarwinStartObserver() {
     guard !isObservingStartNotification else { return }
 
@@ -1528,11 +1661,17 @@ public class AppGroupStorageModule: Module {
         let module = Unmanaged<AppGroupStorageModule>.fromOpaque(observer).takeUnretainedValue()
         DispatchQueue.main.async {
           module.logMarker("darwinStartObserver.received")
-          if module.startRecording(trigger: "darwin.startNotification") {
-            module.logMarker("darwinStartObserver.startSucceeded")
-            module.sendEvent("onBackgroundRecordingStarted", [:])
-          } else {
-            module.logMarker("darwinStartObserver.startFailed")
+          guard let defaults = UserDefaults(suiteName: module.appGroupId) else { return }
+          defaults.synchronize()
+          let jobId = module.sharedRecordingJobId()
+            ?? module.resolveRecordingJobId(trigger: "darwin.startNotification")
+          let ready = defaults.string(forKey: module.hotkeyJsReadyAtMsKey)?.hasPrefix("\(getpid()):") == true
+          if module.recordingStartupGate.requestStart(
+            jobId: jobId, isReady: ready,
+            stopRequested: defaults.string(forKey: module.stopRequestedKey) == "1",
+            cancelled: defaults.string(forKey: "keyboard_cancel_requested") == "1"
+          ) {
+            module.startDarwinRecording()
           }
         }
       },
@@ -1706,6 +1845,13 @@ public class AppGroupStorageModule: Module {
     ) { [weak self] _ in
       self?.handleMediaServicesReset()
     }
+    engineConfigurationObserverToken = center.addObserver(
+      forName: .AVAudioEngineConfigurationChange,
+      object: nil,
+      queue: .main
+    ) { [weak self] notification in
+      self?.handleAudioEngineConfigurationChange(notification)
+    }
     logMarker("audioSessionObservers.added")
   }
 
@@ -1718,6 +1864,10 @@ public class AppGroupStorageModule: Module {
     if let token = mediaServicesResetObserverToken {
       center.removeObserver(token)
       mediaServicesResetObserverToken = nil
+    }
+    if let token = engineConfigurationObserverToken {
+      center.removeObserver(token)
+      engineConfigurationObserverToken = nil
     }
   }
 
@@ -1780,6 +1930,26 @@ public class AppGroupStorageModule: Module {
     }
     shutdownAudioPipeline(reason: "audioSession.mediaServicesReset")
     armWarmMic(reason: "mediaServicesReset")
+  }
+
+  /// The engine stops itself when the input format changes (a Bluetooth headset
+  /// connecting, another audio client changing the category), with no other signal.
+  /// Left alone, the shared flags would keep claiming a warm mic: the keyboard skips
+  /// Activate, and a backgrounded app keeps its Live Activity until it suspends and
+  /// dies. Rebuild on the current session, or release so the flags tell the truth.
+  private func handleAudioEngineConfigurationChange(_ notification: Notification) {
+    audioPipelineLock.lock()
+    defer { audioPipelineLock.unlock() }
+    guard let engine = notification.object as? AVAudioEngine, engine === audioEngine else { return }
+    audioStateLock.lock()
+    let recording = isClipRecording
+    audioStateLock.unlock()
+    logMarker("audioEngine.configurationChange", extra: "recording=\(recording)")
+    // stopRecording reads the dead engine and clears the warm flag itself.
+    guard !recording else { return }
+    if !ensureAudioEngineRunning(reason: "configurationChange") {
+      releaseWarmMic(reason: "configurationChange")
+    }
   }
 
   private func handleAppDidBecomeActive() {
@@ -1854,6 +2024,10 @@ public class AppGroupStorageModule: Module {
       logMarker("armWarmMic.skippedDisabled", extra: "reason=\(reason)")
       return
     }
+    guard !isCaptureLeaseHeld() else {
+      logMarker("armWarmMic.skippedCaptureLease", extra: "reason=\(reason)")
+      return
+    }
     // Without permission there is nothing to warm, and attempting it would
     // raise the system prompt from wherever we happen to be (launch, resume).
     // The keyboard stays un-ready, which is the truthful state: it cannot
@@ -1914,6 +2088,94 @@ public class AppGroupStorageModule: Module {
     }
     shutdownAudioPipeline(reason: "releaseWarmMic.\(reason)")
     logMarker("releaseWarmMic.released", extra: "reason=\(reason)")
+  }
+
+  // MARK: - Capture Lease
+
+  private func isCaptureLeaseHeld() -> Bool {
+    captureLeaseLock.lock()
+    defer { captureLeaseLock.unlock() }
+    return captureLease.isHeld
+  }
+
+  /// Parks the warm mic for a meeting recording. Runs on main; only the first
+  /// holder parks, later holders find it already parked.
+  private func acquireCaptureLease(owner: String) {
+    captureLeaseLock.lock()
+    let isFirstHolder = captureLease.acquire(owner)
+    captureLeaseLock.unlock()
+    logMarker("captureLease.acquired", extra: "owner=\(owner) parks=\(isFirstHolder)")
+    guard isFirstHolder else { return }
+    // Before the promise resolves, so the keyboard sees the lease at once.
+    startCaptureLeaseHeartbeat()
+
+    audioPipelineLock.lock()
+    defer { audioPipelineLock.unlock() }
+    stopWarmMicIdleTimer()
+    audioStateLock.lock()
+    let recording = isClipRecording
+    audioStateLock.unlock()
+    if recording {
+      stopRecording(reason: "captureLease")
+    }
+    // The lease is already held, so this stops the engine but leaves the
+    // session active for the meeting.
+    shutdownAudioPipeline(reason: "captureLease")
+    // Stopping a clip re-arms the idle timer, so turn it off again.
+    stopWarmMicIdleTimer()
+    setSharedRecordingState(active: false, ready: false, clearStopRequested: false, clearAudioLevel: true)
+  }
+
+  private func releaseCaptureLease(owner: String) {
+    captureLeaseLock.lock()
+    let wasLastHolder = captureLease.release(owner)
+    captureLeaseLock.unlock()
+    logMarker("captureLease.released", extra: "owner=\(owner) rearms=\(wasLastHolder)")
+    if wasLastHolder {
+      stopCaptureLeaseHeartbeat()
+    }
+    // Warming activates the session, which only succeeds in the foreground;
+    // otherwise the next foreground re-arms.
+    guard wasLastHolder, UIApplication.shared.applicationState == .active else { return }
+    armWarmMic(reason: "captureLeaseReleased")
+  }
+
+  private func startCaptureLeaseHeartbeat() {
+    updateCaptureLeaseHeartbeat()
+    guard captureLeaseHeartbeatTimer == nil else { return }
+    // Common modes on the main run loop: background audio keeps the app
+    // running during a meeting, so this keeps firing in the background.
+    let timer = Timer(timeInterval: captureLeaseHeartbeatIntervalSeconds, repeats: true) { [weak self] _ in
+      self?.updateCaptureLeaseHeartbeat()
+    }
+    RunLoop.main.add(timer, forMode: .common)
+    captureLeaseHeartbeatTimer = timer
+    logMarker("captureLease.heartbeatStarted")
+  }
+
+  private func updateCaptureLeaseHeartbeat() {
+    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    defaults.set(
+      String(Int64(Date().timeIntervalSince1970 * 1000)),
+      forKey: captureLeaseHeartbeatKey
+    )
+    defaults.synchronize()
+  }
+
+  private func stopCaptureLeaseHeartbeat() {
+    let wasRunning = captureLeaseHeartbeatTimer != nil
+    captureLeaseHeartbeatTimer?.invalidate()
+    captureLeaseHeartbeatTimer = nil
+    removeCaptureLeaseHeartbeat()
+    if wasRunning {
+      logMarker("captureLease.heartbeatStopped")
+    }
+  }
+
+  private func removeCaptureLeaseHeartbeat() {
+    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    defaults.removeObject(forKey: captureLeaseHeartbeatKey)
+    defaults.synchronize()
   }
 
   private func resetWarmMicIdleTimer() {
@@ -2116,5 +2378,76 @@ public class AppGroupStorageModule: Module {
       UIApplication.shared.endBackgroundTask(backgroundTaskId)
       backgroundTaskId = .invalid
     }
+  }
+}
+
+// MARK: - Keyboard session credential
+
+extension AppGroupStorageModule {
+  // Must match KeyboardCredentialStore in plugins/keyboard-extension/ios (a Jest test compares them).
+  static let keyboardSessionService = "com.openwhispr.keyboard-session"
+  static let keyboardSessionAccount = "cookie"
+
+  /// Streams the raw take into a WAV file with a 44-byte header, never loading it whole.
+  static func wrapPcmAsWav(pcmPath: String, wavPath: String) -> Bool {
+    let fileManager = FileManager.default
+    guard let size = (try? fileManager.attributesOfItem(atPath: pcmPath)[.size] as? NSNumber)?.intValue,
+      size > 0, let input = FileHandle(forReadingAtPath: pcmPath)
+    else { return false }
+    defer { try? input.close() }
+    fileManager.createFile(atPath: wavPath, contents: nil)
+    guard let output = FileHandle(forWritingAtPath: wavPath) else { return false }
+    defer { try? output.close() }
+    let rate: UInt32 = 16_000
+    var header = Data()
+    func append<T: FixedWidthInteger>(_ value: T) {
+      withUnsafeBytes(of: value.littleEndian) { header.append(contentsOf: $0) }
+    }
+    header.append(contentsOf: Array("RIFF".utf8))
+    append(UInt32(36 + size))
+    header.append(contentsOf: Array("WAVEfmt ".utf8))
+    append(UInt32(16))
+    append(UInt16(1))
+    append(UInt16(1))
+    append(rate)
+    append(rate * 2)
+    append(UInt16(2))
+    append(UInt16(16))
+    header.append(contentsOf: Array("data".utf8))
+    append(UInt32(size))
+    do {
+      try output.write(contentsOf: header)
+      while let chunk = try input.read(upToCount: 64 * 1024), !chunk.isEmpty {
+        try output.write(contentsOf: chunk)
+      }
+      return true
+    } catch {
+      try? fileManager.removeItem(atPath: wavPath)
+      return false
+    }
+  }
+
+  /// One Keychain item in the App Group's access group, so the keyboard can read the session
+  /// without a new entitlement and the app's other items stay out of its reach. A nil or empty
+  /// cookie deletes it.
+  func writeKeyboardSessionCredential(_ cookie: String?) -> Bool {
+    let item: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: Self.keyboardSessionService,
+      kSecAttrAccount as String: Self.keyboardSessionAccount,
+      kSecAttrAccessGroup as String: appGroupId,
+    ]
+    guard let cookie, !cookie.isEmpty else {
+      let status = SecItemDelete(item as CFDictionary)
+      return status == errSecSuccess || status == errSecItemNotFound
+    }
+    let value: [String: Any] = [
+      kSecValueData as String: Data(cookie.utf8),
+      kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+    ]
+    let updated = SecItemUpdate(item as CFDictionary, value as CFDictionary)
+    if updated == errSecSuccess { return true }
+    guard updated == errSecItemNotFound else { return false }
+    return SecItemAdd(item.merging(value) { _, new in new } as CFDictionary, nil) == errSecSuccess
   }
 }

@@ -23,8 +23,13 @@ interface AppGroupStorageModule {
   stopNativeRecording(): void;
   endProcessingTask(): void;
   armWarmMic(): void;
+  acquireCaptureLease(owner: string): Promise<void>;
+  releaseCaptureLease(owner: string): void;
   isHardwareKeyboardConnected(): boolean;
   markHotkeyJsReady(): void;
+  setKeyboardSessionCredential?(cookie: string | null): boolean;
+  getAppGroupContainerPath?(): string | null;
+  wrapPcmAsWav?(pcmPath: string, wavPath: string): boolean;
 }
 
 export interface SpeechActivityAnalysis {
@@ -81,6 +86,8 @@ const NativeModuleEvents = NativeModule
   : null;
 
 export const AppGroupStorage = {
+  supportsKeyboardDirectDictation: typeof NativeModule?.setKeyboardSessionCredential === 'function',
+
   setItem(key: string, value: string): boolean {
     if (!NativeModule) return false;
     return NativeModule.setItem(key, value);
@@ -94,6 +101,24 @@ export const AppGroupStorage = {
   removeItem(key: string): boolean {
     if (!NativeModule) return false;
     return NativeModule.removeItem(key);
+  },
+
+  /**
+   * Shares the session with the keyboard, as `{"userId", "cookie"}` JSON (null removes it).
+   * False when it couldn't.
+   */
+  setKeyboardSessionCredential(credential: string | null): boolean {
+    return NativeModule?.setKeyboardSessionCredential?.(credential) ?? false;
+  },
+
+  /** The App Group container's path, where the keyboard leaves its own dictations. */
+  getAppGroupContainerPath(): string | null {
+    return NativeModule?.getAppGroupContainerPath?.() ?? null;
+  },
+
+  /** Wraps a raw 16 kHz mono 16-bit take the keyboard left behind in a WAV file. */
+  wrapPcmAsWav(pcmPath: string, wavPath: string): boolean {
+    return NativeModule?.wrapPcmAsWav?.(pcmPath, wavPath) ?? false;
   },
 
   setKeyboardStatus(status: string, detail?: string | null): void {
@@ -190,6 +215,23 @@ export const AppGroupStorage = {
     NativeModule.armWarmMic();
   },
 
+  /**
+   * Parks the keyboard's warm mic while `owner` captures audio. The warm mic
+   * shares the app's audio session, and its idle teardown would otherwise
+   * deactivate the session under a meeting recording. Resolves once parked,
+   * so start capture only after it settles.
+   */
+  async acquireCaptureLease(owner: string): Promise<void> {
+    if (!NativeModule) return;
+    await NativeModule.acquireCaptureLease(owner);
+  },
+
+  /** Ends `owner`'s hold; the last release re-arms the warm mic in the foreground. */
+  releaseCaptureLease(owner: string): void {
+    if (!NativeModule) return;
+    NativeModule.releaseCaptureLease(owner);
+  },
+
   /** True while a hardware keyboard (e.g. a Magic Keyboard) is attached. */
   isHardwareKeyboardConnected(): boolean {
     if (!NativeModule) return false;
@@ -273,6 +315,9 @@ export const APP_GROUP_KEYS = {
   KEYBOARD_PENDING_TRANSCRIPT_JOB_ID: 'keyboard_pending_transcript_job_id',
   KEYBOARD_ORPHANED_RAW_TRANSCRIPT: 'keyboard_orphaned_raw_transcript',
   KEYBOARD_ORPHANED_RAW_TRANSCRIPT_JOB_ID: 'keyboard_orphaned_raw_transcript_job_id',
+  // The orphan slot's job id when the native uploader kept text the server already cleaned (fused
+  // cleanup), so the app translates it without cleaning it again.
+  KEYBOARD_ORPHANED_TRANSCRIPT_CLEANED_JOB_ID: 'keyboard_orphaned_transcript_cleaned_job_id',
   KEYBOARD_RECORDING_JOB_ID: 'keyboard_recording_job_id',
   KEYBOARD_RECORDING_FORMAT: 'keyboard_recording_format',
   KEYBOARD_COMPRESSED_AUDIO_UNSUPPORTED: 'keyboard_compressed_audio_unsupported',
@@ -290,16 +335,32 @@ export const APP_GROUP_KEYS = {
   KEYBOARD_RECORDING_TONE: 'keyboard_recording_tone',
   KEYBOARD_RECORDING_TONE_JOB_ID: 'keyboard_recording_tone_job_id',
   KEYBOARD_TONE_APPLICABLE: 'keyboard_tone_applicable',
+  // Dictation translation: the chosen target (absent = Off), the languages the current route can
+  // translate into (JSON), whether translation applies at all, and the per-job frozen target.
+  KEYBOARD_TRANSLATION_TARGET: 'keyboard_translation_target',
+  KEYBOARD_TRANSLATION_LANGUAGES: 'keyboard_translation_languages',
+  KEYBOARD_TRANSLATION_APPLICABLE: 'keyboard_translation_applicable',
+  KEYBOARD_TRANSLATION_RECENTS: 'keyboard_translation_recents',
+  KEYBOARD_RECORDING_TRANSLATION: 'keyboard_recording_translation',
+  KEYBOARD_RECORDING_TRANSLATION_JOB_ID: 'keyboard_recording_translation_job_id',
+  // The direct-dictation snapshot the keyboard reads (src/lib/keyboardDirectSync.ts).
+  KEYBOARD_DIRECT_CONFIG: 'keyboard_direct_config',
   BACKGROUND_SESSION_READY: 'background_session_ready',
   // Hotkey dictation: "<pid>:<ms>", stamped by markHotkeyJsReady once
   // useKeyboardHandoff's recording listeners are subscribed; the hotkey's cold
   // start waits for it. Native clears it at launch.
   HOTKEY_JS_READY_AT_MS: 'hotkey_js_ready_at_ms',
+  // Native → keyboard: epoch ms, refreshed every 5 s while a meeting holds the capture lease
+  // (removed on the last release and at launch). Older than 15 s counts as not held.
+  CAPTURE_LEASE_HEARTBEAT_MS: 'capture_lease_heartbeat_ms',
   // Agent mode — config mirrors (app → keyboard; persisted across launches like tone keys)
   KEYBOARD_AGENT_ENABLED: 'keyboard_agent_enabled',
   KEYBOARD_AGENT_APPLICABLE: 'keyboard_agent_applicable',
   KEYBOARD_AGENT_NAME: 'keyboard_agent_name',
   KEYBOARD_AGENT_SHARE_CONTEXT: 'keyboard_agent_share_context',
+  // App → keyboard: hide the example instructions until this time (ms), while onboarding's
+  // voice assistant step says what to dictate.
+  KEYBOARD_AGENT_HINTS_HIDDEN_UNTIL_MS: 'keyboard_agent_hints_hidden_until_ms',
   // Agent mode — one-shot / per-job keys (cleared on app launch)
   KEYBOARD_AGENT_REQUEST: 'keyboard_agent_request',
   KEYBOARD_AGENT_JOB: 'keyboard_agent_job',

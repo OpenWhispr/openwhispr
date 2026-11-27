@@ -70,3 +70,29 @@ test("a local account cleanup failure cannot strand the deleted remote session",
   assert.deepEqual(calls, ["remote", "local-account", "workspace-session", "sign-out"]);
   assert.deepEqual(result.localCleanupFailures, ["local-account-data"]);
 });
+
+test("a deleted account is never presented offline, even if sign-out never runs", async (t) => {
+  const values = new Map([["openwhispr:accountProfile", "{}"]]);
+  const previousWindow = global.window;
+  global.window = {
+    localStorage: {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, value),
+      removeItem: (key) => values.delete(key),
+    },
+  };
+  t.after(() => {
+    global.window = previousWindow;
+  });
+  const profileKeptAfterServerDelete = [];
+  const { dependencies } = operations({
+    // The first local step after the server deleted the account.
+    deleteLocalAccountData: async () => {
+      profileKeptAfterServerDelete.push(values.has("openwhispr:accountProfile"));
+    },
+  });
+
+  await executeAccountDeletion({ eraseDeviceData: false, dependencies });
+
+  assert.deepEqual(profileKeptAfterServerDelete, [false]);
+});

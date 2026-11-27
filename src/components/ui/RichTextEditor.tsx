@@ -1,11 +1,41 @@
-import { useEffect, useRef, useCallback, type MutableRefObject } from "react";
+import { useEffect, useRef, useCallback, useId, useState, type MutableRefObject } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { createMentionExtension } from "./RichTextEditorMention";
 import { createRichTextExtensions } from "./RichTextEditorExtensions";
 import { RichTextEditorFormatMenu } from "./RichTextEditorFormatMenu";
 import { RichTextEditorTableMenu } from "./RichTextEditorTableMenu";
+import { DragHandle } from "@tiptap/extension-drag-handle-react";
+import { FindReplacePanel } from "./editorBlocks/FindReplacePanel";
+import "katex/dist/katex.min.css";
+import "./editorBlocks/editorBlocks.css";
 import type { MentionPerson } from "../../utils/mentionMarkdown";
+
+/**
+ * ProseMirror's scroll margin or threshold (`side` on every side), raised at the
+ * bottom to whatever an ancestor overlays there: NoteBottomBar publishes its height
+ * in --bottom-overlay-height. ProseMirror reads the sides each time it scrolls the
+ * caret into view, so the getter follows the bar as it grows (action chips, the
+ * summary callout, an open chat).
+ */
+function clearOfBottomOverlay(
+  containerRef: MutableRefObject<HTMLElement | null>,
+  side: number
+): Record<"top" | "right" | "bottom" | "left", number> {
+  return {
+    top: side,
+    right: side,
+    left: side,
+    get bottom(): number {
+      const container = containerRef.current;
+      const overlay = container
+        ? parseFloat(getComputedStyle(container).getPropertyValue("--bottom-overlay-height"))
+        : NaN;
+      return Number.isFinite(overlay) ? Math.max(overlay, side) : side;
+    },
+  };
+}
 
 interface RichTextEditorProps {
   value: string;
@@ -40,6 +70,9 @@ export function RichTextEditor({
   editorRef,
   mentionPeople,
 }: RichTextEditorProps) {
+  const { t } = useTranslation();
+  const keyboardHintId = useId();
+  const [showKeyboardHint, setShowKeyboardHint] = useState(false);
   const internalValueRef = useRef(value);
   const suppressUpdateRef = useRef(false);
 
@@ -51,10 +84,16 @@ export function RichTextEditor({
   }, [mentionPeople]);
   const withMentions = useRef(mentionPeople != null).current;
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollClearance] = useState(() => ({
+    scrollMargin: clearOfBottomOverlay(containerRef, 5),
+    scrollThreshold: clearOfBottomOverlay(containerRef, 0),
+  }));
+
   const editor = useEditor({
     extensions: [
       ...(withMentions ? [createMentionExtension(() => mentionPeopleRef.current ?? [])] : []),
-      ...createRichTextExtensions(placeholder || ""),
+      ...createRichTextExtensions(placeholder || "", (): void => setShowKeyboardHint(true)),
     ],
     content: value,
     editable: !disabled,
@@ -63,16 +102,20 @@ export function RichTextEditor({
       // on the first click) is not an edit; saving it would also discard the
       // assistant's Undo for the note.
       if (suppressUpdateRef.current || !transaction.docChanged) return;
+      setShowKeyboardHint(false);
 
       const md = (ed.storage as any).markdown.getMarkdown() as string;
       internalValueRef.current = md;
       onChange?.(md);
     },
+    onBlur: (): void => setShowKeyboardHint(false),
     editorProps: {
       attributes: {
         class: "rich-text-editor-content",
         dir: "auto",
+        ...(!disabled && { "aria-describedby": keyboardHintId }),
       },
+      ...scrollClearance,
     },
   });
 
@@ -120,19 +163,35 @@ export function RichTextEditor({
   }, [editor, disabled]);
 
   return (
-    <div className={cn("relative w-full h-full", className)} onClick={handleClick}>
+    <div
+      ref={containerRef}
+      className={cn("relative w-full h-full", className)}
+      onClick={handleClick}
+    >
       <EditorContent
         editor={editor}
         className={cn(
           // relative: the table menu positions against this scroller and scrolls with it.
           "relative h-full overflow-y-auto",
-          disabled && "pointer-events-none opacity-70",
-          // Reserved by an ancestor via --floating-inset; 0 elsewhere.
-          "pb-[var(--floating-inset,0px)]"
+          disabled && "pointer-events-none opacity-70"
         )}
       />
+      {!disabled && (
+        <p id={keyboardHintId} className={showKeyboardHint ? "rte-keyboard-hint" : "sr-only"}>
+          {t("notes.editor.tabToLeave")}
+        </p>
+      )}
       {editor && !disabled && <RichTextEditorFormatMenu editor={editor} />}
       {editor && !disabled && <RichTextEditorTableMenu editor={editor} />}
+      {/* find & replace, drag handle. */}
+      {editor && !disabled && <FindReplacePanel editor={editor} />}
+      {editor && !disabled && (
+        <DragHandle editor={editor}>
+          <div className="rte-drag-handle" aria-hidden="true">
+            ⠿
+          </div>
+        </DragHandle>
+      )}
     </div>
   );
 }

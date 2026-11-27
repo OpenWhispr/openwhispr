@@ -1,4 +1,10 @@
-import { expandSnippets, getDictionaryHintWords, type Snippet } from '../snippets';
+import {
+  expandSnippets,
+  resolveSnippetVariables,
+  getDictionaryHintTiers,
+  splitLlmDictionary,
+  type Snippet,
+} from '../snippets';
 
 describe('expandSnippets', () => {
   it('replaces a trigger with its replacement', () => {
@@ -66,23 +72,108 @@ describe('expandSnippets', () => {
   });
 });
 
-describe('getDictionaryHintWords', () => {
+describe('getDictionaryHintTiers', () => {
+  const noShared = { space: [], workspace: [] };
+
   it('returns the custom dictionary unchanged when there are no snippets', () => {
-    expect(getDictionaryHintWords({ customDictionary: ['Acme', 'Vercel'], snippets: [] })).toEqual([
-      'Acme',
-      'Vercel',
+    expect(getDictionaryHintTiers(['Acme', 'Vercel'], [], noShared, true)).toEqual([
+      ['Acme', 'Vercel'],
+      [],
+      [],
     ]);
   });
 
-  it('appends snippet triggers to the custom dictionary', () => {
+  it('appends snippet triggers to the custom dictionary only when asked to', () => {
     const snippets: Snippet[] = [
       { trigger: 'linkedin', replacement: 'LinkedIn' },
       { trigger: 'eg', replacement: 'for example' },
     ];
-    expect(getDictionaryHintWords({ customDictionary: ['Acme'], snippets })).toEqual([
+    expect(getDictionaryHintTiers(['Acme'], snippets, noShared, true)[0]).toEqual([
       'Acme',
       'linkedin',
       'eg',
     ]);
+    expect(getDictionaryHintTiers(['Acme'], snippets, noShared, false)[0]).toEqual(['Acme']);
+  });
+
+  it('drops shared words already in a higher tier, case-insensitively', () => {
+    const snippets: Snippet[] = [{ trigger: 'sig', replacement: 'Best, Chad' }];
+    expect(
+      getDictionaryHintTiers(
+        ['OpenWhispr'],
+        snippets,
+        { space: ['openwhispr', 'Gizmo', 'SIG'], workspace: ['gizmo', 'Acme', 'acme'] },
+        true,
+      ),
+    ).toEqual([['OpenWhispr', 'sig'], ['Gizmo'], ['Acme']]);
+  });
+
+  it('drops a shared word that is a personal word in another Unicode form', () => {
+    // Personal "Café" is NFC; the shared copies are NFD and padded.
+    expect(
+      getDictionaryHintTiers(
+        ['Café'],
+        [],
+        { space: ['Café'], workspace: [' café ', 'Acme'] },
+        false,
+      ),
+    ).toEqual([['Café'], [], ['Acme']]);
+  });
+});
+
+describe('splitLlmDictionary', () => {
+  it('keeps every personal word and caps shared ones at 200 words, space first', () => {
+    const workspace = Array.from({ length: 300 }, (_, i) => `w${i}`);
+    const { personal, shared } = splitLlmDictionary([['Piha'], ['Space'], workspace]);
+    expect(personal).toEqual(['Piha']);
+    expect(shared).toEqual(['Space', ...workspace.slice(0, 199)]);
+  });
+
+  it('stops at the first shared word past 2,000 characters', () => {
+    const long = Array.from(
+      { length: 40 },
+      (_, i) => `${String(i).padStart(2, '0')}${'x'.repeat(48)}`,
+    );
+    const { shared } = splitLlmDictionary([[], [], [...long, 'short']]);
+    expect(shared).toEqual(long);
+    expect(shared.join('').length).toBe(2000);
+    expect(splitLlmDictionary([[], [], ['y'.repeat(2001), 'short']]).shared).toEqual([]);
+  });
+});
+
+describe('snippet variables', () => {
+  const context = { now: new Date(2026, 10, 18, 9, 5), locale: 'en-US' };
+
+  it('fills date, time, datetime and locale like desktop', () => {
+    expect(
+      resolveSnippetVariables('{{date}} | {{time}} | {{datetime}} | {{locale}}', context),
+    ).toBe('11/18/2026 | 9:05 AM | 11/18/2026, 9:05 AM | en-US');
+    expect(resolveSnippetVariables('{{date}}', { ...context, locale: 'de' })).toBe('18.11.2026');
+  });
+
+  it('leaves unknown, misspelled and prototype placeholders as typed', () => {
+    const literal = '{{clipboard}} {{Date}} {{ date }} {{constructor}} {{__proto__}} {date}';
+    expect(resolveSnippetVariables(literal, context)).toBe(literal);
+  });
+
+  it("fills only a snippet's saved text, never the rest of the dictation", () => {
+    const snippets: Snippet[] = [{ trigger: 'stamp', replacement: 'Logged {{date}} at {{time}}' }];
+    expect(expandSnippets('stamp, then put {{date}} in the template', snippets, context)).toBe(
+      'Logged 11/18/2026 at 9:05 AM, then put {{date}} in the template',
+    );
+    expect(expandSnippets('put {{date}} in the template', snippets, context)).toBe(
+      'put {{date}} in the template',
+    );
+  });
+
+  it('keeps the placeholders when the runtime cannot format dates', () => {
+    const spy = jest.spyOn(Date.prototype, 'toLocaleDateString').mockImplementation(() => {
+      throw new RangeError('no Intl');
+    });
+    try {
+      expect(resolveSnippetVariables('Logged {{date}}', context)).toBe('Logged {{date}}');
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

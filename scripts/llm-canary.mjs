@@ -15,26 +15,26 @@
  * this measures the request users actually make and reports how close it runs
  * to the deadline.
  *
- * Run: node --import tsx scripts/llm-canary.mjs
+ * Run: node --import tsx scripts/llm-canary.mjs [--published]
+ * --published probes the live signed catalog users receive instead of the bundle.
  * Keys come from LLM_CANARY_<PROVIDER>_KEY env vars; providers without a key
  * are skipped and listed. Exit 1 when any probe on a keyed provider fails, or
  * when no key is configured at all — an all-skip run probed nothing and must
  * not report green.
  */
 import { applyChatCompletionsParams } from "../src/services/ai/chatRequestBody.ts";
+import { getModelFamilyConstraints } from "../src/services/ai/modelFamilyConstraints.ts";
 import { openaiProvider } from "../src/services/ai/inferenceProviders/openai.ts";
 import { geminiProvider } from "../src/services/ai/inferenceProviders/gemini.ts";
 import { getLlmRequestTimeoutSeconds } from "../src/helpers/llmRequestTimeout.js";
 import { NOTE_OUTPUT_MAX_TOKENS } from "../src/helpers/builtinActions.js";
 import logger from "../src/utils/logger.ts";
-import registryData from "../src/models/modelRegistryData.json" with { type: "json" };
+import { loadCanaryCatalog } from "./lib/canary-catalog.mjs";
 import {
   buildNoteProbeSystemPrompt,
   buildNoteProbeTranscript,
   countWords,
 } from "./lib/note-formatting-probe.mjs";
-
-const CONSTRAINED_FAMILY = /gpt-oss|qwen|magistral/i;
 
 const PROVIDERS = [
   {
@@ -43,13 +43,15 @@ const PROVIDERS = [
     base: "https://api.openai.com/v1",
     // Registry models only — a non-registry id skips the suppression gate and
     // draws a 400 from OpenAI's strict parser that no app user ever hits.
-    models: ["gpt-4.1-mini", "gpt-5-mini"],
+    // gpt-4.1-mini is the last registry model that takes temperature (legacy,
+    // shut down 2027-01-14); gpt-6-luna is where retired small models land.
+    models: ["gpt-4.1-mini", "gpt-6-luna"],
   },
   {
     id: "groq",
     keyEnv: "LLM_CANARY_GROQ_KEY",
     base: "https://api.groq.com/openai/v1",
-    models: ["openai/gpt-oss-120b", "openai/gpt-oss-20b"],
+    models: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"],
   },
   {
     id: "tinfoil",
@@ -60,7 +62,8 @@ const PROVIDERS = [
     // reasoning-param rejection there hard-errors (#1611).
     // deepseek-v4-flash was replaced by deepseek-v4-1-flash in Tinfoil's live
     // catalog (canary run 35322067138, 2026-09-18: HTTP 404 "model does not exist").
-    models: ["glm-5-3", "gpt-oss-120b", "deepseek-v4-1-flash", "llama3-3-70b"],
+    // kimi-k3-1-pro replaced kimi-k3 in Tinfoil's live catalog (2026-11-12).
+    models: ["glm-5-3", "kimi-k3-1-pro", "gpt-oss-120b", "deepseek-v4-1-flash", "llama3-3-70b"],
   },
   {
     id: "gemini",
@@ -101,6 +104,7 @@ const PROVIDERS = [
   },
 ];
 
+const registryData = await loadCanaryCatalog();
 const registryIdsByProvider = new Map(
   registryData.cloudProviders.map((p) => [p.id, p.models.map((m) => m.id)])
 );
@@ -161,7 +165,7 @@ const NOTE_PROBES = [
   {
     id: "gemini",
     keyEnv: "LLM_CANARY_GEMINI_KEY",
-    model: "gemini-3.5-flash",
+    model: "gemini-3.6-flash",
     provider: geminiProvider,
     config: {},
   },
@@ -244,7 +248,7 @@ async function catalogDiff(entry, apiKey) {
   const pinned = registryIdsByProvider.get(entry.id) ?? [];
   const vanished = pinned.filter((id) => !live.includes(id));
   const probed = new Set(entry.models);
-  const newConstrained = live.filter((id) => CONSTRAINED_FAMILY.test(id) && !probed.has(id));
+  const newConstrained = live.filter((id) => !probed.has(id) && getModelFamilyConstraints(id));
   return { vanished, newConstrained };
 }
 

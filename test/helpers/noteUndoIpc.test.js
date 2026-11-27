@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -30,7 +31,11 @@ const electronStub = {
       return [
         {
           isDestroyed: () => false,
-          webContents: { send: (channel, data) => sent.push([channel, data]) },
+          webContents: {
+            send: (channel, data) => {
+              if (channel !== "effective-policy-changed") sent.push([channel, data]);
+            },
+          },
         },
       ];
     }
@@ -92,9 +97,11 @@ test.before(() => {
     },
   };
   Ctor.prototype.setupHandlers.call(
-    new Proxy(target, {
-      get: (value, property) => (property in value ? value[property] : anything()),
-    })
+    withDevicePolicy(
+      new Proxy(target, {
+        get: (value, property) => (property in value ? value[property] : anything()),
+      })
+    )
   );
 });
 

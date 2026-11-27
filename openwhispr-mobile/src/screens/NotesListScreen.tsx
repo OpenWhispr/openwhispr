@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo, useState } from 'react';
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { View, ScrollView, Pressable, RefreshControl, Alert, ActionSheetIOS } from 'react-native';
 import { Text } from '@/components/ui/Text';
 
@@ -9,6 +9,7 @@ import { NotesTopBar } from '@/components/notes/NotesTopBar';
 import { GroupedList } from '@/components/notes/GroupedList';
 import { FolderRow } from '@/components/notes/FolderRow';
 import { NoteRow } from '@/components/notes/NoteRow';
+import type { RestoreRow } from '@/components/ui/SwipeableCard';
 import { SectionHeader } from '@/components/notes/SectionHeader';
 import { MoveToFolderSheet } from '@/components/notes/MoveToFolderSheet';
 import { NewFolderSheet } from '@/components/notes/NewFolderSheet';
@@ -16,7 +17,8 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { Fab, FAB_BOTTOM_PADDING, type FabAction } from '@/components/ui/Fab';
 import { groupNotesByDate } from '@/lib/groupNotesByDate';
 import { safeHaptics } from '@/lib/utils';
-import { confirmDestructive } from '@/lib/alerts';
+import { alertMeetingNoteNotDeletable, confirmDestructive } from '@/lib/alerts';
+import { useLiveMeetingNoteId } from '@/components/notes/liveMeetingNote';
 import { SyncStatusLabel } from '@/components/notes/SyncStatusLabel';
 import { useManualSyncRefresh } from '@/hooks/useManualSyncRefresh';
 import { useMoveNote } from '@/hooks/useMoveNote';
@@ -50,6 +52,7 @@ export default function NotesListScreen() {
   } = useNotesStore();
 
   const [newFolderVisible, setNewFolderVisible] = useState(false);
+  const routeWorkspaceId = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     if (!isInitialized) initialize();
@@ -61,12 +64,23 @@ export default function NotesListScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      const {
+        activePrivateWorkspaceId,
+        activeFolderId: storeFolderId,
+        activeSpaceId: storeSpaceId,
+      } = useNotesStore.getState();
+      // The Notes tab keeps its stack while Account switches the workspace.
+      if (routeWorkspaceId.current === undefined) {
+        routeWorkspaceId.current = activePrivateWorkspaceId;
+      } else if (routeWorkspaceId.current !== activePrivateWorkspaceId) {
+        router.dismissTo('/(tabs)/(notes)');
+        return;
+      }
+
       // Only re-assert when the store drifted to another scope — descending into
       // a folder rewrites it, so coming back would otherwise leave this screen
       // showing the child's notes. A no-op refocus (returning from a note) must
       // not run, or it would clear an open search.
-      const { activeFolderId: storeFolderId, activeSpaceId: storeSpaceId } =
-        useNotesStore.getState();
       if (spaceId != null) {
         if (storeSpaceId !== spaceId) setActiveSpaceId(spaceId);
       } else if (storeFolderId !== folderId) {
@@ -118,14 +132,26 @@ export default function NotesListScreen() {
     [setActiveNoteId],
   );
 
+  const liveMeetingNoteId = useLiveMeetingNoteId();
   const handleDeleteNote = useCallback(
-    (id: number) => {
-      confirmDestructive('Delete Note', 'This note will be deleted permanently.', () => {
-        safeHaptics('warning');
-        deleteNote(id);
-      });
+    (id: number, restoreRow: RestoreRow) => {
+      // The store refuses it too; answering here keeps the swiped row from staying hidden.
+      if (id === liveMeetingNoteId) {
+        restoreRow();
+        alertMeetingNoteNotDeletable();
+        return;
+      }
+      confirmDestructive(
+        'Delete Note',
+        'This note will be deleted permanently.',
+        () => {
+          safeHaptics('warning');
+          deleteNote(id);
+        },
+        { onCancel: restoreRow },
+      );
     },
-    [deleteNote],
+    [deleteNote, liveMeetingNoteId],
   );
 
   const handleCompose = useCallback(() => {
@@ -361,7 +387,7 @@ export default function NotesListScreen() {
                     bucket={bucket.key}
                     onPress={() => handleNotePress(note.id)}
                     onLongPress={() => move.open(note.id)}
-                    onDelete={() => handleDeleteNote(note.id)}
+                    onDelete={(restoreRow) => handleDeleteNote(note.id, restoreRow)}
                     onMove={() => move.open(note.id)}
                   />
                 ))}

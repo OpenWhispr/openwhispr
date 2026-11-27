@@ -1,6 +1,10 @@
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
 import type { CalendarAttendee } from "../types/calendar";
-import { resolveSegmentSpeakerName } from "./transcriptSpeakerState";
+import {
+  isYouSpeakerName,
+  resolveMappedSpeakerName,
+  resolveSegmentSpeakerName,
+} from "./transcriptSpeakerState";
 import type { MentionPerson } from "./mentionMarkdown";
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
@@ -15,26 +19,31 @@ const isSelfParticipant = (participant: CalendarAttendee, identity: MeetingIdent
   participant.self || (!!identity.selfEmail && participant.email === identity.selfEmail);
 
 /**
- * Speaker label for the LLM payload. An unnamed mic track falls back to the
- * note owner's real name instead of an anonymous "You" whenever it is known.
+ * Speaker label for the LLM payload. An unnamed, unnumbered mic track falls back
+ * to the recorder's real name instead of an anonymous "You" whenever it is known.
+ * Diarization numbers the mic's clusters when several people share it (an
+ * in-person meeting), so a numbered mic segment is someone in the room, not
+ * necessarily the recorder — matching the "Speaker N" the transcript view shows.
  */
 export function resolveLlmSpeakerLabel(
   segment: TranscriptSegment,
   speakerMappings: Record<string, string>,
   selfLabel: string,
-  t: Translate
+  t: Translate,
+  viewerLabel = selfLabel
 ): string {
+  const recorderLabel = segment.recorderName || selfLabel;
   const resolved = resolveSegmentSpeakerName(segment, speakerMappings);
   if (resolved) {
-    return resolved.trim().toLowerCase() === t("notes.speaker.you").toLowerCase()
-      ? selfLabel
-      : resolved;
+    if (!isYouSpeakerName(resolved, t("notes.speaker.you"))) return resolved;
+    return resolveMappedSpeakerName(segment, speakerMappings) ? viewerLabel : recorderLabel;
   }
-  if (segment.source === "mic" || segment.speaker === "you") return selfLabel;
+  if (segment.speaker === "you") return recorderLabel;
   if (segment.speaker) {
     const num = Number.parseInt(segment.speaker.replace("speaker_", ""), 10);
     if (!Number.isNaN(num)) return t("notes.speaker.label", { n: num + 1 });
   }
+  if (segment.source === "mic") return recorderLabel;
   return t("notes.speaker.them");
 }
 
@@ -42,10 +51,13 @@ export function buildLlmTranscript(
   segments: TranscriptSegment[],
   speakerMappings: Record<string, string>,
   selfLabel: string,
-  t: Translate
+  t: Translate,
+  viewerLabel = selfLabel
 ): string {
   return segments
-    .map((s) => `${resolveLlmSpeakerLabel(s, speakerMappings, selfLabel, t)}: ${s.text}`)
+    .map(
+      (s) => `${resolveLlmSpeakerLabel(s, speakerMappings, selfLabel, t, viewerLabel)}: ${s.text}`
+    )
     .join("\n");
 }
 
@@ -58,14 +70,14 @@ const formatPerson = (name: string | null, email: string | null): string => {
 
 /**
  * Context block prepended to the LLM payload so note generation knows who the
- * note owner is (instead of guessing an identity from names spoken in the
+ * note taker is (instead of guessing an identity from names spoken in the
  * transcript) and who was invited.
  */
 export function buildMeetingContext(identity: MeetingIdentity, selfLabel: string): string {
   const lines: string[] = [];
   const self = formatPerson(identity.selfName, identity.selfEmail);
   if (self) {
-    lines.push(`The user taking these notes ("${selfLabel}" in the transcript) is ${self}.`);
+    lines.push(`The note taker ("${selfLabel}" in the transcript) is ${self}.`);
   }
   const invited = identity.participants
     .filter((p) => !isSelfParticipant(p, identity))
@@ -76,7 +88,7 @@ export function buildMeetingContext(identity: MeetingIdentity, selfLabel: string
 }
 
 /**
- * Everyone we can name around a note — the note owner, calendar participants,
+ * Everyone we can name around a note — the recorder, calendar participants,
  * mapped speaker clusters, and named segments. Same-name attendees with
  * different emails stay distinct so tagging can detect ambiguous owners.
  * Feeds the editor's @mention suggestions and action-item owner tagging.
@@ -110,6 +122,9 @@ export function collectKnownPeople(
     push(p.displayName || p.email.split("@")[0], p.email);
   }
   for (const name of Object.values(speakerMappings)) push(name, null);
-  for (const segment of segments) push(segment.speakerName, null);
+  for (const segment of segments) {
+    push(segment.speakerName, null);
+    push(segment.recorderName, null);
+  }
   return people;
 }

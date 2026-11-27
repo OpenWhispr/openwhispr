@@ -1,7 +1,7 @@
 export const NOTE_TEXT_FIELDS = ["content", "enhanced_content"];
 
 // What a summary clear removes along with the text. The template stays: it is
-// the note's choice, so "Generate AI Summary" reruns the same one.
+// the note's choice for regeneration. The summary callout uses the current default.
 export const SUMMARY_CLEARED_METADATA = ["enhancement_prompt", "enhanced_at_content_hash"];
 // Everything that travels with the summary text.
 export const SUMMARY_METADATA = [...SUMMARY_CLEARED_METADATA, "enhancement_template_id"];
@@ -78,5 +78,22 @@ export function noteAwaitsCloudResolution(note, serverKeepsRevisions) {
     note.cloud_create_rejected ||
     note.cloud_create_pending ||
     (serverKeepsRevisions && hasUnrevisionedNoteClear(note))
+  );
+}
+
+// A conflict whose cloud copy the note's base already covers was this device's
+// own write: two of its pushes raced, or a pull read the row before the push's
+// answer landed, and that answer has moved the base since. Pushing from the
+// base is safe, because the server still refuses it if anyone else wrote in
+// between. Without revisions on both sides nothing proves it, so it stays.
+export function isStaleNoteConflict(note, cloudNote) {
+  return Boolean(
+    note?.cloud_id &&
+    cloudNote?.id === note.cloud_id &&
+    !note.cloud_create_rejected &&
+    !note.cloud_create_pending &&
+    hasNoteRevision(note.cloud_revision) &&
+    hasNoteRevision(cloudNote.revision) &&
+    cloudNote.revision <= note.cloud_revision
   );
 }

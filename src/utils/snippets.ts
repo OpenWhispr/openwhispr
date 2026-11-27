@@ -1,3 +1,7 @@
+import { dictionaryWordKey } from "./dictionaryWordKey";
+export { dictionaryWordKey } from "./dictionaryWordKey";
+import type { SharedHintWords } from "./sharedDictionaryHints";
+
 export interface Snippet {
   trigger: string;
   replacement: string;
@@ -102,36 +106,356 @@ export function findSnippetTriggerRanges(
     }));
 }
 
+/** Variable names a snippet replacement may hold as `{{name}}`. */
+export const SNIPPET_VARIABLE_NAMES = ["date", "time", "datetime", "locale"] as const;
+
+export interface SnippetVariableContext {
+  now?: Date;
+  /** BCP 47 locale the date and time are written in; see `snippetLocale`. */
+  locale?: string;
+}
+
+function runtimeLocale(): string | undefined {
+  return typeof navigator !== "undefined" ? navigator.language : undefined;
+}
+
 /**
- * Replace every spoken trigger with its saved text in a single pass.
+ * The locale snippet dates are written in. The app's UI language decides it;
+ * the runtime locale (Chromium's, from the OS) only adds its region when the
+ * UI language names none and both share a language, so an English UI on a
+ * British system writes 18/11/2026 rather than 11/18/2026.
  */
-export function expandSnippets(text: string, snippets?: Snippet[] | null): string {
+export function snippetLocale(
+  uiLanguage?: string | null,
+  runtime: string | undefined = runtimeLocale()
+): string {
+  const fallback = runtime || "en";
+  if (!uiLanguage) return fallback;
+  if (uiLanguage.includes("-")) return uiLanguage;
+  const runtimeLanguage = fallback.split("-")[0].toLowerCase();
+  return runtimeLanguage === uiLanguage.toLowerCase() ? fallback : uiLanguage;
+}
+
+function snippetVariableValues(now: Date, locale: string): Map<string, string> {
+  const format = (options: Intl.DateTimeFormatOptions): string =>
+    new Intl.DateTimeFormat(locale, options).format(now);
+  const shortTime = new Intl.DateTimeFormat(locale, { timeStyle: "short" });
+  // timeStyle knows whether a locale pads the hour (en-US 9:05 AM, de 09:05,
+  // ja 9:05) but can't be combined with date fields, so datetime copies it
+  // from how it writes 9 o'clock.
+  const hourPadded =
+    shortTime.formatToParts(new Date(2000, 0, 1, 9)).find((part) => part.type === "hour")?.value
+      .length === 2;
+  const dateParts = { year: "numeric", month: "2-digit", day: "2-digit" } as const;
+  return new Map([
+    ["date", format(dateParts)],
+    ["time", shortTime.format(now)],
+    [
+      "datetime",
+      format({ ...dateParts, hour: hourPadded ? "2-digit" : "numeric", minute: "2-digit" }),
+    ],
+    ["locale", locale],
+  ]);
+}
+
+/**
+ * Fill `{{date}}`, `{{time}}`, `{{datetime}}` and `{{locale}}` in a snippet's
+ * saved text. Any other `{{…}}` is left as typed. There is no escape: a saved
+ * snippet holding one of these exact names, from before they existed, now
+ * fills it too, which is what someone typing it almost always meant.
+ */
+export function resolveSnippetVariables(
+  text: string,
+  { now = new Date(), locale = snippetLocale() }: SnippetVariableContext = {}
+): string {
+  if (!text.includes("{{")) return text;
+  let values: Map<string, string> | undefined;
+  return text.replace(/\{\{([A-Za-z][A-Za-z0-9_]*)\}\}/g, (placeholder, name: string) => {
+    values ??= snippetVariableValues(now, locale);
+    return values.get(name) ?? placeholder;
+  });
+}
+
+/**
+ * Replace every spoken trigger with its saved text in a single pass, filling
+ * variables in that saved text only: a `{{date}}` the user dictated, or the
+ * cleanup model wrote, is not a snippet's and stays as it is.
+ */
+export function expandSnippets(
+  text: string,
+  snippets?: Snippet[] | null,
+  context: SnippetVariableContext = {}
+): string {
   if (!text) return text;
   const matcher = getMatcher(snippets);
   if (!matcher) return text;
   const { regex, replacements } = matcher;
+  // One clock for every replacement, so two stamps in one dictation agree.
+  const variables = { now: context.now ?? new Date(), locale: context.locale ?? snippetLocale() };
   // NFC so a decomposed "I" + U+0307 in the transcript recombines into İ.
-  return text
-    .normalize("NFC")
-    .replace(regex, (match) => resolveReplacement(match, replacements) ?? match);
+  return text.normalize("NFC").replace(regex, (match) => {
+    const replacement = resolveReplacement(match, replacements);
+    return replacement === undefined ? match : resolveSnippetVariables(replacement, variables);
+  });
+}
+
+// Cleanup can change the surrounding prose and casing, but it must preserve
+// the saved text each spoken trigger will insert, in order and with repeats.
+export function preservesSnippetExpansions(
+  spoken: string,
+  rewritten: string,
+  snippets?: Snippet[] | null
+): boolean {
+  const matcher = getMatcher(snippets);
+  if (!matcher) return true;
+  const replacementsIn = (text: string): string[] =>
+    Array.from(text.normalize("NFC").matchAll(matcher.regex), ([match]) =>
+      resolveReplacement(match, matcher.replacements)
+    ).filter((replacement) => replacement !== undefined);
+  const original = replacementsIn(spoken);
+  const candidate = replacementsIn(rewritten);
+  return (
+    original.length === candidate.length &&
+    original.every((replacement, index) => replacement === candidate[index])
+  );
+}
+
+interface DictionaryHintSettings {
+  customDictionary?: string[] | null;
+  snippets?: Snippet[] | null;
+  sharedDictionaryHints?: SharedHintWords | null;
+}
+
+function wordList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((w): w is string => typeof w === "string") : [];
+}
+
+// Shared words never repeat a word seen in a higher tier (or earlier in their
+// own); case-insensitive so the user's own spelling wins over a teammate's.
+function dedupeBelow(words: string[], seen: Set<string>): string[] {
+  const kept: string[] = [];
+  for (const word of words) {
+    const key = dictionaryWordKey(word);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(word);
+  }
+  return kept;
+}
+
+// The personal dictionary words that apply: all of them, except moved words
+// whose shared copies the member hid (see SharedHintWords.suppressedPersonal).
+// Without suppressed words this is the saved list itself.
+export function getPersonalDictionaryWords(
+  settings: DictionaryHintSettings | null | undefined
+): string[] {
+  const dictionary = Array.isArray(settings?.customDictionary) ? settings.customDictionary : [];
+  const suppressed = wordList(settings?.sharedDictionaryHints?.suppressedPersonal);
+  if (suppressed.length === 0) return dictionary;
+  const suppressedKeys = new Set(suppressed.map(dictionaryWordKey));
+  return dictionary.filter((word) => !suppressedKeys.has(dictionaryWordKey(word)));
+}
+
+function sharedTiers(
+  settings: DictionaryHintSettings | null | undefined,
+  personal: string[]
+): [string[], string[]] {
+  const seen = new Set(wordList(personal).map(dictionaryWordKey));
+  const space = dedupeBelow(wordList(settings?.sharedDictionaryHints?.space), seen);
+  const workspace = dedupeBelow(wordList(settings?.sharedDictionaryHints?.workspace), seen);
+  return [space, workspace];
+}
+
+/**
+ * Hint words in priority order: [personal + snippet triggers, space, workspace].
+ * Snippet triggers rank with personal words so they survive both the STT prompt
+ * and the cleanup-model suffix. The personal tier is returned as saved (no
+ * dedupe) so a list without shared words is exactly what it always was.
+ */
+export function getDictionaryHintTiers(settings?: DictionaryHintSettings | null): string[][] {
+  const dictionary = getPersonalDictionaryWords(settings);
+  const snippets = Array.isArray(settings?.snippets) ? settings.snippets : [];
+  const triggers = snippets
+    .map((s) => s?.trigger)
+    .filter((t): t is string => typeof t === "string" && t.length > 0);
+  const personal = [...dictionary, ...triggers];
+  return [personal, ...sharedTiers(settings, personal)];
 }
 
 /**
  * Dictionary words plus snippet triggers — the hint list fed to the STT
  * prompt and cleanup-model dictionary suffix so triggers survive both.
  */
-export function getDictionaryHintWords(
-  settings?: {
-    customDictionary?: string[] | null;
-    snippets?: Snippet[] | null;
-  } | null
-): string[] {
-  const dictionary = Array.isArray(settings?.customDictionary) ? settings.customDictionary : [];
-  const snippets = Array.isArray(settings?.snippets) ? settings.snippets : [];
-  if (snippets.length === 0) return [...dictionary];
+export function getDictionaryHintWords(settings?: DictionaryHintSettings | null): string[] {
+  return getDictionaryHintTiers(settings).flat();
+}
 
-  const triggers = snippets
-    .map((s) => s?.trigger)
-    .filter((t): t is string => typeof t === "string" && t.length > 0);
-  return [...dictionary, ...triggers];
+function effectiveTiers(settings?: DictionaryHintSettings | null): string[][] {
+  const personal = getPersonalDictionaryWords(settings);
+  return [personal, ...sharedTiers(settings, personal)];
+}
+
+/**
+ * The words the user's dictionary effectively contains, for counts and display:
+ * personal, then space, then workspace, without snippet triggers.
+ */
+export function getEffectiveDictionaryWords(settings?: DictionaryHintSettings | null): string[] {
+  return effectiveTiers(settings).flat();
+}
+
+// At most this many shared words ride in any STT request (keyterms, keywords,
+// prompts), so a team list must not be able to break every member's stream.
+export const MAX_SHARED_KEYTERMS = 100;
+// Shared keyterms only fill what the providers' limits leave beside the personal
+// list, which is sent as it always was: AssemblyAI takes at most 100 keyterms of
+// at most 50 characters each, and Deepgram refuses keyterms past 500 tokens,
+// which ~1,000 characters of rare names and jargon stays inside.
+const MAX_TOTAL_KEYTERMS = 100;
+const MAX_KEYTERM_LENGTH = 50;
+const MAX_TOTAL_KEYTERM_CHARS = 1000;
+// Teammates' words ride in LLM system prompts; a bounded list keeps a long one
+// from crowding out the instructions or a local model's context.
+export const MAX_SHARED_WORDS_IN_LLM_PROMPTS = 200;
+export const MAX_SHARED_CHARS_IN_LLM_PROMPTS = 2000;
+
+interface SharedFillLimits {
+  words: number;
+  chars?: number;
+  totalWords?: number;
+  totalChars?: number;
+  maxWordLength?: number;
+}
+
+const charCount = (words: string[]) => words.reduce((total, word) => total + word.length, 0);
+
+// Every personal word, then shared words (space words first) while they fit the
+// limits. The first shared word that doesn't fit ends the fill, so priority
+// holds; one too long for any provider is dropped instead.
+function withSharedCapped(
+  [personal, space, workspace]: string[][],
+  {
+    words,
+    chars = Infinity,
+    totalWords = Infinity,
+    totalChars = Infinity,
+    maxWordLength = Infinity,
+  }: SharedFillLimits
+): string[] {
+  const kept = [...personal];
+  let sharedWords = 0;
+  let sharedChars = 0;
+  let keptChars = charCount(personal);
+  for (const word of [...space, ...workspace]) {
+    if (word.length > maxWordLength) continue;
+    if (
+      sharedWords >= words ||
+      kept.length >= totalWords ||
+      sharedChars + word.length > chars ||
+      keptChars + word.length > totalChars
+    ) {
+      break;
+    }
+    kept.push(word);
+    sharedWords++;
+    sharedChars += word.length;
+    keptChars += word.length;
+  }
+  return kept;
+}
+
+/**
+ * Keyterms for STT providers: every personal word, then shared words while the
+ * list stays inside the keyterm providers' limits.
+ */
+export function getKeytermDictionaryWords(settings?: DictionaryHintSettings | null): string[] {
+  return withSharedCapped(effectiveTiers(settings), {
+    words: MAX_SHARED_KEYTERMS,
+    totalWords: MAX_TOTAL_KEYTERMS,
+    totalChars: MAX_TOTAL_KEYTERM_CHARS,
+    maxWordLength: MAX_KEYTERM_LENGTH,
+  });
+}
+
+export function limitBatchKeyterms(words: string[]): string[] {
+  return words
+    .map((word) => word.trim().slice(0, MAX_KEYTERM_LENGTH))
+    .filter(Boolean)
+    .slice(0, MAX_TOTAL_KEYTERMS);
+}
+
+/**
+ * gpt-transcribe's keywords[]: every personal word and snippet trigger, at most
+ * MAX_SHARED_KEYTERMS shared ones.
+ */
+export function getKeywordDictionaryWords(settings?: DictionaryHintSettings | null): string[] {
+  return withSharedCapped(getDictionaryHintTiers(settings), { words: MAX_SHARED_KEYTERMS });
+}
+
+/**
+ * Dictionary words for LLM prompts (cleanup, agent, translation, chat, notes):
+ * every personal word (and snippet trigger when asked for), at most
+ * MAX_SHARED_WORDS_IN_LLM_PROMPTS shared ones in MAX_SHARED_CHARS_IN_LLM_PROMPTS.
+ */
+export function getLlmDictionaryWords(
+  settings: DictionaryHintSettings | null | undefined,
+  { includeTriggers }: { includeTriggers: boolean }
+): string[] {
+  const tiers = includeTriggers ? getDictionaryHintTiers(settings) : effectiveTiers(settings);
+  return withSharedCapped(tiers, {
+    words: MAX_SHARED_WORDS_IN_LLM_PROMPTS,
+    chars: MAX_SHARED_CHARS_IN_LLM_PROMPTS,
+  });
+}
+
+/**
+ * Splits a dictionary word list into the user's own words (personal words and
+ * snippet triggers) and the teammates' words it carries, so a prompt can quote
+ * the shared ones as data. A word in both counts as personal, as dedupe does.
+ */
+export function splitSharedDictionaryWords(
+  words: readonly string[],
+  settings?: DictionaryHintSettings | null
+): { personal: string[]; shared: string[] } {
+  const [personalTier, space, workspace] = getDictionaryHintTiers(settings);
+  const personalKeys = new Set(personalTier.map(dictionaryWordKey));
+  const sharedKeys = new Set([...space, ...workspace].map(dictionaryWordKey));
+  const personal: string[] = [];
+  const shared: string[] = [];
+  for (const word of words) {
+    const key = dictionaryWordKey(word);
+    if (sharedKeys.has(key) && !personalKeys.has(key)) shared.push(word);
+    else personal.push(word);
+  }
+  return { personal, shared };
+}
+
+export interface CloudDictionaryFields {
+  customDictionary: string[];
+  sharedDictionary?: string[];
+}
+
+/**
+ * The dictionary fields of an OpenWhispr Cloud LLM request: the user's own
+ * words (and snippet triggers) in `customDictionary`, as always, and teammates'
+ * words in `sharedDictionary`, which the API quotes as data. The field is left
+ * out when there are none, so a personal-only body is what it always was.
+ */
+export function toCloudDictionaryFields(
+  words: readonly string[],
+  settings?: DictionaryHintSettings | null
+): CloudDictionaryFields {
+  const { personal, shared } = splitSharedDictionaryWords(words, settings);
+  return shared.length > 0
+    ? { customDictionary: personal, sharedDictionary: shared }
+    : { customDictionary: personal };
+}
+
+/** toCloudDictionaryFields for the LLM dictionary words, snippet triggers included. */
+export function getCloudLlmDictionaryFields(
+  settings: DictionaryHintSettings | null | undefined
+): CloudDictionaryFields {
+  return toCloudDictionaryFields(
+    getLlmDictionaryWords(settings, { includeTriggers: true }),
+    settings
+  );
 }

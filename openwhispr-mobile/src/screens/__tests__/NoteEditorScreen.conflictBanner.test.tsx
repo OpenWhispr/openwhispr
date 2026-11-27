@@ -12,6 +12,7 @@ import type {
   Speaker,
   SpeakerProfile,
 } from '@/data/types';
+import type { PrivateWorkspace } from '@/lib/privateWorkspaces';
 import type { Folder, Space } from '@/data';
 
 const mockUpdateNote = jest.fn();
@@ -37,6 +38,7 @@ const mockNotesState = {
   updateNote: mockUpdateNote,
   deleteNote: mockDeleteNote,
   retryMeetingTranscription: mockRetryMeetingTranscription,
+  isMeetingAwaitingConnection: jest.fn(async (_noteId: number) => false),
   getNoteById: jest.fn((id: number) => (mockNote?.id === id ? mockNote : null)),
   getNoteSegments: jest.fn(() => mockSegments),
   getNoteSpeakers: jest.fn(() => mockSpeakers),
@@ -56,6 +58,10 @@ const mockNotesState = {
   moveNoteToSpace: jest.fn(),
   createFolder: jest.fn(),
   getSpaceFolders: jest.fn(() => [] as Folder[]),
+  getAllPrivateFolders: jest.fn((): Folder[] => mockNotesState.folders),
+  privateWorkspaces: [] as PrivateWorkspace[],
+  activePrivateWorkspaceId: null as string | null,
+  defaultPrivateWorkspaceId: null as string | null,
   voiceProfiles: [] as SpeakerProfile[],
   meetingSpeakerEmbeddingsByNoteId: {} as Record<number, Record<string, number[]>>,
   claimSpeakerAsMe: jest.fn(),
@@ -88,6 +94,8 @@ const mockDictionaryState = {
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
+
+jest.mock('@/lib/captureLease', () => ({ isCaptureLeaseHeld: () => false }));
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: '7' }),
@@ -141,6 +149,11 @@ jest.mock('@/store/useDictionaryStore', () => ({
     selector(mockDictionaryState),
 }));
 
+jest.mock('@/lib/dictationHints', () => ({
+  buildEffectiveDictionaryWords: (): string[] => [],
+  buildDictationHintTiers: (): string[][] => [[], [], []],
+}));
+
 jest.mock('@/store/useUsageStore', () => {
   const usageState = { usage: null, load: jest.fn(async () => ({ status: 'skipped' })) };
   const useUsageStore = (selector?: (state: typeof usageState) => unknown) =>
@@ -172,6 +185,8 @@ jest.mock('@/services/reasoning/ReasoningService', () => ({
   ReasoningService: {
     processText: jest.fn(),
   },
+  // Off device, so note actions keep the usual dictionary.
+  resolveReasoningPlacement: () => ({ localRequired: false }),
 }));
 
 jest.mock('@/utils/generateTitle', () => ({

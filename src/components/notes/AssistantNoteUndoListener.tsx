@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../ui/useToast";
-import { ToastActionButton } from "../ui/Toast";
 import { syncService } from "../../services/SyncService";
 import logger from "../../utils/logger";
 
@@ -58,9 +57,12 @@ export default function AssistantNoteUndoListener() {
               void window.electronAPI.discardNoteUndo(edit.noteId, edit.token);
               visible.current.delete(edit.token);
             },
-            action: (
-              <ToastActionButton
-                onClick={async () => {
+            actions: [
+              {
+                label: t("app.toasts.undo"),
+                // The provider's close path is onClose, which retires the recovery.
+                dismissOnClick: false,
+                onClick: async () => {
                   if (busy) return;
                   busy = true;
                   try {
@@ -94,11 +96,9 @@ export default function AssistantNoteUndoListener() {
                         variant: "destructive",
                       });
                   }
-                }}
-              >
-                {t("app.toasts.undo")}
-              </ToastActionButton>
-            ),
+                },
+              },
+            ],
           });
           visible.current.set(edit.token, id);
         }

@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { cn } from "./lib/utils";
+import { avatarInitials } from "../lib/avatarInitials";
 
 const SIZES = {
   sm: { box: "w-5 h-5", text: "text-[9px]" },
+  // A table row's avatar, as the design draws it.
+  row: { box: "w-6 h-6", text: "text-[10px]" },
   md: { box: "w-7 h-7", text: "text-[10px]" },
   lg: { box: "w-11 h-11", text: "text-xs" },
 } as const;
@@ -40,7 +43,7 @@ export default function MemberAvatar({ name, email, image, size = "md" }: Member
         "rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center shrink-0"
       )}
     >
-      {(name || email || "?").slice(0, 2).toUpperCase()}
+      {avatarInitials(name, email)}
     </span>
   );
 }

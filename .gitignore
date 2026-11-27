@@ -297,6 +297,9 @@ $RECYCLE.BIN/
 .windsurf/
 .zencoder/
 skills/
+# The app's own Skills code
+!/src/**/skills/
+!/test/**/skills/
 
 # OS generated files
 .DS_Store
@@ -322,3 +325,8 @@ src/assets/fonts/yowza/*.otf
 
 # Local scratch output from the Superpowers Claude Code plugin (SDD fix reports etc.).
 .superpowers/
+
+# Written by `npm run model-registry:pin-release` for release builds only. A committed copy
+# would pin every other build to an old publication; without it, a committed pinned
+# registryMetadata.json fails model-registry:verify.
+src/models/registryBundle.json

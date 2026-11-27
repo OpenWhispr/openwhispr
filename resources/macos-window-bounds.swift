@@ -19,12 +19,30 @@
  * localized bundle name ("Systemeinstellungen" on a German Mac). The first
  * argument is the caller's own pid, so its windows report as "self".
  *
+ * Given --check-post-event-access or --request-post-event-access instead of a
+ * pid, it reports the app's input-posting access and exits: this is the one
+ * helper already bundled for the permission flow, and macOS attributes the
+ * check to the app that launched it.
+ *
  * Compile: swiftc -O macos-window-bounds.swift -o macos-window-bounds
  */
 
 import AppKit
 import CoreGraphics
 import Foundation
+
+// macOS 27.3 lists input posting separately from assistive access. Keep the
+// request user-initiated and use a quiet preflight for permission polling.
+switch CommandLine.arguments.dropFirst().first {
+case "--request-post-event-access":
+    if CGRequestPostEventAccess() { print("POST_EVENT_ALLOWED") }
+    exit(0)
+case "--check-post-event-access":
+    if CGPreflightPostEventAccess() { print("POST_EVENT_ALLOWED") }
+    exit(0)
+default:
+    break
+}
 
 // Ventura renamed System Preferences to System Settings; the bundle identifier
 // is the one thing that stayed the same across the releases the app supports.

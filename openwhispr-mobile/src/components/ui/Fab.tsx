@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useIsFocused } from '@react-navigation/native';
 import Animated, {
@@ -13,6 +13,7 @@ import { GlassContainer } from 'expo-glass-effect';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
 import { Glass } from '@/components/ui/Glass';
+import { TAB_BAR_CLEARANCE } from '@/components/ui/tabBarClearance';
 import { safeHaptics } from '@/lib/utils';
 
 const BRAND = '#007AFF';
@@ -21,8 +22,7 @@ const SIZE = 56;
 const MINI_SIZE = 44;
 const MINI_ICON_SIZE = 22;
 const MINI_GAP = 12;
-const TAB_BAR_OFFSET = Platform.OS === 'ios' ? 110 : 70;
-const BOTTOM = TAB_BAR_OFFSET + 32;
+const BOTTOM = TAB_BAR_CLEARANCE + 32;
 const FAB_RIGHT = 20;
 const MINI_RIGHT = FAB_RIGHT + (SIZE - MINI_SIZE) / 2;
 const STAGGER = 0.18;

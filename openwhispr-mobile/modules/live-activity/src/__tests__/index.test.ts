@@ -4,6 +4,7 @@ const mockNative = {
   setDictationMode: jest.fn(),
   isDictationModeEnabled: jest.fn(() => true),
   startMeeting: jest.fn(),
+  setMeetingCapture: jest.fn(),
   setMeetingProcessing: jest.fn(),
   endMeeting: jest.fn(),
 };
@@ -73,6 +74,14 @@ describe('LiveActivity meeting API on iOS', () => {
     expect(mockNative.setMeetingProcessing).toHaveBeenNthCalledWith(2, 0);
   });
 
+  it('forwards capture state with floored, clamped recorded seconds', () => {
+    const { LiveActivity } = load('ios');
+    LiveActivity.setMeetingCapture({ capturing: false, recordedSeconds: 540.7 });
+    LiveActivity.setMeetingCapture({ capturing: true, recordedSeconds: -1 });
+    expect(mockNative.setMeetingCapture).toHaveBeenNthCalledWith(1, false, 540);
+    expect(mockNative.setMeetingCapture).toHaveBeenNthCalledWith(2, true, 0);
+  });
+
   it('forwards endMeeting', () => {
     const { LiveActivity } = load('ios');
     LiveActivity.endMeeting();
@@ -94,6 +103,7 @@ describe('LiveActivity meeting API off iOS', () => {
     const { LiveActivity } = load('android');
     LiveActivity.startMeeting({ title: 'x', startedAt: 1 });
     LiveActivity.setMeetingProcessing({ recordedSeconds: 1 });
+    LiveActivity.setMeetingCapture({ capturing: false, recordedSeconds: 1 });
     LiveActivity.endMeeting();
     const subscription = LiveActivity.addEndMeetingListener(jest.fn());
     expect(() => subscription.remove()).not.toThrow();

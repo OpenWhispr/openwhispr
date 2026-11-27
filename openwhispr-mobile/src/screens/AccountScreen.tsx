@@ -2,9 +2,10 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { Alert, Platform, View, Pressable } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import Constants from 'expo-constants';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
+import { PrivateWorkspaceSwitcher } from '@/components/notes/PrivateWorkspaceSwitcher';
 import { PlanBadge } from '@/components/ui/PlanBadge';
 import { UsageMeter } from '@/components/ui/UsageMeter';
 import { SystemIcon } from '@/components/ui/SystemIcon';
@@ -13,6 +14,7 @@ import { TabScreenHeader } from '@/components/ui/TabScreenHeader';
 import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore';
+import { waitForSuperwallIdentity } from '@/store/useSuperwallIdentityStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import type { UsageInfo } from '@/data/remote/usageApi';
 import { createStripeBillingPortalSession } from '@/data/remote/billingApi';
@@ -24,6 +26,10 @@ import { safeHaptics } from '@/lib/utils';
 import { iosColor } from '@/config/colors';
 import { getAccountDisplay } from '@/lib/accountDisplay';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
+import { useAffiliateStore } from '@/store/useAffiliateStore';
+import { getAffiliateClientConfig } from '@/lib/affiliateLink';
+import { loadAffiliateOffer, type AffiliateOffer } from '@/lib/affiliateOffer';
+import { AccountCreatorLink, type CreatorOfferResult } from '@/components/AccountCreatorLink';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 
 const MUTED_ICON_BG = iosColor('systemGray2');
@@ -115,7 +121,7 @@ async function openGrantedBillingManagement(usage: UsageInfo): Promise<void> {
 
 export default function AccountScreen() {
   const params = useLocalSearchParams<{ superwallPlacement?: string }>();
-  const { user, isGuest, signOut, deleteAccount } = useAuthStore();
+  const { user, sessionCookie, isGuest, signOut, deleteAccount } = useAuthStore();
   // An anonymous onboarding session: Sign Out would revoke it (and the notes
   // and purchase it carries) and the API refuses to delete it, so the one
   // account action it needs is creating the account.
@@ -123,8 +129,32 @@ export default function AccountScreen() {
   const usage = useUsageStore((s) => s.usage);
   const loadUsage = useUsageStore((s) => s.load);
   const resetOnboarding = useOnboardingStore((state) => state.reset);
-  const { register: registerSuperwallGate } = useSuperwallGate();
+  const {
+    register: registerSuperwallGate,
+    isConfigured: superwallConfigured,
+    requiresIdentity,
+  } = useSuperwallGate();
   const handledBillingIntentRef = useRef<string | null>(null);
+  const billingContextRef = useRef({
+    userId: user?.id,
+    sessionCookie,
+    active: true,
+    generation: 0,
+  });
+  billingContextRef.current.userId = user?.id;
+  billingContextRef.current.sessionCookie = sessionCookie;
+  const affiliatePendingRef = useRef(false);
+  const billingRegistrationRef = useRef<AbortController | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      billingContextRef.current.active = true;
+      return () => {
+        billingContextRef.current.active = false;
+        billingContextRef.current.generation += 1;
+        billingRegistrationRef.current?.abort();
+      };
+    }, []),
+  );
 
   useEffect(() => {
     if (user) loadUsage();
@@ -142,42 +172,97 @@ export default function AccountScreen() {
     );
   }, [signOut, user]);
 
-  const handleBillingPress = useCallback(async (): Promise<void> => {
-    let currentUsage = useUsageStore.getState().usage;
-    if (user && !currentUsage) {
-      const loadResult = await loadUsage(true);
-      currentUsage = loadResult.usage ?? useUsageStore.getState().usage;
-      if (!currentUsage) {
-        Alert.alert("Couldn't Load Billing", 'Please try again in a moment.');
-        return;
-      }
-    }
-
-    const managementUsage = currentUsage;
-
-    await registerSuperwallGate({
-      placement: SUPERWALL_PLACEMENTS.accountBillingOpen,
-      params: currentUsage
-        ? {
-            plan: currentUsage.plan,
-            status: currentUsage.status,
-            isSubscribed: currentUsage.isSubscribed,
-            isTrial: currentUsage.isTrial,
+  const handleBillingPress = useCallback(
+    async (intent: 'plans' | 'creator' = 'plans'): Promise<CreatorOfferResult> => {
+      if (affiliatePendingRef.current) return 'cancelled';
+      affiliatePendingRef.current = true;
+      try {
+        const context = { ...billingContextRef.current };
+        const isCurrent = () =>
+          billingContextRef.current.active &&
+          billingContextRef.current.generation === context.generation &&
+          useAuthStore.getState().user?.id === context.userId &&
+          useAuthStore.getState().sessionCookie === context.sessionCookie;
+        let currentUsage = useUsageStore.getState().usage;
+        if (user && !currentUsage) {
+          const loadResult = await loadUsage(true);
+          currentUsage = loadResult.usage ?? useUsageStore.getState().usage;
+          if (!isCurrent()) return 'cancelled';
+          if (!currentUsage) {
+            Alert.alert("Couldn't Load Billing", 'Please try again in a moment.');
+            return 'cancelled';
           }
-        : undefined,
-      onAccessGrantedWithoutPurchase: managementUsage
-        ? () => {
-            openGrantedBillingManagement(managementUsage).catch(() => {});
+        }
+
+        const managementUsage = currentUsage;
+        if (
+          intent === 'creator' &&
+          (!currentUsage || currentUsage.isSubscribed || !useAffiliateStore.getState().link.trim())
+        )
+          return 'cancelled';
+        if (
+          !currentUsage?.isSubscribed &&
+          intent === 'creator' &&
+          !(await useAffiliateStore.getState().prepare(isCurrent))
+        )
+          return 'invalid';
+        if (!isCurrent()) return 'cancelled';
+        let creatorOffer: AffiliateOffer | undefined;
+        if (!currentUsage?.isSubscribed && intent === 'creator') {
+          // Allocating stock for a paywall that can't open would waste the offer.
+          if (!superwallConfigured) return 'unavailable';
+          if (requiresIdentity) {
+            const identified = await waitForSuperwallIdentity();
+            if (!isCurrent()) return 'cancelled';
+            if (!identified) return 'unavailable';
           }
-        : undefined,
-      onPurchaseComplete: (completion) => {
-        router.replace({
-          pathname: '/(tabs)/(record)',
-          params: { proCompletion: completion },
+          creatorOffer = (await loadAffiliateOffer(isCurrent)) ?? undefined;
+          if (!isCurrent()) return 'cancelled';
+          if (!creatorOffer) return 'unavailable';
+        }
+        if (!isCurrent()) return 'cancelled';
+
+        const registration = new AbortController();
+        billingRegistrationRef.current = registration;
+        let presented = false;
+        await registerSuperwallGate({
+          signal: registration.signal,
+          onPresent: () => {
+            presented = true;
+          },
+          placement: SUPERWALL_PLACEMENTS.accountBillingOpen,
+          creatorOffer,
+          requiresAccount: creatorOffer ? false : undefined,
+          params: currentUsage
+            ? {
+                plan: currentUsage.plan,
+                status: currentUsage.status,
+                isSubscribed: currentUsage.isSubscribed,
+                isTrial: currentUsage.isTrial,
+              }
+            : undefined,
+          onAccessGrantedWithoutPurchase:
+            managementUsage && !creatorOffer
+              ? () => {
+                  openGrantedBillingManagement(managementUsage).catch(() => {});
+                }
+              : undefined,
+          onPurchaseComplete: (completion) => {
+            router.replace({
+              pathname: '/(tabs)/(record)',
+              params: { proCompletion: completion },
+            });
+          },
         });
-      },
-    });
-  }, [loadUsage, registerSuperwallGate, user]);
+        // A skipped or failed paywall never showed the offer, so keep the regular plans in reach.
+        if (!creatorOffer) return 'cancelled';
+        return presented ? 'shown' : 'unavailable';
+      } finally {
+        affiliatePendingRef.current = false;
+      }
+    },
+    [loadUsage, registerSuperwallGate, requiresIdentity, superwallConfigured, user],
+  );
 
   useEffect(() => {
     if (!user || params.superwallPlacement !== SUPERWALL_PLACEMENTS.accountBillingOpen) return;
@@ -199,7 +284,7 @@ export default function AccountScreen() {
         title="Account"
         left={<GlassBackButton fallbackRoute="/(tabs)/(record)" />}
       />
-      <SettingsScreen>
+      <SettingsScreen automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled">
         {(user || isGuest) && (
           <Pressable
             onPress={() => router.push('/(account)/profile')}
@@ -236,11 +321,23 @@ export default function AccountScreen() {
           </Pressable>
         )}
 
+        <PrivateWorkspaceSwitcher />
+
         {user && usage ? (
           <SettingsSection title="Usage">
             <UsageMeter usage={usage} />
           </SettingsSection>
         ) : null}
+
+        <SettingsSection title="Referral">
+          <SettingsRow
+            iconStyle="line"
+            icon="gift"
+            mdIcon="Gift"
+            title="Referral Code"
+            onPress={() => router.push('/(account)/referral')}
+          />
+        </SettingsSection>
 
         <SettingsSection title="Preferences">
           <SettingsRow
@@ -279,6 +376,15 @@ export default function AccountScreen() {
         ) : null}
 
         <SettingsSection title="Subscription">
+          {user && usage && !usage.isSubscribed && getAffiliateClientConfig() ? (
+            <AccountCreatorLink
+              key={user.id}
+              onCheckOffer={() => handleBillingPress('creator')}
+              onViewPlans={() => {
+                handleBillingPress().catch(() => {});
+              }}
+            />
+          ) : null}
           <SettingsRow
             iconStyle="line"
             icon="creditcard"
@@ -330,6 +436,19 @@ export default function AccountScreen() {
             showChevron={false}
           />
         </SettingsSection>
+
+        {__DEV__ ? (
+          <SettingsSection title="Developer">
+            <SettingsRow
+              icon="hammer"
+              mdIcon="Hammer"
+              iconBg={MUTED_ICON_BG}
+              title="Meeting debug"
+              description="Short session rotation and speaker pass timing"
+              onPress={() => router.push('/(account)/meeting-debug')}
+            />
+          </SettingsSection>
+        ) : null}
 
         <SettingsSection title="About">
           <SettingsRow

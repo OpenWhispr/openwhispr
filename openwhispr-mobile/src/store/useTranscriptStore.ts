@@ -26,6 +26,8 @@ import { StorageService } from '../services/storage/StorageService';
 
 export type AddTranscriptInput = Omit<Transcript, 'id' | 'createdAt' | 'updatedAt'> & {
   id?: string;
+  /** When it was dictated, for one the keyboard finished while the app was away; else now. */
+  createdAt?: number;
 };
 
 export type FailedTranscriptInput = {
@@ -35,15 +37,17 @@ export type FailedTranscriptInput = {
   audioMimeType?: string;
   duration?: number;
   provider: TranscriptionProvider;
+  localOnly?: boolean;
   inferenceRoute?: Transcript['inferenceRoute'];
   cleanupRoute?: Transcript['cleanupRoute'];
-  agentRoute?: Transcript['agentRoute'];
   cleanupUnavailable?: string;
-  agentUnavailable?: string;
   requestContext?: Transcript['requestContext'];
   keyboardTone?: KeyboardTone;
+  // The translation target the dictation was recorded with, so a retry translates it too.
+  translationTarget?: string;
   jobId?: string;
   errorMessage: string;
+  createdAt?: number;
 };
 
 interface TranscriptState {
@@ -56,8 +60,11 @@ interface TranscriptState {
   error: string | null;
 
   loadTranscripts: () => Promise<void>;
-  addTranscript: (transcript: AddTranscriptInput) => Promise<void>;
-  addFailedTranscript: (transcript: FailedTranscriptInput) => Promise<void>;
+  addTranscript: (transcript: AddTranscriptInput, mayWrite?: () => boolean) => Promise<void>;
+  addFailedTranscript: (
+    transcript: FailedTranscriptInput,
+    options?: { mayWrite?: () => boolean; keepSourceAudio?: boolean },
+  ) => Promise<void>;
   retryTranscript: (id: string) => Promise<Transcript>;
   updateTranscript: (id: string, updates: Partial<Transcript>) => Promise<void>;
   deleteTranscript: (id: string) => Promise<void>;
@@ -75,18 +82,23 @@ const normalizeTranscript = (transcript: Transcript): Transcript => ({
   retryCount: transcript.retryCount ?? 0,
 });
 
-const ensureRetainedAudio = async (
-  transcriptId: string,
-  audioUrl?: string,
-  audioFileName?: string,
-  audioMimeType?: string,
-): Promise<string | undefined> => {
-  if (!audioUrl) return undefined;
-  if (isManagedTranscriptAudioUri(audioUrl)) return audioUrl;
-  return retainTranscriptAudio(audioUrl, { transcriptId, audioFileName, audioMimeType });
-};
-
 const RETRY_JOB_ID = /^(.+)-retry-\d+$/;
+
+// The target a keyboard job was recorded with. Lazy: keyboardTranslationSync reaches back into the
+// stores this one is loaded beside.
+function keyboardTranslationTargetFor(jobId: string): string | undefined {
+  const { readKeyboardTranslationSnapshot } =
+    require('@/lib/keyboardTranslationSync') as typeof import('@/lib/keyboardTranslationSync');
+  return readKeyboardTranslationSnapshot(jobId) ?? undefined;
+}
+
+// A raw transcript recovered after an interruption skips the steps that ran after it, translation
+// included, so the row says the text wasn't translated either.
+function recoveredRawWarning(translationTarget: string | undefined): string {
+  return translationTarget
+    ? 'Recovered the raw transcript after an interruption. Cleanup and translation were not repeated.'
+    : 'Recovered the raw transcript after an interruption. Cleanup was not repeated.';
+}
 
 // Shared so a write that has to wait for history and the app's own startup load
 // read storage once.
@@ -140,14 +152,16 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
               updatedAt: now,
               status: 'completed',
               audioUrl: undefined,
-              cleanupWarning:
-                'Recovered the raw transcript after an interruption. Cleanup was not repeated.',
+              cleanupWarning: recoveredRawWarning(retried.translationTarget),
               errorMessage: undefined,
+              translationTarget: undefined,
               retryCount: (retried.retryCount ?? 0) + 1,
             };
           }
         } else if (!loaded.some((row) => row.id === job.jobId || row.jobId === job.jobId)) {
           if (!job.result && !job.audioUri) continue;
+          const translationTarget =
+            job.requestContext === 'keyboard' ? keyboardTranslationTargetFor(job.jobId) : undefined;
           loaded.push({
             ...job.route,
             id: job.jobId,
@@ -159,9 +173,9 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
             requestContext: job.requestContext,
             status: job.result ? 'completed' : 'failed',
             audioUrl: job.result ? undefined : job.audioUri,
-            cleanupWarning: job.result
-              ? 'Recovered the raw transcript after an interruption. Cleanup was not repeated.'
-              : undefined,
+            cleanupWarning: job.result ? recoveredRawWarning(translationTarget) : undefined,
+            // Only a failed row is retried, and its retry translates as the dictation would have.
+            translationTarget: job.result ? undefined : translationTarget,
             errorMessage: job.result
               ? undefined
               : 'The provider upload was interrupted. Retry uses the original provider.',
@@ -234,7 +248,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
       return inFlightLoad;
     },
 
-    addTranscript: async (transcript) => {
+    addTranscript: async (transcript, mayWrite) => {
       await ensureLoaded();
       const id = transcript.id ?? createTranscriptId();
       const now = Date.now();
@@ -246,20 +260,23 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
         status: 'completed',
         errorMessage: undefined,
         retryCount: transcript.retryCount ?? 0,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: transcript.createdAt ?? now,
+        updatedAt: transcript.createdAt ?? now,
       };
 
-      set({ isLoading: true, error: null });
       try {
-        await exclusive(async () => {
+        const saved = await exclusive(async () => {
+          if (mayWrite && !mayWrite()) return false;
+          set({ isLoading: true, error: null });
           const transcripts = [
             ...get().transcripts.filter((existing) => existing.id !== newTranscript.id),
             newTranscript,
           ];
           await StorageService.saveTranscripts(transcripts);
           set({ transcripts, isLoading: false });
+          return true;
         });
+        if (!saved) return;
         if (newTranscript.jobId) clearKeyboardProviderRecovery(newTranscript.jobId);
         if (newTranscript.text.trim()) {
           logTranscriptionCompleted({
@@ -281,40 +298,42 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
       }
     },
 
-    addFailedTranscript: async (transcript) => {
+    addFailedTranscript: async (transcript, options) => {
       await ensureLoaded();
       return exclusive(async () => {
         const id = transcript.id ?? createTranscriptId();
         const now = Date.now();
-        const audioUrl = await ensureRetainedAudio(
-          id,
-          transcript.audioUrl,
-          transcript.audioFileName,
-          transcript.audioMimeType,
-        );
-        if (!audioUrl) {
-          throw new Error('Audio file not found');
-        }
+        if (options?.mayWrite && !options.mayWrite()) return;
+        if (!transcript.audioUrl) throw new Error('Audio file not found');
+        const audioUrl = isManagedTranscriptAudioUri(transcript.audioUrl)
+          ? transcript.audioUrl
+          : await retainTranscriptAudio(transcript.audioUrl, {
+              transcriptId: id,
+              audioFileName: transcript.audioFileName,
+              audioMimeType: transcript.audioMimeType,
+              keepSource: options?.keepSourceAudio,
+            });
+        if (options?.mayWrite && !options.mayWrite()) return;
 
         const failedTranscript: Transcript = {
           id,
           text: '',
-          createdAt: now,
-          updatedAt: now,
+          createdAt: transcript.createdAt ?? now,
+          updatedAt: transcript.createdAt ?? now,
           audioUrl,
           audioFileName: transcript.audioFileName,
           audioMimeType: transcript.audioMimeType,
           duration: transcript.duration,
           provider: transcript.provider,
+          ...(transcript.localOnly ? { localOnly: true } : {}),
           inferenceRoute: transcript.inferenceRoute,
           cleanupRoute: transcript.cleanupRoute,
-          agentRoute: transcript.agentRoute,
           cleanupUnavailable: transcript.cleanupUnavailable,
-          agentUnavailable: transcript.agentUnavailable,
           status: 'failed',
           errorMessage: transcript.errorMessage,
           requestContext: transcript.requestContext,
           keyboardTone: transcript.keyboardTone,
+          translationTarget: transcript.translationTarget,
           jobId: transcript.jobId,
           retryCount: 0,
         };
@@ -355,21 +374,31 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
         throw new Error('The original provider route is unavailable. Start a new transcription.');
       }
       const { activeMode } = useProcessingModeStore.getState();
-      // Provider recordings keep their original route. Cloud and On-Device
-      // recordings follow the current mode, including the provider it now selects.
+      const scope = current.requestContext === 'file' ? 'upload' : 'dictation';
+      // Provider recordings keep their original route, and so does a keyboard Local take, which
+      // must never leave this iPhone. Other Cloud and On-Device recordings follow the current mode,
+      // including the provider it now selects; in Local Mode, uploads follow what is chosen for them.
       const rerouted =
-        current.provider !== 'byok' && activeMode === 'providers'
-          ? snapshotTranscriptionJob(current.requestContext === 'file' ? 'upload' : 'dictation')
+        current.provider !== 'byok' &&
+        !current.localOnly &&
+        (activeMode === 'providers' || (activeMode === 'private' && scope === 'upload'))
+          ? snapshotTranscriptionJob(scope)
           : undefined;
       const provider =
         rerouted?.provider ??
-        (current.provider === 'byok' ? 'byok' : activeMode === 'private' ? 'local' : 'cloud');
+        (current.localOnly
+          ? 'local'
+          : current.provider === 'byok'
+            ? 'byok'
+            : activeMode === 'private'
+              ? 'local'
+              : 'cloud');
       const inferenceRoute = rerouted ? rerouted.inferenceRoute : current.inferenceRoute;
       const textRoutes =
         rerouted ?? (provider === current.provider ? current : snapshotTextInference(provider));
-      if (provider !== 'local' && activeMode === 'private') {
+      if (provider !== 'local' && activeMode === 'private' && scope === 'dictation') {
         throw new Error(
-          'This recording used a remote provider. Turn off Private Mode in Account → AI Models to retry its original route.',
+          'This recording used a remote provider. Change Dictation from On-Device in Account → AI Models to retry its original route.',
         );
       }
       const retryCount = (current.retryCount ?? 0) + 1;
@@ -398,27 +427,24 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
             (provider !== 'byok'
               ? { mode: provider === 'local' ? 'local' : 'openwhispr', scope: 'cleanup' }
               : undefined),
-          agentRoute:
-            textRoutes.agentRoute ??
-            (provider !== 'byok'
-              ? { mode: provider === 'local' ? 'local' : 'openwhispr', scope: 'agent' }
-              : undefined),
           cleanupUnavailable:
             textRoutes.cleanupUnavailable ??
             (provider === 'byok' && !textRoutes.cleanupRoute
               ? 'The original cleanup route is unavailable. Your raw transcript is saved.'
-              : undefined),
-          agentUnavailable:
-            textRoutes.agentUnavailable ??
-            (provider === 'byok' && !textRoutes.agentRoute
-              ? 'The original agent route is unavailable. Your raw transcript is saved.'
               : undefined),
           language: getPreferredTranscriptionLanguage(),
           fileName,
           mimeType,
           jobId: retryJobId,
           requestContext: current.requestContext ?? 'recording',
+          // History holds dictations and uploads only; meetings are notes.
+          purpose: scope,
           keyboardTone: current.requestContext === 'keyboard' ? current.keyboardTone : undefined,
+          // A keyboard Local take never translates: the take must not leave this iPhone.
+          translationTarget:
+            current.requestContext === 'keyboard' && !current.localOnly
+              ? current.translationTarget
+              : undefined,
         });
 
         const updated: Transcript = {
@@ -429,11 +455,11 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           provider: processed.transcription.provider,
           inferenceRoute: processed.transcription.inferenceRoute,
           cleanupRoute: processed.transcription.cleanupRoute,
-          agentRoute: processed.transcription.agentRoute,
           cleanupUnavailable: processed.transcription.cleanupUnavailable,
-          agentUnavailable: processed.transcription.agentUnavailable,
           cleanupWarning: processed.transcription.cleanupWarning,
+          translatedTo: processed.translatedTo,
           // Retry succeeded: the row is completed and no longer retryable.
+          translationTarget: undefined,
           audioUrl: undefined,
           status: 'completed',
           errorMessage: undefined,
@@ -470,9 +496,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
                 provider,
                 inferenceRoute,
                 cleanupRoute: textRoutes.cleanupRoute,
-                agentRoute: textRoutes.agentRoute,
                 cleanupUnavailable: textRoutes.cleanupUnavailable,
-                agentUnavailable: textRoutes.agentUnavailable,
               }),
           status: 'failed',
           errorMessage: toFriendlyTranscriptionErrorMessage(error),

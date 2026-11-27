@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
-import { Calendar, Key, Link2, Network, Terminal } from "../icons";
+import { Calendar, Key, Link2, Network, SkillStack, Terminal } from "../icons";
 
-export type IntegrationsSection = "connectors" | "calendars" | "api" | "mcp" | "cli";
+export type IntegrationsSection = "connectors" | "skills" | "calendars" | "api" | "mcp" | "cli";
 
 export const DEFAULT_INTEGRATIONS_SECTION: IntegrationsSection = "calendars";
 
@@ -10,7 +10,7 @@ export const INTEGRATIONS_SECTION_GROUPS: ReadonlyArray<{
   sections: readonly IntegrationsSection[];
 }> = [
   { id: "meetings", sections: ["calendars"] },
-  { id: "assistant", sections: ["connectors"] },
+  { id: "assistant", sections: ["connectors", "skills"] },
   { id: "developer", sections: ["api", "mcp", "cli"] },
 ];
 
@@ -19,6 +19,7 @@ export const INTEGRATIONS_SECTION_ICONS: Record<
   ComponentType<{ size?: number; className?: string }>
 > = {
   connectors: Link2,
+  skills: SkillStack,
   calendars: Calendar,
   api: Key,
   mcp: Network,
@@ -30,6 +31,8 @@ export type SectionMeta =
 
 export interface SectionMetaInput {
   isPaid: boolean;
+  /** The organization restricts personal API access, so no plan would unlock it. */
+  apiAccessRestricted: boolean;
   /** Connectors decide their plan and org policy as the Connectors pane does. */
   connectors: { isPaid: boolean; blockedByOrg: boolean; ready: number };
   connectedCalendars: number;
@@ -38,7 +41,7 @@ export interface SectionMetaInput {
 /** The status shown beside a section in the nav: what's connected, or which plan it needs. */
 export function sectionMeta(
   section: IntegrationsSection,
-  { isPaid, connectors, connectedCalendars }: SectionMetaInput
+  { isPaid, apiAccessRestricted, connectors, connectedCalendars }: SectionMetaInput
 ): SectionMeta | null {
   switch (section) {
     case "connectors":
@@ -48,9 +51,11 @@ export function sectionMeta(
       return connectors.ready > 0 ? { kind: "count", value: connectors.ready } : null;
     case "calendars":
       return connectedCalendars > 0 ? { kind: "count", value: connectedCalendars } : null;
+    case "skills":
+      return null;
     case "api":
     case "mcp":
-      return isPaid ? null : { kind: "badge", badge: "pro" };
+      return isPaid || apiAccessRestricted ? null : { kind: "badge", badge: "pro" };
     case "cli":
       // Local mode is free; saying so is the point of surfacing it to free plans.
       return isPaid ? null : { kind: "badge", badge: "free" };

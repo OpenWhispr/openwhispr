@@ -8,18 +8,28 @@ import type {
 export type ProcessingMode = 'cloud' | 'private' | 'providers';
 export type TranscriptionProvider = 'local' | 'cloud' | 'byok';
 export type KeyboardTone = 'default' | 'formal' | 'casual' | 'very_casual' | 'excited';
+// 'other': a language the keyboard has no word list for, typed without suggestions or autocorrect.
+// 'fr_CH': the same, with è, é and à on keys of their own.
+export type KeyboardTypingLanguage = 'en' | 'de' | 'fr_CH' | 'other';
+export type KeyboardTypingLayout = 'qwerty' | 'qwertz';
 export type InferenceMode = 'openwhispr' | 'local' | 'providers';
 
 export interface UserConfig {
   inference?: Partial<Record<InferenceScope, InferenceSelection>>;
   rememberedInference?: Partial<Record<InferenceScope, Record<string, InferenceSelection>>>;
-  // Workflows held on the previous mode when dictation moved to Bring Your Own Key,
-  // as opposed to ones the user chose; only these are released when dictation leaves it.
+  // Workflows set automatically, by Local Mode holding them on this iPhone or a dictation change
+  // keeping them where they ran, as opposed to ones the user chose on their own page; a dictation
+  // change keeps these and only onboarding releases them.
   pinnedInference?: MobileInferenceScope[];
-  // Set while Private mode is on after being turned on from Bring Your Own Key, so turning it
-  // off goes back to the last provider rather than to Cloud, with the workflows it held
-  // (pinnedInference) held on the same selections again.
-  privateModeReturn?: { pinned: Partial<Record<MobileInferenceScope, InferenceSelection>> };
+  // Set once a config follows Local Mode's OpenWhispr Cloud defaults for uploads and cleanup. New
+  // installs start with it; older configs get it from localModeUpgradeConfig at launch.
+  localModeUpgraded?: boolean;
+  // Set once note chat has its own selection, copied from the voice assistant's it used to share.
+  // New installs start with it; older configs get it from noteChatSplitConfig at launch.
+  noteChatSplit?: boolean;
+  // Set once note formatting follows its own selection in Local Mode instead of running on this
+  // iPhone. New installs start with it; older configs get it from notesLocalModeSplitConfig.
+  notesLocalModeSplit?: boolean;
   defaultMode: ProcessingMode;
   cleanupEnabled?: boolean;
   autoGenerateNoteTitle?: boolean;
@@ -38,12 +48,22 @@ export interface UserConfig {
   // the first time a hardware keyboard is attached.
   hardwareKeyboardNudgeDismissedAt?: string;
   keyboardTone?: KeyboardTone;
+  // Language code the keyboard translates dictation into; null or unset is Off.
+  keyboardTranslationTarget?: string | null;
+  // Records and transcribes in the keyboard, without opening the app. Unset is on; read it
+  // through keyboardDirectDictationEnabled.
+  keyboardDirectDictation?: boolean;
+  // The keyboard's typing help (src/lib/keyboardTypingSync.ts), apart from the dictation language.
+  // Unset or null follows the device's languages / the typing language; haptics default on.
+  keyboardTypingLanguage?: KeyboardTypingLanguage | null;
+  keyboardTypingLayout?: KeyboardTypingLayout | null;
+  keyboardHapticsEnabled?: boolean;
   // Apple Foundation Models local generation for notes. Default on; users can
   // disable it from AI Models.
   appleLocalIntelligenceEnabled?: boolean;
-  // Dictation agent (cloud-only, default on)
+  // Voice assistant: the keyboard's compose wand (Cloud and Bring Your Own Key, default on)
   dictationAgentEnabled?: boolean;
-  // Note chat, which once shared dictationAgentEnabled's switch and follows it until set.
+  // Note chat, which once shared dictationAgentEnabled's switch (saved apart by noteChatSplitConfig).
   noteChatEnabled?: boolean;
   dictationAgentName?: string;
   dictationAgentShareContext?: boolean;
@@ -53,10 +73,6 @@ export function inferenceToProcessingMode(mode: InferenceMode): ProcessingMode {
   return mode === 'local' ? 'private' : mode === 'providers' ? 'providers' : 'cloud';
 }
 
-export function processingToInferenceMode(mode: ProcessingMode): InferenceMode {
-  return mode === 'private' ? 'local' : mode === 'providers' ? 'providers' : 'openwhispr';
-}
-
 export interface TextInferenceSnapshot {
   cleanupRoute?: InferenceRoute;
   agentRoute?: InferenceRoute;
@@ -64,7 +80,14 @@ export interface TextInferenceSnapshot {
   agentUnavailable?: string;
 }
 
-export interface Transcript extends TextInferenceSnapshot {
+// Dictation and uploads only take the cleanup route; the voice assistant's route belongs to the
+// keyboard's wand jobs.
+export type CleanupInferenceSnapshot = Pick<
+  TextInferenceSnapshot,
+  'cleanupRoute' | 'cleanupUnavailable'
+>;
+
+export interface Transcript extends CleanupInferenceSnapshot {
   cleanupWarning?: string;
   inferenceRoute?: Extract<InferenceRoute, { mode: 'providers' }>;
   id: string;
@@ -78,10 +101,20 @@ export interface Transcript extends TextInferenceSnapshot {
   audioMimeType?: string;
   duration?: number;
   provider: TranscriptionProvider;
+  /**
+   * Recorded for the keyboard's Local engine, which promises the take never leaves this iPhone:
+   * Retry stays On-Device whatever mode is on now, and fails rather than uploading.
+   */
+  localOnly?: boolean;
   status?: 'completed' | 'failed';
   errorMessage?: string;
   requestContext?: 'keyboard' | 'recording' | 'file';
   keyboardTone?: KeyboardTone;
+  // The language the text was translated into; unset when it wasn't.
+  translatedTo?: string;
+  // On a failed keyboard row, the target the dictation was recorded with, so a retry from History
+  // translates it the same way.
+  translationTarget?: string;
   jobId?: string;
   retryCount?: number;
 }
@@ -101,18 +134,24 @@ export interface ReasoningRequest {
   language?: string;
   locale?: string;
   customDictionary?: string[];
+  // Teammates' words (at most 200, 2,000 characters), kept apart from the
+  // personal customDictionary: the API and the prompts built here quote them as
+  // data. Omitted when empty, so a personal-only request is what it always was.
+  sharedDictionary?: string[];
   // Keyboard dictation tone. Sent only for keyboard cleanup with a non-default
-  // tone; the API appends a matching instruction in cleanup mode.
+  // tone; the API appends a matching instruction in cleanup mode unless a
+  // custom prompt is set.
   tone?: KeyboardTone;
   // User's custom cleanup prompt, sent as a TEMPLATE: the API substitutes
-  // {{agentName}} and still appends language, dictionary and tone. Goes out
-  // with promptMode "cleanup", which pins cleanup semantics and disables the
-  // server's agent-name detection — cleanupTranscript gates it on its own
-  // detection. Ignored when systemPrompt (a raw action-mode override) is set.
+  // {{agentName}} and still appends language and dictionary, but no tone.
+  // Ignored when systemPrompt is set.
   customPrompt?: string;
-  // When set, the backend enters Action Mode (dictation agent).
+  // Fills {{agentName}} in the cleanup prompt, which keeps the assistant's name
+  // as dictated words.
   agentName?: string;
   routing?: ReasoningRoutingOptions;
+  // Tells the Cloud route what the systemPrompt is for. Omitted for every other caller.
+  purpose?: 'translation';
 }
 
 export interface ReasoningResponse {
@@ -141,20 +180,27 @@ export type LocalReasoningStatus =
   | 'unsupportedDevice'
   | 'unsupportedOS'
   | 'appleIntelligenceOff'
-  | 'modelNotReady';
+  | 'modelNotReady'
+  // Apple Intelligence doesn't support the iPhone's language, which Settings can change.
+  | 'unsupportedLanguage';
 
 export interface LocalReasoningReadiness {
   status: LocalReasoningStatus;
   contextSize?: number;
   tokenCounting?: boolean;
+  // The iPhone's language, named for unsupportedLanguage.
+  deviceLanguage?: string;
 }
 
 export type LocalReasoningErrorCode =
   | 'APPLE_LLM_GUARDRAIL'
   | 'APPLE_LLM_CONTEXT_LIMIT'
+  | 'APPLE_LLM_OUTPUT_LIMIT'
   | 'APPLE_LLM_RATE_LIMITED'
   | 'APPLE_LLM_UNAVAILABLE'
+  | 'APPLE_LLM_UNSUPPORTED_LANGUAGE'
   | 'APPLE_LLM_FAILED'
+  | 'APPLE_LLM_CANCELLED'
   | 'LOCAL_CONTEXT_LIMIT'
   | 'LOCAL_REASONING_UNAVAILABLE';
 
@@ -171,7 +217,11 @@ export interface StructuredMeetingNotes {
   followUps: string[];
 }
 
-export interface TranscriptionRequest extends TextInferenceSnapshot {
+// What the audio is for. /api/transcribe applies org policy to it instead of
+// inferring it from requestContext, where 'recording' would fit a meeting too.
+export type AudioPurpose = 'dictation' | 'meeting' | 'upload';
+
+export interface TranscriptionRequest extends CleanupInferenceSnapshot {
   inferenceRoute?: Extract<InferenceRoute, { mode: 'providers' }>;
   audioUri: string;
   provider: TranscriptionProvider;
@@ -181,13 +231,17 @@ export interface TranscriptionRequest extends TextInferenceSnapshot {
   jobId?: string;
   clientTranscriptionId?: string;
   requestContext?: 'keyboard' | 'recording' | 'file';
+  purpose?: AudioPurpose;
   // Per-job snapshot of the keyboard tone taken at record-start. Threaded to
   // cleanup; never re-read live. Only set for keyboard dictation.
   keyboardTone?: KeyboardTone;
+  // Per-job snapshot of the keyboard translation target taken at record-start; absent is Off.
+  // Only set for keyboard dictation.
+  translationTarget?: string;
   timeoutSeconds?: number;
 }
 
-export interface TranscriptionResponse extends TextInferenceSnapshot {
+export interface TranscriptionResponse extends CleanupInferenceSnapshot {
   cleanupWarning?: string;
   inferenceRoute?: Extract<InferenceRoute, { mode: 'providers' }>;
   text: string;
@@ -206,6 +260,8 @@ export interface TranscriptionResponse extends TextInferenceSnapshot {
   serverTiming?: Record<string, string | number | boolean | null>;
   /** Present only when word timestamps were requested (meeting path). t0/t1 in centiseconds. */
   segments?: WhisperSegment[];
+  /** Set only when `text` is a translation into this language. */
+  translatedTo?: string;
 }
 
 /** Raw whisper.rn segment. t0/t1 are CENTISECONDS (hundredths of a second). */

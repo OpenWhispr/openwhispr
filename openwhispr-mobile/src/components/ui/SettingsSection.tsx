@@ -1,5 +1,12 @@
 import React from 'react';
-import { View, Pressable, StyleSheet, TextInput, type TextInputProps } from 'react-native';
+import {
+  View,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  type TextInputProps,
+  type AccessibilityState,
+} from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from './SystemIcon';
 import { BRAND, iosColor } from '@/config/colors';
@@ -18,6 +25,7 @@ type SettingsRowProps = {
   destructive?: boolean;
   showChevron?: boolean;
   selected?: boolean;
+  accessibilityState?: AccessibilityState;
   // Shown right after the description, such as a help button.
   descriptionAccessory?: React.ReactNode;
   // Dims the icon and title and ignores taps; the description stays legible to say why.
@@ -37,6 +45,7 @@ export function SettingsRow({
   destructive = false,
   showChevron = true,
   selected = false,
+  accessibilityState,
   descriptionAccessory,
   disabled = false,
 }: SettingsRowProps) {
@@ -45,8 +54,13 @@ export function SettingsRow({
   return (
     <Pressable
       onPress={disabled ? undefined : onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
       disabled={disabled || (!onPress && !rightElement)}
-      accessibilityState={{ selected, disabled }}
+      accessibilityState={{
+        selected,
+        ...accessibilityState,
+        disabled: disabled || accessibilityState?.disabled,
+      }}
       className={selected ? 'bg-brand/10 active:bg-brand/20' : 'active:bg-tertiarySystemFill'}
     >
       <View

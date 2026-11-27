@@ -1,0 +1,23 @@
+diff --git a/node_modules/expo-audio/ios/AudioModule.swift b/node_modules/expo-audio/ios/AudioModule.swift
+index d2046b5..d7801e2 100644
+--- a/node_modules/expo-audio/ios/AudioModule.swift
++++ b/node_modules/expo-audio/ios/AudioModule.swift
+@@ -810,8 +810,18 @@ public class AudioModule: Module {
+         if !mode.shouldRouteThroughEarpiece {
+           categoryOptions.insert(.defaultToSpeaker)
+         }
++        // OpenWhispr: Bluetooth HFP alone (call mode) left AirPods muffled and
++        // mono for the whole recording. On iOS 26, AirPods that support
++        // high-quality recording record and play at full bandwidth instead;
++        // iOS falls back to HFP for any headset that doesn't, so its mic is
++        // still used. A2DP only reaches output-only devices (speakers, car
++        // audio), since iOS prefers HFP on a device that has both.
++        categoryOptions.insert(.allowBluetoothA2DP)
+ #if compiler(>=6.2) // Xcode 26
+         categoryOptions.insert(.allowBluetoothHFP)
++        if #available(iOS 26.0, *) {
++          categoryOptions.insert(.bluetoothHighQualityRecording)
++        }
+ #else
+         categoryOptions.insert(.allowBluetooth)
+ #endif

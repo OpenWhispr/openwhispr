@@ -59,6 +59,11 @@ The Expo mobile application is maintained separately in
 development commands. Follow its
 [`CONTRIBUTING.md`](../openwhispr-mobile/CONTRIBUTING.md) when changing mobile code.
 
+The list of models the desktop app offers lives in [`model-registry`](../model-registry/).
+To add, retire or correct a model, follow its
+[`CONTRIBUTING.md`](../model-registry/CONTRIBUTING.md); a model that also needs app code
+goes in the same pull request as that code.
+
 ### CI scope and required checks
 
 PR checks follow the files changed:
@@ -68,7 +73,9 @@ PR checks follow the files changed:
 | `openwhispr-mobile/**` or the mobile CI workflow                                       | Mobile only        |
 | Desktop files at the repository root, including its dependencies and workflows         | Desktop only       |
 | Files from both applications                                                           | Both               |
-| Shared CI routing, CodeQL configuration, Dependabot configuration, or `.gitattributes` | Both               |
+| `model-registry/**`                                                                    | Registry, Desktop  |
+| The model registry workflows                                                           | Registry only      |
+| Shared CI routing, CodeQL configuration, Dependabot configuration, or `.gitattributes` | All                |
 
 Small routing and status jobs run on every PR. They let required checks finish
 successfully when an application is unaffected, without installing or building it.

@@ -10,6 +10,9 @@ export interface RemoteDictionaryEntry {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+  // Set when the word was moved into a shared list. Absent from older APIs,
+  // which the pull treats as "keep the local value"; null clears it.
+  shared_at?: string | null;
 }
 
 export interface DictionaryPushInput {
@@ -18,6 +21,16 @@ export interface DictionaryPushInput {
   client_dict_id: string;
   created_at?: string;
   updated_at?: string;
+  // Absent keeps the server's value; null takes a moved word back into the
+  // personal list.
+  shared_at?: string | null;
+}
+
+export interface DictionaryUpdateInput {
+  word?: string;
+  source?: RemoteDictionarySource;
+  // Same rule as DictionaryPushInput.shared_at.
+  shared_at?: string | null;
 }
 
 async function fetchList(
@@ -71,7 +84,7 @@ export async function batchCreateDictionary(
 
 export async function updateDictionaryEntry(
   remoteId: string,
-  patch: { word?: string; source?: RemoteDictionarySource },
+  patch: DictionaryUpdateInput,
 ): Promise<RemoteDictionaryEntry> {
   return await api.patch<RemoteDictionaryEntry>('/api/dictionary/update', {
     id: remoteId,

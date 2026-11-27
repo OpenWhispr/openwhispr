@@ -66,6 +66,8 @@ export interface MeetingRecordingStartOperation {
   markMainStartAttempted(): void;
   markCommitted(): void;
   stopMainOnce(stopMain: () => Promise<unknown> | unknown): Promise<unknown>;
+  // Runs as soon as a cancel lands, before the start notices it at its next await.
+  onCancel(release: () => void): void;
 }
 
 interface PendingStart<T> {
@@ -79,6 +81,7 @@ interface PendingStart<T> {
   committed: boolean;
   mainStartAttempted: boolean;
   mainStopPromise: Promise<unknown> | null;
+  cancelReleases: (() => void)[];
 }
 
 export interface MeetingRecordingStartCoordinator {
@@ -113,6 +116,10 @@ export function createMeetingRecordingStartCoordinator(): MeetingRecordingStartC
           state.mainStopPromise = Promise.resolve().then(stopMain);
         }
         return state.mainStopPromise;
+      },
+      onCancel: (release) => {
+        if (state.canceled) release();
+        else state.cancelReleases.push(release);
       },
     };
 
@@ -162,21 +169,28 @@ export function createMeetingRecordingStartCoordinator(): MeetingRecordingStartC
       committed: false,
       mainStartAttempted: false,
       mainStopPromise: null,
+      cancelReleases: [],
     } as PendingStart<unknown>);
     startNext();
     return startPromise;
   };
 
   const cancelActiveStart = (expectedSessionId?: string | null): Promise<void> | null => {
-    if (
-      !activeStart ||
-      activeStart.committed ||
-      (expectedSessionId != null && activeStart.sessionId !== expectedSessionId)
-    ) {
+    if (expectedSessionId != null && activeStart?.sessionId !== expectedSessionId) {
+      const queued = pendingStarts.find((operation) => operation.sessionId === expectedSessionId);
+      if (!queued) return null;
+      queued.canceled = true;
+      return queued.settled;
+    }
+    if (!activeStart || activeStart.committed) {
       return null;
     }
 
     activeStart.canceled = true;
+    if (expectedSessionId == null) {
+      for (const pending of pendingStarts) pending.canceled = true;
+    }
+    for (const release of activeStart.cancelReleases.splice(0)) release();
     return activeStart.settled;
   };
 

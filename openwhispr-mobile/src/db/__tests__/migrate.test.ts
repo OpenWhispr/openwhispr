@@ -255,4 +255,53 @@ describe('runMigrations — spaces', () => {
       ),
     ).not.toThrow();
   });
+
+  it('creates the chat tables', () => {
+    const { runMigrations } = loadMigrate();
+    runMigrations();
+
+    const columns = (
+      raw.prepare('PRAGMA table_info(chat_messages)').all() as { name: string }[]
+    ).map((column) => column.name);
+    expect(columns).toEqual(expect.arrayContaining(['steps_json', 'sources_json']));
+
+    const conversationColumns = (
+      raw.prepare('PRAGMA table_info(chat_conversations)').all() as { name: string }[]
+    ).map((column) => column.name);
+    expect(conversationColumns).toEqual(['id', 'title', 'created_at', 'updated_at']);
+  });
+  it('adds Private placement and replays the personal cursors only once', () => {
+    createLegacyNotesAndFolders();
+    raw.exec(
+      "CREATE TABLE sync_state (key TEXT PRIMARY KEY, value TEXT); INSERT INTO sync_state VALUES ('folders.last_sync_at', 'old-cursor'), ('notes.last_sync_at', 'old-notes'), ('dictionary.last_sync_at', 'keep');",
+    );
+    const { runMigrations } = loadMigrate();
+    runMigrations();
+    // Rows the API hid from the older build come back on the next personal pull.
+    expect(
+      raw.prepare("SELECT value FROM sync_state WHERE key='folders.last_sync_at'").get(),
+    ).toBeUndefined();
+    expect(
+      raw.prepare("SELECT value FROM sync_state WHERE key='notes.last_sync_at'").get(),
+    ).toBeUndefined();
+    expect(
+      raw.prepare("SELECT value FROM sync_state WHERE key='dictionary.last_sync_at'").get(),
+    ).toEqual({ value: 'keep' });
+    expect(raw.prepare('SELECT private_workspace_id FROM folders LIMIT 1').get()).toEqual({
+      private_workspace_id: null,
+    });
+    expect(
+      (raw.prepare('PRAGMA table_info(notes)').all() as { name: string }[]).map((c) => c.name),
+    ).toContain('private_workspace_id');
+    raw.exec(
+      "INSERT INTO sync_state VALUES ('folders.last_sync_at', 'new-cursor'), ('notes.last_sync_at', 'new-notes');",
+    );
+    runMigrations();
+    expect(
+      raw.prepare("SELECT value FROM sync_state WHERE key='folders.last_sync_at'").get(),
+    ).toEqual({ value: 'new-cursor' });
+    expect(
+      raw.prepare("SELECT value FROM sync_state WHERE key='notes.last_sync_at'").get(),
+    ).toEqual({ value: 'new-notes' });
+  });
 });

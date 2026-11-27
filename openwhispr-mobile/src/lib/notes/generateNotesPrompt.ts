@@ -1,3 +1,4 @@
+import { sharedDictionaryHint } from '@/lib/sharedDictionaryHints';
 import type { Action } from '@/data';
 
 export type GenerateNotesInputKind = 'plain-note' | 'meeting-transcript';
@@ -7,7 +8,16 @@ export interface BuildActionSystemPromptInput {
   inputKind: GenerateNotesInputKind;
   isDefaultGenerateNotesAction: boolean;
   customDictionary?: string[];
+  // Teammates' words, quoted as data after the personal list.
+  sharedDictionary?: string[];
 }
+
+// Without an explicit rule the English prompt pulls non-English notes into English. The action's
+// own instructions follow these rules, so one asking for a language (a translation) still wins.
+export const MEETING_OUTPUT_LANGUAGE_RULE =
+  '- Unless the instructions below ask for another language, write the notes in the language the meeting was held in, including the section headings: translate the heading names above into that language. Never translate the content into English unasked.';
+export const NOTE_OUTPUT_LANGUAGE_RULE =
+  '- Unless the instructions below ask for another language, write in the language the notes are written in. Never translate them into English unasked.';
 
 const BASE_SYSTEM_PROMPT = `You are a note enhancement assistant. The user will provide raw notes - possibly voice-transcribed, rough, or unstructured. Your job is to clean them up according to the instructions below while preserving all original meaning and information. Output clean markdown.
 
@@ -16,6 +26,7 @@ FORMAT RULES (strict):
 - Do NOT use tables, horizontal rules, or block quotes.
 - Do NOT list or guess participant names/roles.
 - Keep the tone professional and concise. Bias toward brevity.
+${NOTE_OUTPUT_LANGUAGE_RULE}
 
 Instructions: `;
 
@@ -31,6 +42,7 @@ FORMAT RULES (strict):
 - Use clear section headings: ## Key Discussion Points, ## Decisions Made, ## Action Items, ## Follow-ups.
 - Omit any section that has no content.
 - Under Action Items, use checkboxes (\`- [ ]\`). Attribute an item only when a visible speaker name or distinct speaker label clearly owns it. Keep clear actions from unlabeled lines, but do not assign them an owner.
+${MEETING_OUTPUT_LANGUAGE_RULE}
 
 CONTENT RULES:
 - Preserve important quotes or specific commitments verbatim when they carry meaning.
@@ -76,5 +88,10 @@ export const buildActionSystemPrompt = (input: BuildActionSystemPromptInput): st
       ? MEETING_SYSTEM_PROMPT
       : BASE_SYSTEM_PROMPT;
 
-  return appendCustomDictionarySuffix(`${basePrompt}${input.actionPrompt}`, input.customDictionary);
+  const prompt = appendCustomDictionarySuffix(
+    `${basePrompt}${input.actionPrompt}`,
+    input.customDictionary,
+  );
+  const shared = normalizedDictionaryWords(input.sharedDictionary);
+  return shared.length > 0 ? `${prompt}\n\n${sharedDictionaryHint(shared)}` : prompt;
 };

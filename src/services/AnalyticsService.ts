@@ -32,9 +32,42 @@ let historicalRetryBlockedUntil = 0;
 export const ANALYTICS_SUMMARY_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 export const ANALYTICS_REMOTE_REFRESH_DEBOUNCE_MS = 250;
 const requestedHistoryBackfillAccounts = new Set<string>();
+// Every window runs its own sync passes, so the write a summary read must not
+// miss lives in shared localStorage, one key per account.
+const SUMMARY_WRITE_PREFIX = "analyticsSummaryWrite:";
 
+function summaryWriteKey(accountId: string | null): string {
+  return `${SUMMARY_WRITE_PREFIX}${encodeURIComponent(accountId ?? "")}`;
+}
+
+function readSummaryWrite(accountId: string | null): string | null {
+  try {
+    return localStorage.getItem(summaryWriteKey(accountId));
+  } catch {
+    return null;
+  }
+}
+
+function markSummaryWrite(context?: AnalyticsSyncContext): void {
+  try {
+    localStorage.setItem(summaryWriteKey(context?.accountId ?? null), crypto.randomUUID());
+  } catch {
+    // Losing the mark only lets a check read the API's copy until it expires.
+  }
+}
+
+function acknowledgeSummaryWrite(accountId: string | null, write: string | null): void {
+  if (write === null || readSummaryWrite(accountId) !== write) return;
+  try {
+    localStorage.removeItem(summaryWriteKey(accountId));
+  } catch {
+    // A kept mark only costs one more fresh read.
+  }
+}
+
+/** `refresh` is told whether local data changed, or whether it is only checking for remote changes. */
 export function subscribeToAnalyticsRefresh(
-  refresh: () => void | Promise<void>,
+  refresh: (dataChanged: boolean) => void | Promise<void>,
   cloudInsightsActive: boolean
 ): () => void {
   let disposed = false;
@@ -53,7 +86,7 @@ export function subscribeToAnalyticsRefresh(
 
     refreshRunning = true;
     try {
-      await refresh();
+      await refresh(!remoteOnly);
     } catch (error) {
       console.error("Refreshing analytics failed:", error);
     } finally {
@@ -124,6 +157,7 @@ async function deleteFromCloud(
   body: unknown,
   context?: AnalyticsSyncContext
 ): Promise<void> {
+  markSummaryWrite(context);
   if (context) {
     await cloudDeleteForAuthGeneration(path, body, context.authGeneration);
     return;
@@ -136,6 +170,7 @@ async function postToCloud<T>(
   body: unknown,
   context?: AnalyticsSyncContext
 ): Promise<T> {
+  markSummaryWrite(context);
   return context
     ? cloudPostForAuthGeneration<T>(path, body, context.authGeneration)
     : cloudPost<T>(path, body);
@@ -166,6 +201,19 @@ async function pushAnalyticsClear(context?: AnalyticsSyncContext): Promise<void>
     context
   );
   await window.electronAPI.completeAnalyticsClear(pending.cleared_through, context);
+}
+
+/**
+ * Whether a clear or delete for the account has not reached the cloud yet. A
+ * pass logs a failed erasure and carries on, so this is how a reader learns the
+ * account totals may still include what the user erased.
+ */
+export async function hasPendingAnalyticsErasures(context: AnalyticsSyncContext): Promise<boolean> {
+  const [clear, deletes] = await Promise.all([
+    window.electronAPI.getPendingAnalyticsClear(context),
+    window.electronAPI.getPendingAnalyticsDeletes(1, context),
+  ]);
+  return clear != null || deletes.length > 0;
 }
 
 // Erasures and uploads are independent work that happens to share a pass. A
@@ -344,9 +392,19 @@ function isAnalyticsSummary(value: unknown): value is AnalyticsSummary {
   );
 }
 
+/**
+ * `allow` lets the API answer from a copy a few minutes old, for a check on
+ * other devices' changes. `refresh` reads the database and updates that copy.
+ */
+export type AccountSummaryCache = "allow" | "refresh";
+
 export async function getAccountAnalyticsSummary(
-  accountId: string | null = null
+  accountId: string | null = null,
+  cache: AccountSummaryCache = "refresh"
 ): Promise<AnalyticsSummary> {
+  // Writes are marked when they start, since even an uncertain one may land.
+  // Reads stay fresh until one that began after the latest write succeeds.
+  const write = readSummaryWrite(accountId);
   const requestHistoryBackfill = Boolean(
     accountId && !requestedHistoryBackfillAccounts.has(accountId)
   );
@@ -355,6 +413,7 @@ export async function getAccountAnalyticsSummary(
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
   });
   if (requestHistoryBackfill) params.set("backfill", "true");
+  params.set("cache", write === null ? cache : "refresh");
 
   let summary: unknown;
   try {
@@ -377,5 +436,6 @@ export async function getAccountAnalyticsSummary(
   if (requestHistoryBackfill && accountId && summary.historyBackfillRetryRequired === true) {
     requestedHistoryBackfillAccounts.delete(accountId);
   }
+  acknowledgeSummaryWrite(accountId, write);
   return summary;
 }

@@ -2,6 +2,7 @@ const { spawn } = require("child_process");
 const { app } = require("electron");
 const { resolveBundledBinary } = require("./binaryResolver");
 const debugLogger = require("./debugLogger");
+const { isValidWindowInputRegion } = require("./windowInputRegion");
 
 const APPLY_TIMEOUT_MS = 1000;
 
@@ -33,7 +34,7 @@ function createLinuxWindowInputRegion(win) {
   const onClose = () => stop();
   const fail = (error) => {
     if (failure) return;
-    debugLogger.warn("Linux input region unavailable", { error: error.message });
+    debugLogger.warn("Linux input region helper unavailable", { error: error.message });
     stop(error);
   };
 
@@ -74,41 +75,19 @@ function createLinuxWindowInputRegion(win) {
     });
   };
 
-  const set = (region) => {
-    if (failure)
-      return stopped.then(() => {
-        throw failure;
-      });
-    let line = "full\n";
-    if (region !== null) {
-      const values = [
-        region?.viewportWidth,
-        region?.viewportHeight,
-        region?.x,
-        region?.y,
-        region?.width,
-        region?.height,
-      ];
-      if (
-        !values.every(Number.isFinite) ||
-        values[0] <= 0 ||
-        values[1] <= 0 ||
-        values[4] < 0 ||
-        values[5] < 0
-      ) {
-        fail(new Error("Invalid input region"));
-        return stopped.then(() => {
-          throw failure;
-        });
-      }
-      line = `${values.join(" ")}\n`;
-    }
+  const rejectWithFailure = () =>
+    stopped.then(() => {
+      throw failure;
+    });
+
+  const send = (line) => {
+    if (failure) return rejectWithFailure();
     return new Promise((resolve, reject) => {
       pending.push({
         resolve,
         reject,
         timer: setTimeout(
-          () => fail(new Error("Linux input region update timed out")),
+          () => fail(new Error("Linux input region helper timed out")),
           APPLY_TIMEOUT_MS
         ),
       });
@@ -121,9 +100,24 @@ function createLinuxWindowInputRegion(win) {
     });
   };
 
+  const set = (region) => {
+    let line = "full\n";
+    if (region !== null) {
+      if (!isValidWindowInputRegion(region)) {
+        fail(new Error("Invalid input region"));
+        return rejectWithFailure();
+      }
+      const { viewportWidth, viewportHeight, x, y, width, height } = region;
+      line = `${[viewportWidth, viewportHeight, x, y, width, height].join(" ")}\n`;
+    }
+    return send(line);
+  };
+
+  const focus = () => send("focus\n");
+
   app.once("before-quit", onClose);
   win.once("closed", onClose);
-  return { set, stop };
+  return { set, focus, stop };
 }
 
 module.exports = { createLinuxWindowInputRegion };

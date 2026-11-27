@@ -36,3 +36,10 @@ export function getCachedPlatform(): Platform {
   }
   return cachedPlatform;
 }
+
+/** The label for revealing a file or folder in the system's file manager. */
+export function showInFolderLabelKey(platform: Platform): string {
+  if (platform === "win32") return "controlPanel.history.showInFolderWindows";
+  if (platform === "linux") return "controlPanel.history.showInFolderLinux";
+  return "controlPanel.history.showInFolder";
+}

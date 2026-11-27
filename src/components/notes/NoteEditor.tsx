@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect, useMemo, useCallback, type ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
+import { usePolicySnapshot, useTranscriptionChoiceRefusal } from "../../hooks/usePolicy";
+import { openProviderSettings } from "../../utils/describeProviderError";
+import { meetingRecordingRefusal } from "../../stores/policyRules";
 import {
   Loader2,
   FileText,
   Sparkles,
   AlignLeft,
   MessageSquareText,
-  LinkIcon,
   Link2,
   Lock,
   FolderOpen,
@@ -17,6 +19,7 @@ import {
   ChevronDown,
   ShieldCheck,
   Users,
+  AlertTriangle,
 } from "../icons";
 import ShareNoteDialog, { type NoteExportOption } from "./ShareNoteDialog";
 import { reconcileLocalShareState } from "./shareNoteRules";
@@ -29,6 +32,7 @@ import {
 import { ownsNote } from "../../lib/spacePermissions";
 import SpaceSettingsDialog from "./SpaceSettingsDialog";
 import {
+  markNoteEdited,
   useShareCacheEntry,
   useNoteConflict,
   useSpaces,
@@ -39,9 +43,10 @@ import {
   updateShareCache,
 } from "../../stores/noteStore";
 import { NoteSharingService } from "../../services/NoteSharingService";
-import { fetchSpaceRoster } from "../../hooks/useSpaceRoster";
+import { fetchSpaceRoster, useSpaceRoster } from "../../hooks/useSpaceRoster";
 import { useAuth } from "../../hooks/useAuth";
 import { RichTextEditor } from "../ui/RichTextEditor";
+import { NoteBacklinks } from "../ui/editorBlocks/NoteBacklinks";
 import type { Editor } from "@tiptap/react";
 import { MeetingTranscriptChat, SelectionBar } from "./MeetingTranscriptChat";
 import {
@@ -62,16 +67,21 @@ import {
   SPLIT_BUTTON_GROUP_CLASS,
   SPLIT_BUTTON_SEGMENT_CLASS,
 } from "../ui/splitButton";
+import type { CalendarEvent } from "../../types/calendar";
 import type { NoteItem, FolderItem, ActionItem, ActionKind } from "../../types/electron";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 import type { NoteActionProgress } from "../../stores/actionProcessingStore";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
 import NoteBottomBar from "./NoteBottomBar";
 import NoteRecordControl, { RecordingWave } from "./NoteRecordControl";
+import MicMuteButton from "./MicMuteButton";
 import ThemedEmptyIllustration from "../ui/ThemedEmptyIllustration";
 import transcriptsEmptyLight from "../../assets/empty-states/notes-transcripts-light.svg";
 import transcriptsEmptyDark from "../../assets/empty-states/notes-transcripts-dark.svg";
 import { Button } from "../ui/button";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "../ui/BidiInterpolatedText";
+import { useSettingsStore } from "../../stores/settingsStore";
+import { GENERATE_NOTES_KEY } from "../../helpers/builtinActions";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
 import ActionChips from "./ActionChips";
@@ -83,6 +93,7 @@ import {
   getActionDescription,
   getActionName,
   initializeActions,
+  resolveDefaultTemplate,
   resolveTemplate,
   useActionsOfKind,
 } from "../../stores/actionStore";
@@ -90,10 +101,18 @@ import { compileChatActionPrompt } from "../../helpers/templatePrompts";
 import type { SlashCommand } from "../chat/slashCommands";
 import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
 import { collectKnownPeople, type MeetingIdentity } from "../../utils/llmTranscript";
+import {
+  isNoteRecorder,
+  noteRecorderUserId,
+  recorderTranscriptLabel,
+  resolveNoteRecorder,
+  resolveSpeakerAssignmentName,
+} from "../../utils/noteRecorder";
 import { noteChatTranscript } from "../../utils/transcriptEvidence";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
   applyTranscriptSpeakerPatch,
+  isYouSpeakerName,
   lockTranscriptSpeaker,
   serializeTranscriptSegments,
 } from "../../utils/transcriptSpeakerState";
@@ -101,9 +120,10 @@ import NoteParticipants from "./NoteParticipants";
 import { parseNoteParticipants } from "../../utils/noteAttendees";
 import { observeFloatingChatLayout } from "./floatingChatLayout";
 import {
+  MEETING_RECORDING_REFUSAL_KEYS,
   NOTE_META_CHIP_CLASS,
-  defaultFolderDisplayName,
   folderMatchesQuery,
+  folderPathLabel,
   shouldOfferMeetingSummary,
 } from "./shared";
 
@@ -164,6 +184,7 @@ type LiveMeetingTranscriptChatProps = Omit<
   | "systemPartialSpeakerId"
   | "systemPartialSpeakerName"
   | "isRecording"
+  | "micMuted"
 >;
 
 // Subscribes to live transcript state at this leaf so per-update re-renders
@@ -178,6 +199,7 @@ function LiveMeetingTranscriptChat({
   const systemPartial = useMeetingRecordingStore((s) => s.systemPartial);
   const systemPartialSpeakerId = useMeetingRecordingStore((s) => s.systemPartialSpeakerId);
   const systemPartialSpeakerName = useMeetingRecordingStore((s) => s.systemPartialSpeakerName);
+  const micMuted = useMeetingRecordingStore((s) => s.micMuted);
 
   const knownSpeakers = useMemo(
     () => buildKnownSpeakers(speakerProfiles ?? [], segments, speakerMappings ?? {}),
@@ -193,6 +215,7 @@ function LiveMeetingTranscriptChat({
       systemPartial={systemPartial}
       systemPartialSpeakerId={systemPartialSpeakerId}
       systemPartialSpeakerName={systemPartialSpeakerName}
+      micMuted={micMuted}
       speakerMappings={speakerMappings}
       speakerProfiles={knownSpeakers}
     />
@@ -210,7 +233,8 @@ interface NoteEditorProps {
   onStartRecording: () => void;
   onStopRecording: () => void;
   onExportNote?: (format: "md" | "txt") => void;
-  onExportTranscript?: (format: "txt" | "srt" | "json" | "md") => void;
+  /** recorderLabel names the original recorder when someone else exports the note. */
+  onExportTranscript?: (format: "txt" | "srt" | "json" | "md", recorderLabel?: string) => void;
   enhancement?: Enhancement;
   /** Runs a template, or an action that edits the summary, on this note. */
   onRunNoteAction?: (action: ActionItem) => void;
@@ -220,14 +244,15 @@ interface NoteEditorProps {
   actionProgress?: NoteActionProgress | null;
   onCancelAction?: () => void;
   diarizationSessionId?: string | null;
-  onLiveSpeakerLock?: (speakerId: string, displayName: string) => void;
+  onLiveSpeakerLock?: (speakerId: string, displayName: string, recorderName?: string) => void;
   sessionDiarizationEnabled?: boolean;
   sessionExpectedCount?: number;
   userTouchedStepper?: boolean;
   onSetSessionDiarizationEnabled?: (enabled: boolean) => void;
   onSetSessionExpectedCount?: (count: number) => void;
   folderName?: string | null;
-  calendarEventName?: string | null;
+  /** The linked event's stored row; undefined while it is being looked up. */
+  linkedEvent?: CalendarEvent | null;
   folders?: FolderItem[];
   onMoveToFolder?: (noteId: number, folderId: number) => void;
   onCreateFolderAndMove?: (noteId: number, folderName: string) => void;
@@ -264,7 +289,7 @@ export default function NoteEditor({
   onSetSessionDiarizationEnabled,
   onSetSessionExpectedCount,
   folderName,
-  calendarEventName,
+  linkedEvent,
   folders,
   onMoveToFolder,
   onCreateFolderAndMove,
@@ -273,7 +298,21 @@ export default function NoteEditor({
 }: NoteEditorProps) {
   const { t } = useTranslation();
   const locale = useUiLocale();
-  const defaultViewMode: MeetingViewMode = enhancement ? "enhanced" : "raw";
+  const handleStartRecording = (): void => {
+    markNoteEdited(note.id);
+    onStartRecording();
+  };
+  const recordingRefusal = meetingRecordingRefusal(usePolicySnapshot());
+  const recordingChoiceRefusal = useTranscriptionChoiceRefusal("meeting");
+  // An upload's transcription lives in its transcript, so until the user writes
+  // notes it opens there rather than on an empty "Your notes".
+  const opensOnTranscript =
+    note.note_type === "upload" && !!note.transcript && !note.content.trim();
+  const defaultViewMode: MeetingViewMode = enhancement
+    ? "enhanced"
+    : opensOnTranscript
+      ? "transcript"
+      : "raw";
   const [selectedViewMode, setSelectedViewMode] = useState<MeetingViewMode>(defaultViewMode);
   // Stored as chosen, clamped on read: AI Summary is the only tab that can stop
   // rendering, and a tab that no longer renders can never be the current one.
@@ -371,6 +410,7 @@ export default function NoteEditor({
   }, [
     aclRetryVersion,
     isSignedIn,
+    isTeamNote,
     note.cloud_id,
     note.id,
     note.is_shared,
@@ -447,7 +487,11 @@ export default function NoteEditor({
   const filteredFolders = useMemo(
     () =>
       folderSearch && folders
-        ? folders.filter((f) => folderMatchesQuery(f, t, folderSearch))
+        ? folders.filter(
+            (f) =>
+              folderMatchesQuery(f, t, folderSearch) ||
+              folderPathLabel(f, folders, t).toLowerCase().includes(folderSearch.toLowerCase())
+          )
         : (folders ?? []),
     [folders, folderSearch, t]
   );
@@ -459,8 +503,15 @@ export default function NoteEditor({
 
   const templates = useActionsOfKind("template");
   const noteActions = useActionsOfKind("action");
-  // Regenerating keeps the note's template; a first summary uses the default.
+  const defaultSummaryTemplateId = useSettingsStore((state) => state.defaultSummaryTemplateId);
+  const defaultTemplate = resolveDefaultTemplate(templates, defaultSummaryTemplateId);
   const noteTemplate = resolveTemplate(templates, note.enhancement_template_id);
+  const isDefaultAiSummary = defaultTemplate?.translation_key === GENERATE_NOTES_KEY;
+  const summaryCalloutLabel = isDefaultAiSummary
+    ? t("notes.editor.generateSummary")
+    : t("notes.editor.generateWithTemplate", {
+        template: defaultTemplate ? getActionName(defaultTemplate, t) : "",
+      });
   const isActionRunning = actionProcessingState === "processing";
   const hasNoteMaterial = !!note.content.trim() || hasMeetingTranscript;
   const canRunTemplate =
@@ -477,7 +528,8 @@ export default function NoteEditor({
 
   const hasChatSegments = displaySegments.length > 0;
   const showSummaryCallout =
-    canRunTemplate &&
+    !!onRunNoteAction &&
+    !!defaultTemplate &&
     shouldOfferMeetingSummary({
       isRecording,
       hasTranscriptSegments: hasNoteMaterial,
@@ -491,14 +543,29 @@ export default function NoteEditor({
     [displaySegments, speakerMappings, speakerProfiles]
   );
 
-  const meetingIdentity = useMemo<MeetingIdentity>(
-    () => ({
-      selfName: user?.name?.trim() || null,
-      selfEmail: user?.email?.trim() || null,
-      participants: parsedParticipants,
-    }),
-    [user?.name, user?.email, parsedParticipants]
+  const recordedByUser = isNoteRecorder(note, user?.id);
+  const recorderId = noteRecorderUserId(note);
+  const recorderRoster = useSpaceRoster(
+    !recordedByUser && recorderId && isTeamNote ? (space?.cloud_space_id ?? null) : null
   );
+  const noteRecorder = recorderId ? recorderRoster?.get(recorderId) : undefined;
+  const meetingIdentity = useMemo<MeetingIdentity>(
+    () =>
+      resolveNoteRecorder({
+        recordedByUser,
+        user: { name: user?.name, email: user?.email },
+        recorder: noteRecorder,
+        participants: parsedParticipants,
+      }),
+    [recordedByUser, user?.name, user?.email, noteRecorder, parsedParticipants]
+  );
+  const recorderLabel = recorderTranscriptLabel(meetingIdentity, recordedByUser, t);
+  // Exports name the recorder only on a note known to be someone else's.
+  const knownRecorderId = recorderId ?? note.owner_user_id;
+  const exportRecorderLabel =
+    !recordedByUser && user?.id && knownRecorderId && knownRecorderId !== user.id
+      ? recorderLabel
+      : undefined;
 
   const mentionPeople = useMemo(
     () => collectKnownPeople(meetingIdentity, speakerMappings, displaySegments),
@@ -509,10 +576,14 @@ export default function NoteEditor({
   // for, and says whether the note taker is the user.
   const chatTranscript = useMemo(
     () =>
-      noteChatTranscript(displaySegments, speakerMappings, ownedByUser ? meetingIdentity : null) ??
+      noteChatTranscript(
+        displaySegments,
+        speakerMappings,
+        recordedByUser ? meetingIdentity : null
+      ) ??
       note.transcript ??
       undefined,
-    [displaySegments, meetingIdentity, note.transcript, ownedByUser, speakerMappings]
+    [displaySegments, meetingIdentity, note.transcript, recordedByUser, speakerMappings]
   );
 
   const embeddedChat = useEmbeddedChat({
@@ -523,7 +594,7 @@ export default function NoteEditor({
     noteTranscript: chatTranscript,
     noteSummary: enhancement?.content,
     noteParticipants: parsedParticipants,
-    noteOwnedByUser: ownedByUser,
+    noteOwnedByUser: recordedByUser,
     selfEmail: user?.email ?? null,
     noteCalendarEventId: note.calendar_event_id,
     onNewChatUnsent: setChatDraft,
@@ -610,14 +681,18 @@ export default function NoteEditor({
     }
   }, [note.id, note.title, defaultViewMode, scheduleUiUpdate]);
 
-  useEffect(() => {
+  const refreshSpeakerMappings = useCallback(() => {
     window.electronAPI?.getSpeakerMappings?.(note.id).then((mappings) => {
       const map: Record<string, string> = {};
       for (const m of mappings || []) map[m.speaker_id] = m.display_name;
       setSpeakerMappings(map);
     });
+  }, [note.id]);
+
+  useEffect(() => {
+    refreshSpeakerMappings();
     refreshSpeakerProfiles();
-  }, [note.id, refreshSpeakerProfiles]);
+  }, [refreshSpeakerMappings, refreshSpeakerProfiles]);
 
   useEffect(() => {
     if (titleRef.current && titleRef.current.textContent !== note.title) {
@@ -648,15 +723,10 @@ export default function NoteEditor({
     const enriched = completedDiarization.segments;
     if (enriched.length === 0) return;
     setDiarizedSegments(enriched);
-
-    const autoMappings: Record<string, string> = {};
-    for (const s of enriched) {
-      if (s.speakerName && s.speaker) autoMappings[s.speaker] = s.speakerName;
-    }
-    if (Object.keys(autoMappings).length > 0) {
-      setSpeakerMappings((prev) => ({ ...autoMappings, ...prev }));
-    }
-  }, [completedDiarization, note.id]);
+    // Diarization moves a live speaker's name to the voice it matched, whose id
+    // can differ from the one the name was given to.
+    refreshSpeakerMappings();
+  }, [completedDiarization, note.id, refreshSpeakerMappings]);
 
   const persistDisplaySegments = useCallback(
     async (nextSegments: TranscriptSegment[], updateOverlay = true) => {
@@ -675,25 +745,41 @@ export default function NoteEditor({
       speakerId: string,
       displayName: string,
       email?: string | null,
-      profileId?: number | null
-    ) => {
-      setSpeakerMappings((prev) => ({ ...prev, [speakerId]: displayName }));
-      await window.electronAPI?.setSpeakerMapping?.(
-        note.id,
-        speakerId,
+      profileId?: number | null,
+      recorderName?: string,
+      profileName = displayName
+    ): Promise<void> => {
+      markNoteEdited(note.id);
+      const segments = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
+      const hasOtherRecorders = segments.some((segment) => segment.recorderName);
+      const scopeSelfSpeaker = speakerId === "you" && hasOtherRecorders;
+      displayName = resolveSpeakerAssignmentName(
         displayName,
-        email,
-        profileId
+        user,
+        recordedByUser && !hasOtherRecorders,
+        t
       );
+      // The reserved self ID is shared by recording sessions. Its corrections
+      // live on those sessions' rows, never in a mapping that renames all of them.
+      if (!scopeSelfSpeaker) {
+        setSpeakerMappings((prev) => ({ ...prev, [speakerId]: displayName }));
+        await window.electronAPI?.setSpeakerMapping?.(
+          note.id,
+          speakerId,
+          profileName,
+          email,
+          profileId
+        );
+      }
 
       if (isRecording) {
-        onLiveSpeakerLock?.(speakerId, displayName);
+        onLiveSpeakerLock?.(speakerId, displayName, recorderName);
         refreshSpeakerProfiles();
         return;
       }
 
       const currentSegments = displaySegments.map((s) =>
-        s.speaker === speakerId
+        s.speaker === speakerId && (!scopeSelfSpeaker || s.recorderName === recorderName)
           ? lockTranscriptSpeaker(s, {
               speakerName: displayName,
               speaker: speakerId,
@@ -710,6 +796,9 @@ export default function NoteEditor({
     [
       diarizedSegments,
       displaySegments,
+      user,
+      recordedByUser,
+      t,
       isRecording,
       note.id,
       onLiveSpeakerLock,
@@ -719,10 +808,13 @@ export default function NoteEditor({
   );
 
   const handleConfirmSuggestion = useCallback(
-    async (speakerId: string, suggestedName: string, profileId: number) => {
-      await handleMapSpeaker(speakerId, suggestedName, null, profileId);
+    async (speakerId: string, suggestedName: string, profileId: number, recorderName?: string) => {
+      const displayName = isYouSpeakerName(suggestedName, t("notes.speaker.you"))
+        ? recorderName || recorderLabel
+        : suggestedName;
+      await handleMapSpeaker(speakerId, displayName, null, profileId, recorderName, suggestedName);
     },
-    [handleMapSpeaker]
+    [handleMapSpeaker, recorderLabel, t]
   );
 
   const handleAttachSpeakerEmail = useCallback(
@@ -736,7 +828,8 @@ export default function NoteEditor({
   );
 
   const handleDismissSuggestion = useCallback(
-    async (speakerId: string) => {
+    async (speakerId: string): Promise<void> => {
+      markNoteEdited(note.id);
       const currentSegments = displaySegments.map((s) =>
         s.speaker === speakerId
           ? applyTranscriptSpeakerPatch(s, {
@@ -747,7 +840,7 @@ export default function NoteEditor({
       );
       await persistDisplaySegments(currentSegments, !!diarizedSegments || !isRecording);
     },
-    [displaySegments, diarizedSegments, isRecording, persistDisplaySegments]
+    [note.id, displaySegments, diarizedSegments, isRecording, persistDisplaySegments]
   );
 
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<Set<string>>(new Set());
@@ -782,6 +875,13 @@ export default function NoteEditor({
   const handleBulkAssignName = useCallback(
     async (displayName: string, _email?: string | null, profileId?: number) => {
       if (!selectedSegmentIds.size) return;
+      markNoteEdited(note.id);
+      displayName = resolveSpeakerAssignmentName(
+        displayName,
+        user,
+        recordedByUser && !displaySegments.some((segment) => segment.recorderName),
+        t
+      );
       const nextSegments = displaySegments.map((segment) =>
         selectedSegmentIds.has(segment.id)
           ? lockTranscriptSpeaker(segment, {
@@ -795,7 +895,16 @@ export default function NoteEditor({
       await persistDisplaySegments(nextSegments);
       handleClearSelection();
     },
-    [displaySegments, selectedSegmentIds, persistDisplaySegments, handleClearSelection]
+    [
+      displaySegments,
+      selectedSegmentIds,
+      note.id,
+      persistDisplaySegments,
+      handleClearSelection,
+      user,
+      recordedByUser,
+      t,
+    ]
   );
 
   const handleTitleInput = useCallback(() => {
@@ -957,7 +1066,11 @@ export default function NoteEditor({
     clearNoteConflict(note.client_note_id);
     // With no save pending, the owner's external-update resync applies the
     // fresh copy to the visible editor buffer.
-    if (fresh) updateNoteInStore(fresh);
+    if (fresh) {
+      // The row may have adopted the cloud copy's key; nothing may wait under it.
+      clearNoteConflict(fresh.client_note_id);
+      updateNoteInStore(fresh);
+    }
   }, [conflict, note.client_note_id, note.folder_id, note.id, note.space_id, onCancelPendingSaves]);
 
   // Keep the local edits, overwriting the cloud revision the user just saw.
@@ -1000,7 +1113,7 @@ export default function NoteEditor({
       return (["txt", "srt", "md", "json"] as const).map((format) => ({
         id: format,
         label: t(TRANSCRIPT_EXPORT_LABEL_KEYS[format]),
-        onSelect: () => onExportTranscript(format),
+        onSelect: () => onExportTranscript(format, exportRecorderLabel),
       }));
     }
     if (!onExportNote) return [];
@@ -1009,7 +1122,7 @@ export default function NoteEditor({
       label: t(NOTE_EXPORT_LABEL_KEYS[format]),
       onSelect: () => onExportNote(format),
     }));
-  }, [viewMode, onExportTranscript, onExportNote, t]);
+  }, [viewMode, onExportTranscript, onExportNote, exportRecorderLabel, t]);
 
   return (
     <div className="flex h-full min-h-0">
@@ -1034,13 +1147,12 @@ export default function NoteEditor({
               participants={parsedParticipants}
               dateLabel={shortDate || undefined}
               dateTitle={noteDate}
+              noteCreatedAt={note.created_at}
+              linkedEventId={note.calendar_event_id || null}
+              linkedEvent={linkedEvent}
+              canEdit={canEditNote}
+              ownedByUser={ownedByUser}
             />
-            {calendarEventName && (
-              <span className={cn(NOTE_META_CHIP_CLASS, "cursor-default")}>
-                <LinkIcon size={14} className="shrink-0 text-foreground/60" />
-                <span className="max-w-40 truncate">{calendarEventName}</span>
-              </span>
-            )}
             {isTeamNote && space && (
               <>
                 <button
@@ -1128,7 +1240,7 @@ export default function NoteEditor({
                         >
                           <FolderOpen size={11} className="text-foreground/45 shrink-0" />
                           <span dir="auto" className="truncate flex-1">
-                            {defaultFolderDisplayName(folder, t)}
+                            {folderPathLabel(folder, folders, t)}
                           </span>
                           {isCurrent && <Check size={9} className="text-primary shrink-0" />}
                         </DropdownMenuItem>
@@ -1296,10 +1408,15 @@ export default function NoteEditor({
                   isRecording={isRecording}
                   isProcessing={isProcessing}
                   disabled={!recordingAllowed}
-                  onStart={onStartRecording}
+                  disabledReason={t(
+                    recordingChoiceRefusal?.messageKey ??
+                      MEETING_RECORDING_REFUSAL_KEYS[recordingRefusal]
+                  )}
+                  onStart={handleStartRecording}
                   onStop={onStopRecording}
                 />
               )}
+              {canEditNote && isRecording && <MicMuteButton />}
               <div className={cn(SPLIT_BUTTON_GROUP_CLASS, "h-[30px] shrink-0")}>
                 <button
                   type="button"
@@ -1362,11 +1479,47 @@ export default function NoteEditor({
           </div>
         )}
 
+        {/* The org's meeting switch and a refused local model earn a banner; other restrictions just disable recording. */}
+        {canEditNote &&
+          !recordingAllowed &&
+          (recordingRefusal === "disabled" || recordingChoiceRefusal) && (
+            <div className="h-8 mt-2 shrink-0 border-y border-warning/20 bg-warning/8 dark:bg-warning/10">
+              <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
+                <AlertTriangle
+                  aria-hidden="true"
+                  className="w-3 h-3 shrink-0 text-amber-600 dark:text-warning"
+                />
+                <p
+                  role="status"
+                  className="text-[11px] text-amber-700 dark:text-warning/90 flex-1 truncate"
+                >
+                  {t(recordingChoiceRefusal?.messageKey ?? MEETING_RECORDING_REFUSAL_KEYS.disabled)}
+                </p>
+                {recordingChoiceRefusal && (
+                  <button
+                    type="button"
+                    onClick={() => openProviderSettings("noteRecording")}
+                    className="shrink-0 rounded-sm text-[11px] font-medium text-amber-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 dark:text-warning/90"
+                  >
+                    {t("providerErrors.openSettings")}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+        {/* notes that link here with [[title]]. */}
+        <NoteBacklinks
+          noteId={note.id}
+          title={note.title || ""}
+          className={cn(PAGE_CONTENT_WIDTH_CLASS, "shrink-0 px-5")}
+        />
         <div className="flex-1 relative min-h-0">
           <div ref={contentScrollRef} className="h-full overflow-y-auto">
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
               isRecording ? (
                 <LiveMeetingTranscriptChat
+                  recorderLabel={recorderLabel}
                   contentClassName={PAGE_CONTENT_WIDTH_CLASS}
                   speakerMappings={speakerMappings}
                   speakerProfiles={speakerProfiles}
@@ -1385,6 +1538,7 @@ export default function NoteEditor({
               ) : (
                 <MeetingTranscriptChat
                   contentClassName={PAGE_CONTENT_WIDTH_CLASS}
+                  recorderLabel={recorderLabel}
                   segments={displaySegments}
                   speakerMappings={speakerMappings}
                   speakerProfiles={knownSpeakers}
@@ -1429,7 +1583,7 @@ export default function NoteEditor({
                 {canEditNote && recordingAllowed && (
                   <Button
                     className="mt-6 rounded-full px-5 font-medium"
-                    onClick={onStartRecording}
+                    onClick={handleStartRecording}
                     disabled={isProcessing}
                   >
                     {t("notes.editor.startRecording")}
@@ -1471,11 +1625,14 @@ export default function NoteEditor({
           {!isRecording && selectedSegmentIds.size > 0 && (
             <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
               <SelectionBar
-                count={selectedSegmentIds.size}
                 onClear={handleClearSelection}
                 speakerProfiles={knownSpeakers}
                 participants={parsedParticipants}
                 onAssignName={handleBulkAssignName}
+                selectedSegments={displaySegments.filter((segment) =>
+                  selectedSegmentIds.has(segment.id)
+                )}
+                speakerMappings={speakerMappings}
                 t={t}
               />
             </div>
@@ -1505,14 +1662,27 @@ export default function NoteEditor({
             slashCommands={actionCommands}
             callout={
               showSummaryCallout &&
-              noteTemplate &&
+              defaultTemplate &&
               selectedSegmentIds.size === 0 && (
                 <Button
-                  className="h-9 gap-2 px-4 text-sm"
-                  onClick={() => onRunNoteAction?.(noteTemplate)}
+                  className="h-9 max-w-full min-w-0 gap-2 px-4 text-sm"
+                  aria-label={summaryCalloutLabel}
+                  onClick={() => onRunNoteAction?.(defaultTemplate)}
                 >
-                  <AlignLeft size={16} />
-                  {t("notes.editor.generateSummary")}
+                  <AlignLeft size={16} className="shrink-0" />
+                  <span className="truncate">
+                    {isDefaultAiSummary ? (
+                      summaryCalloutLabel
+                    ) : (
+                      <BidiInterpolatedText
+                        text={t("notes.editor.generateWithTemplate", {
+                          template: BIDI_VALUE_TOKEN,
+                        })}
+                        value={getActionName(defaultTemplate, t)}
+                        dir="auto"
+                      />
+                    )}
+                  </span>
                 </Button>
               )
             }

@@ -1,0 +1,27 @@
+# Data sources and licences
+
+Every data file bundled in the keyboard or checked in as test data comes from one of these sources. Raw downloads are not committed: `tools/fetch-sources.sh` fetches them into `data/.cache/`.
+
+## Bundled in the keyboard (lexicon and language model)
+
+Built by `tools/build-lexicon.py` from word and word-pair counts over these corpora.
+
+| Source                                                                                                                                                                                                                                                                                                                                                                                         | Used for                                          | Licence                                                         |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------- |
+| [Leipzig Corpora Collection](https://wortschatz.uni-leipzig.de/en/download) — `eng_news_2020_1M`, `eng-com_web-public_2018_1M`, `eng_wikipedia_2016_1M`, `deu_news_2020_1M`, `deu-de_web-public_2019_1M`, `deu_wikipedia_2021_1M`. D. Goldhahn, T. Eckart and U. Quasthoff: _Building Large Monolingual Dictionaries at the Leipzig Corpora Collection: From 100 to 200 Languages_, LREC 2012. | English and German word and word-pair counts      | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)       |
+| [Tatoeba](https://tatoeba.org) sentence exports (English, German)                                                                                                                                                                                                                                                                                                                              | Conversational word and word-pair counts          | [CC BY 2.0 FR](https://creativecommons.org/licenses/by/2.0/fr/) |
+| [Unicode emoji data](https://unicode.org/Public/emoji/) (`emoji-test.txt`) and [CLDR annotations](https://github.com/unicode-org/cldr) (`common/annotations`, `common/annotationsDerived`, English and German). © Unicode, Inc.                                                                                                                                                               | Emoji list, categories, names and search keywords | [Unicode License v3](https://www.unicode.org/license.txt)       |
+
+## Test data only (`tests/benchmarks/`)
+
+Built by `tools/build-benchmarks.py`. These are kept apart from the bundled sources so the benchmarks measure words and sentences the lexicon was not built from.
+
+| Source                                                                                                                                                                                                 | Used for                              | Licence                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- | --------------------------------------------------------------------------------- |
+| [Universal Dependencies English-EWT](https://github.com/UniversalDependencies/UD_English-EWT) (Silveira et al., 2014)                                                                                  | `sentences.en.*`, `typos.en-qwerty.*` | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)                   |
+| [Universal Dependencies German-GSD](https://github.com/UniversalDependencies/UD_German-GSD) (McDonald et al., 2013)                                                                                    | `sentences.de.*`, `typos.de-qwertz.*` | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)                   |
+| Wikipedia, [Lists of common misspellings/For machines](https://en.wikipedia.org/wiki/Wikipedia:Lists_of_common_misspellings/For_machines)                                                              | `misspellings.en.*`                   | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)                   |
+| Wikipedia, [Liste von Tippfehlern](https://de.wikipedia.org/wiki/Wikipedia:Liste_von_Tippfehlern) (pages A to XYZ)                                                                                     | `misspellings.de.*`                   | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)                   |
+| [hermitdave/FrequencyWords](https://github.com/hermitdave/FrequencyWords), OpenSubtitles 2018 word frequencies (`en_50k`, `de_50k`); corpus: P. Lison and J. Tiedemann, _OpenSubtitles2016_, LREC 2016 | `swipe-words.*`                       | Content [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), code MIT |
+
+The derived files under `tests/benchmarks/` are shared under CC BY-SA 4.0, as their sources require. No GPL data is used.

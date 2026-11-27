@@ -140,3 +140,50 @@ test("managed transcription outranks OpenWhispr Cloud and local Whisper on the u
   assert.equal(calls.local, 0);
   assert.equal(calls.byok.length, 3);
 });
+
+test("an upload waits for a stale personal route and respects cancellation during that wait", async (t) => {
+  const { window } = installBrowserGlobals(t);
+  const vite = await createRendererServer(t);
+  const { useEnterpriseIdentityStore } = await vite.ssrLoadModule(
+    "/stores/enterpriseIdentityStore.ts"
+  );
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { transcribeFileWithSpeakers } = await vite.ssrLoadModule("/services/fileTranscription.ts");
+  const scope = { accountId: "account-a", workspaceId: "workspace-a", authGeneration: 1 };
+  let now = 0;
+  t.mock.method(Date, "now", () => now);
+  usePolicyStore.setState({ status: "unmanaged" });
+  window.electronAPI.getManagedEnterpriseConfig = async () => ({
+    ...scope,
+    success: false,
+    code: "ENTERPRISE_REQUIRED",
+  });
+  await useEnterpriseIdentityStore
+    .getState()
+    .refresh(scope.accountId, scope.workspaceId, scope.authGeneration);
+  now += 5 * 60_000;
+  const reply = Promise.withResolvers();
+  const recheck = t.mock.fn(() => reply.promise);
+  window.electronAPI.getManagedEnterpriseConfig = recheck;
+  const upload = t.mock.fn(async () => ({ success: true, text: "managed" }));
+  window.electronAPI.transcribeAudioFileByok = upload;
+  let cancelled = false;
+  const send = (isCancelled) =>
+    transcribeFileWithSpeakers(
+      "/tmp/a.wav",
+      cfg({ isOpenWhisprCloud: true }),
+      { enabled: false },
+      null,
+      { isCancelled }
+    );
+  const first = send(() => cancelled);
+  const second = send(() => false);
+  assert.equal(recheck.mock.callCount(), 1);
+  assert.equal(upload.mock.callCount(), 0);
+  cancelled = true;
+  reply.resolve({ ...scope, success: true, config: sttDefault });
+  assert.equal((await first).code, "AUDIO_OPERATION_CANCELLED");
+  assert.equal((await second).text, "managed");
+  assert.equal(upload.mock.callCount(), 1);
+  assert.equal(upload.mock.calls[0].arguments[0].managed.provider, "azure");
+});

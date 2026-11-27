@@ -35,6 +35,11 @@ export function hasLayerAbove(content: HTMLElement | null, doc: LayerProbe): boo
   return openDialogs.length > 0 && openDialogs[openDialogs.length - 1] !== content;
 }
 
+/** Toasts render outside every dialog, so Radix counts a press on one as an outside click. */
+function isToastPress(target: EventTarget | null): boolean {
+  return Boolean((target as Element | null)?.closest?.("[data-toast-viewport]"));
+}
+
 interface OutsideEvent {
   detail: { originalEvent: Event };
 }
@@ -44,8 +49,9 @@ export function useDismissGuard<T extends HTMLElement>(forwardedRef?: React.Forw
   const layerWasAboveRef = React.useRef(false);
 
   React.useEffect(() => {
-    const snapshotLayersAbove = () => {
-      layerWasAboveRef.current = hasLayerAbove(contentRef.current, document);
+    const snapshotLayersAbove = (event: PointerEvent) => {
+      layerWasAboveRef.current =
+        isToastPress(event.target) || hasLayerAbove(contentRef.current, document);
     };
     document.addEventListener("pointerdown", snapshotLayersAbove, { capture: true });
     return () => {

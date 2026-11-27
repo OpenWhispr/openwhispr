@@ -1,8 +1,17 @@
 import { act, renderHook } from '@testing-library/react-native';
+import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
 import { useAudioRecording } from '../useAudioRecording';
 
 jest.mock('expo-file-system/legacy', () => ({
   getInfoAsync: jest.fn(async () => ({ exists: true, size: 1024 })),
+}));
+
+// Meetings' capture lease reaches Sentry and the native module, neither of which loads under
+// Jest; dictation never touches it.
+jest.mock('@/lib/captureLease', () => ({
+  acquireCaptureLease: jest.fn(),
+  releaseCaptureLease: jest.fn(),
+  isCaptureLeaseHeld: jest.fn(() => false),
 }));
 
 // permissions.ts re-exports the alert helper, which reaches nativewind through
@@ -86,6 +95,10 @@ it('still delivers the transcript when history cannot be saved', async () => {
     await result.current.stopRecording().catch(() => undefined);
   });
   expect(onComplete).toHaveBeenCalledWith('Hello there.');
+  expect(transcribeAndCleanup).toHaveBeenCalledWith(
+    expect.objectContaining({ requestContext: 'recording', purpose: 'dictation' }),
+    expect.anything(),
+  );
   expect(onError).toHaveBeenCalledWith(
     expect.objectContaining({ message: expect.stringContaining('could not be saved') }),
   );

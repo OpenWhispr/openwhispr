@@ -187,6 +187,25 @@ export function runMigrations(): void {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS chat_conversations (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      text TEXT NOT NULL,
+      steps_json TEXT,
+      sources_json TEXT,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation ON chat_messages(conversation_id, created_at);
+
     CREATE TABLE IF NOT EXISTS transcript_segments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
@@ -337,6 +356,8 @@ export function runMigrations(): void {
   addColumnIfMissing('folders', 'sort_order', 'INTEGER DEFAULT 0');
 
   // Cloud sync additive migrations
+  const needsPrivateFolderPlacement = !columnExists('folders', 'private_workspace_id');
+  addColumnIfMissing('folders', 'private_workspace_id', 'TEXT');
   addColumnIfMissing('folders', 'client_folder_id', 'TEXT');
   addColumnIfMissing('folders', 'remote_id', 'TEXT');
   addColumnIfMissing('folders', 'deleted_at', 'TEXT');
@@ -346,6 +367,8 @@ export function runMigrations(): void {
   // rows, our repository writes updated_at explicitly on every insert/update.
   addColumnIfMissing('folders', 'updated_at', 'TEXT');
 
+  const needsPrivateNotePlacement = !columnExists('notes', 'private_workspace_id');
+  addColumnIfMissing('notes', 'private_workspace_id', 'TEXT');
   addColumnIfMissing('notes', 'client_note_id', 'TEXT');
   addColumnIfMissing('notes', 'remote_id', 'TEXT');
   addColumnIfMissing('notes', 'deleted_at', 'TEXT');
@@ -369,6 +392,8 @@ export function runMigrations(): void {
   addColumnIfMissing('notes', 'cloud_updated_at', 'TEXT');
   addColumnIfMissing('notes', 'conflict_server_note', 'TEXT');
   addColumnIfMissing('notes', 'left_team', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing('dictionary_entries', 'shared_at', 'TEXT');
+  addColumnIfMissing('dictionary_entries', 'shared_at_cleared', 'INTEGER NOT NULL DEFAULT 0');
 
   tryAlter(
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_client_id ON folders(client_folder_id) WHERE client_folder_id IS NOT NULL',
@@ -427,6 +452,15 @@ export function runMigrations(): void {
     'CREATE INDEX IF NOT EXISTS idx_google_calendar_events_calendar_window ON google_calendar_events(calendar_local_id, start_at, end_at)',
   );
   tryAlter('CREATE TABLE IF NOT EXISTS sync_state (key TEXT PRIMARY KEY, value TEXT)');
+  // Refresh metadata before any default-folder name adoption on the next consented sync.
+  if (needsPrivateFolderPlacement)
+    rawDb.runSync("DELETE FROM sync_state WHERE key = 'folders.last_sync_at'");
+  // This build asks the API for every workspace's Private (private-workspace-placement). Rows
+  // an older build's cursors passed while the API hid them come back on the next personal pull.
+  if (needsPrivateNotePlacement)
+    rawDb.runSync(
+      "DELETE FROM sync_state WHERE key IN ('folders.last_sync_at', 'notes.last_sync_at')",
+    );
   tryAlter(
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_client_space_id ON spaces(client_space_id)',
   );

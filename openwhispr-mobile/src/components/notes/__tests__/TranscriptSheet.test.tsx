@@ -74,6 +74,7 @@ const renderSheet = (overrides: Partial<React.ComponentProps<typeof TranscriptSh
     <TranscriptSheet
       visible
       blocks={[block]}
+      showSpeakerNames
       selectedSpeakerId={null}
       shareText="[0:00] Speaker 1: Hello there"
       onSpeakerPress={jest.fn()}

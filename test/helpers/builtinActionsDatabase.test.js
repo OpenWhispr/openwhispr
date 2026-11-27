@@ -5,7 +5,6 @@ const { createDb } = require("./harness/db.js");
 const DatabaseManager = require("../../src/helpers/database.js");
 const {
   BUILTIN_ACTIONS,
-  DETAILED_NOTES_KEY,
   FOLLOW_UP_EMAIL_KEY,
   GENERATE_NOTES_KEY,
   NOTE_ACTION_LIMITS,
@@ -42,6 +41,18 @@ test("no built-in lists its current prompt as a previous default", () => {
   for (const action of BUILTIN_ACTIONS) {
     assert.equal(action.previousPrompts.includes(action.prompt), false, action.name);
   }
+});
+
+// Copied from 1.10.3 as it shipped: a later change to the current rule must not
+// change the previous default an installed row is matched against.
+const SHIPPED_1_10_3_NOTHING_RULE =
+  "For material with no substantive discussion or notes (for example, only greetings, filler, or recording checks), reply with exactly NOTHING_TO_SUMMARIZE and nothing else. This rule overrides the section structure and bullet counts above: do not return an empty response or invent topics, decisions, or action items. Consider both the transcript and any manual notes before applying this rule.";
+
+test("AI Summary still recognizes the flat default 1.10.3 shipped", () => {
+  const summary = BUILTIN_ACTIONS.find((a) => a.translationKey === GENERATE_NOTES_KEY);
+  assert.ok(
+    summary.previousPrompts.some((prompt) => prompt.endsWith(`\n\n${SHIPPED_1_10_3_NOTHING_RULE}`))
+  );
 });
 
 for (const action of BUILTIN_ACTIONS) {
@@ -103,43 +114,6 @@ for (const action of BUILTIN_ACTIONS) {
     });
   });
 }
-
-test("launch puts the default AI Summary template first, then Detailed Notes", (t) => {
-  const db = createDb(t);
-  if (!db) return;
-  // As an earlier build ordered them, with Detailed Notes as the default.
-  db.db
-    .prepare("UPDATE actions SET sort_order = 0 WHERE translation_key = ?")
-    .run(DETAILED_NOTES_KEY);
-  db.db
-    .prepare("UPDATE actions SET sort_order = 1 WHERE translation_key = ?")
-    .run(GENERATE_NOTES_KEY);
-  db.db.close();
-
-  relaunch((migrated) => {
-    const [first, second] = migrated.getActions();
-    assert.equal(first.translation_key, GENERATE_NOTES_KEY);
-    assert.equal(second.translation_key, DETAILED_NOTES_KEY);
-  });
-});
-
-test("an upgrade to sections keeps a name the user gave Detailed Notes", (t) => {
-  const db = createDb(t);
-  if (!db) return;
-  const detailed = BUILTIN_ACTIONS.find((a) => a.translationKey === DETAILED_NOTES_KEY);
-  db.db
-    .prepare(
-      "UPDATE actions SET name = 'Team notes', prompt = ?, sections = NULL WHERE translation_key = ?"
-    )
-    .run(detailed.previousPrompts.at(-1), DETAILED_NOTES_KEY);
-  db.db.close();
-
-  relaunch((migrated) => {
-    const [row] = builtinRows(migrated, DETAILED_NOTES_KEY);
-    assert.deepEqual(row.sections, detailed.sections, "the old default still moves to sections");
-    assert.equal(row.name, "Team notes");
-  });
-});
 
 test("a database from before templates and chat actions migrates on launch", (t) => {
   const db = createDb(t);
@@ -217,8 +191,8 @@ test("templates and actions are validated and normalized when saved", (t) => {
   assert.equal(updated.action.kind, "action", "a row's kind never changes");
   assert.equal(updated.action.output, "chat");
 
-  const [detailed] = builtinRows(db, DETAILED_NOTES_KEY);
-  assert.equal(db.updateAction(detailed.id, { sections: [] }).success, false);
+  const [summary] = builtinRows(db, GENERATE_NOTES_KEY);
+  assert.equal(db.updateAction(summary.id, { sections: [] }).success, false);
 });
 
 test("an older build renaming the newer built-ins doesn't stop the next launch", (t) => {
@@ -353,6 +327,22 @@ test("TL;DR stock prompt upgrades without replacing an edited description", (t) 
     assert.equal(action.prompt, tldr.prompt);
     assert.equal(action.description, "My description");
     assert.equal(action.output, "chat");
+  });
+});
+
+test("AI Summary stock prompt upgrades without replacing an edited description", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const summary = BUILTIN_ACTIONS.find((a) => a.translationKey === GENERATE_NOTES_KEY);
+  const [row] = builtinRows(db, GENERATE_NOTES_KEY);
+  db.db
+    .prepare("UPDATE actions SET prompt = ?, sections = NULL, description = ? WHERE id = ?")
+    .run(summary.previousPrompts.at(-1), "My description", row.id);
+  db.db.close();
+  relaunch((upgraded) => {
+    const action = upgraded.getAction(row.id);
+    assert.deepEqual(action.sections, summary.sections);
+    assert.equal(action.description, "My description");
   });
 });
 

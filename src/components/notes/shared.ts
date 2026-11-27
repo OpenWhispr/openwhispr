@@ -1,9 +1,15 @@
 import { cn } from "../lib/utils";
-import type { FolderItem } from "../../types/electron";
+import { localMutationErrorKey } from "../../lib/localMutationError";
+import type { FolderItem, FolderNameClash } from "../../types/electron";
+import type { MeetingRecordingRefusal, PolicyDecisionSnapshot } from "../../stores/policyRules";
 
-export const DEFAULT_FOLDER_NAME = "Personal";
-export const MEETINGS_FOLDER_NAME = "Meetings";
-export const VIDEOS_FOLDER_NAME = "Videos";
+import {
+  DEFAULT_FOLDER_NAME,
+  MEETINGS_FOLDER_NAME,
+  VIDEOS_FOLDER_NAME,
+} from "../../lib/defaultFolderNames";
+
+export { DEFAULT_FOLDER_NAME, MEETINGS_FOLDER_NAME, VIDEOS_FOLDER_NAME };
 
 const DEFAULT_FOLDER_LABEL_KEYS: Record<string, string> = {
   [DEFAULT_FOLDER_NAME]: "notes.folders.defaults.personal",
@@ -34,14 +40,103 @@ export function folderMatchesQuery(
   );
 }
 
+// A subfolder whose parent isn't a loaded top-level folder of its space (a
+// transient sync state) shows as top level, so no folder is ever hidden.
+function loadedParent(folder: FolderItem, folders: FolderItem[]): FolderItem | undefined {
+  if (folder.parent_folder_id == null) return undefined;
+  return folders.find(
+    (f) =>
+      f.id === folder.parent_folder_id &&
+      f.space_id === folder.space_id &&
+      f.parent_folder_id == null
+  );
+}
+
+// Each top-level folder with its subfolders, both in main's sort order.
+export function folderTree(
+  folders: FolderItem[]
+): Array<{ folder: FolderItem; subfolders: FolderItem[] }> {
+  const nodes = new Map<number, { folder: FolderItem; subfolders: FolderItem[] }>();
+  const nested: Array<[FolderItem, FolderItem]> = [];
+  for (const folder of folders) {
+    const parent = loadedParent(folder, folders);
+    if (parent) nested.push([parent, folder]);
+    else nodes.set(folder.id, { folder, subfolders: [] });
+  }
+  for (const [parent, folder] of nested) nodes.get(parent.id)!.subfolders.push(folder);
+  return [...nodes.values()];
+}
+
+export function orderFoldersAsTree(folders: FolderItem[]): FolderItem[] {
+  return folderTree(folders).flatMap(({ folder, subfolders }) => [folder, ...subfolders]);
+}
+
+const FOLDER_PATH_SEPARATOR = " / ";
+
+export function joinFolderPath(parentName: string, name: string): string {
+  return `${parentName}${FOLDER_PATH_SEPARATOR}${name}`;
+}
+
+// Splits at the last separator, since subfolders go one level deep: only the
+// last segment can name a subfolder.
+export function splitFolderPath(path: string): { parentName: string; name: string } | null {
+  const separatorAt = path.lastIndexOf(FOLDER_PATH_SEPARATOR);
+  if (separatorAt < 0) return null;
+  return {
+    parentName: path.slice(0, separatorAt).trim(),
+    name: path.slice(separatorAt + FOLDER_PATH_SEPARATOR.length).trim(),
+  };
+}
+
+export function folderPathLabel(
+  folder: FolderItem,
+  folders: FolderItem[],
+  t: (key: string) => string
+): string {
+  const parent = loadedParent(folder, folders);
+  const name = defaultFolderDisplayName(folder, t);
+  return parent ? joinFolderPath(defaultFolderDisplayName(parent, t), name) : name;
+}
+
+// Why a folder change failed. A name clash says where the name is used, unless
+// it's a folder right beside this one, where the plain message is already clear.
+export function folderMutationErrorDescription(
+  result: { error?: string } & FolderNameClash,
+  folders: FolderItem[],
+  t: (key: string, options?: Record<string, string>) => string,
+  attempt?: { name: string; nested: boolean }
+): string {
+  const { takenName, takenInFolderId, reservedName } = result;
+  if (reservedName) {
+    return t("notes.mutationErrors.reservedSubfolderName", { name: reservedName });
+  }
+  if (takenName && takenInFolderId != null) {
+    const parent = folders.find((folder) => folder.id === takenInFolderId);
+    if (parent) {
+      return t("notes.mutationErrors.folderNameTakenIn", {
+        name: takenName,
+        parent: defaultFolderDisplayName(parent, t),
+      });
+    }
+  } else if (takenName && attempt && (attempt.nested || attempt.name !== takenName)) {
+    return t("notes.mutationErrors.folderNameTakenTopLevel", { name: takenName });
+  }
+  return t(localMutationErrorKey(result.error));
+}
+
+// Folders arrive account-scoped, so an attributed default is the active
+// account's own; a device-owned (NULL account) one only stands in for it.
 export function findDefaultFolder(folders: FolderItem[]): FolderItem | undefined {
-  return folders.find((f) => f.name === DEFAULT_FOLDER_NAME && f.is_default);
+  const defaults = folders.filter((f) => f.name === DEFAULT_FOLDER_NAME && f.is_default);
+  return defaults.find((f) => f.account_id) ?? defaults[0];
 }
 
 // URL downloads route to "Videos" by name: a pre-existing user-created folder with
-// that name is used as-is (the migration never promotes or replaces it).
+// that name is used as-is (the migration never promotes or replaces it), but only
+// at the top level, so a "Videos" subfolder of Meetings never takes uploads.
 export function findVideosFolder(folders: FolderItem[]): FolderItem | undefined {
-  return folders.find((f) => f.name === VIDEOS_FOLDER_NAME);
+  const videos = folders.filter((f) => f.name === VIDEOS_FOLDER_NAME && f.parent_folder_id == null);
+  return videos.find((f) => f.account_id) ?? videos[0];
 }
 
 // URL-download error codes → notes.upload.* i18n keys.
@@ -63,7 +158,42 @@ const TRANSCRIPTION_ERROR_KEYS: Record<string, string> = {
   CHUNK_LOSS_EXCEEDED: "chunkLossExceeded",
   CUSTOM_ENDPOINT_INVALID: "customEndpointInvalid",
   STREAMING_ONLY_PROVIDER: "streamingOnlyProvider",
+  // Server refusals under org policy. Uploads always send their source, so a
+  // purpose refusal here can only be the upload control's.
+  POLICY_AUDIO_UPLOAD_DISABLED: "disabledByOrg",
+  AUDIO_PURPOSE_REQUIRED: "disabledByOrg",
 };
+
+// Why policy refuses a meeting recording, as an i18n key.
+export const MEETING_RECORDING_REFUSAL_KEYS: Record<MeetingRecordingRefusal, string> = {
+  unresolved: "common.policyUnresolved",
+  disabled: "notes.meeting.recordingDisabledByOrg",
+  restricted: "notes.meeting.restrictedByOrg",
+};
+
+// Why policy refuses an upload, as an i18n key.
+export function uploadRestrictionKey(policy: PolicyDecisionSnapshot): string {
+  if (policy.status !== "managed" || !policy.policy) return "common.policyUnresolved";
+  return policy.policy.features.audioUploadEnabled === false
+    ? "notes.upload.disabledByOrg"
+    : "common.policyTranscriptionRestricted";
+}
+
+// Org-policy refusals from main or the server. Every later upload would meet
+// the same refusal, so a batch stops at the first one.
+const UPLOAD_POLICY_REFUSAL_CODES = new Set([
+  "POLICY_AUDIO_UPLOAD_DISABLED",
+  "AUDIO_PURPOSE_REQUIRED",
+  "POLICY_UNRESOLVABLE",
+  "POLICY_MODEL_BLOCKED",
+  "POLICY_LOCAL_MODE_BLOCKED",
+  "POLICY_APP_VERSION_BLOCKED",
+]);
+
+export function isUploadPolicyRefusal(failure: unknown): boolean {
+  const code = (failure as { code?: string } | null | undefined)?.code;
+  return !!code && UPLOAD_POLICY_REFUSAL_CODES.has(code);
+}
 
 // A coded failure arrives either as a returned result (BYOK, local) or as a
 // thrown error — OpenWhispr Cloud rethrows it through withSessionRefresh — so

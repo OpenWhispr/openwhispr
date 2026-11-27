@@ -59,7 +59,6 @@ async function setup(t, focused = true) {
     mockModules: {
       "/services/SyncService": `export const syncService = { debouncedPush: (...args) => globalThis.__assistantUndoToast.pushes.push(args) };`,
       "/ui/useToast": "export const useToast = () => globalThis.__assistantUndoToast;",
-      "/ui/Toast": `import { createElement } from "react"; export const ToastActionButton = ({ onClick, children }) => createElement("button", { onClick }, children);`,
     },
   });
   await (await vite.ssrLoadModule("/i18n.ts")).default.changeLanguage("en");
@@ -110,7 +109,9 @@ test("a background window offers Undo once focused; it targets the edited note",
   assert.equal(state.toasts[0].duration, 6000);
   await state.emit("focus");
   assert.equal(state.toasts.length, 1);
-  await React.act(async () => state.toasts[0].action.props.onClick());
+  // A dismissing click would run onClose, which discards the recovery first.
+  assert.equal(state.toasts[0].actions[0].dismissOnClick, false);
+  await React.act(async () => state.toasts[0].actions[0].onClick());
   assert.deepEqual(state.calls, ["first"]);
   assert.deepEqual(state.pushes, [["note", 7]]);
   assert.ok(state.dismissed.includes("toast-1"));
@@ -148,7 +149,7 @@ test("a later edit replaces the old toast and unavailable Undo explains the refu
   await state.emit("note");
   assert.ok(state.dismissed.includes("toast-1"));
   state.setResult({ success: false, error: "note_changed" });
-  await React.act(async () => state.toasts[1].action.props.onClick());
+  await React.act(async () => state.toasts[1].actions[0].onClick());
   assert.deepEqual(state.calls, ["second"]);
   assert.match(state.toasts[2].description, /changed.*Undo/);
   assert.ok(state.dismissed.includes("toast-2"), "a refused Undo cannot be clicked again");
@@ -161,7 +162,7 @@ test("a failed restore keeps the toast; closing it retires only its recovery", a
   await state.emit("note");
   assert.match(state.toasts[0].title, /Untitled/);
   state.setResult({ success: false, error: "disk full" });
-  await React.act(async () => state.toasts[0].action.props.onClick());
+  await React.act(async () => state.toasts[0].actions[0].onClick());
   assert.match(state.toasts[1].description, /Could not undo/);
   assert.equal(state.dismissed.includes("toast-1"), false);
   await React.act(async () => state.toasts[0].onClose());
@@ -174,7 +175,7 @@ test("Undo errors stay visible and double clicks cannot issue parallel restores"
   await state.emit("note");
   state.setResult(new Error("disk full"));
   await React.act(async () =>
-    Promise.all([state.toasts[0].action.props.onClick(), state.toasts[0].action.props.onClick()])
+    Promise.all([state.toasts[0].actions[0].onClick(), state.toasts[0].actions[0].onClick()])
   );
   assert.deepEqual(state.calls, ["first"]);
   assert.match(state.toasts[1].description, /Could not undo/);
@@ -185,9 +186,9 @@ test("a click on a toast that is animating out after its Undo does nothing", asy
   const state = await setup(t);
   state.setEdits([one]);
   await state.emit("note");
-  await React.act(async () => state.toasts[0].action.props.onClick());
+  await React.act(async () => state.toasts[0].actions[0].onClick());
   state.setResult({ success: false, error: "note_changed" });
-  await React.act(async () => state.toasts[0].action.props.onClick());
+  await React.act(async () => state.toasts[0].actions[0].onClick());
   assert.deepEqual(state.calls, ["first"]);
   assert.equal(state.toasts.length, 1, "no error toast after a successful Undo");
 });

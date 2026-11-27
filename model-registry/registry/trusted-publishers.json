@@ -1,0 +1,14 @@
+{
+  "huggingFace": [
+    "LiquidAI",
+    "Qwen",
+    "bartowski",
+    "ggerganov",
+    "ggml-org",
+    "google",
+    "mistralai",
+    "mradermacher",
+    "oruk",
+    "unsloth"
+  ]
+}

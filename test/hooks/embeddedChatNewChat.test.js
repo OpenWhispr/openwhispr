@@ -21,21 +21,30 @@ const MOCKS = {
   `,
   "/chat/useChatPersistence": `
     import { useState } from "react";
-    export function useChatPersistence() {
+    export function useChatPersistence(options) {
       const [messages, setMessages] = useState([]);
+      const [conversationId, setConversationId] = useState(null);
       return {
         messages,
         setMessages,
+        conversationId,
         createConversation: async (title) => {
           if (globalThis.__failCreate) throw new Error("offline");
           globalThis.__created.push(title);
+          setConversationId(2);
+          options.onConversationCreated?.(2, title);
           return 2;
         },
         saveUserMessage: async () => {},
         saveAssistantMessage() {},
-        loadConversation: async () =>
-          setMessages([{ id: "m0", role: "user", content: "Earlier question", isStreaming: false }]),
-        handleNewChat: () => setMessages([]),
+        loadConversation: async (id) => {
+          setConversationId(id);
+          setMessages([{ id: "m0", role: "user", content: "Earlier question", isStreaming: false }]);
+        },
+        handleNewChat: () => {
+          setConversationId(null);
+          setMessages([]);
+        },
       };
     }
   `,

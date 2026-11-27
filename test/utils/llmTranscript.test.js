@@ -69,10 +69,36 @@ test("a renamed microphone cluster reaches note generation without per-segment n
     buildLlmTranscript([segment], { speaker_0: "Ravi Patel" }, "Casey", t),
     "Ravi Patel: I will send the proposal."
   );
-  assert.equal(buildLlmTranscript([segment], {}, "Casey", t), "Casey: I will send the proposal.");
+  assert.equal(
+    buildLlmTranscript([segment], {}, "Casey", t),
+    "Speaker 1: I will send the proposal."
+  );
   assert.equal(
     buildLlmTranscript([segment], { speaker_0: " you " }, "Casey", t),
     "Casey: I will send the proposal."
+  );
+});
+
+test("an in-person meeting's diarized mic clusters keep their speaker numbers", async () => {
+  const { buildLlmTranscript, resolveLlmSpeakerLabel } = await load();
+  const segments = [
+    { source: "mic", speaker: "speaker_0", text: "Can you send the proposal?" },
+    { source: "mic", speaker: "speaker_1", text: "I will send it today." },
+    { source: "mic", speaker: "you", text: "Thanks." },
+    { source: "mic", text: "Before diarization." },
+  ];
+  assert.equal(
+    buildLlmTranscript(segments, {}, "Casey", t),
+    [
+      "Speaker 1: Can you send the proposal?",
+      "Speaker 2: I will send it today.",
+      "Casey: Thanks.",
+      "Casey: Before diarization.",
+    ].join("\n")
+  );
+  assert.equal(
+    resolveLlmSpeakerLabel(segments[1], { speaker_1: "Ravi Patel" }, "Casey", t),
+    "Ravi Patel"
   );
 });
 
@@ -129,7 +155,7 @@ test("buildMeetingContext names the owner and invited participants", async () =>
     buildMeetingContext(identity, "Gabriel Stein"),
     [
       "## Meeting Context",
-      'The user taking these notes ("Gabriel Stein" in the transcript) is Gabriel Stein <gabe@openwhispr.com>.',
+      'The note taker ("Gabriel Stein" in the transcript) is Gabriel Stein <gabe@openwhispr.com>.',
       "Invited participants: Michael Chen <michael@acme.com>, sean@acme.com.",
     ].join("\n")
   );
@@ -235,4 +261,62 @@ test("an owner without an email stays distinct from a same-name invitee", async 
   ]);
   const line = "- [ ] Send the proposal — Alex Morgan";
   assert.equal(tagActionItemOwners(line, people), line);
+});
+
+test("a You saved in another UI language still labels the note owner", async () => {
+  const { resolveLlmSpeakerLabel } = await load();
+  const german = (key, options) => (key === "notes.speaker.you" ? "Du" : t(key, options));
+  const segment = { source: "mic", speaker: "speaker_0", text: "hi" };
+  assert.equal(resolveLlmSpeakerLabel(segment, { speaker_0: "You" }, "Casey", german), "Casey");
+  assert.equal(resolveLlmSpeakerLabel(segment, { speaker_0: "Du" }, "Casey", german), "Casey");
+});
+
+test("a previous recorder's self mapping cannot rename a later recorder", async () => {
+  const { buildLlmTranscript } = await load();
+  const segments = [
+    { source: "mic", speaker: "you", text: "old" },
+    { source: "mic", speaker: "you", recorderName: "Bob", text: "new" },
+  ];
+  assert.equal(buildLlmTranscript(segments, { you: "Alice" }, "Alice", t), "Alice: old\nBob: new");
+});
+
+test("local self mappings name the viewer while stored self corrections name their recorder", async () => {
+  const { buildLlmTranscript } = await load();
+  const segments = [
+    { source: "mic", speaker: "speaker_0", text: "viewer" },
+    {
+      source: "mic",
+      speaker: "speaker_1",
+      speakerName: "You",
+      speakerLocked: true,
+      text: "original",
+    },
+    {
+      source: "mic",
+      speaker: "you",
+      recorderName: "Later Recorder",
+      speakerName: "You",
+      text: "later",
+    },
+    {
+      source: "mic",
+      speaker: "speaker_2",
+      speakerName: "Corrected",
+      speakerLocked: true,
+      text: "fixed",
+    },
+  ];
+  for (const selfName of ["You", "Du"]) {
+    const german = (key, options) => (key === "notes.speaker.you" ? "Du" : t(key, options));
+    assert.equal(
+      buildLlmTranscript(
+        segments,
+        { speaker_0: selfName, speaker_1: selfName, speaker_2: selfName, you: selfName },
+        "Original Recorder",
+        german,
+        "Bob Viewer"
+      ),
+      "Bob Viewer: viewer\nOriginal Recorder: original\nLater Recorder: later\nCorrected: fixed"
+    );
+  }
 });

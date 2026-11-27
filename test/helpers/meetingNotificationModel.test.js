@@ -25,6 +25,29 @@ test("detection presentation preserves event title, join action, and dismissal",
   );
 });
 
+test("a reminder the org refuses to record can only join, and says why", async () => {
+  const { getMeetingNotificationPresentation } = await load();
+
+  assert.deepEqual(
+    getMeetingNotificationPresentation({
+      detectionId: "calendar:event-1",
+      source: "calendar",
+      key: "event-1",
+      event: { summary: "Weekly planning" },
+      variant: "underway",
+      joinUrl: "https://meet.example/event-1",
+      recordingRefusal: "POLICY_MEETING_RECORDING_DISABLED",
+    }),
+    {
+      title: "Weekly planning",
+      bodyKey: "meetingNotification.folders.errors.POLICY_MEETING_RECORDING_DISABLED",
+      actionKey: "meetingNotification.joinOnly",
+      action: "open",
+      dismissible: true,
+    }
+  );
+});
+
 test("a dismissible meeting notification closes after an 80px horizontal swipe", async () => {
   const { shouldDismissMeetingNotificationSwipe } = await load();
 
@@ -92,4 +115,19 @@ test("overlay initialization cleanup cancels reveal and invalidates a pending pu
   assert.equal(visibleCount, 0);
   assert.equal(readyCount, 0);
   assert.equal(unsubscribeCount, 1);
+});
+
+test("outside and unreadable guests show their localized explanation and only Join", async () => {
+  const { getMeetingNotificationPresentation } = await load();
+  for (const [recordingRefusal, key] of [
+    ["POLICY_EXTERNAL_ATTENDEES", "externalAttendeesBlocked"],
+    ["POLICY_ATTENDEES_UNVERIFIABLE", "externalAttendeesUnverifiable"],
+  ]) {
+    const card = getMeetingNotificationPresentation({
+      recordingRefusal,
+      joinUrl: "https://meet.example/join",
+    });
+    assert.equal(card.bodyKey, "notes.meeting." + key);
+    assert.equal(card.action, "open");
+  }
 });

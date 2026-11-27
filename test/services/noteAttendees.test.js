@@ -88,3 +88,102 @@ test("other context loses the attendee fence's tag name, whatever brackets surro
   );
   assert.equal(withoutAttendeesFence("Kickoff"), "Kickoff");
 });
+
+test("mergeEventAttendees appends new guests after the existing ones, tagged with the event", async () => {
+  const { mergeEventAttendees } = await load();
+  const dana = { email: "dana@x.com", displayName: "Dana", responseStatus: null, self: false };
+  const eve = { email: "Eve@X.com", displayName: "Eve", responseStatus: "accepted", self: false };
+
+  assert.deepEqual(
+    mergeEventAttendees([dana], [eve, { ...dana, email: "DANA@X.COM" }], "evt-1"),
+    [
+      dana,
+      {
+        email: "eve@x.com",
+        displayName: "Eve",
+        responseStatus: "accepted",
+        self: false,
+        addedByEvent: "evt-1",
+      },
+    ],
+    "only the guest the event added carries its tag"
+  );
+});
+
+test("mergeEventAttendees leaves an attendee already on the note as it was", async () => {
+  const { mergeEventAttendees, removeEventAttendees } = await load();
+  const existing = { email: "me@x.com", displayName: null, responseStatus: null, self: false };
+
+  const linked = mergeEventAttendees(
+    [existing],
+    [{ email: "Me@x.com ", displayName: "Me", responseStatus: "accepted", self: true }],
+    "evt-1"
+  );
+
+  assert.deepEqual(linked, [existing], "nothing the event knows is written onto the row");
+  assert.deepEqual(
+    removeEventAttendees(linked, "evt-1"),
+    [existing],
+    "so removing the event leaves the row exactly as it was before linking"
+  );
+});
+
+test("mergeEventAttendees leaves rooms and declined guests out", async () => {
+  const { mergeEventAttendees } = await load();
+  const eve = { email: "eve@x.com", displayName: "Eve", responseStatus: "accepted", self: false };
+
+  assert.deepEqual(
+    mergeEventAttendees(
+      [],
+      [
+        eve,
+        {
+          email: "room@x.com",
+          displayName: "Room 4",
+          responseStatus: null,
+          self: false,
+          resource: true,
+        },
+        { email: "kim@x.com", displayName: "Kim", responseStatus: "declined", self: false },
+      ],
+      "evt-1"
+    ),
+    [{ ...eve, addedByEvent: "evt-1" }]
+  );
+});
+
+test("the user added by linking on their own note stays when the event is removed", async () => {
+  const { mergeEventAttendees, removeEventAttendees } = await load();
+  const me = { email: "me@x.com", displayName: "Me", responseStatus: "accepted", self: true };
+  const eve = { email: "eve@x.com", displayName: "Eve", responseStatus: "accepted", self: false };
+
+  const linked = mergeEventAttendees([], [me, eve], "evt-1");
+
+  assert.deepEqual(linked, [me, { ...eve, addedByEvent: "evt-1" }]);
+  assert.deepEqual(removeEventAttendees(linked, "evt-1"), [me]);
+});
+
+test("mergeEventAttendees ignores guests without an email", async () => {
+  const { mergeEventAttendees } = await load();
+
+  assert.deepEqual(mergeEventAttendees([], [{ email: null, displayName: "Room" }], "evt-1"), []);
+});
+
+test("mergeEventAttendees leaves the attendees alone for an event without guests", async () => {
+  const { mergeEventAttendees } = await load();
+  const current = [{ email: "dana@x.com", displayName: "Dana", responseStatus: null, self: false }];
+
+  assert.deepEqual(mergeEventAttendees(current, [], "evt-1"), current);
+});
+
+test("removeEventAttendees takes off only the attendees that event added", async () => {
+  const { removeEventAttendees } = await load();
+  const manual = { email: "dana@x.com", displayName: "Dana", responseStatus: null, self: false };
+  const fromEvent = { ...manual, email: "eve@x.com", addedByEvent: "evt-1" };
+  const fromOtherEvent = { ...manual, email: "frank@x.com", addedByEvent: "evt-2" };
+
+  assert.deepEqual(removeEventAttendees([manual, fromEvent, fromOtherEvent], "evt-1"), [
+    manual,
+    fromOtherEvent,
+  ]);
+});

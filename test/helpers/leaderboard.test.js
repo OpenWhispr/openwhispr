@@ -253,3 +253,29 @@ test("the partial-participation strip appears only while a board has at most one
   assert.equal(shouldShowLeaderboardEmptyStrip(5, 2), false);
   assert.equal(shouldShowLeaderboardEmptyStrip(1, 1), false);
 });
+
+test("growing a company board invites into the active workspace when the user can", async () => {
+  const { leaderboardInviteScope } = await load();
+  const domain = { key: "domain:acme.com", kind: "domain", id: "acme.com" };
+  const first = { key: "workspace:one", kind: "workspace", id: "one" };
+  const active = { key: "workspace:two", kind: "workspace", id: "two" };
+  const scopes = [domain, first, active];
+  const canInvite = (scope) => scope.kind === "workspace";
+
+  // A selected workspace board invites into that workspace.
+  assert.equal(leaderboardInviteScope(first, scopes, "two", canInvite), first);
+  // A company board prefers the active workspace, then the first one the user can invite to.
+  assert.equal(leaderboardInviteScope(domain, scopes, "two", canInvite), active);
+  assert.equal(leaderboardInviteScope(domain, scopes, null, canInvite), first);
+  assert.equal(
+    leaderboardInviteScope(domain, scopes, "two", (scope) => scope.id === "one"),
+    first
+  );
+  assert.equal(leaderboardInviteScope(domain, [domain], "two", canInvite), undefined);
+  // A workspace board the user can't invite to never falls back to another workspace.
+  assert.equal(
+    leaderboardInviteScope(first, scopes, "two", () => false),
+    undefined
+  );
+  assert.equal(leaderboardInviteScope(undefined, scopes, "two", canInvite), undefined);
+});

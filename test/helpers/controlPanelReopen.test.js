@@ -195,8 +195,8 @@ test("showing the control panel without a live window touches neither the Dock n
 });
 
 test("the first show leaves an already visible control panel where it is", () => {
-  // It runs on every onboarding window-mode change; showing again would pull
-  // the panel over System Settings during the permission steps.
+  // A failed load runs it on an open panel too; showing again would pull the
+  // panel over the app the user is working in.
   const { windowManager } = createManagers();
   windowManager.controlPanelWindow = createControlPanel({ visible: true });
 

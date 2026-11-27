@@ -18,7 +18,11 @@ function HeaderBackButton() {
       hitSlop={12}
       onPress={() => {
         safeHaptics('selection');
-        router.back();
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/(account)');
+        }
       }}
       style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
     >
@@ -27,8 +31,10 @@ function HeaderBackButton() {
   );
 }
 
-function renderHeaderLeft({ canGoBack }: { canGoBack?: boolean }) {
-  return canGoBack ? <HeaderBackButton /> : null;
+// Every screen here gets Back, even with nothing beneath it: the keyboard's Keyboard Settings…
+// opens the Keyboard screen alone at a cold launch, and Back then goes to Account.
+function renderHeaderLeft() {
+  return <HeaderBackButton />;
 }
 
 export default function AccountLayout() {
@@ -42,6 +48,7 @@ export default function AccountLayout() {
     >
       <Stack.Screen name="index" options={customHeaderStackOptions} />
       <Stack.Screen name="profile" options={{ title: 'Profile', headerLargeTitle: false }} />
+      <Stack.Screen name="referral" options={{ title: 'Referral', headerLargeTitle: false }} />
       <Stack.Screen name="ai-models" options={{ title: 'AI Models', headerLargeTitle: false }} />
       <Stack.Screen
         name="ai-workflow"
@@ -59,6 +66,10 @@ export default function AccountLayout() {
         options={{ title: 'Keyboard Tone', headerLargeTitle: false }}
       />
       <Stack.Screen
+        name="keyboard-translation"
+        options={{ title: 'Translate Dictation', headerLargeTitle: false }}
+      />
+      <Stack.Screen
         name="hardware-keyboard"
         options={{ title: 'Hardware Keyboard', headerLargeTitle: false }}
       />
@@ -70,6 +81,7 @@ export default function AccountLayout() {
         name="preferences"
         options={{ title: 'Preferences', headerLargeTitle: false }}
       />
+      <Stack.Screen name="keyboard" options={{ title: 'Keyboard', headerLargeTitle: false }} />
       <Stack.Screen
         name="google-calendar"
         options={{ title: 'Google Calendar', headerLargeTitle: false }}
@@ -90,6 +102,10 @@ export default function AccountLayout() {
       <Stack.Screen
         name="parakeet-benchmark"
         options={{ title: 'Parakeet Benchmark', headerLargeTitle: false }}
+      />
+      <Stack.Screen
+        name="meeting-debug"
+        options={{ title: 'Meeting Debug', headerLargeTitle: false }}
       />
       <Stack.Screen
         name="licenses"

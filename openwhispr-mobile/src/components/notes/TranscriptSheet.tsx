@@ -12,6 +12,7 @@ import { SpeakerTranscript } from './SpeakerTranscript';
 interface TranscriptSheetProps {
   visible: boolean;
   blocks: TranscriptBlock[];
+  showSpeakerNames: boolean;
   selectedSpeakerId: number | null;
   shareText: string;
   onSpeakerPress: (block: TranscriptBlock) => void;
@@ -25,6 +26,7 @@ interface TranscriptSheetProps {
 export function TranscriptSheet({
   visible,
   blocks,
+  showSpeakerNames,
   selectedSpeakerId,
   shareText,
   onSpeakerPress,
@@ -100,6 +102,7 @@ export function TranscriptSheet({
         >
           <SpeakerTranscript
             blocks={blocks}
+            showSpeakerNames={showSpeakerNames}
             selectedSpeakerId={selectedSpeakerId}
             selectable
             onSpeakerPress={onSpeakerPress}

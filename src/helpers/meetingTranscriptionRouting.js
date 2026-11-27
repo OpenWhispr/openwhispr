@@ -11,6 +11,7 @@ export const MEETING_STREAMING_PROVIDER_IDS = [
   "deepgram",
   "corti",
   "tinfoil",
+  "elevenlabs",
 ];
 
 export function filterMeetingStreamingProviders(providers) {
@@ -24,7 +25,7 @@ const DEFAULT_MANAGED_PROVIDER = {
 
 const resolveModel = (provider, selectedModel) =>
   provider.models.find((model) => model.id === selectedModel)?.id ??
-  provider.models.find((model) => model.default)?.id ??
+  provider.models.find((model) => model.default || model.id === provider.defaultModel)?.id ??
   provider.models[0]?.id;
 
 export function resolveMeetingTranscriptionOptions({
@@ -100,6 +101,9 @@ export function resolveMeetingTranscriptionOptions({
       keyterms,
     };
   }
+
+  // ElevenLabs takes the dictionary as keyterms on the socket it opens.
+  if (provider.id === "elevenlabs") return { ...options, keyterms };
 
   return options;
 }

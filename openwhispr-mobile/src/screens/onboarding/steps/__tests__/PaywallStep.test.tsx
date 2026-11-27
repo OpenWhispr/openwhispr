@@ -1,6 +1,38 @@
+import { loadAffiliateOffer } from '@/lib/affiliateOffer';
+jest.mock('@/lib/affiliateOffer', () => ({
+  loadAffiliateOffer: jest.fn().mockResolvedValue(null),
+}));
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+let mockAffiliateEnabled = false;
+let mockInboundPending = false;
+const mockPrepare = jest.fn();
+const mockConsumeInbound = jest.fn();
+jest.mock('@/lib/affiliateLink', () => ({
+  getAffiliateClientConfig: () =>
+    mockAffiliateEnabled ? { domain: 'sandbox.dub.link', publishableKey: 'dub_pk_TEST' } : null,
+}));
+jest.mock('@/store/useAffiliateStore', () => ({
+  useAffiliateStore: {
+    getState: () => ({
+      prepare: mockPrepare,
+      consumeInboundOffer: mockConsumeInbound,
+      hydrate: async () => {},
+      bindSession: async () => {},
+      inboundOfferPending: mockInboundPending,
+    }),
+  },
+}));
+jest.mock('../TrackingPermissionStep', () => ({
+  TrackingPermissionStep: ({ onComplete }: { onComplete: () => Promise<void> }) => {
+    const { Button } = require('react-native');
+    return <Button title="Existing tracking choice" onPress={onComplete} />;
+  },
+}));
 
-jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+jest.mock('@/lib/sentry', () => ({
+  Sentry: { captureException: jest.fn(), addBreadcrumb: jest.fn() },
+}));
+import { Sentry } from '@/lib/sentry';
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: require('react-native').View,
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -16,19 +48,27 @@ jest.mock('@/store/useOnboardingStore', () => ({
 }));
 
 const mockRegister = jest.fn();
-type MockGate = { isConfigured: boolean; state: { status: string } };
-let mockGate: MockGate = { isConfigured: true, state: { status: 'idle' } };
+type MockGate = {
+  isConfigured: boolean;
+  requiresIdentity?: boolean;
+  state: { status: string };
+  register?: jest.Mock;
+};
+let mockGate: MockGate = { isConfigured: true, requiresIdentity: true, state: { status: 'idle' } };
 jest.mock('@/hooks/useSuperwallGate', () => ({
-  useSuperwallGate: () => ({ register: mockRegister, ...mockGate }),
+  useSuperwallGate: () => ({ register: mockRegister, requiresIdentity: true, ...mockGate }),
 }));
 
-type MockAuthState = { user: { id: string; isAnonymous: boolean } | null };
+type MockAuthState = { user: { id: string; isAnonymous: boolean } | null; sessionCookie?: string };
 let mockAuthState: MockAuthState = { user: { id: 'anon-user', isAnonymous: true } };
 jest.mock('@/store/useAuthStore', () => ({
-  useAuthStore: (selector: (s: MockAuthState) => unknown) => selector(mockAuthState),
+  useAuthStore: Object.assign(
+    (selector: (s: MockAuthState) => unknown) => selector(mockAuthState),
+    { getState: () => mockAuthState },
+  ),
 }));
 
-type MockUsage = { isSubscribed: boolean };
+type MockUsage = { isSubscribed: boolean; billingUserId?: string };
 type MockUsageState = { usage: MockUsage | null; ownerKey: string | null };
 const OWNER = 'user-1:cookie';
 let mockUsageState: MockUsageState = { usage: null, ownerKey: null };
@@ -42,22 +82,52 @@ jest.mock('@/store/useUsageStore', () => ({
   getUsageOwnerKey: () => mockCurrentOwnerKey,
 }));
 
-const FREE: MockUsage = { isSubscribed: false };
-const SUBSCRIBED: MockUsage = { isSubscribed: true };
+const BILLING_ID = 'billing-1';
+const FREE: MockUsage = { isSubscribed: false, billingUserId: BILLING_ID };
+const SUBSCRIBED: MockUsage = { isSubscribed: true, billingUserId: BILLING_ID };
 const PRO_TITLE = 'Go further with OpenWhispr Pro.';
 const PRO_HIGHLIGHT = 'Sync notes across devices';
 
 import { PAYWALL_ESCAPE_MS, PAYWALL_READY_GRACE_MS, PaywallStep } from '../PaywallStep';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
+import { useSuperwallIdentityStore } from '@/store/useSuperwallIdentityStore';
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAffiliateEnabled = false;
+  mockInboundPending = false;
+  mockPrepare.mockResolvedValue(true);
+  mockConsumeInbound.mockResolvedValue(false);
+  jest.mocked(loadAffiliateOffer).mockResolvedValue(null);
   mockGoNext.mockResolvedValue(undefined);
   mockRegister.mockResolvedValue(true);
   mockAuthState = { user: { id: 'anon-user', isAnonymous: true } };
   mockUsageState = { usage: FREE, ownerKey: OWNER };
   mockCurrentOwnerKey = OWNER;
-  mockGate = { isConfigured: true, state: { status: 'idle' } };
+  mockGate = { isConfigured: true, requiresIdentity: true, state: { status: 'idle' } };
+  useSuperwallIdentityStore.setState({ identifiedBillingUserId: BILLING_ID });
+});
+
+it('keeps the usual order without an inbound creator link: no early tracking step, claim or allocation', async () => {
+  mockAffiliateEnabled = true;
+  const screen = render(<PaywallStep />);
+  await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText('Existing tracking choice')).toBeNull();
+  expect(mockPrepare).not.toHaveBeenCalled();
+  expect(loadAffiliateOffer).not.toHaveBeenCalled();
+  expect(mockGoNext).toHaveBeenCalledTimes(1);
+});
+it('asks the existing tracking question first for an inbound creator link', async () => {
+  mockAffiliateEnabled = true;
+  mockInboundPending = true;
+  const screen = render(<PaywallStep />);
+  await waitFor(() => expect(screen.getByText('Existing tracking choice')).toBeTruthy());
+  expect(mockRegister).not.toHaveBeenCalled();
+  await act(async () => {
+    fireEvent.press(screen.getByText('Existing tracking choice'));
+  });
+  expect(mockRegister).toHaveBeenCalledTimes(1);
+  expect(mockGoNext).toHaveBeenCalledTimes(1);
 });
 
 afterEach(() => {
@@ -65,6 +135,66 @@ afterEach(() => {
 });
 
 describe('PaywallStep', () => {
+  it('onboarding paywall waits for the Superwall identity before presenting', async () => {
+    jest.useFakeTimers();
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+
+    render(<PaywallStep />);
+    await act(async () => {
+      jest.advanceTimersByTime(PAYWALL_READY_GRACE_MS - 100);
+    });
+    expect(mockRegister).not.toHaveBeenCalled();
+    expect(mockGoNext).not.toHaveBeenCalled();
+
+    await act(async () => {
+      useSuperwallIdentityStore.setState({ identifiedBillingUserId: BILLING_ID });
+    });
+    expect(mockRegister).toHaveBeenCalledTimes(1);
+  });
+
+  it("onboarding paywall does not present from another account's identity", async () => {
+    jest.useFakeTimers();
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: 'previous-account' });
+
+    render(<PaywallStep />);
+    await act(async () => {
+      jest.advanceTimersByTime(PAYWALL_READY_GRACE_MS);
+    });
+
+    expect(mockRegister).not.toHaveBeenCalled();
+  });
+
+  it('onboarding paywall advances without presenting when no identity arrives', async () => {
+    jest.useFakeTimers();
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+
+    render(<PaywallStep />);
+    await act(async () => {
+      jest.advanceTimersByTime(PAYWALL_READY_GRACE_MS);
+    });
+
+    expect(mockRegister).not.toHaveBeenCalled();
+    expect(mockGoNext).toHaveBeenCalledTimes(1);
+    expect(Sentry.addBreadcrumb).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: 'superwall',
+        message: 'onboarding paywall skipped: identity not ready',
+        level: 'warning',
+      }),
+    );
+  });
+
+  it('onboarding paywall advances immediately when Superwall is disabled', async () => {
+    jest.useFakeTimers();
+    mockGate = { isConfigured: true, requiresIdentity: false, state: { status: 'idle' } };
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+
+    render(<PaywallStep />);
+    await act(async () => {});
+
+    expect(mockGoNext).toHaveBeenCalledTimes(1);
+  });
+
   it('presents the onboarding placement on mount', async () => {
     render(<PaywallStep />);
 
@@ -345,4 +475,124 @@ it('allows retrying continuation after a progress save fails', async () => {
   fireEvent.press(screen.getByText('Continue'));
   await waitFor(() => expect(mockGoNext).toHaveBeenCalledTimes(2));
   expect(mockRegister).toHaveBeenCalledTimes(1);
+});
+
+it('closing the shared paywall continues once with no second paywall or stock allocation', async () => {
+  render(<PaywallStep />);
+  await waitFor(() => expect(mockGoNext).toHaveBeenCalledTimes(1));
+  expect(mockRegister).toHaveBeenCalledTimes(1);
+  expect(loadAffiliateOffer).not.toHaveBeenCalled();
+});
+
+it('seeds the shared Cloud paywall only for an explicit trusted inbound intent', async () => {
+  mockAffiliateEnabled = true;
+  mockInboundPending = true;
+  mockConsumeInbound.mockResolvedValue(true);
+  const offer = { productId: 'monthly' } as Awaited<ReturnType<typeof loadAffiliateOffer>>;
+  jest.mocked(loadAffiliateOffer).mockResolvedValue(offer);
+  const screen = render(<PaywallStep />);
+  expect(loadAffiliateOffer).not.toHaveBeenCalled();
+  const consent = await screen.findByText('Existing tracking choice');
+  await act(async () => fireEvent.press(consent));
+  expect(loadAffiliateOffer).toHaveBeenCalledTimes(1);
+  expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ creatorOffer: offer }));
+});
+it('keeps ordinary Cloud purchasing available when an inbound offer is refused', async () => {
+  mockAffiliateEnabled = true;
+  mockInboundPending = true;
+  mockConsumeInbound.mockResolvedValue(true);
+  jest.mocked(loadAffiliateOffer).mockResolvedValue(null);
+  const screen = render(<PaywallStep />);
+  const consent = await screen.findByText('Existing tracking choice');
+  await act(async () => fireEvent.press(consent));
+  expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ creatorOffer: undefined }));
+});
+
+it('registers through the gate current after inbound preparation, not the one it started with', async () => {
+  mockAffiliateEnabled = true;
+  mockInboundPending = true;
+  let finishPreparation!: () => void;
+  mockConsumeInbound.mockReturnValue(
+    new Promise<boolean>((resolve) => {
+      finishPreparation = () => resolve(false);
+    }),
+  );
+  const screen = render(<PaywallStep />);
+  const consent = await screen.findByText('Existing tracking choice');
+  await act(async () => fireEvent.press(consent));
+  const configuredRegister = jest.fn().mockResolvedValue(true);
+  mockGate = { ...mockGate, register: configuredRegister };
+  screen.rerender(<PaywallStep />);
+  await act(async () => finishPreparation());
+  expect(configuredRegister).toHaveBeenCalledTimes(1);
+  expect(mockRegister).not.toHaveBeenCalled();
+});
+it('lets Continue escape a slow creator preparation, which then never registers', async () => {
+  jest.useFakeTimers();
+  mockAffiliateEnabled = true;
+  mockInboundPending = true;
+  let finishPreparation!: () => void;
+  mockConsumeInbound.mockReturnValue(
+    new Promise<boolean>((resolve) => {
+      finishPreparation = () => resolve(false);
+    }),
+  );
+  const screen = render(<PaywallStep />);
+  await act(async () => {});
+  const consent = await screen.findByText('Existing tracking choice');
+  await act(async () => fireEvent.press(consent));
+  await act(async () => fireEvent.press(screen.getByText('Continue')));
+  expect(mockGoNext).not.toHaveBeenCalled();
+  await act(async () => {
+    jest.advanceTimersByTime(PAYWALL_ESCAPE_MS);
+  });
+  await act(async () => fireEvent.press(screen.getByText('Continue')));
+  expect(mockGoNext).toHaveBeenCalledTimes(1);
+  await act(async () => finishPreparation());
+  expect(mockRegister).not.toHaveBeenCalled();
+});
+it('still presents ordinary purchasing if consuming an optional inbound intent fails', async () => {
+  mockAffiliateEnabled = true;
+  mockInboundPending = true;
+  mockConsumeInbound.mockRejectedValueOnce(new Error('storage unavailable'));
+  const screen = render(<PaywallStep />);
+  const consent = await screen.findByText('Existing tracking choice');
+  await act(async () => fireEvent.press(consent));
+  expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ creatorOffer: undefined }));
+  expect(loadAffiliateOffer).not.toHaveBeenCalled();
+});
+
+describe.each(['claim', 'offer'])('eligibility while waiting for %s', (phase) => {
+  it.each([
+    ['subscribed', { usage: SUBSCRIBED, ownerKey: OWNER }],
+    ['owned by another session', { usage: FREE, ownerKey: 'old-session' }],
+    ['unknown', { usage: null, ownerKey: null }],
+  ])('skips when usage becomes %s', async (_label, nextUsage) => {
+    mockAffiliateEnabled = true;
+    mockInboundPending = true;
+    let finishPreparation!: () => void;
+    if (phase === 'claim') {
+      mockConsumeInbound.mockReturnValue(
+        new Promise<boolean>((resolve) => {
+          finishPreparation = () => resolve(false);
+        }),
+      );
+    } else {
+      mockConsumeInbound.mockResolvedValue(true);
+      jest.mocked(loadAffiliateOffer).mockReturnValue(
+        new Promise((resolve) => {
+          finishPreparation = () => resolve(null);
+        }),
+      );
+    }
+    const screen = render(<PaywallStep />);
+    const consent = await screen.findByText('Existing tracking choice');
+    await act(async () => fireEvent.press(consent));
+    mockUsageState = nextUsage;
+    screen.rerender(<PaywallStep />);
+    await act(async () => finishPreparation());
+    expect(mockRegister).not.toHaveBeenCalled();
+    expect(mockGoNext).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(PRO_TITLE)).toBeNull();
+  });
 });
