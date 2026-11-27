@@ -143,10 +143,13 @@ const mergeSpeakerFields = (
   if (existing.speakerNameFromUser && existing.speaker) {
     // Offline IDs can be reordered, and the selected self name can differ from
     // its profile name ("You" vs the recorder's name). Follow the matched voice.
+    // A speaker that matched no voice keeps its name on its lines, as a lock
+    // would; with no voices to match, the name follows the ID, as the note's
+    // speaker mapping does.
     let matchedSpeaker: string | undefined = existing.speaker;
     if (splitLiveSpeakers) matchedSpeaker = split?.speaker;
     else if (reconciledLiveSpeakerIds) matchedSpeaker = reconciledLiveSpeakerIds[existing.speaker];
-    if (matchedSpeaker && matchedSpeaker === merged.speaker) {
+    if (matchedSpeaker === undefined || matchedSpeaker === merged.speaker) {
       merged.speakerName = existing.speakerName;
       merged.speakerNameFromUser = true;
     } else if (incoming.speakerName === undefined) {

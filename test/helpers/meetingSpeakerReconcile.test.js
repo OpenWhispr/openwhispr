@@ -556,12 +556,13 @@ function makeCapResolver() {
   return (args) =>
     IPCHandlers.prototype._resolveSpeakerCap.call(
       Object.assign(Object.create(IPCHandlers.prototype), {
-        databaseManager: { getNote: () => args.note ?? null },
+        databaseManager: { getNote: () => args.note ?? null, getGoogleAccounts: () => [] },
       }),
       {
         sessionConfig: args.sessionConfig ?? null,
         noteId: args.noteId ?? null,
         diarizedSource: args.diarizedSource,
+        liveSpeakerState: args.liveSpeakerState ?? null,
       }
     );
 }
@@ -590,6 +591,53 @@ test("with no count, the remote side gets no count-derived cap", () => {
 
   assert.equal(resolve({}), null);
   assert.equal(resolve({ sessionConfig: { expectedCount: 2, explicit: false } }), null);
+});
+
+// Attendees added after automatic mode had confirmed more voices: the note's
+// count would fold those voices into each other, the collapse of #2641.
+test("an attendee count never caps below the speakers live identification confirmed", () => {
+  const resolve = makeCapResolver();
+  const live = (count) =>
+    Object.fromEntries(Array.from({ length: count }, (_, i) => [`speaker_${i}`, {}]));
+  const attendees = (others) => ({
+    participants: JSON.stringify(
+      Array.from({ length: others }, (_, i) => ({ email: `guest${i}@example.com` }))
+    ),
+  });
+  const withNote = (note, extra) => resolve({ noteId: NOTE_ID, note, ...extra });
+
+  assert.equal(withNote(attendees(1), { liveSpeakerState: live(4) }), 4);
+  assert.equal(withNote(attendees(4), { liveSpeakerState: live(2) }), 4, "a longer list stands");
+  assert.equal(withNote(attendees(1), { liveSpeakerState: live(9) }), 7, "never past the maximum");
+  assert.equal(withNote(attendees(1), {}), 1, "no live speakers: the list alone decides");
+  assert.equal(withNote(attendees(1), { liveSpeakerState: {} }), 1);
+});
+
+// A number the user set is exact, however many voices live identification found.
+test("a count set by hand is not raised to the live speakers", () => {
+  const resolve = makeCapResolver();
+  const liveSpeakerState = { speaker_0: {}, speaker_1: {}, speaker_2: {}, speaker_3: {} };
+
+  assert.equal(
+    resolve({ sessionConfig: { expectedCount: 2, explicit: true }, liveSpeakerState }),
+    1
+  );
+  assert.equal(
+    resolve({ noteId: NOTE_ID, note: { expected_speaker_count: 2 }, liveSpeakerState }),
+    1,
+    "a count stored on the note was set by hand too"
+  );
+  assert.equal(resolve({ liveSpeakerState }), null, "with no count, clustering still decides");
+  assert.equal(
+    resolve({
+      noteId: NOTE_ID,
+      note: { participants: JSON.stringify([{ email: "guest@example.com" }]) },
+      diarizedSource: "mic",
+      liveSpeakerState,
+    }),
+    2,
+    "live identification never hears an in-person recording"
+  );
 });
 
 // Mic mode (in-person session): the user is one of the diarized voices, so the

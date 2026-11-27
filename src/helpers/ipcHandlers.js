@@ -1735,7 +1735,7 @@ class IPCHandlers {
   // yields ends automatic mode. The stepper then never shows fewer than the
   // speakers already on screen (new placeholder ids are minted from it), and the
   // live cap never drops below the speakers already confirmed
-  // (resolveLiveSpeakerLimit). The after-call cap still reads the note. When the
+  // (resolveLiveSpeakerLimit), nor does the after-call cap (_resolveSpeakerCap). When the
   // attendees that ended automatic mode are all removed again, it resumes.
   //
   // A stepper press never lands here: it writes only the note's count, and this
@@ -17176,14 +17176,17 @@ class IPCHandlers {
 
   // The most speakers post-call diarization may keep, from the count the user or
   // the note gives; clustering finds how many actually spoke.
-  _resolveSpeakerCap({ sessionConfig, noteId, diarizedSource }) {
+  _resolveSpeakerCap({ sessionConfig, noteId, diarizedSource, liveSpeakerState = null }) {
     // Only a count the user set explicitly outranks the note: participants added
     // mid-meeting postdate the config snapshot taken at recording start.
     let expectedTotal = sessionConfig?.explicit ? sessionConfig.expectedCount : null;
+    let fromAttendees = false;
 
     if (!expectedTotal && noteId != null) {
       try {
-        expectedTotal = this._noteExpectedSpeakerCountOrNull(this.databaseManager.getNote(noteId));
+        const note = this.databaseManager.getNote(noteId);
+        expectedTotal = this._noteExpectedSpeakerCountOrNull(note);
+        fromAttendees = normalizeStoredSpeakerCount(note?.expected_speaker_count) == null;
       } catch (_) {
         expectedTotal = null;
       }
@@ -17196,7 +17199,13 @@ class IPCHandlers {
 
     if (expectedTotal) {
       const total = Math.min(expectedTotal, MAX_SPEAKER_COUNT);
-      return micMode ? total : Math.max(1, total - 1);
+      if (micMode) return total;
+      // Attendees only estimate who spoke. Ones added after automatic mode had
+      // confirmed more voices would fold those voices into each other (#2641),
+      // so the cap never drops below the speakers live identification confirmed.
+      // It stays a cap: clustering still merges a voice live split in two.
+      const liveConfirmed = fromAttendees ? Object.keys(liveSpeakerState || {}).length : 0;
+      return Math.min(Math.max(1, total - 1, liveConfirmed), MAX_SPEAKER_COUNT - 1);
     }
 
     if (micMode) {
@@ -17284,7 +17293,12 @@ class IPCHandlers {
 
     const fs = require("fs");
 
-    const speakerCap = this._resolveSpeakerCap({ sessionConfig, noteId, diarizedSource });
+    const speakerCap = this._resolveSpeakerCap({
+      sessionConfig,
+      noteId,
+      diarizedSource,
+      liveSpeakerState,
+    });
     // Reserved before the async work so a "record more" started while this runs
     // numbers its speakers past every cluster the result can name. With no count
     // the cap is settled after clustering, and it never exceeds MAX_SPEAKER_COUNT - 1.
@@ -17437,7 +17451,7 @@ class IPCHandlers {
         // the lines that speaker was heard in (not ones only carried onto them,
         // or local-model lines). After a split the renderer keeps that lock only
         // on the voice the name went to; a name that matched no voice isn't
-        // listed, and stays on its locked lines.
+        // listed, and stays on the lines it named, locked or not.
         const splitLiveSpeakers = liveSpeakersSplit ? Object.fromEntries(namedVoices) : undefined;
 
         if (speakerEmbeddingsMap) {
