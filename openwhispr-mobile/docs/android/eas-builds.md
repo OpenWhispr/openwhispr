@@ -3,15 +3,17 @@
 Run Android EAS commands from `openwhispr-mobile` with Node 24:
 
 ```sh
-node scripts/eas-android.mjs build --profile android-play-test --non-interactive
+node scripts/eas-android.mjs build --profile android-production --non-interactive
 ```
+
+`android-production` is the Android release profile: the production package, Play signing and a store AAB. It was called `android-play-test` until 27 November 2026, so older notes and receipts use that name; its update channel was renamed with it. It still reads its keys from the EAS `preview` environment, which holds the Android RevenueCat and Superwall keys.
 
 The command uses EAS CLI 25.1.1 and selects Android. Use `android-billing-test` when that separate billing environment is intended. The existing EAS profiles, signing credentials and update channels still control the build. Building does not submit a release unless an explicit EAS submission option is supplied.
 
 To inspect the archive without starting a remote build:
 
 ```sh
-node scripts/eas-android.mjs build:inspect --profile android-play-test --stage archive --output /absolute/path/android-archive
+node scripts/eas-android.mjs build:inspect --profile android-production --stage archive --output /absolute/path/android-archive
 ```
 
 EAS archive inspection still uses the CLI's normal authentication/configuration flow. Output paths are resolved from the directory where the command is invoked. Local builds keep their default artifacts in that invoking directory; explicit local artifact and working-directory environment paths are resolved there too. Other EAS options pass through; omit `--platform`/`-p`, and keep short options separate from their values.

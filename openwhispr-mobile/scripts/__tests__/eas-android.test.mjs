@@ -74,10 +74,10 @@ async function fixture() {
 
 test('forces Android and preserves output paths relative to the invoking directory', () => {
   const directory = resolve('fixture output');
-  assert.deepEqual(androidArguments(['build', '--profile', 'android-play-test'], directory), [
+  assert.deepEqual(androidArguments(['build', '--profile', 'android-production'], directory), [
     'build',
     '--profile',
-    'android-play-test',
+    'android-production',
     '--platform',
     'android',
   ]);
@@ -356,7 +356,7 @@ test(
           '--stage',
           'archive',
           '--profile',
-          'android-play-test',
+          'android-production',
           '--output',
           'result file;$x',
         ]);
@@ -370,7 +370,7 @@ test(
           '--stage',
           'archive',
           '--profile',
-          'android-play-test',
+          'android-production',
           '--output',
           join(item.folder, 'result file;$x'),
           '--platform',
@@ -410,7 +410,7 @@ test(
       invocation = await startFixtureCli(item, 'descendant', [
         'build',
         '--profile',
-        'android-play-test',
+        'android-production',
       ]);
       const report = await invocation.ready();
       invocation.child.kill('SIGINT');
@@ -447,7 +447,7 @@ test(
       invocation = await startFixtureCli(item, 'stubborn', [
         'build',
         '--profile',
-        'android-play-test',
+        'android-production',
       ]);
       const report = await invocation.ready();
       invocation.child.kill('SIGTERM');
