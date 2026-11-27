@@ -40,6 +40,8 @@ export const onboardingEnglish = {
   practiceFailed: 'That didn’t work. Tap the bubble to try again.',
   practiceRetryHold: '{{message}} Hold the bubble to try again.',
   noSpeech: 'We didn’t hear anything. Tap the bubble and try again.',
+  practiceFailedHold: 'That didn’t work. Hold the bubble to try again.',
+  noSpeechHold: 'We didn’t hear anything. Hold the bubble and try again.',
   languagesTitle: 'Choose your [languages]',
   languagesBody: 'We picked these from your phone’s languages. Add or remove any.',
   addLanguage: 'Add a language',

@@ -216,7 +216,8 @@ describe('practice recorder, starting twice', () => {
 });
 
 describe('practice failure copy', () => {
-  const t = (key: 'noSpeech' | 'practiceFailed') => onboardingEnglish[key];
+  const t = (key: 'noSpeech' | 'practiceFailed' | 'noSpeechHold' | 'practiceFailedHold') =>
+    onboardingEnglish[key];
   const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
   afterAll(() => warn.mockRestore());
 
@@ -235,6 +236,17 @@ describe('practice failure copy', () => {
     expect(practiceFailure(t, new Error('We didn’t hear any speech.'))).toBe(
       onboardingEnglish.noSpeech,
     );
+  });
+
+  it('tells the hold practices to hold the bubble, since a tap there only nudges', () => {
+    expect(practiceFailure(t, new Error('We didn’t hear any speech.'), 'hold')).toBe(
+      onboardingEnglish.noSpeechHold,
+    );
+    expect(practiceFailure(t, new Error('HTTP 500'), 'hold')).toBe(
+      onboardingEnglish.practiceFailedHold,
+    );
+    expect(onboardingEnglish.noSpeechHold).toMatch(/Hold the bubble/);
+    expect(onboardingEnglish.practiceFailedHold).toMatch(/Hold the bubble/);
   });
 });
 

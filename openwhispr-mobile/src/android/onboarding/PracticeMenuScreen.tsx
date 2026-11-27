@@ -186,7 +186,7 @@ export function PracticeMenuScreen({
       if ((await recorder.current.start()) && mounted.current) setPhase('listening');
     } catch (failure) {
       if (!mounted.current) return;
-      setError(practiceFailure(t, failure));
+      setError(practiceFailure(t, failure, 'hold'));
       restart();
     } finally {
       starting.current = false;
@@ -215,7 +215,9 @@ export function PracticeMenuScreen({
       if (!mounted.current) return;
       const message = (failure as Error).message;
       setError(
-        ownEditMessage(message) ? t('practiceRetryHold', { message }) : practiceFailure(t, failure),
+        ownEditMessage(message)
+          ? t('practiceRetryHold', { message })
+          : practiceFailure(t, failure, 'hold'),
       );
       restart();
     }

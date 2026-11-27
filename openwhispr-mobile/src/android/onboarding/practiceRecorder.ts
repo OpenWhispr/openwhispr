@@ -57,18 +57,23 @@ async function formatPractice(
   }
 }
 
+type PracticeFailureKey = 'noSpeech' | 'practiceFailed' | 'noSpeechHold' | 'practiceFailedHold';
+
 /**
  * The practice's own words for a failure: no speech, or try again. The raw error (a native exception,
- * an HTTP status) goes to the log, never to the card.
+ * an HTTP status) goes to the log, never to the card. [gesture] is how the step starts a take: the
+ * menu practices only start on a hold (a tap there just nudges), so their copy says hold.
  */
 export function practiceFailure(
-  t: (key: 'noSpeech' | 'practiceFailed') => string,
+  t: (key: PracticeFailureKey) => string,
   failure: unknown,
+  gesture: 'tap' | 'hold' = 'tap',
 ): string {
   const message = failure instanceof Error ? failure.message : String(failure);
-  if (/hear|speech/i.test(message)) return t('noSpeech');
+  const hold = gesture === 'hold';
+  if (/hear|speech/i.test(message)) return t(hold ? 'noSpeechHold' : 'noSpeech');
   console.warn('[onboarding] practice failed', message);
-  return t('practiceFailed');
+  return t(hold ? 'practiceFailedHold' : 'practiceFailed');
 }
 
 export type MicAccess = 'granted' | 'denied' | 'blocked';
