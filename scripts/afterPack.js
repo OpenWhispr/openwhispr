@@ -15,7 +15,8 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execFileSync } = require("child_process");
+const childProcess = require("child_process");
+const { execFileSync } = childProcess;
 const { Arch } = require("app-builder-lib");
 const { buildLinuxWrapperScript } = require("./lib/linux-launcher");
 const { signWindowsNativeModules } = require("./lib/windows-signatures");
@@ -267,6 +268,20 @@ function verifyWindowsKeyListener(binDir) {
   if (!fs.existsSync(listenerPath)) {
     throw new Error(
       `afterPack: missing ${listenerPath} — run npm run compile:winkeys on Windows (compiles with MSVC, MinGW or Clang, or downloads the prebuilt binary); Push-to-Talk and modifier-only hotkeys would never fire on Windows`
+    );
+  }
+
+  // The capability probe exits before installing a keyboard hook.
+  if (process.platform !== "win32") return;
+  const probe = childProcess.spawnSync(listenerPath, ["--supports-exact-modifiers"], {
+    encoding: "utf8",
+    timeout: 2000,
+    windowsHide: true,
+  });
+  if (probe.status !== 0 || probe.stdout?.trim() !== "EXACT_MODIFIERS_READY") {
+    throw new Error(
+      `afterPack: ${listenerPath} does not support exact modifier matching — remove the stale helper from resources/bin and run npm run compile:winkeys on Windows to rebuild it from this checkout`,
+      { cause: probe.error }
     );
   }
 }

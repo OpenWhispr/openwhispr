@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const childProcess = require("node:child_process");
 const { Arch } = require("app-builder-lib");
 const { VmManager } = require("app-builder-lib/out/vm/vm");
 
@@ -95,6 +96,10 @@ test("afterPack signs native modules in the packaged Windows app", async (t) => 
   }
   t.mock.method(console, "log", () => {});
   t.mock.method(console, "warn", () => {});
+  t.mock.method(childProcess, "spawnSync", () => ({
+    status: 0,
+    stdout: "EXACT_MODIFIERS_READY\n",
+  }));
   const { context, signed, commands } = buildContext(
     [{ file: "resources\\app.asar.unpacked\\better_sqlite3.node", error: "No signature found" }],
     { appOutDir }

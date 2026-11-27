@@ -263,7 +263,7 @@ jobs:
           path: resources/bin
           # Native helper sources are in the key so source changes cannot
           # restore stale helper binaries from the cache.
-          key: windows-x64-bin-${{ hashFiles('scripts/download-*.js', 'resources/windows-system-audio-helper.c', 'resources/windows-mic-listener.c') }}
+          key: windows-x64-bin-${{ hashFiles('scripts/download-*.js', 'resources/windows-system-audio-helper.c', 'resources/windows-mic-listener.c', 'resources/windows-key-listener.c') }}
 
       - name: Download whisper.cpp binaries
         run: node scripts/download-whisper-cpp.js --current
