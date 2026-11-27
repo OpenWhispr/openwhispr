@@ -158,6 +158,7 @@ function getOAuthProtocol() {
 const OAUTH_PROTOCOL = getOAuthProtocol();
 
 const { registerLinuxUrlSchemeHandler } = require("./src/helpers/linuxUrlSchemeHandler");
+const { resolveProtocolAppPath } = require("./src/helpers/protocolAppPath");
 
 function shouldRegisterProtocolWithAppArg() {
   return Boolean(process.defaultApp) || isElectronBinaryExec();
@@ -217,7 +218,7 @@ function isOAuthSchemeRegistered() {
 // can launch the project app instead of opening bare Electron.
 function getProtocolAppArgs() {
   if (!shouldRegisterProtocolWithAppArg()) return [];
-  return [process.argv[1] ? path.resolve(process.argv[1]) : path.resolve(".")];
+  return [resolveProtocolAppPath(process.argv)];
 }
 
 // Register custom protocol for OAuth callbacks.

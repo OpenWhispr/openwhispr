@@ -41,6 +41,7 @@ function runStartup({ lockAvailable, hidden }) {
     "./src/helpers/linuxUrlSchemeHandler": {
       registerLinuxUrlSchemeHandler: () => ({ registered: true }),
     },
+    "./src/helpers/protocolAppPath": { resolveProtocolAppPath: () => "/fixture/app" },
   };
   const context = {
     require: (name) => {
