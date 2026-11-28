@@ -399,9 +399,9 @@ test("in Hold mode on GNOME, cancel stays on the X11 grab alone", async () => {
   manager.unregisterSlot("cancel");
 });
 
-test("cancel skips the portal when its X11 grab fails, so nothing is left to release", async () => {
+test("cancel skips the portal when its X11 grab fails, so nothing is left to release", async (t) => {
   const { manager, calls } = hotkeyManagerOnGnome("tap");
-  registered.set("Escape", noop);
+  t.mock.method(manager, "registerGlobalShortcut", () => false);
 
   assert.equal((await manager.registerSlot("cancel", "Escape", noop)).success, false);
   assert.deepEqual(calls, []);
