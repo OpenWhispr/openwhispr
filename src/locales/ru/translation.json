@@ -679,7 +679,11 @@
       "couldNotDownloadDescription": "Проверьте подключение к интернету и попробуйте снова.",
       "installing": "Установка...",
       "installButton": "Установить обновление",
-      "availableButton": "Доступно обновление"
+      "availableButton": "Доступно обновление",
+      "moreActions": "Другие действия с обновлением",
+      "skipVersion": "Пропустить эту версию",
+      "skippedTitle": "Версия {{version}} пропущена",
+      "skippedDescription": "Вы по-прежнему можете установить её в настройках."
     },
     "limit": {
       "weeklyTitle": "Недельный облачный лимит достигнут",

@@ -71,3 +71,41 @@ test("the update info a policy block cleared comes back once updates are allowed
   await React.act(async () => onStatus(status));
   assert.equal(updater.info?.version, "99.0.0");
 });
+
+test("an available release first renders with its version", async (t) => {
+  const React = require("react");
+  const { installHappyDom } = require("../lib/happyDomDialog");
+  const { happyWindow, createRoot } = await installHappyDom();
+  happyWindow.electronAPI = {
+    getUpdateStatus: async () => ({
+      updateAvailable: true,
+      updateDownloaded: false,
+      updateMode: "user_choice",
+      isDevelopment: false,
+      isSupported: true,
+    }),
+    // Main answers each call in its own task, as IPC does.
+    getUpdateInfo: () =>
+      new Promise((resolve) => setTimeout(() => resolve({ version: "1.12.3" }), 20)),
+  };
+  const { useUpdater } = await import("../../src/hooks/useUpdater.ts");
+  const renders = [];
+  function Probe() {
+    const { status, info } = useUpdater();
+    renders.push({ updateAvailable: status.updateAvailable, version: info?.version });
+    return null;
+  }
+  const root = createRoot(happyWindow.document.createElement("div"));
+  t.after(async () => {
+    await React.act(async () => root.unmount());
+    await happyWindow.happyDOM.close();
+  });
+  await React.act(async () => root.render(createElement(Probe)));
+  await React.act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+
+  // The sidebar hides a skipped release by its version, so a render that has
+  // the release but not its version would flash the button.
+  const available = renders.filter((render) => render.updateAvailable);
+  assert.ok(available.length > 0);
+  for (const render of available) assert.equal(render.version, "1.12.3");
+});

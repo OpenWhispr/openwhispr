@@ -161,16 +161,14 @@ export function useUpdater() {
 
     const initializeUpdateStatus = async () => {
       try {
-        if (window.electronAPI?.getUpdateStatus) {
-          const status = await window.electronAPI.getUpdateStatus();
-          updateGlobalState({ status });
-        }
-
-        if (window.electronAPI?.getUpdateInfo) {
-          const info = await window.electronAPI.getUpdateInfo();
-          if (info) {
-            updateGlobalState({ info });
-          }
+        // One update for both, so an available release never renders without its
+        // version (the sidebar hides a skipped one by version).
+        const [status, info] = await Promise.all([
+          window.electronAPI?.getUpdateStatus?.(),
+          window.electronAPI?.getUpdateInfo?.(),
+        ]);
+        if (status || info) {
+          updateGlobalState({ ...(status ? { status } : {}), ...(info ? { info } : {}) });
         }
       } catch (error) {
         console.error("Failed to initialize update status:", error);

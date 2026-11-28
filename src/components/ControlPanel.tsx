@@ -16,6 +16,7 @@ import { useHotkey } from "../hooks/useHotkey";
 import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
 import { updatePolicyMessageKey } from "../utils/updatePolicyMessage";
+import { SKIPPED_UPDATE_VERSION_KEY, canSkipUpdate, isUpdateSkipped } from "../utils/skippedUpdate";
 import { useSettings } from "../hooks/useSettings";
 import { recordingRecorderName } from "../utils/noteRecorder";
 import { useAuth } from "../hooks/useAuth";
@@ -73,6 +74,7 @@ import {
   useMeetingRecordingStore,
 } from "../stores/meetingRecordingStore";
 import ControlPanelSidebar from "./ControlPanelSidebar";
+import SidebarUpdateButton from "./SidebarUpdateButton";
 import ControlPanelTopBar from "./ControlPanelTopBar";
 import { useControlPanelNavItems, type ControlPanelView } from "./controlPanelNav";
 import {
@@ -224,6 +226,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
     () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
   );
+  const [skippedUpdateVersion, setSkippedUpdateVersion] = useState(() =>
+    localStorage.getItem(SKIPPED_UPDATE_VERSION_KEY)
+  );
   const updateReadyToastShown = useRef(false);
   const { hotkey } = useHotkey();
   const { toast } = useToast();
@@ -251,12 +256,22 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   const {
     status: updateStatus,
+    info: updateInfo,
     downloadProgress,
     isDownloading,
     isInstalling,
     downloadUpdate,
     installUpdate,
   } = useUpdater();
+  const sidebarUpdate = {
+    updateAvailable: updateStatus.updateAvailable,
+    updateDownloaded: updateStatus.updateDownloaded,
+    isDownloading,
+    isInstalling,
+    version: updateInfo?.version,
+  };
+  const updateSkippable = canSkipUpdate(sidebarUpdate);
+  const updateSkipped = isUpdateSkipped(sidebarUpdate, skippedUpdateVersion);
 
   const openTranscriptionSettings = useCallback(() => {
     setSettingsSection("transcription");
@@ -1102,6 +1117,17 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     }
   };
 
+  const handleSkipUpdate = () => {
+    const version = updateInfo?.version;
+    if (!version) return;
+    localStorage.setItem(SKIPPED_UPDATE_VERSION_KEY, version);
+    setSkippedUpdateVersion(version);
+    toast({
+      title: t("controlPanel.update.skippedTitle", { version }),
+      description: t("controlPanel.update.skippedDescription"),
+    });
+  };
+
   const getUpdateButtonContent = () => {
     if (isInstalling) {
       return (
@@ -1281,19 +1307,19 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             updateAction={
               updateStatus.updateMode !== "it_managed" &&
               !updateStatus.isDevelopment &&
+              !updateSkipped &&
               (updateStatus.updateAvailable ||
                 updateStatus.updateDownloaded ||
                 isDownloading ||
                 isInstalling) ? (
-                <Button
-                  variant={updateStatus.updateDownloaded ? "default" : "outline"}
-                  size="sm"
+                <SidebarUpdateButton
+                  downloaded={updateStatus.updateDownloaded}
                   onClick={handleUpdateClick}
                   disabled={isInstalling || isDownloading}
-                  className="gap-1.5 text-xs w-full h-7"
+                  onSkipVersion={updateSkippable ? handleSkipUpdate : undefined}
                 >
                   {getUpdateButtonContent()}
-                </Button>
+                </SidebarUpdateButton>
               ) : undefined
             }
           />

@@ -679,7 +679,11 @@
       "couldNotDownloadDescription": "请检查网络连接后重试。",
       "installing": "正在安装...",
       "installButton": "安装更新",
-      "availableButton": "有可用更新"
+      "availableButton": "有可用更新",
+      "moreActions": "更多更新操作",
+      "skipVersion": "跳过此版本",
+      "skippedTitle": "已跳过版本 {{version}}",
+      "skippedDescription": "你仍可以在设置中安装它。"
     },
     "limit": {
       "weeklyTitle": "已达本周云端上限",

@@ -679,7 +679,11 @@
       "couldNotDownloadDescription": "請檢查你的網路連線後再試一次。",
       "installing": "安裝中...",
       "installButton": "安裝更新",
-      "availableButton": "有可用更新"
+      "availableButton": "有可用更新",
+      "moreActions": "更多更新操作",
+      "skipVersion": "略過此版本",
+      "skippedTitle": "已略過版本 {{version}}",
+      "skippedDescription": "你仍可以在設定中安裝它。"
     },
     "limit": {
       "weeklyTitle": "已達本週雲端上限",
