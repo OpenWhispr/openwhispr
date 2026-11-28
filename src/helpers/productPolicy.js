@@ -1,7 +1,12 @@
 const rules = require("../stores/policyRules.ts");
 
 // These authenticate with saved credentials whatever the mode says.
-const SAVED_KEY_PROVIDERS = new Set(["corti-realtime", "tinfoil-realtime", "elevenlabs-realtime"]);
+const SAVED_KEY_PROVIDERS = new Set([
+  "corti-realtime",
+  "tinfoil-realtime",
+  "elevenlabs-realtime",
+  "gnani-realtime",
+]);
 
 // A verdict still on its way for an identity nothing says is managed (no
 // device policy, no server calling the policy unresolvable) restricts no
@@ -152,13 +157,17 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
     ].includes(channel)
   )
     return transcription({ mode: "local", provider: "" });
+  if (channel === "gnani-voice-preview")
+    return transcription({ mode: "providers", provider: "gnani" });
   if (channel === "proxy-assemblyai-transcription") {
     return (
       transcription({ mode: "providers", provider: "assemblyai" }) &&
       rules.isAssemblyAiRewriteAllowedByPolicy(state)
     );
   }
-  const proxy = /^proxy-(xai|mistral|corti|tinfoil|gemini|elevenlabs)-transcription$/.exec(channel);
+  const proxy = /^proxy-(xai|mistral|corti|tinfoil|gemini|elevenlabs|gnani)-transcription$/.exec(
+    channel
+  );
   if (proxy) return transcription({ mode: "providers", provider: proxy[1] });
   if (channel === "cloud-agent-stream-start")
     return rules.isAgentAllowed(state) && llm("openwhispr");

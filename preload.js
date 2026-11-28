@@ -16,6 +16,7 @@ const BYOK_KEY_BRIDGES = [
   { base: "corti", get: "getCortiKey", save: "saveCortiKey" },
   { base: "deepgram", get: "getDeepgramKey", save: "saveDeepgramKey" },
   { base: "assemblyai", get: "getAssemblyAIKey", save: "saveAssemblyAIKey" },
+  { base: "gnani", get: "getGnaniKey", save: "saveGnaniKey" },
   { base: "elevenlabs", get: "getElevenlabsKey", save: "saveElevenlabsKey" },
   {
     base: "note-formatting-custom",
@@ -124,6 +125,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, payload) => callback(payload)
   ),
   testProviderConnection: (config) => ipcRenderer.invoke("test-provider-connection", config),
+  previewGnaniVoice: (text) => ipcRenderer.invoke("gnani-voice-preview", text),
   pasteText: (text, options) => ipcRenderer.invoke("paste-text", text, options),
   captureSelectedText: (options) => ipcRenderer.invoke("capture-selected-text", options),
   cancelSelectionEdit: (sessionId) => ipcRenderer.invoke("cancel-selection-edit", sessionId),
@@ -644,8 +646,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSpeakerProfiles: () => ipcRenderer.invoke("get-speaker-profiles"),
   attachSpeakerEmail: (profileId, email) =>
     ipcRenderer.invoke("attach-speaker-email", profileId, email),
-  saveNoteSpeakerEmbeddings: (noteId, embeddings) =>
-    ipcRenderer.invoke("save-note-speaker-embeddings", noteId, embeddings),
+  saveNoteSpeakerEmbeddings: (noteId, embeddings, writeGuard) =>
+    ipcRenderer.invoke("save-note-speaker-embeddings", noteId, embeddings, writeGuard),
 
   // Window control functions
   windowMinimize: () => ipcRenderer.invoke("window-minimize"),
@@ -752,6 +754,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("proxy-assemblyai-transcription", data),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
   proxyGeminiTranscription: (data) => ipcRenderer.invoke("proxy-gemini-transcription", data),
+  proxyGnaniTranscription: (data) => ipcRenderer.invoke("proxy-gnani-transcription", data),
   proxyElevenlabsTranscription: (data) =>
     ipcRenderer.invoke("proxy-elevenlabs-transcription", data),
 
@@ -973,6 +976,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("transcribe-audio-file-cloud", filePath, options),
   cancelUploadTranscription: (requestId) =>
     ipcRenderer.invoke("cancel-upload-transcription", requestId),
+  getGnaniKeyGeneration: () => ipcRenderer.invoke("get-gnani-key-generation"),
   transcribeAudioFileByok: (options) => ipcRenderer.invoke("transcribe-audio-file-byok", options),
   onUploadTranscriptionProgress: registerListener(
     "upload-transcription-progress",
@@ -1144,9 +1148,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Dictation realtime streaming
   dictationRealtimeWarmup: (options) => ipcRenderer.invoke("dictation-realtime-warmup", options),
   dictationRealtimeStart: (options) => ipcRenderer.invoke("dictation-realtime-start", options),
-  dictationRealtimeSend: (buffer) => ipcRenderer.send("dictation-realtime-send", buffer),
-  dictationRealtimeFinalize: () => ipcRenderer.invoke("dictation-realtime-finalize"),
-  dictationRealtimeStop: () => ipcRenderer.invoke("dictation-realtime-stop"),
+  dictationRealtimeSend: (buffer, captureId) =>
+    ipcRenderer.send("dictation-realtime-send", buffer, captureId),
+  reserveGnaniDictation: (captureId, options) =>
+    ipcRenderer.send("dictation-realtime-reserve", captureId, options),
+  releaseGnaniDictation: (captureId) => ipcRenderer.send("dictation-realtime-release", captureId),
+  dictationRealtimeFinalize: (captureId) =>
+    ipcRenderer.invoke("dictation-realtime-finalize", captureId),
+  dictationRealtimeStop: (captureId) => ipcRenderer.invoke("dictation-realtime-stop", captureId),
   onDictationRealtimePartial: registerListener(
     "dictation-realtime-partial",
     (callback) => (_event, data) => callback(data)

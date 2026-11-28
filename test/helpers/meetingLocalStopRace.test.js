@@ -56,6 +56,7 @@ function harness({
   };
   const context = {
     events,
+    crypto: require("node:crypto"),
     require: require("node:module").createRequire(
       path.join(__dirname, "../../src/helpers/ipcHandlers.js")
     ),

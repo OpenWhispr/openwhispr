@@ -2,6 +2,7 @@ const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const { EventEmitter } = require("node:events");
 const { deferred } = require("./harness/deferred");
 
 // #2050: the dictation language must reach the realtime session on every path
@@ -74,6 +75,8 @@ class FakeRealtimeStreaming {
     return true;
   }
 }
+class FakeGnaniStreaming extends FakeRealtimeStreaming {}
+
 FakeRealtimeStreaming.normalizeLanguage =
   require("../../src/helpers/openaiRealtimeStreaming").normalizeLanguage;
 
@@ -82,6 +85,8 @@ Module._load = function loadWithMocks(request, parent, isMain) {
   if (parent?.filename === handlersModulePath) {
     if (request === "./debugLogger") return new Proxy({}, { get: () => () => {} });
     if (request === "./openaiRealtimeStreaming") return FakeRealtimeStreaming;
+    if (request === "./gnaniRealtimeStreaming")
+      return { GnaniRealtimeStreaming: FakeGnaniStreaming };
     if (request === "./realtimeTokenProviders") {
       return {
         ...originalLoad.call(this, request, parent, isMain),
@@ -119,6 +124,7 @@ function scenario(t) {
     _dictationConnectPromise: null,
     _dictationIdleTimer: null,
     _dictationPreviewEnabled: false,
+    databaseManager: { activeAccountId: null },
     windowManager: { hideTranscriptionPreview() {}, showTranscriptionPreview() {} },
   };
   const IPCHandlers = require(handlersModulePath);
@@ -129,11 +135,16 @@ function scenario(t) {
       })
     )
   );
-  const event = { sender: { send: (channel, payload) => calls.sent.push({ channel, payload }) } };
+  const event = {
+    sender: Object.assign(new EventEmitter(), {
+      id: 1,
+      send: (channel, payload) => calls.sent.push({ channel, payload }),
+    }),
+  };
   const invoke = (channel, options) => handlers.get(channel)(event, options);
   const sendAudio = () => listeners.get("dictation-realtime-send")(event, new Uint8Array(4));
   t.after(() => invoke("dictation-realtime-stop"));
-  return { invoke, sendAudio };
+  return { invoke, sendAudio, event, target };
 }
 
 const byok = (overrides) => ({
@@ -301,3 +312,58 @@ for (const [label, options] of [
     assert.equal(calls.connects.length, 2);
   });
 }
+
+test("Gnani capture owns start, audio, stop and account retirement across the whole recording", async (t) => {
+  const { event, target, invoke } = scenario(t);
+  target.environmentManager = { getGnaniKey: () => "saved", saveGnaniKey() {} };
+  const options = byok({
+    provider: "gnani",
+    model: "prisma-v3.0",
+    language: "hi",
+    keyterms: ["original"],
+  });
+  const peer = { sender: { id: 2, send() {} } };
+  listeners.get("dictation-realtime-reserve")(event, "take", options);
+  assert.equal(
+    (await handlers.get("dictation-realtime-start")(peer, { ...options, gnaniCaptureId: "take" }))
+      .success,
+    false
+  );
+  assert.deepEqual(
+    await invoke("dictation-realtime-start", {
+      ...options,
+      model: "prisma-v2.5",
+      gnaniCaptureId: "take",
+    }),
+    { success: true }
+  );
+  assert.equal(calls.connects[0].options.apiKey, "saved");
+  assert.equal(calls.connects[0].options.model, "prisma-v3.0");
+  assert.deepEqual(calls.connects[0].options.keyterms, ["original"]);
+  const audio = () => listeners.get("dictation-realtime-send")(event, Buffer.alloc(4), "take");
+  listeners.get("dictation-realtime-send")(peer, Buffer.alloc(4), "take");
+  await handlers.get("dictation-realtime-stop")(peer, "take");
+  assert.deepEqual(calls.audio, []);
+  audio();
+  assert.equal(calls.audio.length, 1);
+  const previousAccount = target.effectivePolicyManager.getCurrent().accountId;
+  target.databaseManager.activeAccountId = "different";
+  audio();
+  assert.equal(calls.audio.length, 1);
+  target._retireAccountProductStreams(previousAccount);
+  audio();
+  assert.equal(calls.audio.length, 1);
+  assert.equal(calls.sent.at(-1).payload.code, "AUTH_CONTEXT_CHANGED");
+});
+
+test("a Gnani key change during microphone startup refuses the original capture", async (t) => {
+  const { event, target, invoke } = scenario(t);
+  target.environmentManager = { getGnaniKey: () => "old", saveGnaniKey() {} };
+  const opts = byok({ provider: "gnani", model: "prisma-v2.5", gnaniCaptureId: "pending" });
+  listeners.get("dictation-realtime-reserve")(event, "pending", opts);
+  await invoke("save-gnani-key", "new");
+  const result = await invoke("dictation-realtime-start", opts);
+  assert.equal(result.code, "PROVIDER_CREDENTIAL_CHANGED");
+  assert.equal(calls.connects.length, 0);
+  listeners.get("dictation-realtime-release")(event, "pending");
+});

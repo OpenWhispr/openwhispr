@@ -99,6 +99,9 @@ function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
   };
   const noSuppression = { suppress: false, reason: null };
   const context = {
+    crypto: require("node:crypto"),
+    GnaniRealtimeStreaming: require("../../src/helpers/gnaniRealtimeStreaming")
+      .GnaniRealtimeStreaming,
     DeepgramStreaming,
     _meetingMicStreaming: streams.mic,
     _meetingSystemStreaming: streams.system,

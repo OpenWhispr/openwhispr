@@ -1,4 +1,9 @@
-function createMeetingTranscriptionLifecycle({ start, stop, onError = () => {} }) {
+function createMeetingTranscriptionLifecycle({
+  start,
+  stop,
+  onOwnerLost = () => {},
+  onError = () => {},
+}) {
   let operationTail = Promise.resolve();
   const sessions = new Map();
 
@@ -42,6 +47,7 @@ function createMeetingTranscriptionLifecycle({ start, stop, onError = () => {} }
     if (!session) {
       return Promise.resolve({ success: false, reason: "stale-session" });
     }
+    if (reason === "window-lost") onOwnerLost(session.sessionId);
     if (session.stopPromise) return session.stopPromise;
 
     session.stopRequested = true;

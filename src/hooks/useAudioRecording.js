@@ -14,7 +14,7 @@ import {
   dismissPastePermissionNotice,
 } from "../utils/permissions";
 import { needsSttConfigBeforeStart } from "../helpers/sttConfigPolicy";
-import { isManagedOrukeetStream } from "../helpers/transcriptionFallback";
+import { holdsAudioUntilConnected } from "../helpers/transcriptionFallback";
 import {
   effectiveLocalHistoryEnabled,
   isAgentAllowed,
@@ -342,14 +342,16 @@ export const useAudioRecording = (toast, options = {}) => {
         if (!current()) return false;
 
         const usesStreaming = manager.shouldUseStreaming();
-        const managedOrukeet =
+        const providerName = usesStreaming ? manager.getStreamingProviderName?.() : null;
+        if (providerName === "gnani" && stopRequestedDuringStartRef.current) return false;
+        const connectsPerRecording =
           usesStreaming &&
-          isManagedOrukeetStream({
-            providerName: manager.getStreamingProviderName?.(),
+          holdsAudioUntilConnected({
+            providerName,
             cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
           });
-        startEffectsOnReportRef.current = managedOrukeet;
-        startCuePendingRef.current = managedOrukeet;
+        startEffectsOnReportRef.current = connectsPerRecording;
+        startCuePendingRef.current = connectsPerRecording;
         const didStart = usesStreaming
           ? await manager.startStreamingRecording()
           : await manager.startRecording();
@@ -370,7 +372,7 @@ export const useAudioRecording = (toast, options = {}) => {
         // A stop that landed while the start was still awaiting the mic open was
         // dropped (isRecording was still false), leaving a runaway recording
         // until the next hotkey press. Honor it now that we started.
-        if (didStart && stopRequestedDuringStartRef.current) {
+        if (didStart && stopRequestedDuringStartRef.current && manager.getState().isRecording) {
           window.electronAPI?.unregisterCancelHotkey?.();
           // Cue semantics mirror performStopRecording: unconditional for
           // streaming, gated on the stop landing for batch.
@@ -420,9 +422,20 @@ export const useAudioRecording = (toast, options = {}) => {
 
   const performStopRecording = useCallback(async () => {
     if (startLockRef.current) {
+      if (stopRequestedDuringStartRef.current) return true;
       stopRequestedDuringStartRef.current = true;
       setIsPreparing(false);
       setIsStopping(true);
+      const manager = audioManagerRef.current;
+      const state = manager?.getState();
+      if (
+        state?.isStreamingStartInProgress &&
+        manager.getActiveStreamingProviderName() === "gnani"
+      ) {
+        if (!state.isRecording) return manager.cancelStreamingRecording();
+        void playStopCue();
+        return manager.stopStreamingRecording();
+      }
       return true;
     }
     if (stopLockRef.current) return false;
@@ -643,8 +656,8 @@ export const useAudioRecording = (toast, options = {}) => {
                 ? "preparing"
                 : "idle"
         );
-        // Managed Orukeet acts with the pill, not when the start resolves: its start
-        // stays pending on a cold connect for seconds while audio already buffers.
+        // Managed Orukeet and Gnani act with the pill, not when the start resolves: the
+        // start stays pending on a cold connect for seconds while audio already buffers.
         // A fallback to batch reports recording again after its not-recording report
         // released these, so only the cue is once per start.
         if (

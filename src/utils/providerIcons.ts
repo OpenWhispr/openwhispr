@@ -23,6 +23,7 @@ import openrouterIcon from "@/assets/icons/providers/openrouter.svg";
 import tinfoilIcon from "@/assets/icons/providers/tinfoil.svg";
 import deepgramIcon from "@/assets/icons/providers/deepgram.svg";
 import assemblyaiIcon from "@/assets/icons/providers/assemblyai.svg";
+import gnaniIcon from "@/assets/icons/providers/gnani.png";
 import elevenlabsIcon from "@/assets/icons/providers/elevenlabs.svg";
 
 export const PROVIDER_ICONS: Record<string, string> = {
@@ -49,6 +50,7 @@ export const PROVIDER_ICONS: Record<string, string> = {
   tinfoil: tinfoilIcon,
   deepgram: deepgramIcon,
   assemblyai: assemblyaiIcon,
+  gnani: gnaniIcon,
   elevenlabs: elevenlabsIcon,
 };
 

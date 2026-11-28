@@ -17,10 +17,23 @@ const USER_ACTIONABLE_START_FAILURES = new Set([
   "AUTH_EXPIRED",
   "AUTH_REQUIRED",
   "AUTH_CONTEXT_CHANGED",
+  "TRANSCRIPTION_CANCELLED",
   "ACCOUNT_REQUIRED",
   "UPGRADE_REQUIRED",
   "LIMIT_REACHED",
 ]);
+
+const GNANI_ACCOUNT_FAILURES = new Set([
+  "API_KEY_MISSING",
+  "PROVIDER_CREDENTIAL_CHANGED",
+  "PROVIDER_AUTH_FAILED",
+  "PROVIDER_ACCESS_DENIED",
+  "PROVIDER_QUOTA_EXHAUSTED",
+]);
+
+export function isGnaniAccountFailure(error) {
+  return GNANI_ACCOUNT_FAILURES.has(error?.code);
+}
 
 // A device policy's refusal is as final as a workspace's.
 export function isTranscriptionPolicyRefusal(error) {
@@ -32,16 +45,25 @@ export function isManagedOrukeetStream({ providerName, cloudTranscriptionMode })
   return providerName === "orukeet" && cloudTranscriptionMode === "openwhispr";
 }
 
-// Every other managed Orukeet start failure goes to batch rather than losing
-// the dictation: the rollout was turned off for this account, its mint window
-// is exhausted, or the session service, the network, the WebSocket or the
-// session response failed. Scoped to the managed Orukeet route so no other
-// provider's start-failure behavior changes.
+// Routes that open a session per recording. The pill, start cue and Escape act while
+// it connects, and the audio spoken meanwhile is held for it.
+export function holdsAudioUntilConnected({ providerName, cloudTranscriptionMode }) {
+  return (
+    providerName === "gnani" || isManagedOrukeetStream({ providerName, cloudTranscriptionMode })
+  );
+}
+
+// These routes can transcribe the whole recording over their own batch API
+// when the streaming endpoint is unavailable. Policy and account refusals still apply.
 export function resolveStreamingStartFallback({ providerName, cloudTranscriptionMode, result }) {
-  if (!isManagedOrukeetStream({ providerName, cloudTranscriptionMode })) return null;
   if (USER_ACTIONABLE_START_FAILURES.has(result.code) || isTranscriptionPolicyRefusal(result)) {
     return null;
   }
+  if (providerName === "gnani" && cloudTranscriptionMode === "byok") {
+    // A missing or refused key, or a spent budget, would fail the batch upload too.
+    return isGnaniAccountFailure(result) ? null : "session_unavailable";
+  }
+  if (!isManagedOrukeetStream({ providerName, cloudTranscriptionMode })) return null;
   if (result.code === "FEATURE_NOT_ENABLED") return "feature_disabled";
   if (result.code === "RATE_LIMITED") return "rate_limited";
   return "session_unavailable";

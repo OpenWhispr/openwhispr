@@ -152,6 +152,7 @@ export interface DictationRealtimeSessionOptions {
   transcriptionMode?: string;
   language?: string;
   sampleRate?: number;
+  gnaniCaptureId?: string;
   keyterms?: string[];
   environment?: string;
   tenant?: string;
@@ -1851,6 +1852,15 @@ declare global {
       stopOnboardingDemo?: (id: string) => Promise<boolean>;
       publishOnboardingDemoEvent?: (event: Omit<OnboardingDemoEvent, "demoId">) => Promise<boolean>;
       onOnboardingDemoEvent?: (callback: (event: OnboardingDemoEvent) => void) => () => void;
+      previewGnaniVoice: (text: string) => Promise<
+        | { success: true; audio: ArrayBuffer }
+        | {
+            success?: false;
+            error: string;
+            messageKey?: string;
+            messageParams?: Record<string, string>;
+          }
+      >;
       testProviderConnection?: (config: {
         scope: "transcription" | "reasoning";
         provider: string;
@@ -2225,7 +2235,9 @@ declare global {
           updated_by_user_id?: string | null;
           left_team?: number;
         },
-        options?: { undoable: true; expected: NoteItem; turn?: string; writeGuard?: NoteWriteGuard }
+        options?:
+          | { undoable: true; expected: NoteItem; turn?: string; writeGuard?: NoteWriteGuard }
+          | { undoable?: false; writeGuard: NoteWriteGuard }
       ) => Promise<NoteMutationResult>;
       getNoteUndos: () => Promise<Array<{ token: string; noteId: number; title: string }>>;
       claimNoteUndo: (token: string) => Promise<boolean>;
@@ -3061,6 +3073,15 @@ declare global {
         language?: string;
         keyterms?: string[];
       }) => Promise<ProxyTranscriptionResult & { cleanedText?: string }>;
+      getGnaniKey?: () => Promise<string | null>;
+      saveGnaniKey?: (key: string) => Promise<void>;
+      proxyGnaniTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        model?: string;
+        language?: string;
+        keyterms?: string[];
+        gnaniCaptureId?: string;
+      }) => Promise<ProxyTranscriptionResult<{ language?: string }>>;
       getElevenlabsKey?: () => Promise<string | null>;
       saveElevenlabsKey?: (key: string) => Promise<void>;
       proxyElevenlabsTranscription?: (data: {
@@ -3511,12 +3532,22 @@ declare global {
       cancelUploadTranscription?: (requestId: string) => Promise<{ success: boolean }>;
 
       onUploadTranscriptionProgress?: (
-        callback: (data: { stage: string; chunksTotal: number; chunksCompleted: number }) => void
+        callback: (data: {
+          stage: string;
+          chunksTotal: number;
+          chunksCompleted: number;
+          requestId?: string;
+        }) => void
       ) => () => void;
 
       // BYOK audio file transcription
+      getGnaniKeyGeneration: () => Promise<number>;
       transcribeAudioFileByok?: (options: {
         filePath: string;
+        gnaniKeyGeneration?: number;
+        gnaniOwner?: NoteWriteGuard;
+        keyterms?: string[];
+        numSpeakers?: number;
         durationSeconds?: number;
         requestId?: string;
         purpose?: "dictation" | "upload";
@@ -4033,6 +4064,7 @@ declare global {
           error?: string;
           systemAudioMode?: SystemAudioMode;
           systemAudioStrategy?: SystemAudioStrategy;
+          writeGuard?: NoteWriteGuard;
           oneOnOneAttendee?: { displayName: string; email: string | null } | null;
           speakerIndexBase?: number;
         } & PolicyFailureMetadata
@@ -4076,6 +4108,7 @@ declare global {
       ) => Promise<{
         success: boolean;
         transcript?: string;
+        partialTranscript?: boolean;
         diarizationSessionId?: string;
         error?: string;
         reason?: "stale-session";
@@ -4161,6 +4194,7 @@ declare global {
         callback: (data: {
           sessionId?: string;
           noteId?: number | null;
+          writeGuard?: NoteWriteGuard;
           segments: Array<{
             id: string;
             text: string;
@@ -4223,7 +4257,8 @@ declare global {
       }>;
       saveNoteSpeakerEmbeddings?: (
         noteId: number,
-        embeddings: Record<string, number[]>
+        embeddings: Record<string, number[]>,
+        writeGuard?: NoteWriteGuard
       ) => Promise<{ success: boolean }>;
 
       // Dictation realtime streaming
@@ -4233,21 +4268,24 @@ declare global {
       dictationRealtimeStart?: (
         options: DictationRealtimeSessionOptions
       ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
-      dictationRealtimeSend?: (buffer: ArrayBuffer) => void;
-      dictationRealtimeFinalize?: () => Promise<
+      dictationRealtimeSend?: (buffer: ArrayBuffer, captureId?: string) => void;
+      reserveGnaniDictation?: (captureId: string, options: DictationRealtimeSessionOptions) => void;
+      releaseGnaniDictation?: (captureId: string) => void;
+      dictationRealtimeFinalize?: (captureId?: string) => Promise<
         {
           success: boolean;
           text?: string;
-          error?: string;
-        } & Partial<DictationLanguageMetadata>
+        } & Partial<DictationLanguageMetadata & IpcErrorFields>
       >;
-      dictationRealtimeStop?: () => Promise<{ success: boolean; text: string }>;
+      dictationRealtimeStop?: (captureId?: string) => Promise<{ success: boolean; text: string }>;
       onDictationRealtimePartial?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeFinal?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeLanguage?: (
         callback: (metadata: DictationLanguageMetadata) => void
       ) => () => void;
-      onDictationRealtimeError?: (callback: (error: string) => void) => () => void;
+      onDictationRealtimeError?: (
+        callback: (error: string | (IpcErrorFields & { gnaniCaptureId: string })) => void
+      ) => () => void;
       onDictationRealtimeSessionEnd?: (callback: (data: { text: string }) => void) => () => void;
 
       // Google Calendar event listeners

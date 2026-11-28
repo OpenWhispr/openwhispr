@@ -10,7 +10,7 @@ import { followsSystemDefaultMic } from "../helpers/micSelectionRecovery";
 import { resolvePreferredMicrophone } from "../helpers/microphoneSelection";
 import { ActiveMicRecoveryController } from "../helpers/activeMicRecovery";
 import { getBaseLanguageCode } from "../utils/languageSupport";
-import { getKeytermDictionaryWords } from "../utils/snippets";
+import { getEffectiveDictionaryWords, getKeytermDictionaryWords } from "../utils/snippets";
 import { describeProviderError } from "../utils/describeProviderError";
 import {
   resolveInitialSpeakerCountOverride,
@@ -21,6 +21,7 @@ import type {
   MeetingStopReason,
   MeetingSystemAudioInterruption,
   NoteItem,
+  NoteWriteGuard,
   SystemAudioAccessResult,
   SystemAudioStrategy,
 } from "../types/electron";
@@ -244,7 +245,10 @@ const getMeetingTranscriptionOptions = () => {
       managedProviders: useStreamingProvidersStore.getState().providers,
       cortiEnvironment: state.cortiEnvironment,
       cortiTenant: state.cortiTenant,
-      keyterms: getKeytermDictionaryWords(state).filter(Boolean),
+      keyterms:
+        resolved.cloudTranscriptionProvider === "gnani"
+          ? getEffectiveDictionaryWords(state)
+          : getKeytermDictionaryWords(state).filter(Boolean),
     }),
     // A model revoked mid-start stays blank for main to refuse, not the default chosen above.
     ...(state.policyBlockedLocalScopes?.includes("meeting") ? { localModel: "" } : {}),
@@ -361,6 +365,7 @@ class MeetingPCMProcessor extends AudioWorkletProcessor {
           this._offset = 0;
         }
         this._stopped = true;
+        this.port.postMessage("flushed");
       }
     };
   }
@@ -469,13 +474,26 @@ const detachFromOutputDevice = async (ctx: AudioContext) => {
   }
 };
 
-const flushAndDisconnectProcessor = async (processor: AudioWorkletNode | null) => {
+const flushAndDisconnectProcessor = async (
+  processor: AudioWorkletNode | null,
+  timeoutMs = MEETING_STOP_FLUSH_TIMEOUT_MS
+) => {
   if (!processor) return;
 
   try {
-    processor.port.postMessage("stop");
-    await new Promise((resolve) => {
-      window.setTimeout(resolve, MEETING_STOP_FLUSH_TIMEOUT_MS);
+    await new Promise<void>((resolve) => {
+      const port = processor.port;
+      const onChunk = port.onmessage;
+      const timer = window.setTimeout(resolve, timeoutMs);
+      port.onmessage = (event) => {
+        if (event.data === "flushed") {
+          clearTimeout(timer);
+          resolve();
+        } else {
+          onChunk?.call(port, event);
+        }
+      };
+      port.postMessage("stop");
     });
   } catch {}
 
@@ -498,6 +516,7 @@ let systemSource: MediaStreamAudioSourceNode | null = null;
 let systemProcessor: AudioWorkletNode | null = null;
 let systemStream: MediaStream | null = null;
 let isRecordingFlag = false;
+let flushingGnaniSessionId: string | null = null;
 let isStartingFlag = false;
 let activeRecordingSessionId: string | null = null;
 const meetingRecordingStartCoordinator = createMeetingRecordingStartCoordinator();
@@ -511,17 +530,18 @@ let segmentsRefValue: TranscriptSegment[] = [];
 // matched against the seeded rows. Keyed by diarization session at stop.
 let sessionSeedLength = 0;
 let sessionRecorderName: string | undefined;
-const seedLengthByDiarizationSession = new Map<
-  string,
-  { noteId: number | null; seedLength: number; fallbackTranscript: string; recorderName?: string }
->();
-// The stopping session's seed, until its stop call returns and keys it above.
-let stoppingSeed: {
+let recordingSequence = 0;
+let lastStoppingSequence = 0;
+interface DiarizationSeed {
   noteId: number | null;
+  sequence: number;
   seedLength: number;
+  savedRowCount: number | null;
   fallbackTranscript: string;
   recorderName?: string;
-} | null = null;
+}
+const seedByDiarizationSession = new Map<string, DiarizationSeed>();
+const enqueueDiarizationCompletion = createSerialQueue();
 let preparePromise: Promise<void> | null = null;
 let awaitingMeetingAdmission: {
   noteId: number | null;
@@ -548,6 +568,7 @@ let recordingNoteDeletedByUser = false;
 // Read as the recording starts: the account a copy may be made for, and where the
 // note lives, so a Private note's copy stays in that Private.
 let recordingOwnerAccountId: string | null | undefined;
+let recordingWriteOptions: { writeGuard: NoteWriteGuard } | undefined;
 let recordingNoteSpaceId: number | null = null;
 // Each note a recording moved off, by the copy it went on in.
 const recordingNoteCopies = new Map<number, number>();
@@ -605,6 +626,7 @@ const MEETING_MAIN_STOPS = new Set([
   ...MEETING_POLICY_REFUSALS,
   "accountChanged",
   "workspaceChanged",
+  "gnaniCredentialChanged",
 ]);
 
 // The last session main ended itself, so a policy stop of the same session
@@ -977,6 +999,7 @@ export interface StartRecordingArgs {
   noteTitle: string | null;
   folderId: number | null;
   seedSegments?: TranscriptSegment[];
+  noteTranscript?: string | null;
   recorderName?: string;
   diarizationEnabled?: boolean | null;
   expectedCount?: number | null;
@@ -1005,8 +1028,17 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     void meetingRecordingStartCoordinator.cancelActiveStart(awaitingMeetingAdmission.sessionId);
   }
   const sessionId = createMeetingRecordingSessionId();
+  const refreshResumeSeed =
+    args.noteId != null &&
+    args.seedSegments === undefined &&
+    args.noteTranscript !== undefined &&
+    (useMeetingRecordingStore.getState().recordingNoteId === args.noteId ||
+      Array.from(seedByDiarizationSession.values()).some(
+        (pending) => pending.noteId === args.noteId
+      ));
   let automaticStartSuppressed = false;
   let automaticStartCancelled = false;
+  let startRefused = false;
   let recordingDisabled = false;
   const setup = meetingRecordingStartCoordinator.runStart(sessionId, async (startOperation) => {
     if (isRecordingFlag || isStartingFlag) return;
@@ -1032,7 +1064,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         startSource: args.startSource,
         reason: refusal,
       });
-      recordingDisabled = true;
+      startRefused = true;
       return;
     }
 
@@ -1057,11 +1089,42 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         startSource: args.startSource,
         reason: "POLICY_MEETING_RECORDING_DISABLED",
       });
-      recordingDisabled = true;
+      startRefused = true;
       return;
     }
 
     await meetingRecordingStopBarrier.waitForPendingStop();
+    let seed = args.seedSegments ?? parseSeedSegments(args.noteTranscript);
+    if (refreshResumeSeed && args.noteId != null && window.electronAPI?.getNote) {
+      // The caller read the note before the policy/stop awaits. Order this read
+      // after any completion already merging into it, including its DB write.
+      const noteId = args.noteId;
+      const cancelled = new Promise<null>((resolve) =>
+        startOperation.onCancel(() => resolve(null))
+      );
+      try {
+        const read = enqueueDiarizationCompletion(async () => {
+          if (!startOperation.isCurrent()) return null;
+          return Promise.race([window.electronAPI.getNote(noteId), cancelled]);
+        });
+        // Cancel both a queued read and one already waiting on the database.
+        const note = await Promise.race([read, cancelled]);
+        if (startOperation.isCurrent()) {
+          if (!note || note.deleted_at) {
+            automaticStartCancelled = Boolean(args.canAutoStart);
+            startRefused = true;
+            return;
+          }
+          seed = parseSeedSegments(note.transcript);
+        }
+      } catch (error) {
+        if (startOperation.isCurrent()) {
+          reportMeetingError(describeMeetingSetupError(error));
+          startRefused = true;
+          return;
+        }
+      }
+    }
     if (!startOperation.isCurrent()) {
       automaticStartCancelled = Boolean(
         args.canAutoStart || window.electronAPI?.checkMeetingRecordingStart
@@ -1152,7 +1215,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     );
 
     logger.info("Meeting transcription starting...", {}, "meeting");
-    const seed = args.seedSegments ?? [];
+    for (const pending of seedByDiarizationSession.values()) {
+      if (pending.noteId === args.noteId && pending.savedRowCount === null) {
+        // A failed stop write may have left only the last periodic save on
+        // disk. This is the actual boundary before the resumed recording adds rows.
+        pending.savedRowCount = Math.max(0, seed.length - pending.seedLength);
+      }
+    }
     const locks = new Map<string, string>();
     const keepSeedSelfLocks = !args.recorderName && !seed.some((segment) => segment.recorderName);
     let maxSpeakerIndex = -1;
@@ -1170,6 +1239,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     }
 
     segmentsRefValue = seed;
+    recordingSequence++;
     sessionSeedLength = seed.length;
     sessionRecorderName = args.recorderName;
     speakerIdentifications = [];
@@ -1182,6 +1252,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     recordingNoteDeleted = false;
     recordingNoteDeletedByUser = false;
     recordingOwnerAccountId = undefined;
+    recordingWriteOptions = undefined;
     recordingNoteSpaceId = null;
 
     useMeetingRecordingStore.setState({
@@ -1325,6 +1396,23 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       const pendingMicChunks: { chunk: ArrayBuffer; capturedAt: number }[] = [];
       const pendingSystemChunks: { chunk: ArrayBuffer; capturedAt: number }[] = [];
       let socketReady = false;
+      const acceptsChunk = () =>
+        (isRecordingFlag && activeRecordingSessionId === sessionId) ||
+        flushingGnaniSessionId === sessionId;
+      const sendCapturedChunk = (chunk: ArrayBuffer, source: "mic" | "system") => {
+        // The worklet posts after filling the buffer. Prisma timestamps its
+        // first sample, including speech held through the initial handshake.
+        const capturedAt =
+          meetingTranscriptionOptions.provider === "gnani-realtime"
+            ? Date.now() - (chunk.byteLength * 1000) / (24000 * 2)
+            : undefined;
+        if (socketReady) {
+          window.electronAPI?.meetingTranscriptionSend?.(chunk, source, capturedAt);
+        } else {
+          const pending = source === "mic" ? pendingMicChunks : pendingSystemChunks;
+          pending.push({ chunk: chunk.slice(0), capturedAt: capturedAt ?? Date.now() });
+        }
+      };
 
       const micCapturePromise = getMeetingMicConstraints()
         .then(async (constraints) => {
@@ -1393,17 +1481,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
             stream: micResult,
             context: ctx,
             onChunk: (captured) => {
-              if (!isRecordingFlag || activeRecordingSessionId !== sessionId) return;
+              if (!acceptsChunk()) return;
               // Frames already in the worklet when mute lands, or from a replacement
               // track not yet disabled, must not leave the renderer either.
               const chunk = useMeetingRecordingStore.getState().micMuted
                 ? new ArrayBuffer(captured.byteLength)
                 : captured;
-              if (socketReady) {
-                window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic");
-                return;
-              }
-              pendingMicChunks.push({ chunk: chunk.slice(0), capturedAt: Date.now() });
+              sendCapturedChunk(chunk, "mic");
             },
           }).then(async ({ source, processor }) => {
             if (!isCurrentStart()) {
@@ -1509,6 +1593,10 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         return;
       }
 
+      if (startResult.writeGuard) {
+        recordingWriteOptions = { writeGuard: startResult.writeGuard };
+        recordingOwnerAccountId = startResult.writeGuard.accountId;
+      }
       const [micOutcome, systemCaptureOutcome] = await captureOutcomes;
       if (!isCurrentStart()) {
         await teardownStart();
@@ -1829,12 +1917,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
           stream,
           context: ctx,
           onChunk: (chunk) => {
-            if (!isRecordingFlag || activeRecordingSessionId !== sessionId) return;
-            if (socketReady) {
-              window.electronAPI?.meetingTranscriptionSend?.(chunk, "system");
-              return;
-            }
-            pendingSystemChunks.push({ chunk: chunk.slice(0), capturedAt: Date.now() });
+            if (!acceptsChunk()) return;
+            sendCapturedChunk(chunk, "system");
           },
         });
         systemSource = source;
@@ -2009,7 +2093,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
   const result = setup
     .then((): StartRecordingResult => {
       if (recordingDisabled) return false;
-      return automaticStartCancelled ? "cancelled" : !automaticStartSuppressed;
+      return automaticStartCancelled ? "cancelled" : !startRefused && !automaticStartSuppressed;
     })
     .finally(() => {
       if (awaitingMeetingAdmission?.sessionId === sessionId) awaitingMeetingAdmission = null;
@@ -2032,7 +2116,7 @@ async function captureRecordingOwner(noteId: number | null): Promise<void> {
     const api = window.electronAPI;
     const [guard, note] = await Promise.all([api?.getNoteWriteGuard?.(), api?.getNote?.(noteId)]);
     if (useMeetingRecordingStore.getState().recordingNoteId !== noteId) return;
-    if (guard) recordingOwnerAccountId = guard.accountId;
+    if (guard && !recordingWriteOptions) recordingOwnerAccountId = guard.accountId;
     rememberRecordingNoteSpace(note);
   } catch {
     // With no owner, a vanished note's transcript stays on screen and is only logged.
@@ -2113,7 +2197,7 @@ async function copyRecordingNote(lostNoteId: number): Promise<number | null> {
     return lostNoteId;
   }
   if (recordingNoteDeletedByUser) return null;
-  const guard = await api?.getNoteWriteGuard?.();
+  const guard = recordingWriteOptions?.writeGuard ?? (await api?.getNoteWriteGuard?.());
   if (
     !guard ||
     recordingOwnerAccountId === undefined ||
@@ -2177,15 +2261,20 @@ async function persistToRecordingCopy(
   const target = await startRecordingRescue(lostNoteId);
   if (target == null) return;
   if (target === lostNoteId) {
-    if (transcript != null) await window.electronAPI?.updateNote?.(target, { transcript });
+    if (transcript != null)
+      await window.electronAPI?.updateNote?.(target, { transcript }, recordingWriteOptions);
     return;
   }
   // The copy holds this session's segments only, as the store's now do.
   const { segments } = useMeetingRecordingStore.getState();
   if (segments.length > 0) {
-    await window.electronAPI?.updateNote?.(target, {
-      transcript: serializeTranscriptSegments(segments),
-    });
+    await window.electronAPI?.updateNote?.(
+      target,
+      {
+        transcript: serializeTranscriptSegments(segments),
+      },
+      recordingWriteOptions
+    );
   }
 }
 
@@ -2194,7 +2283,7 @@ async function persistToRecordingCopy(
 // for the account the recording started under. A note revived meanwhile takes it as any save.
 async function keepTranscriptOfDeletedNote(noteId: number, transcript: string): Promise<void> {
   const api = window.electronAPI;
-  const guard = await api?.getNoteWriteGuard?.();
+  const guard = recordingWriteOptions?.writeGuard ?? (await api?.getNoteWriteGuard?.());
   if (
     !guard ||
     recordingOwnerAccountId === undefined ||
@@ -2204,7 +2293,8 @@ async function keepTranscriptOfDeletedNote(noteId: number, transcript: string): 
     return;
   }
   const kept = await api?.keepDeletedNoteTranscript?.(noteId, transcript, guard);
-  if (kept?.code === "note_live") await api?.updateNote?.(noteId, { transcript });
+  if (kept?.code === "note_live")
+    await api?.updateNote?.(noteId, { transcript }, recordingWriteOptions);
 }
 
 /**
@@ -2245,15 +2335,20 @@ export async function persistLiveTranscript(): Promise<void> {
   try {
     // Posted before the first await: during beforeunload nothing after it is
     // guaranteed to run.
-    const result = await window.electronAPI?.updateNote?.(recordingNoteId, {
-      transcript: serializeTranscriptSegments(segments),
-    });
+    const result = await window.electronAPI?.updateNote?.(
+      recordingNoteId,
+      {
+        transcript: serializeTranscriptSegments(segments),
+      },
+      recordingWriteOptions
+    );
     if (result && !result.success) {
       logger.error(
         "Failed to persist live meeting transcript",
         { error: result.error, noteId: recordingNoteId },
         "meeting"
       );
+      if (result.error === "Account changed") return;
       // Refused because the note is gone (main's note_deleted, or no row at all).
       noteLeftRecording(recordingNoteId);
     }
@@ -2317,6 +2412,25 @@ export async function stopRecording(
     }
 
     const sessionId = activeRecordingSessionId;
+    let finalAudio: Promise<void[]> | undefined;
+    if (recordingWriteOptions && (reason === "user" || reason === "auto-end")) {
+      // Stop input immediately. Let these two worklets deliver the samples
+      // already captured before main commits each Prisma socket.
+      flushingGnaniSessionId = sessionId;
+      micRecovery?.stop();
+      micSource?.disconnect();
+      systemSource?.disconnect();
+      stopMediaStream(micStream);
+      stopMediaStream(systemStream);
+      finalAudio = Promise.all([
+        flushAndDisconnectProcessor(micProcessor, 500),
+        flushAndDisconnectProcessor(systemProcessor, 500),
+      ]).finally(() => {
+        flushingGnaniSessionId = null;
+      });
+      micProcessor = systemProcessor = null;
+    }
+    lastStoppingSequence = recordingSequence;
     activeRecordingSessionId = null;
     isRecordingFlag = false;
     isStartingFlag = false;
@@ -2328,22 +2442,34 @@ export async function stopRecording(
     const { recordingNoteId, segments: finalSegments } = useMeetingRecordingStore.getState();
     const hasNewSegments = finalSegments.length > sessionSeedLength;
     let stopTranscript = "";
+    let stopWriteFailed = false;
     const persistTranscript = async (transcript: string) => {
       if (recordingNoteId == null) return;
       try {
         if (recordingNoteDeleted && !recordingNoteDeletedByUser) {
           await persistToRecordingCopy(recordingNoteId, transcript);
+          stopWriteFailed = false;
           return;
         }
-        const result = await window.electronAPI?.updateNote?.(recordingNoteId, { transcript });
+        const result = await window.electronAPI?.updateNote?.(
+          recordingNoteId,
+          { transcript },
+          recordingWriteOptions
+        );
         if (result && !result.success) {
+          if (result.error === "Account changed") throw new Error(result.error);
           if (recordingNoteDeletedByUser) {
             await keepTranscriptOfDeletedNote(recordingNoteId, transcript);
           } else {
             await persistToRecordingCopy(recordingNoteId, null);
+            if (useMeetingRecordingStore.getState().recordingNoteId === recordingNoteId) {
+              throw new Error(result.error || "Failed to save transcript");
+            }
           }
         }
+        stopWriteFailed = false;
       } catch (err) {
+        stopWriteFailed = true;
         logger.error(
           "Failed to persist final meeting transcript",
           { error: (err as Error).message, noteId: recordingNoteId },
@@ -2363,15 +2489,15 @@ export async function stopRecording(
           ? stopTranscript
           : serializeTranscriptSegments(useMeetingRecordingStore.getState().segments)),
       stop: async () => {
-        // Set before cleanup's awaits: the final transcript write is already
-        // posted, so an earlier session's result can land from here on.
         const seed = {
-          noteId: recordingNoteId,
+          noteId: useMeetingRecordingStore.getState().recordingNoteId,
+          sequence: recordingSequence,
           seedLength: sessionSeedLength,
+          savedRowCount: useMeetingRecordingStore.getState().segments.length - sessionSeedLength,
           fallbackTranscript: "",
           recorderName: sessionRecorderName,
         };
-        stoppingSeed = seed;
+        await finalAudio;
         await cleanup();
 
         let stoppedDiarizationSessionId: string | null = null;
@@ -2380,9 +2506,10 @@ export async function stopRecording(
             sessionId ?? undefined,
             reason
           );
+          if (result?.partialTranscript) reportMeetingError("partialTranscript");
           if (result?.diarizationSessionId) {
             stoppedDiarizationSessionId = result.diarizationSessionId;
-            seedLengthByDiarizationSession.set(stoppedDiarizationSessionId, seed);
+            seedByDiarizationSession.set(stoppedDiarizationSessionId, seed);
             useMeetingRecordingStore.setState({
               diarizationSessionId: stoppedDiarizationSessionId,
             });
@@ -2393,6 +2520,7 @@ export async function stopRecording(
             } else {
               stopTranscript = result.transcript;
               seed.fallbackTranscript = result.transcript.trim();
+              seed.savedRowCount = 1;
               const segments = [
                 ...useMeetingRecordingStore.getState().segments,
                 { id: "stop-plain", text: seed.fallbackTranscript, source: "system" as const },
@@ -2413,12 +2541,25 @@ export async function stopRecording(
             { error: (err as Error).message },
             "meeting"
           );
-        } finally {
-          stoppingSeed = null;
         }
         return stoppedDiarizationSessionId;
       },
     });
+
+    const seed = diarizationSessionId
+      ? seedByDiarizationSession.get(diarizationSessionId)
+      : undefined;
+    if (seed) {
+      const current = useMeetingRecordingStore.getState();
+      // The stop write can create a recording copy while main drains the session.
+      // Its transcript starts with this session's speech, without the old note's seed.
+      if (seed.noteId !== current.recordingNoteId) {
+        seed.noteId = current.recordingNoteId;
+        seed.seedLength = sessionSeedLength;
+        seed.savedRowCount = current.segments.length - sessionSeedLength;
+      }
+      if (stopWriteFailed) seed.savedRowCount = null;
+    }
 
     useMeetingRecordingStore.setState({
       micPartial: "",
@@ -2491,36 +2632,55 @@ export function cancelPreparedTranscription(): void {
 // session (#1495). Registered once at module load so results survive the
 // notes view unmounting; NoteEditor only mirrors `completedDiarization`.
 if (typeof window !== "undefined") {
-  // Serialized so rapid re-record completions can't interleave around the
-  // getNote await and overwrite each other's speaker labels — the later
-  // result merges on top of the earlier one's persisted transcript.
-  const enqueueDiarizationCompletion = createSerialQueue();
+  window.electronAPI?.onActiveAccountScopeChanged?.((scope) => {
+    if (scope && recordingWriteOptions?.writeGuard.accountId === scope.accountId) {
+      recordingWriteOptions = { writeGuard: scope };
+    }
+  });
+  // Serialize completions so each merge reads the previous speaker-label write.
   window.electronAPI?.onMeetingDiarizationComplete?.((data) => {
     enqueueDiarizationCompletion(async () => {
-      await meetingRecordingStopBarrier.waitForPendingStop();
-      const {
-        diarizationSessionId,
-        isRecording,
-        recordingNoteId,
-        segments: liveSegments,
-      } = useMeetingRecordingStore.getState();
-      const resolved = resolveDiarizationTarget({
-        payloadNoteId: data?.noteId,
-        payloadSessionId: data?.sessionId,
-        currentSessionId: diarizationSessionId,
-        activeRecordingNoteId: isRecording ? recordingNoteId : null,
-      });
-      const { isCurrentSession } = resolved;
-      let targetNoteId = resolved.targetNoteId;
+      const payloadNoteId = data?.noteId;
+      let targetNoteId = payloadNoteId;
       if (targetNoteId == null) {
-        if (data?.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
+        await meetingRecordingStopBarrier.waitForPendingStop();
+        if (data?.sessionId) seedByDiarizationSession.delete(data.sessionId);
         return;
       }
+      let writeGuard = data.writeGuard;
+      const ownsNote = async () => {
+        const current = await window.electronAPI?.getNoteWriteGuard?.();
+        if (!current || !writeGuard || current.accountId !== writeGuard.accountId) return false;
+        if (current.authGeneration === writeGuard.authGeneration) return true;
+        const scope = await window.electronAPI?.getActiveAccountScope?.();
+        if (
+          scope?.accountId !== writeGuard.accountId ||
+          scope?.authGeneration !== current.authGeneration
+        )
+          return false;
+        writeGuard = current;
+        return true;
+      };
 
       // Publishing an empty result clears a waiting editor's spinner without
       // painting an overlay; anything non-empty is already persisted.
-      const publish = (segments: TranscriptSegment[]) => {
-        if (isCurrentSession) {
+      const publish = (segments: TranscriptSegment[], completedSequence?: number): void => {
+        const latest = useMeetingRecordingStore.getState();
+        const { isCurrentSession } = resolveDiarizationTarget({
+          payloadNoteId: targetNoteId,
+          payloadSessionId: data?.sessionId,
+          currentSessionId: latest.diarizationSessionId,
+          activeRecordingNoteId: latest.isRecording ? latest.recordingNoteId : null,
+        });
+        // Refresh the newer session's overlay if it has already published.
+        const latestAlreadyCompleted =
+          completedSequence !== undefined &&
+          recordingSequence > completedSequence &&
+          latest.recordingNoteId === targetNoteId &&
+          !latest.isRecording &&
+          latest.diarizationSessionId &&
+          !seedByDiarizationSession.has(latest.diarizationSessionId);
+        if (isCurrentSession || latestAlreadyCompleted) {
           useMeetingRecordingStore.setState({
             completedDiarization: { noteId: targetNoteId, segments },
           });
@@ -2528,14 +2688,28 @@ if (typeof window !== "undefined") {
       };
 
       if (!data?.segments?.length) {
-        if (data?.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
-        publish([]);
+        await meetingRecordingStopBarrier.waitForPendingStop();
+        if (data?.sessionId) seedByDiarizationSession.delete(data.sessionId);
+        if (!writeGuard || (await ownsNote())) publish([]);
         return;
       }
 
       let persisted: NoteItem | null | undefined;
+      let seed: DiarizationSeed | undefined;
       try {
-        persisted = await window.electronAPI?.getNote?.(targetNoteId);
+        // A newer stop can post its final write while getNote's IPC reply is in
+        // flight. Reread after that stop before writing over its transcript.
+        let stopAtRead: number;
+        do {
+          stopAtRead = lastStoppingSequence;
+          await meetingRecordingStopBarrier.waitForPendingStop();
+          seed = data.sessionId ? seedByDiarizationSession.get(data.sessionId) : undefined;
+          // Main names the note where the recording started. Only follow its
+          // copy when this session stopped there.
+          const copyId = recordingNoteCopies.get(payloadNoteId);
+          targetNoteId = copyId != null && seed?.noteId === copyId ? copyId : payloadNoteId;
+          persisted = await window.electronAPI?.getNote?.(targetNoteId);
+        } while (stopAtRead !== lastStoppingSequence);
       } catch (error) {
         logger.error(
           "Diarization completion could not read its note",
@@ -2543,93 +2717,101 @@ if (typeof window !== "undefined") {
           "meeting"
         );
       }
-      // Read after the getNote await: a skipped diarization is sent before the
-      // stop call that records this session's seed length returns.
-      const seed = data.sessionId ? seedLengthByDiarizationSession.get(data.sessionId) : undefined;
       const seedLength = seed?.seedLength ?? 0;
-      if (data.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
-      // A session that went on in a copy of its vanished note stopped there: main still
-      // names the note it started on.
-      const copyId = recordingNoteCopies.get(targetNoteId);
-      if (copyId != null && seed?.noteId === copyId) {
-        targetNoteId = copyId;
-        persisted = await window.electronAPI?.getNote?.(copyId).catch(() => null);
+      // The renderer can stay mounted across sign-ins while a completion is
+      // waiting for the previous stop's write. Note IDs are local to an account.
+      if (writeGuard && !(await ownsNote())) {
+        if (data.sessionId) seedByDiarizationSession.delete(data.sessionId);
+        return;
       }
       // No note means no safe base to merge into, and writing to a deleted one
       // would resurrect its tombstone in the sidebar, cloud mirror, and vector
       // index.
       if (!persisted || persisted.deleted_at) {
+        if (data.sessionId && (persisted === null || persisted?.deleted_at)) {
+          seedByDiarizationSession.delete(data.sessionId);
+        }
         publish([]);
         return;
       }
 
-      const existing = selectBaseSegments({
-        persistedSegments: persisted.transcript ? parseSeedSegments(persisted.transcript) : null,
-        liveSegments,
-        recordingNoteId,
-        targetNoteId,
-      });
+      const current = useMeetingRecordingStore.getState();
+      const resumedRecording =
+        seed &&
+        recordingSequence > seed.sequence &&
+        current.isRecording &&
+        current.recordingNoteId === targetNoteId;
+      const existing = resumedRecording
+        ? current.segments
+        : selectBaseSegments({
+            persistedSegments: persisted.transcript
+              ? parseSeedSegments(persisted.transcript)
+              : null,
+            liveSegments: current.segments,
+            recordingNoteId: current.recordingNoteId,
+            targetNoteId,
+          });
       const recordedSegments = seed?.recorderName
         ? data.segments.map((segment) => ({ ...segment, recorderName: seed.recorderName }))
         : data.segments;
+      // The stop captured both ends of its own slice. A newer completion can
+      // already have discarded its bookkeeping when this older result arrives.
       const { segments: enriched, removedCount } = mergeSessionDiarization({
         existing,
         seedLength,
+        sessionEnd: seed?.savedRowCount != null ? seedLength + seed.savedRowCount : undefined,
         fallbackTranscript: seed?.fallbackTranscript,
         segments: recordedSegments,
         removedSegments: data.removedSegments,
         splitLiveSpeakers: data.splitLiveSpeakers,
       });
 
-      // A later session seeded this session's rows, so move its boundary when
-      // removing rows or replacing a fallback with individual diarized rows.
-      // Only sessions whose final write is already posted count: one posted
-      // after this write puts the rows back.
-      const laterSeeds = [...seedLengthByDiarizationSession.values(), stoppingSeed].filter(
-        (pending): pending is NonNullable<typeof stoppingSeed> =>
-          pending?.noteId === targetNoteId && pending.seedLength > seedLength
+      // Apply to the resumed capture before yielding: its next periodic/stop
+      // write uses this snapshot and may run while the database write finishes.
+      if (resumedRecording) {
+        sessionSeedLength -= removedCount;
+        segmentsRefValue = enriched;
+        useMeetingRecordingStore.setState({
+          segments: enriched,
+          transcript: buildTranscriptText(enriched),
+        });
+      }
+      const laterSeeds = Array.from(seedByDiarizationSession.values()).filter(
+        (pending) => seed && pending.noteId === targetNoteId && pending.sequence > seed.sequence
       );
+      let saved = false;
       try {
         // Awaited so the next queued completion's getNote is guaranteed to
         // read this write — without it the ordering depends on db-update-note
         // staying synchronous ahead of its first await.
-        await window.electronAPI?.updateNote?.(targetNoteId, {
-          transcript: serializeTranscriptSegments(enriched),
-        });
+        const result = await window.electronAPI?.updateNote?.(
+          targetNoteId,
+          {
+            transcript: serializeTranscriptSegments(enriched),
+          },
+          writeGuard && { writeGuard }
+        );
+        if (result && !result.success) throw new Error(result.error || "Failed to save transcript");
+        saved = true;
       } catch (error) {
         publish([]);
         throw error;
+      } finally {
+        // A resumed recording already owns this merge and retries it on its
+        // next save. Otherwise retain the old boundaries if the write failed.
+        if (saved || resumedRecording) {
+          if (data.sessionId) seedByDiarizationSession.delete(data.sessionId);
+          for (const pending of laterSeeds) pending.seedLength -= removedCount;
+        }
       }
-      for (const pending of laterSeeds) pending.seedLength -= removedCount;
-
-      // The resumed recording must save the replacement too, or its next
-      // periodic/stop write would put the combined fallback back.
-      const current = useMeetingRecordingStore.getState();
-      if (
-        current.recordingNoteId === targetNoteId &&
-        sessionSeedLength > seedLength &&
-        seed?.fallbackTranscript &&
-        current.segments[seedLength]?.text === seed.fallbackTranscript
-      ) {
-        const merged = mergeSessionDiarization({
-          existing: current.segments,
-          seedLength,
-          fallbackTranscript: seed.fallbackTranscript,
-          segments: recordedSegments,
-          removedSegments: data.removedSegments,
-          splitLiveSpeakers: data.splitLiveSpeakers,
-        });
-        sessionSeedLength -= merged.removedCount;
-        segmentsRefValue = merged.segments;
-        useMeetingRecordingStore.setState({
-          segments: merged.segments,
-          transcript: buildTranscriptText(merged.segments),
-        });
-      }
-      publish(enriched);
+      publish(enriched, seed?.sequence);
 
       if (data.speakerEmbeddings) {
-        await window.electronAPI?.saveNoteSpeakerEmbeddings?.(targetNoteId, data.speakerEmbeddings);
+        await window.electronAPI?.saveNoteSpeakerEmbeddings?.(
+          targetNoteId,
+          data.speakerEmbeddings,
+          writeGuard
+        );
       }
     }).catch((error) => {
       logger.error(

@@ -157,7 +157,7 @@ test("connection identity follows key saves exactly when the token comes from a 
         return "key";
       };
       const options = { provider, mode, purpose: "meeting" };
-      await fetchRealtimeTokenForProvider(
+      const token = fetchRealtimeTokenForProvider(
         provider,
         {
           environmentManager: new Proxy({}, { get: () => savedKey }),
@@ -167,6 +167,12 @@ test("connection identity follows key saves exactly when the token comes from a 
         },
         options
       );
+      if (provider === "gnani-realtime" && mode !== "byok") {
+        await assert.rejects(token, /personal API key/);
+        assert.equal(readsSavedKey, false);
+        continue;
+      }
+      await token;
       assert.equal(
         getMeetingConnectionKey(options, 1) !== getMeetingConnectionKey(options, 2),
         readsSavedKey,

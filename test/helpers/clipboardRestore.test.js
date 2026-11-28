@@ -172,6 +172,10 @@ function createSpawnSync(calls) {
   };
 }
 
+function useX11Session(t) {
+  t.mock.property(process, "env", { ...process.env, XDG_SESSION_TYPE: "x11", WAYLAND_DISPLAY: "" });
+}
+
 async function withWaylandEnvironment(desktop, callback) {
   const previous = {
     XDG_SESSION_TYPE: process.env.XDG_SESSION_TYPE,
@@ -230,6 +234,7 @@ for (const [label, platform, backend, expectedDispatches] of [
   ["Linux fallback delay", "linux", "fallback", 1],
 ]) {
   test(`caret cancellation during ${label} stops pending input and restores its clipboard`, async (t) => {
+    if (platform === "linux") useX11Session(t);
     const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
     Object.defineProperty(process, "platform", { value: platform });
     t.after(() => Object.defineProperty(process, "platform", originalPlatform));
@@ -347,6 +352,7 @@ test("cancelled Wayland input preserves a newer native clipboard when XWayland i
 
 for (const userChangedPrimary of [false, true]) {
   test(`cancelled Linux input restores only its own primary selection (user changed: ${userChangedPrimary})`, async (t) => {
+    useX11Session(t);
     const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
     Object.defineProperty(process, "platform", { value: "linux" });
     t.after(() => Object.defineProperty(process, "platform", originalPlatform));
@@ -3143,6 +3149,7 @@ for (const [label, platform, backend] of [
   ["Linux fallback", "linux", "fallback"],
 ]) {
   test(`caret delivery refuses focus drift during ${label}`, async (t) => {
+    if (platform === "linux") useX11Session(t);
     const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
     Object.defineProperty(process, "platform", { value: platform });
     t.after(() => Object.defineProperty(process, "platform", originalPlatform));

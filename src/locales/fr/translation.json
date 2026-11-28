@@ -945,6 +945,10 @@
     }
   },
   "transcription": {
+    "gnani": {
+      "voicePreview": "Aperçu de la voix Gnani",
+      "voicePreviewFailed": "Impossible de lire l’aperçu de la voix Gnani. Réessayez."
+    },
     "modelCard": "Fiche du modèle",
     "deleteModel": {
       "title": "Supprimer le modèle",
@@ -3584,6 +3588,8 @@
         "groq_whisper_large_v3_turbo": "Vitesse 216x en temps réel",
         "mistral_voxtral_mini_latest": "Transcription multilingue rapide",
         "gemini_3_5_transcribe": "Reconnaissance vocale Gemini de Google",
+        "gnani_prisma_v3": "Détection automatique de la langue, alternance des langues et termes du dictionnaire",
+        "gnani_prisma_v2_5": "Transcription dans une seule langue. Le mode automatique utilise l’anglais indien.",
         "elevenlabs_scribe_v3": "La transcription multilingue la plus précise",
         "elevenlabs_scribe_v2": "Transcription multilingue précise",
         "elevenlabs_scribe_v3_live": "Transcription en direct pour l'enregistrement de notes",
@@ -4786,6 +4792,7 @@
       "internalAttendeesConfirm": "Oui, commencer",
       "recordingDisabledByOrg": "L’enregistrement des réunions est désactivé par votre organisation.",
       "stoppedAccountChanged": "L’enregistrement s’est arrêté, car vous vous êtes déconnecté ou avez changé de compte.",
+      "stoppedGnaniKeyChanged": "L’enregistrement a été arrêté car la clé API GnaniAI a changé.",
       "stoppedPolicyUnresolved": "L’enregistrement s’est arrêté, car les paramètres de votre organisation n’ont pas pu être vérifiés.",
       "stoppedWorkspaceChanged": "L’enregistrement s’est arrêté, car vous avez changé d’espace de travail.",
       "recordingCopy": {

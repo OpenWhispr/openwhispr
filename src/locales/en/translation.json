@@ -945,6 +945,10 @@
     }
   },
   "transcription": {
+    "gnani": {
+      "voicePreview": "Gnani voice preview",
+      "voicePreviewFailed": "Couldn’t play the Gnani voice preview. Try again."
+    },
     "modelCard": "Model card",
     "deleteModel": {
       "title": "Delete Model",
@@ -3577,6 +3581,8 @@
         "groq_whisper_large_v3_turbo": "216x real-time speed",
         "mistral_voxtral_mini_latest": "Fast multilingual transcription",
         "gemini_3_5_transcribe": "Google's Gemini speech-to-text",
+        "gnani_prisma_v3": "Automatic language detection, mixed speech and dictionary hints",
+        "gnani_prisma_v2_5": "Single-language transcription. Auto uses Indian English.",
         "elevenlabs_scribe_v3": "Most accurate multilingual transcription",
         "elevenlabs_scribe_v2": "Accurate multilingual transcription",
         "elevenlabs_scribe_v3_live": "Live transcription for note recording",
@@ -4779,6 +4785,7 @@
       "internalAttendeesConfirm": "Yes, start",
       "recordingDisabledByOrg": "Meeting recording is disabled by your organization.",
       "stoppedAccountChanged": "Recording stopped because you signed out or switched accounts.",
+      "stoppedGnaniKeyChanged": "Recording stopped because the GnaniAI API key changed.",
       "stoppedPolicyUnresolved": "Recording stopped because your organization's settings couldn't be checked.",
       "stoppedWorkspaceChanged": "Recording stopped because you switched workspaces.",
       "recordingCopy": {

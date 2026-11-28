@@ -945,6 +945,10 @@
     }
   },
   "transcription": {
+    "gnani": {
+      "voicePreview": "Gnani 語音試聽",
+      "voicePreviewFailed": "無法播放 Gnani 語音，請重試。"
+    },
     "modelCard": "模型卡",
     "deleteModel": {
       "title": "刪除模型",
@@ -3479,6 +3483,8 @@
         "groq_whisper_large_v3": "Large v3 模型，快速且精準",
         "mistral_voxtral_mini_latest": "快速多語言轉錄",
         "gemini_3_5_transcribe": "Google Gemini 語音轉文字",
+        "gnani_prisma_v3": "自動偵測語言，支援混合語言及詞典提示",
+        "gnani_prisma_v2_5": "單一語言轉錄。自動模式使用印度英語。",
         "elevenlabs_scribe_v3": "最精準的多語言轉錄",
         "elevenlabs_scribe_v2": "精準的多語言轉錄",
         "elevenlabs_scribe_v3_live": "用於筆記錄音的即時轉錄",
@@ -4220,6 +4226,7 @@
       "internalAttendeesConfirm": "是，開始",
       "recordingDisabledByOrg": "您的組織已停用會議錄音。",
       "stoppedAccountChanged": "由於您已登出或切換了帳號，錄音已停止。",
+      "stoppedGnaniKeyChanged": "GnaniAI 的 API 金鑰已變更，因此錄音已停止。",
       "stoppedPolicyUnresolved": "由於無法檢查您的組織設定，錄音已停止。",
       "stoppedWorkspaceChanged": "由於您切換了工作區，錄音已停止。",
       "recordingCopy": {

@@ -22,6 +22,46 @@ function byokConfig() {
   };
 }
 
+test("Prisma uploads pin the account and key and pass the speaker count to Batch", async (t) => {
+  const { window } = installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-gnani-upload-owner-",
+    mockModules: { "/lib/auth": "export const withSessionRefresh = (fn) => fn();" },
+  });
+  const { snapshotGnaniUpload, transcribeFileWithSpeakers } = await vite.ssrLoadModule(
+    "/services/fileTranscription.ts"
+  );
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState({ accountId: "alice" });
+  const owner = { accountId: "alice", authGeneration: 4 };
+  window.electronAPI.getGnaniKeyGeneration = async () => 8;
+  window.electronAPI.getNoteWriteGuard = async () => owner;
+  const cfg = await snapshotGnaniUpload({
+    ...byokConfig(),
+    cloudTranscriptionProvider: "gnani",
+    cloudTranscriptionModel: "prisma-v2.5",
+    getApiKey: () => assert.fail("Gnani audio requests resolve the saved secret in main"),
+  });
+  let calls = 0;
+  window.electronAPI.transcribeAudioFileByok = async (options) => {
+    calls++;
+    assert.equal(options.apiKey, "");
+    assert.equal(options.model, "prisma-v2.5");
+    assert.equal(options.gnaniKeyGeneration, 8);
+    assert.deepEqual(options.gnaniOwner, owner);
+    assert.equal(options.numSpeakers, 2);
+    assert.equal(options.diarize, true);
+    return { success: true, text: "Hello", diarized: true, durationSeconds: 33 };
+  };
+  const speakers = { enabled: true, localModelsReady: false, numSpeakers: 2 };
+  const result = await transcribeFileWithSpeakers("/tmp/meeting.wav", cfg, speakers);
+  assert.equal(result.durationSeconds, 33);
+  usePolicyStore.setState({ accountId: "bob" });
+  const stale = await transcribeFileWithSpeakers("/tmp/meeting.wav", cfg, speakers);
+  assert.equal(stale.code, "AUTH_CONTEXT_CHANGED");
+  assert.equal(calls, 1);
+});
+
 test("timestamps opt-in reaches the BYOK IPC call and segments flow back", async (t) => {
   const { window } = installBrowserGlobals(t);
   const vite = await createRendererServer(t, {

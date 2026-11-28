@@ -123,6 +123,17 @@ const REALTIME_TOKEN_PROVIDERS = {
     return duplicate(streams, apiKey);
   },
 
+  "gnani-realtime": async ({ environmentManager }, options, streams) => {
+    if (options.mode !== "byok") throw new Error("GnaniAI requires a personal API key");
+    const apiKey = environmentManager.getGnaniKey();
+    if (!apiKey) {
+      throw Object.assign(new Error("No GnaniAI API key configured. Add your key in Settings."), {
+        code: "NO_API",
+      });
+    }
+    return duplicate(streams, apiKey);
+  },
+
   "openai-realtime": async ({ environmentManager, postServerToken }, options, streams) => {
     if (options.mode === "byok") {
       const apiKey = environmentManager.getOpenAIKey();

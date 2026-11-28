@@ -134,6 +134,31 @@ async function installMuteHarness(t, { connection, withDom = false } = {}) {
 const speech = () => new Int16Array([1200, -900, 3000, -2500]).buffer;
 const isSilent = (buffer) => new Int16Array(buffer).every((sample) => sample === 0);
 
+test("Gnani meeting stop sends the final worklet samples before committing", async (t) => {
+  const { workletPorts, sent, store } = await installMuteHarness(t);
+  const api = globalThis.window.electronAPI;
+  const start = api.meetingTranscriptionStart;
+  api.meetingTranscriptionStart = async (...args) => ({
+    ...(await start(...args)),
+    writeGuard: { accountId: null, authGeneration: 1 },
+  });
+  assert.equal(await store.startRecording(START_ARGS), true);
+  const [port] = workletPorts;
+  const tail = speech();
+  port.postMessage = (command) => {
+    assert.equal(command, "stop");
+    queueMicrotask(() => {
+      port.onmessage({ data: tail });
+      port.onmessage({ data: "flushed" });
+    });
+  };
+  api.meetingTranscriptionStop = async () => {
+    assert.deepEqual(sent, [{ chunk: tail, source: "mic" }]);
+    return { success: true };
+  };
+  await store.stopRecording();
+});
+
 test("muting disables the mic track and sends silence in its place", async (t) => {
   const { mics, workletPorts, sent, store } = await installMuteHarness(t);
 

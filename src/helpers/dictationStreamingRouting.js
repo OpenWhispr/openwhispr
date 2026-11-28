@@ -4,8 +4,9 @@
 // call sites is what broke default dictation in 1.8.2 (#1624: the
 // openai-realtime entry never sent `provider`, and the hardened main-process
 // allowlist rejected undefined). Pure module, mirrors meetingTranscriptionRouting.
+import { getEffectiveDictionaryWords } from "../utils/snippets.ts";
 import { isOrukeetStreaming, isSelfHostedTranscription } from "./selfHostedTranscription.js";
-import { isStreamingOnlySelection } from "./transcriptionRoute.ts";
+import { isStreamingOnlySelection, resolveByokModel } from "./transcriptionRoute.ts";
 import { registryData as modelRegistryData, subscribeRegistry } from "../models/registryData.js";
 import bundledRegistryData from "../models/modelRegistryData.json" with { type: "json" };
 
@@ -206,6 +207,12 @@ export function resolveStreamingProviderName({ settings, context, sttConfig, lan
   ) {
     return "corti";
   }
+  if (
+    context === "dictation" &&
+    settings.cloudTranscriptionMode === "byok" &&
+    settings.cloudTranscriptionProvider === "gnani"
+  )
+    return "gnani";
   if (isGeminiLiveSelection(settings)) {
     return "gemini";
   }
@@ -253,6 +260,13 @@ export function buildStreamingSessionOptions({
     environment: settings.cortiEnvironment,
     tenant: settings.cortiTenant,
   };
+  if (providerName === "gnani") {
+    // A model left over from another provider resolves as the batch fallback's does.
+    options.model = resolveByokModel("gnani", options.model);
+    options.keyterms =
+      options.model === "prisma-v3.0" ? getEffectiveDictionaryWords(settings) : undefined;
+    options.preview = !voiceAgentRequested;
+  }
   // Tinfoil realtime shows the live preview for normal dictation (#1120), but
   // assistant voice skips it because the agent window owns that surface.
   if (providerName === "tinfoil-realtime" && !voiceAgentRequested) {

@@ -945,6 +945,10 @@
     }
   },
   "transcription": {
+    "gnani": {
+      "voicePreview": "Gnani-Sprachvorschau",
+      "voicePreviewFailed": "Die Gnani-Sprachvorschau konnte nicht abgespielt werden. Versuche es erneut."
+    },
     "modelCard": "Modellkarte",
     "deleteModel": {
       "title": "Modell löschen",
@@ -3577,6 +3581,8 @@
         "groq_whisper_large_v3_turbo": "216x Echtzeitgeschwindigkeit",
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
         "gemini_3_5_transcribe": "Googles Gemini-Spracherkennung",
+        "gnani_prisma_v3": "Automatische Spracherkennung, gemischte Sprachen und Wörterbuchhinweise",
+        "gnani_prisma_v2_5": "Transkription in einer Sprache. Bei automatischer Auswahl wird indisches Englisch verwendet.",
         "elevenlabs_scribe_v3": "Präziseste mehrsprachige Transkription",
         "elevenlabs_scribe_v2": "Präzise mehrsprachige Transkription",
         "elevenlabs_scribe_v3_live": "Live-Transkription für Notizaufnahmen",
@@ -4779,6 +4785,7 @@
       "internalAttendeesConfirm": "Ja, starten",
       "recordingDisabledByOrg": "Die Aufzeichnung von Besprechungen wurde von Ihrer Organisation deaktiviert.",
       "stoppedAccountChanged": "Die Aufnahme wurde beendet, weil Sie sich abgemeldet oder das Konto gewechselt haben.",
+      "stoppedGnaniKeyChanged": "Die Aufnahme wurde beendet, weil sich der GnaniAI-API-Schlüssel geändert hat.",
       "stoppedPolicyUnresolved": "Die Aufnahme wurde beendet, weil die Einstellungen Ihrer Organisation nicht geprüft werden konnten.",
       "stoppedWorkspaceChanged": "Die Aufnahme wurde beendet, weil Sie den Workspace gewechselt haben.",
       "recordingCopy": {

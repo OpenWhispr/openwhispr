@@ -3,6 +3,28 @@
 // model-registry/ lists one, remove it below.
 const APP_TRANSCRIPTION_PROVIDERS = [
   {
+    id: "gnani",
+    name: "GnaniAI",
+    baseUrl: "https://api.vachana.ai",
+    defaultModel: "prisma-v3.0",
+    models: [
+      {
+        id: "prisma-v3.0",
+        name: "Prisma v3.0",
+        description: "Automatic language detection, mixed speech and dictionary hints",
+        descriptionKey: "models.descriptions.transcription.gnani_prisma_v3",
+        streaming: true,
+      },
+      {
+        id: "prisma-v2.5",
+        name: "Prisma v2.5",
+        description: "Single-language transcription. Auto uses Indian English.",
+        descriptionKey: "models.descriptions.transcription.gnani_prisma_v2_5",
+        streaming: true,
+      },
+    ],
+  },
+  {
     id: "elevenlabs",
     name: "ElevenLabs",
     baseUrl: "https://api.elevenlabs.io/v1",
