@@ -16,6 +16,7 @@ import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
 import { InferenceModeSelector } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import ReasoningModelSelector from "../ReasoningModelSelector";
+import AiPassCleanupSettings from "./AiPassCleanupSettings";
 import EnterpriseSection from "../EnterpriseSection";
 import OpenAICompatiblePanel from "../OpenAICompatiblePanel";
 import { Toggle } from "../ui/toggle";
@@ -70,6 +71,9 @@ export default function InferenceConfigEditor({
         : resolved;
     })
   );
+  const aiPassAvailable = scope === "dictationCleanup" && policyState.status === "unmanaged";
+  const aiPassModel = useSettingsStore((s) => (aiPassAvailable ? s.aiPassCleanupModel : ""));
+  const setAiPassModel = useSettingsStore((s) => s.setAiPassCleanupModel);
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
   const keepLocalModelLoaded = useSettingsStore((s) => s.keepLocalModelLoaded);
   const setKeepLocalModelLoaded = useSettingsStore((s) => s.setKeepLocalModelLoaded);
@@ -139,6 +143,7 @@ export default function InferenceConfigEditor({
         return;
       }
       if (mode === effectiveMode) return;
+      if (scope === "dictationCleanup") setAiPassModel("");
 
       setResolvedLLMConfig(
         scope,
@@ -146,7 +151,16 @@ export default function InferenceConfigEditor({
       );
       onModeChange?.(mode);
     },
-    [scope, config.provider, config.model, effectiveMode, isSignedIn, onModeChange, isModeAllowed]
+    [
+      scope,
+      config.provider,
+      config.model,
+      effectiveMode,
+      isSignedIn,
+      onModeChange,
+      isModeAllowed,
+      setAiPassModel,
+    ]
   );
 
   const setMode = setField("mode");
@@ -175,10 +189,12 @@ export default function InferenceConfigEditor({
     effectiveMode === "providers" &&
     config.provider === "anthropic";
   const showThinkingToggle =
-    !chatSendsNoThinking && offersThinkingToggle(effectiveMode, config.provider, config.model);
+    !(effectiveMode === "providers" && aiPassModel) &&
+    !chatSendsNoThinking &&
+    offersThinkingToggle(effectiveMode, config.provider, config.model);
 
   const effortCapability =
-    effectiveMode === "providers"
+    effectiveMode === "providers" && !aiPassModel
       ? selectableReasoningEffort(config.provider, config.model, config, config.cloudBaseUrl)
       : null;
 
@@ -277,7 +293,14 @@ export default function InferenceConfigEditor({
         />
       )}
 
-      {effectiveMode === "providers" && renderModelSelector("cloud")}
+      {effectiveMode === "providers" && (
+        <>
+          {aiPassAvailable && (
+            <AiPassCleanupSettings model={aiPassModel} onModelChange={setAiPassModel} />
+          )}
+          {!aiPassModel && renderModelSelector("cloud")}
+        </>
+      )}
       {effectiveMode === "local" &&
         (localPickerRef ? (
           <div

@@ -79,6 +79,7 @@ function runOAuthLoopbackFlow({
   callbackPath = "",
   renderResultPage = null,
   publicRedirectUri = null,
+  requireStateOnError = false,
   timeoutMs = OAUTH_TIMEOUT_MS,
   signal = null,
 }) {
@@ -133,9 +134,9 @@ function runOAuthLoopbackFlow({
           return;
         }
 
-        // Behind a relay, an error counts only with this flow's state:
+        // A relay or a caller that requires state accepts only its own error callback:
         // without it, it is a stray request, not the user's answer.
-        if (error && publicRedirectUri && returnedState !== state) {
+        if (error && (publicRedirectUri || requireStateOnError) && returnedState !== state) {
           invalidRequest(res);
           return;
         }

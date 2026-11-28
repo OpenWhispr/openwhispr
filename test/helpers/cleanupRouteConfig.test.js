@@ -4,7 +4,7 @@ const { loadAudioManager } = require("./harness/audioManager");
 
 // Pin both cleanup routes against bridge defaults (local: 0.7, Anthropic/enterprise: 0.3).
 // Only direct Gemini defers to model defaults; stale provider selections must not leak.
-async function loadRouteResolver(t, provider = "test", mode = "providers") {
+async function loadRouteResolver(t, provider = "test", mode = "providers", aiPassModel = "") {
   const { vite } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-cleanup-route-config-test-",
     settingsKey: "__cleanupRouteConfigSettings",
@@ -16,6 +16,9 @@ async function loadRouteResolver(t, provider = "test", mode = "providers") {
         export const isCloudCleanupMode = () => false;
         export const isCloudDictationAgentMode = () => false;
         export const isCloudTranslationMode = () => false;
+      `,
+      "/stores/aiPassCleanupSelection": `
+        export const selectAiPassCleanupModel = () => ${JSON.stringify(aiPassModel)};
       `,
       "/dictationAgentInference": `
         export const resolveDictationAgentInference = () => ({
@@ -107,4 +110,19 @@ test("the agent route keeps its provider defaults", async (t) => {
   assert.equal(route.kind, "agent");
   assert.equal(route.config.temperature, undefined);
   assert.equal(route.config.requireCompleteOutput, undefined);
+});
+
+test("AI Pass uses its own model for ordinary cleanup and leaves the agent route alone", async (t) => {
+  const resolveRoute = await loadRouteResolver(t, "test", "providers", "wallet-model");
+
+  const cleanup = resolveRoute("um lets meet on tuesday");
+  assert.equal(cleanup.kind, "cleanup");
+  assert.equal(cleanup.model, "wallet-model");
+  assert.equal(cleanup.config.provider, "aipass");
+  assert.equal(cleanup.config.inferenceScope, "dictationCleanup");
+
+  const agent = resolveRoute("Open my calendar", { voiceAgentRequested: true });
+  assert.equal(agent.kind, "agent");
+  assert.equal(agent.model, "agent-model");
+  assert.equal(agent.config.provider, "test");
 });

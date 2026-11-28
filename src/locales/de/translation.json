@@ -2603,6 +2603,15 @@
       "customSetup": "Benutzerdefinierte Einrichtung",
       "customSetupDescription": "Verwenden Sie Ihren eigenen Anbieter und API-Schlüssel.",
       "description": "Bereinigt Transkriptionen, verarbeitet Befehle und korrigiert Fehler unter Beibehaltung Ihres Stils.",
+      "aiPass": {
+        "description": "Nutze dein AI Pass Guthaben zur Textbereinigung. Wähle dazu ein Modell.",
+        "connect": "AI Pass verbinden",
+        "disconnect": "AI Pass trennen",
+        "model": "Modell zur Textbereinigung",
+        "otherProviders": "Andere Anbieter verwenden",
+        "error": "AI Pass ist nicht verfügbar. Prüfe deine Verbindung und versuche es erneut.",
+        "disconnectError": "Der Widerruf der AI Pass Tokens konnte nicht bestätigt werden. Prüfe dein AI Pass Konto."
+      },
       "assemblyAiCleanup": {
         "pickerOn": "Die Standardbereinigung ist in AssemblyAI Dictation enthalten.",
         "pickerOff": "Die Textbereinigung ist aus. OpenWhispr fügt den ursprünglichen Wortlaut ein.",

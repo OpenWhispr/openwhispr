@@ -5477,6 +5477,15 @@
       "customSetup": "إعداد مخصص",
       "customSetupDescription": "استخدم المزود ومفتاح API الخاص بك.",
       "description": "تنظيف النصوص المفرَّغة ومعالجة الأوامر وإصلاح الأخطاء مع الحفاظ على أسلوبك.",
+      "aiPass": {
+        "description": "استخدم محفظة AI Pass لتنظيف النص المُملى. اختر نموذجًا للبدء.",
+        "connect": "ربط AI Pass",
+        "disconnect": "قطع اتصال AI Pass",
+        "model": "نموذج تنظيف النص",
+        "otherProviders": "استخدام مزودين آخرين",
+        "error": "خدمة AI Pass غير متاحة. تحقّق من الاتصال وحاول مجددًا.",
+        "disconnectError": "تعذّر تأكيد إلغاء رموز AI Pass. تحقّق من حسابك في AI Pass."
+      },
       "assemblyAiCleanup": {
         "pickerOn": "التنقيح القياسي مضمّن في AssemblyAI Dictation.",
         "pickerOff": "تنقيح النص متوقف. سيلصق OpenWhispr كلماتك الأصلية.",

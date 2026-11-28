@@ -1,3 +1,4 @@
+import { selectAiPassCleanupModel } from "./aiPassCleanupSelection";
 import "../models/registryBootstrap.js";
 import {
   parseSelfHostedSttHeaders,
@@ -1442,6 +1443,8 @@ export interface SettingsState
   setUseCleanupModel: (value: boolean) => void;
   setUseDictationAgent: (value: boolean) => void;
   setCleanupModel: (value: string) => void;
+  aiPassCleanupModel: string;
+  setAiPassCleanupModel: (value: string) => void;
   setCleanupProvider: (value: string) => void;
   setUiLanguage: (language: string) => void;
 
@@ -1872,6 +1875,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   useCleanupModel: readBoolean("useCleanupModel", true),
   useDictationAgent: readBoolean("useDictationAgent", true),
   cleanupModel: readString("cleanupModel", ""),
+  aiPassCleanupModel: readString("aiPassCleanupModel", ""),
   cleanupProvider: readString("cleanupProvider", "openai"),
 
   // Secrets hydrate from main process in initializeSettings, never from localStorage.
@@ -2454,6 +2458,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setUseDictationAgent: createBooleanSetter("useDictationAgent"),
   setCleanupProvider: createStringSetter("cleanupProvider"),
   setCleanupModel: createStringSetter("cleanupModel"),
+  setAiPassCleanupModel: createStringSetter("aiPassCleanupModel"),
 
   // Derived from the active workspace's shared dictionary. The subscription
   // sends main separate copies for auto-learn and local hotwords.
@@ -4082,7 +4087,9 @@ export function getEffectiveCleanupModel() {
   if (selectIsCloudCleanupMode(state)) {
     return "";
   }
-  return selectResolvedLLMConfig(state, "dictationCleanup").model;
+  return (
+    selectAiPassCleanupModel(state) || selectResolvedLLMConfig(state, "dictationCleanup").model
+  );
 }
 
 export function isCloudCleanupMode() {

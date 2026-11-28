@@ -1848,6 +1848,15 @@
       "customSetup": "カスタム設定",
       "customSetupDescription": "独自のプロバイダーと API キーを使用。",
       "description": "文字起こしのクリーンアップ、コマンド処理、エラー修正を行いながら、あなたの話し方を維持します。",
+      "aiPass": {
+        "description": "AI Pass の残高を使って音声入力の文章を整えます。まずモデルを選択してください。",
+        "connect": "AI Pass に接続",
+        "disconnect": "AI Pass の接続を解除",
+        "model": "文章の整形モデル",
+        "otherProviders": "ほかのプロバイダーを使用",
+        "error": "AI Pass を利用できません。接続を確認して、もう一度お試しください。",
+        "disconnectError": "AI Pass のトークンの失効を確認できませんでした。AI Pass アカウントを確認してください。"
+      },
       "assemblyAiCleanup": {
         "pickerOn": "AssemblyAI Dictation には通常の整形が含まれています。",
         "pickerOff": "整形はオフです。OpenWhispr は元の発言を貼り付けます。",

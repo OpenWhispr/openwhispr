@@ -1798,10 +1798,23 @@ export interface ReferralItem {
   first_payment_at: string | null;
 }
 
+type AiPassResult<T> = { ok: true; data: T } | { ok: false };
+
 declare global {
   interface Window {
     commitHeldSpaceDeletes?: () => Promise<void>;
     electronAPI: {
+      aiPassCleanupStatus?: () => Promise<
+        AiPassResult<{ configured: boolean; connected: boolean }>
+      >;
+      connectAiPassCleanup?: () => Promise<AiPassResult<void>>;
+      disconnectAiPassCleanup?: () => Promise<AiPassResult<void>>;
+      listAiPassCleanupModels?: () => Promise<AiPassResult<{ id: string; name: string }[]>>;
+      runAiPassCleanup?: (
+        id: string,
+        input: { model: string; system: string; user: string }
+      ) => Promise<AiPassResult<string>>;
+      cancelAiPassCleanup?: (id: string) => void;
       // Basic window operations
       setOnboardingWindowMode?: (
         mode: "compact" | "expanded" | "local-setup" | "restore"
