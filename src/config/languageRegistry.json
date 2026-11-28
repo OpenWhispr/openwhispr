@@ -52,6 +52,14 @@
       "assemblyai": false
     },
     {
+      "code": "bn",
+      "label": "Bengali",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": true,
+      "parakeet": false,
+      "assemblyai": false
+    },
+    {
       "code": "bs",
       "label": "Bosnian",
       "flag": "\uD83C\uDDE7\uD83C\uDDE6",
@@ -203,6 +211,14 @@
       "instruction": "LANGUAGE CONTEXT: The user's preferred language is Greek. The transcribed text will be in Greek. You MUST write your entire output in Greek while maintaining proper Greek grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
+      "code": "gu",
+      "label": "Gujarati",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": true,
+      "parakeet": false,
+      "assemblyai": false
+    },
+    {
       "code": "he",
       "label": "Hebrew",
       "flag": "\uD83C\uDDEE\uD83C\uDDF1",
@@ -324,6 +340,14 @@
       "assemblyai": false
     },
     {
+      "code": "ml",
+      "label": "Malayalam",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": true,
+      "parakeet": false,
+      "assemblyai": false
+    },
+    {
       "code": "mt",
       "label": "Maltese",
       "flag": "\uD83C\uDDF2\uD83C\uDDF9",
@@ -390,6 +414,14 @@
       "parakeet": true,
       "assemblyai": true,
       "instruction": "LANGUAGE CONTEXT: The user's preferred language is Portuguese. The transcribed text will be in Portuguese. You MUST write your entire output in Portuguese while maintaining proper Portuguese grammar, spelling, and punctuation. If the user naturally uses English words or technical terms within their Portuguese speech, preserve those as-is."
+    },
+    {
+      "code": "pa",
+      "label": "Punjabi",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": true,
+      "parakeet": false,
+      "assemblyai": false
     },
     {
       "code": "ro",
@@ -473,6 +505,14 @@
     {
       "code": "ta",
       "label": "Tamil",
+      "flag": "\uD83C\uDDEE\uD83C\uDDF3",
+      "whisper": true,
+      "parakeet": false,
+      "assemblyai": false
+    },
+    {
+      "code": "te",
+      "label": "Telugu",
       "flag": "\uD83C\uDDEE\uD83C\uDDF3",
       "whisper": true,
       "parakeet": false,

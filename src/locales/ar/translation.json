@@ -283,6 +283,8 @@
         "groq_whisper_large_v3_turbo": "أسرع من الوقت الفعلي بـ216 ضعفًا",
         "mistral_voxtral_mini_latest": "تفريغ سريع متعدد اللغات",
         "gemini_3_5_transcribe": "تحويل الكلام إلى نص من Google Gemini",
+        "gnani_prisma_v3": "اكتشاف اللغة تلقائيًا ودعم الكلام المختلط وتلميحات القاموس",
+        "gnani_prisma_v2_5": "نسخ بلغة واحدة. يستخدم الوضع التلقائي الإنجليزية الهندية.",
         "elevenlabs_scribe_v3": "أدق تفريغ متعدد اللغات",
         "elevenlabs_scribe_v2": "تفريغ دقيق متعدد اللغات",
         "elevenlabs_scribe_v3_live": "تفريغ مباشر لتسجيل الملاحظات",
@@ -3728,6 +3730,7 @@
       "internalAttendeesConfirm": "نعم، ابدأ",
       "recordingDisabledByOrg": "تم تعطيل تسجيل الاجتماعات بواسطة مؤسستك.",
       "stoppedAccountChanged": "توقف التسجيل لأنك سجّلت الخروج أو بدّلت الحساب.",
+      "stoppedGnaniKeyChanged": "توقف التسجيل لأن مفتاح واجهة برمجة تطبيقات GnaniAI تغير.",
       "stoppedPolicyUnresolved": "توقف التسجيل لأنه تعذّر التحقق من إعدادات مؤسستك.",
       "stoppedWorkspaceChanged": "توقف التسجيل لأنك بدّلت مساحة العمل.",
       "recordingCopy": {
@@ -6697,6 +6700,10 @@
     }
   },
   "transcription": {
+    "gnani": {
+      "voicePreview": "معاينة صوت Gnani",
+      "voicePreviewFailed": "تعذّر تشغيل معاينة صوت Gnani. حاول مرة أخرى."
+    },
     "modelCard": "بطاقة النموذج",
     "deleteModel": {
       "title": "حذف النموذج",

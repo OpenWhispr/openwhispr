@@ -945,6 +945,10 @@
     }
   },
   "transcription": {
+    "gnani": {
+      "voicePreview": "Образец голоса Gnani",
+      "voicePreviewFailed": "Не удалось воспроизвести образец голоса Gnani. Попробуйте ещё раз."
+    },
     "modelCard": "Карточка модели",
     "deleteModel": {
       "title": "Удалить модель",
@@ -3577,6 +3581,8 @@
         "groq_whisper_large_v3": "Модель Large v3, быстрая и точная",
         "mistral_voxtral_mini_latest": "Быстрая многоязычная транскрипция",
         "gemini_3_5_transcribe": "Распознавание речи Gemini от Google",
+        "gnani_prisma_v3": "Автоопределение языка, смешанная речь и подсказки из словаря",
+        "gnani_prisma_v2_5": "Распознавание на одном языке. В автоматическом режиме используется индийский английский.",
         "elevenlabs_scribe_v3": "Самая точная многоязычная транскрипция",
         "elevenlabs_scribe_v2": "Точная многоязычная транскрипция",
         "elevenlabs_scribe_v3_live": "Транскрипция в реальном времени для записи заметок",
@@ -4326,6 +4332,7 @@
       "internalAttendeesConfirm": "Да, начать",
       "recordingDisabledByOrg": "Запись встреч отключена вашей организацией.",
       "stoppedAccountChanged": "Запись остановлена, так как вы вышли из аккаунта или сменили его.",
+      "stoppedGnaniKeyChanged": "Запись остановлена из-за изменения ключа API GnaniAI.",
       "stoppedPolicyUnresolved": "Запись остановлена, так как не удалось проверить настройки вашей организации.",
       "stoppedWorkspaceChanged": "Запись остановлена, так как вы сменили рабочее пространство.",
       "recordingCopy": {

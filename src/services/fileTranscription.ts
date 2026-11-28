@@ -1,3 +1,6 @@
+import { getSettings } from "../stores/settingsStore";
+import { getEffectiveDictionaryWords } from "../utils/snippets";
+import { usePolicyStore } from "../stores/policyStore";
 import { refreshEnterpriseIdentityForUse } from "../stores/enterpriseIdentityStore";
 import { withSessionRefresh } from "../lib/auth";
 import {
@@ -10,7 +13,7 @@ import {
   isManagedTranscriptionActive,
 } from "./managedTranscription";
 import { getTranscriptionProviders } from "../models/ModelRegistry";
-import type { LocalTranscriptionProvider } from "../types/electron";
+import type { LocalTranscriptionProvider, NoteWriteGuard } from "../types/electron";
 
 export interface FileTranscriptionResult {
   success: boolean;
@@ -53,11 +56,40 @@ export interface FileTranscriptionConfig {
   cloudTranscriptionBaseUrl: string;
   cloudTranscriptionModel: string;
   language: string;
+  gnaniKeyGeneration?: number;
+  gnaniOwner?: NoteWriteGuard;
+  gnaniKeyterms?: string[];
   cortiEnvironment?: string;
   cortiTenant?: string;
   transcriptionMode?: string;
   remoteTranscriptionUrl?: string;
   remoteTranscriptionModel?: string;
+}
+
+// Pin a whole upload (including queued files and note writes) before conversion
+// or downloading a URL. The key itself stays in the main process.
+export async function snapshotGnaniUpload(
+  config: FileTranscriptionConfig
+): Promise<FileTranscriptionConfig> {
+  if (
+    config.cloudTranscriptionProvider !== "gnani" ||
+    config.useLocalWhisper ||
+    config.isOpenWhisprCloud ||
+    config.transcriptionMode === "self-hosted" ||
+    isManagedTranscriptionActive()
+  )
+    return config;
+  const accountId = usePolicyStore.getState().accountId;
+  const keyterms = getEffectiveDictionaryWords(getSettings());
+  const [generation, owner] = await Promise.all([
+    window.electronAPI.getGnaniKeyGeneration(),
+    window.electronAPI.getNoteWriteGuard!(),
+  ]);
+  if (owner.accountId !== accountId)
+    throw Object.assign(new Error("The account changed. Start the upload again."), {
+      code: "AUTH_CONTEXT_CHANGED",
+    });
+  return { ...config, gnaniKeyGeneration: generation, gnaniOwner: owner, gnaniKeyterms: keyterms };
 }
 
 export interface TranscriptionApiKeys {
@@ -69,6 +101,7 @@ export interface TranscriptionApiKeys {
   tinfoilApiKey: string;
   deepgramApiKey: string;
   assemblyaiApiKey: string;
+  gnaniApiKey: string;
   elevenlabsApiKey: string;
   openrouterApiKey: string;
   customTranscriptionApiKey?: string;
@@ -92,6 +125,8 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
       return keys.deepgramApiKey;
     case "assemblyai":
       return keys.assemblyaiApiKey;
+    case "gnani":
+      return keys.gnaniApiKey;
     case "elevenlabs":
       return keys.elevenlabsApiKey;
     case "openrouter":
@@ -144,6 +179,7 @@ export async function transcribeFile(
     timestamps?: boolean;
     purpose?: "dictation" | "upload";
     durationSeconds?: number;
+    numSpeakers?: number;
   } = {}
 ): Promise<FileTranscriptionResult> {
   // Managed enterprise STT outranks every personal lane, OpenWhispr Cloud and
@@ -152,6 +188,16 @@ export async function transcribeFile(
   if (refresh) await refresh;
   signal?.throwIfAborted();
   const managed = getManagedTranscriptionResolution();
+  if (
+    cfg.gnaniOwner &&
+    (managed || cfg.gnaniOwner.accountId !== usePolicyStore.getState().accountId)
+  ) {
+    return {
+      success: false,
+      code: "AUTH_CONTEXT_CHANGED",
+      error: "The account changed. Start the upload again.",
+    };
+  }
   if (managed?.kind === "error") {
     return {
       success: false,
@@ -204,6 +250,7 @@ export async function transcribeFile(
 
   // Self-hosted fields make the handler route to the configured server
   // (fail-closed on misconfiguration) instead of stale BYOK settings.
+  const gnani = route.transport === "proxied" && route.provider === "gnani";
   return window.electronAPI.transcribeAudioFileByok!({
     filePath,
     requestId: opts.requestId,
@@ -212,7 +259,13 @@ export async function transcribeFile(
     ...(route.transport === "proxied" && route.provider === "assemblyai"
       ? { durationSeconds }
       : {}),
-    apiKey: cfg.getApiKey(),
+    apiKey: gnani ? "" : cfg.getApiKey(),
+    ...(gnani && {
+      gnaniKeyGeneration: cfg.gnaniKeyGeneration,
+      gnaniOwner: cfg.gnaniOwner,
+      keyterms: cfg.gnaniKeyterms ?? getEffectiveDictionaryWords(getSettings()),
+      numSpeakers: opts.numSpeakers,
+    }),
     baseUrl: cfg.cloudTranscriptionBaseUrl,
     model: cfg.cloudTranscriptionModel,
     diarize: diarize || undefined,
@@ -242,6 +295,7 @@ export function shouldUseByokDiarize(
     cfg.transcriptionMode !== "self-hosted" &&
     (cfg.cloudTranscriptionProvider === "openai" ||
       cfg.cloudTranscriptionProvider === "mistral" ||
+      cfg.cloudTranscriptionProvider === "gnani" ||
       cfg.cloudTranscriptionProvider === "elevenlabs")
   );
 }
@@ -322,13 +376,20 @@ export async function transcribeFileWithSpeakers(
       : Promise.resolve(null);
 
   const [transcribed, diar] = await Promise.all([
-    transcribeFile(filePath, cfg, byokDiarize, opts),
+    transcribeFile(filePath, cfg, byokDiarize, {
+      ...opts,
+      numSpeakers: diarization.numSpeakers ?? undefined,
+    }),
     diarizePromise,
   ]);
 
   // The diarizer measures the converted audio, so it covers picked files whose
   // duration the caller never knew. 0/NaN mean "unknown", hence ||.
-  const measuredDuration = durationSeconds || (diar?.success && diar.durationSeconds) || null;
+  const measuredDuration =
+    durationSeconds ||
+    transcribed.durationSeconds ||
+    (diar?.success && diar.durationSeconds) ||
+    null;
   const result = { ...transcribed, durationSeconds: measuredDuration };
 
   if (!result.success || !result.text || !diarization.enabled || result.diarized) return result;

@@ -81,6 +81,13 @@ const BYOK_API_KEYS = [
     storeKey: "assemblyaiApiKey",
   },
   {
+    base: "gnani",
+    env: "GNANI_API_KEY",
+    get: "getGnaniKey",
+    save: "saveGnaniKey",
+    storeKey: "gnaniApiKey",
+  },
+  {
     base: "elevenlabs",
     env: "ELEVENLABS_API_KEY",
     get: "getElevenlabsKey",

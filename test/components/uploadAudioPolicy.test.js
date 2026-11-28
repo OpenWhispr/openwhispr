@@ -80,6 +80,7 @@ for (const phase of ["title", "save"]) {
       isOpenWhisprCloud: false,
       managedActive: false,
       uploadInPieces: false,
+      isGnaniUpload: false,
       isLargeFile: false,
       progressRef: { current: null },
       progressCleanupRef: { current: null },
@@ -161,6 +162,7 @@ test("main policy refusals appear in Spanish upload errors", async (t) => {
       isOpenWhisprCloud: false,
       managedActive: false,
       uploadInPieces: false,
+      isGnaniUpload: false,
       progressRef: { current: null },
       progressCleanupRef: { current: null },
       setInterval: () => 1,
@@ -273,4 +275,14 @@ test("the upload label never names a model the policy won't run", () => {
   );
   assert.equal(label(null, { whisperModel: "small" }), "Whisper · small");
   assert.equal(label(null), "Whisper · base", "a guest's blank still means the engine default");
+  assert.equal(
+    label(null, {
+      useLocalWhisper: false,
+      cloudTranscriptionProvider: "gnani",
+      cloudTranscriptionModel: "whisper-1",
+      getTranscriptionProvider: () => ({ name: "GnaniAI" }),
+      resolveByokModel: require("../../src/helpers/transcriptionRoute.ts").resolveByokModel,
+    }),
+    "GnaniAI · prisma-v3.0"
+  );
 });

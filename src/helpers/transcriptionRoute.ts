@@ -44,6 +44,7 @@ const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 const GEMINI_FILE_SIZE_LIMIT = 14 * 1024 * 1024;
 
 export function byokFileSizeLimit(provider: string): number {
+  if (provider === "gnani") return 5 * 1024 ** 3; // Maximum presigned Batch upload.
   return provider === "gemini" ? GEMINI_FILE_SIZE_LIMIT : BYOK_FILE_SIZE_LIMIT;
 }
 
@@ -175,7 +176,8 @@ export type TranscriptionRoute =
   | { transport: "local" }
   | {
       transport: "proxied";
-      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini" | "assemblyai" | "elevenlabs";
+      provider:
+        "tinfoil" | "mistral" | "xai" | "corti" | "gemini" | "assemblyai" | "elevenlabs" | "gnani";
       model: string | null;
       language?: string;
       sizeCapBytes: number;
@@ -312,6 +314,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
           trimmed === ASSEMBLYAI_DICTATION_MODEL));
     if (matchesProvider) return trimmed;
   }
+  if (provider === "gnani") return "prisma-v3.0";
   if (provider === "groq") return "whisper-large-v3-turbo";
   if (provider === "xai") return "grok-stt";
   if (provider === "mistral") return "voxtral-mini-latest";
@@ -467,7 +470,7 @@ export function resolveTranscriptionRoute({
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
     };
   }
-  if (provider === "gemini" || provider === "elevenlabs") {
+  if (provider === "gemini" || provider === "elevenlabs" || provider === "gnani") {
     return {
       transport: "proxied",
       provider,

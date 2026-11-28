@@ -19,12 +19,15 @@ const sliceBetween = (startMarker, endMarker) => {
   return source.slice(start, end);
 };
 
-function harness({ systemAudioHeard = false } = {}) {
+function harness({ systemAudioHeard = false, provider } = {}) {
   let now = 1_000_000;
   const events = [];
   const handlers = {};
+  const owner = {};
   const context = {
     Buffer,
+    meetingConnectionOptions: { provider },
+    meetingConnectionWin: { webContents: owner },
     meetingSystemAudioHeard: systemAudioHeard,
     meetingSystemAudioHandover: createMeetingSystemAudioHandover({ now: () => now }),
     meetingSystemAudioWatchdog: { detachCapture: () => events.push("detach") },
@@ -53,7 +56,8 @@ function harness({ systemAudioHeard = false } = {}) {
   return {
     events,
     degrade: context.degrade,
-    sendRenderer: (buffer) => handlers["meeting-transcription-send"]({}, buffer, "system"),
+    sendRenderer: (buffer, sender = owner) =>
+      handlers["meeting-transcription-send"]({ sender }, buffer, "system"),
     advance: (ms) => {
       now += ms;
     },
@@ -89,5 +93,13 @@ test("renderer chunks pass straight through when no helper handover is pending",
 
   sendRenderer(AUDIBLE);
 
+  assert.deepEqual(events, ["send:system"]);
+});
+
+test("only the recording window supplies system audio to a Gnani meeting", () => {
+  const { events, sendRenderer } = harness({ provider: "gnani-realtime" });
+  sendRenderer(AUDIBLE, {});
+  assert.deepEqual(events, []);
+  sendRenderer(AUDIBLE);
   assert.deepEqual(events, ["send:system"]);
 });

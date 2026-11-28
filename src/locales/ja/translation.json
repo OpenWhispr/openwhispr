@@ -945,6 +945,10 @@
     }
   },
   "transcription": {
+    "gnani": {
+      "voicePreview": "Gnani の音声プレビュー",
+      "voicePreviewFailed": "Gnani の音声プレビューを再生できませんでした。もう一度お試しください。"
+    },
     "modelCard": "モデルカード",
     "deleteModel": {
       "title": "モデルを削除",
@@ -3479,6 +3483,8 @@
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
         "mistral_voxtral_mini_latest": "高速多言語文字起こし",
         "gemini_3_5_transcribe": "GoogleのGemini音声文字起こし",
+        "gnani_prisma_v3": "言語の自動検出、複数言語が混ざった音声、辞書のヒントに対応",
+        "gnani_prisma_v2_5": "単一言語の文字起こし。自動設定ではインド英語を使います。",
         "elevenlabs_scribe_v3": "最も高精度な多言語文字起こし",
         "elevenlabs_scribe_v2": "高精度な多言語文字起こし",
         "elevenlabs_scribe_v3_live": "ノート録音向けのリアルタイム文字起こし",
@@ -4304,6 +4310,7 @@
       "internalAttendeesConfirm": "はい、開始します",
       "recordingDisabledByOrg": "組織によって会議の録音が無効にされています。",
       "stoppedAccountChanged": "サインアウトまたはアカウントの切り替えにより、録音を停止しました。",
+      "stoppedGnaniKeyChanged": "GnaniAI の API キーが変更されたため、録音を停止しました。",
       "stoppedPolicyUnresolved": "組織の設定を確認できなかったため、録音を停止しました。",
       "stoppedWorkspaceChanged": "ワークスペースを切り替えたため、録音を停止しました。",
       "recordingCopy": {

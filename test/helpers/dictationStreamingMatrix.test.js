@@ -21,6 +21,7 @@ const RENDERER_STREAMING_PROVIDERS = [
   "assemblyai",
   "openai-realtime",
   "gemini",
+  "gnani",
   "corti",
   "tinfoil-realtime",
 ];
@@ -316,6 +317,32 @@ test("tinfoil realtime does not request the main-side preview for a voice-assist
     voiceAgentRequested: true,
   });
   assert.equal(options.preview, undefined);
+});
+
+test("both Prisma models stream with personal credentials, recover stale IDs and gate dictionary hints", async () => {
+  const { resolveStreamingProviderName, buildStreamingSessionOptions } = await loadRouting();
+  for (const [saved, model] of [
+    ["stale", "prisma-v3.0"],
+    ["prisma-v2.5", "prisma-v2.5"],
+  ]) {
+    const settings = settingsWith({
+      cloudTranscriptionProvider: "gnani",
+      cloudTranscriptionMode: "byok",
+      cloudTranscriptionModel: saved,
+      customDictionary: ["OpenWhispr"],
+    });
+    const providerName = resolveStreamingProviderName({ settings, context: "dictation" });
+    assert.equal(providerName, "gnani");
+    const opts = buildStreamingSessionOptions({
+      providerName,
+      settings,
+      language: "hi",
+      keyterms: [],
+    });
+    assert.equal(opts.model, model);
+    assert.equal(opts.mode, "byok");
+    assert.deepEqual(opts.keyterms, model === "prisma-v3.0" ? ["OpenWhispr"] : undefined);
+  }
 });
 
 test("options: corti carries environment and tenant; auto language is omitted", async () => {

@@ -186,7 +186,7 @@ function runFFmpegConversion(args, outputPath, { signal } = {}) {
 }
 
 function convertToWav(inputPath, outputPath, options = {}) {
-  const { sampleRate = 16000, channels = 1, signal } = options;
+  const { sampleRate = 16000, channels = 1, signal, maxDurationSeconds } = options;
 
   debugLogger.debug("Converting audio with FFmpeg", {
     input: inputPath,
@@ -196,7 +196,27 @@ function convertToWav(inputPath, outputPath, options = {}) {
   });
 
   return runFFmpegConversion(
-    ["-i", inputPath, "-ar", String(sampleRate), "-ac", String(channels), "-c:a", "pcm_s16le"],
+    [
+      "-i",
+      inputPath,
+      ...(maxDurationSeconds
+        ? ["-t", String(maxDurationSeconds), "-vn", "-map_metadata", "-1"]
+        : []),
+      "-ar",
+      String(sampleRate),
+      "-ac",
+      String(channels),
+      "-c:a",
+      "pcm_s16le",
+    ],
+    outputPath,
+    { signal }
+  );
+}
+
+function convertToFlac(inputPath, outputPath, { signal } = {}) {
+  return runFFmpegConversion(
+    ["-i", inputPath, "-vn", "-map_metadata", "-1", "-c:a", "flac"],
     outputPath,
     { signal }
   );
@@ -556,6 +576,7 @@ module.exports = {
   convertToWav,
   convertBufferToWav,
   convertToMp3,
+  convertToFlac,
   splitAudioFile,
   parseFfmpegDuration,
   wavToFloat32Samples,

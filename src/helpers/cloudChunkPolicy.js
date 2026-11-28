@@ -129,7 +129,7 @@ function assembleChunkTranscript(
   results,
   segmentDurationSeconds,
   totalDurationSeconds,
-  { preserveWhitespace = false } = {}
+  { preserveWhitespace = false, chunkBoundaries } = {}
 ) {
   const pieces = [];
   for (let i = 0; i < results.length; i++) {
@@ -140,10 +140,10 @@ function assembleChunkTranscript(
     }
     const gapStart = i;
     while (i + 1 < results.length && results[i + 1] == null) i++;
-    const gapEnd = (i + 1) * segmentDurationSeconds;
+    const gapEnd = chunkBoundaries?.[i + 1] ?? (i + 1) * segmentDurationSeconds;
     pieces.push(
       i18nMain.t("transcript.missingAudio", {
-        from: formatTimestamp(gapStart * segmentDurationSeconds),
+        from: formatTimestamp(chunkBoundaries?.[gapStart] ?? gapStart * segmentDurationSeconds),
         to: formatTimestamp(
           Number.isFinite(totalDurationSeconds) && totalDurationSeconds > 0
             ? Math.min(gapEnd, totalDurationSeconds)

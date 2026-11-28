@@ -142,6 +142,16 @@ function syncSenderAccount(accountId, authGeneration) {
     ? accountId
     : null;
 }
+// A long-running meeting can span a bearer refresh for the same validated
+// account. Its delayed writes still use an atomic guard for the current bearer.
+function meetingNoteWriteGuard(owner, activeAccountId) {
+  if (!owner || owner.accountId !== activeAccountId) return null;
+  const generation = tokenStore.getState().generation;
+  if (owner.authGeneration === generation) return owner;
+  return owner.accountId && syncSenderAccount(owner.accountId, generation)
+    ? { accountId: owner.accountId, authGeneration: generation }
+    : null;
+}
 // A workspace id from the renderer: a non-empty string, or null for none.
 // The note queues a sync pass reads (DatabaseManager.getPendingNotes).
 const SYNC_NOTE_QUEUES = new Set([null, undefined, "private", "team", "syncable"]);
@@ -218,6 +228,8 @@ const {
   resolveGeminiLiveModel,
 } = require("./geminiLiveStreaming");
 const CortiStreaming = require("./cortiStreaming");
+const { transcribeGnaniRecording, transcribeGnaniFile } = require("./gnaniTranscription");
+const { GnaniRealtimeStreaming } = require("./gnaniRealtimeStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { getCortiToken } = require("./cortiAuth");
 const { ONBOARDING_DEMO_KINDS, ONBOARDING_DEMO_STATUSES } = require("./onboardingInputPolicy");
@@ -2105,7 +2117,62 @@ class IPCHandlers {
 
   setupHandlers() {
     this._remoteStreamPolicies = new Map();
+    // One pill recording owns both its socket and its optional whole-audio upload.
+    // Closing the socket is a normal step before fallback and doesn't release this owner.
+    let gnaniCapture = null;
+    let gnaniKeyGeneration = 0;
+    let gnaniKeyController = new AbortController();
+    let dictationRecordingOwner = null;
+    const { runAbortableOperation } = require("./enterpriseProviderErrors");
+    const changedDictationAccount = () =>
+      Object.assign(new Error("Authentication context changed during dictation"), {
+        code: "AUTH_CONTEXT_CHANGED",
+      });
+    const ownsGnaniAccount = (capture) =>
+      capture.accountId === this.effectivePolicyManager.getCurrent().accountId &&
+      capture.databaseAccountId === this.databaseManager?.activeAccountId;
+    const changedGnaniCredential = () =>
+      Object.assign(new Error("The GnaniAI API key changed during the request."), {
+        code: "PROVIDER_CREDENTIAL_CHANGED",
+      });
+    const gnaniKeyForGeneration = (generation) => {
+      if (generation !== undefined && generation !== gnaniKeyGeneration)
+        throw changedGnaniCredential();
+      return this.environmentManager.getGnaniKey();
+    };
+    const cancelledDictation = () =>
+      Object.assign(createAbortError("Cancelled"), { code: "TRANSCRIPTION_CANCELLED" });
+    const retireGnaniCapture = (reason) => {
+      const capture = gnaniCapture;
+      if (!capture) return;
+      if (reason.code !== "PROVIDER_CREDENTIAL_CHANGED") {
+        gnaniCapture = null;
+        capture.unwatch();
+      }
+      capture.controller.abort(reason);
+      if (capture.streaming && this._dictationStreaming === capture.streaming) {
+        retireStreaming(capture.streaming);
+        this._dictationStreaming = null;
+        if (this._dictationPreviewEnabled) {
+          this.windowManager.hideTranscriptionPreview();
+          this._dictationPreviewEnabled = false;
+        }
+        const registration = this._remoteStreamPolicies.get("_dictationStreaming");
+        if (!registration?.pending && registration?.streaming === capture.streaming)
+          this._remoteStreamPolicies.delete("_dictationStreaming");
+      }
+      if (dictationRecordingOwner === capture) dictationRecordingOwner = null;
+      if (reason.code !== "TRANSCRIPTION_CANCELLED" && !capture.sender.isDestroyed?.()) {
+        capture.sender.send("dictation-realtime-error", {
+          code: reason.code,
+          error: reason.message,
+          gnaniCaptureId: capture.id,
+        });
+      }
+    };
     this._retireAccountProductStreams = (accountId) => {
+      if (gnaniCapture && gnaniCapture.accountId === accountId)
+        retireGnaniCapture(changedDictationAccount());
       this.googleCalendarManager?.stop();
       this.microsoftCalendarManager?.stop();
       this._remoteCalendarsStarted = false;
@@ -2147,14 +2214,23 @@ class IPCHandlers {
         productOperationAllowed(policy, app.getVersion(), operation.channel, operation.args)
       );
     };
-    const createProductHandler = (channel, handler, remote = false) => {
+    const createProductHandler = (channel, handler, remote = false, ownerSignal) => {
       return async (event, ...args) => {
         const startedPolicy = this.effectivePolicyManager.getCurrent();
         const operation = { channel, args, remote, accountId: startedPolicy.accountId };
+        if (
+          channel === "proxy-gnani-transcription" ||
+          channel === "gnani-voice-preview" ||
+          (channel === "retry-transcription" && args[1]?.cloudTranscriptionProvider === "gnani") ||
+          (channel === "transcribe-audio-file-byok" && args[0]?.provider === "gnani")
+        ) {
+          operation.gnaniKeyGeneration = gnaniKeyGeneration;
+        }
         // Only the pill's live request belongs to its Cancel button. History and file
         // uploads can later use the same provider through their own IPC channels.
         if (
           channel === "proxy-assemblyai-transcription" ||
+          channel === "proxy-gnani-transcription" ||
           channel === "proxy-elevenlabs-transcription"
         )
           operation.liveDictationSenderId = event.sender.id;
@@ -2185,7 +2261,12 @@ class IPCHandlers {
           !args[0]?.public &&
           args[0]?.method?.toUpperCase() === "POST" &&
           args[0]?.path === "/api/conversations/create";
-        const streamProperty = channel.startsWith("dictation-realtime-")
+        // Gnani warms only the renderer's microphone. An idle socket may still
+        // belong to the previous provider and retain its own policy registration.
+        const ownsDictationStream =
+          channel.startsWith("dictation-realtime-") &&
+          !(channel === "dictation-realtime-warmup" && args[0]?.provider === "gnani");
+        const streamProperty = ownsDictationStream
           ? "_dictationStreaming"
           : /^(assemblyai|deepgram|gemini|corti)-streaming-(start|warmup)$/.test(channel)
             ? {
@@ -2197,23 +2278,40 @@ class IPCHandlers {
             : null;
         let streamPolicy;
         const controller = new AbortController();
-        operation.signal = controller.signal;
+        const signal = ownerSignal
+          ? AbortSignal.any([controller.signal, ownerSignal])
+          : controller.signal;
+        operation.signal = signal;
         const interrupted = () =>
-          controller.signal.reason?.code === "TRANSCRIPTION_CANCELLED"
-            ? { success: false, error: "Cancelled", code: "TRANSCRIPTION_CANCELLED" }
+          [
+            "TRANSCRIPTION_CANCELLED",
+            "AUTH_CONTEXT_CHANGED",
+            "PROVIDER_CREDENTIAL_CHANGED",
+          ].includes(signal.reason?.code)
+            ? { success: false, ...ipcErrorFields(signal.reason) }
             : policyBlockedFailure(this.effectivePolicyManager.getCurrent());
         this._productRequests.set(controller, operation);
         try {
           void this.refreshEffectivePolicy(event);
-          if (operation.remote && this.effectivePolicyManager.getCurrent().status === "loading")
-            await awaitVerdict(event);
+          if (operation.remote && this.effectivePolicyManager.getCurrent().status === "loading") {
+            if (ownerSignal) {
+              try {
+                await runAbortableOperation(() => awaitVerdict(event), signal);
+              } catch (error) {
+                if (signal.aborted) return interrupted();
+                throw error;
+              }
+            } else await awaitVerdict(event);
+          }
           if (
-            controller.signal.aborted ||
+            signal.aborted ||
             this.effectivePolicyManager.getCurrent().accountId !== operation.accountId ||
             !mayStart(operation)
           )
             return interrupted();
           if (streamProperty) {
+            if (channel === "dictation-realtime-warmup" && dictationRecordingOwner)
+              return { success: true, alreadyWarm: true };
             const previousStreamPolicy = this._remoteStreamPolicies.get(streamProperty);
             if (
               previousStreamPolicy?.pending &&
@@ -2234,7 +2332,7 @@ class IPCHandlers {
           if (operation.preserveCreateReceipt && result?.success) return result;
           let snapshot = this.effectivePolicyManager.getCurrent();
           if (
-            !controller.signal.aborted &&
+            !signal.aborted &&
             snapshot.status === "loading" &&
             snapshot.deviceReady &&
             snapshot.accountId === operation.accountId &&
@@ -2250,7 +2348,7 @@ class IPCHandlers {
               error: "Authentication context changed during the request",
             };
           }
-          if (controller.signal.aborted) return interrupted();
+          if (signal.aborted) return interrupted();
           if (operation.dictationCleanupSignal?.aborted)
             return { success: false, ...ipcErrorFields(operation.dictationCleanupSignal.reason) };
           if (
@@ -2275,7 +2373,7 @@ class IPCHandlers {
             const snapshot = this.effectivePolicyManager.getCurrent();
             if (
               operation.streaming &&
-              (controller.signal.aborted ||
+              (signal.aborted ||
                 !runningOperationAllowed(
                   snapshot,
                   operation.accountId,
@@ -2386,15 +2484,32 @@ class IPCHandlers {
         !Number.isSafeInteger(guard.authGeneration) ||
         guard.accountId !== this.databaseManager.activeAccountId ||
         guard.authGeneration !== tokenStore.getState().generation);
+    const currentNoteWriteGuard = () => ({
+      accountId: this.databaseManager.activeAccountId,
+      authGeneration: tokenStore.getState().generation,
+    });
     // Each handler takes at most one renderer argument, so the job's signal
     // always lands after it and can't be supplied by the renderer. onRefused
     // hears a refusal of work that did not go ahead, with that argument.
     const handleAudioFeature = (channel, purpose, handler, onRefused) =>
-      ipcMain.handle(channel, (event, options) =>
-        this._audioFeaturePolicy.run(event, purpose, (signal) => handler(event, options, signal), {
-          onRefused: onRefused && ((failure) => onRefused(failure, options)),
-        })
-      );
+      ipcMain.handle(channel, (event, options) => {
+        if (channel === "meeting-transcription-start" && options?.provider === "gnani-realtime") {
+          options = {
+            ...options,
+            gnaniKeyGeneration,
+            gnaniAccountId: this.effectivePolicyManager.getCurrent().accountId,
+            gnaniNoteOwner: currentNoteWriteGuard(),
+          };
+        }
+        return this._audioFeaturePolicy.run(
+          event,
+          purpose,
+          (signal) => handler(event, options, signal),
+          {
+            onRefused: onRefused && ((failure) => onRefused(failure, options)),
+          }
+        );
+      });
     const auditMeetingRefusal = ({ code }, trigger, noteId) =>
       this.meetingAuditLog?.recordingRefused({ noteId, trigger, reason: code });
     // Runs a job under the audio policy and the caller's own cancellation
@@ -2697,6 +2812,14 @@ class IPCHandlers {
       const result = this.environmentManager[saver](key);
       if (!changed) return result;
       credentialGeneration += 1;
+      if (storeKey === "gnaniApiKey") {
+        gnaniKeyGeneration += 1;
+        gnaniKeyController.abort(changedGnaniCredential());
+        gnaniKeyController = new AbortController();
+        if (gnaniCapture) retireGnaniCapture(changedGnaniCredential());
+        if (this.getMeetingTranscriptionOptions?.()?.provider === "gnani-realtime")
+          this._stopMeetingForPolicy?.("gnaniCredentialChanged");
+      }
       // Notify peers by setting name only; leave the editor's pending input alone.
       for (const win of BrowserWindow.getAllWindows()) {
         if (!win.isDestroyed() && win.webContents.id !== event.sender.id) {
@@ -2706,6 +2829,7 @@ class IPCHandlers {
       return result;
     };
 
+    ipcMain.handle("get-gnani-key-generation", () => gnaniKeyGeneration);
     for (const k of BYOK_API_KEYS) {
       ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
       ipcMain.handle(`save-${k.base}-key`, saveSecretKey(k.get, k.save, k.storeKey));
@@ -3802,6 +3926,12 @@ class IPCHandlers {
       });
       affiliateLinks.setAccountScope(accountId, state.generation);
       const accountChanged = this.databaseManager.activeAccountId !== accountId;
+      if (accountChanged && this.databaseManager.activeAccountId === null) {
+        if (gnaniCapture) retireGnaniCapture(changedDictationAccount());
+        if (this.getMeetingTranscriptionOptions?.()?.provider === "gnani-realtime") {
+          this._stopMeetingForPolicy?.("accountChanged");
+        }
+      }
       // Every window asks again whenever its auth state moves, so most calls repeat the scope
       // this process last applied. A repeat changes nothing below: the claims only find rows
       // written signed out, which can't appear while an account is active (see saveTranscription
@@ -3910,10 +4040,7 @@ class IPCHandlers {
     );
 
     // A tool can wait on folder lookup or a lock before writing; keep its original account.
-    ipcMain.handle("get-note-write-guard", () => ({
-      accountId: this.databaseManager.activeAccountId,
-      authGeneration: tokenStore.getState().generation,
-    }));
+    ipcMain.handle("get-note-write-guard", currentNoteWriteGuard);
 
     // The binding above stops matching as soon as the token rotates, while the
     // database keeps the account until the renderer re-scopes it, so a window
@@ -6999,6 +7126,57 @@ class IPCHandlers {
       })
     );
 
+    const runGnaniRequest = async (event, options, request, expectedGeneration) => {
+      const generation =
+        expectedGeneration ?? this._productRequestContext.getStore().gnaniKeyGeneration;
+      const apiKey = gnaniKeyForGeneration(generation);
+      const renderer = new AbortController();
+      const close = () => renderer.abort();
+      const ownerEvents = ["destroyed", "render-process-gone", "did-start-loading"];
+      for (const name of ownerEvents) event.sender.once?.(name, close);
+      const signal = AbortSignal.any(
+        [options.signal, gnaniKeyController.signal, renderer.signal].filter(Boolean)
+      );
+      try {
+        signal.throwIfAborted();
+        const result = await request({ ...options, apiKey, signal });
+        signal.throwIfAborted();
+        return result;
+      } finally {
+        for (const name of ownerEvents) event.sender.removeListener?.(name, close);
+      }
+    };
+    handleRemoteProduct(
+      "gnani-voice-preview",
+      serializeIpcError((event, text) =>
+        runGnaniRequest(
+          event,
+          { text, fetchImpl: proxyFetch, signal: this._productRequestContext.getStore().signal },
+          require("./gnaniVoicePreview").synthesizeGnaniPreview
+        )
+      )
+    );
+    handleProviderTranscription(
+      "proxy-gnani-transcription",
+      serializeIpcError(
+        async (event, { audioBuffer, model, language, keyterms, gnaniCaptureId }, signal) => {
+          const capture = gnaniCaptureFor(event, gnaniCaptureId);
+          return runGnaniRequest(
+            event,
+            {
+              audioBuffer,
+              model: capture ? capture.model : model,
+              language: capture ? capture.language : language,
+              keyterms: capture ? capture.keyterms : keyterms,
+              signal: capture ? AbortSignal.any([signal, capture.signal]) : signal,
+            },
+            transcribeGnaniRecording,
+            capture?.keyGeneration
+          );
+        }
+      )
+    );
+
     // ElevenLabs Scribe authenticates with xi-api-key and takes model_id /
     // language_code, so it has no OpenAI-compatible path either.
     handleProviderTranscription(
@@ -9880,6 +10058,19 @@ class IPCHandlers {
             apiKey: this.environmentManager.getAssemblyAIKey(),
           });
           result = { text, cleanedText, source: "assemblyai", model: route.model };
+        } else if (route.transport === "proxied" && route.provider === "gnani") {
+          const transcript = await runGnaniRequest(
+            event,
+            {
+              audioBuffer: buffer,
+              model: route.model,
+              language: route.language,
+              keyterms: this._getDictionaryHotwords(),
+              signal,
+            },
+            transcribeGnaniRecording
+          );
+          result = { ...transcript, source: "gnani", model: route.model };
         } else if (route.transport === "proxied" && route.provider === "elevenlabs") {
           // No size check: the cap is the upload screen's, not ElevenLabs', and dictation
           // already sent this recording once at this size.
@@ -10252,7 +10443,7 @@ class IPCHandlers {
         debugLogger.debug(
           "Dropping buffered mic segment after system context confirmed duplicate",
           {
-            text: pending.text.slice(0, 80),
+            ...(pending.logTranscript && { text: pending.text.slice(0, 80) }),
             averageCorrelation: pending.micSuppression?.averageCorrelation?.toFixed(3),
             averageResidual: pending.micSuppression?.averageResidual?.toFixed(3),
           }
@@ -10265,7 +10456,7 @@ class IPCHandlers {
             ? "Releasing bleed-flagged mic segment after holdback (no transcript match)"
             : "Releasing buffered mic segment after duplicate holdback",
           {
-            text: pending.text.slice(0, 80),
+            ...(pending.logTranscript && { text: pending.text.slice(0, 80) }),
             holdbackMs: pending.holdbackMs,
             reason: pending.micSuppression?.reason,
             averageCorrelation: pending.micSuppression?.averageCorrelation?.toFixed(3),
@@ -10313,7 +10504,14 @@ class IPCHandlers {
       return removed;
     };
 
-    const queuePendingMicFinal = ({ text, timestamp, micSuppression, holdbackMs, emit }) => {
+    const queuePendingMicFinal = ({
+      text,
+      timestamp,
+      micSuppression,
+      holdbackMs,
+      emit,
+      logTranscript = true,
+    }) => {
       meetingPendingMicFinals.push({
         text,
         timestamp,
@@ -10321,6 +10519,7 @@ class IPCHandlers {
         holdbackMs,
         releaseAt: Date.now() + holdbackMs,
         emit,
+        logTranscript,
       });
       meetingPendingMicFinals.sort((left, right) => left.releaseAt - right.releaseAt);
       schedulePendingMicFinalFlush();
@@ -10370,9 +10569,13 @@ class IPCHandlers {
     };
 
     const attachMeetingStreamingHandlers = (streaming, win, source) => {
+      const gnaniOptions =
+        meetingConnectionOptions?.provider === "gnani-realtime" ? meetingConnectionOptions : null;
+      const logTranscript = !gnaniOptions;
       // Deepgram's audio range can begin before its first spoken word.
       const timestampIsSpeechStart = !(streaming instanceof DeepgramStreaming);
       const send = (channel, data) => {
+        if (gnaniOptions && isStaleGnaniMeeting(gnaniOptions)) return;
         if (!win || win.isDestroyed()) {
           debugLogger.error("Meeting segment send failed: window unavailable", {
             channel,
@@ -10393,9 +10596,11 @@ class IPCHandlers {
         send("meeting-transcription-segment", { text, source, type: "partial" });
       };
       streaming.onFinalTranscript = (text, timestamp) => {
+        if (gnaniOptions && isStaleGnaniMeeting(gnaniOptions)) return;
         const segments = streaming.completedSegments;
         const latestSegment = segments.length > 0 ? segments[segments.length - 1] : text;
         if (
+          !gnaniOptions &&
           isWrongScriptFragment(latestSegment, fragmentFilterLanguages(meetingConnectionOptions))
         ) {
           debugLogger.debug("Dropping wrong-script meeting fragment", { source });
@@ -10410,7 +10615,9 @@ class IPCHandlers {
               reason: micSuppression.reason,
               averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
               averageResidual: micSuppression.averageResidual?.toFixed(3),
-              text: latestSegment.slice(0, 80),
+              ...(logTranscript && {
+                text: latestSegment.slice(0, 80),
+              }),
             });
             send("meeting-transcription-segment", { text: "", source, type: "partial" });
             return;
@@ -10418,7 +10625,9 @@ class IPCHandlers {
 
           if (shouldSkipDuplicateMicSegment(latestSegment, timestamp, micSuppression)) {
             debugLogger.debug("Skipping duplicate mic segment that matches recent system audio", {
-              text: latestSegment.slice(0, 80),
+              ...(logTranscript && {
+                text: latestSegment.slice(0, 80),
+              }),
               averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
               averageResidual: micSuppression.averageResidual?.toFixed(3),
             });
@@ -10432,7 +10641,9 @@ class IPCHandlers {
           if (pending.length > 0) {
             debugLogger.debug("Dropping buffered mic segments after system transcript arrived", {
               count: pending.length,
-              text: latestSegment.slice(0, 80),
+              ...(logTranscript && {
+                text: latestSegment.slice(0, 80),
+              }),
             });
           }
 
@@ -10449,7 +10660,9 @@ class IPCHandlers {
 
         debugLogger.debug("Meeting segment sending to renderer", {
           source,
-          text: latestSegment.slice(0, 80),
+          ...(logTranscript && {
+            text: latestSegment.slice(0, 80),
+          }),
           segmentCount: segments.length,
           micCorrelation: micSuppression?.averageCorrelation?.toFixed(3),
           micSuppressionReason: micSuppression?.reason,
@@ -10459,13 +10672,16 @@ class IPCHandlers {
         });
         if (source === "mic" && hasRiskyMicDuplicateProfile(micSuppression)) {
           debugLogger.debug("Buffering risky mic segment before renderer commit", {
-            text: latestSegment.slice(0, 80),
+            ...(logTranscript && {
+              text: latestSegment.slice(0, 80),
+            }),
             holdbackMs: STREAMING_RISKY_MIC_SEGMENT_HOLDBACK_MS,
             reason: micSuppression?.reason,
             hasBleedEvidence: micSuppression?.hasBleedEvidence,
           });
           send("meeting-transcription-segment", { text: "", source, type: "partial" });
           queuePendingMicFinal({
+            logTranscript,
             text: latestSegment,
             timestamp,
             micSuppression,
@@ -10979,7 +11195,24 @@ class IPCHandlers {
 
     // `signal` ends a prepare whose account went away: it must not leave warm
     // connections minted for that account behind for the next one to reuse.
+    const isStaleGnaniMeeting = (options) =>
+      options?.provider === "gnani-realtime" &&
+      (options.gnaniKeyGeneration !== gnaniKeyGeneration ||
+        options.gnaniAccountId !== this.effectivePolicyManager.getCurrent().accountId ||
+        options.gnaniNoteOwner.accountId !== this.databaseManager.activeAccountId);
+    const assertGnaniMeetingOwner = (options) => {
+      if (options.provider !== "gnani-realtime") return;
+      if (options.gnaniKeyGeneration !== gnaniKeyGeneration) throw changedGnaniCredential();
+      if (
+        isStaleGnaniMeeting(options) ||
+        !meetingNoteWriteGuard(options.gnaniNoteOwner, this.databaseManager.activeAccountId)
+      )
+        throw Object.assign(new Error("Account changed during meeting transcription"), {
+          code: "AUTH_CONTEXT_CHANGED",
+        });
+    };
     const connectRealtimeStreaming = async (event, options, signal) => {
+      assertGnaniMeetingOwner(options);
       // Read before the key is, so a save during the token fetch marks these connections stale.
       const connectionKey = getMeetingConnectionKey(options, credentialGeneration);
       const StreamingClass = getMeetingStreamingClient(options.provider);
@@ -11006,6 +11239,7 @@ class IPCHandlers {
         ...(await enterpriseMeetingConnectOptions(event, options)),
       };
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
+      assertGnaniMeetingOwner(options);
       let pairs;
       if (systemAudioMode !== "unsupported") {
         const secrets = await fetchRealtimeToken(
@@ -11028,6 +11262,7 @@ class IPCHandlers {
       }
       signal?.throwIfAborted();
 
+      assertGnaniMeetingOwner(options);
       for (const { ref, source } of pairs) {
         this[ref] = new StreamingClass();
         attachMeetingStreamingHandlers(this[ref], win, source);
@@ -11048,6 +11283,7 @@ class IPCHandlers {
         if (pairs.some(({ ref }) => !this[ref]?.isConnected)) {
           throw new Error("Meeting transcription connection closed during startup.");
         }
+        assertGnaniMeetingOwner(options);
         meetingConnectionKey = connectionKey;
       } catch (error) {
         await Promise.all(
@@ -11233,6 +11469,8 @@ class IPCHandlers {
     };
 
     const dispatchMeetingAudioBuffer = (buffer, source, synthetic = false, capturedAt = null) => {
+      if (meetingConnectionOptions?.gnaniNoteOwner && isStaleGnaniMeeting(meetingConnectionOptions))
+        return;
       if (meetingLocalMode) {
         // Local STT timestamps each batch with wall time, not a sample cursor.
         // Large synthetic gaps would dilute speech and inflate the next batch.
@@ -12016,10 +12254,14 @@ class IPCHandlers {
       resetMeetingReconnectAudio();
     };
 
-    const disconnectMeetingStreaming = async ({ flushPending = false } = {}) => {
-      await Promise.all([
-        this._meetingMicStreaming?.disconnect().catch(() => {}),
-        this._meetingSystemStreaming?.disconnect().catch(() => {}),
+    const disconnectMeetingStreaming = async ({ flushPending = false, commit = true } = {}) => {
+      const disconnect = (stream) =>
+        stream instanceof GnaniRealtimeStreaming
+          ? stream.disconnect({ commit }).catch(() => ({ incomplete: true }))
+          : stream?.disconnect().catch(() => {});
+      const results = await Promise.all([
+        disconnect(this._meetingMicStreaming),
+        disconnect(this._meetingSystemStreaming),
       ]);
 
       if (flushPending) {
@@ -12027,6 +12269,7 @@ class IPCHandlers {
       }
 
       resetMeetingStreamingState();
+      return results.some((result) => result?.incomplete);
     };
 
     const clearMeetingSystemAudioSilenceTimer = () => {
@@ -12111,11 +12354,14 @@ class IPCHandlers {
       this.activeMeetingSpeakerConfig = null;
     };
 
-    const setupDictationCallbacks = (streaming, event) => {
-      const isOrukeet = streaming instanceof OrukeetStreaming;
+    const setupDictationCallbacks = (streaming, event, capture) => {
+      const ownsCallbacks =
+        streaming instanceof OrukeetStreaming || streaming instanceof GnaniRealtimeStreaming;
       const canNotify = () =>
-        !event.sender.isDestroyed?.() && (!isOrukeet || this._dictationStreaming === streaming);
-      if (isOrukeet) {
+        !event.sender.isDestroyed?.() &&
+        (!capture || ownsGnaniAccount(capture)) &&
+        (!ownsCallbacks || this._dictationStreaming === streaming);
+      if (streaming instanceof OrukeetStreaming) {
         const ownerGone = () => {
           streaming.disconnect().catch(() => {});
           if (this._dictationStreaming === streaming) this._dictationStreaming = null;
@@ -12124,23 +12370,32 @@ class IPCHandlers {
         streaming.onClose = () => event.sender.removeListener?.("destroyed", ownerGone);
       }
       streaming.onPartialTranscript = (text) => {
+        if (!canNotify()) return;
         event.sender.send("dictation-realtime-partial", text);
         if (this._dictationPreviewEnabled && text) {
           this.windowManager.showTranscriptionPreview(text);
         }
       };
       streaming.onFinalTranscript = (text) => {
-        if (canNotify()) event.sender.send("dictation-realtime-final", text);
+        if (!canNotify()) return;
+        event.sender.send("dictation-realtime-final", text);
+        if (capture && this._dictationPreviewEnabled && text)
+          this.windowManager.showTranscriptionPreview(text);
       };
       streaming.onLanguage = (metadata) => {
         if (canNotify()) event.sender.send("dictation-realtime-language", metadata);
       };
       streaming.onError = (err) => {
         if (!canNotify()) return;
-        event.sender.send("dictation-realtime-error", err.message);
+        const error =
+          capture?.id && err.fatal
+            ? { ...ipcErrorFields(err), gnaniCaptureId: capture.id }
+            : err.message;
+        event.sender.send("dictation-realtime-error", error);
         if (this._dictationPreviewEnabled) this.windowManager.hideTranscriptionPreview();
       };
       streaming.onSessionEnd = (data) => {
+        if (!canNotify()) return;
         event.sender.send("dictation-realtime-session-end", data || {});
         if (this._dictationPreviewEnabled) this.windowManager.hideTranscriptionPreview();
       };
@@ -12153,7 +12408,6 @@ class IPCHandlers {
     // the next recording, so they neither replace this one's connection nor expire
     // it as idle. Other routes cue the user only once connected, so they keep
     // redialling over a warmup.
-    let dictationRecordingActive = false;
     // Only a cancel stops a start in progress: a tap to stop waits for it to settle.
     let dictationStopGeneration = 0;
     const watchedDictationRenderers = new WeakSet();
@@ -12162,7 +12416,7 @@ class IPCHandlers {
       if (watchedDictationRenderers.has(sender)) return;
       watchedDictationRenderers.add(sender);
       const release = () => {
-        dictationRecordingActive = false;
+        if (dictationRecordingOwner?.sender === sender) dictationRecordingOwner = null;
       };
       sender.on("did-start-loading", release);
       sender.once("destroyed", release);
@@ -12177,7 +12431,7 @@ class IPCHandlers {
 
     const startDictationIdleTimer = () => {
       clearDictationIdleTimer();
-      if (dictationRecordingActive) return;
+      if (dictationRecordingOwner) return;
       const idleTimeoutMs =
         this._dictationStreaming instanceof OrukeetStreaming
           ? ORUKEET_IDLE_TIMEOUT_MS
@@ -12213,7 +12467,7 @@ class IPCHandlers {
       ]);
     };
 
-    const connectDictationStreaming = async (event, options) => {
+    const connectDictationStreaming = async (event, options, capture) => {
       // Older renderers did not label the OpenAI dictation adapter. Dictation
       // realtime was OpenAI-only before Tinfoil support, so preserve that
       // established default while requiring new adapters to be explicit.
@@ -12223,9 +12477,17 @@ class IPCHandlers {
       };
 
       if (this._dictationConnectPromise) {
-        await this._dictationConnectPromise.catch(() => {});
+        const previous = this._dictationConnectPromise.catch(() => {});
+        if (capture)
+          await runAbortableOperation(
+            () => previous,
+            this._productRequestContext.getStore().signal
+          );
+        else await previous;
       }
-      ownProductStream(this._dictationStreaming);
+      // A retiring take cannot claim the warmup it was waiting on.
+      if (capture) capture.controller.signal.throwIfAborted();
+      ownProductStream(capture ? null : this._dictationStreaming);
 
       clearDictationIdleTimer();
       this._dictationPreviewEnabled = !!options.preview;
@@ -12249,19 +12511,32 @@ class IPCHandlers {
         const streaming =
           provider === "orukeet"
             ? new OrukeetStreaming(isCloud ? MANAGED_STREAM_OPTIONS : {})
-            : new OpenAIRealtimeStreaming();
+            : provider === "gnani"
+              ? new GnaniRealtimeStreaming()
+              : new OpenAIRealtimeStreaming();
         if (provider === "orukeet")
           streaming.onUsageError = (metadata) =>
             debugLogger.error("Combined cleanup usage could not be recorded", metadata);
-        setupDictationCallbacks(streaming, event);
+        if (capture) capture.streaming = streaming;
+        setupDictationCallbacks(streaming, event, capture);
         // Assign before the token fetch (a real network round trip) so
         // dictation-realtime-send has a live instance to buffer into instead
         // of silently dropping the start of the recording.
-        streaming.beginConnecting();
+        streaming.beginConnecting?.();
         streaming.connectionKey = dictationConnectionKey(options);
         this._dictationStreaming = streaming;
         ownProductStream(streaming);
         try {
+          if (provider === "gnani") {
+            if (isCloud) throw new Error("Gnani dictation requires a personal API key");
+            await streaming.connect({
+              apiKey: gnaniKeyForGeneration(capture?.keyGeneration),
+              model: options.model,
+              language: options.language,
+              keyterms: options.keyterms,
+            });
+            return;
+          }
           if (provider === "orukeet") {
             if (isCloud) {
               await connectManagedOrukeet({
@@ -12313,7 +12588,8 @@ class IPCHandlers {
             });
           }
         } catch (err) {
-          if (provider === "orukeet") await streaming.disconnect().catch(() => {});
+          if (provider === "orukeet" || provider === "gnani")
+            await streaming.disconnect().catch(() => {});
           if (this._dictationStreaming === streaming) this._dictationStreaming = null;
           throw err;
         }
@@ -12339,7 +12615,7 @@ class IPCHandlers {
         return { success: false, error: `Unsupported provider: ${options.provider}` };
       }
 
-      if (options.provider === "local") {
+      if (options.provider === "local" || options.provider === "gnani-realtime") {
         return { success: true };
       }
 
@@ -12601,6 +12877,11 @@ class IPCHandlers {
       )
         return;
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+      if (meetingConnectionOptions?.provider === "gnani-realtime") {
+        if (isStaleGnaniMeeting(meetingConnectionOptions)) return;
+        capturedAt ??=
+          Date.now() - (outboundBuffer.length * 1000) / (2 * MEETING_STREAM_SAMPLE_RATE);
+      }
       // Auto-end judges "is anyone audible" from the raw chunk of either
       // channel, before AEC/holdback/muting can swallow it.
       if (!synthetic) {
@@ -12860,7 +13141,12 @@ class IPCHandlers {
 
     // capturedAt marks audio the renderer held while main connected; it is
     // clamped to the connect window so a renderer can't move the timeline.
-    ipcMain.on("meeting-transcription-send", (_event, audioBuffer, source, capturedAt) => {
+    ipcMain.on("meeting-transcription-send", (event, audioBuffer, source, capturedAt) => {
+      if (
+        meetingConnectionOptions?.provider === "gnani-realtime" &&
+        meetingConnectionWin?.webContents !== event.sender
+      )
+        return;
       const buffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
       if (source === "system") {
         const route = meetingSystemAudioHandover.acceptRendererChunk(buffer);
@@ -12902,7 +13188,11 @@ class IPCHandlers {
         broadcastToWindows("meeting-transcription-error", reason);
       const stopped = meetingTranscriptionLifecycle.stopSession(
         expectedSessionId,
-        reason === "accountChanged" || reason === "workspaceChanged" ? "account-change" : "policy"
+        reason === "gnaniCredentialChanged"
+          ? "error"
+          : reason === "accountChanged" || reason === "workspaceChanged"
+            ? "account-change"
+            : "policy"
       );
       // The renderer still needs this result after its capture cleanup to bind
       // diarization to the resumed note's seed rows.
@@ -12912,7 +13202,7 @@ class IPCHandlers {
       );
     };
 
-    const stopMeetingTranscription = async (expectedSessionId) => {
+    const stopMeetingTranscription = async (expectedSessionId, reason, gnaniNoteOwner) => {
       // Only a *different* live session blocks teardown — it owns the shared
       // capture now. With no engine session (e.g. after quit-path engine stop)
       // the streams below must still be torn down.
@@ -12938,7 +13228,7 @@ class IPCHandlers {
 
         const liveSpeakerState = await stopLiveSpeakerIdentification().catch(() => null);
 
-        const diarizationSessionId = `diar-${Date.now()}`;
+        const diarizationSessionId = `diar-${crypto.randomUUID()}`;
         const diarizationWin = meetingLocalWin || this.windowManager.controlPanelWindow;
 
         if (meetingLocalMode) {
@@ -12983,7 +13273,10 @@ class IPCHandlers {
           return { success: true, transcript, diarizationSessionId };
         }
 
-        await disconnectMeetingStreaming({ flushPending: true });
+        const partialTranscript = await disconnectMeetingStreaming({
+          flushPending: true,
+          commit: !reason || reason === "user" || reason === "auto-end",
+        });
         const {
           diarizationPcmPath,
           diarizationSegments,
@@ -13012,10 +13305,16 @@ class IPCHandlers {
           noteIdSnapshot,
           diarizedSource,
           speakerIndexBaseSnapshot,
-          retractedSegments
+          retractedSegments,
+          ...(gnaniNoteOwner ? [gnaniNoteOwner] : [])
         );
 
-        return { success: true, transcript, diarizationSessionId };
+        return {
+          success: true,
+          transcript,
+          diarizationSessionId,
+          ...(partialTranscript && { partialTranscript: true }),
+        };
       } catch (error) {
         debugLogger.error("Meeting transcription stop error", { error: error.message });
         return { success: false, error: error.message };
@@ -13023,6 +13322,13 @@ class IPCHandlers {
     };
 
     const meetingTranscriptionLifecycle = createMeetingTranscriptionLifecycle({
+      onOwnerLost: (sessionId) => {
+        if (policyMeetingStop?.sessionId !== sessionId) return;
+        // The renderer can disappear while its user-requested stop is draining.
+        for (const stream of [this._meetingMicStreaming, this._meetingSystemStreaming]) {
+          if (stream instanceof GnaniRealtimeStreaming) retireStreaming(stream);
+        }
+      },
       start: async ({
         sessionId,
         ownerWebContents,
@@ -13037,6 +13343,10 @@ class IPCHandlers {
           sessionId,
           ownerWebContents,
           authGeneration,
+          gnaniNoteOwner:
+            transcriptionOptions.provider === "gnani-realtime"
+              ? transcriptionOptions.gnaniNoteOwner
+              : undefined,
           promise: null,
         };
         let result;
@@ -13054,13 +13364,17 @@ class IPCHandlers {
             noteId: transcriptionOptions.noteId,
             trigger: transcriptionOptions.startSource,
           });
-        return result;
+        return result?.success && policyMeetingStop.gnaniNoteOwner
+          ? { ...result, writeGuard: policyMeetingStop.gnaniNoteOwner }
+          : result;
       },
       stop: (sessionId, reason) => {
         this.meetingAuditLog?.recordingStopped({ sessionId, reason });
-        return stopMeetingTranscription(sessionId).finally(() =>
-          this._meetingAdmission.end(sessionId)
-        );
+        return stopMeetingTranscription(
+          sessionId,
+          reason,
+          policyMeetingStop?.gnaniNoteOwner
+        ).finally(() => this._meetingAdmission.end(sessionId));
       },
       onError: (error, sessionId) => {
         debugLogger.error(
@@ -13113,6 +13427,13 @@ class IPCHandlers {
 
     ipcMain.handle("meeting-transcription-stop", async (event, expectedSessionId, reason) => {
       const stopped = policyMeetingStop;
+      if (
+        stopped?.gnaniNoteOwner &&
+        (stopped.ownerWebContents !== event.sender ||
+          !meetingNoteWriteGuard(stopped.gnaniNoteOwner, this.databaseManager.activeAccountId))
+      ) {
+        return { success: false, reason: "stale-session" };
+      }
       if (stopped?.promise && stopped.sessionId === expectedSessionId) {
         if (
           stopped.ownerWebContents !== event.sender ||
@@ -13126,7 +13447,14 @@ class IPCHandlers {
       }
       // "window-lost" and "app-quit" are main's own findings, never the renderer's.
       const rendererReason = ["window-lost", "app-quit"].includes(reason) ? null : reason;
-      return meetingTranscriptionLifecycle.stopSession(expectedSessionId, rendererReason);
+      const result = await meetingTranscriptionLifecycle.stopSession(
+        expectedSessionId,
+        rendererReason
+      );
+      return stopped?.gnaniNoteOwner &&
+        !meetingNoteWriteGuard(stopped.gnaniNoteOwner, this.databaseManager.activeAccountId)
+        ? { success: false, reason: "stale-session" }
+        : result;
     });
 
     ipcMain.handle(
@@ -13153,6 +13481,7 @@ class IPCHandlers {
     const streamingStartFailure = (err) => {
       const result = toPolicyFailure(err);
       if (err.messageKey) result.messageKey = err.messageKey;
+      if (err.surface) Object.assign(result, ipcErrorFields(err));
       if (err.networkCode) result.networkCode = err.networkCode;
       return result;
     };
@@ -13170,11 +13499,10 @@ class IPCHandlers {
       streaming.connectionKey === dictationConnectionKey(options);
 
     const warmupDictationStreaming = async (event, options) => {
+      // Gnani sessions are per recording. The renderer still warms its microphone and worklet.
+      if (options.provider === "gnani") return { success: true };
       await this._dictationConnectPromise?.catch(() => {});
-      if (dictationRecordingActive) {
-        ownProductStream(this._dictationStreaming);
-        return { success: true, alreadyWarm: true };
-      }
+      if (dictationRecordingOwner) return { success: true, alreadyWarm: true };
       if (!isUnusedOrukeetConnection(this._dictationStreaming, options)) {
         await connectDictationStreaming(event, options);
         startDictationIdleTimer();
@@ -13194,62 +13522,193 @@ class IPCHandlers {
       return warmup;
     });
 
-    handleRemoteProduct("dictation-realtime-start", async (event, options = {}) => {
-      const managedOrukeet = options.provider === "orukeet" && options.mode !== "byok";
+    const startDictationStreaming = async (event, options, capture) => {
+      const ownsConnection =
+        options.provider === "gnani" || (options.provider === "orukeet" && options.mode !== "byok");
       const stopGeneration = dictationStopGeneration;
-      if (managedOrukeet) {
-        dictationRecordingActive = true;
-        releaseRecordingWithRenderer(event.sender);
+      const owner = capture ?? { sender: event.sender };
+      if (ownsConnection) {
+        dictationRecordingOwner = owner;
+        if (options.provider !== "gnani") releaseRecordingWithRenderer(event.sender);
       }
       try {
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
         // A warmup still connecting may be the connection this start wants. Managed audio
         // waits in the renderer; other routes need the connection before this tick ends.
-        if (managedOrukeet && this._dictationConnectPromise) {
+        if (ownsConnection && !capture && this._dictationConnectPromise) {
           await this._dictationConnectPromise.catch(() => {});
           if (stopGeneration !== dictationStopGeneration) {
             throw new Error("Dictation start was cancelled");
           }
         }
         if (
+          options.provider === "gnani" ||
           !this._dictationStreaming?.isConnected ||
           this._dictationStreaming.connectionKey !== dictationConnectionKey(options)
         ) {
-          await connectDictationStreaming(event, options);
+          await connectDictationStreaming(event, options, capture);
         }
-        ownProductStream(this._dictationStreaming);
+        if (capture) capture.controller.signal.throwIfAborted();
+        ownProductStream(capture ? capture.streaming : this._dictationStreaming);
         return { success: true };
       } catch (err) {
-        dictationRecordingActive = false;
+        if (dictationRecordingOwner === owner) dictationRecordingOwner = null;
         return streamingStartFailure(err);
       }
+    };
+    const gnaniCaptureFor = (event, captureId) => {
+      if (captureId === undefined) return null;
+      const capture = gnaniCapture;
+      if (
+        !capture ||
+        capture.sender !== event.sender ||
+        capture.id !== captureId ||
+        !ownsGnaniAccount(capture)
+      )
+        throw changedDictationAccount();
+      if (capture.keyGeneration !== gnaniKeyGeneration) throw changedGnaniCredential();
+      capture.signal.throwIfAborted();
+      return capture;
+    };
+    const reserveGnaniCapture = (sender, captureId, options) => {
+      const owner = gnaniCapture ?? dictationRecordingOwner;
+      if (owner && owner.sender !== sender) return;
+      retireGnaniCapture(cancelledDictation());
+      const ownerEvents = ["did-start-loading", "render-process-gone", "destroyed"];
+      const capture = {
+        id: captureId,
+        sender,
+        accountId: this.effectivePolicyManager.getCurrent().accountId,
+        databaseAccountId: this.databaseManager?.activeAccountId,
+        keyGeneration: gnaniKeyGeneration,
+        controller: new AbortController(),
+        pending: true,
+        model: options?.model,
+        language: options?.language,
+        keyterms: options?.keyterms,
+        streaming: null,
+        unwatch: () => {
+          for (const name of ownerEvents) sender.removeListener?.(name, ownerGone);
+        },
+      };
+      const ownerGone = () => {
+        if (gnaniCapture === capture) retireGnaniCapture(cancelledDictation());
+      };
+      capture.signal = capture.controller.signal;
+      gnaniCapture = capture;
+      for (const name of ownerEvents) sender.once?.(name, ownerGone);
+    };
+    // The microphone and fallback recorder open before the socket start. Its
+    // recording ID must already belong to the account during that interval.
+    ipcMain.on("dictation-realtime-reserve", (event, captureId, options) =>
+      reserveGnaniCapture(event.sender, captureId, options)
+    );
+    ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
+      if (options.provider !== "gnani") {
+        if (gnaniCapture && gnaniCapture.sender !== event.sender)
+          return {
+            success: false,
+            code: "TRANSCRIPTION_CANCELLED",
+            error: "Another recording is active",
+          };
+        retireGnaniCapture(cancelledDictation());
+        return createProductHandler(
+          "dictation-realtime-start",
+          startDictationStreaming,
+          true
+        )(event, options);
+      }
+      // Gnani requires the recording reservation that precedes microphone startup.
+      if (typeof options.gnaniCaptureId !== "string")
+        return { success: false, code: "TRANSCRIPTION_CANCELLED", error: "Missing recording ID" };
+      const capture = gnaniCapture;
+      if (
+        !capture ||
+        capture.sender !== event.sender ||
+        capture.id !== options.gnaniCaptureId ||
+        !ownsGnaniAccount(capture)
+      )
+        return { success: false, ...ipcErrorFields(changedDictationAccount()) };
+      try {
+        return await createProductHandler(
+          "dictation-realtime-start",
+          () =>
+            startDictationStreaming(
+              event,
+              {
+                ...options,
+                model: capture.model,
+                language: capture.language,
+                keyterms: capture.keyterms,
+              },
+              capture
+            ),
+          true,
+          capture.controller.signal
+        )(event, options);
+      } finally {
+        capture.pending = false;
+      }
     });
 
-    ipcMain.on("dictation-realtime-send", (_event, buffer) => {
-      this._dictationStreaming?.sendAudio(Buffer.from(buffer));
+    ipcMain.on("dictation-realtime-release", (event, captureId) => {
+      if (gnaniCapture && gnaniCapture.sender === event.sender && gnaniCapture.id === captureId)
+        retireGnaniCapture(cancelledDictation());
     });
 
-    ipcMain.handle("dictation-realtime-finalize", async () => {
-      if (!(this._dictationStreaming instanceof OrukeetStreaming)) {
-        return { success: false, error: "No Orukeet recording is active" };
+    const ownsDictation = (event, captureId) =>
+      gnaniCapture
+        ? gnaniCapture.sender === event.sender &&
+          gnaniCapture.id === captureId &&
+          ownsGnaniAccount(gnaniCapture)
+        : captureId === undefined;
+
+    ipcMain.on("dictation-realtime-send", (event, buffer, captureId) => {
+      if (!ownsDictation(event, captureId)) return;
+      const streaming = gnaniCapture ? gnaniCapture.streaming : this._dictationStreaming;
+      if (streaming === this._dictationStreaming) streaming?.sendAudio(Buffer.from(buffer));
+    });
+
+    ipcMain.handle("dictation-realtime-finalize", async (event, captureId) => {
+      const streaming = gnaniCapture ? gnaniCapture.streaming : this._dictationStreaming;
+      if (
+        !ownsDictation(event, captureId) ||
+        streaming !== this._dictationStreaming ||
+        !streaming?.finalize
+      ) {
+        return { success: false, error: "No realtime recording to finalize" };
       }
       try {
-        return { success: true, ...(await this._dictationStreaming.finalize()) };
+        const result = await streaming.finalize();
+        if (captureId !== undefined) gnaniCaptureFor(event, captureId);
+        return { success: true, ...result };
       } catch (error) {
-        return { success: false, error: error.message };
+        return { success: false, ...ipcErrorFields(error) };
       }
     });
 
-    ipcMain.handle("dictation-realtime-stop", async () => {
+    ipcMain.handle("dictation-realtime-stop", async (event, captureId) => {
+      if (!ownsDictation(event, captureId)) return { success: true, text: "" };
+      if (gnaniCapture?.pending) {
+        retireGnaniCapture(cancelledDictation());
+        return { success: true, text: "" };
+      }
+      if (gnaniCapture && gnaniCapture.streaming !== this._dictationStreaming)
+        return { success: true, text: "" };
       dictationStopGeneration += 1;
-      dictationRecordingActive = false;
+      dictationRecordingOwner = null;
       clearDictationIdleTimer();
       // A policy retirement may already have taken the stream; its preview is still up.
-      const result = this._dictationStreaming
-        ? await this._dictationStreaming.disconnect().catch(() => ({ text: "" }))
+      const streaming = this._dictationStreaming;
+      const result = streaming
+        ? await streaming.disconnect().catch(() => ({ text: "" }))
         : { text: "" };
+      if (captureId !== undefined && !ownsDictation(event, captureId))
+        return { success: false, ...ipcErrorFields(changedDictationAccount()) };
+      if (this._dictationStreaming !== streaming) return { success: true, ...result };
       this._dictationStreaming = null;
+      if (gnaniCapture && gnaniCapture.streaming === streaming) gnaniCapture.streaming = null;
       if (this._dictationPreviewEnabled) {
         this.windowManager.hideTranscriptionPreview();
         this._dictationPreviewEnabled = false;
@@ -14243,6 +14702,10 @@ class IPCHandlers {
           baseUrl,
           model,
           diarize,
+          numSpeakers,
+          gnaniKeyGeneration: expectedGnaniKey,
+          gnaniOwner,
+          keyterms,
           timestamps,
           provider,
           language,
@@ -14318,6 +14781,41 @@ class IPCHandlers {
               model: route.model,
               surface: "transcription",
             };
+
+            if (route.transport === "proxied" && route.provider === "gnani") {
+              providerErrorContext = byokErrorContext;
+              if (isStaleNoteWrite(gnaniOwner)) throw changedDictationAccount();
+              if (fs.statSync(sourcePath).size > route.sizeCapBytes)
+                return { success: false, error: byokSizeCapError(route.sizeCapBytes) };
+              const result = await runGnaniRequest(
+                event,
+                {
+                  filePath: sourcePath,
+                  model: route.model,
+                  language: route.language,
+                  diarize,
+                  numSpeakers,
+                  keyterms: keyterms ?? this._getDictionaryHotwords(),
+                  signal,
+                  onProgress: (percent) =>
+                    event.sender.send("upload-transcription-progress", {
+                      stage: "batch",
+                      requestId,
+                      chunksTotal: 100,
+                      chunksCompleted: percent,
+                    }),
+                },
+                transcribeGnaniFile,
+                expectedGnaniKey
+              );
+              if (!result.text)
+                return {
+                  success: false,
+                  code: "NO_SPEECH_DETECTED",
+                  error: "No speech detected in this audio.",
+                };
+              return { success: true, ...result };
+            }
 
             // OpenRouter's upstream providers stop after ~60 s of work per request,
             // so its uploads go out in 4-minute pieces, cut straight from the source
@@ -16681,15 +17179,19 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("save-note-speaker-embeddings", async (_event, noteId, embeddingsObj) => {
-      const buffers = {};
-      for (const [speakerId, arr] of Object.entries(embeddingsObj)) {
-        buffers[speakerId] = Buffer.from(new Float32Array(arr).buffer);
+    ipcMain.handle(
+      "save-note-speaker-embeddings",
+      async (_event, noteId, embeddingsObj, writeGuard) => {
+        if (isStaleNoteWrite(writeGuard)) return { success: false, error: "Account changed" };
+        const buffers = {};
+        for (const [speakerId, arr] of Object.entries(embeddingsObj)) {
+          buffers[speakerId] = Buffer.from(new Float32Array(arr).buffer);
+        }
+        this.databaseManager.saveNoteSpeakerEmbeddings(noteId, buffers);
+        this._tryAutoLabelOneOnOne(noteId);
+        return { success: true };
       }
-      this.databaseManager.saveNoteSpeakerEmbeddings(noteId, buffers);
-      this._tryAutoLabelOneOnOne(noteId);
-      return { success: true };
-    });
+    );
   }
 
   _retroactiveMapping(profile) {
@@ -17029,8 +17531,18 @@ class IPCHandlers {
     noteId = null,
     diarizedSource = "system",
     speakerIndexBase = 0,
-    retractedSegments = []
+    retractedSegments = [],
+    writeGuard
   ) {
+    const ownsNote = () =>
+      !writeGuard || meetingNoteWriteGuard(writeGuard, this.databaseManager.activeAccountId);
+    if (!ownsNote()) {
+      if (rawPcmPath)
+        require("fs")
+          .promises.unlink(rawPcmPath)
+          .catch(() => {});
+      return;
+    }
     const startMs =
       (Number.isFinite(audioStartedAt) && audioStartedAt) ||
       transcriptSegments.find((segment) => segment.source === diarizedSource)?.timestamp ||
@@ -17061,10 +17573,13 @@ class IPCHandlers {
       ...transcriptSegments.filter((_, index) => isEchoDuplicate(index)),
     ].map(({ text, source, timestamp }) => ({ text, source, timestamp }));
     const send = (payload) => {
-      if (win && !win.isDestroyed()) {
+      if (ownsNote() && win && !win.isDestroyed()) {
         win.webContents.send("meeting-diarization-complete", {
           sessionId,
           noteId,
+          ...(writeGuard && {
+            writeGuard: meetingNoteWriteGuard(writeGuard, this.databaseManager.activeAccountId),
+          }),
           ...payload,
           segments: payload.segments.map(
             ({ timestampIsSpeechStart: _timestampIsSpeechStart, ...segment }) => segment
@@ -17233,6 +17748,7 @@ class IPCHandlers {
           }
         }
 
+        if (!ownsNote()) return;
         const namedVoices = this._reconcileLiveSpeakerState(
           liveSpeakerState,
           speakerEmbeddingsMap,

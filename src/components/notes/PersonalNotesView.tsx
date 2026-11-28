@@ -31,7 +31,6 @@ import {
 import { cn } from "../lib/utils";
 import logger from "../../utils/logger";
 import {
-  parseSeedSegments,
   parseTranscriptSegments,
   speakerlessTranscriptText,
 } from "../../utils/parseTranscriptSegments";
@@ -971,13 +970,12 @@ export default function PersonalNotesView({
       return;
     handledMeetingRequest.current = meetingRecordingRequest;
     const note = activeNote;
-    const seedSegments = parseSeedSegments(note.transcript);
     void handleMeetingRecordingRequest({
       args: {
         noteId: meetingRecordingRequest.noteId,
         noteTitle: note.title,
         folderId: note.folder_id,
-        seedSegments,
+        noteTranscript: note.transcript ?? null,
         recorderName: recordingRecorderName(note, user, t),
         diarizationEnabled:
           note.diarization_enabled == null ? null : note.diarization_enabled === 1,

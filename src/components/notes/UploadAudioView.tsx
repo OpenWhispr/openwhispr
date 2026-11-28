@@ -70,6 +70,7 @@ import {
 import { useBatchQueue } from "../../stores/batchQueueStore";
 import type { TranscribeOptions } from "../../stores/batchQueueStore";
 import {
+  snapshotGnaniUpload,
   transcribeFileWithSpeakers,
   resolveDiarizationSettings,
   shouldUseByokDiarize,
@@ -99,6 +100,7 @@ import {
 } from "../../hooks/usePolicy";
 import {
   byokFileSizeLimit,
+  resolveByokModel,
   resolveTranscriptionRoute,
   uploadsInChunks,
 } from "../../helpers/transcriptionRoute";
@@ -312,6 +314,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     tinfoilApiKey,
     deepgramApiKey,
     assemblyaiApiKey,
+    gnaniApiKey,
     elevenlabsApiKey,
     openrouterApiKey,
     customTranscriptionApiKey,
@@ -374,6 +377,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   // Mode detection
   const isSelfHosted = transcriptionMode === "self-hosted" && !useLocalWhisper;
   const isByok = !useLocalWhisper && !isOpenWhisprCloud;
+  const isGnaniUpload =
+    isByok && !isSelfHosted && !managedActive && cloudTranscriptionProvider === "gnani";
   // OpenRouter uploads (its tab, or a Custom endpoint on its host) go out in
   // 4-minute pieces, so no whole-file cap applies and progress is per piece.
   const uploadInPieces =
@@ -520,6 +525,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 tinfoilApiKey,
                 deepgramApiKey,
                 assemblyaiApiKey,
+                gnaniApiKey,
                 elevenlabsApiKey,
                 openrouterApiKey,
                 customTranscriptionApiKey,
@@ -571,6 +577,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     tinfoilApiKey,
     deepgramApiKey,
     assemblyaiApiKey,
+    gnaniApiKey,
     elevenlabsApiKey,
     openrouterApiKey,
     customTranscriptionApiKey,
@@ -593,16 +600,18 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       const name = t("settingsPage.transcription.modes.selfHosted");
       return remoteTranscriptionModel ? `${name} · ${remoteTranscriptionModel}` : name;
     }
+    const provider = getTranscriptionProvider(cloudTranscriptionProvider);
     const name =
       cloudTranscriptionProvider === "custom"
         ? t("notes.upload.custom")
-        : cloudTranscriptionProvider.charAt(0).toUpperCase() + cloudTranscriptionProvider.slice(1);
+        : (provider?.name ??
+          cloudTranscriptionProvider.charAt(0).toUpperCase() + cloudTranscriptionProvider.slice(1));
+    if (cloudTranscriptionProvider === "gnani")
+      return `${name} · ${resolveByokModel("gnani", cloudTranscriptionModel)}`;
     // Same rule as the upload itself: the batch model replaces only a streaming selection.
     const batchModel = getBatchTranscriptionModel(cloudTranscriptionProvider);
     const selectedId = cloudTranscriptionModel?.trim();
-    const selected = getTranscriptionProvider(cloudTranscriptionProvider)?.models.find(
-      (option) => option.id === selectedId
-    );
+    const selected = provider?.models.find((option) => option.id === selectedId);
     const model = batchModel && (!selected || selected.streaming) ? batchModel : selectedId;
     return `${name} · ${model}`;
   };
@@ -810,21 +819,23 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     // Managed and OpenRouter uploads go out in pieces, and a single piece reports
     // nothing until it is done, so the simulated bar covers it.
     const uploadsPieces = managedActive || uploadInPieces;
-    const useChunkProgress = uploadsPieces || (isOpenWhisprCloud && isLargeFile);
+    const useChunkProgress = uploadsPieces || isGnaniUpload || (isOpenWhisprCloud && isLargeFile);
 
     if (useChunkProgress) {
       progressCleanupRef.current =
         window.electronAPI.onUploadTranscriptionProgress?.((data) => {
+          if (data.requestId && data.requestId !== requestId) return;
           if (data.chunksTotal === 0 || (uploadsPieces && data.chunksTotal === 1)) return;
           if (progressRef.current) clearInterval(progressRef.current);
-          setChunkProgress({
-            chunksTotal: data.chunksTotal,
-            chunksCompleted: data.chunksCompleted,
-          });
+          if (data.stage !== "batch")
+            setChunkProgress({
+              chunksTotal: data.chunksTotal,
+              chunksCompleted: data.chunksCompleted,
+            });
           setProgress((prev) => Math.max(prev, (data.chunksCompleted / data.chunksTotal) * 90));
         }) ?? null;
     }
-    if (!useChunkProgress || uploadsPieces) {
+    if (!useChunkProgress || uploadsPieces || isGnaniUpload) {
       progressRef.current = setInterval(() => {
         setProgress((prev) => {
           if (prev >= 90) {
@@ -837,13 +848,15 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     }
 
     try {
+      const selected = buildTranscriptionConfig();
+      const config = isGnaniUpload ? await snapshotGnaniUpload(selected) : selected;
       const diarization = await buildDiarizationSettings();
       // A Cancel while speaker models download came before the main process had
       // anything to abort; starting now would send, and bill, the whole upload.
       if (runId !== runIdRef.current) return;
       const res: FileTranscriptionResult = await transcribeFileWithSpeakers(
         currentFile.path,
-        buildTranscriptionConfig(),
+        config,
         diarization,
         currentFile.durationSeconds,
         { requestId, timestamps: true, isCancelled: () => runId !== runIdRef.current }
@@ -882,8 +895,15 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           diarization,
           durationSeconds: res.durationSeconds,
           segments: res.segments,
+          writeGuard: config.gnaniOwner,
         });
         if (runId !== runIdRef.current) return;
+        if (config.gnaniOwner && !noteRes.success) {
+          setResult(null);
+          setError(t("notes.upload.batchSaveFailed"));
+          setState("error");
+          return;
+        }
         if (noteRes.success && noteRes.note) {
           noteSpaceIdRef.current = noteRes.note.space_id ?? null;
           setNoteId(noteRes.note.id);

@@ -924,6 +924,10 @@
     }
   },
   "transcription": {
+    "gnani": {
+      "voicePreview": "Prévia da voz da Gnani",
+      "voicePreviewFailed": "Não foi possível reproduzir a prévia da voz da Gnani. Tente novamente."
+    },
     "modelCard": "Ficha do modelo",
     "deleteModel": {
       "title": "Excluir modelo",
@@ -3465,6 +3469,8 @@
         "groq_whisper_large_v3": "Modelo Large v3, rápido e preciso",
         "mistral_voxtral_mini_latest": "Transcrição multilíngue rápida",
         "gemini_3_5_transcribe": "Fala para texto Gemini do Google",
+        "gnani_prisma_v3": "Detecção automática de idioma, fala em idiomas mistos e termos do dicionário",
+        "gnani_prisma_v2_5": "Transcrição em um idioma. O modo automático usa inglês indiano.",
         "elevenlabs_scribe_v3": "A transcrição multilíngue mais precisa",
         "elevenlabs_scribe_v2": "Transcrição multilíngue precisa",
         "elevenlabs_scribe_v3_live": "Transcrição ao vivo para gravação de notas",
@@ -4227,6 +4233,7 @@
       "internalAttendeesConfirm": "Sim, iniciar",
       "recordingDisabledByOrg": "A gravação de reuniões foi desativada pela sua organização.",
       "stoppedAccountChanged": "A gravação parou porque você saiu da conta ou trocou de conta.",
+      "stoppedGnaniKeyChanged": "A gravação foi interrompida porque a chave de API da GnaniAI mudou.",
       "stoppedPolicyUnresolved": "A gravação parou porque não foi possível verificar as configurações da sua organização.",
       "stoppedWorkspaceChanged": "A gravação parou porque você trocou de espaço de trabalho.",
       "recordingCopy": {

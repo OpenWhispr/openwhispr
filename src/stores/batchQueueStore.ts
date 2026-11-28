@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import i18n from "../i18n";
-import { transcribeFileWithSpeakers } from "../services/fileTranscription";
+import { snapshotGnaniUpload, transcribeFileWithSpeakers } from "../services/fileTranscription";
 import type { FileTranscriptionConfig, DiarizationSettings } from "../services/fileTranscription";
 import {
   DOWNLOAD_ERROR_KEYS,
@@ -161,9 +161,16 @@ export function processBatchQueue(
     ),
   }));
 
-  const snapshotApiKey = transcribeOpts.transcription.getApiKey();
+  const config = transcribeOpts.transcription;
+  const gnani =
+    config.cloudTranscriptionProvider === "gnani" &&
+    !config.useLocalWhisper &&
+    !config.isOpenWhisprCloud &&
+    config.transcriptionMode !== "self-hosted" &&
+    !isManagedTranscriptionActive();
+  const snapshotApiKey = gnani ? "" : config.getApiKey();
   const transcription: FileTranscriptionConfig = {
-    ...transcribeOpts.transcription,
+    ...config,
     getApiKey: () => snapshotApiKey,
   };
 
@@ -177,7 +184,10 @@ export function processBatchQueue(
   // leaves the rest queued for when policy allows uploads again.
   let refusedByPolicy = false;
   const failItem = (id: string, error: string, failure: unknown) => {
-    const byPolicy = isUploadPolicyRefusal(failure);
+    const code = (failure as { code?: string } | null)?.code;
+    const byPolicy =
+      isUploadPolicyRefusal(failure) ||
+      (gnani && ["AUTH_CONTEXT_CHANGED", "PROVIDER_CREDENTIAL_CHANGED"].includes(code ?? ""));
     if (byPolicy) refusedByPolicy = true;
     updateItem(id, { status: "error", error, ...(byPolicy ? { stoppedByPolicy: true } : {}) });
   };
@@ -241,9 +251,10 @@ export function processBatchQueue(
       const requestId = crypto.randomUUID();
       activeUploadRequestId = requestId;
       let cleanupTranscriptionProgress: (() => void) | undefined;
-      if (isManagedTranscriptionActive()) {
+      if (isManagedTranscriptionActive() || gnani) {
         cleanupTranscriptionProgress = window.electronAPI.onUploadTranscriptionProgress?.(
-          ({ chunksCompleted, chunksTotal }) => {
+          ({ chunksCompleted, chunksTotal, requestId: owner }) => {
+            if (owner && owner !== requestId) return;
             if (chunksTotal > 0)
               updateItem(item.id, { progress: (chunksCompleted / chunksTotal) * 90 });
           }
@@ -302,6 +313,7 @@ export function processBatchQueue(
         diarization,
         durationSeconds: transcriptionResult.durationSeconds,
         segments: transcriptionResult.segments,
+        writeGuard: transcription.gnaniOwner,
       });
 
       if (noteRes.success && noteRes.note) {
@@ -333,6 +345,17 @@ export function processBatchQueue(
   };
 
   (async () => {
+    if (gnani) {
+      try {
+        Object.assign(transcription, await snapshotGnaniUpload(transcription));
+      } catch {
+        const first = useBatchQueueStore.getState().queue.find((item) => item.status === "queued");
+        if (first)
+          failItem(first.id, "Could not verify the GnaniAI key. Start the upload again.", {
+            code: "PROVIDER_CREDENTIAL_CHANGED",
+          });
+      }
+    }
     const processed = new Set<string>();
     let next: QueueItem | undefined;
     while (

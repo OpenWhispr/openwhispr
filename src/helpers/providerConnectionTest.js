@@ -23,6 +23,7 @@ const ENDPOINTS = {
   // The transcription route checks the key before the body, so a request without audio is
   // refused as unauthorised or as invalid, and transcribes nothing.
   elevenlabs: "https://api.elevenlabs.io/v1/speech-to-text",
+  gnani: require("./gnaniConfig").GNANI_STT_URL,
 };
 // Listing the key's projects proves the key too: used only if Deepgram retires the route above.
 const DEEPGRAM_PROJECTS_ENDPOINT = "https://api.deepgram.com/v1/projects";
@@ -256,6 +257,8 @@ function resolveProviderRequest(config) {
       headers.Authorization = `Token ${apiKey}`;
     } else if (provider === "assemblyai") {
       headers.Authorization = apiKey;
+    } else if (provider === "gnani") {
+      headers["X-API-Key-ID"] = apiKey;
     } else if (provider === "elevenlabs") {
       headers["xi-api-key"] = apiKey;
     } else {
@@ -466,6 +469,40 @@ async function testProviderConnection(
   }
 
   const provider = String(config?.provider || "").toLowerCase();
+  if (provider === "gnani") {
+    // This endpoint authenticates before validating the missing audio_file.
+    const body = new FormData();
+    body.set("model", config.model === "prisma-v2.5" ? config.model : "prisma-v3.0");
+    body.set("language_code", "en-IN");
+    const failure = await probe(
+      request.endpoint,
+      request,
+      fetchImpl,
+      async (response) => {
+        const status = response.status;
+        if (status === 422) {
+          const detail = (await readJson(response))?.detail;
+          if (
+            Array.isArray(detail) &&
+            detail.some((e) => e.type === "missing" && e.loc?.at(-1) === "audio_file")
+          )
+            return null;
+        }
+        if (status === 403)
+          return {
+            errorCode: "providerStatus",
+            error: "This GnaniAI key does not have speech-to-text access.",
+            status,
+          };
+        return {
+          ...describeStatusFailure(status, "gnani"),
+          ...(response.ok && { unverified: true }),
+        };
+      },
+      { method: "POST", body }
+    );
+    return failure ? { success: false, ...failure } : { success: true };
+  }
   if (provider === "deepgram") return testDeepgramKey(request, fetchImpl);
   if (provider === "elevenlabs") return testElevenLabsKey(request, fetchImpl);
 

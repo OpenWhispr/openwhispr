@@ -64,6 +64,7 @@ import { createExternalLinkHandler } from "../utils/externalLinks";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
+import { GnaniVoicePreview } from "./settings/GnaniVoicePreview";
 import { ConnectionCheckAnnouncer } from "./ui/ConnectionCheckAnnouncer";
 import { ProviderCheckField } from "./ui/ProviderCheckField";
 import { usePanelVisible } from "./ui/usePanelVisible";
@@ -302,6 +303,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "tinfoil", name: "Tinfoil" },
   { id: "deepgram", name: "Deepgram" },
   { id: "assemblyai", name: "AssemblyAI" },
+  { id: "gnani", name: "GnaniAI" },
   { id: "elevenlabs", name: "ElevenLabs" },
   { id: "openrouter", name: "OpenRouter" },
   { id: "custom", name: "Custom" },
@@ -338,6 +340,7 @@ interface ProviderCredentialField {
     | "tinfoilApiKey"
     | "deepgramApiKey"
     | "assemblyaiApiKey"
+    | "gnaniApiKey"
     | "elevenlabsApiKey"
     | "openrouterApiKey";
   input: "secret" | "text" | "select";
@@ -403,6 +406,10 @@ const PROVIDER_CREDENTIALS: Record<
   assemblyai: {
     consoleUrl: "https://www.assemblyai.com/dashboard/api-keys",
     fields: [{ key: "assemblyaiApiKey", input: "secret" }],
+  },
+  gnani: {
+    consoleUrl: "https://app.gnani.ai/voice/",
+    fields: [{ key: "gnaniApiKey", input: "secret" }],
   },
   elevenlabs: {
     consoleUrl: "https://elevenlabs.io/app/settings/api-keys",
@@ -548,7 +555,9 @@ export default function TranscriptionModelPicker({
   const setDeepgramApiKey = useSettingsStore((s) => s.setDeepgramApiKey);
   const assemblyaiApiKey = useSettingsStore((s) => s.assemblyaiApiKey);
   const setAssemblyaiApiKey = useSettingsStore((s) => s.setAssemblyaiApiKey);
+  const gnaniApiKey = useSettingsStore((s) => s.gnaniApiKey);
   const elevenlabsApiKey = useSettingsStore((s) => s.elevenlabsApiKey);
+  const setGnaniApiKey = useSettingsStore((s) => s.setGnaniApiKey);
   const setElevenlabsApiKey = useSettingsStore((s) => s.setElevenlabsApiKey);
   const openrouterApiKey = useSettingsStore((s) => s.openrouterApiKey);
   const setOpenrouterApiKey = useSettingsStore((s) => s.setOpenrouterApiKey);
@@ -1321,6 +1330,7 @@ export default function TranscriptionModelPicker({
     tinfoilApiKey: keyDraft.value("tinfoilApiKey", tinfoilApiKey),
     deepgramApiKey: keyDraft.value("deepgramApiKey", deepgramApiKey),
     assemblyaiApiKey: keyDraft.value("assemblyaiApiKey", assemblyaiApiKey),
+    gnaniApiKey: keyDraft.value("gnaniApiKey", gnaniApiKey),
     elevenlabsApiKey: keyDraft.value("elevenlabsApiKey", elevenlabsApiKey),
     openrouterApiKey: keyDraft.value("openrouterApiKey", openrouterApiKey),
   };
@@ -1338,6 +1348,7 @@ export default function TranscriptionModelPicker({
     tinfoilApiKey: setTinfoilApiKey,
     deepgramApiKey: setDeepgramApiKey,
     assemblyaiApiKey: setAssemblyaiApiKey,
+    gnaniApiKey: setGnaniApiKey,
     elevenlabsApiKey: setElevenlabsApiKey,
     openrouterApiKey: setOpenrouterApiKey,
   };
@@ -1841,6 +1852,12 @@ export default function TranscriptionModelPicker({
                         </p>
                       )}
                   </div>
+                  {visible &&
+                    variant === "settings" &&
+                    transcriptionContext === "dictation" &&
+                    displayedCloudProvider === "gnani" &&
+                    Boolean(gnaniApiKey) &&
+                    gnaniApiKey === providerKey && <GnaniVoicePreview />}
                 </div>
               )}
               {transcriptionContext === "dictation" &&

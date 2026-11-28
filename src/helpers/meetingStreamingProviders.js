@@ -4,6 +4,7 @@ const DeepgramStreaming = require("./deepgramStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const ElevenLabsStreaming = require("./elevenLabsStreaming");
 const { TinfoilRealtimeStreaming } = require("./tinfoilRealtimeStreaming");
+const { GnaniMeetingStreaming } = require("./gnaniRealtimeStreaming");
 const { SAVED_KEY_PROVIDERS } = require("./productPolicy");
 
 const STREAMING_CLIENT_BY_PROVIDER = {
@@ -14,6 +15,7 @@ const STREAMING_CLIENT_BY_PROVIDER = {
   "corti-realtime": CortiStreaming,
   "elevenlabs-realtime": ElevenLabsStreaming,
   "tinfoil-realtime": TinfoilRealtimeStreaming,
+  "gnani-realtime": GnaniMeetingStreaming,
 };
 
 // Derived from the registry so an allowed provider can never lack a client

@@ -1,3 +1,4 @@
+import type { NoteWriteGuard } from "../types/electron";
 import type { DiarizationSettings } from "./fileTranscription";
 
 export interface UploadSegment {
@@ -71,6 +72,7 @@ export function buildUploadNoteMetadata(
 }
 
 interface SaveUploadNoteParams {
+  writeGuard?: NoteWriteGuard;
   title: string;
   text: string;
   sourceName: string;
@@ -95,6 +97,7 @@ export async function saveUploadNote({
   diarization,
   durationSeconds,
   segments,
+  writeGuard,
 }: SaveUploadNoteParams) {
   const { transcript, audioDurationSeconds, noteUpdates } = buildUploadNoteMetadata(
     diarization,
@@ -109,11 +112,14 @@ export async function saveUploadNote({
     audioDurationSeconds,
     folderId,
     null,
-    transcript ?? JSON.stringify([{ text }])
+    transcript ?? JSON.stringify([{ text }]),
+    ...(writeGuard ? [writeGuard] : [])
   );
   if (res.success && res.note && noteUpdates) {
     // Best-effort: a failed metadata write must not error a saved note.
-    await window.electronAPI.updateNote(res.note.id, noteUpdates).catch(() => {});
+    await window.electronAPI
+      .updateNote(res.note.id, noteUpdates, ...(writeGuard ? [{ writeGuard }] : []))
+      .catch(() => {});
   }
   return res;
 }

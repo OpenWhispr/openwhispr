@@ -90,7 +90,7 @@ function createElectronAPI({ spaceId = PRIVATE.id } = {}) {
     onMeetingTranscriptionError: noopListener,
     onMeetingTranscriptionFatalError: noopListener,
     onMeetingSystemAudioSilent: noopListener,
-    onMeetingDiarizationComplete: noopListener,
+    onMeetingDiarizationComplete: capture("diarization"),
   };
   return { api, listeners, state, writes, saves, kept };
 }
@@ -309,11 +309,13 @@ test("a live save refused because the note is gone starts the copy", async (t) =
   await store.stopRecording();
 });
 
-test("a stop that finds the note gone saves its transcript to a new note", async (t) => {
+test("a stop that finds the note gone saves its transcript and diarization to a new note", async (t) => {
   const { api, listeners, state, writes, saves } = createElectronAPI();
   const store = await loadStore(t, api);
-  await startRecording(store, listeners);
-  listeners.segment(final("closing words"));
+  await startRecording(store, listeners, { ...START_ARGS, seedSegments: SEED });
+  const closing = final("closing words");
+  listeners.segment(closing);
+  api.meetingTranscriptionStop = async () => ({ success: true, diarizationSessionId: "stop-copy" });
 
   state.stored = null;
   await store.stopRecording();
@@ -321,7 +323,22 @@ test("a stop that finds the note gone saves its transcript to a new note", async
   assert.equal(saves.length, 1);
   assert.match(saves[0][7], /closing words/);
   assert.match(transcriptWrites(writes).at(-1)[1].transcript, /closing words/);
-  assert.equal(transcriptWrites(writes).at(-1)[0], 500);
+  const [copyId, { transcript }] = transcriptWrites(writes).at(-1);
+  assert.equal(copyId, 500);
+  const getOriginalNote = api.getNote;
+  api.getNote = async (id) => (id === copyId ? { id, transcript } : getOriginalNote(id));
+  writes.length = 0;
+  listeners.diarization({
+    noteId: NOTE_ID,
+    sessionId: "stop-copy",
+    segments: [{ ...closing, id: "diarized", speaker: "speaker_1", speakerName: "Ada" }],
+  });
+  await settle();
+
+  const [[targetId, patch]] = transcriptWrites(writes);
+  assert.equal(targetId, copyId);
+  assert.match(patch.transcript, /Ada/);
+  assert.doesNotMatch(patch.transcript, /earlier session/);
 });
 
 test("no copy is made for an account other than the one the recording started under", async (t) => {

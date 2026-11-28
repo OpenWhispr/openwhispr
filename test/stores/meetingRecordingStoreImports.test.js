@@ -95,4 +95,15 @@ test("personal meeting options preserve manual enterprise preference while requi
     workspaceId: "workspace-a",
     authGeneration: 1,
   });
+
+  const sharedTerm = "a".repeat(64);
+  useSettingsStore.setState({
+    meetingCloudTranscriptionProvider: "gnani",
+    meetingCloudTranscriptionModel: "prisma-v3.0",
+    sharedDictionaryHints: { space: [sharedTerm], workspace: [] },
+  });
+  await prepareTranscription();
+  assert.equal(calls.at(-1).provider, "gnani-realtime");
+  assert.equal(calls.at(-1).model, "prisma-v3.0");
+  assert.deepEqual(calls.at(-1).keyterms, ["Personal", sharedTerm]);
 });
