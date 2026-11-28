@@ -679,7 +679,11 @@
       "couldNotDownloadDescription": "Prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
       "installing": "Wird installiert...",
       "installButton": "Update installieren",
-      "availableButton": "Update verfügbar"
+      "availableButton": "Update verfügbar",
+      "moreActions": "Weitere Update-Aktionen",
+      "skipVersion": "Diese Version überspringen",
+      "skippedTitle": "Version {{version}} übersprungen",
+      "skippedDescription": "Sie können sie weiterhin über die Einstellungen installieren."
     },
     "limit": {
       "weeklyTitle": "Wöchentliches Cloud-Limit erreicht",

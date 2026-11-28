@@ -679,7 +679,11 @@
       "couldNotDownloadDescription": "Controlla la connessione e riprova.",
       "installing": "Installazione...",
       "installButton": "Installa aggiornamento",
-      "availableButton": "Aggiornamento disponibile"
+      "availableButton": "Aggiornamento disponibile",
+      "moreActions": "Altre azioni di aggiornamento",
+      "skipVersion": "Salta questa versione",
+      "skippedTitle": "Versione {{version}} saltata",
+      "skippedDescription": "Puoi comunque installarla dalle Impostazioni."
     },
     "limit": {
       "weeklyTitle": "Limite cloud settimanale raggiunto",

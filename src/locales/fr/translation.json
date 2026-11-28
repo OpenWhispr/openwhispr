@@ -679,7 +679,11 @@
       "couldNotDownloadDescription": "Vérifiez votre connexion internet puis réessayez.",
       "installing": "Installation...",
       "installButton": "Installer la mise à jour",
-      "availableButton": "Mise à jour disponible"
+      "availableButton": "Mise à jour disponible",
+      "moreActions": "Plus d’actions de mise à jour",
+      "skipVersion": "Ignorer cette version",
+      "skippedTitle": "Version {{version}} ignorée",
+      "skippedDescription": "Vous pouvez toujours l’installer depuis les Paramètres."
     },
     "limit": {
       "weeklyTitle": "Limite cloud hebdomadaire atteinte",

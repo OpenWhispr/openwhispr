@@ -679,7 +679,11 @@
       "couldNotDownloadDescription": "インターネット接続を確認してもう一度お試しください。",
       "installing": "インストール中...",
       "installButton": "アップデートをインストール",
-      "availableButton": "アップデートあり"
+      "availableButton": "アップデートあり",
+      "moreActions": "アップデートのその他の操作",
+      "skipVersion": "このバージョンをスキップ",
+      "skippedTitle": "v{{version}} をスキップしました",
+      "skippedDescription": "設定からいつでもインストールできます。"
     },
     "limit": {
       "weeklyTitle": "週間のクラウド上限に達しました",

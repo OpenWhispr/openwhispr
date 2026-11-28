@@ -619,7 +619,11 @@
       "couldNotDownloadDescription": "تحقق من اتصالك بالإنترنت وحاول مرة أخرى.",
       "installing": "جاري التثبيت...",
       "installButton": "تثبيت التحديث",
-      "availableButton": "التحديث متاح"
+      "availableButton": "التحديث متاح",
+      "moreActions": "مزيد من إجراءات التحديث",
+      "skipVersion": "تخطي هذا الإصدار",
+      "skippedTitle": "تم تخطي الإصدار {{version}}",
+      "skippedDescription": "لا يزال بإمكانك تثبيته من الإعدادات."
     },
     "limit": {
       "weeklyTitle": "تم بلوغ الحد السحابي الأسبوعي",
