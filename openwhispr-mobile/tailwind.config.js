@@ -1,9 +1,11 @@
-const { platformColor } = require('nativewind/theme');
+const { platformColor, platformSelect } = require('nativewind/theme');
 
 const BRAND = '#007AFF';
 
+// platformColor() hands every argument to PlatformColor, which on Android only
+// accepts resource paths, so a hex fallback there throws when the color is drawn.
 const ios = (iosName, androidFallback, web = androidFallback) =>
-  platformColor(iosName, androidFallback, web);
+  platformSelect({ ios: platformColor(iosName), android: androidFallback, default: web });
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
