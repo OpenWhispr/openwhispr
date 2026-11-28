@@ -218,6 +218,56 @@ test("a get-session 401 clears the binding so the app drops to guest", async (t)
   assert.equal(auth.getBoundSessionGeneration("user-a"), null);
 });
 
+// #3323: an admin removal revokes the session, and only the policy lookup says
+// whether that wipes the device.
+test("a rejected session asks main once for a fresh policy; an unreachable one doesn't", async () => {
+  const auth = await import("../../src/lib/authRequestContext.ts");
+  const fail = (status) =>
+    auth.handleAuthRequestError({
+      request: sessionRequest(9, "token-a"),
+      response: new Response("", { status }),
+    });
+  // The auth server answers a dead bearer with no user; a 401 says the same.
+  const noUser = () =>
+    auth.handleAuthRequestSuccess({
+      data: null,
+      response: new Response("null", { status: 200 }),
+      request: sessionRequest(9, "token-a"),
+    });
+  for (const reject of [noUser, () => fail(401)]) {
+    auth.resetAuthRequestContextForTests();
+    const state = { current: { token: "token-a", generation: 9 } };
+    const restore = installWindow(state);
+    try {
+      const asked = [];
+      global.window.electronAPI.getEffectivePolicy = async (options) => asked.push(options);
+      await fail(503);
+      assert.deepEqual(asked, []);
+      await reject();
+      await noUser();
+      await fail(401);
+      assert.deepEqual(asked, [{ refresh: true }]);
+    } finally {
+      restore();
+    }
+  }
+  // Signed out, a session with no user rejects no credential.
+  auth.resetAuthRequestContextForTests();
+  const restore = installWindow({ current: { token: null, generation: 3 } });
+  try {
+    const asked = [];
+    global.window.electronAPI.getEffectivePolicy = async (options) => asked.push(options);
+    await auth.handleAuthRequestSuccess({
+      data: null,
+      response: new Response("null", { status: 200 }),
+      request: sessionRequest(3, null),
+    });
+    assert.deepEqual(asked, []);
+  } finally {
+    restore();
+  }
+});
+
 async function failSessionFetch(t, auth, { signal } = {}) {
   const request = await auth.prepareAuthRequest({
     url: "https://auth.openwhispr.test/api/auth/get-session",

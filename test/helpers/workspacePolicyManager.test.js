@@ -282,7 +282,10 @@ test("reuses a successful managed policy for five minutes, then accepts an updat
   assert.equal(context.broadcasts.length, 2);
 });
 
-test("a refresh after a server refusal skips the freshness window, not the throttle", async (t) => {
+// The refused credential may be gone soon after, and with it the removal only
+// its lookup reports.
+test("a refresh after a server refusal skips the freshness window, and the throttle only delays it", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   let currentTime = 0;
   let requestCount = 0;
   const updated = validPolicy("2026-08-05T00:05:00.000Z");
@@ -302,14 +305,31 @@ test("a refresh after a server refusal skips the freshness window, not the throt
 
   await context.manager.getPolicy(request);
   currentTime = 1_000;
-  const throttled = await context.manager.getPolicy({ ...request, refresh: true });
+  // Every window asks once.
+  const throttled = await Promise.all([
+    context.manager.getPolicy({ ...request, refresh: true }),
+    context.manager.getPolicy({ ...request, refresh: true }),
+  ]);
+  assert.equal(requestCount, 1);
   currentTime = 5_000;
-  const refreshed = await context.manager.getPolicy({ ...request, refresh: true });
+  t.mock.timers.tick(4_000);
+  await new Promise(setImmediate);
 
-  assert.equal(throttled.policy.features.meetingRecordingEnabled, undefined);
-  assert.equal(refreshed.policy.features.meetingRecordingEnabled, false);
+  assert.deepEqual(
+    throttled.map((snapshot) => snapshot.policy.features.meetingRecordingEnabled),
+    [undefined, undefined]
+  );
   assert.equal(requestCount, 2);
   assert.equal(context.broadcasts.at(-1).policy.features.meetingRecordingEnabled, false);
+
+  // One whose credential changed meanwhile isn't another account's lookup.
+  currentTime = 6_000;
+  await context.manager.getPolicy({ ...request, refresh: true });
+  context.tokenState.generation = 2;
+  currentTime = 10_000;
+  t.mock.timers.tick(4_000);
+  await new Promise(setImmediate);
+  assert.equal(requestCount, 2);
 });
 
 test("refreshes a managed identity to authoritative unmanaged after five minutes", async (t) => {
@@ -1470,6 +1490,466 @@ test("nothing is held for an identity that never fetched a policy", () => {
   const { manager } = setup(async () => response(500, {}));
 
   assert.equal(manager.heldPolicy({ accountId: "account-a", expectedAuthGeneration: 1 }), null);
+});
+
+// #3323: a removal from the workspace that managed this device wipes it.
+const removal = { workspaceId: "workspace-1", removedAt: "2026-11-12T10:00:00.000Z" };
+// What the API sends: the newest removal, and every one.
+const removedFrom = { workspaceRemoval: removal, workspaceRemovals: [removal] };
+const unmanagedWith = (extra) =>
+  response(200, { data: { managed: false, policy: null, policyUpdatedAt: null, ...extra } });
+const managedBy =
+  (...workspaceIds) =>
+  () =>
+    response(200, { data: { ...validPolicy().data, managedBy: workspaceIds } });
+
+function removalSetup(responses, record = () => {}) {
+  const removals = [];
+  const requests = [];
+  let call = 0;
+  const context = setup(
+    async (_url, init) => {
+      requests.push(init.headers);
+      return responses[Math.min(call++, responses.length - 1)]();
+    },
+    {
+      // The binding vouches for account-a's own bearer only.
+      getValidatedAccountId: () => (context.tokenState.token === "token-a" ? "account-a" : null),
+      onWorkspaceRemoval: (reported) => {
+        removals.push(reported);
+        return record(reported);
+      },
+    }
+  );
+  const lookup = (accountId = "account-a") =>
+    context.manager.getPolicy({ accountId, expectedAuthGeneration: 1 });
+  return { ...context, removals, requests, lookup };
+}
+
+test("a device the workspace managed hears its removal, signed in or not", async (t) => {
+  for (const removed of [
+    // An admin removal revoked the session.
+    () =>
+      response(401, {
+        error: "Removed from the workspace",
+        code: "WORKSPACE_MEMBER_REMOVED",
+        ...removal,
+      }),
+    // Directory deprovisioning kept it signed in.
+    () => unmanagedWith(removedFrom),
+    // ...while another workspace still manages them.
+    () =>
+      response(200, {
+        data: { ...validPolicy().data, managedBy: ["workspace-2"], ...removedFrom },
+      }),
+  ]) {
+    const context = removalSetup([managedBy("workspace-1", "workspace-2"), removed]);
+    t.after(context.cleanup);
+    await context.lookup();
+    assert.deepEqual(context.removals, []);
+    await context.lookup();
+    assert.deepEqual(context.removals, [{ accountId: "account-a", ...removal }]);
+    // Only this lookup asks for the signal.
+    assert.match(context.requests[0]["x-openwhispr-capabilities"], /,workspace-removal-v1$/);
+  }
+});
+
+// A rejected session clears the account label before the next policy refresh.
+test("the revoked session's own verdict still hears its removal without an account label", async (t) => {
+  const context = removalSetup([
+    managedBy("workspace-1"),
+    () => response(401, { code: "WORKSPACE_MEMBER_REMOVED", ...removal }),
+  ]);
+  t.after(context.cleanup);
+  await context.lookup();
+  await context.lookup(null);
+  assert.deepEqual(context.removals, [{ accountId: null, ...removal }]);
+});
+
+// Account labels can lag a new bearer: B's removal must not read A's verdict.
+test("another account's removal, under a label still naming the last account, wipes nothing", async (t) => {
+  const context = removalSetup([managedBy("workspace-1"), () => unmanagedWith(removedFrom)]);
+  t.after(context.cleanup);
+  await context.lookup();
+  context.tokenState.token = "token-b";
+  context.tokenState.generation = 2;
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 2 });
+  assert.deepEqual(context.removals, []);
+});
+
+test("a removal never reaches a device the workspace didn't manage, nor an ordinary 401", async (t) => {
+  for (const responses of [
+    // A sign-in on another device: this one never saw the account managed.
+    [() => unmanagedWith(removedFrom)],
+    [managedBy("workspace-1"), () => response(401, { error: "Invalid session" })],
+    [
+      managedBy("workspace-1"),
+      () => response(401, { code: "WORKSPACE_MEMBER_REMOVED", workspaceId: 7 }),
+    ],
+    [managedBy("workspace-1"), () => unmanagedWith({})],
+    // Managed by another workspace: an old removal from this one changes nothing.
+    [managedBy("workspace-2"), () => unmanagedWith(removedFrom)],
+    // A verdict cached before managedBy existed names no workspace.
+    [() => response(200, validPolicy()), () => unmanagedWith(removedFrom)],
+  ]) {
+    const context = removalSetup(responses);
+    t.after(context.cleanup);
+    await context.lookup();
+    await context.lookup();
+    assert.deepEqual(context.removals, []);
+  }
+});
+
+test("a removal whose 401 body arrives after an account switch wipes nothing", async (t) => {
+  let context;
+  // The body is read after the request: here the user switches accounts meanwhile.
+  const removedThenSwitched = {
+    status: 401,
+    ok: false,
+    json: async () => {
+      context.tokenState.token = "token-b";
+      context.tokenState.generation = 2;
+      return { code: "WORKSPACE_MEMBER_REMOVED", ...removal };
+    },
+  };
+  context = removalSetup([managedBy("workspace-1"), () => removedThenSwitched]);
+  t.after(context.cleanup);
+  await context.lookup();
+  await context.lookup();
+  assert.deepEqual(context.removals, []);
+});
+
+test("a removal behind a newer one from a workspace that never managed the device still wipes it", async (t) => {
+  const newer = { workspaceId: "workspace-9", removedAt: "2026-11-13T10:00:00.000Z" };
+  const context = removalSetup([
+    managedBy("workspace-1"),
+    () => unmanagedWith({ workspaceRemoval: newer, workspaceRemovals: [newer, removal] }),
+  ]);
+  t.after(context.cleanup);
+  await context.lookup();
+  await context.lookup();
+  assert.deepEqual(context.removals, [{ accountId: "account-a", ...removal }]);
+});
+
+// A session revoked by a later removal from another workspace: the 401 lists
+// every removal behind it, and an older API sends only the newest.
+test("a revoked session hears the removal from the workspace that managed it, behind a newer one", async (t) => {
+  const newer = { workspaceId: "workspace-9", removedAt: "2026-11-13T10:00:00.000Z" };
+  const context = removalSetup([
+    managedBy("workspace-1"),
+    () =>
+      response(401, {
+        code: "WORKSPACE_MEMBER_REMOVED",
+        ...newer,
+        workspaceRemovals: [newer, removal],
+      }),
+  ]);
+  t.after(context.cleanup);
+  await context.lookup();
+  await context.lookup();
+  assert.deepEqual(context.removals, [{ accountId: "account-a", ...removal }]);
+});
+
+test("the verdict this run enforces hears its removal when the cache couldn't save it", async (t) => {
+  const context = removalSetup([managedBy("workspace-1"), () => unmanagedWith(removedFrom)]);
+  t.after(context.cleanup);
+  // A folder where the cache goes: every write fails.
+  fs.mkdirSync(context.cachePath);
+  await context.lookup();
+  await context.lookup();
+  assert.deepEqual(context.removals, [{ accountId: "account-a", ...removal }]);
+});
+
+// A session from before the bearer migration has no binding to wait for.
+test(
+  "a cookie session's verdict hears its removal when the cache couldn't save it",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async (t) => {
+    const context = removalSetup([
+      managedBy("workspace-1"),
+      managedBy("workspace-1"),
+      () => response(401, { code: "WORKSPACE_MEMBER_REMOVED", ...removal }),
+    ]);
+    t.after(context.cleanup);
+    await context.lookup();
+    // Only the bearer's verdict is on disk: the session's can't be saved.
+    fs.chmodSync(context.cachePath, 0o444);
+    const session = {
+      accountId: "account-a",
+      expectedAuthGeneration: 1,
+      authHeaders: { Cookie: "session=1" },
+    };
+    await context.manager.getPolicy(session);
+    await context.manager.getPolicy(session);
+    assert.deepEqual(context.removals, [{ accountId: "account-a", ...removal }]);
+  }
+);
+
+for (const [enforced, next, accountId] of [
+  ["another workspace's", managedBy("workspace-9"), "account-a"],
+  // An account label no binding vouches for, of an account never managed here.
+  ["an unmanaged one", () => unmanagedWith(), "account-b"],
+]) {
+  test(
+    `an older cached verdict can't authorize a removal the verdict this run enforces doesn't name: ${enforced}`,
+    { skip: process.platform === "win32" || process.getuid?.() === 0 },
+    async (t) => {
+      const context = removalSetup([
+        managedBy("workspace-1"),
+        next,
+        () => unmanagedWith(removedFrom),
+      ]);
+      t.after(context.cleanup);
+      await context.lookup(accountId);
+      // Only workspace-1's verdict is on disk: the next one can't be saved.
+      fs.chmodSync(context.cachePath, 0o444);
+      await context.lookup(accountId);
+      await context.lookup(accountId);
+      assert.deepEqual(context.removals, []);
+    }
+  );
+}
+
+// A replica that lags behind answers with an older verdict, which the downgrade
+// guard doesn't enforce, so it can't hide a removal from the workspace the
+// enforced one names.
+test("an older answer the run doesn't enforce can't hide a removal", async (t) => {
+  const managedSince = (updatedAt, workspaceIds, extra) => () =>
+    response(200, {
+      data: { ...validPolicy(updatedAt).data, managedBy: workspaceIds, ...extra },
+    });
+  const context = removalSetup([
+    managedSince("2026-11-10T00:00:00.000Z", ["workspace-1", "workspace-9"]),
+    managedSince("2026-10-01T00:00:00.000Z", ["workspace-9"]),
+    managedSince("2026-10-01T00:00:00.000Z", ["workspace-9"], removedFrom),
+  ]);
+  t.after(context.cleanup);
+  await context.lookup();
+  await context.lookup();
+  await context.lookup();
+  assert.deepEqual(context.removals, [{ accountId: "account-a", ...removal }]);
+});
+
+// A rotated bearer's first lookup can come before its binding, when the
+// account's last verdict, the one that names the removing workspace, can't be
+// read for it yet. Its label may already name the account, or nothing yet (a
+// sign-in after a sign-out).
+const withinRefresh = { successfulRefreshMs: 5 * 60 * 1000 };
+for (const [answer, respond, overrides, label = "account-a"] of [
+  ["an unmanaged answer", () => unmanagedWith(removedFrom), {}],
+  // Within the refresh window the next read after binding comes from memory.
+  ["an unmanaged answer read again from memory", () => unmanagedWith(removedFrom), withinRefresh],
+  [
+    "an answer naming another workspace",
+    () =>
+      response(200, {
+        data: { ...validPolicy().data, managedBy: ["workspace-2"], ...removedFrom },
+      }),
+    {},
+  ],
+  [
+    "an answer naming another workspace read again from memory",
+    () =>
+      response(200, {
+        data: { ...validPolicy().data, managedBy: ["workspace-2"], ...removedFrom },
+      }),
+    withinRefresh,
+  ],
+  ["an unmanaged answer to a lookup with no label", () => unmanagedWith(removedFrom), {}, null],
+  [
+    "an unmanaged answer to a lookup with no label, read again from memory",
+    () => unmanagedWith(removedFrom),
+    withinRefresh,
+    null,
+  ],
+]) {
+  test(`a removal a rotated bearer hears before its binding still wipes once it is bound: ${answer}`, async (t) => {
+    const removals = [];
+    const responses = [managedBy("workspace-1"), respond];
+    let call = 0;
+    const bound = new Set(["token-a"]);
+    const context = setup(async () => responses[Math.min(call++, responses.length - 1)](), {
+      getValidatedAccountId: () => (bound.has(context.tokenState.token) ? "account-a" : null),
+      onWorkspaceRemoval: (reported) => removals.push(reported),
+      ...overrides,
+    });
+    t.after(context.cleanup);
+    const lookup = () =>
+      context.manager.getPolicy({
+        accountId: bound.has(context.tokenState.token) ? "account-a" : label,
+        expectedAuthGeneration: context.tokenState.generation,
+      });
+    await lookup();
+    Object.assign(context.tokenState, { token: "token-b", generation: 2 });
+    await lookup();
+    assert.deepEqual(removals, []);
+    bound.add("token-b");
+    await lookup();
+    await lookup();
+    assert.deepEqual(removals, [{ accountId: "account-a", ...removal }]);
+  });
+}
+
+// The app can quit before the bearer's first bound read, and the next run reads
+// the verdict it holds before the network, with no label until the binding.
+for (const [answer, respond] of [
+  ["an unmanaged answer", () => unmanagedWith(removedFrom)],
+  [
+    "an answer naming another workspace",
+    () =>
+      response(200, {
+        data: { ...validPolicy().data, managedBy: ["workspace-2"], ...removedFrom },
+      }),
+  ],
+]) {
+  for (const boundBeforeRestart of [true, false]) {
+    test(`a removal a rotated bearer hears before its binding still wipes after a restart: ${answer}${boundBeforeRestart ? "" : ", bound after it"}`, async (t) => {
+      const removals = [];
+      const bound = new Set(["token-a"]);
+      const responses = [managedBy("workspace-1"), respond];
+      let call = 0;
+      const options = {
+        getValidatedAccountId: () => (bound.has(first.tokenState.token) ? "account-a" : null),
+        onWorkspaceRemoval: (reported) => removals.push(reported),
+      };
+      const first = setup(async () => responses[Math.min(call++, responses.length - 1)](), options);
+      t.after(first.cleanup);
+      const request = () => ({
+        accountId: "account-a",
+        expectedAuthGeneration: first.tokenState.generation,
+      });
+      await first.manager.getPolicy(request());
+      Object.assign(first.tokenState, { token: "token-b", generation: 2 });
+      await first.manager.getPolicy(request());
+      if (boundBeforeRestart) bound.add("token-b");
+      const next = setup(respond, { ...options, cachePath: first.cachePath });
+      t.after(next.cleanup);
+      Object.assign(next.tokenState, first.tokenState);
+      if (!boundBeforeRestart) {
+        const unlabelled = { ...request(), accountId: null };
+        next.manager.heldPolicy(unlabelled);
+        await next.manager.getPolicy(unlabelled);
+        bound.add("token-b");
+      }
+      next.manager.heldPolicy(request());
+      await next.manager.getPolicy(request());
+      assert.deepEqual(removals, [{ accountId: "account-a", ...removal }]);
+    });
+  }
+}
+
+// A sign-in after a sign-out: the new bearer's first lookup carries no label,
+// and the read once it is bound joins that lookup.
+test("a removal heard by a lookup the bound read joined still wipes", async (t) => {
+  const removals = [];
+  const bound = new Set(["token-a"]);
+  let release;
+  const responses = [
+    managedBy("workspace-1"),
+    async () => {
+      await new Promise((resolve) => (release = resolve));
+      return unmanagedWith(removedFrom);
+    },
+  ];
+  let call = 0;
+  const context = setup(async () => responses[Math.min(call++, responses.length - 1)](), {
+    getValidatedAccountId: () => (bound.has(context.tokenState.token) ? "account-a" : null),
+    onWorkspaceRemoval: (reported) => removals.push(reported),
+  });
+  t.after(context.cleanup);
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+  Object.assign(context.tokenState, { token: "token-b", generation: 2 });
+  const unlabelled = context.manager.getPolicy({ accountId: null, expectedAuthGeneration: 2 });
+  await new Promise((resolve) => setImmediate(resolve));
+  bound.add("token-b");
+  const joined = context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 2 });
+  await new Promise((resolve) => setImmediate(resolve));
+  release();
+  await Promise.all([unlabelled, joined]);
+  assert.deepEqual(removals, [{ accountId: "account-a", ...removal }]);
+});
+
+// The API reads the managing workspaces and the removals apart, so a rejoin
+// between the two reads can name a workspace in both.
+test("a verdict naming a workspace in both lists wipes nothing, then or after a restart", async (t) => {
+  const both = () =>
+    response(200, { data: { ...validPolicy().data, managedBy: ["workspace-1"], ...removedFrom } });
+  for (const responses of [[both], [managedBy("workspace-1"), both]]) {
+    const removals = [];
+    let call = 0;
+    const options = {
+      getValidatedAccountId: () => "account-a",
+      onWorkspaceRemoval: (reported) => removals.push(reported),
+    };
+    const first = setup(async () => responses[Math.min(call++, responses.length - 1)](), options);
+    t.after(first.cleanup);
+    const request = { accountId: "account-a", expectedAuthGeneration: 1 };
+    for (let i = 0; i < responses.length; i++) await first.manager.getPolicy(request);
+    // The next run reads the verdict it held before the network.
+    const next = setup(both, { ...options, cachePath: first.cachePath });
+    t.after(next.cleanup);
+    Object.assign(next.tokenState, first.tokenState);
+    next.manager.heldPolicy(request);
+    await next.manager.getPolicy(request);
+    assert.deepEqual(removals, []);
+  }
+});
+
+test("a removal list that isn't a list doesn't keep the verdict from being saved", async (t) => {
+  const context = removalSetup([() => unmanagedWith({ workspaceRemovals: {} })]);
+  t.after(context.cleanup);
+  await context.lookup();
+  assert.equal(fs.existsSync(context.cachePath), true);
+});
+
+test("a removal the app couldn't record is heard again at the next lookup", async (t) => {
+  let recording = false;
+  const context = removalSetup(
+    [managedBy("workspace-1"), () => unmanagedWith(removedFrom)],
+    () => recording
+  );
+  t.after(context.cleanup);
+  await context.lookup();
+  await context.lookup();
+  // The verdict that names the workspace stays until the removal is on record,
+  // and is replaced once it is.
+  recording = true;
+  await context.lookup();
+  await context.lookup();
+  assert.deepEqual(context.removals, Array(2).fill({ accountId: "account-a", ...removal }));
+});
+
+// A rotated bearer heard the removal before its binding, so the first read once
+// it is bound checks it against the account's verdict before replacing that.
+test("a removal heard before the binding is checked again when the app couldn't record it", async (t) => {
+  const recorded = [];
+  const bound = new Set(["token-a"]);
+  let recording = true;
+  const responses = [managedBy("workspace-1"), () => unmanagedWith(removedFrom)];
+  let call = 0;
+  const context = setup(async () => responses[Math.min(call++, responses.length - 1)](), {
+    getValidatedAccountId: () => (bound.has(context.tokenState.token) ? "account-a" : null),
+    onWorkspaceRemoval: () => {
+      recorded.push(recording);
+      return recording;
+    },
+  });
+  t.after(context.cleanup);
+  const lookup = () =>
+    context.manager.getPolicy({
+      accountId: "account-a",
+      expectedAuthGeneration: context.tokenState.generation,
+    });
+  await lookup();
+  Object.assign(context.tokenState, { token: "token-b", generation: 2 });
+  await lookup();
+  bound.add("token-b");
+  recording = false;
+  await lookup();
+  recording = true;
+  await lookup();
+  assert.equal(recorded[0], false);
+  assert.equal(recorded.at(-1), true);
 });
 
 test("known pending screen-context denial blocks capture before the workspace settles", () => {

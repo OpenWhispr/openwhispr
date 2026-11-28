@@ -102,6 +102,10 @@
       "title": "OpenWhispr 啟動錯誤",
       "message": "應用程式啟動失敗：\n\n{{error}}\n\n請回報此問題。"
     },
+    "localDataWipe": {
+      "title": "OpenWhispr 無法刪除全部資料",
+      "message": "你的組織要求 OpenWhispr 刪除此裝置上的資料，但有部分資料無法刪除，因此 OpenWhispr 不會開啟。請重新啟動電腦後再次開啟 OpenWhispr 重試。如果問題持續發生，請聯絡你的 IT 團隊。"
+    },
     "globeHotkey": {
       "title": "Globe 快捷鍵無法使用",
       "message": "OpenWhispr 無法啟用 Globe 鍵快捷鍵。",
@@ -5011,6 +5015,10 @@
         "title": "需要重新下載 GPU 加速包",
         "description": "此版本無法使用先前的 GPU 加速包（{{packs}}）。請在設定中重新下載以重新啟用 GPU 加速。"
       },
+      "localDataWiped": {
+        "title": "你的組織已刪除此裝置上的 OpenWhispr 資料",
+        "description": "你已被移出組織的工作區，因此 OpenWhispr 已刪除先前儲存在此裝置上的內容，並重新開始。"
+      },
       "cleanupFailed": {
         "title": "清理失敗",
         "description": "你的聽寫已直接貼上，未經 AI 清理。"
@@ -6750,7 +6758,9 @@
       "failedTitle_one": "無法移除 {{count}} 位成員",
       "failedTitle_other": "無法移除 {{count}} 位成員",
       "transferDone_one": "已將內容與 Teamspace 管理權限重新分配給 {{name}}。已移除 {{count}} 位成員。",
-      "transferDone_other": "已將內容與 Teamspace 管理權限重新分配給 {{name}}。已移除 {{count}} 位成員。"
+      "transferDone_other": "已將內容與 Teamspace 管理權限重新分配給 {{name}}。已移除 {{count}} 位成員。",
+      "wipeDevices": "清除其裝置上的 OpenWhispr 資料",
+      "wipeDevicesHint": "下次 OpenWhispr 在此工作區為其管理的裝置上連線時，會刪除該裝置上的所有筆記、錄音和設定，包括其他帳戶的資料。"
     },
     "cancelInvitation": {
       "title": "取消寄給 {{email}} 的邀請？",

@@ -138,13 +138,14 @@ async function previewMemberRemoval(
 
 async function removeMembers(
   workspaceId: string,
-  input: { userIds: string[]; transferTo?: string }
+  input: { userIds: string[]; transferTo?: string; wipeDevices?: boolean }
 ): Promise<MemberRemovalResult> {
   const res = await cloudPost<DataWrap<MemberRemovalResult>>(
     `/api/workspaces/${workspaceId}/members/remove`,
     {
       user_ids: input.userIds,
       ...(input.transferTo ? { transfer_to: input.transferTo } : {}),
+      ...(input.wipeDevices !== undefined ? { wipe_devices: input.wipeDevices } : {}),
     }
   );
   return res.data;

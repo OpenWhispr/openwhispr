@@ -102,6 +102,10 @@
       "title": "Error de inicio de OpenWhispr",
       "message": "No se pudo iniciar la aplicación:\n\n{{error}}\n\nPor favor, reporta este problema."
     },
+    "localDataWipe": {
+      "title": "OpenWhispr no pudo eliminar todos sus datos",
+      "message": "Tu organización pidió a OpenWhispr que eliminara sus datos de este dispositivo y una parte no se pudo borrar, así que OpenWhispr no se abrirá. Reinicia el ordenador y vuelve a abrir OpenWhispr para intentarlo de nuevo. Si sigue ocurriendo, contacta con tu equipo de TI."
+    },
     "globeHotkey": {
       "title": "Atajo Globe no disponible",
       "message": "OpenWhispr no pudo activar el atajo de la tecla Globe.",
@@ -5085,6 +5089,10 @@
         "title": "Es necesario volver a descargar el paquete GPU",
         "description": "Esta versión no puede usar tu paquete GPU anterior ({{packs}}). Vuelve a descargarlo en Configuración para volver a activar la aceleración GPU."
       },
+      "localDataWiped": {
+        "title": "Tu organización eliminó los datos de OpenWhispr de este dispositivo",
+        "description": "Te retiraron del espacio de trabajo de tu organización, así que OpenWhispr borró lo que guardaba en este dispositivo y empezó de cero."
+      },
       "cleanupFailed": {
         "title": "Limpieza fallida",
         "description": "Tu dictado se pegó sin limpieza con IA."
@@ -6772,7 +6780,9 @@
       "failedTitle_one": "No se pudo eliminar a {{count}} miembro",
       "failedTitle_other": "No se pudo eliminar a {{count}} miembros",
       "transferDone_one": "Se reasignaron el contenido y el acceso de administrador de teamspace a {{name}}. Se eliminó a {{count}} miembro.",
-      "transferDone_other": "Se reasignaron el contenido y el acceso de administrador de teamspace a {{name}}. Se eliminó a {{count}} miembros."
+      "transferDone_other": "Se reasignaron el contenido y el acceso de administrador de teamspace a {{name}}. Se eliminó a {{count}} miembros.",
+      "wipeDevices": "Borrar los datos de OpenWhispr de sus dispositivos",
+      "wipeDevicesHint": "La próxima vez que OpenWhispr se conecte en uno de sus dispositivos gestionados por este espacio de trabajo, borrará allí todas las notas, grabaciones y ajustes, incluidos los de otras cuentas."
     },
     "cancelInvitation": {
       "title": "¿Cancelar la invitación para {{email}}?",

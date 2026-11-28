@@ -343,8 +343,13 @@ const WindowsLoopbackAudioManager = require("./src/helpers/windowsLoopbackAudioM
 const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
 const { createManagedMeetingPolicy } = require("./src/helpers/managedMeetingPolicy");
-const { createManagedDevicePolicy } = require("./src/helpers/managedDevicePolicy");
+const {
+  createManagedDevicePolicy,
+  normalizeDeviceValues,
+  readDeviceValues,
+} = require("./src/helpers/managedDevicePolicy");
 const { createMeetingAuditLog } = require("./src/helpers/meetingAuditLog");
+const { wipeLocalDataOnLaunch } = require("./src/helpers/localDataWipe");
 const { installManagedNetworkGuard } = require("./src/helpers/devicePolicyNetwork");
 const { applyOpenWhisprOriginHeader } = require("./src/helpers/sessionHeaders");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
@@ -367,6 +372,9 @@ let diarizationManager = null;
 let trayManager = null;
 let updateManager = null;
 let managedDevicePolicy = null;
+// The launch's one read of the device policy, for the launch wipe and then the
+// device policy's first snapshot.
+let launchDeviceRead = null;
 let meetingAuditLog = null;
 let globeKeyManager = null;
 let windowsKeyManager = null;
@@ -675,7 +683,13 @@ function initializeCoreManagers() {
   );
   appleCalendarManager = new AppleCalendarManager(databaseManager, calendarReminderScheduler);
   const meetingProcessDetector = new MeetingProcessDetector();
-  managedDevicePolicy = createManagedDevicePolicy();
+  managedDevicePolicy = createManagedDevicePolicy({
+    read: () => {
+      const read = launchDeviceRead ?? readDeviceValues();
+      launchDeviceRead = null;
+      return read;
+    },
+  });
   const managedMeetingPolicy = createManagedMeetingPolicy({
     getSnapshot: () => managedDevicePolicy.getSnapshot(),
   });
@@ -1302,6 +1316,45 @@ async function startApp() {
   // Await so a stale sidecar is confirmed dead before new ones can spawn and
   // contend for its port or storage lock.
   await reapStaleSidecars();
+
+  // #3323: the device policy's offboarding wipe runs before the logger, the
+  // database or any sidecar opens a file it removes, then restarts the app as a
+  // fresh install. One that leaves something behind keeps the app closed, so
+  // nothing opens what is left, and the next launch tries again.
+  let wiped;
+  // Read first: the wipe takes .env's values, the saved language's too, out of
+  // the environment.
+  const uiLanguage = process.env.UI_LANGUAGE || app.getLocale();
+  launchDeviceRead = readDeviceValues();
+  launchDeviceRead.catch(() => {});
+  try {
+    wiped = await wipeLocalDataOnLaunch({
+      userDataPath: app.getPath("userData"),
+      appVersion: app.getVersion(),
+      readDevicePolicy: async () => normalizeDeviceValues(await launchDeviceRead),
+      clearBrowserData: () =>
+        Promise.all([
+          session.defaultSession.clearStorageData(),
+          session.defaultSession.clearCache(),
+        ]),
+    });
+  } catch (error) {
+    // What stayed goes in the dialog: the logs folder went with the wipe. In the
+    // user's language, which the managers that set it haven't yet.
+    changeLanguage(uiLanguage);
+    dialog.showErrorBox(
+      i18nMain.t("startup.localDataWipe.title"),
+      [i18nMain.t("startup.localDataWipe.message"), (error.errors ?? []).join("\n")].join("\n\n")
+    );
+    app.exit(1);
+    return;
+  }
+  if (wiped) {
+    // Like Reset app data, a development build quits instead of relaunching.
+    if (process.env.NODE_ENV !== "development") autoStart.scheduleRelaunch(OAUTH_PROTOCOL);
+    app.exit(0);
+    return;
+  }
 
   // The registry loader reports cache problems before core managers exist, so the
   // logger starts first. Requiring it again in initializeCoreManagers is a no-op.

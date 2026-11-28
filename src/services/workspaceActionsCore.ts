@@ -8,7 +8,7 @@ export interface WorkspaceActionsDependencies {
     removeMember(workspaceId: string, userId: string): Promise<void>;
     removeMembers(
       workspaceId: string,
-      input: { userIds: string[]; transferTo?: string }
+      input: { userIds: string[]; transferTo?: string; wipeDevices?: boolean }
     ): Promise<MemberRemovalResult>;
     remove(workspaceId: string): Promise<void>;
     updateMemberRole(workspaceId: string, userId: string, role: "owner"): Promise<unknown>;
@@ -35,7 +35,7 @@ export interface WorkspaceActions {
   transferOwnership(workspaceId: string, newOwnerId: string): Promise<void>;
   removeMembers(
     workspaceId: string,
-    input: { userIds: string[]; transferTo?: string }
+    input: { userIds: string[]; transferTo?: string; wipeDevices?: boolean }
   ): Promise<MemberRemovalResult>;
 }
 
@@ -149,7 +149,7 @@ export function createWorkspaceActions(deps: WorkspaceActionsDependencies): Work
 
   async function removeMembers(
     workspaceId: string,
-    input: { userIds: string[]; transferTo?: string }
+    input: { userIds: string[]; transferTo?: string; wipeDevices?: boolean }
   ): Promise<MemberRemovalResult> {
     let result: MemberRemovalResult;
     try {

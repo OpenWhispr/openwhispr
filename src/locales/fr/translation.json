@@ -102,6 +102,10 @@
       "title": "Erreur de démarrage OpenWhispr",
       "message": "Échec du démarrage de l'application :\n\n{{error}}\n\nVeuillez signaler ce problème."
     },
+    "localDataWipe": {
+      "title": "OpenWhispr n'a pas pu supprimer toutes ses données",
+      "message": "Votre organisation a demandé à OpenWhispr de supprimer ses données de cet appareil, et une partie n'a pas pu être effacée : OpenWhispr ne s'ouvrira donc pas. Redémarrez l'ordinateur, puis rouvrez OpenWhispr pour réessayer. Si cela se reproduit, contactez votre service informatique."
+    },
     "globeHotkey": {
       "title": "Raccourci Globe indisponible",
       "message": "OpenWhispr n'a pas pu activer la touche Globe.",
@@ -4108,7 +4112,9 @@
       "failedTitle_one": "Impossible de retirer {{count}} membre",
       "failedTitle_other": "Impossible de retirer {{count}} membres",
       "transferDone_one": "Contenu et accès admin de teamspace réattribués à {{name}}. {{count}} membre retiré.",
-      "transferDone_other": "Contenu et accès admin de teamspace réattribués à {{name}}. {{count}} membres retirés."
+      "transferDone_other": "Contenu et accès admin de teamspace réattribués à {{name}}. {{count}} membres retirés.",
+      "wipeDevices": "Effacer les données OpenWhispr des appareils concernés",
+      "wipeDevicesHint": "La prochaine fois qu'OpenWhispr se connectera sur l'un de ces appareils gérés par cet espace, il y supprimera toutes les notes, tous les enregistrements et tous les paramètres, y compris ceux des autres comptes."
     },
     "cancelInvitation": {
       "title": "Annuler l'invitation de {{email}} ?",
@@ -5398,6 +5404,10 @@
       "gpuPackMigration": {
         "title": "Le pack GPU doit être retéléchargé",
         "description": "Cette version ne peut pas utiliser votre ancien pack GPU ({{packs}}). Retéléchargez-le dans les paramètres pour réactiver l'accélération GPU."
+      },
+      "localDataWiped": {
+        "title": "Votre organisation a supprimé les données OpenWhispr de cet appareil",
+        "description": "Vous avez été retiré de l'espace de travail de votre organisation : OpenWhispr a donc supprimé ce qu'il conservait sur cet appareil et repart de zéro."
       },
       "cleanupFailed": {
         "title": "Échec du nettoyage",

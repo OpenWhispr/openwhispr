@@ -5,7 +5,10 @@ const crypto = require("crypto");
 // logic stays local here, but the error taxonomy is shared.
 const { AuthContextError } = require("./cloudApiRequest");
 const { isValidPolicyShape } = require("./policyValidation");
-const { withPolicyRequestHeaders } = require("./policyRequestHeaders");
+const {
+  WORKSPACE_REMOVAL_CAPABILITY,
+  withPolicyRequestHeaders,
+} = require("./policyRequestHeaders");
 const {
   readWorkspacePolicyCache,
   readAccountPolicyCache,
@@ -57,6 +60,7 @@ function createWorkspacePolicyManager({
   tokenStore,
   getValidatedAccountId = () => null,
   broadcast,
+  onWorkspaceRemoval = () => {},
   logger,
   requestTimeoutMs = 10_000,
   successfulRefreshMs = 5 * 60 * 1000,
@@ -67,6 +71,9 @@ function createWorkspacePolicyManager({
   now = Date.now,
 }) {
   const snapshots = new Map();
+  // Credentials with a lookup this run acted on, and whether their binding
+  // vouched for the account then, which removal matching trusts over the cache.
+  const lookedUp = new Map();
   const inFlight = new Map();
   const successfulRefreshes = new Map();
   const lastAttempts = new Map();
@@ -187,6 +194,61 @@ function createWorkspacePolicyManager({
     return cached?.managed === true || cached?.requiresManagedPolicy === true;
   }
 
+  // #3323: the server says this account was removed from a managed workspace.
+  // Only a device whose last managed verdict for this credential (or account)
+  // named that workspace acts on it: a removal from some other workspace, or a
+  // sign-in on another device, wipes nothing. Once a lookup has run, that is the
+  // verdict this run enforces, which a failed cache write may have left off
+  // disk, and while that lookup came before the credential's binding, its
+  // account's last verdict too, which nothing has been matched against yet.
+  // Without one, the cached verdicts count, the credential's own still counting
+  // once a rejected session has cleared the account label. A removal the app
+  // couldn't record throws, so the verdict that names its workspace isn't
+  // replaced and the next lookup reports it again.
+  function reportRemoval(identity, removal) {
+    if (typeof removal?.workspaceId !== "string" || !validTimestamp(removal.removedAt)) return;
+    const key = identityKey(identity);
+    const account = isValidatedAccount(identity) && readAccountPolicyCache(cachePath, identity);
+    const verdicts = lookedUp.has(key)
+      ? [snapshots.get(key)?.data, !lookedUp.get(key) && account]
+      : [readWorkspacePolicyCache(cachePath, cacheIdentity(identity)), account];
+    const managedBy = verdicts.flatMap((verdict) =>
+      verdict?.managed && Array.isArray(verdict.managedBy) ? verdict.managedBy : []
+    );
+    if (!managedBy.includes(removal.workspaceId)) return;
+    const recorded = onWorkspaceRemoval({
+      accountId: identity.accountId,
+      workspaceId: removal.workspaceId,
+      removedAt: removal.removedAt,
+    });
+    if (recorded === false) throw new Error("Could not record the workspace removal");
+  }
+
+  // The removals a verdict lists, less any from a workspace the same verdict
+  // says manages the account: the API reads the two apart, so a removal (or,
+  // read side by side by an older API, a rejoin) between the reads can name a
+  // workspace in both, and the next lookup settles it.
+  function listedRemovals(data) {
+    const managing = data.managed && Array.isArray(data.managedBy) ? data.managedBy : [];
+    return Array.isArray(data.workspaceRemovals)
+      ? data.workspaceRemovals.filter((removal) => !managing.includes(removal?.workspaceId))
+      : [];
+  }
+
+  // A bound credential's verdict becomes its account's, so the removals it lists
+  // are checked against the verdict it replaces first, whichever read binds it
+  // (one heard before the binding, maybe in an earlier run, wasn't). A removal
+  // the app couldn't record skips the write, so the next read checks it again.
+  function saveVerdict(identity, data) {
+    try {
+      if (isValidatedAccount(identity))
+        for (const removal of listedRemovals(data)) reportRemoval(identity, removal);
+      writeWorkspacePolicyCache(cachePath, cacheIdentity(identity), data);
+    } catch (error) {
+      logger?.error?.("Policy verdict not saved", error);
+    }
+  }
+
   function errorSnapshot(identity, code, error, httpStatus) {
     const current = snapshots.get(identityKey(identity));
     return {
@@ -244,10 +306,18 @@ function createWorkspacePolicyManager({
       isValidatedAccount(identity) &&
       accountWasManaged(identity.accountId)
     ) {
+      saveVerdict(identity, data);
+    }
+    // A managed one replaces it only at the next lookup, but the removals it
+    // lists are checked against it once the bearer is bound, not minutes
+    // later; from then on the binding vouches for the lookup.
+    const key = identityKey(identity);
+    if (data.managed && lookedUp.get(key) === false && isValidatedAccount(identity)) {
       try {
-        writeWorkspacePolicyCache(cachePath, cacheIdentity(identity), data);
+        for (const removal of listedRemovals(data)) reportRemoval(identity, removal);
+        lookedUp.set(key, true);
       } catch (error) {
-        logger?.error?.("Policy cache write failed", error);
+        logger?.error?.("Workspace removal not recorded", error);
       }
     }
     return {
@@ -286,11 +356,7 @@ function createWorkspacePolicyManager({
     revision += 1;
     const next = { data, revision };
     snapshots.set(key, next);
-    try {
-      writeWorkspacePolicyCache(cachePath, cacheIdentity(identity), data);
-    } catch (error) {
-      logger?.error?.("Policy cache write failed", error);
-    }
+    saveVerdict(identity, data);
     const result = publicSnapshot(identity, data, status, revision);
     broadcast?.(result);
     return result;
@@ -301,6 +367,13 @@ function createWorkspacePolicyManager({
     // A stale (anti-downgraded) response is still a successful server round
     // trip; recording it keeps the refresh TTL engaged behind lagging replicas.
     successfulRefreshes.set(identityKey(identity), now());
+    // What publicSnapshot acts on.
+    if (
+      data.managed ||
+      !accountWasManaged(identity.accountId) ||
+      (data.endpointSupported !== false && isValidatedAccount(identity))
+    )
+      lookedUp.set(identityKey(identity), isValidatedAccount(identity));
     return accept(identity, data, status);
   }
 
@@ -314,7 +387,9 @@ function createWorkspacePolicyManager({
         // server refusal with the verdict the server just contradicted.
         const response = await proxyFetch(`${identity.apiUrl}/api/workspace-policy`, {
           method: "GET",
-          headers: withPolicyRequestHeaders(identity.authHeaders, getAppVersion()),
+          headers: withPolicyRequestHeaders(identity.authHeaders, getAppVersion(), [
+            WORKSPACE_REMOVAL_CAPABILITY,
+          ]),
           cache: "no-store",
           signal: controller.signal,
         });
@@ -341,8 +416,18 @@ function createWorkspacePolicyManager({
           try {
             errorBody = await response.json();
           } catch {}
+          // The body can arrive after an account switch, which its removal mustn't reach.
+          assertIdentityCurrent(identity);
           if (errorBody?.code === "POLICY_UNRESOLVABLE") {
             throw unresolvablePolicyError(errorBody.error || "Organization policy is unresolvable");
+          }
+          // An admin removal revoked this session. The API names every removal
+          // behind it in workspaceRemovals; an older one names only the newest.
+          if (response.status === 401 && errorBody?.code === "WORKSPACE_MEMBER_REMOVED") {
+            const removals = Array.isArray(errorBody.workspaceRemovals)
+              ? errorBody.workspaceRemovals
+              : [errorBody];
+            for (const removal of removals) reportRemoval(identity, removal);
           }
           const error = new Error(`API error: ${response.status}`);
           error.status = response.status;
@@ -361,6 +446,12 @@ function createWorkspacePolicyManager({
           }
           throw new Error("Malformed policy response");
         }
+        // Still signed in (directory deprovisioning keeps the session), maybe
+        // still managed by another workspace; read before this verdict replaces
+        // the one that named the removing workspace. The newest removal may be
+        // from a workspace that never managed this device, so every listed one
+        // is checked.
+        for (const removal of listedRemovals(data)) reportRemoval(identity, removal);
         return acceptSuccessfulResponse(identity, data, "network");
       } finally {
         clearTimeout(timeout);
@@ -419,7 +510,9 @@ function createWorkspacePolicyManager({
     const successfulRefreshAge =
       lastSuccessfulRefresh === undefined ? null : now() - lastSuccessfulRefresh;
     // `refresh` is for a caller the server just refused: the fresh verdict it
-    // holds is the one in question. The attempt throttle below still applies.
+    // holds is the one in question. The attempt throttle below still applies,
+    // but delays that lookup, for as long as the credential is current,
+    // rather than dropping it.
     if (
       !request.refresh &&
       current &&
@@ -431,17 +524,24 @@ function createWorkspacePolicyManager({
       return publicSnapshot(identity, current.data, "current", current.revision);
     }
     if (inFlight.has(key)) {
-      return inFlight
-        .get(key)
-        .then((result) =>
-          result.success ? publicSnapshot(identity, result, result.status, result.revision) : result
-        );
+      // The verdict the lookup left, not its summary: the summary lists no
+      // removals for a joiner bound since to check.
+      return inFlight.get(key).then((result) => {
+        if (!result.success) return result;
+        const settled = snapshots.get(key);
+        return publicSnapshot(identity, settled.data, result.status, settled.revision);
+      });
     }
     const lastAttempt = lastAttempts.get(key);
     const attemptAge = lastAttempt === undefined ? null : now() - lastAttempt.startedAt;
     const attemptIsThrottled =
       attemptAge !== null && attemptAge >= 0 && attemptAge < minimumAttemptIntervalMs;
     if (attemptIsThrottled) {
+      // A sign-out or another sign-in soon drops the refused credential, and
+      // with it the removal only its lookup can report.
+      if (request.refresh) {
+        setTimeout(() => void getPolicy(request), minimumAttemptIntervalMs - attemptAge).unref();
+      }
       if (requiresManagedPolicy(identity)) {
         return errorSnapshot(
           identity,

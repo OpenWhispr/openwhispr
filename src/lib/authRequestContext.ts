@@ -330,6 +330,14 @@ function sessionUser(data: unknown): unknown {
   return data && typeof data === "object" ? (data as { user?: unknown }).user : null;
 }
 
+// An admin removal revokes the session, and only the policy lookup says
+// whether it wipes this device (#3323): once per rejected credential, ask now,
+// before a sign-out or another sign-in drops it.
+function checkPolicyOnRejection(generation: number): void {
+  if (snapshot.sessionRejectedGeneration === generation) return;
+  window.electronAPI?.getEffectivePolicy?.({ refresh: true })?.catch(() => {});
+}
+
 function recordSessionResolution(generation: number, userId: string | null): void {
   sessionAnsweredAt = Date.now();
   update((current) => ({
@@ -412,6 +420,8 @@ export async function handleAuthRequestSuccess(context: AuthSuccessContext): Pro
   }
   if (isGetSessionRequest(context.request)) {
     const userId = resolvedUserId(context.data);
+    // A dead bearer is answered with no user.
+    if (!userId && current.token) checkPolicyOnRejection(current.generation);
     recordSessionResolution(current.generation, userId);
     // A server answer for a session that is already validated refreshes the
     // profile an offline launch may present; the first validation is saved by
@@ -440,6 +450,7 @@ export async function handleAuthRequestError(context: AuthErrorContext): Promise
   // The rejection outlives this run's generation counter only through the
   // saved profile, so drop it: a later offline launch stays a guest.
   clearOfflineAccountProfile();
+  checkPolicyOnRejection(generation);
   update((current) => ({
     ...withoutSessionResolution(current, generation),
     offlineAccount: null,
