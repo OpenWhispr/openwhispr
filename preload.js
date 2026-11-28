@@ -64,6 +64,12 @@ const registerListener = (channel, handlerFactory) => {
 };
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  aiPassCleanupStatus: () => ipcRenderer.invoke("aipass:status"),
+  connectAiPassCleanup: () => ipcRenderer.invoke("aipass:connect"),
+  disconnectAiPassCleanup: () => ipcRenderer.invoke("aipass:disconnect"),
+  listAiPassCleanupModels: () => ipcRenderer.invoke("aipass:listModels"),
+  runAiPassCleanup: (id, input) => ipcRenderer.invoke("aipass:complete", id, input),
+  cancelAiPassCleanup: (id) => ipcRenderer.send("aipass:cancel", id),
   initialModelRegistrySnapshot: ipcRenderer.sendSync?.("model-registry-initial"),
   getModelRegistry: () => ipcRenderer.invoke("get-model-registry"),
   onModelRegistryUpdated: registerListener(

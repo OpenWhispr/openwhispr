@@ -1848,6 +1848,15 @@
       "customSetup": "Configurazione personalizzata",
       "customSetupDescription": "Usa il tuo provider e la tua chiave API.",
       "description": "Correggi le trascrizioni, gestisci i comandi e risolvi gli errori preservando il tuo tono.",
+      "aiPass": {
+        "description": "Usa il saldo di AI Pass per ripulire il testo dettato. Scegli un modello per iniziare.",
+        "connect": "Connetti AI Pass",
+        "disconnect": "Disconnetti AI Pass",
+        "model": "Modello di pulizia",
+        "otherProviders": "Usa altri fornitori",
+        "error": "AI Pass non è disponibile. Controlla la connessione e riprova.",
+        "disconnectError": "Non è stato possibile confermare la revoca dei token di AI Pass. Controlla il tuo account AI Pass."
+      },
       "assemblyAiCleanup": {
         "pickerOn": "La pulizia standard è inclusa con AssemblyAI Dictation.",
         "pickerOff": "La pulizia è disattivata. OpenWhispr incollerà le parole originali.",

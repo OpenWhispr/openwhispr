@@ -1848,6 +1848,15 @@
       "customSetup": "自訂設定",
       "customSetupDescription": "使用你自己的供應商和 API Key。",
       "description": "整理轉錄文字、處理指令、修正錯誤，同時保留你的語調。",
+      "aiPass": {
+        "description": "使用 AI Pass 餘額整理聽寫文字。請選擇模型以開始使用。",
+        "connect": "連接 AI Pass",
+        "disconnect": "中斷 AI Pass 連線",
+        "model": "文字整理模型",
+        "otherProviders": "使用其他供應商",
+        "error": "AI Pass 無法使用。請檢查連線後重試。",
+        "disconnectError": "無法確認 AI Pass 權杖已撤銷。請檢查您的 AI Pass 帳戶。"
+      },
       "assemblyAiCleanup": {
         "pickerOn": "AssemblyAI Dictation 已包含標準文字整理。",
         "pickerOff": "文字整理已關閉。OpenWhispr 會貼上你的原話。",

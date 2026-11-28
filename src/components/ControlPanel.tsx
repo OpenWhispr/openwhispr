@@ -51,6 +51,7 @@ import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
 import { usePolicySnapshot, useMeetingAutoTranscriptionCheck } from "../hooks/usePolicy";
 import { getKeytermDictionaryWords, limitBatchKeyterms } from "../utils/snippets";
 import { providerCleanupStandsIn } from "../helpers/dictationRouting";
+import { selectAiPassCleanupModel } from "../stores/aiPassCleanupSelection";
 import { handleMeetingRecordingRequest } from "../helpers/meetingRecordingRequest";
 import { useMeetingNoteSession } from "../hooks/useMeetingNoteSession";
 import {
@@ -953,12 +954,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 import("../services/ReasoningService"),
                 import("../stores/settingsStore"),
               ]);
+              const settings = getSettings();
               const model = getEffectiveCleanupModel();
+              const aiPassModel = selectAiPassCleanupModel(settings);
               const isCloud = isCloudCleanupMode();
               // A provider's own rewrite stands in for cleanup, as on a fresh dictation.
               const providerCleanedText =
                 result.cleanedText?.trim() &&
-                providerCleanupStandsIn(getSettings(), {
+                !aiPassModel &&
+                providerCleanupStandsIn(settings, {
                   cleanupReachable: !!model || isCloud,
                   providerLlmAllowed: canUseAssemblyAiRewrite(),
                 })
@@ -969,8 +973,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 const reasonedText =
                   providerCleanedText ||
                   (await ReasoningService.processText(rawText, model, getAgentName(), {
-                    disableThinking: getSettings().cleanupDisableThinking,
-                    reasoningEffort: getSettings().cleanupReasoningEffort,
+                    ...(aiPassModel
+                      ? { inferenceScope: "dictationCleanup", provider: "aipass" }
+                      : {}),
+                    disableThinking: settings.cleanupDisableThinking,
+                    reasoningEffort: settings.cleanupReasoningEffort,
                     requireCompleteOutput: true,
                   }));
                 if (hasTextContent(reasonedText) && reasonedText !== rawText) {

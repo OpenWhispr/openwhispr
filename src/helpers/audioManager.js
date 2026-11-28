@@ -58,6 +58,7 @@ import {
   isCloudTranslationMode,
   selectResolvedLLMConfig,
 } from "../stores/settingsStore";
+import { selectAiPassCleanupModel } from "../stores/aiPassCleanupSelection";
 
 import {
   effectiveAudioRetentionDays,
@@ -331,13 +332,15 @@ function resolveReasoningRoute(
 ) {
   const wakeWordLanguage = resolveWakeWordLanguage(settings, detectedLanguage, text);
   const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
+  const aiPassModel = selectAiPassCleanupModel(settings);
   // Pin cleanup to 0 where supported; bridges otherwise default to 0.7 (local)
   // or 0.3 (Anthropic/enterprise). Zero does not guarantee determinism.
   // Direct Gemini owns its defaults (3: 1.0, older: 0); check mode to ignore stale providers.
   const cleanupTemperature =
     cleanup.mode === "providers" && cleanup.provider === "gemini" ? undefined : 0;
   const cleanupReachable =
-    !!settings.useCleanupModel && (!!cleanup.model?.trim() || isCloudCleanupMode());
+    !!settings.useCleanupModel &&
+    (!!aiPassModel || !!cleanup.model?.trim() || isCloudCleanupMode());
   const agent = resolveDictationAgentInference(settings, {
     isCloudAgent: isCloudDictationAgentMode(),
   });
@@ -386,6 +389,7 @@ function resolveReasoningRoute(
   // raise the cleanup-failed toast (#2091).
   const cleanupConfig = {
     inferenceScope: /** @type {const} */ ("dictationCleanup"),
+    ...(aiPassModel ? { provider: "aipass" } : {}),
     disableThinking: settings.cleanupDisableThinking,
     reasoningEffort: settings.cleanupReasoningEffort,
     temperature: cleanupTemperature,
@@ -455,7 +459,12 @@ function resolveReasoningRoute(
     };
   }
   if (kind === "cleanup") {
-    return { kind: "cleanup", cleanupReachable, config: cleanupConfig };
+    return {
+      kind: "cleanup",
+      cleanupReachable,
+      config: cleanupConfig,
+      ...(aiPassModel ? { model: aiPassModel } : {}),
+    };
   }
   return { kind: "skip", cleanupReachable };
 }
@@ -3401,6 +3410,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     const s = getSettings();
+    if (s.useCleanupModel && selectAiPassCleanupModel(s)) return true;
     const useReasoning =
       !!s.useCleanupModel || dictationAgentReachable(s) || translationChainReachable(s);
     const now = Date.now();
@@ -3651,6 +3661,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const providerCleanedText = typeof cleanedText === "string" ? cleanedText.trim() : "";
     if (
       providerCleanedText &&
+      !selectAiPassCleanupModel(settings) &&
       !this.voiceAgentRequested &&
       !this.translationRequested &&
       !(addressesAgent && (agentReachable || isAgentScopeBlocked(settings))) &&
@@ -3744,7 +3755,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           return translatedText;
         }
 
-        const targetModel = route.kind === "agent" ? route.model : cleanupModel;
+        const targetModel = route.kind === "agent" ? route.model : route.model || cleanupModel;
         const reasoningConfig =
           route.kind === "cleanup"
             ? { ...route.config, toneStyle: await this.consumeToneStyle() }
@@ -4106,7 +4117,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             processedText = reasonResult.text;
           }
         } else if (route.kind === "cleanup") {
-          const effectiveModel = getEffectiveCleanupModel();
+          const effectiveModel = route.model || getEffectiveCleanupModel();
           if (effectiveModel) {
             const reasoned = await this.processWithReasoningModel(
               processedText,
@@ -6602,7 +6613,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             "streaming"
           );
         } else if (route.kind === "cleanup") {
-          const effectiveModel = getEffectiveCleanupModel();
+          const effectiveModel = route.model || getEffectiveCleanupModel();
           if (effectiveModel) {
             const reasoned = await this.processWithReasoningModel(
               finalText,

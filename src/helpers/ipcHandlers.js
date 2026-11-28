@@ -39,6 +39,7 @@ const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
 const affiliateLinks = require("./affiliateLinks");
 const { createNoteFilesSync } = require("./noteFilesSync");
+const { registerAiPassCleanup } = require("./aiPassCleanup");
 const { registerProductHelpIpc, remoteHelpPolicyState } = require("./productHelp");
 const { captureAuthFence, createCloudApiRequestHandler } = require("./cloudApiRequest");
 const { MetaActivation } = require("./metaActivation");
@@ -8871,6 +8872,20 @@ class IPCHandlers {
     // to the tray has no control panel to fetch it, and the tray item, the
     // meeting hotkey, and calendar reminders all read this snapshot.
     this._audioFeaturePolicy.update(this.effectivePolicyManager.getCurrent());
+
+    registerAiPassCleanup({
+      ipcMain,
+      directory: app.getPath("userData"),
+      fetch: proxyFetch,
+      canUse: (origin) => {
+        const snapshot = this.effectivePolicyManager.getCurrent();
+        return snapshot.status === "unmanaged" && !snapshot.deviceManaged && networkAllowed(origin);
+      },
+      isSettingsWindow: (event) => isFromWindow(event, this.windowManager.controlPanelWindow),
+      canComplete: (event) =>
+        isFromWindow(event, this.windowManager.mainWindow) ||
+        isFromWindow(event, this.windowManager.controlPanelWindow),
+    });
 
     registerProductHelpIpc({
       ipcMain,

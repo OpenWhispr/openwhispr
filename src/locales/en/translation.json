@@ -2603,6 +2603,15 @@
       "customSetup": "Custom Setup",
       "customSetupDescription": "Use your own provider and API key.",
       "description": "Clean up transcriptions, handle commands, and fix errors while preserving your tone.",
+      "aiPass": {
+        "description": "Use your AI Pass wallet for dictation cleanup. Choose a model to start.",
+        "connect": "Connect AI Pass",
+        "disconnect": "Disconnect AI Pass",
+        "model": "Cleanup model",
+        "otherProviders": "Use other providers",
+        "error": "AI Pass is unavailable. Check your connection and try again.",
+        "disconnectError": "Could not confirm AI Pass token revocation. Check your AI Pass account."
+      },
       "assemblyAiCleanup": {
         "pickerOn": "Standard cleanup is included with AssemblyAI Dictation.",
         "pickerOff": "Text cleanup is off. OpenWhispr will paste your original wording.",
